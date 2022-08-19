@@ -33,13 +33,18 @@ typedef struct ExpressionNode {
     } node;
 } ExpressionNode;
 
-typedef struct AssignmentNode {
+typedef struct TypeNode {
     IdentifierNode identifier;
+} TypeNode;
+
+typedef struct VariableDefinitionNode {
+    IdentifierNode identifier;
+    TypeNode type;
     ExpressionNode* expression;
-} AssignmentNode;
+} VariableDefinitionNode;
 
 typedef struct StatementNode {
-    AssignmentNode* assignment;
+    VariableDefinitionNode* var_def;
 } StatementNode;
 
 typedef struct ProgramNode {

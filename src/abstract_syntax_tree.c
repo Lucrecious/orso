@@ -23,7 +23,7 @@ static void expression_node_free(ExpressionNode* expression) {
     }
 }
 
-static void assignment_node_free(AssignmentNode* assignment) {
+static void variable_definition_node_free(VariableDefinitionNode* assignment) {
     expression_node_free(assignment->expression);
     identifier_node_free(&assignment->identifier);
     free(assignment->expression);
@@ -31,8 +31,8 @@ static void assignment_node_free(AssignmentNode* assignment) {
 }
 
 static void statement_node_free(StatementNode* statement) {
-    assignment_node_free(statement->assignment);
-    statement->assignment = NULL;
+    variable_definition_node_free(statement->var_def);
+    statement->var_def = NULL;
 }
 
 void abstract_syntax_tree_free(AbstractSyntaxTree* ast) {
@@ -117,21 +117,28 @@ static void parse_expression(TreeParserState* state, ExpressionNode* expression)
     state->error = SavineError_Parse_UNEXPECTED_TOKEN;
 }
 
-static void parse_assignment(TreeParserState* state, AssignmentNode* assignment) {
+static void parse_type(TreeParserState* state, TypeNode* type) {
+    parse_identifier(state, &type->identifier);
+}
+
+static void parse_var_def(TreeParserState* state, VariableDefinitionNode* var_def) {
     consume(state, TokenType_IDENTIFIER);
 
-    parse_identifier(state, &assignment->identifier);
+    parse_identifier(state, &var_def->identifier);
 
     match(state, TokenType_COLIN);
+    if (match(state, TokenType_IDENTIFIER)) {
+        parse_type(state, &var_def->type);
+    }
     consume(state, TokenType_EQUALS);
 
-    assignment->expression = (ExpressionNode*)malloc(sizeof(ExpressionNode));
-    parse_expression(state, assignment->expression);
+    var_def->expression = (ExpressionNode*)malloc(sizeof(ExpressionNode));
+    parse_expression(state, var_def->expression);
 }
 
 static void parse_statement(TreeParserState* state, StatementNode* statement) {
-    statement->assignment = (AssignmentNode*)malloc(sizeof(AssignmentNode));
-    parse_assignment(state, statement->assignment);
+    statement->var_def = (VariableDefinitionNode*)malloc(sizeof(VariableDefinitionNode));
+    parse_var_def(state, statement->var_def);
 }
 
 static void parse_statement_list(TreeParserState* state, StatementNode*** statement_ptr_list) {
@@ -166,66 +173,32 @@ static void print_indent(i32 level) {
     }
 }
 
-void print_program(ProgramNode* program);
-void print_tree(AbstractSyntaxTree* ast) {
-    if (!ast) {
-        return;
-    }
-
-    print_program(ast->program);
-}
-
-void print_statement(StatementNode* statement, i32 level);
-void print_program(ProgramNode* program) {
-    if (!program) {
-        return;
-    }
-
-    printf("PROGRAM\n");
-
-    for (i32 i = 0; i < sb_count(program->statement_ptr_list); i++) {
-        print_statement(program->statement_ptr_list[i], 1);
-    }
-}
-
-void print_assignment(AssignmentNode* assignment, i32 level);
-void print_statement(StatementNode* statement, i32 level) {
-    if (!statement) {
-        return;
-    }
-
-    print_indent(level);
-
-    printf("STATEMENT\n");
-
-    print_assignment(statement->assignment, level + 1);
-}
-
-void print_identifier(IdentifierNode* identifier, i32 level);
-void print_expression(ExpressionNode* expression, i32 level);
-void print_assignment(AssignmentNode* assignment, i32 level) {
-    if (!assignment) {
-        return;
-    }
-
-    print_indent(level);
-    printf("ASSIGNMENT\n");
-
-    print_identifier(&assignment->identifier, level + 1);
-    print_expression(assignment->expression, level + 1);
-}
-
-void print_identifier(IdentifierNode* identifier, i32 level) {
+static void print_identifier(IdentifierNode* identifier, i32 level) {
     if (!identifier) {
         return;
     }
 
     print_indent(level);
-    printf("IDENTIFIER: \"%s\"\n", identifier->value);
+    printf("IDENTIFIER: \"%s\"\n", (identifier->value ? identifier->value : "<no-value>"));
 }
 
-void print_integer(IntegerNode* integer, i32 level);
-void print_expression(ExpressionNode* expression, i32 level) {
+static void print_integer(IntegerNode* integer, i32 level) {
+    if (!integer) {
+        return;
+    }
+
+    print_indent(level);
+    printf("INTEGER: %d\n", integer->value);
+}
+
+static void print_type(TypeNode* type, i32 level) {
+    print_indent(level);
+    printf("TYPE\n");
+
+    print_identifier(&type->identifier, level + 1);
+}
+
+static void print_expression(ExpressionNode* expression, i32 level) {
     if (!expression) {
         return;
     }
@@ -240,11 +213,47 @@ void print_expression(ExpressionNode* expression, i32 level) {
     }
 }
 
-void print_integer(IntegerNode* integer, i32 level) {
-    if (!integer) {
+static void print_var_def(VariableDefinitionNode* var_def, i32 level) {
+    if (!var_def) {
         return;
     }
 
     print_indent(level);
-    printf("INTEGER: %d\n", integer->value);
+    printf("VAR_DEF\n");
+
+    print_identifier(&var_def->identifier, level + 1);
+    print_type(&var_def->type, level + 1);
+    print_expression(var_def->expression, level + 1);
+}
+
+static void print_statement(StatementNode* statement, i32 level) {
+    if (!statement) {
+        return;
+    }
+
+    print_indent(level);
+
+    printf("STATEMENT\n");
+
+    print_var_def(statement->var_def, level + 1);
+}
+
+static void print_program(ProgramNode* program) {
+    if (!program) {
+        return;
+    }
+
+    printf("PROGRAM\n");
+
+    for (i32 i = 0; i < sb_count(program->statement_ptr_list); i++) {
+        print_statement(program->statement_ptr_list[i], 1);
+    }
+}
+
+void print_tree(AbstractSyntaxTree* ast) {
+    if (!ast) {
+        return;
+    }
+
+    print_program(ast->program);
 }
