@@ -3,7 +3,7 @@
 
 StringTable interned;
 
-SavineString* find_string(StringTable* table, const char* c_str, i32 length, i32 hash) {
+SavineString* find_string(StringTable* table, const char* c_str, i32 length, u32 hash) {
     if (table->count == 0) {
         return NULL;
     }

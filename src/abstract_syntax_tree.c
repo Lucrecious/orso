@@ -18,8 +18,8 @@ static void identifier_node_free(IdentifierNode* identifier) {
 }
 
 static void expression_node_free(ExpressionNode* expression) {
-    if (expression == NodeType_IDENTIFIER) {
-        identifier_node_free(&expression->identifier);
+    if (expression->type == NodeType_IDENTIFIER) {
+        identifier_node_free(&expression->node.identifier);
     }
 }
 
@@ -104,13 +104,13 @@ static void parse_integer(TreeParserState* state, IntegerNode* integer) {
 static void parse_expression(TreeParserState* state, ExpressionNode* expression) {
     if (match(state, TokenType_IDENTIFIER)) {
         expression->type = NodeType_IDENTIFIER;
-        parse_identifier(state, &expression->identifier);
+        parse_identifier(state, &expression->node.identifier);
         return;
     }
 
     if (match(state, TokenType_INTEGER)) {
         expression->type = NodeType_INTEGER;
-        parse_integer(state, &expression->integer);
+        parse_integer(state, &expression->node.integer);
         return;
     }
 
@@ -137,7 +137,7 @@ static void parse_statement(TreeParserState* state, StatementNode* statement) {
 static void parse_statement_list(TreeParserState* state, StatementNode*** statement_ptr_list) {
     while (!match(state, TokenType_EOF)) {
         StatementNode* statement = (StatementNode*)malloc(sizeof(StatementNode));
-        sb_push(*statement_ptr_list, statement);
+        sb_push(*statement_ptr_list, (void*)statement);
 
         parse_statement(state, statement);
     }
@@ -234,9 +234,9 @@ void print_expression(ExpressionNode* expression, i32 level) {
     printf("EXPRESSION\n");
 
     if (expression->type == NodeType_IDENTIFIER) {
-        print_identifier(&expression->identifier, level + 1);
+        print_identifier(&expression->node.identifier, level + 1);
     } else if (expression->type == NodeType_INTEGER) {
-        print_integer(&expression->integer, level + 1);
+        print_integer(&expression->node.integer, level + 1);
     }
 }
 

@@ -27,10 +27,10 @@ typedef struct IntegerNode {
 
 typedef struct ExpressionNode {
     NodeType type;
-    union {
+    union Node {
         IdentifierNode identifier;
         IntegerNode integer;
-    };
+    } node;
 } ExpressionNode;
 
 typedef struct AssignmentNode {

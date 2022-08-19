@@ -3,7 +3,6 @@
 
 #include "def.h"
 #include "error_codes.h"
-#include "list.h"
 
 typedef enum TokenType {
     TokenType_INVALID,
