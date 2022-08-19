@@ -1,1 +1,0 @@
-meson test -C ./debug

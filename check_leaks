@@ -1,1 +1,0 @@
-leaks -atExit -- ./debug/$1
