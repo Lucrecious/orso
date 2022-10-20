@@ -8,7 +8,7 @@ inc = include_directories('include')
 
 src = [
   'src/abstract_syntax_tree.c',
-  'src/byte_code.c',
+  'src/chunk.c',
   'src/debug.c',
   'src/lexer.c',
   'src/savine.c',

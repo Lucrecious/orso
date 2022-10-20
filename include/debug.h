@@ -1,8 +1,8 @@
 #ifndef DEBUG_H_
 #define DEBUG_H_
 
-#include "byte_code.h"
+#include "chunk.h"
 
-void byte_code_disassemble(ByteCode* byte_code, const char* name);
+void chunk_disassemble(Chunk* chunk, const char* name);
 
 #endif

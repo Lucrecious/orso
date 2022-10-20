@@ -1,10 +1,10 @@
 #include "savine.h"
 
-#include "lexer.h"
 #include "abstract_syntax_tree.h"
-#include "byte_code.h"
+#include "chunk.h"
+#include "lexer.h"
 
-static void contextualize(Savine_Context* context, ByteCode* byte_code) { }
+static void contextualize(Savine_Context* context, Chunk* chunk) { }
 
 void savine_init(Savine_Context* context) {
 

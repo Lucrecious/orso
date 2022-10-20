@@ -1,20 +1,22 @@
 #include <stdio.h>
 
-#include "byte_code.h"
+#include "chunk.h"
 #include "debug.h"
 
 #define PROJECT_NAME "savine"
 
 int main(int argc, char **argv) {
-    ByteCode byte_code;
+    Chunk chunk;
 
-    byte_code_init(&byte_code);
+    chunk_init(&chunk);
 
-    byte_code_add_instruction(&byte_code, OP_RETURN);
+    i32 constant = chunk_add_constant(&chunk, 42);
 
-    byte_code_disassemble(&byte_code, "my code");
+    chunk_write(&chunk, OP_RETURN, 123);
 
-    byte_code_free(&byte_code);
+    chunk_disassemble(&chunk, "my code");
+
+    chunk_free(&chunk);
 
     return 0;
 }
