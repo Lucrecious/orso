@@ -3,6 +3,7 @@
 
 typedef enum OP {
     OP_CONSTANT,
+    OP_CONSTANT_LONG,
     OP_RETURN,
 } OP;
 

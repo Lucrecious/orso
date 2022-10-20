@@ -10,8 +10,12 @@ int main(int argc, char **argv) {
 
     chunk_init(&chunk);
 
-    i32 constant = chunk_add_constant(&chunk, 42);
-
+    chunk_write_constant(&chunk, 42, 123);
+    chunk_write_constant(&chunk, 69, 123);
+    chunk_write_constant(&chunk, 420, 123);
+    chunk_write_constant(&chunk, 1, 123);
+    chunk_write_constant(&chunk, 2, 123);
+    chunk_write_constant(&chunk, 3, 123);
     chunk_write(&chunk, OP_RETURN, 123);
 
     chunk_disassemble(&chunk, "my code");

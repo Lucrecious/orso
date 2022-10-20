@@ -14,6 +14,19 @@ static i32 constant_instruction(const char* name, Chunk* chunk, i32 offset) {
     return offset + 2;
 }
 
+static i32 constant_long_instruction(const char* name, Chunk* chunk, i32 offset) {
+    i32 constant = chunk->code[offset + 1];
+    constant <<= 8;
+    constant |= chunk->code[offset + 2];
+    constant <<= 8;
+    constant |= chunk->code[offset + 3];
+    printf("%-16s %d ", name, constant);
+    print_value(chunk->constants.values[constant]);
+    printf("\n");
+
+    return offset + 4;
+}
+
 static i32 simple_instruction(const char* name, i32 offset) {
     printf("%s\n", name);
     return offset + 1;
@@ -33,6 +46,8 @@ static i32 disassemble_instruction(Chunk* chunk, i32 offset) {
     switch(instruction) {
         case OP_CONSTANT:
             return constant_instruction("OP_CONSTANT", chunk, offset);
+        case OP_CONSTANT_LONG:
+            return constant_long_instruction("OP_CONSTANT_LONG", chunk, offset);
         case OP_RETURN:
             return simple_instruction("OP_RETURN", offset);
     }

@@ -41,6 +41,19 @@ void chunk_write(Chunk* chunk, byte item, i32 line) {
     }
 }
 
+void chunk_write_constant(Chunk* chunk, Value value, i32 line) {
+    i32 index = chunk_add_constant(chunk, value);
+    if (index > 0xFF) {
+        chunk_write(chunk, OP_CONSTANT_LONG, line);
+        chunk_write(chunk, (index >> 16) & 0xFF, line);
+        chunk_write(chunk, (index >> 8) & 0xFF, line);
+        chunk_write(chunk, index & 0xFF, line);
+    } else {
+        chunk_write(chunk, OP_CONSTANT, line);
+        chunk_write(chunk, index, line);
+    }
+}
+
 i32 chunk_get_line(Chunk* chunk, i32 offset) {
     for (i32 i = 0; i < sb_count(chunk->lines); i += 2) {
         if (offset < chunk->lines[i + 1]) {
