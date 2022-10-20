@@ -7,11 +7,14 @@ add_global_arguments(['-Wunused-function', '-std=c99'], language: 'c')
 inc = include_directories('include')
 
 src = [
-  'src/savine.c',
-  'src/lexer.c',
   'src/abstract_syntax_tree.c',
+  'src/byte_code.c',
+  'src/debug.c',
+  'src/lexer.c',
+  'src/savine.c',
   'src/savine_string.c',
   'src/stringtable.c',
+  'src/virtual_machine.c',
 ]
 
 test_assignment = executable('test_assignment', [src, 'test/assignment.c'],

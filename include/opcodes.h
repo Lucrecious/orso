@@ -2,7 +2,6 @@
 #define OPCODES_H_
 
 typedef enum OP {
-    OP_MOVE,
     OP_RETURN,
 
 } OP;

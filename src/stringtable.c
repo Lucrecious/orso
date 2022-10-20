@@ -16,16 +16,6 @@ void string_table_init(StringTable* table) {
 }
 
 void string_table_free(StringTable* table) {
-    for (i32 i = 0; i < table->capacity; i++) {
-        if (table->entries[i].key == NULL) {
-            continue;
-        }
-
-        savine_string_free(table->entries[i].key);
-        free(table->entries[i].key);
-        table->entries[i].key = NULL;
-    }
-
     free(table->entries);
     string_table_init(table);
 }

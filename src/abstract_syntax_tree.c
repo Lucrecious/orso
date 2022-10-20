@@ -70,7 +70,7 @@ static void consume(TreeParserState* state, TokenType type) {
     state->error = SavineError_Parse_UNEXPECTED_TOKEN;
 }
 
-static bool inline __attribute__((always_inline)) check(TreeParserState* state, TokenType type) {
+static bool FORCE_INLINE check(TreeParserState* state, TokenType type) {
     return state->consuming.type == type;
 }
 
@@ -132,18 +132,18 @@ static void parse_var_def(TreeParserState* state, VariableDefinitionNode* var_de
     }
     consume(state, TokenType_EQUALS);
 
-    var_def->expression = (ExpressionNode*)malloc(sizeof(ExpressionNode));
+    var_def->expression = ALLOCATE(ExpressionNode);
     parse_expression(state, var_def->expression);
 }
 
 static void parse_statement(TreeParserState* state, StatementNode* statement) {
-    statement->var_def = (VariableDefinitionNode*)malloc(sizeof(VariableDefinitionNode));
+    statement->var_def = ALLOCATE(VariableDefinitionNode);
     parse_var_def(state, statement->var_def);
 }
 
 static void parse_statement_list(TreeParserState* state, StatementNode*** statement_ptr_list) {
     while (!match(state, TokenType_EOF)) {
-        StatementNode* statement = (StatementNode*)malloc(sizeof(StatementNode));
+        StatementNode* statement = ALLOCATE(StatementNode);
         sb_push(*statement_ptr_list, (void*)statement);
 
         parse_statement(state, statement);
@@ -160,7 +160,7 @@ void savine_parse_tree(LexerState* lexer_state, AbstractSyntaxTree* tree) {
     state.error = SavineError_OK;
     state.lexer_state = lexer_state;
     state.tree = tree;
-    state.tree->program = (ProgramNode*)malloc(sizeof(ProgramNode));
+    state.tree->program = ALLOCATE(ProgramNode);
     state.tree->program->statement_ptr_list = NULL;
 
     advance(&state);

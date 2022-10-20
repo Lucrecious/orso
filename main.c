@@ -1,19 +1,20 @@
 #include <stdio.h>
 
-#include "savine.h"
-#include "savine_string.h"
+#include "byte_code.h"
+#include "debug.h"
 
 #define PROJECT_NAME "savine"
 
 int main(int argc, char **argv) {
-    savine_string_init_interned();
+    ByteCode byte_code;
 
-    Savine_Context context;
-    savine_init(&context);
+    byte_code_init(&byte_code);
 
-    savine_run_code(&context, "thing: i32 = 10");
+    byte_code_add_instruction(&byte_code, OP_RETURN);
 
-    printf("Finished\n");
+    byte_code_disassemble(&byte_code, "my code");
+
+    byte_code_free(&byte_code);
 
     return 0;
 }
