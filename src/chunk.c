@@ -41,7 +41,7 @@ void chunk_write(Chunk* chunk, byte item, i32 line) {
 
 void chunk_write_constant(Chunk* chunk, Value value, i32 line) {
     i32 index = chunk_add_constant(chunk, value);
-    if (true || index > 0xFF) {
+    if (index > 0xFF) {
         chunk_write(chunk, OP_CONSTANT_LONG, line);
         chunk_write(chunk, (index >> 16) & 0xFF, line);
         chunk_write(chunk, (index >> 8) & 0xFF, line);

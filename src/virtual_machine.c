@@ -15,7 +15,7 @@ void savine_vm_free(SavineVM* vm) {
 static InterpretResult run(SavineVM* vm) {
 #define READ_BYTE() (*vm->ip++)
 #define READ_CONSTANT() (vm->chunk->constants[READ_BYTE()])
-#define READ_CONSTANT_LONG() (vm->chunk->constants[((u32)READ_BYTE() << 16) | ((u16)READ_BYTE() << 8) | READ_BYTE()])
+#define READ_CONSTANT_LONG() (vm->chunk->constants[(READ_BYTE() << 16) | (READ_BYTE() << 8) | READ_BYTE()])
 
     for (;;) {
 #ifdef DEBUG_TRACE_EXECUTION
