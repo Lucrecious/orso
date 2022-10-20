@@ -5,28 +5,26 @@
 #include "def.h"
 #include "sb.h"
 
-void value_array_init(ValueArray* value_array) {
-    value_array->values = NULL;
-}
-
-void value_array_free(ValueArray* value_array) {
-    sb_free(value_array->values);
-}
-
 void print_value(Value value) {
     printf("'%d'", value);
 }
 
 i32 chunk_add_constant(Chunk* chunk, Value value) {
-    i32 index = sb_count(chunk->constants.values);
-    sb_push(chunk->constants.values, value);
+    i32 index = sb_count(chunk->constants);
+    sb_push(chunk->constants, value);
     return index;
 }
 
 void chunk_init(Chunk* chunk) {
+    chunk->constants = NULL;
     chunk->code = NULL;
     chunk->lines = NULL;
-    value_array_init(&chunk->constants);
+}
+
+void chunk_free(Chunk* chunk) {
+    sb_free(chunk->code);
+    sb_free(chunk->lines);
+    sb_free(chunk->constants);
 }
 
 void chunk_write(Chunk* chunk, byte item, i32 line) {
@@ -43,7 +41,7 @@ void chunk_write(Chunk* chunk, byte item, i32 line) {
 
 void chunk_write_constant(Chunk* chunk, Value value, i32 line) {
     i32 index = chunk_add_constant(chunk, value);
-    if (index > 0xFF) {
+    if (true || index > 0xFF) {
         chunk_write(chunk, OP_CONSTANT_LONG, line);
         chunk_write(chunk, (index >> 16) & 0xFF, line);
         chunk_write(chunk, (index >> 8) & 0xFF, line);
@@ -64,10 +62,4 @@ i32 chunk_get_line(Chunk* chunk, i32 offset) {
     }
 
     return -1;
-}
-
-void chunk_free(Chunk* chunk) {
-    sb_free(chunk->code);
-    sb_free(chunk->lines);
-    value_array_free(&chunk->constants);
 }

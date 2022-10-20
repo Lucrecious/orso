@@ -6,16 +6,10 @@
 
 typedef i32 Value;
 
-typedef struct ValueArray {
-    Value* values;
-} ValueArray;
-
-void value_array_init(ValueArray* value_array);
-void value_array_free(ValueArray* value_array);
 void print_value(Value value);
 
 typedef struct Chunk {
-    ValueArray constants;
+    Value* constants;
     i32* lines; // run-length encoded
     byte* code;
 } Chunk;

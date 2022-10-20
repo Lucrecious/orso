@@ -6,6 +6,8 @@
 #include <stdint.h>
 #include <string.h>
 
+#define DEBUG_TRACE_EXECUTION
+
 #define FORCE_INLINE inline __attribute__((always_inline))
 
 #define ALLOCATE(T) (T*)malloc(sizeof(T))

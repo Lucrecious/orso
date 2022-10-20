@@ -8,7 +8,7 @@
 static i32 constant_instruction(const char* name, Chunk* chunk, i32 offset) {
     byte constant = chunk->code[offset + 1];
     printf("%-16s %4d ", name, constant);
-    print_value(chunk->constants.values[constant]);
+    print_value(chunk->constants[constant]);
     printf("\n");
 
     return offset + 2;
@@ -21,7 +21,7 @@ static i32 constant_long_instruction(const char* name, Chunk* chunk, i32 offset)
     constant <<= 8;
     constant |= chunk->code[offset + 3];
     printf("%-16s %d ", name, constant);
-    print_value(chunk->constants.values[constant]);
+    print_value(chunk->constants[constant]);
     printf("\n");
 
     return offset + 4;
@@ -32,7 +32,7 @@ static i32 simple_instruction(const char* name, i32 offset) {
     return offset + 1;
 }
 
-static i32 disassemble_instruction(Chunk* chunk, i32 offset) {
+i32 disassemble_instruction(Chunk* chunk, i32 offset) {
     printf("%04d ", offset);
 
 

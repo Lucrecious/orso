@@ -2,6 +2,7 @@
 
 #include "chunk.h"
 #include "debug.h"
+#include "virtual_machine.h"
 
 #define PROJECT_NAME "savine"
 
@@ -11,15 +12,16 @@ int main(int argc, char **argv) {
     chunk_init(&chunk);
 
     chunk_write_constant(&chunk, 42, 123);
-    chunk_write_constant(&chunk, 69, 123);
-    chunk_write_constant(&chunk, 420, 123);
     chunk_write_constant(&chunk, 1, 123);
     chunk_write_constant(&chunk, 2, 123);
-    chunk_write_constant(&chunk, 3, 123);
     chunk_write(&chunk, OP_RETURN, 123);
 
-    chunk_disassemble(&chunk, "my code");
+    SavineVM vm;
+    savine_vm_init(&vm);
+    
+    savine_interpret(&vm, &chunk);
 
+    savine_vm_free(&vm);
     chunk_free(&chunk);
 
     return 0;
