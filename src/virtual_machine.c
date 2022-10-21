@@ -42,6 +42,10 @@ static InterpretResult run(SavineVM* vm) {
                 savine_push(vm, constant);
                 break;
             }
+            case OP_NEGATE: {
+                *(vm->stack_top - 1) = -(*(vm->stack_top - 1));
+                break;
+            }
             case OP_RETURN: {
                 print_value(savine_pop(vm));
                 printf("\n");

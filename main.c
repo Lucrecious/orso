@@ -13,8 +13,7 @@ int main(int argc, char **argv) {
     chunk_init(&chunk);
 
     chunk_write_constant(&chunk, 42, 123);
-    chunk_write_constant(&chunk, 1, 123);
-    chunk_write_constant(&chunk, 2, 123);
+    chunk_write(&chunk, OP_NEGATE, 123);
     chunk_write(&chunk, OP_RETURN, 123);
 
     SavineVM vm;
