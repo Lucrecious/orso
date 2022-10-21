@@ -21,8 +21,7 @@ static InterpretResult run(SavineVM* vm) {
 #define BINARY_OP(op) \
     do { \
         i32 b = savine_pop(vm); \
-        i32 a = savine_pop(vm); \
-        savine_push(vm, a op b); \
+        *(vm->stack_top - 1) = *(vm->stack_top - 1) op b; \
     } while (false)
 
     for (;;) {
