@@ -8,6 +8,7 @@
 
 int main(int argc, char **argv) {
     Chunk chunk;
+    chunk.max_stack_size = 256;
 
     chunk_init(&chunk);
 

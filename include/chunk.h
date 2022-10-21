@@ -9,6 +9,7 @@ typedef i32 Value;
 void print_value(Value value);
 
 typedef struct Chunk {
+    u32 max_stack_size;
     Value* constants;
     i32* lines; // run-length encoded
     byte* code;

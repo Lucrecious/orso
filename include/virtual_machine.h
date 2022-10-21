@@ -19,11 +19,17 @@ typedef enum {
 typedef struct SavineVM {
     Chunk* chunk;
     uint8_t* ip;
+
+    Value* stack;
+    Value* stack_top;
 } SavineVM;
 
 void savine_vm_init(SavineVM* vm);
 void savine_vm_free(SavineVM* vm);
 
 InterpretResult savine_interpret(SavineVM* vm, Chunk* chunk);
+
+void savine_push(SavineVM* vm, Value value);
+Value savine_pop(SavineVM* vm);
 
 #endif

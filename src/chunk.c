@@ -16,6 +16,7 @@ i32 chunk_add_constant(Chunk* chunk, Value value) {
 }
 
 void chunk_init(Chunk* chunk) {
+    chunk->max_stack_size = 0;
     chunk->constants = NULL;
     chunk->code = NULL;
     chunk->lines = NULL;
