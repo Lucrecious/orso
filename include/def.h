@@ -11,6 +11,7 @@
 #define FORCE_INLINE inline __attribute__((always_inline))
 
 #define ALLOCATE(T) (T*)malloc(sizeof(T))
+#define ALLOCATE_N(T, N) (T*)malloc(sizeof(T) * N)
 
 typedef uint8_t byte;
 typedef int16_t i16;

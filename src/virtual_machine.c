@@ -73,7 +73,7 @@ InterpretResult savine_interpret(SavineVM* vm, Chunk* chunk) {
     vm->chunk = chunk;
     vm->ip = vm->chunk->code;
 
-    vm->stack = (Value*)malloc(sizeof(Value) * chunk->max_stack_size);
+    vm->stack = ALLOCATE_N(Value, chunk->max_stack_size);
     vm->stack_top = vm->stack;
 
     InterpretResult result = run(vm);

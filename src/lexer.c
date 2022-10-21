@@ -37,7 +37,7 @@ static Token create_token(Lexer* lexer, TokenType type) {
 static Token error_token(Lexer* lexer, const char* message) {
     Token token = {
         .type = TOKEN_ERROR,
-        .start = message,
+        .start = (char*)message,
         .length = (i32)(strlen(message)),
         .line = lexer->line,
     };
@@ -50,11 +50,11 @@ static char advance(Lexer* lexer) {
     return lexer->current[-1];
 }
 
-static char FORCE_INLINE peak(Lexer* lexer) {
+static char FORCE_INLINE peek(Lexer* lexer) {
     return lexer->current[0];
 }
 
-static char peak_next(Lexer* lexer) {
+static char peek_next(Lexer* lexer) {
     if (is_at_end(lexer)) {
         return '\0';
     }
@@ -75,9 +75,9 @@ static bool match(Lexer* lexer, char expected) {
     return true;
 }
 
-static bool skip_whitespace(Lexer* lexer) {
+static void skip_whitespace(Lexer* lexer) {
     for (;;) {
-        char c = peak(lexer);
+        char c = peek(lexer);
         switch (c) {
             case ' ':
             case '\t':
@@ -162,7 +162,7 @@ static Token identifier(Lexer* lexer) {
         advance(lexer);
     }
 
-    return create_token(lexer, idenifier_type(lexer));
+    return create_token(lexer, identifier_type(lexer));
 }
 
 Token lexer_next_token(Lexer* lexer) {
