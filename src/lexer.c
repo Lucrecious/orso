@@ -3,10 +3,10 @@
 #include <ctype.h>
 #include <stdlib.h>
 
-void lexer_lexer_init(Lexer* lexer, char* code) {
+void lexer_init(Lexer* lexer, const char* code) {
     lexer->line = 0;
-    lexer->start = code;
-    lexer->current = code;
+    lexer->start = (char*)code;
+    lexer->current = (char*)code;
 }
 
 static bool is_digit(char c) {
@@ -152,6 +152,9 @@ static TokenType identifier_type(Lexer* lexer) {
         case 's': return check_keyword(lexer, 1, 5, "truct", TOKEN_STRUCT);
         case 'v': return check_keyword(lexer, 1, 2, "ar", TOKEN_VAR);
         case 'f': return check_keyword(lexer, 1, 3, "unc", TOKEN_FUNCTION);
+        case 'a': return check_keyword(lexer, 1, 2, "nd", TOKEN_AND);
+        case 'o': return check_keyword(lexer, 1, 1, "r", TOKEN_OR);
+        case 'n': return check_keyword(lexer, 1, 2, "ot", TOKEN_NOT);
     }
 
     return TOKEN_IDENTIFIER;

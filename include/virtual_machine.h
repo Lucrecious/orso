@@ -27,7 +27,7 @@ typedef struct SavineVM {
 void savine_vm_init(SavineVM* vm);
 void savine_vm_free(SavineVM* vm);
 
-InterpretResult savine_interpret(SavineVM* vm, Chunk* chunk);
+InterpretResult savine_interpret(SavineVM* vm, const char* source);
 
 void savine_push(SavineVM* vm, Value value);
 Value savine_pop(SavineVM* vm);

@@ -20,7 +20,7 @@ typedef enum TokenType {
     TOKEN_IDENTIFIER, TOKEN_STRING, TOKEN_INTEGER, TOKEN_DECIMAL, TOKEN_ANNOTATION,
 
     // keywords
-    TOKEN_STRUCT, TOKEN_VAR, TOKEN_FUNCTION,
+    TOKEN_STRUCT, TOKEN_VAR, TOKEN_FUNCTION, TOKEN_NOT, TOKEN_AND, TOKEN_OR,
 
     TOKEN_ERROR, TOKEN_EOF, TOKEN_SIZE,
 } TokenType;
@@ -38,7 +38,7 @@ typedef struct Lexer {
     char* current;
 } Lexer;
 
-void lexer_state_init(Lexer* state, char* code);
+void lexer_init(Lexer* state, const char* code);
 Token lexer_next_token(Lexer* state);
 
 #endif

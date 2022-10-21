@@ -1,22 +1,24 @@
 project('savine', 'c',
   version : '0.1',
-  default_options : ['warning_level=3'])
+  default_options : ['warning_level=3', 'c_std=c99'])
 
-add_global_arguments(['-Wunused-function', '-std=c99'], language: 'c')
+add_global_arguments(['-Wunused-function'], language: 'c')
 
 inc = include_directories('include')
 
 src = [
+  'src/abstract_syntax_tree.c',
   'src/chunk.c',
   'src/debug.c',
   'src/lexer.c',
+  'src/str_to_value.c',
   'src/virtual_machine.c',
 ]
 
-test_assignment = executable('test_assignment', [src, 'test/assignment.c'],
-  install : false,
-  include_directories : inc)
+# test_variable_retrieval = executable('test_variable_retrieval', [src, 'test/variable_retrieval.c'],
+#   install : false,
+#   include_directories : inc)
 
 executable('savine', [src, 'main.c'], install : false, include_directories : inc)
 
-test('assignment', test_assignment)
+# test('variable_retrieval', test_variable_retrieval)
