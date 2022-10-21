@@ -14,6 +14,8 @@ int main(int argc, char **argv) {
 
     chunk_write_constant(&chunk, 42, 123);
     chunk_write(&chunk, OP_NEGATE, 123);
+    chunk_write_constant(&chunk, 10, 123);
+    chunk_write(&chunk, OP_ADD, 123);
     chunk_write(&chunk, OP_RETURN, 123);
 
     SavineVM vm;

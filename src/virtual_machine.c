@@ -18,6 +18,12 @@ static InterpretResult run(SavineVM* vm) {
 #define READ_BYTE() (*vm->ip++)
 #define READ_CONSTANT() (vm->chunk->constants[READ_BYTE()])
 #define READ_CONSTANT_LONG() (vm->chunk->constants[((u32)READ_BYTE() << 16) | ((u16)READ_BYTE() << 8) | READ_BYTE()])
+#define BINARY_OP(op) \
+    do { \
+        i32 b = savine_pop(vm); \
+        i32 a = savine_pop(vm); \
+        savine_push(vm, a op b); \
+    } while (false)
 
     for (;;) {
 #ifdef DEBUG_TRACE_EXECUTION
@@ -46,6 +52,10 @@ static InterpretResult run(SavineVM* vm) {
                 *(vm->stack_top - 1) = -(*(vm->stack_top - 1));
                 break;
             }
+            case OP_ADD: BINARY_OP(+); break;
+            case OP_SUBTRACT: BINARY_OP(-); break;
+            case OP_MULTIPLY: BINARY_OP(*); break;
+            case OP_DIVIDE: BINARY_OP(/); break;
             case OP_RETURN: {
                 print_value(savine_pop(vm));
                 printf("\n");
@@ -54,6 +64,7 @@ static InterpretResult run(SavineVM* vm) {
         }
     }
 
+#undef BINARY_OP
 #undef READ_CONSTANT_LONG
 #undef READ_CONSTANT
 #undef READBYTE
