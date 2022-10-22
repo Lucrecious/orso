@@ -9,6 +9,7 @@ inc = include_directories('include')
 src = [
   'src/abstract_syntax_tree.c',
   'src/chunk.c',
+  'src/codegen.c',
   'src/debug.c',
   'src/lexer.c',
   'src/str_to_value.c',

@@ -260,7 +260,8 @@ void ast_print_expression(SavineExpressionNode* expression, i32 initial_indent) 
     }
 }
 
-void ast_print(SavineAST* ast) {
+void savine_ast_print(SavineAST* ast, const char* name) {
+    printf("=== %s ===\n", name);
     ast_print_expression(ast->expression, 0);
 }
 

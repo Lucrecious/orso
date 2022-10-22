@@ -13,7 +13,7 @@ int main(int argc, char **argv) {
     SavineVM vm;
     savine_vm_init(&vm);
 
-    savine_interpret(&vm, "(1 + 2/-3 + 4 / (5 - 6)");
+    savine_interpret(&vm, "(-1 + 2) * 3 - -4");
 
     savine_vm_free(&vm);
 

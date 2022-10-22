@@ -47,7 +47,7 @@ typedef struct SavineAST {
     SavineExpressionNode* expression;
 } SavineAST;
 
-void ast_print(SavineAST* ast);
+void savine_ast_print(SavineAST* ast, const char* name);
 
 bool savine_parse_to_ast(const char* source, SavineAST* ast);
 

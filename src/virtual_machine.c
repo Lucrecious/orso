@@ -3,9 +3,10 @@
 #include <stdio.h>
 
 #include "abstract_syntax_tree.h"
+#include "codegen.h"
 #include "sb.h"
 
-#ifdef DEBUG_TRACE_EXECUTION
+#if defined(DEBUG_TRACE_EXECUTION) || defined(DEBUG_PRINT_CODE)
 #include "debug.h"
 #endif
 
@@ -73,44 +74,42 @@ static InterpretResult run(SavineVM* vm) {
 #undef READBYTE
 }
 
-static bool compile(SavineVM* vm, const char* source, Chunk* result) {
+static bool compile(const char* source, Chunk* chunk) {
     SavineAST ast;
-    bool succeeded = savine_parse_to_ast(source, &ast);
-    if (!succeeded) {
+    if (!savine_parse_to_ast(source, &ast)) {
         savine_ast_free(&ast);
         return false;
     }
 
-    ast_print(&ast);
+#ifdef DEBUG_PRINT_CODE
+    savine_ast_print(&ast, "code");
+#endif
 
+    bool succeeded = savine_generate_code(&ast, chunk);
     savine_ast_free(&ast);
 
-    // if (!savine_generate_code(vm, &ast, result)) {
-    //     return false;
-    // }
-
-    return false;
+    return succeeded;
 }
 
 InterpretResult savine_interpret(SavineVM* vm, const char* source) {
     Chunk chunk;
     chunk_init(&chunk);
 
-    vm->chunk = &chunk;
-    vm->ip = vm->chunk->code;
-
-    vm->stack = ALLOCATE_N(Value, chunk.max_stack_size);
-    vm->stack_top = vm->stack;
-
     InterpretResult result;
-    if (!compile(vm, source, &chunk)) {
+    if (!compile(source, &chunk)) {
         result = SAVINE_INTERPRET_COMPILE_ERROR;
     } else {
-        result = run(vm);
-    }
+        vm->stack = ALLOCATE_N(Value, chunk.max_stack_size);
+        vm->stack_top = vm->stack;
 
-    free(vm->stack);
-    vm->stack_top = NULL;
+        vm->chunk = &chunk;
+        vm->ip = vm->chunk->code;
+
+        result = run(vm);
+
+        free(vm->stack);
+        vm->stack_top = NULL;
+    }
 
     return result;
 }
