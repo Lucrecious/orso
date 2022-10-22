@@ -5,11 +5,7 @@
 #include "def.h"
 #include "sb.h"
 
-void print_value(Value value) {
-    printf("'%d'", value);
-}
-
-i32 chunk_add_constant(Chunk* chunk, Value value) {
+i32 chunk_add_constant(Chunk* chunk, SavineValue value) {
     i32 index = sb_count(chunk->constants);
     sb_push(chunk->constants, value);
     return index;
@@ -40,7 +36,7 @@ void chunk_write(Chunk* chunk, byte item, i32 line) {
     }
 }
 
-void chunk_write_constant(Chunk* chunk, Value value, i32 line) {
+void chunk_write_constant(Chunk* chunk, SavineValue value, i32 line) {
     i32 index = chunk_add_constant(chunk, value);
     if (index > 0xFF) {
         chunk_write(chunk, OP_CONSTANT_LONG, line);

@@ -92,12 +92,26 @@ static void consume(Parser* parser, TokenType type, const char* message) {
 }
 
 static SavineExpressionNode* number(Parser* parser) {
-    i32 value = cstr_to_i32(parser->previous.start, parser->previous.length);
 
     SavineExpressionNode* expression_node = ALLOCATE(SavineExpressionNode);
     expression_node->type = EXPRESSION_PRIMARY;
     expression_node->primary.token = parser->previous;
-    expression_node->primary.value = value;
+
+    switch (parser->previous.type)  {
+        case TOKEN_INTEGER: {
+            i64 value = cstrn_to_i64(parser->previous.start, parser->previous.length);
+            expression_node->value_type = SAVINE_TYPE_INT64;
+            expression_node->primary.constant.as_int = value;
+            break;
+        }
+        case TOKEN_FLOAT: {
+            f64 value = cstrn_to_f64(parser->previous.start, parser->previous.length);
+            expression_node->value_type = SAVINE_TYPE_FLOAT64;
+            expression_node->primary.constant.as_float = value;
+            break;
+        }
+        default: break; // unreachable
+    }
 
     return expression_node;
 }
@@ -108,8 +122,11 @@ static SavineExpressionNode* parse_precedence(Parser* parser, Precedence precede
 
 static SavineExpressionNode* grouping(Parser* parser) {
     SavineExpressionNode* expression_node = ALLOCATE(SavineExpressionNode);
+
+    expression_node->value_type = SAVINE_TYPE_UNRESOLVED;
     expression_node->type = EXPRESSION_GROUPING;
     expression_node->grouping.expression = expression(parser);
+    expression_node->value_type = expression_node->grouping.expression->value_type;
     consume(parser, TOKEN_PARENTHESIS_CLOSE, "Expect ')' after expression.");
 
     return expression_node;
@@ -118,6 +135,7 @@ static SavineExpressionNode* grouping(Parser* parser) {
 static SavineExpressionNode* unary(Parser* parser) {
     SavineExpressionNode* expression_node = ALLOCATE(SavineExpressionNode);
 
+    expression_node->value_type = SAVINE_TYPE_UNRESOLVED;
     expression_node->type = EXPRESSION_UNARY;
     expression_node->unary.operator = parser->previous;
     expression_node->unary.operand = parse_precedence(parser, PREC_UNARY);
@@ -127,6 +145,8 @@ static SavineExpressionNode* unary(Parser* parser) {
 
 static SavineExpressionNode* binary(Parser* parser) {
     SavineExpressionNode* expression_node = ALLOCATE(SavineExpressionNode);
+
+    expression_node->value_type = SAVINE_TYPE_UNRESOLVED;
     expression_node->type = EXPRESSION_BINARY;
     expression_node->binary.operator = parser->previous;
     expression_node->binary.left = NULL;
@@ -165,7 +185,7 @@ ParseRule rules[] = {
     [TOKEN_IDENTIFIER]              = { NULL,       NULL,       PREC_NONE },
     [TOKEN_STRING]                  = { NULL,       NULL,       PREC_NONE },
     [TOKEN_INTEGER]                 = { number,     NULL,       PREC_NONE },
-    [TOKEN_DECIMAL]                 = { NULL,       NULL,       PREC_NONE },
+    [TOKEN_FLOAT]                   = { number,     NULL,       PREC_NONE },
     [TOKEN_ANNOTATION]              = { NULL,       NULL,       PREC_NONE },
     [TOKEN_STRUCT]                  = { NULL,       NULL,       PREC_NONE },
     [TOKEN_VAR]                     = { NULL,       NULL,       PREC_NONE },
@@ -254,7 +274,9 @@ void ast_print_expression(SavineExpressionNode* expression, i32 initial_indent) 
             break;
         }
         case EXPRESSION_PRIMARY: {
-            printf("PRIMARY %d\n", expression->primary.value);
+            printf("PRIMARY ");
+            print_value(expression->primary.constant);
+            printf("\n");
             break;
         }
     }

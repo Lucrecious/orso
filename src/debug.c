@@ -44,22 +44,22 @@ i32 disassemble_instruction(Chunk* chunk, i32 offset) {
 
     byte instruction = chunk->code[offset];
     switch(instruction) {
-        case OP_CONSTANT:
-            return constant_instruction("OP_CONSTANT", chunk, offset);
-        case OP_CONSTANT_LONG:
-            return constant_long_instruction("OP_CONSTANT_LONG", chunk, offset);
-        case OP_NEGATE:
-            return simple_instruction("OP_NEGATE", offset);
-        case OP_ADD:
-            return simple_instruction("OP_ADD", offset);
-        case OP_SUBTRACT:
-            return simple_instruction("OP_SUBTRACT", offset);
-        case OP_MULTIPLY:
-            return simple_instruction("OP_MULTIPLY", offset);
-        case OP_DIVIDE:
-            return simple_instruction("OP_DIVIDE", offset);
-        case OP_RETURN:
-            return simple_instruction("OP_RETURN", offset);
+        case OP_CONSTANT: return constant_instruction("OP_CONSTANT", chunk, offset);
+        case OP_CONSTANT_LONG: return constant_long_instruction("OP_CONSTANT_LONG", chunk, offset);
+        case OP_NEGATE_INT: return simple_instruction("OP_NEGATE_INT", offset);
+        case OP_NEGATE_DOUBLE: return simple_instruction("OP_NEGATE_DOUBLE", offset);
+        case OP_ADD_INT: return simple_instruction("OP_ADD_INT", offset);
+        case OP_ADD_DOUBLE: return simple_instruction("OP_ADD_DOUBLE", offset);
+        case OP_SUBTRACT_INT: return simple_instruction("OP_SUBTRACT_INT", offset);
+        case OP_SUBTRACT_DOUBLE: return simple_instruction("OP_SUBTRACT_DOUBLE", offset);
+        case OP_MULTIPLY_INT: return simple_instruction("OP_MULTIPLY_INT", offset);
+        case OP_MULTIPLY_DOUBLE: return simple_instruction("OP_MULTIPLY_DOUBLE", offset);
+        case OP_DIVIDE_INT: return simple_instruction("OP_DIVIDE_INT", offset);
+        case OP_DIVIDE_DOUBLE: return simple_instruction("OP_DIVIDE_DOUBLE", offset);
+        case OP_INT_TO_DOUBLE: return simple_instruction("OP_INT_TO_DOUBLE", offset);
+        case OP_DOUBLE_TO_INT: return simple_instruction("OP_DOUBLE_TO_INT", offset);
+        case OP_RETURN: return simple_instruction("OP_RETURN", offset);
+        default: return simple_instruction("OP_UNKNOWN", offset);
     }
 }
 

@@ -2,13 +2,7 @@
 #define VIRTUAL_MACHINE_H_
 
 #include "chunk.h"
-
-// must be less than 0xFFFF
-typedef enum SavineType {
-    SavineType_I32,
-    SavineType_F64,
-    SavineType_SIZE,
-} SavineType;
+#include "value.h"
 
 typedef enum {
     SAVINE_INTERPRET_OK,
@@ -20,8 +14,8 @@ typedef struct SavineVM {
     Chunk* chunk;
     uint8_t* ip;
 
-    Value* stack;
-    Value* stack_top;
+    SavineValue* stack;
+    SavineValue* stack_top;
 } SavineVM;
 
 void savine_vm_init(SavineVM* vm);
@@ -29,7 +23,13 @@ void savine_vm_free(SavineVM* vm);
 
 InterpretResult savine_interpret(SavineVM* vm, const char* source);
 
-void savine_push(SavineVM* vm, Value value);
-Value savine_pop(SavineVM* vm);
+void FORCE_INLINE savine_vm_push(SavineVM* vm, SavineValue value);
+SavineValue FORCE_INLINE savine_vm_pop(SavineVM* vm);
+
+void FORCE_INLINE savine_vm_push_int(SavineVM* vm, i64 value);
+i64 FORCE_INLINE savine_vm_pop_int(SavineVM* vm);
+
+void FORCE_INLINE savine_vm_push_float(SavineVM* vm, f64 value);
+f64 FORCE_INLINE savine_vm_pop_float(SavineVM* vm);
 
 #endif

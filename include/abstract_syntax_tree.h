@@ -2,6 +2,8 @@
 #define ABSTRACT_SYNTAX_TREE_H_
 
 #include "lexer.h"
+#include "type.h"
+#include "value.h"
 
 typedef enum ExpressionType {
     EXPRESSION_NONE,
@@ -30,10 +32,11 @@ typedef struct SavineGrouping {
 
 typedef struct SavinePrimary {
     Token token;
-    i32 value;
+    SavineValue constant;
 } SavinePrimary;
 
 struct SavineExpressionNode {
+    SavineType value_type;
     ExpressionType type;
     union {
         SavineBinaryOp binary;

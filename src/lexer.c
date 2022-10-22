@@ -123,9 +123,9 @@ static Token number(Lexer* lexer) {
         advance(lexer);
     }
 
-    bool is_decimal = false;
+    bool is_float = false;
     if (peek(lexer) == '.' && is_digit(peek_next(lexer))) {
-        is_decimal = true;
+        is_float = true;
 
         advance(lexer);
 
@@ -134,7 +134,7 @@ static Token number(Lexer* lexer) {
         }
     }
 
-    return create_token(lexer, is_decimal ? TOKEN_DECIMAL : TOKEN_INTEGER);
+    return create_token(lexer, is_float ? TOKEN_FLOAT : TOKEN_INTEGER);
 }
 
 static TokenType check_keyword(Lexer* lexer, i32 start, i32 length,

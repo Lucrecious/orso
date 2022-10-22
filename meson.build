@@ -12,7 +12,9 @@ src = [
   'src/codegen.c',
   'src/debug.c',
   'src/lexer.c',
+  'src/static_analyzer.c',
   'src/str_to_value.c',
+  'src/value.c',
   'src/virtual_machine.c',
 ]
 
