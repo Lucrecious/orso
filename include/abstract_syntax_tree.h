@@ -7,6 +7,7 @@
 
 typedef enum ExpressionType {
     EXPRESSION_NONE,
+    EXPRESSION_IMPLICIT_CAST,
     EXPRESSION_UNARY,
     EXPRESSION_BINARY,
     EXPRESSION_GROUPING,
@@ -14,6 +15,10 @@ typedef enum ExpressionType {
 } ExpressionType;
 
 typedef struct SavineExpressionNode SavineExpressionNode;
+
+typedef struct SavineImplicitCastOp {
+    SavineExpressionNode* operand;
+} SavineImplicitCastOp;
 
 typedef struct SavineBinaryOp {
     Token operator;
@@ -39,6 +44,7 @@ struct SavineExpressionNode {
     SavineType value_type;
     ExpressionType type;
     union {
+        SavineImplicitCastOp cast;
         SavineBinaryOp binary;
         SavineUnaryOp unary;
         SavineGrouping grouping;

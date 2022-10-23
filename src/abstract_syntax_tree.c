@@ -190,14 +190,14 @@ ParseRule rules[] = {
     [TOKEN_COLIN]                   = { NULL,       NULL,       PREC_NONE },
     [TOKEN_EQUAL]                   = { NULL,       NULL,       PREC_NONE },
     [TOKEN_BANG]                    = { NULL,       NULL,       PREC_NONE },
-    [TOKEN_LESS]                    = { NULL,       NULL,       PREC_NONE },
-    [TOKEN_GREATER]                 = { NULL,       NULL,       PREC_NONE },
+    [TOKEN_LESS]                    = { NULL,       binary,     PREC_COMPARISON },
+    [TOKEN_GREATER]                 = { NULL,       binary,     PREC_COMPARISON },
     [TOKEN_PLUS_PLUS]               = { NULL,       NULL,       PREC_NONE },
     [TOKEN_MINUS_MINUS]             = { NULL,       NULL,       PREC_NONE },
-    [TOKEN_EQUAL_EQUAL]             = { NULL,       NULL,       PREC_NONE },
-    [TOKEN_BANG_EQUAL]              = { NULL,       NULL,       PREC_NONE },
-    [TOKEN_LESS_EQUAL]              = { NULL,       NULL,       PREC_NONE },
-    [TOKEN_GREATER_EQUAL]           = { NULL,       NULL,       PREC_NONE },
+    [TOKEN_EQUAL_EQUAL]             = { NULL,       binary,     PREC_EQUALITY },
+    [TOKEN_BANG_EQUAL]              = { NULL,       binary,     PREC_EQUALITY },
+    [TOKEN_LESS_EQUAL]              = { NULL,       binary,     PREC_COMPARISON },
+    [TOKEN_GREATER_EQUAL]           = { NULL,       binary,     PREC_COMPARISON },
     [TOKEN_IDENTIFIER]              = { NULL,       NULL,       PREC_NONE },
     [TOKEN_STRING]                  = { NULL,       NULL,       PREC_NONE },
     [TOKEN_INTEGER]                 = { number,     NULL,       PREC_NONE },
@@ -206,7 +206,7 @@ ParseRule rules[] = {
     [TOKEN_STRUCT]                  = { NULL,       NULL,       PREC_NONE },
     [TOKEN_VAR]                     = { NULL,       NULL,       PREC_NONE },
     [TOKEN_FUNCTION]                = { NULL,       NULL,       PREC_NONE },
-    [TOKEN_NOT]                     = { NULL,       NULL,       PREC_NONE },
+    [TOKEN_NOT]                     = { unary,      NULL,       PREC_NONE },
     [TOKEN_AND]                     = { NULL,       NULL,       PREC_NONE },
     [TOKEN_OR]                      = { NULL,       NULL,       PREC_NONE },
     [TOKEN_TRUE]                    = { literal,    NULL,       PREC_NONE },
@@ -286,6 +286,13 @@ void ast_print_expression(SavineExpressionNode* expression, i32 initial_indent) 
             ast_print_expression(expression->grouping.expression, initial_indent + 1);
             break;
         }
+
+        case EXPRESSION_IMPLICIT_CAST: {
+            printf("IMPLICIT CAST \n");
+
+            ast_print_expression(expression->cast.operand, initial_indent + 1);
+            break;
+        }
         case EXPRESSION_UNARY: {
             printf("UNARY %.*s\n", expression->unary.operator.length, expression->unary.operator.start);
 
@@ -325,6 +332,10 @@ static void savine_free_expression(SavineExpressionNode* expression) {
         case EXPRESSION_GROUPING:
             savine_free_expression(expression->grouping.expression);
             free(expression->grouping.expression);
+            break;
+        case EXPRESSION_IMPLICIT_CAST:
+            savine_free_expression(expression->cast.operand);
+            free(expression->cast.operand);
             break;
         case EXPRESSION_UNARY:
             savine_free_expression(expression->unary.operand);

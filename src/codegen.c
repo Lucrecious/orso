@@ -22,9 +22,10 @@ static void emit_constant(Chunk* chunk, SavineValue value, i32 line) {
 }
 
 static void emit_type_convert(SavineType from_type, SavineType to_type, Chunk* chunk, i32 line) {
-    if (savine_is_float_type(from_type) && savine_is_integer_type(to_type)) {
+    bool include_bool = true;
+    if (savine_is_float_type(from_type) && (savine_is_integer_type(to_type, include_bool))) {
         emit_byte(OP_DOUBLE_TO_INT, chunk, line);
-    } else if (savine_is_integer_type(from_type) && savine_is_float_type(to_type)) {
+    } else if (savine_is_integer_type(from_type, include_bool) && savine_is_float_type(to_type)) {
         emit_byte(OP_INT_TO_DOUBLE, chunk, line);
     } else {
         // Unreachable
@@ -35,7 +36,7 @@ static void end_code_generation(Chunk* chunk, i32 line) {
     emit_return(chunk, line);
 }
 
-static void expression(SavineExpressionNode* expression_node, Chunk* chunk, SavineType convert_type) {
+static void expression(SavineExpressionNode* expression_node, Chunk* chunk) {
 #define EMIT_OP(SUFFIX) \
     do { \
         switch(operator.type) { \
@@ -43,40 +44,64 @@ static void expression(SavineExpressionNode* expression_node, Chunk* chunk, Savi
             case TOKEN_PLUS: emit_byte(OP_ADD_ ## SUFFIX, chunk, operator.line); break; \
             case TOKEN_STAR: emit_byte(OP_MULTIPLY_ ## SUFFIX, chunk, operator.line); break; \
             case TOKEN_SLASH: emit_byte(OP_DIVIDE_ ## SUFFIX, chunk, operator.line); break; \
+            case TOKEN_EQUAL_EQUAL: emit_byte(OP_EQUAL_ ## SUFFIX, chunk, operator.line); break; \
+            case TOKEN_BANG_EQUAL: emit_bytes(OP_EQUAL_ ## SUFFIX, OP_NOT, chunk, operator.line); break; \
+            case TOKEN_LESS: emit_byte(OP_LESS_ ## SUFFIX, chunk, operator.line); break; \
+            case TOKEN_GREATER: emit_byte(OP_GREATER_ ## SUFFIX, chunk, operator.line); break; \
+            case TOKEN_LESS_EQUAL: emit_bytes(OP_GREATER_ ## SUFFIX, OP_NOT, chunk, operator.line); break; \
+            case TOKEN_GREATER_EQUAL: emit_bytes(OP_LESS_ ## SUFFIX, OP_NOT, chunk, operator.line); break; \
             default: break; /* unreachable */ \
         } \
     } while (false)
 
     switch(expression_node->type) {
         case EXPRESSION_BINARY: {
-            expression(expression_node->binary.left, chunk, expression_node->value_type);
-            expression(expression_node->binary.right, chunk, expression_node->value_type);
-
             Token operator = expression_node->binary.operator;
+            SavineExpressionNode* left = expression_node->binary.left;
+            SavineExpressionNode* right = expression_node->binary.right;
 
-            if (savine_is_integer_type(expression_node->value_type)) {
-                EMIT_OP(INT);
-            } else if (savine_is_float_type(expression_node->value_type)) {
-                EMIT_OP(DOUBLE);
-            } else {
-                // Unreacheable
+            switch (operator.type) {
+                case TOKEN_MINUS:
+                case TOKEN_PLUS:
+                case TOKEN_STAR:
+                case TOKEN_SLASH:
+                case TOKEN_LESS:
+                case TOKEN_GREATER:
+                case TOKEN_LESS_EQUAL:
+                case TOKEN_GREATER_EQUAL:
+                case TOKEN_BANG_EQUAL:
+                case TOKEN_EQUAL_EQUAL: {
+                    expression(left, chunk);
+                    expression(right, chunk);
+                    if (savine_is_integer_type(left->value_type, true)) {
+                        EMIT_OP(INT);
+                    } else if (savine_is_float_type(left->value_type)) {
+                        EMIT_OP(DOUBLE);
+                    } else {
+                        // Unreacheable
+                    }
+                }
             }
+
             break;
         }
 
         case EXPRESSION_UNARY: {
-            expression(expression_node->unary.operand, chunk, expression_node->value_type);
+            expression(expression_node->unary.operand, chunk);
 
+            SavineExpressionNode* unary = expression_node->unary.operand;
             Token operator = expression_node->unary.operator;
 
-            if (savine_is_integer_type(expression_node->value_type)) {
+            if (savine_is_integer_type(unary->value_type, true)) {
                 switch (operator.type) {
                     case TOKEN_MINUS: emit_byte(OP_NEGATE_INT, chunk, operator.line); break;
+                    case TOKEN_NOT: emit_byte(OP_NOT, chunk, operator.line); break;
                     default: break; // unreachable
                 }
-            } else if (savine_is_float_type(expression_node->value_type)) {
+            } else if (savine_is_float_type(unary->value_type)) {
                 switch (operator.type) {
                     case TOKEN_MINUS: emit_byte(OP_NEGATE_DOUBLE, chunk, operator.line); break;
+                    case TOKEN_NOT: emit_byte(OP_NOT, chunk, operator.line);
                     default: break; // unreachable
                 }
             }
@@ -84,7 +109,7 @@ static void expression(SavineExpressionNode* expression_node, Chunk* chunk, Savi
         }
 
         case EXPRESSION_GROUPING: {
-            expression(expression_node->grouping.expression, chunk, expression_node->value_type);
+            expression(expression_node->grouping.expression, chunk);
             break;
         }
         
@@ -98,11 +123,14 @@ static void expression(SavineExpressionNode* expression_node, Chunk* chunk, Savi
             }
             break;
         }
+
+        case EXPRESSION_IMPLICIT_CAST: {
+            expression(expression_node->cast.operand, chunk);
+            emit_type_convert(expression_node->cast.operand->value_type, expression_node->value_type, chunk, -1);
+            break;
+        }
     }
 
-    if (convert_type != expression_node->value_type) {
-        emit_type_convert(expression_node->value_type, convert_type, chunk, -1);
-    }
 #undef EMIT_OP
 }
 
@@ -111,7 +139,7 @@ bool savine_generate_code(SavineAST* ast, Chunk* chunk) {
         return true;
     }
 
-    expression(ast->expression, chunk, ast->expression->value_type);
+    expression(ast->expression, chunk);
 
     emit_return(chunk, -1);
 

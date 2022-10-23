@@ -52,13 +52,14 @@ f64 savine_vm_pop_float(SavineVM* vm) {
 }
 
 static InterpretResult run(SavineVM* vm) {
+#define TOP_SLOT (vm->stack_top - 1)
 #define READ_BYTE() (*vm->ip++)
 #define READ_CONSTANT() (vm->chunk->constants[READ_BYTE()])
 #define READ_CONSTANT_LONG() (vm->chunk->constants[((u32)READ_BYTE() << 16) | ((u16)READ_BYTE() << 8) | READ_BYTE()])
 #define BINARY_OP(op, type, fn_suffix) \
     do { \
         type b = savine_vm_pop_ ## fn_suffix(vm); \
-        (vm->stack_top - 1)->as_ ## fn_suffix = (vm->stack_top - 1)->as_ ## fn_suffix  op b; \
+        TOP_SLOT->as_ ## fn_suffix = TOP_SLOT->as_ ## fn_suffix  op b; \
     } while (false)
 
     for (;;) {
@@ -94,11 +95,11 @@ static InterpretResult run(SavineVM* vm) {
             }
 
             case OP_NEGATE_INT: {
-                (vm->stack_top - 1)->as_int = -(vm->stack_top - 1)->as_int;
+                TOP_SLOT->as_int = -TOP_SLOT->as_int;
                 break;
             }
             case OP_NEGATE_DOUBLE: {
-                (vm->stack_top - 1)->as_float = -(vm->stack_top - 1)->as_float;
+                TOP_SLOT->as_float = -TOP_SLOT->as_float;
                 break;
             }
 
@@ -113,11 +114,48 @@ static InterpretResult run(SavineVM* vm) {
             case OP_DIVIDE_DOUBLE: BINARY_OP(/, f64, float); break;
 
             case OP_INT_TO_DOUBLE:
-                (vm->stack_top - 1)->as_float = (f64)(vm->stack_top - 1)->as_int;
+                TOP_SLOT->as_float = (f64)TOP_SLOT->as_int;
                 break;
             case OP_DOUBLE_TO_INT:
-                (vm->stack_top - 1)->as_int = (i64)(vm->stack_top - 1)->as_float;
+                TOP_SLOT->as_int = (i64)TOP_SLOT->as_float;
                 break;
+            
+            case OP_NOT:
+                TOP_SLOT->as_int = !(TOP_SLOT->as_int);
+                break;
+            
+            case OP_EQUAL_INT: {
+                i64 right = savine_vm_pop_int(vm);
+                TOP_SLOT->as_int = (TOP_SLOT->as_int == right);
+                break;
+            }
+            case OP_EQUAL_DOUBLE: {
+                f64 right = savine_vm_pop_float(vm);
+                TOP_SLOT->as_int = (TOP_SLOT->as_float == right);
+                break;
+            }
+            
+            case OP_LESS_INT: {
+                i64 right = savine_vm_pop_int(vm);
+                TOP_SLOT->as_int = (TOP_SLOT->as_int < right);
+                break;
+            }
+            case OP_LESS_DOUBLE: {
+                f64 right = savine_vm_pop_float(vm);
+                TOP_SLOT->as_int = (TOP_SLOT->as_float < right);
+                break;
+            }
+            
+            case OP_GREATER_INT: {
+                i64 right = savine_vm_pop_int(vm);
+                TOP_SLOT->as_int = (TOP_SLOT->as_int > right);
+                break;
+            }
+            case OP_GREATER_DOUBLE: {
+                f64 right = savine_vm_pop_float(vm);
+                TOP_SLOT->as_int = (TOP_SLOT->as_float > right);
+                break;
+            }
 
             case OP_RETURN: {
                 print_value(savine_vm_pop(vm));
@@ -130,7 +168,8 @@ static InterpretResult run(SavineVM* vm) {
 #undef BINARY_OP
 #undef READ_CONSTANT_LONG
 #undef READ_CONSTANT
-#undef READBYTE
+#undef READ_BYTE
+#undef LAST_SLOT
 }
 
 static bool compile(const char* source, Chunk* chunk) {
@@ -141,10 +180,14 @@ static bool compile(const char* source, Chunk* chunk) {
     }
 
 #ifdef DEBUG_PRINT_CODE
-    savine_ast_print(&ast, "code");
+    savine_ast_print(&ast, "unresolved");
 #endif
 
     savine_resolve_ast_types(&ast);
+
+#ifdef DEBUG_PRINT_CODE
+    savine_ast_print(&ast, "resolved");
+#endif
 
     bool succeeded = true;
     succeeded &= ast.expression->value_type != SAVINE_TYPE_UNRESOLVED;

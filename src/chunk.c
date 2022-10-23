@@ -28,7 +28,7 @@ void chunk_write(Chunk* chunk, byte item, i32 line) {
     sb_push(chunk->code, item);
 
     i32 lines_count = sb_count(chunk->lines);
-    if ((lines_count > 1 && chunk->lines[lines_count - 2] == line) || line < 0) {
+    if ((lines_count > 1 && (chunk->lines[lines_count - 2] == line || line < 0))) {
         chunk->lines[lines_count - 1]++;
     } else {
         sb_push(chunk->lines, line);

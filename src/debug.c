@@ -60,6 +60,13 @@ i32 disassemble_instruction(Chunk* chunk, i32 offset) {
         case OP_DIVIDE_DOUBLE: return simple_instruction("OP_DIVIDE_DOUBLE", offset);
         case OP_INT_TO_DOUBLE: return simple_instruction("OP_INT_TO_DOUBLE", offset);
         case OP_DOUBLE_TO_INT: return simple_instruction("OP_DOUBLE_TO_INT", offset);
+        case OP_NOT: return simple_instruction("OP_NOT", offset);
+        case OP_EQUAL_INT: return simple_instruction("OP_EQUAL_INT", offset);
+        case OP_EQUAL_DOUBLE: return simple_instruction("OP_EQUAL_DOUBLE", offset);
+        case OP_LESS_INT: return simple_instruction("OP_LESS_INT", offset);
+        case OP_LESS_DOUBLE: return simple_instruction("OP_LESS_DOUBLE", offset);
+        case OP_GREATER_INT: return simple_instruction("OP_GREATER_INT", offset);
+        case OP_GREATER_DOUBLE: return simple_instruction("OP_GREATER_DOUBLE", offset);
         case OP_RETURN: return simple_instruction("OP_RETURN", offset);
         default: return simple_instruction("OP_UNKNOWN", offset);
     }
