@@ -54,12 +54,12 @@ static void expression(SavineExpressionNode* expression_node, Chunk* chunk, Savi
 
             Token operator = expression_node->binary.operator;
 
-            switch(expression_node->value_type) {
-                case SAVINE_TYPE_INT32:
-                case SAVINE_TYPE_INT64: EMIT_OP(INT); break;
-
-                case SAVINE_TYPE_FLOAT32:
-                case SAVINE_TYPE_FLOAT64: EMIT_OP(DOUBLE); break;
+            if (savine_is_integer_type(expression_node->value_type)) {
+                EMIT_OP(INT);
+            } else if (savine_is_float_type(expression_node->value_type)) {
+                EMIT_OP(DOUBLE);
+            } else {
+                // Unreacheable
             }
             break;
         }
@@ -68,9 +68,17 @@ static void expression(SavineExpressionNode* expression_node, Chunk* chunk, Savi
             expression(expression_node->unary.operand, chunk, expression_node->value_type);
 
             Token operator = expression_node->unary.operator;
-            switch (operator.type) {
-                case TOKEN_MINUS: emit_byte(OP_NEGATE_INT, chunk, operator.line);
-                default: break; // unreachable
+
+            if (savine_is_integer_type(expression_node->value_type)) {
+                switch (operator.type) {
+                    case TOKEN_MINUS: emit_byte(OP_NEGATE_INT, chunk, operator.line); break;
+                    default: break; // unreachable
+                }
+            } else if (savine_is_float_type(expression_node->value_type)) {
+                switch (operator.type) {
+                    case TOKEN_MINUS: emit_byte(OP_NEGATE_DOUBLE, chunk, operator.line); break;
+                    default: break; // unreachable
+                }
             }
             break;
         }
