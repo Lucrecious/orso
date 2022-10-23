@@ -10,7 +10,7 @@ int main(int argc, char **argv) {
     SavineVM vm;
     savine_vm_init(&vm);
 
-    savine_interpret(&vm, "not (4 < 6)");
+    savine_interpret(&vm, "(6.0 + 5) > 10");
 
     savine_vm_free(&vm);
 

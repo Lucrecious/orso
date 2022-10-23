@@ -23,13 +23,4 @@ void savine_vm_free(SavineVM* vm);
 
 InterpretResult savine_interpret(SavineVM* vm, const char* source);
 
-void FORCE_INLINE savine_vm_push(SavineVM* vm, SavineValue value);
-SavineValue FORCE_INLINE savine_vm_pop(SavineVM* vm);
-
-void FORCE_INLINE savine_vm_push_int(SavineVM* vm, i64 value);
-i64 FORCE_INLINE savine_vm_pop_int(SavineVM* vm);
-
-void FORCE_INLINE savine_vm_push_float(SavineVM* vm, f64 value);
-f64 FORCE_INLINE savine_vm_pop_float(SavineVM* vm);
-
 #endif

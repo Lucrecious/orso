@@ -21,32 +21,32 @@ void savine_vm_init(SavineVM* vm) {
 void savine_vm_free(SavineVM* vm) {
 }
 
-void savine_vm_push(SavineVM* vm, SavineValue value) {
+static void FORCE_INLINE push(SavineVM* vm, SavineValue value) {
     *vm->stack_top = value;
     vm->stack_top++;
 }
 
-SavineValue savine_vm_pop(SavineVM* vm) {
+static SavineValue FORCE_INLINE pop(SavineVM* vm) {
     vm->stack_top--;
     return *vm->stack_top;
 }
 
-void savine_vm_push_int(SavineVM* vm, i64 value) {
+static void FORCE_INLINE push_int(SavineVM* vm, i64 value) {
     vm->stack_top->as_int = value;
     vm->stack_top++;
 }
 
-void savine_vm_push_float(SavineVM* vm, f64 value) {
+static void FORCE_INLINE push_float(SavineVM* vm, f64 value) {
     vm->stack_top->as_float = value;
     vm->stack_top++;
 }
 
-i64 savine_vm_pop_int(SavineVM* vm) {
+static i64 FORCE_INLINE pop_int(SavineVM* vm) {
     vm->stack_top--;
     return vm->stack_top->as_int;
 }
 
-f64 savine_vm_pop_float(SavineVM* vm) {
+static f64 FORCE_INLINE pop_float(SavineVM* vm) {
     vm->stack_top--;
     return vm->stack_top->as_float;
 }
@@ -58,7 +58,7 @@ static InterpretResult run(SavineVM* vm) {
 #define READ_CONSTANT_LONG() (vm->chunk->constants[((u32)READ_BYTE() << 16) | ((u16)READ_BYTE() << 8) | READ_BYTE()])
 #define BINARY_OP(op, type, fn_suffix) \
     do { \
-        type b = savine_vm_pop_ ## fn_suffix(vm); \
+        type b = pop_ ## fn_suffix(vm); \
         TOP_SLOT->as_ ## fn_suffix = TOP_SLOT->as_ ## fn_suffix  op b; \
     } while (false)
 
@@ -77,20 +77,20 @@ static InterpretResult run(SavineVM* vm) {
         switch (instruction = READ_BYTE()) {
             case OP_CONSTANT: {
                 SavineValue constant = READ_CONSTANT();
-                savine_vm_push(vm, constant);
+                push(vm, constant);
                 break;
             }
             case OP_CONSTANT_LONG: {
                 SavineValue constant = READ_CONSTANT_LONG();
-                savine_vm_push(vm, constant);
+                push(vm, constant);
                 break;
             }
             case OP_ZERO: {
-                savine_vm_push_int(vm, 0);
+                push_int(vm, 0);
                 break;
             }
             case OP_ONE: {
-                savine_vm_push_int(vm, 1);
+                push_int(vm, 1);
                 break;
             }
 
@@ -125,40 +125,40 @@ static InterpretResult run(SavineVM* vm) {
                 break;
             
             case OP_EQUAL_INT: {
-                i64 right = savine_vm_pop_int(vm);
+                i64 right = pop_int(vm);
                 TOP_SLOT->as_int = (TOP_SLOT->as_int == right);
                 break;
             }
             case OP_EQUAL_DOUBLE: {
-                f64 right = savine_vm_pop_float(vm);
+                f64 right = pop_float(vm);
                 TOP_SLOT->as_int = (TOP_SLOT->as_float == right);
                 break;
             }
             
             case OP_LESS_INT: {
-                i64 right = savine_vm_pop_int(vm);
+                i64 right = pop_int(vm);
                 TOP_SLOT->as_int = (TOP_SLOT->as_int < right);
                 break;
             }
             case OP_LESS_DOUBLE: {
-                f64 right = savine_vm_pop_float(vm);
+                f64 right = pop_float(vm);
                 TOP_SLOT->as_int = (TOP_SLOT->as_float < right);
                 break;
             }
             
             case OP_GREATER_INT: {
-                i64 right = savine_vm_pop_int(vm);
+                i64 right = pop_int(vm);
                 TOP_SLOT->as_int = (TOP_SLOT->as_int > right);
                 break;
             }
             case OP_GREATER_DOUBLE: {
-                f64 right = savine_vm_pop_float(vm);
+                f64 right = pop_float(vm);
                 TOP_SLOT->as_int = (TOP_SLOT->as_float > right);
                 break;
             }
 
             case OP_RETURN: {
-                print_value(savine_vm_pop(vm));
+                print_value(pop(vm));
                 printf("\n");
                 return SAVINE_INTERPRET_OK;
             }
