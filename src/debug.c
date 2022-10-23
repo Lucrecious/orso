@@ -46,6 +46,8 @@ i32 disassemble_instruction(Chunk* chunk, i32 offset) {
     switch(instruction) {
         case OP_CONSTANT: return constant_instruction("OP_CONSTANT", chunk, offset);
         case OP_CONSTANT_LONG: return constant_long_instruction("OP_CONSTANT_LONG", chunk, offset);
+        case OP_ZERO: return simple_instruction("OP_ZERO", offset);
+        case OP_ONE: return simple_instruction("OP_ONE", offset);
         case OP_NEGATE_INT: return simple_instruction("OP_NEGATE_INT", offset);
         case OP_NEGATE_DOUBLE: return simple_instruction("OP_NEGATE_DOUBLE", offset);
         case OP_ADD_INT: return simple_instruction("OP_ADD_INT", offset);

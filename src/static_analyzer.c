@@ -47,6 +47,19 @@ static SavineType savine_resolve_binary(TokenType operator, SavineType left, Sav
 
             return merged_type;
         }
+
+        case TOKEN_EQUAL_EQUAL:
+        case TOKEN_BANG_EQUAL:
+        case TOKEN_LESS_EQUAL:
+        case TOKEN_GREATER_EQUAL:
+        case TOKEN_LESS:
+        case TOKEN_GREATER: {
+            if (savine_is_number_type(left) && savine_is_number_type(right)) {
+                return SAVINE_TYPE_BOOL;
+            }
+
+            return SAVINE_TYPE_INVALID;
+        }
         default: return SAVINE_TYPE_INVALID;
     }
 }
@@ -63,6 +76,8 @@ static SavineType savine_resolve_unary(TokenType operator, SavineType operand) {
     switch (operator) {
         case TOKEN_MINUS:
             return operand;
+        case TOKEN_NOT:
+            return SAVINE_TYPE_BOOL;
         default: return SAVINE_TYPE_INVALID;
     }
 }

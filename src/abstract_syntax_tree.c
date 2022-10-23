@@ -92,7 +92,6 @@ static void consume(Parser* parser, TokenType type, const char* message) {
 }
 
 static SavineExpressionNode* number(Parser* parser) {
-
     SavineExpressionNode* expression_node = ALLOCATE(SavineExpressionNode);
     expression_node->type = EXPRESSION_PRIMARY;
     expression_node->primary.token = parser->previous;
@@ -111,6 +110,23 @@ static SavineExpressionNode* number(Parser* parser) {
             break;
         }
         default: break; // unreachable
+    }
+
+    return expression_node;
+}
+
+static SavineExpressionNode* literal(Parser* parser) {
+    SavineExpressionNode* expression_node = ALLOCATE(SavineExpressionNode);
+    expression_node->type = EXPRESSION_PRIMARY;
+    expression_node->primary.token = parser->previous;
+
+    switch (parser->previous.type) {
+        case TOKEN_FALSE:
+        case TOKEN_TRUE: {
+            expression_node->value_type = SAVINE_TYPE_BOOL;
+            expression_node->primary.constant.as_int = (i64)(parser->previous.type == TOKEN_TRUE);
+            break;
+        }
     }
 
     return expression_node;
@@ -193,6 +209,9 @@ ParseRule rules[] = {
     [TOKEN_NOT]                     = { NULL,       NULL,       PREC_NONE },
     [TOKEN_AND]                     = { NULL,       NULL,       PREC_NONE },
     [TOKEN_OR]                      = { NULL,       NULL,       PREC_NONE },
+    [TOKEN_TRUE]                    = { literal,    NULL,       PREC_NONE },
+    [TOKEN_FALSE]                   = { literal,    NULL,       PREC_NONE },
+    [TOKEN_NIL]                     = { literal,    NULL,       PREC_NONE },
     [TOKEN_ERROR]                   = { NULL,       NULL,       PREC_NONE },
     [TOKEN_EOF]                     = { NULL,       NULL,       PREC_NONE },
     [TOKEN_SIZE]                    = { NULL,       NULL,       PREC_NONE },

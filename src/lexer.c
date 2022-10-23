@@ -1,6 +1,8 @@
 #include "lexer.h"
 
 #include <ctype.h>
+#include <stdio.h>
+#include <string.h>
 #include <stdlib.h>
 
 void lexer_init(Lexer* lexer, const char* code) {
@@ -140,7 +142,7 @@ static Token number(Lexer* lexer) {
 static TokenType check_keyword(Lexer* lexer, i32 start, i32 length,
         const char* rest, TokenType type) {
     if (lexer->current - lexer->start == start + length &&
-        memcpy(lexer->start + start, rest, length)== 0) {
+        memcmp(lexer->start + start, rest, length)== 0) {
         return type;
     }
 
@@ -151,10 +153,26 @@ static TokenType identifier_type(Lexer* lexer) {
     switch (lexer->start[0]) {
         case 's': return check_keyword(lexer, 1, 5, "truct", TOKEN_STRUCT);
         case 'v': return check_keyword(lexer, 1, 2, "ar", TOKEN_VAR);
-        case 'f': return check_keyword(lexer, 1, 3, "unc", TOKEN_FUNCTION);
+        case 'f': {
+            switch (lexer->start[1]) {
+                case 'u': return check_keyword(lexer, 2, 2, "nc", TOKEN_FUNCTION);
+                case 'a': return check_keyword(lexer, 2, 3, "lse", TOKEN_FALSE);
+            }
+            break;
+        }
+
+            
         case 'a': return check_keyword(lexer, 1, 2, "nd", TOKEN_AND);
         case 'o': return check_keyword(lexer, 1, 1, "r", TOKEN_OR);
-        case 'n': return check_keyword(lexer, 1, 2, "ot", TOKEN_NOT);
+        case 'n': {
+            switch (lexer->start[1]) {
+                case 'o': return check_keyword(lexer, 2, 1, "t", TOKEN_NOT);
+                case 'i': return check_keyword(lexer, 2, 1, "l", TOKEN_NIL);
+            }
+            break;
+        }
+        
+        case 't': return check_keyword(lexer, 1, 3, "rue", TOKEN_TRUE);
     }
 
     return TOKEN_IDENTIFIER;

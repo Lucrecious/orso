@@ -84,6 +84,15 @@ static InterpretResult run(SavineVM* vm) {
                 savine_vm_push(vm, constant);
                 break;
             }
+            case OP_ZERO: {
+                savine_vm_push_int(vm, 0);
+                break;
+            }
+            case OP_ONE: {
+                savine_vm_push_int(vm, 1);
+                break;
+            }
+
             case OP_NEGATE_INT: {
                 (vm->stack_top - 1)->as_int = -(vm->stack_top - 1)->as_int;
                 break;

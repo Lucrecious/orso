@@ -89,7 +89,13 @@ static void expression(SavineExpressionNode* expression_node, Chunk* chunk, Savi
         }
         
         case EXPRESSION_PRIMARY: {
-            emit_constant(chunk, expression_node->primary.constant, expression_node->primary.token.line);
+            if (expression_node->primary.constant.as_int == 0) {
+                emit_byte(OP_ZERO, chunk, expression_node->primary.token.line);
+            } else if (expression_node->primary.constant.as_int == 1) {
+                emit_byte(OP_ONE, chunk, expression_node->primary.token.line);
+            } else {
+                emit_constant(chunk, expression_node->primary.constant, expression_node->primary.token.line);
+            }
             break;
         }
     }

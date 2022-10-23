@@ -25,6 +25,7 @@ bool FORCE_INLINE savine_is_float_type(SavineType type) {
 
 bool FORCE_INLINE savine_is_integer_type(SavineType type) {
     switch (type) {
+        case SAVINE_TYPE_BOOL:
         case SAVINE_TYPE_INT32:
         case SAVINE_TYPE_INT64: return true;
         default: return false;
@@ -33,6 +34,10 @@ bool FORCE_INLINE savine_is_integer_type(SavineType type) {
 
 bool FORCE_INLINE savine_is_unsigned_integer_type(SavineType type) {
     return false;
+}
+
+bool FORCE_INLINE savine_is_number_type(SavineType type) {
+    return savine_is_float_type(type) || savine_is_integer_type(type) || savine_is_unsigned_integer_type(type);
 }
 
 
