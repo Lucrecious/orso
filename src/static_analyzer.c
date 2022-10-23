@@ -27,14 +27,14 @@ static OrsoExpressionNode* implicit_cast(OrsoExpressionNode* parent, OrsoExpress
     return implicit_cast;
 }
 
-void orso_resolve_expression(OrsoExpressionNode* expression) {
+void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoExpressionNode* expression) {
     if (expression->value_type != ORSO_TYPE_UNRESOLVED) {
         return;
     }
 
     switch (expression->type) {
         case EXPRESSION_GROUPING: {
-            orso_resolve_expression(expression->grouping.expression);
+            orso_resolve_expression(analyzer, expression->grouping.expression);
             expression->value_type = expression->grouping.expression->value_type;
             break;
         }
@@ -45,8 +45,8 @@ void orso_resolve_expression(OrsoExpressionNode* expression) {
         case EXPRESSION_BINARY: {
             OrsoExpressionNode* left = expression->binary.left;
             OrsoExpressionNode* right = expression->binary.right;
-            orso_resolve_expression(left);
-            orso_resolve_expression(right);
+            orso_resolve_expression(analyzer, left);
+            orso_resolve_expression(analyzer, right);
 
             OrsoType cast_left;
             OrsoType cast_right;
@@ -94,7 +94,7 @@ void orso_resolve_expression(OrsoExpressionNode* expression) {
             break;
         }
         case EXPRESSION_UNARY: {
-            orso_resolve_expression(expression->unary.operand);
+            orso_resolve_expression(analyzer, expression->unary.operand);
             expression->value_type = orso_resolve_unary(
                     expression->unary.operator.type, expression->unary.operand->value_type);
             break;
@@ -104,10 +104,16 @@ void orso_resolve_expression(OrsoExpressionNode* expression) {
     }
 }
 
-void orso_resolve_ast_types(OrsoAST* ast, OrsoErrorFunction error_fn) {
+void orso_resolve_ast_types(OrsoStaticAnalyzer* analyzer, OrsoAST* ast) {
     if (ast->expression == NULL) {
         return;
     }
 
-    orso_resolve_expression(ast->expression);
+    orso_resolve_expression(analyzer, ast->expression);
+}
+
+void orso_static_analyzer_init(OrsoStaticAnalyzer* analyzer, OrsoErrorFunction error_fn) {
+    analyzer->error_fn = error_fn;
+    analyzer->had_error = false;
+    analyzer->panic_mode = false;
 }

@@ -183,7 +183,10 @@ static bool compile(const char* source, Chunk* chunk, OrsoErrorFunction error_fn
     orso_ast_print(&ast, "unresolved");
 #endif
 
-    orso_resolve_ast_types(&ast, error_fn);
+    OrsoStaticAnalyzer analyzer;
+    orso_static_analyzer_init(&analyzer, error_fn);
+
+    orso_resolve_ast_types(&analyzer, &ast);
 
 #ifdef DEBUG_PRINT_CODE
     orso_ast_print(&ast, "resolved");
