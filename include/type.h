@@ -15,6 +15,20 @@ typedef enum OrsoType {
     ORSO_TYPE_MAX,
 } OrsoType;
 
+const FORCE_INLINE char* orso_type_to_cstr(OrsoType type) {
+    switch (type) {
+        case ORSO_TYPE_NIL: return "nil";
+        case ORSO_TYPE_BOOL: return "bool";
+        case ORSO_TYPE_INT32: return "i32";
+        case ORSO_TYPE_INT64: return "i64";
+        case ORSO_TYPE_FLOAT32: return "f32";
+        case ORSO_TYPE_FLOAT64: return "f64";
+        case ORSO_TYPE_UNRESOLVED: return "<unresolved>";
+        case ORSO_TYPE_INVALID: return "<invalid>";
+        default: return "<unknown>";
+    }
+}
+
 bool FORCE_INLINE orso_is_float_type(OrsoType type) {
     switch (type) {
         case ORSO_TYPE_FLOAT32:

@@ -4,6 +4,7 @@
 #include <stdlib.h>
 
 #include "common.h"
+#include "type.h"
 #include "str_to_value.h"
 
 typedef struct Parser {
@@ -281,7 +282,7 @@ bool orso_parse_to_ast(const char* source, OrsoAST* ast, OrsoErrorFunction error
 }
 
 void ast_print_expression(OrsoExpressionNode* expression, i32 initial_indent) {
-    printf("%*s", initial_indent, "");
+    printf("%*s [%s] ", initial_indent, "", orso_type_to_cstr(expression->value_type));
 
     switch (expression->type) {
         case EXPRESSION_BINARY: {

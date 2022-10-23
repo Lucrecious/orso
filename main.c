@@ -21,7 +21,7 @@ int main(int argc, char **argv) {
     OrsoVM vm;
     orso_vm_init(&vm);
 
-    orso_interpret(&vm, "(6.0 + 5) ? 10", error);
+    orso_interpret(&vm, "not ((5 - 4 > 3.0 * 2) == true)", error);
 
     orso_vm_free(&vm);
 
