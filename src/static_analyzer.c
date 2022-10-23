@@ -1,25 +1,25 @@
 #include "static_analyzer.h"
 
-static SavineType savine_resolve_unary(TokenType operator, SavineType operand) {
-    if (operand == SAVINE_TYPE_INVALID) {
-        return SAVINE_TYPE_INVALID;
+static OrsoType orso_resolve_unary(TokenType operator, OrsoType operand) {
+    if (operand == ORSO_TYPE_INVALID) {
+        return ORSO_TYPE_INVALID;
     }
 
-    if (operand == SAVINE_TYPE_UNRESOLVED) {
-        return SAVINE_TYPE_UNRESOLVED;
+    if (operand == ORSO_TYPE_UNRESOLVED) {
+        return ORSO_TYPE_UNRESOLVED;
     }
 
     switch (operator) {
         case TOKEN_MINUS:
             return operand;
         case TOKEN_NOT:
-            return SAVINE_TYPE_BOOL;
-        default: return SAVINE_TYPE_INVALID;
+            return ORSO_TYPE_BOOL;
+        default: return ORSO_TYPE_INVALID;
     }
 }
 
-static SavineExpressionNode* implicit_cast(SavineExpressionNode* parent, SavineExpressionNode* operand, SavineType value_type) {
-    SavineExpressionNode* implicit_cast = ALLOCATE(SavineExpressionNode);
+static OrsoExpressionNode* implicit_cast(OrsoExpressionNode* parent, OrsoExpressionNode* operand, OrsoType value_type) {
+    OrsoExpressionNode* implicit_cast = ALLOCATE(OrsoExpressionNode);
     implicit_cast->type = EXPRESSION_IMPLICIT_CAST;
     implicit_cast->value_type = value_type;
     implicit_cast->cast.operand = operand;
@@ -27,36 +27,36 @@ static SavineExpressionNode* implicit_cast(SavineExpressionNode* parent, SavineE
     return implicit_cast;
 }
 
-void savine_resolve_expression(SavineExpressionNode* expression) {
-    if (expression->value_type != SAVINE_TYPE_UNRESOLVED) {
+void orso_resolve_expression(OrsoExpressionNode* expression) {
+    if (expression->value_type != ORSO_TYPE_UNRESOLVED) {
         return;
     }
 
     switch (expression->type) {
         case EXPRESSION_GROUPING: {
-            savine_resolve_expression(expression->grouping.expression);
+            orso_resolve_expression(expression->grouping.expression);
             expression->value_type = expression->grouping.expression->value_type;
             break;
         }
         case EXPRESSION_PRIMARY: {
-            expression->value_type = SAVINE_TYPE_INT64;
+            expression->value_type = ORSO_TYPE_INT64;
             break;
         }
         case EXPRESSION_BINARY: {
-            SavineExpressionNode* left = expression->binary.left;
-            SavineExpressionNode* right = expression->binary.right;
-            savine_resolve_expression(left);
-            savine_resolve_expression(right);
+            OrsoExpressionNode* left = expression->binary.left;
+            OrsoExpressionNode* right = expression->binary.right;
+            orso_resolve_expression(left);
+            orso_resolve_expression(right);
 
-            SavineType cast_left;
-            SavineType cast_right;
+            OrsoType cast_left;
+            OrsoType cast_right;
 
             switch (expression->binary.operator.type) {
                 case TOKEN_PLUS:
                 case TOKEN_MINUS:
                 case TOKEN_STAR:
                 case TOKEN_SLASH: {
-                    SavineType combined_type = savine_binary_arithmetic_cast(left->value_type, right->value_type);
+                    OrsoType combined_type = orso_binary_arithmetic_cast(left->value_type, right->value_type);
                     expression->value_type = combined_type;
 
                     cast_left = combined_type;
@@ -68,20 +68,20 @@ void savine_resolve_expression(SavineExpressionNode* expression) {
                 case TOKEN_GREATER:
                 case TOKEN_LESS_EQUAL:
                 case TOKEN_GREATER_EQUAL: {
-                    savine_binary_comparison_casts(left->value_type, right->value_type, &cast_left, &cast_right);
-                    expression->value_type = SAVINE_TYPE_BOOL;
+                    orso_binary_comparison_casts(left->value_type, right->value_type, &cast_left, &cast_right);
+                    expression->value_type = ORSO_TYPE_BOOL;
                     break;
                 }
                 case TOKEN_BANG_EQUAL:
                 case TOKEN_EQUAL_EQUAL: {
-                    savine_binary_equality_casts(left->value_type, right->value_type, &cast_left, &cast_right);
-                    expression->value_type = SAVINE_TYPE_BOOL;
+                    orso_binary_equality_casts(left->value_type, right->value_type, &cast_left, &cast_right);
+                    expression->value_type = ORSO_TYPE_BOOL;
                     break;
                 }
             }
 
-            if (cast_left == SAVINE_TYPE_INVALID || cast_right == SAVINE_TYPE_INVALID) {
-                expression->value_type = SAVINE_TYPE_INVALID;
+            if (cast_left == ORSO_TYPE_INVALID || cast_right == ORSO_TYPE_INVALID) {
+                expression->value_type = ORSO_TYPE_INVALID;
             } else {
                 if (cast_left != left->value_type) {
                     expression->binary.left = implicit_cast(expression, left, cast_left);
@@ -94,8 +94,8 @@ void savine_resolve_expression(SavineExpressionNode* expression) {
             break;
         }
         case EXPRESSION_UNARY: {
-            savine_resolve_expression(expression->unary.operand);
-            expression->value_type = savine_resolve_unary(
+            orso_resolve_expression(expression->unary.operand);
+            expression->value_type = orso_resolve_unary(
                     expression->unary.operator.type, expression->unary.operand->value_type);
             break;
         }
@@ -104,10 +104,10 @@ void savine_resolve_expression(SavineExpressionNode* expression) {
     }
 }
 
-void savine_resolve_ast_types(SavineAST* ast) {
+void orso_resolve_ast_types(OrsoAST* ast) {
     if (ast->expression == NULL) {
         return;
     }
 
-    savine_resolve_expression(ast->expression);
+    orso_resolve_expression(ast->expression);
 }

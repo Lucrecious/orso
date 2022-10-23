@@ -3,13 +3,13 @@
 
 #include "def.h"
 
-typedef struct SavineValue {
+typedef struct OrsoValue {
     union {
         i64 as_int;
         f64 as_float;
     };
-} SavineValue;
+} OrsoValue;
 
-void print_value(SavineValue value);
+void print_value(OrsoValue value);
 
 #endif

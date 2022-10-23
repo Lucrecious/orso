@@ -7,18 +7,18 @@
 #include "error_codes.h"
 
 MU_TEST(retrieve_i32) {
-    SavineEnv env;
-    savine_env_init(&env);
+    OrsoEnv env;
+    orso_env_init(&env);
 
-    InterpretResult result = savine_env_feed_line("var thing := 42");
+    InterpretResult result = orso_env_feed_line("var thing := 42");
 
-    SavineScope scope;
-    savine_env_current_scope(&env, &scope);
-    i32 thing = savine_scope_get_i32(&scope, "thing");
+    OrsoScope scope;
+    orso_env_current_scope(&env, &scope);
+    i32 thing = orso_scope_get_i32(&scope, "thing");
 
-    savine_env_free(&env);
+    orso_env_free(&env);
 
-    MU_ASSERT(result == SAVINE_INTERPRET_OK, "must interpret correctly");
+    MU_ASSERT(result == ORSO_INTERPRET_OK, "must interpret correctly");
     MU_ASSERT(thing == 42, "must be able to retrieve value");
 }
 

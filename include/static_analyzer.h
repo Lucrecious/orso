@@ -3,9 +3,9 @@
 
 #include "abstract_syntax_tree.h"
 
-void savine_resolve_expression(SavineExpressionNode* expression);
+void orso_resolve_expression(OrsoExpressionNode* expression);
 
-void savine_resolve_ast_types(SavineAST* ast);
+void orso_resolve_ast_types(OrsoAST* ast);
 
 
 #endif

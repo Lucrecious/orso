@@ -4,6 +4,6 @@
 #include "abstract_syntax_tree.h"
 #include "chunk.h"
 
-bool savine_generate_code(SavineAST* ast, Chunk* chunk);
+bool orso_generate_code(OrsoAST* ast, Chunk* chunk);
 
 #endif

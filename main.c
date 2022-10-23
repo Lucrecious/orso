@@ -4,15 +4,15 @@
 #include "debug.h"
 #include "virtual_machine.h"
 
-#define PROJECT_NAME "savine"
+#define PROJECT_NAME "orso"
 
 int main(int argc, char **argv) {
-    SavineVM vm;
-    savine_vm_init(&vm);
+    OrsoVM vm;
+    orso_vm_init(&vm);
 
-    savine_interpret(&vm, "(6.0 + 5) > 10");
+    orso_interpret(&vm, "(6.0 + 5) > 10");
 
-    savine_vm_free(&vm);
+    orso_vm_free(&vm);
 
     return 0;
 }

@@ -1,4 +1,4 @@
-project('savine', 'c',
+project('orso', 'c',
   version : '0.1',
   default_options : ['warning_level=3', 'c_std=c99'])
 
@@ -22,6 +22,6 @@ src = [
 #   install : false,
 #   include_directories : inc)
 
-executable('savine', [src, 'main.c'], install : false, include_directories : inc)
+executable('orso', [src, 'main.c'], install : false, include_directories : inc)
 
 # test('variable_retrieval', test_variable_retrieval)

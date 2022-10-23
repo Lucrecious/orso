@@ -14,53 +14,53 @@ typedef enum ExpressionType {
     EXPRESSION_PRIMARY,
 } ExpressionType;
 
-typedef struct SavineExpressionNode SavineExpressionNode;
+typedef struct OrsoExpressionNode OrsoExpressionNode;
 
-typedef struct SavineImplicitCastOp {
-    SavineExpressionNode* operand;
-} SavineImplicitCastOp;
+typedef struct OrsoImplicitCastOp {
+    OrsoExpressionNode* operand;
+} OrsoImplicitCastOp;
 
-typedef struct SavineBinaryOp {
+typedef struct OrsoBinaryOp {
     Token operator;
-    SavineExpressionNode* left;
-    SavineExpressionNode* right;
-} SavineBinaryOp;
+    OrsoExpressionNode* left;
+    OrsoExpressionNode* right;
+} OrsoBinaryOp;
 
-typedef struct SavineUnaryOp {
+typedef struct OrsoUnaryOp {
     Token operator;
-    SavineExpressionNode* operand;
-} SavineUnaryOp;
+    OrsoExpressionNode* operand;
+} OrsoUnaryOp;
 
-typedef struct SavineGrouping {
-    SavineExpressionNode* expression;
-} SavineGrouping;
+typedef struct OrsoGrouping {
+    OrsoExpressionNode* expression;
+} OrsoGrouping;
 
-typedef struct SavinePrimary {
+typedef struct OrsoPrimary {
     Token token;
-    SavineValue constant;
-} SavinePrimary;
+    OrsoValue constant;
+} OrsoPrimary;
 
-struct SavineExpressionNode {
-    SavineType value_type;
+struct OrsoExpressionNode {
+    OrsoType value_type;
     ExpressionType type;
     union {
-        SavineImplicitCastOp cast;
-        SavineBinaryOp binary;
-        SavineUnaryOp unary;
-        SavineGrouping grouping;
-        SavinePrimary primary;
+        OrsoImplicitCastOp cast;
+        OrsoBinaryOp binary;
+        OrsoUnaryOp unary;
+        OrsoGrouping grouping;
+        OrsoPrimary primary;
     };
 };
 
-typedef struct SavineAST {
-    SavineExpressionNode* expression;
-} SavineAST;
+typedef struct OrsoAST {
+    OrsoExpressionNode* expression;
+} OrsoAST;
 
-void savine_ast_print(SavineAST* ast, const char* name);
+void orso_ast_print(OrsoAST* ast, const char* name);
 
-bool savine_parse_to_ast(const char* source, SavineAST* ast);
+bool orso_parse_to_ast(const char* source, OrsoAST* ast);
 
-void savine_ast_init(SavineAST* ast);
-void savine_ast_free(SavineAST* ast);
+void orso_ast_init(OrsoAST* ast);
+void orso_ast_free(OrsoAST* ast);
 
 #endif

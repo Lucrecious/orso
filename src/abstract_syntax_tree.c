@@ -27,7 +27,7 @@ typedef enum {
     PREC_PRIMARY
 } Precedence;
 
-typedef SavineExpressionNode* (*ParseFn)(Parser*);
+typedef OrsoExpressionNode* (*ParseFn)(Parser*);
 
 typedef struct {
     ParseFn prefix;
@@ -91,21 +91,21 @@ static void consume(Parser* parser, TokenType type, const char* message) {
     error_at_current(parser, message);
 }
 
-static SavineExpressionNode* number(Parser* parser) {
-    SavineExpressionNode* expression_node = ALLOCATE(SavineExpressionNode);
+static OrsoExpressionNode* number(Parser* parser) {
+    OrsoExpressionNode* expression_node = ALLOCATE(OrsoExpressionNode);
     expression_node->type = EXPRESSION_PRIMARY;
     expression_node->primary.token = parser->previous;
 
     switch (parser->previous.type)  {
         case TOKEN_INTEGER: {
             i64 value = cstrn_to_i64(parser->previous.start, parser->previous.length);
-            expression_node->value_type = SAVINE_TYPE_INT64;
+            expression_node->value_type = ORSO_TYPE_INT64;
             expression_node->primary.constant.as_int = value;
             break;
         }
         case TOKEN_FLOAT: {
             f64 value = cstrn_to_f64(parser->previous.start, parser->previous.length);
-            expression_node->value_type = SAVINE_TYPE_FLOAT64;
+            expression_node->value_type = ORSO_TYPE_FLOAT64;
             expression_node->primary.constant.as_float = value;
             break;
         }
@@ -115,15 +115,15 @@ static SavineExpressionNode* number(Parser* parser) {
     return expression_node;
 }
 
-static SavineExpressionNode* literal(Parser* parser) {
-    SavineExpressionNode* expression_node = ALLOCATE(SavineExpressionNode);
+static OrsoExpressionNode* literal(Parser* parser) {
+    OrsoExpressionNode* expression_node = ALLOCATE(OrsoExpressionNode);
     expression_node->type = EXPRESSION_PRIMARY;
     expression_node->primary.token = parser->previous;
 
     switch (parser->previous.type) {
         case TOKEN_FALSE:
         case TOKEN_TRUE: {
-            expression_node->value_type = SAVINE_TYPE_BOOL;
+            expression_node->value_type = ORSO_TYPE_BOOL;
             expression_node->primary.constant.as_int = (i64)(parser->previous.type == TOKEN_TRUE);
             break;
         }
@@ -132,14 +132,14 @@ static SavineExpressionNode* literal(Parser* parser) {
     return expression_node;
 }
 
-static SavineExpressionNode* expression(Parser* parser);
+static OrsoExpressionNode* expression(Parser* parser);
 static ParseRule* get_rule(TokenType type);
-static SavineExpressionNode* parse_precedence(Parser* parser, Precedence precedence);
+static OrsoExpressionNode* parse_precedence(Parser* parser, Precedence precedence);
 
-static SavineExpressionNode* grouping(Parser* parser) {
-    SavineExpressionNode* expression_node = ALLOCATE(SavineExpressionNode);
+static OrsoExpressionNode* grouping(Parser* parser) {
+    OrsoExpressionNode* expression_node = ALLOCATE(OrsoExpressionNode);
 
-    expression_node->value_type = SAVINE_TYPE_UNRESOLVED;
+    expression_node->value_type = ORSO_TYPE_UNRESOLVED;
     expression_node->type = EXPRESSION_GROUPING;
     expression_node->grouping.expression = expression(parser);
     expression_node->value_type = expression_node->grouping.expression->value_type;
@@ -148,10 +148,10 @@ static SavineExpressionNode* grouping(Parser* parser) {
     return expression_node;
 }
 
-static SavineExpressionNode* unary(Parser* parser) {
-    SavineExpressionNode* expression_node = ALLOCATE(SavineExpressionNode);
+static OrsoExpressionNode* unary(Parser* parser) {
+    OrsoExpressionNode* expression_node = ALLOCATE(OrsoExpressionNode);
 
-    expression_node->value_type = SAVINE_TYPE_UNRESOLVED;
+    expression_node->value_type = ORSO_TYPE_UNRESOLVED;
     expression_node->type = EXPRESSION_UNARY;
     expression_node->unary.operator = parser->previous;
     expression_node->unary.operand = parse_precedence(parser, PREC_UNARY);
@@ -159,10 +159,10 @@ static SavineExpressionNode* unary(Parser* parser) {
     return expression_node;
 }
 
-static SavineExpressionNode* binary(Parser* parser) {
-    SavineExpressionNode* expression_node = ALLOCATE(SavineExpressionNode);
+static OrsoExpressionNode* binary(Parser* parser) {
+    OrsoExpressionNode* expression_node = ALLOCATE(OrsoExpressionNode);
 
-    expression_node->value_type = SAVINE_TYPE_UNRESOLVED;
+    expression_node->value_type = ORSO_TYPE_UNRESOLVED;
     expression_node->type = EXPRESSION_BINARY;
     expression_node->binary.operator = parser->previous;
     expression_node->binary.left = NULL;
@@ -217,15 +217,15 @@ ParseRule rules[] = {
     [TOKEN_SIZE]                    = { NULL,       NULL,       PREC_NONE },
 };
 
-static SavineExpressionNode* parse_precedence(Parser* parser, Precedence precedence) {
+static OrsoExpressionNode* parse_precedence(Parser* parser, Precedence precedence) {
     advance(parser);
 
     ParseFn prefix_rule = get_rule(parser->previous.type)->prefix;
-    SavineExpressionNode* left_operand;
+    OrsoExpressionNode* left_operand;
 
     if (prefix_rule == NULL) {
         error(parser, "Expect expression.");
-        left_operand = ALLOCATE(SavineExpressionNode);
+        left_operand = ALLOCATE(OrsoExpressionNode);
         left_operand->type = EXPRESSION_NONE;
     } else {
         left_operand = prefix_rule(parser);
@@ -234,7 +234,7 @@ static SavineExpressionNode* parse_precedence(Parser* parser, Precedence precede
     while (precedence <= get_rule(parser->current.type)->precedence) {
         advance(parser);
         ParseFn infix_rule = get_rule(parser->previous.type)->infix;
-        SavineExpressionNode* right_operand = infix_rule(parser);
+        OrsoExpressionNode* right_operand = infix_rule(parser);
         switch (right_operand->type) {
             case EXPRESSION_BINARY:
                 right_operand->binary.left = left_operand;
@@ -252,11 +252,11 @@ static ParseRule* get_rule(TokenType type) {
     return &rules[type];
 }
 
-static SavineExpressionNode* expression(Parser* parser) {
+static OrsoExpressionNode* expression(Parser* parser) {
     return parse_precedence(parser, PREC_ASSIGNMENT);
 }
 
-bool savine_parse_to_ast(const char* source, SavineAST* ast) {
+bool orso_parse_to_ast(const char* source, OrsoAST* ast) {
     Parser parser;
     parser_init(&parser, source);
 
@@ -269,7 +269,7 @@ bool savine_parse_to_ast(const char* source, SavineAST* ast) {
     return !parser.had_error;
 }
 
-void ast_print_expression(SavineExpressionNode* expression, i32 initial_indent) {
+void ast_print_expression(OrsoExpressionNode* expression, i32 initial_indent) {
     printf("%*s", initial_indent, "");
 
     switch (expression->type) {
@@ -308,37 +308,37 @@ void ast_print_expression(SavineExpressionNode* expression, i32 initial_indent) 
     }
 }
 
-void savine_ast_print(SavineAST* ast, const char* name) {
+void orso_ast_print(OrsoAST* ast, const char* name) {
     printf("=== %s ===\n", name);
     ast_print_expression(ast->expression, 0);
 }
 
-void savine_ast_init(SavineAST* ast) {
+void orso_ast_init(OrsoAST* ast) {
     ast->expression = NULL;
 }
 
-static void savine_free_expression(SavineExpressionNode* expression) {
+static void orso_free_expression(OrsoExpressionNode* expression) {
     if (!expression) {
         return;
     }
 
     switch (expression->type) {
         case EXPRESSION_BINARY:
-            savine_free_expression(expression->binary.left);
-            savine_free_expression(expression->binary.right);
+            orso_free_expression(expression->binary.left);
+            orso_free_expression(expression->binary.right);
             free(expression->binary.left);
             free(expression->binary.right);
             break;
         case EXPRESSION_GROUPING:
-            savine_free_expression(expression->grouping.expression);
+            orso_free_expression(expression->grouping.expression);
             free(expression->grouping.expression);
             break;
         case EXPRESSION_IMPLICIT_CAST:
-            savine_free_expression(expression->cast.operand);
+            orso_free_expression(expression->cast.operand);
             free(expression->cast.operand);
             break;
         case EXPRESSION_UNARY:
-            savine_free_expression(expression->unary.operand);
+            orso_free_expression(expression->unary.operand);
             free(expression->unary.operand);
             break;
         case EXPRESSION_PRIMARY:
@@ -347,7 +347,7 @@ static void savine_free_expression(SavineExpressionNode* expression) {
     }
 }
 
-void savine_ast_free(SavineAST* ast) {
-    savine_free_expression(ast->expression);
+void orso_ast_free(OrsoAST* ast) {
+    orso_free_expression(ast->expression);
     free(ast->expression);
 }

@@ -5,22 +5,22 @@
 #include "value.h"
 
 typedef enum {
-    SAVINE_INTERPRET_OK,
-    SAVINE_INTERPRET_COMPILE_ERROR,
-    SAVINE_INTERPRET_RUNTIME_ERROR,
+    ORSO_INTERPRET_OK,
+    ORSO_INTERPRET_COMPILE_ERROR,
+    ORSO_INTERPRET_RUNTIME_ERROR,
 } InterpretResult;
 
-typedef struct SavineVM {
+typedef struct OrsoVM {
     Chunk* chunk;
     uint8_t* ip;
 
-    SavineValue* stack;
-    SavineValue* stack_top;
-} SavineVM;
+    OrsoValue* stack;
+    OrsoValue* stack_top;
+} OrsoVM;
 
-void savine_vm_init(SavineVM* vm);
-void savine_vm_free(SavineVM* vm);
+void orso_vm_init(OrsoVM* vm);
+void orso_vm_free(OrsoVM* vm);
 
-InterpretResult savine_interpret(SavineVM* vm, const char* source);
+InterpretResult orso_interpret(OrsoVM* vm, const char* source);
 
 #endif

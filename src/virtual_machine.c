@@ -12,46 +12,46 @@
 #include "debug.h"
 #endif
 
-void savine_vm_init(SavineVM* vm) {
+void orso_vm_init(OrsoVM* vm) {
     vm->chunk = NULL;
     vm->stack = NULL;
     vm->stack_top = NULL;
 }
 
-void savine_vm_free(SavineVM* vm) {
+void orso_vm_free(OrsoVM* vm) {
 }
 
-static void FORCE_INLINE push(SavineVM* vm, SavineValue value) {
+static void FORCE_INLINE push(OrsoVM* vm, OrsoValue value) {
     *vm->stack_top = value;
     vm->stack_top++;
 }
 
-static SavineValue FORCE_INLINE pop(SavineVM* vm) {
+static OrsoValue FORCE_INLINE pop(OrsoVM* vm) {
     vm->stack_top--;
     return *vm->stack_top;
 }
 
-static void FORCE_INLINE push_int(SavineVM* vm, i64 value) {
+static void FORCE_INLINE push_int(OrsoVM* vm, i64 value) {
     vm->stack_top->as_int = value;
     vm->stack_top++;
 }
 
-static void FORCE_INLINE push_float(SavineVM* vm, f64 value) {
+static void FORCE_INLINE push_float(OrsoVM* vm, f64 value) {
     vm->stack_top->as_float = value;
     vm->stack_top++;
 }
 
-static i64 FORCE_INLINE pop_int(SavineVM* vm) {
+static i64 FORCE_INLINE pop_int(OrsoVM* vm) {
     vm->stack_top--;
     return vm->stack_top->as_int;
 }
 
-static f64 FORCE_INLINE pop_float(SavineVM* vm) {
+static f64 FORCE_INLINE pop_float(OrsoVM* vm) {
     vm->stack_top--;
     return vm->stack_top->as_float;
 }
 
-static InterpretResult run(SavineVM* vm) {
+static InterpretResult run(OrsoVM* vm) {
 #define TOP_SLOT (vm->stack_top - 1)
 #define READ_BYTE() (*vm->ip++)
 #define READ_CONSTANT() (vm->chunk->constants[READ_BYTE()])
@@ -65,7 +65,7 @@ static InterpretResult run(SavineVM* vm) {
     for (;;) {
 #ifdef DEBUG_TRACE_EXECUTION
         printf("          ");
-        for (SavineValue* slot = vm->stack; slot < vm->stack_top; slot++) {
+        for (OrsoValue* slot = vm->stack; slot < vm->stack_top; slot++) {
             printf("[");
             print_value(*slot);
             printf("]");
@@ -76,12 +76,12 @@ static InterpretResult run(SavineVM* vm) {
         uint8_t instruction;
         switch (instruction = READ_BYTE()) {
             case OP_CONSTANT: {
-                SavineValue constant = READ_CONSTANT();
+                OrsoValue constant = READ_CONSTANT();
                 push(vm, constant);
                 break;
             }
             case OP_CONSTANT_LONG: {
-                SavineValue constant = READ_CONSTANT_LONG();
+                OrsoValue constant = READ_CONSTANT_LONG();
                 push(vm, constant);
                 break;
             }
@@ -160,7 +160,7 @@ static InterpretResult run(SavineVM* vm) {
             case OP_RETURN: {
                 print_value(pop(vm));
                 printf("\n");
-                return SAVINE_INTERPRET_OK;
+                return ORSO_INTERPRET_OK;
             }
         }
     }
@@ -173,45 +173,45 @@ static InterpretResult run(SavineVM* vm) {
 }
 
 static bool compile(const char* source, Chunk* chunk) {
-    SavineAST ast;
-    if (!savine_parse_to_ast(source, &ast)) {
-        savine_ast_free(&ast);
+    OrsoAST ast;
+    if (!orso_parse_to_ast(source, &ast)) {
+        orso_ast_free(&ast);
         return false;
     }
 
 #ifdef DEBUG_PRINT_CODE
-    savine_ast_print(&ast, "unresolved");
+    orso_ast_print(&ast, "unresolved");
 #endif
 
-    savine_resolve_ast_types(&ast);
+    orso_resolve_ast_types(&ast);
 
 #ifdef DEBUG_PRINT_CODE
-    savine_ast_print(&ast, "resolved");
+    orso_ast_print(&ast, "resolved");
 #endif
 
     bool succeeded = true;
-    succeeded &= ast.expression->value_type != SAVINE_TYPE_UNRESOLVED;
-    succeeded &= ast.expression->value_type != SAVINE_TYPE_INVALID;
+    succeeded &= ast.expression->value_type != ORSO_TYPE_UNRESOLVED;
+    succeeded &= ast.expression->value_type != ORSO_TYPE_INVALID;
 
     if (succeeded) {
-        succeeded = savine_generate_code(&ast, chunk);
+        succeeded = orso_generate_code(&ast, chunk);
     }
 
-    savine_ast_free(&ast);
+    orso_ast_free(&ast);
 
     return succeeded;
 }
 
-InterpretResult savine_interpret(SavineVM* vm, const char* source) {
+InterpretResult orso_interpret(OrsoVM* vm, const char* source) {
     Chunk chunk;
     chunk_init(&chunk);
     chunk.max_stack_size = 256;
 
     InterpretResult result;
     if (!compile(source, &chunk)) {
-        result = SAVINE_INTERPRET_COMPILE_ERROR;
+        result = ORSO_INTERPRET_COMPILE_ERROR;
     } else {
-        vm->stack = ALLOCATE_N(SavineValue, chunk.max_stack_size);
+        vm->stack = ALLOCATE_N(OrsoValue, chunk.max_stack_size);
         vm->stack_top = vm->stack;
 
         vm->chunk = &chunk;
