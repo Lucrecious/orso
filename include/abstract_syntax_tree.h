@@ -58,7 +58,7 @@ typedef struct OrsoAST {
 
 void orso_ast_print(OrsoAST* ast, const char* name);
 
-bool orso_parse_to_ast(const char* source, OrsoAST* ast);
+bool orso_parse_to_ast(const char* source, OrsoAST* ast, OrsoErrorFunction error_fn);
 
 void orso_ast_init(OrsoAST* ast);
 void orso_ast_free(OrsoAST* ast);

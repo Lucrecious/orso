@@ -51,7 +51,7 @@ static f64 FORCE_INLINE pop_float(OrsoVM* vm) {
     return vm->stack_top->as_float;
 }
 
-static InterpretResult run(OrsoVM* vm) {
+static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
 #define TOP_SLOT (vm->stack_top - 1)
 #define READ_BYTE() (*vm->ip++)
 #define READ_CONSTANT() (vm->chunk->constants[READ_BYTE()])
@@ -160,7 +160,7 @@ static InterpretResult run(OrsoVM* vm) {
             case OP_RETURN: {
                 print_value(pop(vm));
                 printf("\n");
-                return ORSO_INTERPRET_OK;
+                return;
             }
         }
     }
@@ -172,9 +172,9 @@ static InterpretResult run(OrsoVM* vm) {
 #undef LAST_SLOT
 }
 
-static bool compile(const char* source, Chunk* chunk) {
+static bool compile(const char* source, Chunk* chunk, OrsoErrorFunction error_fn) {
     OrsoAST ast;
-    if (!orso_parse_to_ast(source, &ast)) {
+    if (!orso_parse_to_ast(source, &ast, error_fn)) {
         orso_ast_free(&ast);
         return false;
     }
@@ -183,7 +183,7 @@ static bool compile(const char* source, Chunk* chunk) {
     orso_ast_print(&ast, "unresolved");
 #endif
 
-    orso_resolve_ast_types(&ast);
+    orso_resolve_ast_types(&ast, error_fn);
 
 #ifdef DEBUG_PRINT_CODE
     orso_ast_print(&ast, "resolved");
@@ -202,27 +202,24 @@ static bool compile(const char* source, Chunk* chunk) {
     return succeeded;
 }
 
-InterpretResult orso_interpret(OrsoVM* vm, const char* source) {
+void orso_interpret(OrsoVM* vm, const char* source, OrsoErrorFunction error_fn) {
     Chunk chunk;
     chunk_init(&chunk);
     chunk.max_stack_size = 256;
 
-    InterpretResult result;
-    if (!compile(source, &chunk)) {
-        result = ORSO_INTERPRET_COMPILE_ERROR;
-    } else {
-        vm->stack = ALLOCATE_N(OrsoValue, chunk.max_stack_size);
-        vm->stack_top = vm->stack;
-
-        vm->chunk = &chunk;
-        vm->ip = vm->chunk->code;
-
-        result = run(vm);
-
-        free(vm->stack);
-        vm->stack_top = NULL;
+    if (!compile(source, &chunk, error_fn)) {
+        return;
     }
 
-    return result;
+    vm->stack = ALLOCATE_N(OrsoValue, chunk.max_stack_size);
+    vm->stack_top = vm->stack;
+
+    vm->chunk = &chunk;
+    vm->ip = vm->chunk->code;
+
+    run(vm, error_fn);
+
+    free(vm->stack);
+    vm->stack_top = NULL;
 }
 

@@ -2,13 +2,8 @@
 #define VIRTUAL_MACHINE_H_
 
 #include "chunk.h"
+#include "common.h"
 #include "value.h"
-
-typedef enum {
-    ORSO_INTERPRET_OK,
-    ORSO_INTERPRET_COMPILE_ERROR,
-    ORSO_INTERPRET_RUNTIME_ERROR,
-} InterpretResult;
 
 typedef struct OrsoVM {
     Chunk* chunk;
@@ -21,6 +16,6 @@ typedef struct OrsoVM {
 void orso_vm_init(OrsoVM* vm);
 void orso_vm_free(OrsoVM* vm);
 
-InterpretResult orso_interpret(OrsoVM* vm, const char* source);
+void orso_interpret(OrsoVM* vm, const char* source, OrsoErrorFunction error_function);
 
 #endif

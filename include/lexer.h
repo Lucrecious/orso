@@ -1,6 +1,7 @@
 #ifndef LEXER_H_
 #define LEXER_H_
 
+#include "common.h"
 #include "def.h"
 #include "error_codes.h"
 
@@ -34,6 +35,7 @@ typedef struct Token {
 } Token;
 
 typedef struct Lexer {
+    OrsoErrorFunction error_fn;
     i32 line;
     char* start;
     char* current;

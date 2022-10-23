@@ -104,7 +104,7 @@ void orso_resolve_expression(OrsoExpressionNode* expression) {
     }
 }
 
-void orso_resolve_ast_types(OrsoAST* ast) {
+void orso_resolve_ast_types(OrsoAST* ast, OrsoErrorFunction error_fn) {
     if (ast->expression == NULL) {
         return;
     }

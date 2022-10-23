@@ -3,9 +3,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "common.h"
 #include "str_to_value.h"
 
 typedef struct Parser {
+    OrsoErrorFunction error_fn;
     Lexer lexer;
     Token previous;
     Token current;
@@ -35,30 +37,39 @@ typedef struct {
     Precedence precedence;
 } ParseRule;
 
-static void parser_init(Parser* parser, const char* source) {
+static void parser_init(Parser* parser, const char* source, OrsoErrorFunction error_fn) {
     lexer_init(&parser->lexer, source);
+    parser->error_fn = error_fn;
     parser->had_error = false;
     parser->panic_mode = false;
 }
 
-static void error_at(Parser* parser, Token* token, const char* message) {
+static void error_at(Parser* parser, Token* token, const char* specific) {
     if (parser->panic_mode) {
         return;
     }
     parser->panic_mode = true;
+    parser->had_error = true;
 
-    fprintf(stderr, "[line %d] Error", token->line);
+    if (!parser->error_fn) {
+        return;
+    }
+
+    char message[100];
+    char* msg = message;
+    msg += sprintf(msg, "Error");
 
     if (token->type == TOKEN_EOF) {
-        fprintf(stderr, " at end");
+        msg += sprintf(msg, " at end");
     } else if (token->type == TOKEN_ERROR) {
         // nothing
     } else {
-        fprintf(stderr, " at '%.*s'", token->length, token->start);
+        msg += sprintf(msg, " at '%.*s'", token->length, token->start);
     }
 
-    fprintf(stderr, ": %s\n", message);
-    parser->had_error = true;
+    msg += sprintf(msg, ": %s", specific);
+
+    parser->error_fn(ORSO_ERROR_COMPILE, token->line, message);
 }
 
 static void error_at_current(Parser* parser, const char* message) {
@@ -256,9 +267,9 @@ static OrsoExpressionNode* expression(Parser* parser) {
     return parse_precedence(parser, PREC_ASSIGNMENT);
 }
 
-bool orso_parse_to_ast(const char* source, OrsoAST* ast) {
+bool orso_parse_to_ast(const char* source, OrsoAST* ast, OrsoErrorFunction error_fn) {
     Parser parser;
-    parser_init(&parser, source);
+    parser_init(&parser, source, error_fn);
 
     advance(&parser);
 
