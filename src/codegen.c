@@ -101,7 +101,12 @@ static void expression(OrsoExpressionNode* expression_node, Chunk* chunk) {
             } else if (orso_is_float_type(unary->value_type)) {
                 switch (operator.type) {
                     case TOKEN_MINUS: emit_byte(OP_NEGATE_DOUBLE, chunk, operator.line); break;
-                    case TOKEN_NOT: emit_byte(OP_NOT, chunk, operator.line);
+                    case TOKEN_NOT: emit_byte(OP_NOT, chunk, operator.line); break;
+                    default: break; // unreachable
+                }
+            } else if (unary->value_type == ORSO_TYPE_NULL) {
+                switch (operator.type) {
+                    case TOKEN_NOT: emit_byte(OP_NOT, chunk, operator.line); break;
                     default: break; // unreachable
                 }
             }

@@ -139,6 +139,10 @@ static OrsoExpressionNode* literal(Parser* parser) {
             expression_node->primary.constant.as_int = (i64)(parser->previous.type == TOKEN_TRUE);
             break;
         }
+        case TOKEN_NULL: {
+            expression_node->value_type = ORSO_TYPE_NULL;
+            expression_node->primary.constant.as_int = 0;
+        }
     }
 
     return expression_node;
@@ -223,7 +227,7 @@ ParseRule rules[] = {
     [TOKEN_OR]                      = { NULL,       NULL,       PREC_NONE },
     [TOKEN_TRUE]                    = { literal,    NULL,       PREC_NONE },
     [TOKEN_FALSE]                   = { literal,    NULL,       PREC_NONE },
-    [TOKEN_NIL]                     = { literal,    NULL,       PREC_NONE },
+    [TOKEN_NULL]                    = { literal,    NULL,       PREC_NONE },
     [TOKEN_ERROR]                   = { NULL,       NULL,       PREC_NONE },
     [TOKEN_EOF]                     = { NULL,       NULL,       PREC_NONE },
     [TOKEN_SIZE]                    = { NULL,       NULL,       PREC_NONE },

@@ -167,7 +167,7 @@ static TokenType identifier_type(Lexer* lexer) {
         case 'n': {
             switch (lexer->start[1]) {
                 case 'o': return check_keyword(lexer, 2, 1, "t", TOKEN_NOT);
-                case 'i': return check_keyword(lexer, 2, 1, "l", TOKEN_NIL);
+                case 'u': return check_keyword(lexer, 2, 2, "ll", TOKEN_NULL);
             }
             break;
         }

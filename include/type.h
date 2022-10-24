@@ -4,7 +4,7 @@
 #include "def.h"
 
 typedef enum OrsoType {
-    ORSO_TYPE_NIL,
+    ORSO_TYPE_NULL,
     ORSO_TYPE_BOOL,
     ORSO_TYPE_INT32,
     ORSO_TYPE_INT64,
@@ -17,7 +17,7 @@ typedef enum OrsoType {
 
 const FORCE_INLINE char* orso_type_to_cstr(OrsoType type) {
     switch (type) {
-        case ORSO_TYPE_NIL: return "nil";
+        case ORSO_TYPE_NULL: return "null";
         case ORSO_TYPE_BOOL: return "bool";
         case ORSO_TYPE_INT32: return "i32";
         case ORSO_TYPE_INT64: return "i64";
