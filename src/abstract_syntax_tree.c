@@ -5,7 +5,6 @@
 
 #include "common.h"
 #include "type.h"
-#include "str_to_value.h"
 
 typedef struct Parser {
     OrsoErrorFunction error_fn;
@@ -112,13 +111,13 @@ static OrsoExpressionNode* number(Parser* parser) {
         case TOKEN_INTEGER: {
             i64 value = cstrn_to_i64(parser->previous.start, parser->previous.length);
             expression_node->value_type = ORSO_TYPE_INT64;
-            expression_node->primary.constant.as_int = value;
+            expression_node->primary.constant.i = value;
             break;
         }
         case TOKEN_FLOAT: {
             f64 value = cstrn_to_f64(parser->previous.start, parser->previous.length);
             expression_node->value_type = ORSO_TYPE_FLOAT64;
-            expression_node->primary.constant.as_float = value;
+            expression_node->primary.constant.f = value;
             break;
         }
         default: break; // unreachable
@@ -136,13 +135,20 @@ static OrsoExpressionNode* literal(Parser* parser) {
         case TOKEN_FALSE:
         case TOKEN_TRUE: {
             expression_node->value_type = ORSO_TYPE_BOOL;
-            expression_node->primary.constant.as_int = (i64)(parser->previous.type == TOKEN_TRUE);
+            expression_node->primary.constant.i = (i64)(parser->previous.type == TOKEN_TRUE);
             break;
         }
         case TOKEN_NULL: {
             expression_node->value_type = ORSO_TYPE_NULL;
-            expression_node->primary.constant.as_int = 0;
+            expression_node->primary.constant.i = 0;
+            break;
         }
+        case TOKEN_STRING: {
+            expression_node->value_type = ORSO_TYPE_STRING;
+            Token string = expression_node->primary.token;
+            expression_node->primary.constant.p = orso_new_string_from_cstrn(string.start, string.length);
+            break;
+        };
     }
 
     return expression_node;
@@ -215,7 +221,7 @@ ParseRule rules[] = {
     [TOKEN_LESS_EQUAL]              = { NULL,       binary,     PREC_COMPARISON },
     [TOKEN_GREATER_EQUAL]           = { NULL,       binary,     PREC_COMPARISON },
     [TOKEN_IDENTIFIER]              = { NULL,       NULL,       PREC_NONE },
-    [TOKEN_STRING]                  = { NULL,       NULL,       PREC_NONE },
+    [TOKEN_STRING]                  = { literal,    NULL,       PREC_NONE },
     [TOKEN_INTEGER]                 = { number,     NULL,       PREC_NONE },
     [TOKEN_FLOAT]                   = { number,     NULL,       PREC_NONE },
     [TOKEN_ANNOTATION]              = { NULL,       NULL,       PREC_NONE },
@@ -317,7 +323,7 @@ void ast_print_expression(OrsoExpressionNode* expression, i32 initial_indent) {
         }
         case EXPRESSION_PRIMARY: {
             printf("PRIMARY ");
-            print_value(expression->primary.constant);
+            orso_print_slot(expression->primary.constant);
             printf("\n");
             break;
         }

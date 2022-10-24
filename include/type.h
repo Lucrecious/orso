@@ -10,6 +10,7 @@ typedef enum OrsoType {
     ORSO_TYPE_INT64,
     ORSO_TYPE_FLOAT32,
     ORSO_TYPE_FLOAT64,
+    ORSO_TYPE_STRING,
     ORSO_TYPE_UNRESOLVED,
     ORSO_TYPE_INVALID,
     ORSO_TYPE_MAX,
@@ -23,6 +24,7 @@ const FORCE_INLINE char* orso_type_to_cstr(OrsoType type) {
         case ORSO_TYPE_INT64: return "i64";
         case ORSO_TYPE_FLOAT32: return "f32";
         case ORSO_TYPE_FLOAT64: return "f64";
+        case ORSO_TYPE_STRING: return "string";
         case ORSO_TYPE_UNRESOLVED: return "<unresolved>";
         case ORSO_TYPE_INVALID: return "<invalid>";
         default: return "<unknown>";
@@ -131,7 +133,8 @@ void FORCE_INLINE orso_binary_equality_casts(OrsoType a, OrsoType b, OrsoType* a
         return;
     }
 
-    if (a == ORSO_TYPE_BOOL && b == ORSO_TYPE_BOOL) {
+    if ((a == ORSO_TYPE_BOOL && b == ORSO_TYPE_BOOL)
+    || (a == ORSO_TYPE_STRING && b == ORSO_TYPE_STRING)) {
         *a_cast = a;
         *b_cast = b;
         return;

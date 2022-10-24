@@ -4,13 +4,8 @@
 #include "debug.h"
 #endif
 
-static void emit_byte(const OrsoInstruction* instruction, Chunk* chunk, i32 line) {
+static void emit_instruction(const OrsoInstruction* instruction, Chunk* chunk, i32 line) {
     chunk_write(chunk, instruction, line);
-}
-
-static void emit_bytes(byte byte1, byte byte2, Chunk* chunk, i32 line) {
-    emit_byte(byte1, chunk, line);
-    emit_byte(byte2, chunk, line);
 }
 
 static void emit_return(Chunk* chunk, i32 line) {
@@ -26,10 +21,10 @@ static void emit_type_convert(OrsoType from_type, OrsoType to_type, Chunk* chunk
     bool include_bool = true;
     if (orso_is_float_type(from_type) && (orso_is_integer_type(to_type, include_bool))) {
         const OrsoInstruction instruction = { .op_code = ORSO_OP_F64_TO_I64 };
-        emit_byte(&instruction, chunk, line);
+        emit_instruction(&instruction, chunk, line);
     } else if (orso_is_integer_type(from_type, include_bool) && orso_is_float_type(to_type)) {
         const OrsoInstruction instruction = { .op_code = ORSO_OP_I64_TO_F64 };
-        emit_byte(&instruction, chunk, line);
+        emit_instruction(&instruction, chunk, line);
     } else {
         // Unreachable
     }
@@ -42,7 +37,7 @@ static void end_code_generation(Chunk* chunk, i32 line) {
 static void expression(OrsoExpressionNode* expression_node, Chunk* chunk) {
 #define EMIT_BINARY_OP(OP, TYPE) do { \
     const OrsoInstruction instruction = { .op_code = ORSO_OP_##OP##_##TYPE }; \
-    emit_byte(&instruction, chunk, operator.line); \
+    emit_instruction(&instruction, chunk, operator.line); \
      } while(false)
 
 #define EMIT_BINARY_OP_I64(OP) EMIT_BINARY_OP(OP, I64)
@@ -50,12 +45,12 @@ static void expression(OrsoExpressionNode* expression_node, Chunk* chunk) {
 
 #define EMIT_NOT() do { \
     const OrsoInstruction instruction = { .op_code = ORSO_OP_LOGICAL_NOT }; \
-    emit_byte(&instruction, chunk, operator.line); \
+    emit_instruction(&instruction, chunk, operator.line); \
 } while(false)
 
 #define EMIT_NEGATE(TYPE) do { \
     const OrsoInstruction instruction = { .op_code = ORSO_OP_NEGATE_##TYPE }; \
-    emit_byte(&instruction, chunk, operator.line); \
+    emit_instruction(&instruction, chunk, operator.line); \
 } while (false)
 
     switch(expression_node->type) {
@@ -94,7 +89,14 @@ static void expression(OrsoExpressionNode* expression_node, Chunk* chunk) {
                     case TOKEN_EQUAL_EQUAL: EMIT_BINARY_OP_F64(EQUAL); break;
                     default: break; // Unreachable
                 }
+            } else if (left->value_type == ORSO_TYPE_STRING) {
+                switch (operator.type) {
+                    case TOKEN_BANG_EQUAL: EMIT_NOT(); EMIT_BINARY_OP(EQUAL, STRING); break;
+                    case TOKEN_EQUAL_EQUAL: EMIT_BINARY_OP(EQUAL, STRING); break;
+                    default: break; // Unreachable
+                }
             }
+            break;
         }
 
         case EXPRESSION_UNARY: {
@@ -130,15 +132,15 @@ static void expression(OrsoExpressionNode* expression_node, Chunk* chunk) {
         }
         
         case EXPRESSION_PRIMARY: {
-            if (expression_node->primary.constant.as_int == 0) {
+            if (expression_node->primary.constant.i == 0) {
                 const OrsoInstruction instruction = { .op_code = ORSO_OP_PUSH_0 };
-                emit_byte(&instruction, chunk, expression_node->primary.token.line);
-            } else if (expression_node->primary.constant.as_int == 1) {
+                emit_instruction(&instruction, chunk, expression_node->primary.token.line);
+            } else if (expression_node->primary.constant.i == 1) {
                 const OrsoInstruction instruction = { .op_code = ORSO_OP_PUSH_1 };
-                emit_byte(&instruction, chunk, expression_node->primary.token.line);
+                emit_instruction(&instruction, chunk, expression_node->primary.token.line);
             } else {
-                OrsoSlot slot = { .i = expression_node->primary.constant.as_int };
-                //emit_constant(chunk, slot, expression_node->primary.token.line);
+                OrsoSlot slot = expression_node->primary.constant;
+                emit_constant(chunk, slot, expression_node->primary.token.line);
             }
             break;
         }

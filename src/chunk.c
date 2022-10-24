@@ -55,5 +55,5 @@ i32 chunk_get_line(Chunk* chunk, i32 offset) {
 }
 
 void orso_print_slot(OrsoSlot slot) {
-    printf("'%lld', '%.2f'", slot.i, slot.f);
+    printf("i64(%lld), f64(%.2f), ptr(%x)", slot.i, slot.f, slot.p);
 }

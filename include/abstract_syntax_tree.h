@@ -4,6 +4,7 @@
 #include "lexer.h"
 #include "type.h"
 #include "value.h"
+#include "chunk.h"
 
 typedef enum ExpressionType {
     EXPRESSION_NONE,
@@ -37,7 +38,7 @@ typedef struct OrsoGrouping {
 
 typedef struct OrsoPrimary {
     Token token;
-    OrsoValue constant;
+    OrsoSlot constant;
 } OrsoPrimary;
 
 struct OrsoExpressionNode {

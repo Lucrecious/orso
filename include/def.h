@@ -13,6 +13,7 @@
 
 #define ALLOCATE(T) (T*)malloc(sizeof(T))
 #define ALLOCATE_N(T, N) (T*)malloc(sizeof(T) * N)
+#define ALLOCATE_FLEX(T, N) (T*)malloc(sizeof(T) + N)
 
 typedef uint8_t byte;
 typedef int16_t i16;
@@ -22,5 +23,6 @@ typedef uint32_t u32;
 typedef int64_t i64;
 typedef float f32;
 typedef double f64;
+typedef void* ptr;
 
 #endif

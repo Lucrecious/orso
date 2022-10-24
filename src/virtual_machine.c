@@ -39,7 +39,7 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
 #define READ_INSTRUCTION() (vm->ip++)
 #define TOP_SLOT get_top_slot(vm)
 #define POP() pop(vm)
-#define PUSH(value) push_i64(vm, value)
+#define PUSH(VALUE) push_i64(vm, VALUE)
 
     for (;;) {
         OrsoInstruction* instruction = READ_INSTRUCTION();
@@ -66,9 +66,11 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
             case ORSO_OP_LESS_I64: { i64 b = POP().i; TOP_SLOT->i = (TOP_SLOT->i < b); break; }
             case ORSO_OP_GREATER_I64: { i64 b = POP().i; TOP_SLOT->i = (TOP_SLOT->i > b); break; }
 
-            case ORSO_OP_EQUAL_F64: { f64 b = POP().f; TOP_SLOT->f = (TOP_SLOT->f == b); break; }
-            case ORSO_OP_LESS_F64: { f64 b = POP().f; TOP_SLOT->f = (TOP_SLOT->f < b); break; }
-            case ORSO_OP_GREATER_F64: { f64 b = POP().f; TOP_SLOT->f = (TOP_SLOT->f > b); break; }
+            case ORSO_OP_EQUAL_F64: { f64 b = POP().f; TOP_SLOT->i = (TOP_SLOT->f == b); break; }
+            case ORSO_OP_LESS_F64: { f64 b = POP().f; TOP_SLOT->i = (TOP_SLOT->f < b); break; }
+            case ORSO_OP_GREATER_F64: { f64 b = POP().f; TOP_SLOT->i = (TOP_SLOT->f > b); break; }
+
+            case ORSO_OP_EQUAL_STRING: { ptr b = POP().p; TOP_SLOT->i = orso_string_equal((OrsoString*)(TOP_SLOT->p), (OrsoString*)b); break; }
 
             case ORSO_OP_LOGICAL_NOT: TOP_SLOT->i = !TOP_SLOT->i; break;
 
@@ -107,7 +109,6 @@ static bool compile(const char* source, Chunk* chunk, OrsoErrorFunction error_fn
     orso_ast_print(&ast, "resolved");
 #endif
 
-    orso_ast_free(&ast);
 
     bool succeeded = true;
     succeeded &= ast.expression->value_type != ORSO_TYPE_UNRESOLVED;
@@ -116,6 +117,8 @@ static bool compile(const char* source, Chunk* chunk, OrsoErrorFunction error_fn
     if (succeeded) {
         succeeded = orso_generate_code(&ast, chunk);
     }
+
+    orso_ast_free(&ast);
 
     return succeeded;
 }

@@ -9,6 +9,7 @@
 typedef union OrsoSlot {
     i64 i;
     f64 f;
+    ptr p;
 } OrsoSlot;
 
 typedef struct Chunk {

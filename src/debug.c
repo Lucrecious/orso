@@ -6,12 +6,12 @@
 #include "sb.h"
 
 static i32 constant_instruction(const char* name, Chunk* chunk, i32 offset) {
-    OrsoInstruction constant = chunk->code[offset + 1];
-    printf("%-16s %4d ", name, constant);
+    OrsoInstruction constant = chunk->code[offset];
+    printf("%-16s %4d ", name, constant.value);
     orso_print_slot(chunk->constants[constant.value]);
     printf("\n");
 
-    return offset + 2;
+    return offset + 1;
 }
 
 static i32 simple_instruction(const char* name, i32 offset) {
@@ -53,6 +53,7 @@ i32 disassemble_instruction(Chunk* chunk, i32 offset) {
         case ORSO_OP_LESS_F64: return simple_instruction("OP_LESS_F64", offset);
         case ORSO_OP_GREATER_I64: return simple_instruction("OP_GREATER_I64", offset);
         case ORSO_OP_GREATER_F64: return simple_instruction("OP_GREATER_F64", offset);
+        case ORSO_OP_EQUAL_STRING: return simple_instruction("OP_EQUAL_STRING", offset);
         case ORSO_OP_RETURN: return simple_instruction("OP_RETURN", offset);
         default: return simple_instruction("OP_UNKNOWN", offset);
     }
