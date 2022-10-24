@@ -21,155 +21,70 @@ void orso_vm_init(OrsoVM* vm) {
 void orso_vm_free(OrsoVM* vm) {
 }
 
-static void FORCE_INLINE push(OrsoVM* vm, OrsoValue value) {
-    *vm->stack_top = value;
+static void FORCE_INLINE push_i64(OrsoVM* vm, i64 value) {
+    vm->stack_top->i = value;
     vm->stack_top++;
 }
 
-static OrsoValue FORCE_INLINE pop(OrsoVM* vm) {
+static OrsoSlot FORCE_INLINE pop(OrsoVM* vm) {
     vm->stack_top--;
     return *vm->stack_top;
 }
 
-static void FORCE_INLINE push_int(OrsoVM* vm, i64 value) {
-    vm->stack_top->as_int = value;
-    vm->stack_top++;
-}
-
-static void FORCE_INLINE push_float(OrsoVM* vm, f64 value) {
-    vm->stack_top->as_float = value;
-    vm->stack_top++;
-}
-
-static i64 FORCE_INLINE pop_int(OrsoVM* vm) {
-    vm->stack_top--;
-    return vm->stack_top->as_int;
-}
-
-static f64 FORCE_INLINE pop_float(OrsoVM* vm) {
-    vm->stack_top--;
-    return vm->stack_top->as_float;
+static FORCE_INLINE OrsoSlot* get_top_slot(OrsoVM* vm) {
+    return (vm->stack_top - 1);
 }
 
 static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
-#define TOP_SLOT (vm->stack_top - 1)
-#define READ_BYTE() (*vm->ip++)
-#define READ_CONSTANT() (vm->chunk->constants[READ_BYTE()])
-#define READ_CONSTANT_LONG() (vm->chunk->constants[((u32)READ_BYTE() << 16) | ((u16)READ_BYTE() << 8) | READ_BYTE()])
-#define BINARY_OP(op, type, fn_suffix) \
-    do { \
-        type b = pop_ ## fn_suffix(vm); \
-        TOP_SLOT->as_ ## fn_suffix = TOP_SLOT->as_ ## fn_suffix  op b; \
-    } while (false)
+#define READ_INSTRUCTION() (vm->ip++)
+#define TOP_SLOT get_top_slot(vm)
+#define POP() pop(vm)
+#define PUSH(value) push_i64(vm, value)
 
     for (;;) {
-#ifdef DEBUG_TRACE_EXECUTION
-        printf("          ");
-        for (OrsoValue* slot = vm->stack; slot < vm->stack_top; slot++) {
-            printf("[");
-            print_value(*slot);
-            printf("]");
-        }
-        printf("\n");
-        disassemble_instruction(vm->chunk, (i32)(vm->ip - vm->chunk->code));
-#endif
-        uint8_t instruction;
-        switch (instruction = READ_BYTE()) {
-            case OP_CONSTANT: {
-                OrsoValue constant = READ_CONSTANT();
-                push(vm, constant);
-                break;
-            }
-            case OP_CONSTANT_LONG: {
-                OrsoValue constant = READ_CONSTANT_LONG();
-                push(vm, constant);
-                break;
-            }
-            case OP_ZERO: {
-                push_int(vm, 0);
-                break;
-            }
-            case OP_ONE: {
-                push_int(vm, 1);
-                break;
-            }
+        OrsoInstruction* instruction = READ_INSTRUCTION();
+        switch (instruction->op_code) {
+            case ORSO_OP_PUSH_I64: PUSH(instruction->value); break;
 
-            case OP_NEGATE_INT: {
-                TOP_SLOT->as_int = -TOP_SLOT->as_int;
-                break;
-            }
-            case OP_NEGATE_DOUBLE: {
-                TOP_SLOT->as_float = -TOP_SLOT->as_float;
-                break;
-            }
+            case ORSO_OP_I64_TO_F64: TOP_SLOT->f = (f64)TOP_SLOT->i; break;
+            case ORSO_OP_F64_TO_I64: TOP_SLOT->i = (i64)TOP_SLOT->f; break;
 
-            case OP_ADD_INT: BINARY_OP(+, i64, int); break;
-            case OP_SUBTRACT_INT: BINARY_OP(-, i64, int); break;
-            case OP_MULTIPLY_INT: BINARY_OP(*, i64, int); break;
-            case OP_DIVIDE_INT: BINARY_OP(/, i64, int); break;
+            case ORSO_OP_ADD_I64: { i64 b = POP().i; TOP_SLOT->i = TOP_SLOT->i + b; break; }
+            case ORSO_OP_SUBTRACT_I64: { i64 b = POP().i; TOP_SLOT->i = TOP_SLOT->i - b; break; }
+            case ORSO_OP_MULTIPLY_I64: { i64 b = POP().i; TOP_SLOT->i = TOP_SLOT->i * b; break; }
+            case ORSO_OP_DIVIDE_I64: { i64 b = POP().i; TOP_SLOT->i = TOP_SLOT->i / b; break; }
 
-            case OP_ADD_DOUBLE: BINARY_OP(+, f64, float); break;
-            case OP_SUBTRACT_DOUBLE: BINARY_OP(-, f64, float); break;
-            case OP_MULTIPLY_DOUBLE: BINARY_OP(*, f64, float); break;
-            case OP_DIVIDE_DOUBLE: BINARY_OP(/, f64, float); break;
+            case ORSO_OP_ADD_F64: { f64 b = POP().f; TOP_SLOT->f = TOP_SLOT->f + b; break; }
+            case ORSO_OP_SUBTRACT_F64: { f64 b = POP().f; TOP_SLOT->f = TOP_SLOT->f - b; break; }
+            case ORSO_OP_MULTIPLY_F64: { f64 b = POP().f; TOP_SLOT->f = TOP_SLOT->f * b; break; }
+            case ORSO_OP_DIVIDE_F64: { f64 b = POP().f; TOP_SLOT->f = TOP_SLOT->f / b; break; }
 
-            case OP_INT_TO_DOUBLE:
-                TOP_SLOT->as_float = (f64)TOP_SLOT->as_int;
-                break;
-            case OP_DOUBLE_TO_INT:
-                TOP_SLOT->as_int = (i64)TOP_SLOT->as_float;
-                break;
+            case ORSO_OP_NEGATE_I64: TOP_SLOT->i = -TOP_SLOT->i; break;
+            case ORSO_OP_NEGATE_F64: TOP_SLOT->f = -TOP_SLOT->f; break;
+
+            case ORSO_OP_EQUAL_I64: { i64 b = POP().i; TOP_SLOT->i = (TOP_SLOT->i == b); break; }
+            case ORSO_OP_LESS_I64: { i64 b = POP().i; TOP_SLOT->i = (TOP_SLOT->i < b); break; }
+            case ORSO_OP_GREATER_I64: { i64 b = POP().i; TOP_SLOT->i = (TOP_SLOT->i > b); break; }
+
+            case ORSO_OP_EQUAL_F64: { f64 b = POP().f; TOP_SLOT->f = (TOP_SLOT->f == b); break; }
+            case ORSO_OP_LESS_F64: { f64 b = POP().f; TOP_SLOT->f = (TOP_SLOT->f < b); break; }
+            case ORSO_OP_GREATER_F64: { f64 b = POP().f; TOP_SLOT->f = (TOP_SLOT->f > b); break; }
+
+            case ORSO_OP_LOGICAL_NOT: TOP_SLOT->i = !TOP_SLOT->i; break;
+
+            case ORSO_OP_PUSH_0: PUSH(0); break;
+            case ORSO_OP_PUSH_1: PUSH(1); break;
+
+            case ORSO_OP_CONSTANT: PUSH(vm->chunk->constants[instruction->value].i); break;
             
-            case OP_NOT:
-                TOP_SLOT->as_int = !(TOP_SLOT->as_int);
-                break;
-            
-            case OP_EQUAL_INT: {
-                i64 right = pop_int(vm);
-                TOP_SLOT->as_int = (TOP_SLOT->as_int == right);
-                break;
-            }
-            case OP_EQUAL_DOUBLE: {
-                f64 right = pop_float(vm);
-                TOP_SLOT->as_int = (TOP_SLOT->as_float == right);
-                break;
-            }
-            
-            case OP_LESS_INT: {
-                i64 right = pop_int(vm);
-                TOP_SLOT->as_int = (TOP_SLOT->as_int < right);
-                break;
-            }
-            case OP_LESS_DOUBLE: {
-                f64 right = pop_float(vm);
-                TOP_SLOT->as_int = (TOP_SLOT->as_float < right);
-                break;
-            }
-            
-            case OP_GREATER_INT: {
-                i64 right = pop_int(vm);
-                TOP_SLOT->as_int = (TOP_SLOT->as_int > right);
-                break;
-            }
-            case OP_GREATER_DOUBLE: {
-                f64 right = pop_float(vm);
-                TOP_SLOT->as_int = (TOP_SLOT->as_float > right);
-                break;
-            }
-
-            case OP_RETURN: {
-                print_value(pop(vm));
-                printf("\n");
-                return;
-            }
+            case ORSO_OP_RETURN: orso_print_slot(POP()); printf("\n"); return;
         }
     }
 
-#undef BINARY_OP
-#undef READ_CONSTANT_LONG
-#undef READ_CONSTANT
-#undef READ_BYTE
-#undef LAST_SLOT
+#undef PUSH
+#undef POP
+#undef TOP_SLOT
+#undef READ_INSTRUCTION
 }
 
 static bool compile(const char* source, Chunk* chunk, OrsoErrorFunction error_fn) {

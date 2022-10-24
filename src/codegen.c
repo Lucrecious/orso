@@ -4,8 +4,8 @@
 #include "debug.h"
 #endif
 
-static void emit_byte(byte byte, Chunk* chunk, i32 line) {
-    chunk_write(chunk, byte, line);
+static void emit_byte(const OrsoInstruction* instruction, Chunk* chunk, i32 line) {
+    chunk_write(chunk, instruction, line);
 }
 
 static void emit_bytes(byte byte1, byte byte2, Chunk* chunk, i32 line) {
@@ -14,19 +14,22 @@ static void emit_bytes(byte byte1, byte byte2, Chunk* chunk, i32 line) {
 }
 
 static void emit_return(Chunk* chunk, i32 line) {
-    emit_byte(OP_RETURN, chunk, line);
+    const OrsoInstruction instruction = { .op_code = ORSO_OP_RETURN };
+    chunk_write(chunk, &instruction, line);
 }
 
-static void emit_constant(Chunk* chunk, OrsoValue value, i32 line) {
-    chunk_write_constant(chunk, value, line);
+static void emit_constant(Chunk* chunk, OrsoSlot slot, i32 line) {
+    chunk_write_constant(chunk, slot, line);
 }
 
 static void emit_type_convert(OrsoType from_type, OrsoType to_type, Chunk* chunk, i32 line) {
     bool include_bool = true;
     if (orso_is_float_type(from_type) && (orso_is_integer_type(to_type, include_bool))) {
-        emit_byte(OP_DOUBLE_TO_INT, chunk, line);
+        const OrsoInstruction instruction = { .op_code = ORSO_OP_F64_TO_I64 };
+        emit_byte(&instruction, chunk, line);
     } else if (orso_is_integer_type(from_type, include_bool) && orso_is_float_type(to_type)) {
-        emit_byte(OP_INT_TO_DOUBLE, chunk, line);
+        const OrsoInstruction instruction = { .op_code = ORSO_OP_I64_TO_F64 };
+        emit_byte(&instruction, chunk, line);
     } else {
         // Unreachable
     }
@@ -37,53 +40,61 @@ static void end_code_generation(Chunk* chunk, i32 line) {
 }
 
 static void expression(OrsoExpressionNode* expression_node, Chunk* chunk) {
-#define EMIT_OP(SUFFIX) \
-    do { \
-        switch(operator.type) { \
-            case TOKEN_MINUS: emit_byte(OP_SUBTRACT_ ## SUFFIX, chunk, operator.line); break; \
-            case TOKEN_PLUS: emit_byte(OP_ADD_ ## SUFFIX, chunk, operator.line); break; \
-            case TOKEN_STAR: emit_byte(OP_MULTIPLY_ ## SUFFIX, chunk, operator.line); break; \
-            case TOKEN_SLASH: emit_byte(OP_DIVIDE_ ## SUFFIX, chunk, operator.line); break; \
-            case TOKEN_EQUAL_EQUAL: emit_byte(OP_EQUAL_ ## SUFFIX, chunk, operator.line); break; \
-            case TOKEN_BANG_EQUAL: emit_bytes(OP_EQUAL_ ## SUFFIX, OP_NOT, chunk, operator.line); break; \
-            case TOKEN_LESS: emit_byte(OP_LESS_ ## SUFFIX, chunk, operator.line); break; \
-            case TOKEN_GREATER: emit_byte(OP_GREATER_ ## SUFFIX, chunk, operator.line); break; \
-            case TOKEN_LESS_EQUAL: emit_bytes(OP_GREATER_ ## SUFFIX, OP_NOT, chunk, operator.line); break; \
-            case TOKEN_GREATER_EQUAL: emit_bytes(OP_LESS_ ## SUFFIX, OP_NOT, chunk, operator.line); break; \
-            default: break; /* unreachable */ \
-        } \
-    } while (false)
+#define EMIT_BINARY_OP(OP, TYPE) do { \
+    const OrsoInstruction instruction = { .op_code = ORSO_OP_##OP##_##TYPE }; \
+    emit_byte(&instruction, chunk, operator.line); \
+     } while(false)
+
+#define EMIT_BINARY_OP_I64(OP) EMIT_BINARY_OP(OP, I64)
+#define EMIT_BINARY_OP_F64(OP) EMIT_BINARY_OP(OP, F64)
+
+#define EMIT_NOT() do { \
+    const OrsoInstruction instruction = { .op_code = ORSO_OP_LOGICAL_NOT }; \
+    emit_byte(&instruction, chunk, operator.line); \
+} while(false)
+
+#define EMIT_NEGATE(TYPE) do { \
+    const OrsoInstruction instruction = { .op_code = ORSO_OP_NEGATE_##TYPE }; \
+    emit_byte(&instruction, chunk, operator.line); \
+} while (false)
 
     switch(expression_node->type) {
         case EXPRESSION_BINARY: {
             Token operator = expression_node->binary.operator;
             OrsoExpressionNode* left = expression_node->binary.left;
             OrsoExpressionNode* right = expression_node->binary.right;
+            expression(left, chunk);
+            expression(right, chunk);
 
-            switch (operator.type) {
-                case TOKEN_MINUS:
-                case TOKEN_PLUS:
-                case TOKEN_STAR:
-                case TOKEN_SLASH:
-                case TOKEN_LESS:
-                case TOKEN_GREATER:
-                case TOKEN_LESS_EQUAL:
-                case TOKEN_GREATER_EQUAL:
-                case TOKEN_BANG_EQUAL:
-                case TOKEN_EQUAL_EQUAL: {
-                    expression(left, chunk);
-                    expression(right, chunk);
-                    if (orso_is_integer_type(left->value_type, true)) {
-                        EMIT_OP(INT);
-                    } else if (orso_is_float_type(left->value_type)) {
-                        EMIT_OP(DOUBLE);
-                    } else {
-                        // Unreacheable
-                    }
+            if (orso_is_integer_type(left->value_type, true)) {
+                switch (operator.type) {
+                    case TOKEN_PLUS: EMIT_BINARY_OP_I64(ADD); break;
+                    case TOKEN_MINUS: EMIT_BINARY_OP_I64(SUBTRACT); break;
+                    case TOKEN_STAR: EMIT_BINARY_OP_I64(MULTIPLY); break;
+                    case TOKEN_SLASH: EMIT_BINARY_OP_I64(DIVIDE); break;
+                    case TOKEN_LESS: EMIT_BINARY_OP_I64(LESS); break;
+                    case TOKEN_GREATER: EMIT_BINARY_OP_I64(GREATER); break;
+                    case TOKEN_LESS_EQUAL: EMIT_NOT(); EMIT_BINARY_OP_I64(GREATER); break;
+                    case TOKEN_GREATER_EQUAL: EMIT_NOT(); EMIT_BINARY_OP_I64(LESS); break;
+                    case TOKEN_BANG_EQUAL: EMIT_NOT(); EMIT_BINARY_OP_I64(EQUAL); break;
+                    case TOKEN_EQUAL_EQUAL: EMIT_BINARY_OP_I64(EQUAL); break;
+                    default: break; // Unreachable
+                }
+            } else if (orso_is_float_type(left->value_type)) {
+                switch (operator.type) {
+                    case TOKEN_PLUS: EMIT_BINARY_OP_F64(ADD); break;
+                    case TOKEN_MINUS: EMIT_BINARY_OP_F64(SUBTRACT); break;
+                    case TOKEN_STAR: EMIT_BINARY_OP_F64(MULTIPLY); break;
+                    case TOKEN_SLASH: EMIT_BINARY_OP_F64(DIVIDE); break;
+                    case TOKEN_LESS: EMIT_BINARY_OP_F64(LESS); break;
+                    case TOKEN_GREATER: EMIT_BINARY_OP_F64(GREATER); break;
+                    case TOKEN_LESS_EQUAL: EMIT_NOT(); EMIT_BINARY_OP_F64(GREATER); break;
+                    case TOKEN_GREATER_EQUAL: EMIT_NOT(); EMIT_BINARY_OP_F64(LESS); break;
+                    case TOKEN_BANG_EQUAL: EMIT_NOT(); EMIT_BINARY_OP_F64(EQUAL); break;
+                    case TOKEN_EQUAL_EQUAL: EMIT_BINARY_OP_F64(EQUAL); break;
+                    default: break; // Unreachable
                 }
             }
-
-            break;
         }
 
         case EXPRESSION_UNARY: {
@@ -94,19 +105,19 @@ static void expression(OrsoExpressionNode* expression_node, Chunk* chunk) {
 
             if (orso_is_integer_type(unary->value_type, true)) {
                 switch (operator.type) {
-                    case TOKEN_MINUS: emit_byte(OP_NEGATE_INT, chunk, operator.line); break;
-                    case TOKEN_NOT: emit_byte(OP_NOT, chunk, operator.line); break;
+                    case TOKEN_MINUS: EMIT_NEGATE(I64); break;
+                    case TOKEN_NOT: EMIT_NOT(); break;
                     default: break; // unreachable
                 }
             } else if (orso_is_float_type(unary->value_type)) {
                 switch (operator.type) {
-                    case TOKEN_MINUS: emit_byte(OP_NEGATE_DOUBLE, chunk, operator.line); break;
-                    case TOKEN_NOT: emit_byte(OP_NOT, chunk, operator.line); break;
+                    case TOKEN_MINUS: EMIT_NEGATE(I64); break;
+                    case TOKEN_NOT: EMIT_NOT(); break;
                     default: break; // unreachable
                 }
             } else if (unary->value_type == ORSO_TYPE_NULL) {
                 switch (operator.type) {
-                    case TOKEN_NOT: emit_byte(OP_NOT, chunk, operator.line); break;
+                    case TOKEN_NOT: EMIT_NOT(); break;
                     default: break; // unreachable
                 }
             }
@@ -120,11 +131,14 @@ static void expression(OrsoExpressionNode* expression_node, Chunk* chunk) {
         
         case EXPRESSION_PRIMARY: {
             if (expression_node->primary.constant.as_int == 0) {
-                emit_byte(OP_ZERO, chunk, expression_node->primary.token.line);
+                const OrsoInstruction instruction = { .op_code = ORSO_OP_PUSH_0 };
+                emit_byte(&instruction, chunk, expression_node->primary.token.line);
             } else if (expression_node->primary.constant.as_int == 1) {
-                emit_byte(OP_ONE, chunk, expression_node->primary.token.line);
+                const OrsoInstruction instruction = { .op_code = ORSO_OP_PUSH_1 };
+                emit_byte(&instruction, chunk, expression_node->primary.token.line);
             } else {
-                emit_constant(chunk, expression_node->primary.constant, expression_node->primary.token.line);
+                OrsoSlot slot = { .i = expression_node->primary.constant.as_int };
+                emit_constant(chunk, slot, expression_node->primary.token.line);
             }
             break;
         }

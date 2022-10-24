@@ -6,25 +6,12 @@
 #include "sb.h"
 
 static i32 constant_instruction(const char* name, Chunk* chunk, i32 offset) {
-    byte constant = chunk->code[offset + 1];
+    OrsoInstruction constant = chunk->code[offset + 1];
     printf("%-16s %4d ", name, constant);
-    print_value(chunk->constants[constant]);
+    orso_print_slot(chunk->constants[constant.value]);
     printf("\n");
 
     return offset + 2;
-}
-
-static i32 constant_long_instruction(const char* name, Chunk* chunk, i32 offset) {
-    i32 constant = chunk->code[offset + 1];
-    constant <<= 8;
-    constant |= chunk->code[offset + 2];
-    constant <<= 8;
-    constant |= chunk->code[offset + 3];
-    printf("%-16s %d ", name, constant);
-    print_value(chunk->constants[constant]);
-    printf("\n");
-
-    return offset + 4;
 }
 
 static i32 simple_instruction(const char* name, i32 offset) {
@@ -42,32 +29,31 @@ i32 disassemble_instruction(Chunk* chunk, i32 offset) {
         printf("%4d ", chunk_get_line(chunk, offset));
     }
 
-    byte instruction = chunk->code[offset];
+    OrsoOPCode instruction = chunk->code[offset].op_code;
     switch(instruction) {
-        case OP_CONSTANT: return constant_instruction("OP_CONSTANT", chunk, offset);
-        case OP_CONSTANT_LONG: return constant_long_instruction("OP_CONSTANT_LONG", chunk, offset);
-        case OP_ZERO: return simple_instruction("OP_ZERO", offset);
-        case OP_ONE: return simple_instruction("OP_ONE", offset);
-        case OP_NEGATE_INT: return simple_instruction("OP_NEGATE_INT", offset);
-        case OP_NEGATE_DOUBLE: return simple_instruction("OP_NEGATE_DOUBLE", offset);
-        case OP_ADD_INT: return simple_instruction("OP_ADD_INT", offset);
-        case OP_ADD_DOUBLE: return simple_instruction("OP_ADD_DOUBLE", offset);
-        case OP_SUBTRACT_INT: return simple_instruction("OP_SUBTRACT_INT", offset);
-        case OP_SUBTRACT_DOUBLE: return simple_instruction("OP_SUBTRACT_DOUBLE", offset);
-        case OP_MULTIPLY_INT: return simple_instruction("OP_MULTIPLY_INT", offset);
-        case OP_MULTIPLY_DOUBLE: return simple_instruction("OP_MULTIPLY_DOUBLE", offset);
-        case OP_DIVIDE_INT: return simple_instruction("OP_DIVIDE_INT", offset);
-        case OP_DIVIDE_DOUBLE: return simple_instruction("OP_DIVIDE_DOUBLE", offset);
-        case OP_INT_TO_DOUBLE: return simple_instruction("OP_INT_TO_DOUBLE", offset);
-        case OP_DOUBLE_TO_INT: return simple_instruction("OP_DOUBLE_TO_INT", offset);
-        case OP_NOT: return simple_instruction("OP_NOT", offset);
-        case OP_EQUAL_INT: return simple_instruction("OP_EQUAL_INT", offset);
-        case OP_EQUAL_DOUBLE: return simple_instruction("OP_EQUAL_DOUBLE", offset);
-        case OP_LESS_INT: return simple_instruction("OP_LESS_INT", offset);
-        case OP_LESS_DOUBLE: return simple_instruction("OP_LESS_DOUBLE", offset);
-        case OP_GREATER_INT: return simple_instruction("OP_GREATER_INT", offset);
-        case OP_GREATER_DOUBLE: return simple_instruction("OP_GREATER_DOUBLE", offset);
-        case OP_RETURN: return simple_instruction("OP_RETURN", offset);
+        case ORSO_OP_CONSTANT: return constant_instruction("OP_CONSTANT", chunk, offset);
+        case ORSO_OP_PUSH_0: return simple_instruction("OP_PUSH_0", offset);
+        case ORSO_OP_PUSH_1: return simple_instruction("OP_PUSH_1", offset);
+        case ORSO_OP_NEGATE_I64: return simple_instruction("OP_NEGATE_I64", offset);
+        case ORSO_OP_NEGATE_F64: return simple_instruction("OP_NEGATE_F64", offset);
+        case ORSO_OP_ADD_I64: return simple_instruction("OP_ADD_I64", offset);
+        case ORSO_OP_ADD_F64: return simple_instruction("OP_ADD_F64", offset);
+        case ORSO_OP_SUBTRACT_I64: return simple_instruction("OP_SUBTRACT_I64", offset);
+        case ORSO_OP_SUBTRACT_F64: return simple_instruction("OP_SUBTRACT_F64", offset);
+        case ORSO_OP_MULTIPLY_I64: return simple_instruction("OP_MULTIPLY_I64", offset);
+        case ORSO_OP_MULTIPLY_F64: return simple_instruction("OP_MULTIPLY_F64", offset);
+        case ORSO_OP_DIVIDE_I64: return simple_instruction("OP_DIVIDE_I64", offset);
+        case ORSO_OP_DIVIDE_F64: return simple_instruction("OP_DIVIDE_F64", offset);
+        case ORSO_OP_I64_TO_F64: return simple_instruction("OP_I64_TO_F64", offset);
+        case ORSO_OP_F64_TO_I64: return simple_instruction("OP_F64_TO_I64", offset);
+        case ORSO_OP_LOGICAL_NOT: return simple_instruction("OP_LOGICAL_NOT", offset);
+        case ORSO_OP_EQUAL_I64: return simple_instruction("OP_EQUAL_I64", offset);
+        case ORSO_OP_EQUAL_F64: return simple_instruction("OP_EQUAL_F64", offset);
+        case ORSO_OP_LESS_I64: return simple_instruction("OP_LESS_I64", offset);
+        case ORSO_OP_LESS_F64: return simple_instruction("OP_LESS_F64", offset);
+        case ORSO_OP_GREATER_I64: return simple_instruction("OP_GREATER_I64", offset);
+        case ORSO_OP_GREATER_F64: return simple_instruction("OP_GREATER_F64", offset);
+        case ORSO_OP_RETURN: return simple_instruction("OP_RETURN", offset);
         default: return simple_instruction("OP_UNKNOWN", offset);
     }
 }

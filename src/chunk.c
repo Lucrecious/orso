@@ -5,7 +5,7 @@
 #include "def.h"
 #include "sb.h"
 
-i32 chunk_add_constant(Chunk* chunk, OrsoValue value) {
+i32 chunk_add_constant(Chunk* chunk, OrsoSlot value) {
     i32 index = sb_count(chunk->constants);
     sb_push(chunk->constants, value);
     return index;
@@ -24,8 +24,8 @@ void chunk_free(Chunk* chunk) {
     sb_free(chunk->constants);
 }
 
-void chunk_write(Chunk* chunk, byte item, i32 line) {
-    sb_push(chunk->code, item);
+void chunk_write(Chunk* chunk, const OrsoInstruction* instruction, i32 line) {
+    sb_push(chunk->code, (*instruction));
 
     i32 lines_count = sb_count(chunk->lines);
     if ((lines_count > 1 && (chunk->lines[lines_count - 2] == line || line < 0))) {
@@ -36,17 +36,10 @@ void chunk_write(Chunk* chunk, byte item, i32 line) {
     }
 }
 
-void chunk_write_constant(Chunk* chunk, OrsoValue value, i32 line) {
+void chunk_write_constant(Chunk* chunk, OrsoSlot value, i32 line) {
     i32 index = chunk_add_constant(chunk, value);
-    if (index > 0xFF) {
-        chunk_write(chunk, OP_CONSTANT_LONG, line);
-        chunk_write(chunk, (index >> 16) & 0xFF, line);
-        chunk_write(chunk, (index >> 8) & 0xFF, line);
-        chunk_write(chunk, index & 0xFF, line);
-    } else {
-        chunk_write(chunk, OP_CONSTANT, line);
-        chunk_write(chunk, index, line);
-    }
+    const OrsoInstruction instruction = { .op_code = ORSO_OP_CONSTANT, .value = index };
+    chunk_write(chunk, &instruction, line);
 }
 
 i32 chunk_get_line(Chunk* chunk, i32 offset) {
@@ -59,4 +52,8 @@ i32 chunk_get_line(Chunk* chunk, i32 offset) {
     }
 
     return -1;
+}
+
+void orso_print_slot(OrsoSlot slot) {
+    printf("'%d', '%.2f'", (i32)slot.i, slot.f);
 }

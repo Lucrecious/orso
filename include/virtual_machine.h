@@ -7,10 +7,10 @@
 
 typedef struct OrsoVM {
     Chunk* chunk;
-    uint8_t* ip;
+    OrsoInstruction* ip;
 
-    OrsoValue* stack;
-    OrsoValue* stack_top;
+    OrsoSlot* stack;
+    OrsoSlot* stack_top;
 } OrsoVM;
 
 void orso_vm_init(OrsoVM* vm);
