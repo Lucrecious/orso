@@ -107,6 +107,8 @@ static bool compile(const char* source, Chunk* chunk, OrsoErrorFunction error_fn
     orso_ast_print(&ast, "resolved");
 #endif
 
+    orso_ast_free(&ast);
+
     bool succeeded = true;
     succeeded &= ast.expression->value_type != ORSO_TYPE_UNRESOLVED;
     succeeded &= ast.expression->value_type != ORSO_TYPE_INVALID;
@@ -114,8 +116,6 @@ static bool compile(const char* source, Chunk* chunk, OrsoErrorFunction error_fn
     if (succeeded) {
         succeeded = orso_generate_code(&ast, chunk);
     }
-
-    orso_ast_free(&ast);
 
     return succeeded;
 }
@@ -138,6 +138,7 @@ void orso_interpret(OrsoVM* vm, const char* source, OrsoErrorFunction error_fn) 
     run(vm, error_fn);
 
     free(vm->stack);
+    chunk_free(&chunk);
     vm->stack_top = NULL;
 }
 

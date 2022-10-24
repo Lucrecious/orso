@@ -138,7 +138,7 @@ static void expression(OrsoExpressionNode* expression_node, Chunk* chunk) {
                 emit_byte(&instruction, chunk, expression_node->primary.token.line);
             } else {
                 OrsoSlot slot = { .i = expression_node->primary.constant.as_int };
-                emit_constant(chunk, slot, expression_node->primary.token.line);
+                //emit_constant(chunk, slot, expression_node->primary.token.line);
             }
             break;
         }
@@ -150,7 +150,11 @@ static void expression(OrsoExpressionNode* expression_node, Chunk* chunk) {
         }
     }
 
-#undef EMIT_OP
+#undef EMIT_NEGATE
+#undef EMIT_NOT
+#undef EMIT_BINARY_OP_F64
+#undef EMIT_BINARY_OP_I64
+#undef EMIT_BINARY_OP
 }
 
 bool orso_generate_code(OrsoAST* ast, Chunk* chunk) {
