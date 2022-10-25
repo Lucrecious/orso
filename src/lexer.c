@@ -96,8 +96,8 @@ static void skip_whitespace(Lexer* lexer) {
     }
 }
 
-static Token string(Lexer* lexer) {
-    while (peek(lexer) != '"' && !is_at_end(lexer)) {
+static FORCE_INLINE Token _string_symbol(Lexer* lexer, char terminator, TokenType type) {
+    while (peek(lexer) != terminator && !is_at_end(lexer)) {
         if (peek(lexer) == '\n') {
             lexer->line++;
         }
@@ -109,7 +109,15 @@ static Token string(Lexer* lexer) {
     }
 
     advance(lexer);
-    return create_token(lexer, TOKEN_STRING);
+    return create_token(lexer, type);
+}
+
+static Token string(Lexer* lexer) {
+    return _string_symbol(lexer, '"', TOKEN_STRING);
+}
+
+static Token symbol(Lexer* lexer) {
+    return _string_symbol(lexer, '\'', TOKEN_SYMBOL);
 }
 
 static Token annotation(Lexer* lexer) {
@@ -218,21 +226,15 @@ Token lexer_next_token(Lexer* lexer) {
         case '*': return create_token(lexer, TOKEN_STAR);
         case '/': return create_token(lexer, TOKEN_SLASH);
         case ':': return create_token(lexer, TOKEN_COLIN);
-        case '+':
-            return create_token(lexer, match(lexer, '+') ? TOKEN_PLUS_PLUS : TOKEN_PLUS);
-        case '=':
-            return create_token(lexer, match(lexer, '=') ? TOKEN_EQUAL_EQUAL : TOKEN_EQUAL);
-        case '!':
-            return create_token(lexer, match(lexer, '=') ? TOKEN_BANG_EQUAL : TOKEN_BANG);
-        case '<':
-            return create_token(lexer, match(lexer, '=') ? TOKEN_LESS_EQUAL : TOKEN_LESS);
-        case '>':
-            return create_token(lexer, match(lexer, '=') ? TOKEN_GREATER_EQUAL : TOKEN_GREATER);
+        case '+': return create_token(lexer, match(lexer, '+') ? TOKEN_PLUS_PLUS : TOKEN_PLUS);
+        case '=': return create_token(lexer, match(lexer, '=') ? TOKEN_EQUAL_EQUAL : TOKEN_EQUAL);
+        case '!': return create_token(lexer, match(lexer, '=') ? TOKEN_BANG_EQUAL : TOKEN_BANG);
+        case '<': return create_token(lexer, match(lexer, '=') ? TOKEN_LESS_EQUAL : TOKEN_LESS);
+        case '>': return create_token(lexer, match(lexer, '=') ? TOKEN_GREATER_EQUAL : TOKEN_GREATER);
         
-        case '"':
-            return string(lexer);
-        case '@':
-            return annotation(lexer);
+        case '"': return string(lexer);
+        case '\'': return symbol(lexer);
+        case '@': return annotation(lexer);
     }
 
     return error_token(lexer, "Unexpected character.");

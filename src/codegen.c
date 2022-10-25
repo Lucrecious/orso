@@ -92,6 +92,12 @@ static void expression(OrsoExpressionNode* expression_node, Chunk* chunk) {
                     case TOKEN_EQUAL_EQUAL: EMIT_BINARY_OP(EQUAL, STRING); break;
                     default: break; // Unreachable
                 }
+            } else if (left->value_type == ORSO_TYPE_SYMBOL) {
+                switch (operator.type) {
+                    case TOKEN_EQUAL_EQUAL: EMIT_BINARY_OP_I64(EQUAL); break;
+                    case TOKEN_BANG_EQUAL: EMIT_NOT(); EMIT_BINARY_OP_I64(EQUAL); break;
+                    default: break; // Unreachable
+                }
             }
             break;
         }

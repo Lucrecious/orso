@@ -3,7 +3,7 @@
 
 #include "lexer.h"
 #include "type.h"
-#include "value.h"
+#include "object.h"
 #include "chunk.h"
 
 typedef enum ExpressionType {

@@ -21,7 +21,7 @@ int main(int argc, char **argv) {
     OrsoVM vm;
     orso_vm_init(&vm);
 
-    orso_interpret(&vm, "\"hello \" + \"world\"", error);
+    orso_interpret(&vm, "'hello' == \"another\"", error);
     //orso_interpret(&vm, "1 == 2", error);
 
     orso_vm_free(&vm);

@@ -3,7 +3,7 @@
 
 #include "chunk.h"
 #include "common.h"
-#include "value.h"
+#include "object.h"
 
 typedef struct OrsoVM {
     Chunk* chunk;

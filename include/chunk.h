@@ -2,7 +2,7 @@
 #define BYTE_CODE_H_
 
 #include "def.h"
-#include "value.h"
+#include "object.h"
 #include "opcodes.h"
 #include "instructions.h"
 #include "type.h"

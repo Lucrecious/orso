@@ -1,5 +1,5 @@
-#ifndef VALUE_H_
-#define VALUE_H_
+#ifndef OBJECT_H_
+#define OBJECT_H_
 
 #include "def.h"
 
@@ -13,13 +13,6 @@ typedef struct OrsoString {
     char text[];
 } OrsoString;
 
-typedef struct OrsoValue {
-    union {
-        i64 as_int;
-        f64 as_float;
-    };
-} OrsoValue;
-
 FORCE_INLINE OrsoString* orso_new_string_from_cstrn(const char* start, i32 length) {
     OrsoString* string = ALLOCATE_FLEX(OrsoString, length + 1);
     string->length = length;
@@ -27,6 +20,10 @@ FORCE_INLINE OrsoString* orso_new_string_from_cstrn(const char* start, i32 lengt
     string->text[length] = '\0';
 
     return string;
+}
+
+FORCE_INLINE i64 orso_new_symbol_from_cstrn(const char* start, i32 length) {
+    return 1;
 }
 
 FORCE_INLINE bool orso_string_equal(OrsoString* a, OrsoString* b) {
@@ -97,7 +94,5 @@ FORCE_INLINE f64 cstrn_to_f64(const char* text, i32 length) {
 
     return value * fact;
 }
-
-void print_value(OrsoValue value);
 
 #endif

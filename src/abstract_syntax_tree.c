@@ -149,6 +149,13 @@ static OrsoExpressionNode* literal(Parser* parser) {
             expression_node->primary.constant.p = orso_new_string_from_cstrn(string.start + 1, string.length - 2);
             break;
         };
+
+        case TOKEN_SYMBOL: {
+            expression_node->value_type = ORSO_TYPE_SYMBOL;
+            Token symbol = expression_node->primary.token;
+            expression_node->primary.constant.i = orso_new_symbol_from_cstrn(symbol.start + 1, symbol.length - 2);
+            break;
+        }
     }
 
     return expression_node;
@@ -222,6 +229,7 @@ ParseRule rules[] = {
     [TOKEN_GREATER_EQUAL]           = { NULL,       binary,     PREC_COMPARISON },
     [TOKEN_IDENTIFIER]              = { NULL,       NULL,       PREC_NONE },
     [TOKEN_STRING]                  = { literal,    NULL,       PREC_NONE },
+    [TOKEN_SYMBOL]                  = { literal,    NULL,       PREC_NONE },
     [TOKEN_INTEGER]                 = { number,     NULL,       PREC_NONE },
     [TOKEN_FLOAT]                   = { number,     NULL,       PREC_NONE },
     [TOKEN_ANNOTATION]              = { NULL,       NULL,       PREC_NONE },

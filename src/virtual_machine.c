@@ -133,7 +133,7 @@ void orso_interpret(OrsoVM* vm, const char* source, OrsoErrorFunction error_fn) 
         return;
     }
 
-    vm->stack = ALLOCATE_N(OrsoValue, chunk.max_stack_size);
+    vm->stack = ALLOCATE_N(OrsoSlot, chunk.max_stack_size);
     vm->stack_top = vm->stack;
 
     vm->chunk = &chunk;
