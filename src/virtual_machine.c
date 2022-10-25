@@ -80,7 +80,7 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
 
             case ORSO_OP_CONSTANT: PUSH(vm->chunk->constants[instruction->value].i); break;
             
-            case ORSO_OP_RETURN: orso_print_slot(POP()); printf("\n"); return;
+            case ORSO_OP_RETURN: orso_print_slot(POP(), (OrsoType)instruction->value); printf("\n"); return;
         }
     }
 

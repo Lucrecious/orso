@@ -5,6 +5,7 @@
 #include "value.h"
 #include "opcodes.h"
 #include "instructions.h"
+#include "type.h"
 
 typedef union OrsoSlot {
     i64 i;
@@ -25,7 +26,7 @@ void chunk_write_constant(Chunk* chunk, OrsoSlot value, i32 line);
 i32 chunk_get_line(Chunk* chunk, i32 offset);
 i32 chunk_add_constant(Chunk* chunk, OrsoSlot value);
 
-void orso_print_slot(OrsoSlot slot);
+void orso_print_slot(OrsoSlot slot, OrsoType type);
 
 void chunk_free(Chunk* chunk);
 

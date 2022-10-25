@@ -2,6 +2,7 @@
 #define TYPE_H_
 
 #include "def.h"
+#include "lexer.h"
 
 typedef enum OrsoType {
     ORSO_TYPE_NULL,

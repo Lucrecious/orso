@@ -8,8 +8,8 @@ static void emit_instruction(const OrsoInstruction* instruction, Chunk* chunk, i
     chunk_write(chunk, instruction, line);
 }
 
-static void emit_return(Chunk* chunk, i32 line) {
-    const OrsoInstruction instruction = { .op_code = ORSO_OP_RETURN };
+static void emit_return(Chunk* chunk, i32 line, OrsoType type) {
+    const OrsoInstruction instruction = { .op_code = ORSO_OP_RETURN, .value = type };
     chunk_write(chunk, &instruction, line);
 }
 
@@ -28,10 +28,6 @@ static void emit_type_convert(OrsoType from_type, OrsoType to_type, Chunk* chunk
     } else {
         // Unreachable
     }
-}
-
-static void end_code_generation(Chunk* chunk, i32 line) {
-    emit_return(chunk, line);
 }
 
 static void expression(OrsoExpressionNode* expression_node, Chunk* chunk) {
@@ -167,7 +163,7 @@ bool orso_generate_code(OrsoAST* ast, Chunk* chunk) {
 
     expression(ast->expression, chunk);
 
-    emit_return(chunk, -1);
+    emit_return(chunk, -1, ast->expression->value_type);
 
 #ifdef DEBUG_PRINT_CODE
     chunk_disassemble(chunk, "code");

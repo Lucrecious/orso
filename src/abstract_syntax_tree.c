@@ -323,7 +323,7 @@ void ast_print_expression(OrsoExpressionNode* expression, i32 initial_indent) {
         }
         case EXPRESSION_PRIMARY: {
             printf("PRIMARY ");
-            orso_print_slot(expression->primary.constant);
+            orso_print_slot(expression->primary.constant, expression->value_type);
             printf("\n");
             break;
         }
