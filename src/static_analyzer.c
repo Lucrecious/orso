@@ -97,7 +97,7 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoExpressionNode* e
                 case TOKEN_MINUS:
                 case TOKEN_STAR:
                 case TOKEN_SLASH: {
-                    OrsoType combined_type = orso_binary_arithmetic_cast(left->value_type, right->value_type);
+                    OrsoType combined_type = orso_binary_arithmetic_cast(left->value_type, right->value_type, expression->binary.operator.type);
                     expression->value_type = combined_type;
 
                     cast_left = combined_type;

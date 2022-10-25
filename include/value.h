@@ -25,8 +25,8 @@ FORCE_INLINE OrsoString* orso_new_string_from_cstrn(const char* start, i32 lengt
     string->length = length;
     memcpy(string->text, start, length);
     string->text[length] = '\0';
-    return string;
 
+    return string;
 }
 
 FORCE_INLINE bool orso_string_equal(OrsoString* a, OrsoString* b) {
@@ -35,6 +35,16 @@ FORCE_INLINE bool orso_string_equal(OrsoString* a, OrsoString* b) {
     }
 
     return memcmp(a->text, b->text, a->length) == 0;
+}
+
+FORCE_INLINE OrsoString* orso_string_concat(OrsoString* a, OrsoString* b) {
+    OrsoString* string = ALLOCATE_FLEX(OrsoString, a->length + b->length + 1);
+    string->length = a->length + b->length;
+    memcpy(string->text, a->text, a->length);
+    memcpy(string->text + a->length, b->text, b->length);
+    string->text[a->length + b->length] = '\0';
+
+    return string;
 }
 
 FORCE_INLINE i64 cstrn_to_i64(const char* text, i32 length) {

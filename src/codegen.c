@@ -91,6 +91,7 @@ static void expression(OrsoExpressionNode* expression_node, Chunk* chunk) {
                 }
             } else if (left->value_type == ORSO_TYPE_STRING) {
                 switch (operator.type) {
+                    case TOKEN_PLUS: EMIT_BINARY_OP(CONCAT, STRING); break;
                     case TOKEN_BANG_EQUAL: EMIT_NOT(); EMIT_BINARY_OP(EQUAL, STRING); break;
                     case TOKEN_EQUAL_EQUAL: EMIT_BINARY_OP(EQUAL, STRING); break;
                     default: break; // Unreachable

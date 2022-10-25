@@ -70,7 +70,8 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
             case ORSO_OP_LESS_F64: { f64 b = POP().f; TOP_SLOT->i = (TOP_SLOT->f < b); break; }
             case ORSO_OP_GREATER_F64: { f64 b = POP().f; TOP_SLOT->i = (TOP_SLOT->f > b); break; }
 
-            case ORSO_OP_EQUAL_STRING: { ptr b = POP().p; TOP_SLOT->i = orso_string_equal((OrsoString*)(TOP_SLOT->p), (OrsoString*)b); break; }
+            case ORSO_OP_EQUAL_STRING: { ptr b = POP().p; TOP_SLOT->i = orso_string_equal(TOP_SLOT->p, b); break; }
+            case ORSO_OP_CONCAT_STRING: { ptr b = POP().p; TOP_SLOT->p = orso_string_concat(TOP_SLOT->p, b); break; }
 
             case ORSO_OP_LOGICAL_NOT: TOP_SLOT->i = !TOP_SLOT->i; break;
 

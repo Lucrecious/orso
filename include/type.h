@@ -70,7 +70,11 @@ i32 FORCE_INLINE orso_number_and_bool_type_bit_count(OrsoType number_type) {
     }
 }
 
-OrsoType FORCE_INLINE orso_binary_arithmetic_cast(OrsoType a, OrsoType b) {
+OrsoType FORCE_INLINE orso_binary_arithmetic_cast(OrsoType a, OrsoType b, TokenType operation) {
+    if (operation == TOKEN_PLUS && a == ORSO_TYPE_STRING && b == ORSO_TYPE_STRING) {
+        return ORSO_TYPE_STRING;
+    }
+
     i32 a_count = orso_number_and_bool_type_bit_count(a);
     i32 b_count = orso_number_and_bool_type_bit_count(b);
 

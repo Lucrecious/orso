@@ -146,7 +146,7 @@ static OrsoExpressionNode* literal(Parser* parser) {
         case TOKEN_STRING: {
             expression_node->value_type = ORSO_TYPE_STRING;
             Token string = expression_node->primary.token;
-            expression_node->primary.constant.p = orso_new_string_from_cstrn(string.start, string.length);
+            expression_node->primary.constant.p = orso_new_string_from_cstrn(string.start + 1, string.length - 2);
             break;
         };
     }
