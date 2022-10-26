@@ -7,11 +7,11 @@ add_global_arguments(['-Wunused-function'], language: 'c')
 inc = include_directories('include')
 
 src = [
-  'src/abstract_syntax_tree.c',
   'src/chunk.c',
   'src/codegen.c',
   'src/debug.c',
   'src/lexer.c',
+  'src/parser.c',
   'src/static_analyzer.c',
   'src/symbol_table.c',
   'src/virtual_machine.c',

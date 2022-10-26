@@ -1,4 +1,4 @@
-#include "abstract_syntax_tree.h"
+#include "parser.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -308,7 +308,7 @@ static OrsoExpressionNode* expression(Parser* parser) {
     return parse_precedence(parser, PREC_ASSIGNMENT);
 }
 
-bool orso_parse_to_ast(const char* source, OrsoAST* ast, OrsoSymbolTable* symbol_table, OrsoErrorFunction error_fn) {
+bool orso_parse(OrsoAST* ast, const char* source, OrsoSymbolTable* symbol_table, OrsoErrorFunction error_fn) {
     Parser parser;
     parser_init(&parser, source, symbol_table, error_fn);
 

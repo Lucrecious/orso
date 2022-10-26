@@ -2,7 +2,7 @@
 
 #include <stdio.h>
 
-#include "abstract_syntax_tree.h"
+#include "parser.h"
 #include "codegen.h"
 #include "static_analyzer.h"
 #include "sb.h"
@@ -95,7 +95,7 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
 
 static bool compile(const char* source, Chunk* chunk, OrsoSymbolTable* symbol_table, OrsoErrorFunction error_fn) {
     OrsoAST ast;
-    if (!orso_parse_to_ast(source, &ast, symbol_table, error_fn)) {
+    if (!orso_parse(&ast, source, symbol_table, error_fn)) {
         orso_ast_free(&ast);
         return false;
     }

@@ -1,7 +1,7 @@
 #ifndef STATIC_ANALYZER_H_
 #define STATIC_ANALYZER_H_
 
-#include "abstract_syntax_tree.h"
+#include "parser.h"
 #include "common.h"
 
 typedef struct OrsoStaticAnalyzer {
