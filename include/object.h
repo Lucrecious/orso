@@ -29,13 +29,14 @@ FORCE_INLINE OrsoString* orso_new_string_from_cstrn(const char* start, i32 lengt
     return string;
 }
 
-FORCE_INLINE i64 orso_new_symbol_from_cstrn(const char* start, i32 length) {
-    OrsoSymbol* symbol = ALLOCATE_FLEX(OrsoSymbol, length + 1);
-    symbol->length = length;
-    memcpy(symbol->text, start, length);
-    symbol->text[length] = '\0';
+FORCE_INLINE u32 orso_hash_cstrn(const char* start, i32 length) {
+    u32 hash = 2166136261u;
+    for (i32 i = 0; i < length; i++) {
+        hash ^= (byte)start[i];
+        hash *= 16777619;
+    }
 
-    return symbol;
+    return hash;
 }
 
 FORCE_INLINE bool orso_string_equal(OrsoString* a, OrsoString* b) {

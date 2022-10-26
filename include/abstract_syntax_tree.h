@@ -1,10 +1,11 @@
 #ifndef ABSTRACT_SYNTAX_TREE_H_
 #define ABSTRACT_SYNTAX_TREE_H_
 
-#include "lexer.h"
-#include "type.h"
-#include "object.h"
 #include "chunk.h"
+#include "lexer.h"
+#include "object.h"
+#include "symbol_table.h"
+#include "type.h"
 
 typedef enum ExpressionType {
     EXPRESSION_NONE,
@@ -59,7 +60,7 @@ typedef struct OrsoAST {
 
 void orso_ast_print(OrsoAST* ast, const char* name);
 
-bool orso_parse_to_ast(const char* source, OrsoAST* ast, OrsoErrorFunction error_fn);
+bool orso_parse_to_ast(const char* source, OrsoAST* ast, OrsoSymbolTable* symbol_table, OrsoErrorFunction error_fn);
 
 void orso_ast_init(OrsoAST* ast);
 void orso_ast_free(OrsoAST* ast);

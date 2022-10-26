@@ -13,6 +13,7 @@ src = [
   'src/debug.c',
   'src/lexer.c',
   'src/static_analyzer.c',
+  'src/symbol_table.c',
   'src/virtual_machine.c',
 ]
 

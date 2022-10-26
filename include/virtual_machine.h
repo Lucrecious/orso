@@ -4,11 +4,14 @@
 #include "chunk.h"
 #include "common.h"
 #include "object.h"
+#include "symbol_table.h"
 
 typedef struct OrsoVM {
     Chunk* chunk;
     OrsoInstruction* ip;
 
+    OrsoSymbolTable symbol_table;
+    
     OrsoSlot* stack;
     OrsoSlot* stack_top;
 } OrsoVM;

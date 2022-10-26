@@ -13,12 +13,15 @@
 #endif
 
 void orso_vm_init(OrsoVM* vm) {
+    orso_symbol_table_init(&vm->symbol_table);
+
     vm->chunk = NULL;
     vm->stack = NULL;
     vm->stack_top = NULL;
 }
 
 void orso_vm_free(OrsoVM* vm) {
+    orso_symbol_table_free(&vm->symbol_table);
 }
 
 static void FORCE_INLINE push_i64(OrsoVM* vm, i64 value) {
@@ -90,9 +93,9 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
 #undef READ_INSTRUCTION
 }
 
-static bool compile(const char* source, Chunk* chunk, OrsoErrorFunction error_fn) {
+static bool compile(const char* source, Chunk* chunk, OrsoSymbolTable* symbol_table, OrsoErrorFunction error_fn) {
     OrsoAST ast;
-    if (!orso_parse_to_ast(source, &ast, error_fn)) {
+    if (!orso_parse_to_ast(source, &ast, symbol_table, error_fn)) {
         orso_ast_free(&ast);
         return false;
     }
@@ -129,7 +132,7 @@ void orso_interpret(OrsoVM* vm, const char* source, OrsoErrorFunction error_fn) 
     chunk_init(&chunk);
     chunk.max_stack_size = 256;
 
-    if (!compile(source, &chunk, error_fn)) {
+    if (!compile(source, &chunk, &vm->symbol_table, error_fn)) {
         return;
     }
 

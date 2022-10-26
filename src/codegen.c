@@ -65,9 +65,9 @@ static void expression(OrsoExpressionNode* expression_node, Chunk* chunk) {
                     case TOKEN_SLASH: EMIT_BINARY_OP_I64(DIVIDE); break;
                     case TOKEN_LESS: EMIT_BINARY_OP_I64(LESS); break;
                     case TOKEN_GREATER: EMIT_BINARY_OP_I64(GREATER); break;
-                    case TOKEN_LESS_EQUAL: EMIT_NOT(); EMIT_BINARY_OP_I64(GREATER); break;
-                    case TOKEN_GREATER_EQUAL: EMIT_NOT(); EMIT_BINARY_OP_I64(LESS); break;
-                    case TOKEN_BANG_EQUAL: EMIT_NOT(); EMIT_BINARY_OP_I64(EQUAL); break;
+                    case TOKEN_LESS_EQUAL: EMIT_BINARY_OP_I64(GREATER); EMIT_NOT(); break;
+                    case TOKEN_GREATER_EQUAL: EMIT_BINARY_OP_I64(LESS); EMIT_NOT(); break;
+                    case TOKEN_BANG_EQUAL: EMIT_BINARY_OP_I64(EQUAL); EMIT_NOT(); break;
                     case TOKEN_EQUAL_EQUAL: EMIT_BINARY_OP_I64(EQUAL); break;
                     default: break; // Unreachable
                 }
@@ -79,23 +79,23 @@ static void expression(OrsoExpressionNode* expression_node, Chunk* chunk) {
                     case TOKEN_SLASH: EMIT_BINARY_OP_F64(DIVIDE); break;
                     case TOKEN_LESS: EMIT_BINARY_OP_F64(LESS); break;
                     case TOKEN_GREATER: EMIT_BINARY_OP_F64(GREATER); break;
-                    case TOKEN_LESS_EQUAL: EMIT_NOT(); EMIT_BINARY_OP_F64(GREATER); break;
-                    case TOKEN_GREATER_EQUAL: EMIT_NOT(); EMIT_BINARY_OP_F64(LESS); break;
-                    case TOKEN_BANG_EQUAL: EMIT_NOT(); EMIT_BINARY_OP_F64(EQUAL); break;
+                    case TOKEN_LESS_EQUAL: EMIT_BINARY_OP_F64(GREATER); EMIT_NOT(); break;
+                    case TOKEN_GREATER_EQUAL: EMIT_BINARY_OP_F64(LESS); EMIT_NOT(); break;
+                    case TOKEN_BANG_EQUAL: EMIT_BINARY_OP_F64(EQUAL); EMIT_NOT(); break;
                     case TOKEN_EQUAL_EQUAL: EMIT_BINARY_OP_F64(EQUAL); break;
                     default: break; // Unreachable
                 }
             } else if (left->value_type == ORSO_TYPE_STRING) {
                 switch (operator.type) {
                     case TOKEN_PLUS: EMIT_BINARY_OP(CONCAT, STRING); break;
-                    case TOKEN_BANG_EQUAL: EMIT_NOT(); EMIT_BINARY_OP(EQUAL, STRING); break;
+                    case TOKEN_BANG_EQUAL: EMIT_BINARY_OP(EQUAL, STRING); EMIT_NOT(); break;
                     case TOKEN_EQUAL_EQUAL: EMIT_BINARY_OP(EQUAL, STRING); break;
                     default: break; // Unreachable
                 }
             } else if (left->value_type == ORSO_TYPE_SYMBOL) {
                 switch (operator.type) {
                     case TOKEN_EQUAL_EQUAL: EMIT_BINARY_OP_I64(EQUAL); break;
-                    case TOKEN_BANG_EQUAL: EMIT_NOT(); EMIT_BINARY_OP_I64(EQUAL); break;
+                    case TOKEN_BANG_EQUAL: EMIT_BINARY_OP_I64(EQUAL); EMIT_NOT(); break;
                     default: break; // Unreachable
                 }
             }

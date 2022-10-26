@@ -7,6 +7,8 @@
 #include "type.h"
 
 typedef struct Parser {
+    OrsoSymbolTable* vm_symbol_table;
+
     OrsoErrorFunction error_fn;
     Lexer lexer;
     Token previous;
@@ -37,8 +39,9 @@ typedef struct {
     Precedence precedence;
 } ParseRule;
 
-static void parser_init(Parser* parser, const char* source, OrsoErrorFunction error_fn) {
+static void parser_init(Parser* parser, const char* source, OrsoSymbolTable* vm_symbol_table, OrsoErrorFunction error_fn) {
     lexer_init(&parser->lexer, source);
+    parser->vm_symbol_table = vm_symbol_table;
     parser->error_fn = error_fn;
     parser->had_error = false;
     parser->panic_mode = false;
@@ -102,6 +105,25 @@ static void consume(Parser* parser, TokenType type, const char* message) {
     error_at_current(parser, message);
 }
 
+static FORCE_INLINE OrsoSymbol* orso_new_symbol_from_cstrn(const char* start, i32 length, OrsoSymbolTable* symbol_table) {
+    u32 hash = orso_hash_cstrn(start, length);
+    OrsoSymbol* symbol = orso_symbol_table_find_cstrn(symbol_table, start, length, hash);
+    if (symbol != NULL) {
+        return symbol;
+    }
+
+    symbol = ALLOCATE_FLEX(OrsoSymbol, length + 1);
+    symbol->hash = hash;
+    symbol->length = length;
+    memcpy(symbol->text, start, length);
+    symbol->text[length] = '\0';
+
+    OrsoSlot slot = {.i = 0};
+    orso_symbol_table_set(symbol_table, symbol, slot);
+
+    return symbol;
+}
+
 static OrsoExpressionNode* number(Parser* parser) {
     OrsoExpressionNode* expression_node = ALLOCATE(OrsoExpressionNode);
     expression_node->type = EXPRESSION_PRIMARY;
@@ -153,7 +175,7 @@ static OrsoExpressionNode* literal(Parser* parser) {
         case TOKEN_SYMBOL: {
             expression_node->value_type = ORSO_TYPE_SYMBOL;
             Token symbol = expression_node->primary.token;
-            expression_node->primary.constant.p = orso_new_symbol_from_cstrn(symbol.start + 1, symbol.length - 2);
+            expression_node->primary.constant.p = orso_new_symbol_from_cstrn(symbol.start + 1, symbol.length - 2, parser->vm_symbol_table);
             break;
         }
     }
@@ -286,9 +308,9 @@ static OrsoExpressionNode* expression(Parser* parser) {
     return parse_precedence(parser, PREC_ASSIGNMENT);
 }
 
-bool orso_parse_to_ast(const char* source, OrsoAST* ast, OrsoErrorFunction error_fn) {
+bool orso_parse_to_ast(const char* source, OrsoAST* ast, OrsoSymbolTable* symbol_table, OrsoErrorFunction error_fn) {
     Parser parser;
-    parser_init(&parser, source, error_fn);
+    parser_init(&parser, source, symbol_table, error_fn);
 
     advance(&parser);
 
