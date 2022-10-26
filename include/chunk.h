@@ -7,12 +7,6 @@
 #include "instructions.h"
 #include "type.h"
 
-typedef union OrsoSlot {
-    i64 i;
-    f64 f;
-    ptr p;
-} OrsoSlot;
-
 typedef struct Chunk {
     u32 max_stack_size;
     OrsoSlot* constants;

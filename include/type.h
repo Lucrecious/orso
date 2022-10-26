@@ -18,6 +18,12 @@ typedef enum OrsoType {
     ORSO_TYPE_MAX,
 } OrsoType;
 
+typedef union OrsoSlot {
+    i64 i;
+    f64 f;
+    ptr p;
+} OrsoSlot;
+
 const FORCE_INLINE char* orso_type_to_cstr(OrsoType type) {
     switch (type) {
         case ORSO_TYPE_NULL: return "null";

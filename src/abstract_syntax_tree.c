@@ -153,7 +153,7 @@ static OrsoExpressionNode* literal(Parser* parser) {
         case TOKEN_SYMBOL: {
             expression_node->value_type = ORSO_TYPE_SYMBOL;
             Token symbol = expression_node->primary.token;
-            expression_node->primary.constant.i = orso_new_symbol_from_cstrn(symbol.start + 1, symbol.length - 2);
+            expression_node->primary.constant.p = orso_new_symbol_from_cstrn(symbol.start + 1, symbol.length - 2);
             break;
         }
     }

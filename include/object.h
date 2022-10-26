@@ -8,10 +8,17 @@ typedef struct OrsoObject {
 } OrsoObject;
 
 typedef struct OrsoString {
-    OrsoObject obj;
+    OrsoObject object;
     i32 length;
     char text[];
 } OrsoString;
+
+typedef struct OrsoSymbol {
+    OrsoObject object;
+    i32 length;
+    u32 hash;
+    char text[];
+} OrsoSymbol;
 
 FORCE_INLINE OrsoString* orso_new_string_from_cstrn(const char* start, i32 length) {
     OrsoString* string = ALLOCATE_FLEX(OrsoString, length + 1);
@@ -23,7 +30,12 @@ FORCE_INLINE OrsoString* orso_new_string_from_cstrn(const char* start, i32 lengt
 }
 
 FORCE_INLINE i64 orso_new_symbol_from_cstrn(const char* start, i32 length) {
-    return 1;
+    OrsoSymbol* symbol = ALLOCATE_FLEX(OrsoSymbol, length + 1);
+    symbol->length = length;
+    memcpy(symbol->text, start, length);
+    symbol->text[length] = '\0';
+
+    return symbol;
 }
 
 FORCE_INLINE bool orso_string_equal(OrsoString* a, OrsoString* b) {
