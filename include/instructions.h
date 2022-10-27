@@ -16,7 +16,6 @@ typedef struct OrsoInstruction {
 
         struct {
             OrsoType type;
-            OrsoSlot string;
         } print_expr;
     };
 } OrsoInstruction;

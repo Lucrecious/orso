@@ -26,6 +26,10 @@ if get_option('debug_trace')
   c_args += '-DDEBUG_TRACE_EXECUTION'
 endif
 
+if get_option('debug_print')
+  c_args += '-DDEBUG_PRINT'
+endif
+
 executable('orso', [src, 'main.c'], install : false, include_directories : inc, c_args : c_args)
 
 # test('variable_retrieval', test_variable_retrieval)

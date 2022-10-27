@@ -1,6 +1,6 @@
 #include "codegen.h"
 
-#ifdef DEBUG_PRINT_CODE
+#ifdef DEBUG_PRINT
 #include "debug.h"
 #endif
 
@@ -193,15 +193,20 @@ static void declaration(OrsoDeclarationNode* declaration, Chunk* chunk) {
 
                         Token start = expression_->start;
                         Token end = expression_->end;
+
                         OrsoString* expression_string = orso_new_string_from_cstrn(start.start, (end.start + end.length) - start.start);
+                        OrsoSlot slot = {
+                            .p = expression_string,
+#ifdef DEBUG_TRACE_EXECUTION
+                            .type = ORSO_TYPE_STRING,
+#endif
+                            };
+
+                        emit_constant(chunk, slot, start.line);
 
                         const OrsoInstruction instruction = {
                             .op_code = ORSO_OP_PRINT_EXPR,
                             .print_expr.type = expression_->value_type,
-                            .print_expr.string.p = expression_string,
-#ifdef DEBUG_TRACE_EXECUTION
-                            .print_expr.string.type = ORSO_TYPE_MAX,
-#endif
                         };
                         emit_instruction(&instruction, chunk, start.line);
                     break;
@@ -222,7 +227,7 @@ bool orso_generate_code(OrsoAST* ast, Chunk* chunk) {
 
     emit_instruction(&instruction, chunk, -1);
 
-#ifdef DEBUG_PRINT_CODE
+#ifdef DEBUG_PRINT
     chunk_disassemble(chunk, "code");
 #endif
 

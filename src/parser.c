@@ -465,16 +465,14 @@ void ast_print_statement(OrsoStatementNode* statement, i32 initial_indent) {
     switch(statement->type) {
         case ORSO_STATEMENT_NONE: return;
         case ORSO_STATEMENT_PRINT_EXPR:
-            printf("print_expr");
+            printf("print_expr\n");
             ast_print_expression(statement->expression, initial_indent + 1);
             break;
         case ORSO_STATEMENT_EXPRESSION:
-            printf("expression");
+            printf("expression\n");
             ast_print_expression(statement->expression, initial_indent + 1);
             break;
     }
-
-    printf("\n");
 }
 
 void ast_print_declaration(OrsoDeclarationNode* declaration, i32 initial_indent) {

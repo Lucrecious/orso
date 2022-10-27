@@ -118,8 +118,9 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
             case ORSO_OP_CONSTANT: PUSH(vm->chunk->constants[instruction->constant.index]); break;
 
             case ORSO_OP_PRINT_EXPR: {
-                OrsoString* expression_string = (OrsoString*)instruction->print_expr.string.p;
+                OrsoString* expression_string = (OrsoString*)POP().p;
                 printf("%s => ", expression_string->text);
+
                 OrsoSlot slot = POP();
                 orso_print_slot(slot, instruction->print_expr.type);
                 printf("\n");
@@ -145,7 +146,7 @@ static bool compile(const char* source, Chunk* chunk, OrsoSymbolTable* symbol_ta
         return false;
     }
 
-#ifdef DEBUG_PRINT_CODE
+#ifdef DEBUG_PRINT
     orso_ast_print(&ast, "unresolved");
 #endif
 
@@ -154,7 +155,7 @@ static bool compile(const char* source, Chunk* chunk, OrsoSymbolTable* symbol_ta
 
     bool resolved = orso_resolve_ast_types(&analyzer, &ast);
 
-#ifdef DEBUG_PRINT_CODE
+#ifdef DEBUG_PRINT
     orso_ast_print(&ast, "resolved");
 #endif
 

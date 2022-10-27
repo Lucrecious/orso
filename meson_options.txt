@@ -1,1 +1,2 @@
 option('debug_trace', type : 'boolean', value : false, description : 'Prints the bytecode for the vm as it runs.')
+option('debug_print', type : 'boolean', value : false, description : 'Prints generated code and ast.')
