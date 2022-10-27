@@ -210,9 +210,10 @@ static OrsoExpressionNode* grouping(Parser* parser) {
     expression_node->type = EXPRESSION_GROUPING;
     expression_node->start = parser->previous;
     expression_node->grouping.expression = expression(parser);
-    expression_node->end = parser->previous;
     expression_node->value_type = expression_node->grouping.expression->value_type;
     consume(parser, TOKEN_PARENTHESIS_CLOSE, "Expect ')' after expression.");
+
+    expression_node->end = parser->previous;
 
     return expression_node;
 }
@@ -314,6 +315,7 @@ static OrsoExpressionNode* parse_precedence(Parser* parser, Precedence precedenc
         switch (right_operand->type) {
             case EXPRESSION_BINARY:
                 right_operand->binary.left = left_operand;
+                right_operand->start = left_operand->start;
                 left_operand = right_operand;
                 break;
             default: // unreachable
@@ -335,7 +337,6 @@ static OrsoExpressionNode* expression(Parser* parser) {
 static OrsoDeclarationNode* statement(Parser* parser) {
     if (match(parser, TOKEN_PRINT_EXPR)) {
         OrsoDeclarationNode* declaration_node = ALLOCATE(OrsoDeclarationNode);
-        Token start = parser->current;
         OrsoExpressionNode* expression_node = expression(parser);
         declaration_node->statement.print_expr.expression = expression_node;
         return declaration_node;

@@ -21,8 +21,21 @@ int main(int argc, char **argv) {
     OrsoVM vm;
     orso_vm_init(&vm);
 
-    orso_interpret(&vm, "print_expr 'a' == 'a'\nprint_expr 1 + 3 / (5 + 1.0)", error);
-    //orso_interpret(&vm, "1 == 2", error);
+    char source_code[1000];
+
+    printf("Orso interpreter initialized.\n\n");
+
+    for (;;) {
+        printf("orso>> ");
+        fgets(source_code, 1000, stdin);
+        if (source_code[0] == '\0') {
+            break;
+        }
+
+        orso_interpret(&vm, source_code, error);
+
+        printf("\n");
+    }
 
     orso_vm_free(&vm);
 
