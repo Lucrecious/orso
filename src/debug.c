@@ -11,7 +11,7 @@ static i32 constant_instruction(const char* name, Chunk* chunk, i32 offset) {
     orso_print_slot(chunk->constants[constant.constant.index],
 #ifdef DEBUG_TRACE_EXECUTION
         chunk->constants[constant.constant.index].type
-#elif
+#else
         ORSO_TYPE_MAX
 #endif
     );

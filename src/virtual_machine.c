@@ -46,7 +46,7 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
 #ifdef DEBUG_TRACE_EXECUTION
 #define SLOT_ADD_TYPE(SLOT, TYPE) SLOT->type = TYPE
 #else
-#define SLOT_ADD_TYPE(TYPE)
+#define SLOT_ADD_TYPE(SLOT, TYPE)
 #endif
 
     for (;;) {
