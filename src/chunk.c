@@ -38,7 +38,7 @@ void chunk_write(Chunk* chunk, const OrsoInstruction* instruction, i32 line) {
 
 void chunk_write_constant(Chunk* chunk, OrsoSlot value, i32 line) {
     i32 index = chunk_add_constant(chunk, value);
-    const OrsoInstruction instruction = { .op_code = ORSO_OP_CONSTANT, .value = index };
+    const OrsoInstruction instruction = { .op_code = ORSO_OP_CONSTANT, .constant.index = index };
     chunk_write(chunk, &instruction, line);
 }
 

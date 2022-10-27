@@ -5,6 +5,7 @@
 
 #include "common.h"
 #include "type.h"
+#include "sb.h"
 
 typedef struct Parser {
     OrsoSymbolTable* vm_symbol_table;
@@ -105,6 +106,19 @@ static void consume(Parser* parser, TokenType type, const char* message) {
     error_at_current(parser, message);
 }
 
+static FORCE_INLINE bool check(Parser* parser, TokenType type) {
+    return parser->current.type == type;
+}
+
+static bool match(Parser* parser, TokenType type) {
+    if (!check(parser, type)) {
+        return false;
+    }
+
+    advance(parser);
+    return true;
+}
+
 static FORCE_INLINE OrsoSymbol* orso_new_symbol_from_cstrn(const char* start, i32 length, OrsoSymbolTable* symbol_table) {
     u32 hash = orso_hash_cstrn(start, length);
     OrsoSymbol* symbol = orso_symbol_table_find_cstrn(symbol_table, start, length, hash);
@@ -126,6 +140,7 @@ static FORCE_INLINE OrsoSymbol* orso_new_symbol_from_cstrn(const char* start, i3
 
 static OrsoExpressionNode* number(Parser* parser) {
     OrsoExpressionNode* expression_node = ALLOCATE(OrsoExpressionNode);
+    expression_node->start = expression_node->end = parser->previous;
     expression_node->type = EXPRESSION_PRIMARY;
     expression_node->primary.token = parser->previous;
 
@@ -150,6 +165,7 @@ static OrsoExpressionNode* number(Parser* parser) {
 
 static OrsoExpressionNode* literal(Parser* parser) {
     OrsoExpressionNode* expression_node = ALLOCATE(OrsoExpressionNode);
+    expression_node->start = expression_node->end = parser->previous;
     expression_node->type = EXPRESSION_PRIMARY;
     expression_node->primary.token = parser->previous;
 
@@ -192,7 +208,9 @@ static OrsoExpressionNode* grouping(Parser* parser) {
 
     expression_node->value_type = ORSO_TYPE_UNRESOLVED;
     expression_node->type = EXPRESSION_GROUPING;
+    expression_node->start = parser->previous;
     expression_node->grouping.expression = expression(parser);
+    expression_node->end = parser->previous;
     expression_node->value_type = expression_node->grouping.expression->value_type;
     consume(parser, TOKEN_PARENTHESIS_CLOSE, "Expect ')' after expression.");
 
@@ -205,7 +223,9 @@ static OrsoExpressionNode* unary(Parser* parser) {
     expression_node->value_type = ORSO_TYPE_UNRESOLVED;
     expression_node->type = EXPRESSION_UNARY;
     expression_node->unary.operator = parser->previous;
+    expression_node->start = parser->previous;
     expression_node->unary.operand = parse_precedence(parser, PREC_UNARY);
+    expression_node->end = parser->previous;
 
     return expression_node;
 }
@@ -220,7 +240,10 @@ static OrsoExpressionNode* binary(Parser* parser) {
     expression_node->binary.right = NULL;
 
     ParseRule* rule = get_rule(expression_node->binary.operator.type);
+
+    expression_node->start = parser->previous;
     expression_node->binary.right = parse_precedence(parser, (Precedence)(rule->precedence + 1));
+    expression_node->end = parser->previous;
 
     return expression_node;
 }
@@ -264,6 +287,7 @@ ParseRule rules[] = {
     [TOKEN_TRUE]                    = { literal,    NULL,       PREC_NONE },
     [TOKEN_FALSE]                   = { literal,    NULL,       PREC_NONE },
     [TOKEN_NULL]                    = { literal,    NULL,       PREC_NONE },
+    [TOKEN_PRINT_EXPR]              = { NULL,       NULL,       PREC_NONE },
     [TOKEN_ERROR]                   = { NULL,       NULL,       PREC_NONE },
     [TOKEN_EOF]                     = { NULL,       NULL,       PREC_NONE },
     [TOKEN_SIZE]                    = { NULL,       NULL,       PREC_NONE },
@@ -308,13 +332,36 @@ static OrsoExpressionNode* expression(Parser* parser) {
     return parse_precedence(parser, PREC_ASSIGNMENT);
 }
 
+static OrsoDeclarationNode* statement(Parser* parser) {
+    if (match(parser, TOKEN_PRINT_EXPR)) {
+        OrsoDeclarationNode* declaration_node = ALLOCATE(OrsoDeclarationNode);
+        Token start = parser->current;
+        OrsoExpressionNode* expression_node = expression(parser);
+        declaration_node->statement.print_expr.expression = expression_node;
+        return declaration_node;
+    }
+}
+
+static OrsoDeclarationNode* declaration(Parser* parser) {
+    Token start = parser->current;
+
+    OrsoDeclarationNode* declaration_node = statement(parser);
+
+    declaration_node->start = start;
+    declaration_node->end = parser->previous;
+    return declaration_node;
+}
+
 bool orso_parse(OrsoAST* ast, const char* source, OrsoSymbolTable* symbol_table, OrsoErrorFunction error_fn) {
     Parser parser;
     parser_init(&parser, source, symbol_table, error_fn);
 
     advance(&parser);
 
-    ast->expression = expression(&parser);
+    while (!match(&parser, TOKEN_EOF)) {
+        OrsoDeclarationNode* declaration_node = declaration(&parser);
+        sb_push(ast->declarations, declaration_node);
+    }
 
     consume(&parser, TOKEN_EOF, "Expect end of expression.");
 
@@ -360,13 +407,22 @@ void ast_print_expression(OrsoExpressionNode* expression, i32 initial_indent) {
     }
 }
 
+void ast_print_declaration(OrsoDeclarationNode* declaration, i32 initial_indent) {
+    Token start = declaration->start;
+    Token end = declaration->end;
+    printf("DECLARATION %*s %.*s\n", initial_indent, "", (end.start + end.length) - start.start, start.start);
+    ast_print_expression(declaration->statement.print_expr.expression, initial_indent + 1);
+}
+
 void orso_ast_print(OrsoAST* ast, const char* name) {
     printf("=== %s ===\n", name);
-    ast_print_expression(ast->expression, 0);
+    for (i32 i = 0; i < sb_count(ast->declarations); i++) {
+        ast_print_declaration(ast->declarations[i], 0);
+    }
 }
 
 void orso_ast_init(OrsoAST* ast) {
-    ast->expression = NULL;
+    ast->declarations = NULL;
 }
 
 static void orso_free_expression(OrsoExpressionNode* expression) {
@@ -400,6 +456,5 @@ static void orso_free_expression(OrsoExpressionNode* expression) {
 }
 
 void orso_ast_free(OrsoAST* ast) {
-    orso_free_expression(ast->expression);
-    free(ast->expression);
+    sb_free(ast->declarations);
 }

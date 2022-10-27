@@ -181,6 +181,7 @@ static TokenType identifier_type(Lexer* lexer) {
         }
         
         case 't': return check_keyword(lexer, 1, 3, "rue", TOKEN_TRUE);
+        case 'p': return check_keyword(lexer, 1, 9, "rint_expr", TOKEN_PRINT_EXPR);
     }
 
     return TOKEN_IDENTIFIER;

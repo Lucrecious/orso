@@ -7,8 +7,8 @@
 
 static i32 constant_instruction(const char* name, Chunk* chunk, i32 offset) {
     OrsoInstruction constant = chunk->code[offset];
-    printf("%-16s %4d ", name, constant.value);
-    orso_print_slot(chunk->constants[constant.value], ORSO_TYPE_MAX);
+    printf("%-16s %4d ", name, constant.constant.index);
+    orso_print_slot(chunk->constants[constant.constant.index], ORSO_TYPE_MAX);
     printf("\n");
 
     return offset + 1;
@@ -56,6 +56,7 @@ i32 disassemble_instruction(Chunk* chunk, i32 offset) {
         case ORSO_OP_EQUAL_STRING: return simple_instruction("OP_EQUAL_STRING", offset);
         case ORSO_OP_CONCAT_STRING: return simple_instruction("OP_CONCAT_STRING", offset);
         case ORSO_OP_RETURN: return simple_instruction("OP_RETURN", offset);
+        case ORSO_OP_PRINT_EXPR: return simple_instruction("OP_PRINT_EXPR", offset);
         default: return simple_instruction("OP_UNKNOWN", offset);
     }
 }

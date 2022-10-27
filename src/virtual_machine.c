@@ -47,7 +47,7 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
     for (;;) {
         OrsoInstruction* instruction = READ_INSTRUCTION();
         switch (instruction->op_code) {
-            case ORSO_OP_PUSH_I64: PUSH(instruction->value); break;
+            //case ORSO_OP_PUSH_I64: PUSH(instruction->constant.index); break;
 
             case ORSO_OP_I64_TO_F64: TOP_SLOT->f = (f64)TOP_SLOT->i; break;
             case ORSO_OP_F64_TO_I64: TOP_SLOT->i = (i64)TOP_SLOT->f; break;
@@ -81,9 +81,18 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
             case ORSO_OP_PUSH_0: PUSH(0); break;
             case ORSO_OP_PUSH_1: PUSH(1); break;
 
-            case ORSO_OP_CONSTANT: PUSH(vm->chunk->constants[instruction->value].i); break;
+            case ORSO_OP_CONSTANT: PUSH(vm->chunk->constants[instruction->constant.index].i); break;
+
+            case ORSO_OP_PRINT_EXPR: {
+                OrsoString* expression_string = (OrsoString*)instruction->print_expr.string.p;
+                printf("%s => ", expression_string->text);
+                OrsoSlot slot = POP();
+                orso_print_slot(slot, instruction->print_expr.type);
+                printf("\n");
+                break;
+            }
             
-            case ORSO_OP_RETURN: orso_print_slot(POP(), (OrsoType)instruction->value); printf("\n"); return;
+            case ORSO_OP_RETURN: return;
         }
     }
 
@@ -95,6 +104,8 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
 
 static bool compile(const char* source, Chunk* chunk, OrsoSymbolTable* symbol_table, OrsoErrorFunction error_fn) {
     OrsoAST ast;
+    orso_ast_init(&ast);
+
     if (!orso_parse(&ast, source, symbol_table, error_fn)) {
         orso_ast_free(&ast);
         return false;
@@ -107,16 +118,14 @@ static bool compile(const char* source, Chunk* chunk, OrsoSymbolTable* symbol_ta
     OrsoStaticAnalyzer analyzer;
     orso_static_analyzer_init(&analyzer, error_fn);
 
-    orso_resolve_ast_types(&analyzer, &ast);
+    bool resolved = orso_resolve_ast_types(&analyzer, &ast);
 
 #ifdef DEBUG_PRINT_CODE
     orso_ast_print(&ast, "resolved");
 #endif
 
 
-    bool succeeded = true;
-    succeeded &= ast.expression->value_type != ORSO_TYPE_UNRESOLVED;
-    succeeded &= ast.expression->value_type != ORSO_TYPE_INVALID;
+    bool succeeded = resolved;
 
     if (succeeded) {
         succeeded = orso_generate_code(&ast, chunk);

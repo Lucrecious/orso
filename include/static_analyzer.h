@@ -14,7 +14,7 @@ void orso_static_analyzer_init(OrsoStaticAnalyzer* analyzer, OrsoErrorFunction e
 
 void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoExpressionNode* expression);
 
-void orso_resolve_ast_types(OrsoStaticAnalyzer* analyzer, OrsoAST* ast);
+bool orso_resolve_ast_types(OrsoStaticAnalyzer* analyzer, OrsoAST* ast);
 
 
 #endif

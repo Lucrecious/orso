@@ -1,12 +1,20 @@
 #ifndef INSTRUCTIONS_H_
 #define INSTRUCTIONS_H_
 
+#include "type.h"
 #include "opcodes.h"
 
 typedef struct OrsoInstruction {
     OrsoOPCode op_code;
     union {
-        i64 value;
+        struct {
+            i64 index;
+        } constant;
+
+        struct {
+            OrsoType type;
+            OrsoSlot string;
+        } print_expr;
     };
 } OrsoInstruction;
 

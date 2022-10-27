@@ -2,6 +2,8 @@
 
 #include <stdio.h>
 
+#include "sb.h"
+
 static void error(OrsoStaticAnalyzer* analyzer, i32 line, const char* message) {
     if (analyzer->panic_mode) {
         return;
@@ -61,6 +63,8 @@ static OrsoType orso_resolve_unary(TokenType operator, OrsoType operand) {
 
 static OrsoExpressionNode* implicit_cast(OrsoExpressionNode* parent, OrsoExpressionNode* operand, OrsoType value_type) {
     OrsoExpressionNode* implicit_cast = ALLOCATE(OrsoExpressionNode);
+    implicit_cast->start = operand->start;
+    implicit_cast->end = operand->end;
     implicit_cast->type = EXPRESSION_IMPLICIT_CAST;
     implicit_cast->value_type = value_type;
     implicit_cast->cast.operand = operand;
@@ -149,12 +153,20 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoExpressionNode* e
     }
 }
 
-void orso_resolve_ast_types(OrsoStaticAnalyzer* analyzer, OrsoAST* ast) {
-    if (ast->expression == NULL) {
-        return;
+static void resolve_declaration(OrsoStaticAnalyzer* analyzer, OrsoDeclarationNode* declaration_node) {
+    orso_resolve_expression(analyzer, declaration_node->statement.print_expr.expression);
+}
+
+bool orso_resolve_ast_types(OrsoStaticAnalyzer* analyzer, OrsoAST* ast) {
+    if (ast->declarations == NULL) {
+        return true;
     }
 
-    orso_resolve_expression(analyzer, ast->expression);
+    for (i32 i = 0; i < sb_count(ast->declarations); i++) {
+        resolve_declaration(analyzer, ast->declarations[i]);
+    }
+
+    return !analyzer->had_error;
 }
 
 void orso_static_analyzer_init(OrsoStaticAnalyzer* analyzer, OrsoErrorFunction error_fn) {

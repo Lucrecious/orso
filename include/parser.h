@@ -43,6 +43,8 @@ typedef struct OrsoPrimary {
 } OrsoPrimary;
 
 struct OrsoExpressionNode {
+    Token start;
+    Token end;
     OrsoType value_type;
     ExpressionType type;
     union {
@@ -54,8 +56,24 @@ struct OrsoExpressionNode {
     };
 };
 
+typedef struct OrsoStatement {
+    union {
+        struct {
+            OrsoExpressionNode* expression;
+        } print_expr;
+    };
+} OrsoStatement;
+
+typedef struct OrsoDeclarationNode {
+    Token start;
+    Token end;
+    union {
+        OrsoStatement statement;
+    };
+} OrsoDeclarationNode;
+
 typedef struct OrsoAST {
-    OrsoExpressionNode* expression;
+    OrsoDeclarationNode** declarations;
 } OrsoAST;
 
 void orso_ast_print(OrsoAST* ast, const char* name);

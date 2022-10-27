@@ -4,13 +4,10 @@
 #include "debug.h"
 #endif
 
+#include "sb.h"
+
 static void emit_instruction(const OrsoInstruction* instruction, Chunk* chunk, i32 line) {
     chunk_write(chunk, instruction, line);
-}
-
-static void emit_return(Chunk* chunk, i32 line, OrsoType type) {
-    const OrsoInstruction instruction = { .op_code = ORSO_OP_RETURN, .value = type };
-    chunk_write(chunk, &instruction, line);
 }
 
 static void emit_constant(Chunk* chunk, OrsoSlot slot, i32 line) {
@@ -149,8 +146,9 @@ static void expression(OrsoExpressionNode* expression_node, Chunk* chunk) {
         }
 
         case EXPRESSION_IMPLICIT_CAST: {
-            expression(expression_node->cast.operand, chunk);
-            emit_type_convert(expression_node->cast.operand->value_type, expression_node->value_type, chunk, -1);
+            OrsoExpressionNode* operand = expression_node->cast.operand;
+            expression(operand, chunk);
+            emit_type_convert(operand->value_type, expression_node->value_type, chunk, operand->start.line);
             break;
         }
     }
@@ -162,14 +160,33 @@ static void expression(OrsoExpressionNode* expression_node, Chunk* chunk) {
 #undef EMIT_BINARY_OP
 }
 
+static void declaration(OrsoDeclarationNode* declaration, Chunk* chunk) {
+    OrsoExpressionNode* expression_ = declaration->statement.print_expr.expression;
+    expression(expression_, chunk);
+
+    Token start = expression_->start;
+    Token end = expression_->end;
+    OrsoString* expression_string = orso_new_string_from_cstrn(start.start, (end.start + end.length) - start.start);
+
+    const OrsoInstruction instruction = {
+        .op_code = ORSO_OP_PRINT_EXPR,
+        .print_expr.type = expression_->value_type,
+        .print_expr.string.p = expression_string
+    };
+    emit_instruction(&instruction, chunk, start.line);
+}
+
 bool orso_generate_code(OrsoAST* ast, Chunk* chunk) {
-    if (!ast->expression) {
+    if (ast->declarations == NULL) {
         return true;
     }
 
-    expression(ast->expression, chunk);
+    for (i32 i = 0; i < sb_count(ast->declarations); i++) {
+        declaration(ast->declarations[i], chunk);
+    }
 
-    emit_return(chunk, -1, ast->expression->value_type);
+    const OrsoInstruction instruction = { .op_code = ORSO_OP_RETURN };
+    emit_instruction(&instruction, chunk, -1);
 
 #ifdef DEBUG_PRINT_CODE
     chunk_disassemble(chunk, "code");
