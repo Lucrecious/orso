@@ -119,6 +119,20 @@ static bool match(Parser* parser, TokenType type) {
     return true;
 }
 
+static void synchronize(Parser* parser) {
+    parser->panic_mode = false;
+
+    while (parser->current.type != TOKEN_EOF) {
+        switch (parser->current.type) {
+            case TOKEN_PRINT_EXPR: 
+                return;
+            default: break;
+        }
+
+        advance(parser);
+    }
+}
+
 static FORCE_INLINE OrsoSymbol* orso_new_symbol_from_cstrn(const char* start, i32 length, OrsoSymbolTable* symbol_table) {
     u32 hash = orso_hash_cstrn(start, length);
     OrsoSymbol* symbol = orso_symbol_table_find_cstrn(symbol_table, start, length, hash);
@@ -381,9 +395,13 @@ static OrsoDeclarationNode* declaration(Parser* parser) {
 
     OrsoStatementNode* statement_node = statement(parser);
     declaration_node->statement = statement_node;
-
     declaration_node->start = start;
     declaration_node->end = parser->previous;
+
+    if (parser->panic_mode) {
+        synchronize(parser);
+    }
+
     return declaration_node;
 }
 
