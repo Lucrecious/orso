@@ -46,6 +46,16 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
 
     for (;;) {
         OrsoInstruction* instruction = READ_INSTRUCTION();
+#ifdef DEBUG_TRACE_EXECUTION
+        printf("slots { ");
+        for (OrsoSlot* slot = vm->stack; slot < vm->stack_top; slot++) {
+            printf("[");
+            orso_print_slot(*slot, ORSO_TYPE_MAX);
+            printf("]");
+        }
+        printf(" }\n");
+        disassemble_instruction(vm->chunk, instruction - vm->chunk->code);
+#endif
         switch (instruction->op_code) {
             case ORSO_OP_POP: POP(); break;
             //case ORSO_OP_PUSH_I64: PUSH(instruction->constant.index); break;

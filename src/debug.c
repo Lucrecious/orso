@@ -31,6 +31,7 @@ i32 disassemble_instruction(Chunk* chunk, i32 offset) {
 
     OrsoOPCode instruction = chunk->code[offset].op_code;
     switch(instruction) {
+        case ORSO_OP_POP: return simple_instruction("OP_POP", offset);
         case ORSO_OP_CONSTANT: return constant_instruction("OP_CONSTANT", chunk, offset);
         case ORSO_OP_PUSH_0: return simple_instruction("OP_PUSH_0", offset);
         case ORSO_OP_PUSH_1: return simple_instruction("OP_PUSH_1", offset);
