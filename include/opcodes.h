@@ -4,6 +4,8 @@
 #include "def.h"
 
 typedef enum OrsoOPCode {
+    ORSO_OP_POP,
+
     ORSO_OP_PUSH_I64,
 
     ORSO_OP_I64_TO_F64,

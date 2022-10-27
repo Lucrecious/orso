@@ -21,6 +21,12 @@ typedef enum OrsoDeclarationType {
     ORSO_DECLARATION_STATEMENT,
 } OrsoDeclarationType;
 
+typedef enum OrsoStatementType {
+    ORSO_STATEMENT_NONE,
+    ORSO_STATEMENT_PRINT_EXPR,
+    ORSO_STATEMENT_EXPRESSION,
+} OrsoStatementType;
+
 typedef struct OrsoExpressionNode OrsoExpressionNode;
 
 typedef struct OrsoImplicitCastOp {
@@ -61,20 +67,21 @@ struct OrsoExpressionNode {
     };
 };
 
-typedef struct OrsoStatement {
+typedef struct OrsoStatementNode {
+    OrsoStatementType type;
+    Token start;
+    Token end;
     union {
-        struct {
-            OrsoExpressionNode* expression;
-        } print_expr;
+        OrsoExpressionNode* expression;
     };
-} OrsoStatement;
+} OrsoStatementNode;
 
 typedef struct OrsoDeclarationNode {
     OrsoDeclarationType type;
     Token start;
     Token end;
     union {
-        OrsoStatement statement;
+        OrsoStatementNode* statement;
     };
 } OrsoDeclarationNode;
 

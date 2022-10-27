@@ -47,6 +47,7 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
     for (;;) {
         OrsoInstruction* instruction = READ_INSTRUCTION();
         switch (instruction->op_code) {
+            case ORSO_OP_POP: POP(); break;
             //case ORSO_OP_PUSH_I64: PUSH(instruction->constant.index); break;
 
             case ORSO_OP_I64_TO_F64: TOP_SLOT->f = (f64)TOP_SLOT->i; break;

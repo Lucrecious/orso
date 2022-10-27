@@ -334,25 +334,32 @@ static OrsoExpressionNode* expression(Parser* parser) {
     return parse_precedence(parser, PREC_ASSIGNMENT);
 }
 
-static OrsoDeclarationNode* statement(Parser* parser) {
-    OrsoDeclarationNode* declaration_node = ALLOCATE(OrsoDeclarationNode);
-    declaration_node->type = ORSO_DECLARATION_NONE;
+static OrsoStatementNode* statement(Parser* parser) {
+    OrsoStatementNode* statement_node = ALLOCATE(OrsoStatementNode);
+
     if (match(parser, TOKEN_PRINT_EXPR)) {
-        OrsoExpressionNode* expression_node = expression(parser);
-        declaration_node->type = ORSO_DECLARATION_STATEMENT;
-        declaration_node->statement.print_expr.expression = expression_node;
+        statement_node->type = ORSO_STATEMENT_PRINT_EXPR;
+        statement_node->start = parser->previous;
+        statement_node->expression = expression(parser);
+        statement_node->end = parser->previous;
     } else {
-        error_at_current(parser, "Expected declaration.");
-        advance(parser);
+        statement_node->type = ORSO_STATEMENT_EXPRESSION;
+        statement_node->start = parser->previous;
+        statement_node->expression = expression(parser);
+        statement_node->end = parser->previous;
     }
 
-    return declaration_node;
+    return statement_node;
 }
 
 static OrsoDeclarationNode* declaration(Parser* parser) {
     Token start = parser->current;
 
-    OrsoDeclarationNode* declaration_node = statement(parser);
+    OrsoDeclarationNode* declaration_node = ALLOCATE(OrsoDeclarationNode);
+    declaration_node->type = ORSO_DECLARATION_STATEMENT;
+
+    OrsoStatementNode* statement_node = statement(parser);
+    declaration_node->statement = statement_node;
 
     declaration_node->start = start;
     declaration_node->end = parser->previous;
@@ -414,6 +421,23 @@ void ast_print_expression(OrsoExpressionNode* expression, i32 initial_indent) {
     }
 }
 
+void ast_print_statement(OrsoStatementNode* statement, i32 initial_indent) {
+    printf("STATEMENT - ");
+    switch(statement->type) {
+        case ORSO_STATEMENT_NONE: return;
+        case ORSO_STATEMENT_PRINT_EXPR:
+            printf("print_expr");
+            ast_print_expression(statement->expression, initial_indent + 1);
+            break;
+        case ORSO_STATEMENT_EXPRESSION:
+            printf("expression");
+            ast_print_expression(statement->expression, initial_indent + 1);
+            break;
+    }
+
+    printf("\n");
+}
+
 void ast_print_declaration(OrsoDeclarationNode* declaration, i32 initial_indent) {
     if (declaration->type == ORSO_DECLARATION_NONE) {
         return;
@@ -422,7 +446,14 @@ void ast_print_declaration(OrsoDeclarationNode* declaration, i32 initial_indent)
     Token start = declaration->start;
     Token end = declaration->end;
     printf("DECLARATION %*s %.*s\n", initial_indent, "", (end.start + end.length) - start.start, start.start);
-    ast_print_expression(declaration->statement.print_expr.expression, initial_indent + 1);
+
+    switch (declaration->type) {
+        case ORSO_DECLARATION_NONE: return;
+        case ORSO_DECLARATION_STATEMENT: {
+            ast_print_statement(declaration->statement, initial_indent + 1);
+            break;
+        }
+    }
 }
 
 void orso_ast_print(OrsoAST* ast, const char* name) {

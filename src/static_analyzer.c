@@ -154,7 +154,21 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoExpressionNode* e
 }
 
 static void resolve_declaration(OrsoStaticAnalyzer* analyzer, OrsoDeclarationNode* declaration_node) {
-    orso_resolve_expression(analyzer, declaration_node->statement.print_expr.expression);
+    switch (declaration_node->type) {
+        case ORSO_DECLARATION_NONE: break;
+        case ORSO_DECLARATION_STATEMENT: {
+            OrsoStatementNode* statement_node = declaration_node->statement;
+            switch (statement_node->type) {
+                case ORSO_STATEMENT_NONE: break;
+                case ORSO_STATEMENT_PRINT_EXPR:
+                case ORSO_STATEMENT_EXPRESSION: {
+                    orso_resolve_expression(analyzer, declaration_node->statement->expression);
+                    break;
+                }
+            }
+            break;
+        }
+    }
 }
 
 bool orso_resolve_ast_types(OrsoStaticAnalyzer* analyzer, OrsoAST* ast) {

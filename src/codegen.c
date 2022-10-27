@@ -161,19 +161,40 @@ static void expression(OrsoExpressionNode* expression_node, Chunk* chunk) {
 }
 
 static void declaration(OrsoDeclarationNode* declaration, Chunk* chunk) {
-    OrsoExpressionNode* expression_ = declaration->statement.print_expr.expression;
-    expression(expression_, chunk);
+    switch (declaration->type) {
+        case ORSO_DECLARATION_STATEMENT:
+            switch (declaration->statement->type) {
+                case ORSO_STATEMENT_EXPRESSION: {
+                    OrsoExpressionNode* expression_ = declaration->statement->expression;
+                    expression(expression_, chunk);
 
-    Token start = expression_->start;
-    Token end = expression_->end;
-    OrsoString* expression_string = orso_new_string_from_cstrn(start.start, (end.start + end.length) - start.start);
+                    const OrsoInstruction instruction = {
+                        .op_code = ORSO_OP_POP,
+                    };
+                    emit_instruction(&instruction, chunk, declaration->start.line);
+                    break;
+                }
+                case ORSO_STATEMENT_PRINT_EXPR: {
+                        OrsoExpressionNode* expression_ = declaration->statement->expression;
+                        expression(expression_, chunk);
 
-    const OrsoInstruction instruction = {
-        .op_code = ORSO_OP_PRINT_EXPR,
-        .print_expr.type = expression_->value_type,
-        .print_expr.string.p = expression_string
-    };
-    emit_instruction(&instruction, chunk, start.line);
+                        Token start = expression_->start;
+                        Token end = expression_->end;
+                        OrsoString* expression_string = orso_new_string_from_cstrn(start.start, (end.start + end.length) - start.start);
+
+                        const OrsoInstruction instruction = {
+                            .op_code = ORSO_OP_PRINT_EXPR,
+                            .print_expr.type = expression_->value_type,
+                            .print_expr.string.p = expression_string
+                        };
+                        emit_instruction(&instruction, chunk, start.line);
+                    break;
+                }
+                case ORSO_STATEMENT_NONE: break; // Unreachable
+            }
+            break;
+        case ORSO_DECLARATION_NONE: break; // Unreachable
+    }
 }
 
 bool orso_generate_code(OrsoAST* ast, Chunk* chunk) {
