@@ -335,12 +335,18 @@ static OrsoExpressionNode* expression(Parser* parser) {
 }
 
 static OrsoDeclarationNode* statement(Parser* parser) {
+    OrsoDeclarationNode* declaration_node = ALLOCATE(OrsoDeclarationNode);
+    declaration_node->type = ORSO_DECLARATION_NONE;
     if (match(parser, TOKEN_PRINT_EXPR)) {
-        OrsoDeclarationNode* declaration_node = ALLOCATE(OrsoDeclarationNode);
         OrsoExpressionNode* expression_node = expression(parser);
+        declaration_node->type = ORSO_DECLARATION_STATEMENT;
         declaration_node->statement.print_expr.expression = expression_node;
-        return declaration_node;
+    } else {
+        error_at_current(parser, "Expected declaration.");
+        advance(parser);
     }
+
+    return declaration_node;
 }
 
 static OrsoDeclarationNode* declaration(Parser* parser) {
@@ -409,6 +415,10 @@ void ast_print_expression(OrsoExpressionNode* expression, i32 initial_indent) {
 }
 
 void ast_print_declaration(OrsoDeclarationNode* declaration, i32 initial_indent) {
+    if (declaration->type == ORSO_DECLARATION_NONE) {
+        return;
+    }
+
     Token start = declaration->start;
     Token end = declaration->end;
     printf("DECLARATION %*s %.*s\n", initial_indent, "", (end.start + end.length) - start.start, start.start);

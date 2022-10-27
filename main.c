@@ -27,8 +27,11 @@ int main(int argc, char **argv) {
 
     for (;;) {
         printf("orso>> ");
-        fgets(source_code, 1000, stdin);
-        if (source_code[0] == '\0') {
+        if (fgets(source_code, 1000, stdin) == NULL) {
+            break;
+        }
+
+        if (source_code[0] == '\n') {
             break;
         }
 

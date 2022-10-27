@@ -177,15 +177,12 @@ static void declaration(OrsoDeclarationNode* declaration, Chunk* chunk) {
 }
 
 bool orso_generate_code(OrsoAST* ast, Chunk* chunk) {
-    if (ast->declarations == NULL) {
-        return true;
-    }
+    const OrsoInstruction instruction = { .op_code = ORSO_OP_RETURN };
 
     for (i32 i = 0; i < sb_count(ast->declarations); i++) {
         declaration(ast->declarations[i], chunk);
     }
 
-    const OrsoInstruction instruction = { .op_code = ORSO_OP_RETURN };
     emit_instruction(&instruction, chunk, -1);
 
 #ifdef DEBUG_PRINT_CODE

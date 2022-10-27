@@ -16,6 +16,11 @@ typedef enum ExpressionType {
     EXPRESSION_PRIMARY,
 } ExpressionType;
 
+typedef enum OrsoDeclarationType {
+    ORSO_DECLARATION_NONE,
+    ORSO_DECLARATION_STATEMENT,
+} OrsoDeclarationType;
+
 typedef struct OrsoExpressionNode OrsoExpressionNode;
 
 typedef struct OrsoImplicitCastOp {
@@ -65,6 +70,7 @@ typedef struct OrsoStatement {
 } OrsoStatement;
 
 typedef struct OrsoDeclarationNode {
+    OrsoDeclarationType type;
     Token start;
     Token end;
     union {
