@@ -166,6 +166,8 @@ static void resolve_declaration(OrsoStaticAnalyzer* analyzer, OrsoDeclarationNod
                     break;
                 }
             }
+
+            analyzer->panic_mode = false;
             break;
         }
     }
