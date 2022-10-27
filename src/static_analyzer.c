@@ -153,6 +153,10 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoExpressionNode* e
     }
 }
 
+static void resolve_var_declaration(OrsoStaticAnalyzer* analyzer, OrsoVarDeclarationNode* var_declaration) {
+
+}
+
 static void resolve_declaration(OrsoStaticAnalyzer* analyzer, OrsoDeclarationNode* declaration_node) {
     switch (declaration_node->type) {
         case ORSO_DECLARATION_NONE: break;
@@ -168,6 +172,10 @@ static void resolve_declaration(OrsoStaticAnalyzer* analyzer, OrsoDeclarationNod
             }
 
             analyzer->panic_mode = false;
+            break;
+        }
+        case ORSO_DECLARATION_VAR: {
+            resolve_var_declaration(analyzer, declaration_node->var);
             break;
         }
     }

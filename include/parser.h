@@ -19,6 +19,7 @@ typedef enum ExpressionType {
 typedef enum OrsoDeclarationType {
     ORSO_DECLARATION_NONE,
     ORSO_DECLARATION_STATEMENT,
+    ORSO_DECLARATION_VAR,
 } OrsoDeclarationType;
 
 typedef enum OrsoStatementType {
@@ -67,6 +68,15 @@ struct OrsoExpressionNode {
     };
 };
 
+typedef struct OrsoVarDeclarationNode {
+    // Unresolved means inferred
+    OrsoType var_type;
+    OrsoSymbol* identifier;
+    OrsoSymbol* type_identifier;
+    OrsoExpressionNode* expression;
+
+} OrsoVarDeclarationNode;
+
 typedef struct OrsoStatementNode {
     OrsoStatementType type;
     Token start;
@@ -82,6 +92,7 @@ typedef struct OrsoDeclarationNode {
     Token end;
     union {
         OrsoStatementNode* statement;
+        OrsoVarDeclarationNode* var;
     };
 } OrsoDeclarationNode;
 

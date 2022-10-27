@@ -372,14 +372,13 @@ static OrsoExpressionNode* expression(Parser* parser) {
 static OrsoStatementNode* statement(Parser* parser) {
     OrsoStatementNode* statement_node = ALLOCATE(OrsoStatementNode);
 
+    statement_node->start = parser->current;
     if (match(parser, TOKEN_PRINT_EXPR)) {
         statement_node->type = ORSO_STATEMENT_PRINT_EXPR;
-        statement_node->start = parser->previous;
         statement_node->expression = expression(parser);
         statement_node->end = parser->previous;
     } else {
         statement_node->type = ORSO_STATEMENT_EXPRESSION;
-        statement_node->start = parser->previous;
         statement_node->expression = expression(parser);
         statement_node->end = parser->previous;
     }
@@ -387,14 +386,46 @@ static OrsoStatementNode* statement(Parser* parser) {
     return statement_node;
 }
 
+static OrsoSymbol* parse_consumed_variable(Parser* parser, const char* message) {
+    OrsoSymbol* identifier = orso_new_symbol_from_cstrn(parser->previous.start, parser->previous.length, parser->vm_symbol_table);
+    return identifier;
+}
+
+static OrsoVarDeclarationNode* var_declaration(Parser* parser) {
+    OrsoVarDeclarationNode* var_declaration_node = ALLOCATE(OrsoVarDeclarationNode);
+    var_declaration_node->var_type = ORSO_TYPE_UNRESOLVED;
+    var_declaration_node->type_identifier = NULL;
+    var_declaration_node->expression = NULL;
+
+    var_declaration_node->identifier = parse_consumed_variable(parser, "Expect variable name.");
+
+    consume(parser, TOKEN_COLIN, "Expect explicit type.");
+    if (match(parser, TOKEN_IDENTIFIER)) {
+        var_declaration_node->type_identifier = parse_consumed_variable(parser, "Expect type name.");
+        if (match(parser, TOKEN_EQUAL)) {
+            var_declaration_node->expression = expression(parser);
+        }
+    } else {
+        consume(parser, TOKEN_EQUAL, "Except define assignment.");
+        var_declaration_node->expression = expression(parser);
+    }
+
+    return var_declaration_node;
+}
+
 static OrsoDeclarationNode* declaration(Parser* parser) {
     Token start = parser->current;
 
     OrsoDeclarationNode* declaration_node = ALLOCATE(OrsoDeclarationNode);
-    declaration_node->type = ORSO_DECLARATION_STATEMENT;
+    declaration_node->type = ORSO_DECLARATION_NONE;
+    if (match(parser, TOKEN_IDENTIFIER) && check(parser, TOKEN_COLIN)) {
+        declaration_node->type = ORSO_DECLARATION_VAR;
+        declaration_node->var= var_declaration(parser);
+    } else {
+        declaration_node->type = ORSO_DECLARATION_STATEMENT;
+        declaration_node->statement = statement(parser);
+    }
 
-    OrsoStatementNode* statement_node = statement(parser);
-    declaration_node->statement = statement_node;
     declaration_node->start = start;
     declaration_node->end = parser->previous;
 
@@ -475,6 +506,17 @@ void ast_print_statement(OrsoStatementNode* statement, i32 initial_indent) {
     }
 }
 
+void ast_print_var_declaration(OrsoVarDeclarationNode* var_declaration_node, i32 indent) {
+    printf("%*s", indent, "");
+    printf("VAR DECLARATION - identifier: %s, type: %s\n",
+            var_declaration_node->identifier->text,
+            var_declaration_node->type_identifier ? var_declaration_node->type_identifier->text : "omitted");
+
+    if (var_declaration_node->expression != NULL) {
+        ast_print_expression(var_declaration_node->expression, indent + 1);
+    }
+}
+
 void ast_print_declaration(OrsoDeclarationNode* declaration, i32 initial_indent) {
     if (declaration->type == ORSO_DECLARATION_NONE) {
         return;
@@ -488,6 +530,10 @@ void ast_print_declaration(OrsoDeclarationNode* declaration, i32 initial_indent)
         case ORSO_DECLARATION_NONE: return;
         case ORSO_DECLARATION_STATEMENT: {
             ast_print_statement(declaration->statement, initial_indent + 1);
+            break;
+        }
+        case ORSO_DECLARATION_VAR: {
+            ast_print_var_declaration(declaration->var, initial_indent + 1);
             break;
         }
     }
