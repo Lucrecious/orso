@@ -133,6 +133,9 @@ static FORCE_INLINE OrsoSymbol* orso_new_symbol_from_cstrn(const char* start, i3
     symbol->text[length] = '\0';
 
     OrsoSlot slot = {.i = 0};
+#ifdef DEBUG_TRACE_EXECUTION
+    slot.type = ORSO_TYPE_SYMBOL;
+#endif
     orso_symbol_table_set(symbol_table, symbol, slot);
 
     return symbol;
@@ -149,12 +152,18 @@ static OrsoExpressionNode* number(Parser* parser) {
             i64 value = cstrn_to_i64(parser->previous.start, parser->previous.length);
             expression_node->value_type = ORSO_TYPE_INT64;
             expression_node->primary.constant.i = value;
+#ifdef DEBUG_TRACE_EXECUTION
+            expression_node->primary.constant.type = ORSO_TYPE_INT64;
+#endif
             break;
         }
         case TOKEN_FLOAT: {
             f64 value = cstrn_to_f64(parser->previous.start, parser->previous.length);
             expression_node->value_type = ORSO_TYPE_FLOAT64;
             expression_node->primary.constant.f = value;
+#ifdef DEBUG_TRACE_EXECUTION
+            expression_node->primary.constant.type = ORSO_TYPE_FLOAT64;
+#endif
             break;
         }
         default: break; // unreachable
@@ -174,17 +183,26 @@ static OrsoExpressionNode* literal(Parser* parser) {
         case TOKEN_TRUE: {
             expression_node->value_type = ORSO_TYPE_BOOL;
             expression_node->primary.constant.i = (i64)(parser->previous.type == TOKEN_TRUE);
+#ifdef DEBUG_TRACE_EXECUTION
+            expression_node->primary.constant.type = ORSO_TYPE_BOOL;
+#endif
             break;
         }
         case TOKEN_NULL: {
             expression_node->value_type = ORSO_TYPE_NULL;
             expression_node->primary.constant.i = 0;
+#ifdef DEBUG_TRACE_EXECUTION
+            expression_node->primary.constant.type = ORSO_TYPE_NULL;
+#endif
             break;
         }
         case TOKEN_STRING: {
             expression_node->value_type = ORSO_TYPE_STRING;
             Token string = expression_node->primary.token;
             expression_node->primary.constant.p = orso_new_string_from_cstrn(string.start + 1, string.length - 2);
+#ifdef DEBUG_TRACE_EXECUTION
+            expression_node->primary.constant.type = ORSO_TYPE_STRING;
+#endif
             break;
         };
 
@@ -192,6 +210,9 @@ static OrsoExpressionNode* literal(Parser* parser) {
             expression_node->value_type = ORSO_TYPE_SYMBOL;
             Token symbol = expression_node->primary.token;
             expression_node->primary.constant.p = orso_new_symbol_from_cstrn(symbol.start + 1, symbol.length - 2, parser->vm_symbol_table);
+#ifdef DEBUG_TRACE_EXECUTION
+            expression_node->primary.constant.type = ORSO_TYPE_SYMBOL;
+#endif
             break;
         }
     }

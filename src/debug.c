@@ -7,8 +7,14 @@
 
 static i32 constant_instruction(const char* name, Chunk* chunk, i32 offset) {
     OrsoInstruction constant = chunk->code[offset];
-    printf("%-16s %4d ", name, constant.constant.index);
-    orso_print_slot(chunk->constants[constant.constant.index], ORSO_TYPE_MAX);
+    printf("%-16s %4d => ", name, constant.constant.index);
+    orso_print_slot(chunk->constants[constant.constant.index],
+#ifdef DEBUG_TRACE_EXECUTION
+        chunk->constants[constant.constant.index].type
+#elif
+        ORSO_TYPE_MAX
+#endif
+    );
     printf("\n");
 
     return offset + 1;

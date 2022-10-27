@@ -9,6 +9,9 @@ typedef struct OrsoInstruction {
     union {
         struct {
             i64 index;
+#ifdef DEBUG_TRACE_EXECUTION
+            OrsoType type;
+#endif
         } constant;
 
         struct {

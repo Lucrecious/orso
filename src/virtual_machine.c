@@ -24,8 +24,8 @@ void orso_vm_free(OrsoVM* vm) {
     orso_symbol_table_free(&vm->symbol_table);
 }
 
-static void FORCE_INLINE push_i64(OrsoVM* vm, i64 value) {
-    vm->stack_top->i = value;
+static void FORCE_INLINE push_i64(OrsoVM* vm, OrsoSlot value) {
+    *vm->stack_top = value;
     vm->stack_top++;
 }
 
@@ -43,14 +43,19 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
 #define TOP_SLOT get_top_slot(vm)
 #define POP() pop(vm)
 #define PUSH(VALUE) push_i64(vm, VALUE)
+#ifdef DEBUG_TRACE_EXECUTION
+#define SLOT_ADD_TYPE(SLOT, TYPE) SLOT->type = TYPE
+#else
+#define SLOT_ADD_TYPE(TYPE)
+#endif
 
     for (;;) {
         OrsoInstruction* instruction = READ_INSTRUCTION();
 #ifdef DEBUG_TRACE_EXECUTION
-        printf("slots { ");
+        printf("SLOTS = { ");
         for (OrsoSlot* slot = vm->stack; slot < vm->stack_top; slot++) {
             printf("[");
-            orso_print_slot(*slot, ORSO_TYPE_MAX);
+            orso_print_slot(*slot, slot->type);
             printf("]");
         }
         printf(" }\n");
@@ -76,23 +81,41 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
             case ORSO_OP_NEGATE_I64: TOP_SLOT->i = -TOP_SLOT->i; break;
             case ORSO_OP_NEGATE_F64: TOP_SLOT->f = -TOP_SLOT->f; break;
 
-            case ORSO_OP_EQUAL_I64: { i64 b = POP().i; TOP_SLOT->i = (TOP_SLOT->i == b); break; }
-            case ORSO_OP_LESS_I64: { i64 b = POP().i; TOP_SLOT->i = (TOP_SLOT->i < b); break; }
-            case ORSO_OP_GREATER_I64: { i64 b = POP().i; TOP_SLOT->i = (TOP_SLOT->i > b); break; }
+            case ORSO_OP_EQUAL_I64: { i64 b = POP().i; TOP_SLOT->i = (TOP_SLOT->i == b); SLOT_ADD_TYPE(TOP_SLOT, ORSO_TYPE_BOOL); break; }
+            case ORSO_OP_LESS_I64: { i64 b = POP().i; TOP_SLOT->i = (TOP_SLOT->i < b); SLOT_ADD_TYPE(TOP_SLOT, ORSO_TYPE_BOOL); break; }
+            case ORSO_OP_GREATER_I64: { i64 b = POP().i; TOP_SLOT->i = (TOP_SLOT->i > b); SLOT_ADD_TYPE(TOP_SLOT, ORSO_TYPE_BOOL); break; }
 
-            case ORSO_OP_EQUAL_F64: { f64 b = POP().f; TOP_SLOT->i = (TOP_SLOT->f == b); break; }
-            case ORSO_OP_LESS_F64: { f64 b = POP().f; TOP_SLOT->i = (TOP_SLOT->f < b); break; }
-            case ORSO_OP_GREATER_F64: { f64 b = POP().f; TOP_SLOT->i = (TOP_SLOT->f > b); break; }
+            case ORSO_OP_EQUAL_F64: { f64 b = POP().f; TOP_SLOT->i = (TOP_SLOT->f == b); SLOT_ADD_TYPE(TOP_SLOT, ORSO_TYPE_BOOL); break; }
+            case ORSO_OP_LESS_F64: { f64 b = POP().f; TOP_SLOT->i = (TOP_SLOT->f < b); SLOT_ADD_TYPE(TOP_SLOT, ORSO_TYPE_BOOL); break; }
+            case ORSO_OP_GREATER_F64: { f64 b = POP().f; TOP_SLOT->i = (TOP_SLOT->f > b); SLOT_ADD_TYPE(TOP_SLOT, ORSO_TYPE_BOOL); break; }
 
-            case ORSO_OP_EQUAL_STRING: { ptr b = POP().p; TOP_SLOT->i = orso_string_equal(TOP_SLOT->p, b); break; }
+            case ORSO_OP_EQUAL_STRING: { ptr b = POP().p; TOP_SLOT->i = orso_string_equal(TOP_SLOT->p, b); SLOT_ADD_TYPE(TOP_SLOT, ORSO_TYPE_BOOL); break; }
             case ORSO_OP_CONCAT_STRING: { ptr b = POP().p; TOP_SLOT->p = orso_string_concat(TOP_SLOT->p, b); break; }
 
-            case ORSO_OP_LOGICAL_NOT: TOP_SLOT->i = !TOP_SLOT->i; break;
+            case ORSO_OP_LOGICAL_NOT: TOP_SLOT->i = !TOP_SLOT->i; SLOT_ADD_TYPE(TOP_SLOT, ORSO_TYPE_BOOL); break;
 
-            case ORSO_OP_PUSH_0: PUSH(0); break;
-            case ORSO_OP_PUSH_1: PUSH(1); break;
+            case ORSO_OP_PUSH_0: {
+                const OrsoSlot zero = {
+                    .i = 0,
+#ifdef DEBUG_TRACE_EXECUTION
+                    .type = instruction->constant.type,
+#endif
+                };
+                PUSH(zero);
+                break;
+            }
+            case ORSO_OP_PUSH_1: {
+                const OrsoSlot one = {
+                    .i = 1,
+#ifdef DEBUG_TRACE_EXECUTION
+                    .type = instruction->constant.type,
+#endif
+                };
+                PUSH(one);
+                break;
+            }
 
-            case ORSO_OP_CONSTANT: PUSH(vm->chunk->constants[instruction->constant.index].i); break;
+            case ORSO_OP_CONSTANT: PUSH(vm->chunk->constants[instruction->constant.index]); break;
 
             case ORSO_OP_PRINT_EXPR: {
                 OrsoString* expression_string = (OrsoString*)instruction->print_expr.string.p;

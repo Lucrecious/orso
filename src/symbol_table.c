@@ -41,6 +41,9 @@ static void adjust_capacity(OrsoSymbolTable* table, i32 capacity) {
     for (i32 i = 0; i < capacity; i++) {
         entries[i].key = NULL;
         entries[i].value.i = 0;
+#ifdef DEBUG_TRACE_EXECUTION
+        entries[i].value.type = ORSO_TYPE_NULL;
+#endif
     }
 
     table->count = 0;

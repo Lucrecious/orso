@@ -133,13 +133,26 @@ static void expression(OrsoExpressionNode* expression_node, Chunk* chunk) {
         
         case EXPRESSION_PRIMARY: {
             if (expression_node->primary.constant.i == 0) {
-                const OrsoInstruction instruction = { .op_code = ORSO_OP_PUSH_0 };
+                const OrsoInstruction instruction = {
+                    .op_code = ORSO_OP_PUSH_0,
+#ifdef DEBUG_TRACE_EXECUTION
+                    .constant.type = expression_node->value_type,
+#endif
+                };
                 emit_instruction(&instruction, chunk, expression_node->primary.token.line);
             } else if (expression_node->primary.constant.i == 1) {
-                const OrsoInstruction instruction = { .op_code = ORSO_OP_PUSH_1 };
+                const OrsoInstruction instruction = {
+                    .op_code = ORSO_OP_PUSH_1,
+#ifdef DEBUG_TRACE_EXECUTION
+                    .constant.type = expression_node->value_type,
+#endif
+                    };
                 emit_instruction(&instruction, chunk, expression_node->primary.token.line);
             } else {
                 OrsoSlot slot = expression_node->primary.constant;
+#ifdef DEBUG_TRACE_EXECUTION
+                slot.type = expression_node->value_type;
+#endif
                 emit_constant(chunk, slot, expression_node->primary.token.line);
             }
             break;
@@ -185,7 +198,10 @@ static void declaration(OrsoDeclarationNode* declaration, Chunk* chunk) {
                         const OrsoInstruction instruction = {
                             .op_code = ORSO_OP_PRINT_EXPR,
                             .print_expr.type = expression_->value_type,
-                            .print_expr.string.p = expression_string
+                            .print_expr.string.p = expression_string,
+#ifdef DEBUG_TRACE_EXECUTION
+                            .print_expr.string.type = ORSO_TYPE_MAX,
+#endif
                         };
                         emit_instruction(&instruction, chunk, start.line);
                     break;
