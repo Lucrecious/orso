@@ -1,0 +1,1 @@
+option('debug_trace', type : 'boolean', value : false, description : 'Prints the bytecode for the vm as it runs.')

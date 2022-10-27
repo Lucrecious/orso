@@ -21,7 +21,11 @@ src = [
 #   install : false,
 #   include_directories : inc)
 
-executable('orso', [src, 'main.c'], install : false, include_directories : inc)
-executable('orso-traced', [src, 'main.c'], install : false, include_directories :inc, c_args : '-DDEBUG_TRACE_EXECUTION')
+c_args = []
+if get_option('debug_trace')
+  c_args += '-DDEBUG_TRACE_EXECUTION'
+endif
+
+executable('orso', [src, 'main.c'], install : false, include_directories : inc, c_args : c_args)
 
 # test('variable_retrieval', test_variable_retrieval)
