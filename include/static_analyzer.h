@@ -8,11 +8,15 @@ typedef struct OrsoStaticAnalyzer {
     OrsoErrorFunction error_fn;
     OrsoSymbolTable symbol_to_type;
     OrsoSymbolTable* vm_symbol_table;
+
+    OrsoSymbolTable defined_variables;
+
     bool had_error;
     bool panic_mode;
 } OrsoStaticAnalyzer;
 
 void orso_static_analyzer_init(OrsoStaticAnalyzer* analyzer, OrsoSymbolTable* vm_symbol_table, OrsoErrorFunction error_fn);
+void orso_static_analyzer_free(OrsoStaticAnalyzer* analyzer);
 
 void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoExpressionNode* expression);
 

@@ -146,7 +146,7 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
 #undef READ_INSTRUCTION
 }
 
-static bool compile(const char* source, Chunk* chunk, OrsoSymbolTable* symbol_table, OrsoErrorFunction error_fn) {
+static bool compile(const char* source, Chunk* chunk, OrsoSymbolTable* symbol_table, OrsoSymbolTable* globals, OrsoErrorFunction error_fn) {
     OrsoAST ast;
     orso_ast_init(&ast);
 
@@ -161,8 +161,11 @@ static bool compile(const char* source, Chunk* chunk, OrsoSymbolTable* symbol_ta
 
     OrsoStaticAnalyzer analyzer;
     orso_static_analyzer_init(&analyzer, symbol_table, error_fn);
+    orso_symbol_table_add_all(globals, &analyzer.defined_variables);
 
     bool resolved = orso_resolve_ast_types(&analyzer, &ast);
+
+    orso_static_analyzer_free(&analyzer);
 
 #ifdef DEBUG_PRINT
     orso_ast_print(&ast, "resolved");
@@ -185,7 +188,7 @@ void orso_interpret(OrsoVM* vm, const char* source, OrsoErrorFunction error_fn) 
     chunk_init(&chunk);
     chunk.max_stack_size = 256;
 
-    if (!compile(source, &chunk, &vm->symbol_table, error_fn)) {
+    if (!compile(source, &chunk, &vm->symbol_table, &vm->globals, error_fn)) {
         return;
     }
 

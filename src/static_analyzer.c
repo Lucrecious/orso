@@ -196,6 +196,20 @@ static OrsoSlot zero_value(OrsoType type, OrsoSymbolTable* symbol_table) {
 }
 
 static void resolve_var_declaration(OrsoStaticAnalyzer* analyzer, OrsoVarDeclarationNode* var_declaration) {
+    bool is_new = orso_symbol_table_set(&analyzer->defined_variables, var_declaration->identifier, (OrsoSlot){
+        .i = 0,
+#ifdef DEBUG_TRACE_EXECUTION
+        .type = ORSO_TYPE_NULL,
+#endif
+    });
+
+    if (!is_new) {
+        const char message[100];
+        sprintf(message, "Duplicate variable definition of '%s'.", var_declaration->identifier->text);
+        error(analyzer, var_declaration->start.line, message);
+        return;
+    }
+
     if (var_declaration->type_identifier.length != 0) {
         var_declaration->var_type = resolve_type_identifier(analyzer, var_declaration->type_identifier);
     }
@@ -294,8 +308,20 @@ void orso_static_analyzer_init(OrsoStaticAnalyzer* analyzer, OrsoSymbolTable* vm
     orso_symbol_table_init(&analyzer->symbol_to_type);
     add_builtin_types(analyzer);
 
+    orso_symbol_table_init(&analyzer->defined_variables);
+
     analyzer->vm_symbol_table = vm_symbol_table;
     analyzer->error_fn = error_fn;
+    analyzer->had_error = false;
+    analyzer->panic_mode = false;
+}
+
+void orso_static_analyzer_free(OrsoStaticAnalyzer* analyzer) {
+    orso_symbol_table_free(&analyzer->symbol_to_type);
+    orso_symbol_table_free(&analyzer->defined_variables);
+
+    analyzer->vm_symbol_table = NULL;
+    analyzer->error_fn = NULL;
     analyzer->had_error = false;
     analyzer->panic_mode = false;
 }
