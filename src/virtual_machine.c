@@ -14,6 +14,7 @@
 
 void orso_vm_init(OrsoVM* vm) {
     orso_symbol_table_init(&vm->symbol_table);
+    orso_symbol_table_init(&vm->globals);
 
     vm->chunk = NULL;
     vm->stack = NULL;
@@ -22,6 +23,7 @@ void orso_vm_init(OrsoVM* vm) {
 
 void orso_vm_free(OrsoVM* vm) {
     orso_symbol_table_free(&vm->symbol_table);
+    orso_symbol_table_free(&vm->globals);
 }
 
 static void FORCE_INLINE push_i64(OrsoVM* vm, OrsoSlot value) {
@@ -117,6 +119,13 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
 
             case ORSO_OP_CONSTANT: PUSH(vm->chunk->constants[instruction->constant.index]); break;
 
+            case ORSO_OP_DEFINE_GLOBAL: {
+                OrsoSymbol* name = (OrsoSymbol*)vm->chunk->constants[instruction->constant.index].p;
+                orso_symbol_table_set(&vm->globals, name, *TOP_SLOT);
+                POP();
+                break;
+            }
+
             case ORSO_OP_PRINT_EXPR: {
                 OrsoString* expression_string = (OrsoString*)POP().p;
                 printf("%s => ", expression_string->text);
@@ -151,7 +160,7 @@ static bool compile(const char* source, Chunk* chunk, OrsoSymbolTable* symbol_ta
 #endif
 
     OrsoStaticAnalyzer analyzer;
-    orso_static_analyzer_init(&analyzer, error_fn);
+    orso_static_analyzer_init(&analyzer, symbol_table, error_fn);
 
     bool resolved = orso_resolve_ast_types(&analyzer, &ast);
 

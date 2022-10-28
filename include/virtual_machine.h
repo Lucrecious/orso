@@ -11,6 +11,7 @@ typedef struct OrsoVM {
     OrsoInstruction* ip;
 
     OrsoSymbolTable symbol_table;
+    OrsoSymbolTable globals;
     
     OrsoSlot* stack;
     OrsoSlot* stack_top;

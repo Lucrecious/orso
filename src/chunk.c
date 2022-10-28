@@ -36,12 +36,6 @@ void chunk_write(Chunk* chunk, const OrsoInstruction* instruction, i32 line) {
     }
 }
 
-void chunk_write_constant(Chunk* chunk, OrsoSlot value, i32 line) {
-    i32 index = chunk_add_constant(chunk, value);
-    const OrsoInstruction instruction = { .op_code = ORSO_OP_CONSTANT, .constant.index = index };
-    chunk_write(chunk, &instruction, line);
-}
-
 i32 chunk_get_line(Chunk* chunk, i32 offset) {
     for (i32 i = 0; i < sb_count(chunk->lines); i += 2) {
         if (offset < chunk->lines[i + 1]) {

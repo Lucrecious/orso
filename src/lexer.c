@@ -159,19 +159,24 @@ static TokenType check_keyword(Lexer* lexer, i32 start, i32 length,
 
 static TokenType identifier_type(Lexer* lexer) {
     switch (lexer->start[0]) {
-        case 's': return check_keyword(lexer, 1, 5, "truct", TOKEN_STRUCT);
-        case 'v': return check_keyword(lexer, 1, 2, "ar", TOKEN_VAR);
+        case 'a': return check_keyword(lexer, 1, 2, "nd", TOKEN_AND);
+        case 'b': return check_keyword(lexer, 1, 3, "ool", TOKEN_TYPE);
         case 'f': {
             switch (lexer->start[1]) {
-                case 'u': return check_keyword(lexer, 2, 2, "nc", TOKEN_FUNCTION);
                 case 'a': return check_keyword(lexer, 2, 3, "lse", TOKEN_FALSE);
+                case 'u': return check_keyword(lexer, 2, 2, "nc", TOKEN_FUNCTION);
+                case '3': return check_keyword(lexer, 2, 1, "2", TOKEN_TYPE);
+                case '6': return check_keyword(lexer, 2, 1, "4", TOKEN_TYPE);
             }
             break;
         }
-
-            
-        case 'a': return check_keyword(lexer, 1, 2, "nd", TOKEN_AND);
-        case 'o': return check_keyword(lexer, 1, 1, "r", TOKEN_OR);
+        case 'i': {
+            switch (lexer->start[1]) {
+                case '3': return check_keyword(lexer, 2, 1, "2", TOKEN_TYPE);
+                case '6': return check_keyword(lexer, 2, 1, "4", TOKEN_TYPE);
+            }
+            break;
+        }
         case 'n': {
             switch (lexer->start[1]) {
                 case 'o': return check_keyword(lexer, 2, 1, "t", TOKEN_NOT);
@@ -179,9 +184,25 @@ static TokenType identifier_type(Lexer* lexer) {
             }
             break;
         }
-        
-        case 't': return check_keyword(lexer, 1, 3, "rue", TOKEN_TRUE);
+        case 'o': return check_keyword(lexer, 1, 1, "r", TOKEN_OR);
         case 'p': return check_keyword(lexer, 1, 9, "rint_expr", TOKEN_PRINT_EXPR);
+        case 's': 
+            switch (lexer->start[1]) {
+                case 'y': return check_keyword(lexer, 2, 4, "mbol", TOKEN_TYPE);
+                case 't': 
+                    switch (lexer->start[2]) {
+                        case 'r':
+                            switch(lexer->start[3]) {
+                                case 'u': return check_keyword(lexer, 4, 2, "ct", TOKEN_STRUCT);
+                                case 'i': return check_keyword(lexer, 4, 2, "ng", TOKEN_TYPE);
+                            }
+                            break;
+                    }
+                    break;
+            }
+            break;
+        case 't': return check_keyword(lexer, 1, 3, "rue", TOKEN_TRUE);
+        case 'v': return check_keyword(lexer, 1, 3, "oid", TOKEN_TYPE);
     }
 
     return TOKEN_IDENTIFIER;

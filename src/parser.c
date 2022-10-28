@@ -40,7 +40,8 @@ typedef struct {
     Precedence precedence;
 } ParseRule;
 
-static void parser_init(Parser* parser, const char* source, OrsoSymbolTable* vm_symbol_table, OrsoErrorFunction error_fn) {
+static void parser_init(Parser* parser, const char* source,
+        OrsoSymbolTable* vm_symbol_table, OrsoErrorFunction error_fn) {
     lexer_init(&parser->lexer, source);
     parser->vm_symbol_table = vm_symbol_table;
     parser->error_fn = error_fn;
@@ -131,28 +132,6 @@ static void synchronize(Parser* parser) {
 
         advance(parser);
     }
-}
-
-static FORCE_INLINE OrsoSymbol* orso_new_symbol_from_cstrn(const char* start, i32 length, OrsoSymbolTable* symbol_table) {
-    u32 hash = orso_hash_cstrn(start, length);
-    OrsoSymbol* symbol = orso_symbol_table_find_cstrn(symbol_table, start, length, hash);
-    if (symbol != NULL) {
-        return symbol;
-    }
-
-    symbol = ALLOCATE_FLEX(OrsoSymbol, length + 1);
-    symbol->hash = hash;
-    symbol->length = length;
-    memcpy(symbol->text, start, length);
-    symbol->text[length] = '\0';
-
-    OrsoSlot slot = {.i = 0};
-#ifdef DEBUG_TRACE_EXECUTION
-    slot.type = ORSO_TYPE_SYMBOL;
-#endif
-    orso_symbol_table_set(symbol_table, symbol, slot);
-
-    return symbol;
 }
 
 static OrsoExpressionNode* number(Parser* parser) {
@@ -315,7 +294,6 @@ ParseRule rules[] = {
     [TOKEN_FLOAT]                   = { number,     NULL,       PREC_NONE },
     [TOKEN_ANNOTATION]              = { NULL,       NULL,       PREC_NONE },
     [TOKEN_STRUCT]                  = { NULL,       NULL,       PREC_NONE },
-    [TOKEN_VAR]                     = { NULL,       NULL,       PREC_NONE },
     [TOKEN_FUNCTION]                = { NULL,       NULL,       PREC_NONE },
     [TOKEN_NOT]                     = { unary,      NULL,       PREC_NONE },
     [TOKEN_AND]                     = { NULL,       NULL,       PREC_NONE },
@@ -323,6 +301,7 @@ ParseRule rules[] = {
     [TOKEN_TRUE]                    = { literal,    NULL,       PREC_NONE },
     [TOKEN_FALSE]                   = { literal,    NULL,       PREC_NONE },
     [TOKEN_NULL]                    = { literal,    NULL,       PREC_NONE },
+    [TOKEN_TYPE]                    = { NULL,       NULL,       PREC_NONE },
     [TOKEN_PRINT_EXPR]              = { NULL,       NULL,       PREC_NONE },
     [TOKEN_ERROR]                   = { NULL,       NULL,       PREC_NONE },
     [TOKEN_EOF]                     = { NULL,       NULL,       PREC_NONE },
@@ -393,23 +372,28 @@ static OrsoSymbol* parse_consumed_variable(Parser* parser, const char* message) 
 
 static OrsoVarDeclarationNode* var_declaration(Parser* parser) {
     OrsoVarDeclarationNode* var_declaration_node = ALLOCATE(OrsoVarDeclarationNode);
+    var_declaration_node->start = parser->previous;
+
     var_declaration_node->var_type = ORSO_TYPE_UNRESOLVED;
-    var_declaration_node->type_identifier = NULL;
+
+    Token type_token = { .type = TOKEN_ERROR, .length = 0 };
+    var_declaration_node->type_identifier = type_token;
     var_declaration_node->expression = NULL;
 
     var_declaration_node->identifier = parse_consumed_variable(parser, "Expect variable name.");
 
     consume(parser, TOKEN_COLIN, "Expect explicit type.");
-    if (match(parser, TOKEN_IDENTIFIER)) {
-        var_declaration_node->type_identifier = parse_consumed_variable(parser, "Expect type name.");
+    if (match(parser, TOKEN_IDENTIFIER) || match(parser, TOKEN_TYPE)) {
+        var_declaration_node->type_identifier = parser->previous;
         if (match(parser, TOKEN_EQUAL)) {
             var_declaration_node->expression = expression(parser);
         }
     } else {
-        consume(parser, TOKEN_EQUAL, "Except define assignment.");
+        consume(parser, TOKEN_EQUAL, "Expect define assignment.");
         var_declaration_node->expression = expression(parser);
     }
 
+    var_declaration_node->end = parser->previous;
     return var_declaration_node;
 }
 
@@ -508,9 +492,9 @@ void ast_print_statement(OrsoStatementNode* statement, i32 initial_indent) {
 
 void ast_print_var_declaration(OrsoVarDeclarationNode* var_declaration_node, i32 indent) {
     printf("%*s", indent, "");
-    printf("VAR DECLARATION - identifier: %s, type: %s\n",
-            var_declaration_node->identifier->text,
-            var_declaration_node->type_identifier ? var_declaration_node->type_identifier->text : "omitted");
+    printf("VAR DECLARATION - identifier: %s, type: ", var_declaration_node->identifier->text);
+    printf(orso_type_to_cstr(var_declaration_node->var_type));
+    printf("\n");
 
     if (var_declaration_node->expression != NULL) {
         ast_print_expression(var_declaration_node->expression, indent + 1);

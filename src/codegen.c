@@ -11,7 +11,9 @@ static void emit_instruction(const OrsoInstruction* instruction, Chunk* chunk, i
 }
 
 static void emit_constant(Chunk* chunk, OrsoSlot slot, i32 line) {
-    chunk_write_constant(chunk, slot, line);
+    i32 index = chunk_add_constant(chunk, slot);
+    const OrsoInstruction instruction = { .op_code = ORSO_OP_CONSTANT, .constant.index = index };
+    chunk_write(chunk, &instruction, line);
 }
 
 static void emit_type_convert(OrsoType from_type, OrsoType to_type, Chunk* chunk, i32 line) {
@@ -213,10 +215,33 @@ static void statement(OrsoStatementNode* statement, Chunk* chunk) {
     }
 }
 
+static i32 identifier_constant(OrsoSymbol* identifier, Chunk* chunk) {
+    OrsoSlot slot = {
+        .p = identifier,
+#ifdef DEBUG_TRACE_EXECUTION
+        .type = ORSO_TYPE_SYMBOL,
+#endif
+    };
+    i32 index = chunk_add_constant(chunk, slot);
+
+    return index;
+}
+
+static void var_declaration(OrsoVarDeclarationNode* var_declaration, Chunk* chunk) {
+    expression(var_declaration->expression, chunk);
+
+    const OrsoInstruction instruction = {
+        .op_code = ORSO_OP_DEFINE_GLOBAL,
+        .constant.index = identifier_constant(var_declaration->identifier, chunk),
+    };
+
+    emit_instruction(&instruction, chunk, var_declaration->start.line);
+}
+
 static void declaration(OrsoDeclarationNode* declaration, Chunk* chunk) {
     switch (declaration->type) {
         case ORSO_DECLARATION_STATEMENT: statement(declaration->statement, chunk); break;
-        case ORSO_DECLARATION_VAR: break; //var_declaration(declaration->var, chunk); break;
+        case ORSO_DECLARATION_VAR: var_declaration(declaration->var, chunk); break;
         case ORSO_DECLARATION_NONE: break; // Unreachable
     }
 }

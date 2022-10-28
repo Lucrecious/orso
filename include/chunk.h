@@ -5,6 +5,7 @@
 #include "object.h"
 #include "opcodes.h"
 #include "instructions.h"
+#include "symbol_table.h"
 #include "type.h"
 
 typedef struct Chunk {
@@ -16,7 +17,6 @@ typedef struct Chunk {
 
 void chunk_init(Chunk* chunk);
 void chunk_write(Chunk* chunk, const OrsoInstruction* instruction, i32 line);
-void chunk_write_constant(Chunk* chunk, OrsoSlot value, i32 line);
 i32 chunk_get_line(Chunk* chunk, i32 offset);
 i32 chunk_add_constant(Chunk* chunk, OrsoSlot value);
 

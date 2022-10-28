@@ -69,10 +69,13 @@ struct OrsoExpressionNode {
 };
 
 typedef struct OrsoVarDeclarationNode {
+    Token start;
+    Token end;
+
     // Unresolved means inferred
     OrsoType var_type;
     OrsoSymbol* identifier;
-    OrsoSymbol* type_identifier;
+    Token type_identifier;
     OrsoExpressionNode* expression;
 
 } OrsoVarDeclarationNode;

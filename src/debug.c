@@ -38,7 +38,6 @@ i32 disassemble_instruction(Chunk* chunk, i32 offset) {
     OrsoOPCode instruction = chunk->code[offset].op_code;
     switch(instruction) {
         case ORSO_OP_POP: return simple_instruction("OP_POP", offset);
-        case ORSO_OP_CONSTANT: return constant_instruction("OP_CONSTANT", chunk, offset);
         case ORSO_OP_PUSH_0: return simple_instruction("OP_PUSH_0", offset);
         case ORSO_OP_PUSH_1: return simple_instruction("OP_PUSH_1", offset);
         case ORSO_OP_NEGATE_I64: return simple_instruction("OP_NEGATE_I64", offset);
@@ -61,6 +60,8 @@ i32 disassemble_instruction(Chunk* chunk, i32 offset) {
         case ORSO_OP_GREATER_I64: return simple_instruction("OP_GREATER_I64", offset);
         case ORSO_OP_GREATER_F64: return simple_instruction("OP_GREATER_F64", offset);
         case ORSO_OP_EQUAL_STRING: return simple_instruction("OP_EQUAL_STRING", offset);
+        case ORSO_OP_CONSTANT: return constant_instruction("OP_CONSTANT", chunk, offset);
+        case ORSO_OP_DEFINE_GLOBAL: return constant_instruction("OP_DEFINE_GLOBAL", chunk, offset);
         case ORSO_OP_CONCAT_STRING: return simple_instruction("OP_CONCAT_STRING", offset);
         case ORSO_OP_RETURN: return simple_instruction("OP_RETURN", offset);
         case ORSO_OP_PRINT_EXPR: return simple_instruction("OP_PRINT_EXPR", offset);
