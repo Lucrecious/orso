@@ -243,6 +243,10 @@ static void resolve_var_declaration(OrsoStaticAnalyzer* analyzer, OrsoVarDeclara
         }
     }
 
+    if (analyzer->had_error) {
+        return;
+    }
+
     bool is_new = orso_symbol_table_set(&analyzer->defined_variables, var_declaration->identifier, (OrsoSlot){
         .i = var_declaration->var_type,
 #ifdef DEBUG_TRACE_EXECUTION
