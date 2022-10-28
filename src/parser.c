@@ -220,6 +220,7 @@ static OrsoExpressionNode* variable(Parser* parser) {
     expression_node->start = parser->previous;
     expression_node->end = parser->previous;
     expression_node->variable.token = parser->previous;
+    expression_node->variable.name = orso_new_symbol_from_cstrn(parser->previous.start, parser->previous.length, parser->vm_symbol_table);
 
     return expression_node;
 }
@@ -376,14 +377,15 @@ static OrsoStatementNode* statement(Parser* parser) {
     return statement_node;
 }
 
-static OrsoSymbol* parse_consumed_variable(Parser* parser, const char* message) {
-    OrsoSymbol* identifier = orso_new_symbol_from_cstrn(parser->previous.start, parser->previous.length, parser->vm_symbol_table);
+static OrsoSymbol* parse_variable(Parser* parser) {
+    OrsoSymbol* identifier = orso_new_symbol_from_cstrn(parser->current.start, parser->current.length, parser->vm_symbol_table);
+    advance(parser);
     return identifier;
 }
 
 static OrsoVarDeclarationNode* var_declaration(Parser* parser) {
     OrsoVarDeclarationNode* var_declaration_node = ALLOCATE(OrsoVarDeclarationNode);
-    var_declaration_node->start = parser->previous;
+    var_declaration_node->start = parser->current;
 
     var_declaration_node->var_type = ORSO_TYPE_UNRESOLVED;
 
@@ -391,7 +393,7 @@ static OrsoVarDeclarationNode* var_declaration(Parser* parser) {
     var_declaration_node->type_identifier = type_token;
     var_declaration_node->expression = NULL;
 
-    var_declaration_node->identifier = parse_consumed_variable(parser, "Expect variable name.");
+    var_declaration_node->identifier = parse_variable(parser);
 
     consume(parser, TOKEN_COLIN, "Expect explicit type.");
     if (match(parser, TOKEN_IDENTIFIER) || match(parser, TOKEN_TYPE)) {
@@ -408,12 +410,24 @@ static OrsoVarDeclarationNode* var_declaration(Parser* parser) {
     return var_declaration_node;
 }
 
+static bool variable_declaration_look_ahead(Parser* parser) {
+    if (parser->current.type != TOKEN_IDENTIFIER) {
+        return false;
+    }
+
+    Lexer lookahead_lexer = parser->lexer;
+
+    Token token = lexer_next_token(&lookahead_lexer);
+
+    return token.type == TOKEN_COLIN;
+}
+
 static OrsoDeclarationNode* declaration(Parser* parser) {
     Token start = parser->current;
 
     OrsoDeclarationNode* declaration_node = ALLOCATE(OrsoDeclarationNode);
     declaration_node->type = ORSO_DECLARATION_NONE;
-    if (match(parser, TOKEN_IDENTIFIER) && check(parser, TOKEN_COLIN)) {
+    if (variable_declaration_look_ahead(parser)) {
         declaration_node->type = ORSO_DECLARATION_VAR;
         declaration_node->var= var_declaration(parser);
     } else {
@@ -483,20 +497,25 @@ void ast_print_expression(OrsoExpressionNode* expression, i32 initial_indent) {
             printf("\n");
             break;
         }
+        case EXPRESSION_VARIABLE: {
+            printf("VARIABLE - %s\n", expression->variable.name->text);
+            break;
+        }
     }
 }
 
-void ast_print_statement(OrsoStatementNode* statement, i32 initial_indent) {
+void ast_print_statement(OrsoStatementNode* statement, i32 indent) {
+    printf("%*s", indent, "");
     printf("STATEMENT - ");
     switch(statement->type) {
         case ORSO_STATEMENT_NONE: return;
         case ORSO_STATEMENT_PRINT_EXPR:
             printf("print_expr\n");
-            ast_print_expression(statement->expression, initial_indent + 1);
+            ast_print_expression(statement->expression, indent + 1);
             break;
         case ORSO_STATEMENT_EXPRESSION:
             printf("expression\n");
-            ast_print_expression(statement->expression, initial_indent + 1);
+            ast_print_expression(statement->expression, indent + 1);
             break;
     }
 }

@@ -29,6 +29,18 @@ static void emit_type_convert(OrsoType from_type, OrsoType to_type, Chunk* chunk
     }
 }
 
+static i32 identifier_constant(OrsoSymbol* identifier, Chunk* chunk) {
+    OrsoSlot slot = {
+        .p = identifier,
+#ifdef DEBUG_TRACE_EXECUTION
+        .type = ORSO_TYPE_SYMBOL,
+#endif
+    };
+    i32 index = chunk_add_constant(chunk, slot);
+
+    return index;
+}
+
 static void expression(OrsoExpressionNode* expression_node, Chunk* chunk) {
 #define EMIT_BINARY_OP(OP, TYPE) do { \
     const OrsoInstruction instruction = { .op_code = ORSO_OP_##OP##_##TYPE }; \
@@ -160,6 +172,19 @@ static void expression(OrsoExpressionNode* expression_node, Chunk* chunk) {
             break;
         }
 
+        case EXPRESSION_VARIABLE: {
+            i32 index = identifier_constant(expression_node->variable.name, chunk);
+            const OrsoInstruction instruction = { 
+                .op_code = ORSO_OP_GET_GLOBAL,
+                .constant.index = index,
+#ifdef DEBUG_TRACE_EXECUTION
+                .constant.type = expression_node->value_type,
+#endif
+            };
+
+            emit_instruction(&instruction, chunk, expression_node->start.line);
+        }
+
         case EXPRESSION_IMPLICIT_CAST: {
             OrsoExpressionNode* operand = expression_node->cast.operand;
             expression(operand, chunk);
@@ -213,18 +238,6 @@ static void statement(OrsoStatementNode* statement, Chunk* chunk) {
         }
         case ORSO_STATEMENT_NONE: break; // Unreachable
     }
-}
-
-static i32 identifier_constant(OrsoSymbol* identifier, Chunk* chunk) {
-    OrsoSlot slot = {
-        .p = identifier,
-#ifdef DEBUG_TRACE_EXECUTION
-        .type = ORSO_TYPE_SYMBOL,
-#endif
-    };
-    i32 index = chunk_add_constant(chunk, slot);
-
-    return index;
 }
 
 static void var_declaration(OrsoVarDeclarationNode* var_declaration, Chunk* chunk) {

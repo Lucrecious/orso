@@ -57,6 +57,7 @@ typedef struct OrsoPrimary {
 
 typedef struct OrsoVariable {
     Token token;
+    OrsoSymbol* name;
 } OrsoVariable;
 
 struct OrsoExpressionNode {

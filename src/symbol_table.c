@@ -140,7 +140,7 @@ OrsoSymbol* orso_symbol_table_find_cstrn(OrsoSymbolTable* table, const char* sta
             return entry->key;
         }
 
-        index = (index + 1) % table->capacity;
+        index = index % table->capacity;
     }
 }
 

@@ -55,8 +55,10 @@ static void interpret_continuous(OrsoVM* vm, OrsoStaticAnalyzer* analyzer, const
     chunk.max_stack_size = 256;
 
     if (!compile(source, &chunk, analyzer, error_fn)) {
+        analyzer->had_error = false;
         return;
     }
+
 
     vm->stack = ALLOCATE_N(OrsoSlot, chunk.max_stack_size);
     vm->stack_top = vm->stack;

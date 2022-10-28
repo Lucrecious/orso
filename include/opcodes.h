@@ -28,7 +28,7 @@ typedef enum OrsoOPCode {
 
     ORSO_OP_CONSTANT,
     
-    ORSO_OP_DEFINE_GLOBAL,
+    ORSO_OP_DEFINE_GLOBAL, ORSO_OP_GET_GLOBAL,
 
     ORSO_OP_PRINT_EXPR,
 

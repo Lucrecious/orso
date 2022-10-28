@@ -160,6 +160,15 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoExpressionNode* e
             }
             break;
         }
+        case EXPRESSION_VARIABLE: {
+            OrsoSlot slot;
+            if (!orso_symbol_table_get(&analyzer->defined_variables, expression->variable.name, &slot)) {
+                error(analyzer, expression->variable.token.line, "Expected name does not exist.");
+            } else {
+                expression->value_type = slot.i;
+            }
+            break;
+        }
 
         default: break; // unreachable
     }
@@ -196,20 +205,6 @@ static OrsoSlot zero_value(OrsoType type, OrsoSymbolTable* symbol_table) {
 }
 
 static void resolve_var_declaration(OrsoStaticAnalyzer* analyzer, OrsoVarDeclarationNode* var_declaration) {
-    bool is_new = orso_symbol_table_set(&analyzer->defined_variables, var_declaration->identifier, (OrsoSlot){
-        .i = 0,
-#ifdef DEBUG_TRACE_EXECUTION
-        .type = ORSO_TYPE_NULL,
-#endif
-    });
-
-    if (!is_new) {
-        const char message[100];
-        sprintf(message, "Duplicate variable definition of '%s'.", var_declaration->identifier->text);
-        error(analyzer, var_declaration->start.line, message);
-        return;
-    }
-
     if (var_declaration->type_identifier.length != 0) {
         var_declaration->var_type = resolve_type_identifier(analyzer, var_declaration->type_identifier);
     }
@@ -246,6 +241,20 @@ static void resolve_var_declaration(OrsoStaticAnalyzer* analyzer, OrsoVarDeclara
             }
             break;
         }
+    }
+
+    bool is_new = orso_symbol_table_set(&analyzer->defined_variables, var_declaration->identifier, (OrsoSlot){
+        .i = var_declaration->var_type,
+#ifdef DEBUG_TRACE_EXECUTION
+        .type = ORSO_TYPE_INT64,
+#endif
+    });
+
+    if (!is_new) {
+        const char message[100];
+        sprintf(message, "Duplicate variable definition of '%s'.", var_declaration->identifier->text);
+        error(analyzer, var_declaration->start.line, message);
+        return;
     }
 }
 
