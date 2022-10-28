@@ -213,6 +213,17 @@ static OrsoExpressionNode* literal(Parser* parser) {
     return expression_node;
 }
 
+static OrsoExpressionNode* variable(Parser* parser) {
+    OrsoExpressionNode* expression_node = ALLOCATE(OrsoExpressionNode);
+    expression_node->value_type = ORSO_TYPE_UNRESOLVED;
+    expression_node->type = EXPRESSION_VARIABLE;
+    expression_node->start = parser->previous;
+    expression_node->end = parser->previous;
+    expression_node->variable.token = parser->previous;
+
+    return expression_node;
+}
+
 static OrsoExpressionNode* expression(Parser* parser);
 static ParseRule* get_rule(TokenType type);
 static OrsoExpressionNode* parse_precedence(Parser* parser, Precedence precedence);
@@ -287,7 +298,7 @@ ParseRule rules[] = {
     [TOKEN_BANG_EQUAL]              = { NULL,       binary,     PREC_EQUALITY },
     [TOKEN_LESS_EQUAL]              = { NULL,       binary,     PREC_COMPARISON },
     [TOKEN_GREATER_EQUAL]           = { NULL,       binary,     PREC_COMPARISON },
-    [TOKEN_IDENTIFIER]              = { NULL,       NULL,       PREC_NONE },
+    [TOKEN_IDENTIFIER]              = { variable,   NULL,       PREC_NONE },
     [TOKEN_STRING]                  = { literal,    NULL,       PREC_NONE },
     [TOKEN_SYMBOL]                  = { literal,    NULL,       PREC_NONE },
     [TOKEN_INTEGER]                 = { number,     NULL,       PREC_NONE },

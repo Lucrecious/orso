@@ -10,6 +10,7 @@ src = [
   'src/chunk.c',
   'src/codegen.c',
   'src/debug.c',
+  'src/interpreter.c',
   'src/lexer.c',
   'src/parser.c',
   'src/static_analyzer.c',

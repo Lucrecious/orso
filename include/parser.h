@@ -14,6 +14,7 @@ typedef enum ExpressionType {
     EXPRESSION_BINARY,
     EXPRESSION_GROUPING,
     EXPRESSION_PRIMARY,
+    EXPRESSION_VARIABLE,
 } ExpressionType;
 
 typedef enum OrsoDeclarationType {
@@ -54,6 +55,10 @@ typedef struct OrsoPrimary {
     OrsoSlot constant;
 } OrsoPrimary;
 
+typedef struct OrsoVariable {
+    Token token;
+} OrsoVariable;
+
 struct OrsoExpressionNode {
     Token start;
     Token end;
@@ -65,6 +70,7 @@ struct OrsoExpressionNode {
         OrsoUnaryOp unary;
         OrsoGrouping grouping;
         OrsoPrimary primary;
+        OrsoVariable variable;
     };
 };
 

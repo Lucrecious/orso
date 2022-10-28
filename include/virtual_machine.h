@@ -20,6 +20,6 @@ typedef struct OrsoVM {
 void orso_vm_init(OrsoVM* vm);
 void orso_vm_free(OrsoVM* vm);
 
-void orso_interpret(OrsoVM* vm, const char* source, OrsoErrorFunction error_function);
+void orso_vm_interpret(OrsoVM* vm, OrsoErrorFunction error_fn);
 
 #endif

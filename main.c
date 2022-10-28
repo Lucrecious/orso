@@ -1,9 +1,6 @@
 #include <stdio.h>
 
-#include "chunk.h"
-#include "common.h"
-#include "debug.h"
-#include "virtual_machine.h"
+#include "interpreter.h"
 
 #define PROJECT_NAME "orso"
 
@@ -18,10 +15,10 @@ void error(OrsoErrorType error, i32 line, const char* message) {
 }
 
 int main(int argc, char **argv) {
-    OrsoVM vm;
-    orso_vm_init(&vm);
-
     char source_code[1000];
+
+    OrsoInterpreter interpreter;
+    orso_interpreter_init(&interpreter, error);
 
     printf("Orso interpreter initialized.\n\n");
 
@@ -35,12 +32,12 @@ int main(int argc, char **argv) {
             break;
         }
 
-        orso_interpret(&vm, source_code, error);
+        orso_interpreter_run(&interpreter, source_code);
 
         printf("\n");
     }
 
-    orso_vm_free(&vm);
+    orso_interpreter_free(&interpreter);
 
     return 0;
 }

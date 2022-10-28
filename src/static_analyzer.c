@@ -250,6 +250,7 @@ static void resolve_var_declaration(OrsoStaticAnalyzer* analyzer, OrsoVarDeclara
 }
 
 static void resolve_declaration(OrsoStaticAnalyzer* analyzer, OrsoDeclarationNode* declaration_node) {
+    analyzer->panic_mode = false;
     switch (declaration_node->type) {
         case ORSO_DECLARATION_NONE: break;
         case ORSO_DECLARATION_STATEMENT: {
