@@ -163,9 +163,27 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoExpressionNode* e
         case EXPRESSION_VARIABLE: {
             OrsoSlot slot;
             if (!orso_symbol_table_get(&analyzer->defined_variables, expression->variable.name, &slot)) {
-                error(analyzer, expression->variable.token.line, "Expected name does not exist.");
+                error(analyzer, expression->variable.token.line, "Variable does not exist.");
             } else {
                 expression->value_type = slot.i;
+            }
+            break;
+        }
+
+        case EXPRESSION_ASSIGNMENT: {
+            OrsoSlot type_slot;
+            bool exist = orso_symbol_table_get(&analyzer->defined_variables, expression->assignment.variable_name, &type_slot);
+            if (!exist) {
+                error(analyzer, expression->start.line, "Variable does not exist.");
+            }
+            OrsoType type = type_slot.i;
+
+            orso_resolve_expression(analyzer, expression->assignment.right_side);
+            expression->value_type = expression->assignment.right_side->value_type;
+            if (type != expression->value_type) {
+                error(analyzer, expression->start.line, "Expression needs explicit cast to store in variable");
+            } else {
+                expression->value_type = type;
             }
             break;
         }

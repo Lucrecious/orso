@@ -174,6 +174,7 @@ static void expression(OrsoExpressionNode* expression_node, Chunk* chunk) {
 
         case EXPRESSION_VARIABLE: {
             i32 index = identifier_constant(expression_node->variable.name, chunk);
+
             const OrsoInstruction instruction = { 
                 .op_code = ORSO_OP_GET_GLOBAL,
                 .constant.index = index,
@@ -183,6 +184,24 @@ static void expression(OrsoExpressionNode* expression_node, Chunk* chunk) {
             };
 
             emit_instruction(&instruction, chunk, expression_node->start.line);
+            break;
+        }
+
+        case EXPRESSION_ASSIGNMENT: {
+            i32 index = identifier_constant(expression_node->assignment.variable_name, chunk);
+            
+            const OrsoInstruction instruction = {
+                .op_code = ORSO_OP_SET_GLOBAL,
+                .constant.index = index,
+#ifdef DEBUG_TRACE_EXECUTION
+                .constant.type = expression_node->value_type,
+#endif
+            };
+
+            expression(expression_node->assignment.right_side, chunk);
+
+            emit_instruction(&instruction, chunk, expression_node->start.line);
+            break;
         }
 
         case EXPRESSION_IMPLICIT_CAST: {

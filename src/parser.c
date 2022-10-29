@@ -40,6 +40,50 @@ typedef struct {
     Precedence precedence;
 } ParseRule;
 
+void orso_ast_init(OrsoAST* ast) {
+    ast->declarations = NULL;
+}
+
+static void orso_free_expression(OrsoExpressionNode* expression) {
+    if (!expression) {
+        return;
+    }
+
+    switch (expression->type) {
+        case EXPRESSION_BINARY:
+            orso_free_expression(expression->binary.left);
+            orso_free_expression(expression->binary.right);
+            free(expression->binary.left);
+            free(expression->binary.right);
+            break;
+        case EXPRESSION_GROUPING:
+            orso_free_expression(expression->grouping.expression);
+            free(expression->grouping.expression);
+            break;
+        case EXPRESSION_IMPLICIT_CAST:
+            orso_free_expression(expression->cast.operand);
+            free(expression->cast.operand);
+            break;
+        case EXPRESSION_UNARY:
+            orso_free_expression(expression->unary.operand);
+            free(expression->unary.operand);
+            break;
+        case EXPRESSION_ASSIGNMENT:
+            orso_free_expression(expression->assignment.right_side);
+            free(expression->assignment.right_side);
+            break;
+        case EXPRESSION_VARIABLE:
+            // identifier symbol is freed by gc
+        case EXPRESSION_PRIMARY:
+            // no need
+            break;
+    }
+}
+
+void orso_ast_free(OrsoAST* ast) {
+    sb_free(ast->declarations);
+}
+
 static void parser_init(Parser* parser, const char* source,
         OrsoSymbolTable* vm_symbol_table, OrsoErrorFunction error_fn) {
     lexer_init(&parser->lexer, source);
@@ -134,6 +178,10 @@ static void synchronize(Parser* parser) {
     }
 }
 
+static OrsoExpressionNode* expression(Parser* parser);
+static ParseRule* get_rule(TokenType type);
+static OrsoExpressionNode* parse_precedence(Parser* parser, Precedence precedence);
+
 static OrsoExpressionNode* number(Parser* parser) {
     OrsoExpressionNode* expression_node = ALLOCATE(OrsoExpressionNode);
     expression_node->start = expression_node->end = parser->previous;
@@ -213,21 +261,53 @@ static OrsoExpressionNode* literal(Parser* parser) {
     return expression_node;
 }
 
-static OrsoExpressionNode* variable(Parser* parser) {
+static OrsoExpressionNode* convert_assignment_expression(Parser* parser, OrsoExpressionNode* left_operand, OrsoExpressionNode* assignment) {
+    if (left_operand->type != EXPRESSION_VARIABLE) {
+        error_at(parser, &left_operand->start, "Expect variable.");
+        orso_free_expression(left_operand);
+        orso_free_expression(assignment);
+        free(assignment);
+        left_operand->type = EXPRESSION_NONE;
+        return left_operand;
+    }
+
+    assignment->assignment.variable_name = left_operand->variable.name;
+    orso_free_expression(left_operand);
+    free(left_operand);
+
+    return assignment;
+}
+
+static OrsoExpressionNode* assignment(Parser* parser) {
     OrsoExpressionNode* expression_node = ALLOCATE(OrsoExpressionNode);
+    expression_node->type = EXPRESSION_ASSIGNMENT;
     expression_node->value_type = ORSO_TYPE_UNRESOLVED;
-    expression_node->type = EXPRESSION_VARIABLE;
     expression_node->start = parser->previous;
+    expression_node->assignment.right_side = expression(parser);
     expression_node->end = parser->previous;
-    expression_node->variable.token = parser->previous;
-    expression_node->variable.name = orso_new_symbol_from_cstrn(parser->previous.start, parser->previous.length, parser->vm_symbol_table);
 
     return expression_node;
 }
 
-static OrsoExpressionNode* expression(Parser* parser);
-static ParseRule* get_rule(TokenType type);
-static OrsoExpressionNode* parse_precedence(Parser* parser, Precedence precedence);
+static OrsoExpressionNode* named_variable(Parser* parser) {
+    OrsoExpressionNode* expression_node = ALLOCATE(OrsoExpressionNode);
+    OrsoSymbol* variable_name = orso_new_symbol_from_cstrn(parser->previous.start, parser->previous.length, parser->vm_symbol_table);
+    Token start = parser->previous;
+    expression_node->type = EXPRESSION_VARIABLE;
+
+    expression_node->variable.name = variable_name;
+    expression_node->start = start;
+    expression_node->end = start;
+
+    expression_node->value_type = ORSO_TYPE_UNRESOLVED;
+    expression_node->variable.token = parser->previous;
+
+    return expression_node;
+}
+
+static OrsoExpressionNode* variable(Parser* parser) {
+    return named_variable(parser);
+}
 
 static OrsoExpressionNode* grouping(Parser* parser) {
     OrsoExpressionNode* expression_node = ALLOCATE(OrsoExpressionNode);
@@ -289,7 +369,7 @@ ParseRule rules[] = {
     [TOKEN_STAR]                    = { NULL,       binary,     PREC_FACTOR },
     [TOKEN_SLASH]                   = { NULL,       binary,     PREC_FACTOR },
     [TOKEN_COLIN]                   = { NULL,       NULL,       PREC_NONE },
-    [TOKEN_EQUAL]                   = { NULL,       NULL,       PREC_NONE },
+    [TOKEN_EQUAL]                   = { NULL,       assignment, PREC_ASSIGNMENT},
     [TOKEN_BANG]                    = { NULL,       NULL,       PREC_NONE },
     [TOKEN_LESS]                    = { NULL,       binary,     PREC_COMPARISON },
     [TOKEN_GREATER]                 = { NULL,       binary,     PREC_COMPARISON },
@@ -343,6 +423,9 @@ static OrsoExpressionNode* parse_precedence(Parser* parser, Precedence precedenc
                 right_operand->binary.left = left_operand;
                 right_operand->start = left_operand->start;
                 left_operand = right_operand;
+                break;
+            case EXPRESSION_ASSIGNMENT:
+                left_operand = convert_assignment_expression(parser, left_operand, right_operand);
                 break;
             default: // unreachable
                 break;
@@ -461,34 +544,34 @@ bool orso_parse(OrsoAST* ast, const char* source, OrsoSymbolTable* symbol_table,
     return !parser.had_error;
 }
 
-void ast_print_expression(OrsoExpressionNode* expression, i32 initial_indent) {
-    printf("%*s [%s] ", initial_indent, "", orso_type_to_cstr(expression->value_type));
+void ast_print_expression(OrsoExpressionNode* expression, i32 initial) {
+    printf("%*s [%s] ", initial, "", orso_type_to_cstr(expression->value_type));
 
     switch (expression->type) {
         case EXPRESSION_BINARY: {
             printf("BINARY %.*s\n", expression->binary.operator.length, expression->binary.operator.start);
 
-            ast_print_expression(expression->binary.left, initial_indent + 1);
-            ast_print_expression(expression->binary.right, initial_indent + 1);
+            ast_print_expression(expression->binary.left, initial + 1);
+            ast_print_expression(expression->binary.right, initial + 1);
             break;
         }
         case EXPRESSION_GROUPING: {
             printf("GROUPING\n");
 
-            ast_print_expression(expression->grouping.expression, initial_indent + 1);
+            ast_print_expression(expression->grouping.expression, initial + 1);
             break;
         }
 
         case EXPRESSION_IMPLICIT_CAST: {
             printf("IMPLICIT CAST \n");
 
-            ast_print_expression(expression->cast.operand, initial_indent + 1);
+            ast_print_expression(expression->cast.operand, initial + 1);
             break;
         }
         case EXPRESSION_UNARY: {
             printf("UNARY %.*s\n", expression->unary.operator.length, expression->unary.operator.start);
 
-            ast_print_expression(expression->unary.operand, initial_indent + 1);
+            ast_print_expression(expression->unary.operand, initial + 1);
             break;
         }
         case EXPRESSION_PRIMARY: {
@@ -499,6 +582,11 @@ void ast_print_expression(OrsoExpressionNode* expression, i32 initial_indent) {
         }
         case EXPRESSION_VARIABLE: {
             printf("VARIABLE - %s\n", expression->variable.name->text);
+            break;
+        }
+        case EXPRESSION_ASSIGNMENT: {
+            printf("ASSIGNMENT - %s\n", expression->assignment.variable_name->text);
+            ast_print_expression(expression->assignment.right_side, initial + 1);
             break;
         }
     }
@@ -558,42 +646,4 @@ void orso_ast_print(OrsoAST* ast, const char* name) {
     for (i32 i = 0; i < sb_count(ast->declarations); i++) {
         ast_print_declaration(ast->declarations[i], 0);
     }
-}
-
-void orso_ast_init(OrsoAST* ast) {
-    ast->declarations = NULL;
-}
-
-static void orso_free_expression(OrsoExpressionNode* expression) {
-    if (!expression) {
-        return;
-    }
-
-    switch (expression->type) {
-        case EXPRESSION_BINARY:
-            orso_free_expression(expression->binary.left);
-            orso_free_expression(expression->binary.right);
-            free(expression->binary.left);
-            free(expression->binary.right);
-            break;
-        case EXPRESSION_GROUPING:
-            orso_free_expression(expression->grouping.expression);
-            free(expression->grouping.expression);
-            break;
-        case EXPRESSION_IMPLICIT_CAST:
-            orso_free_expression(expression->cast.operand);
-            free(expression->cast.operand);
-            break;
-        case EXPRESSION_UNARY:
-            orso_free_expression(expression->unary.operand);
-            free(expression->unary.operand);
-            break;
-        case EXPRESSION_PRIMARY:
-            // no need
-            break;
-    }
-}
-
-void orso_ast_free(OrsoAST* ast) {
-    sb_free(ast->declarations);
 }

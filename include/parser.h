@@ -15,6 +15,7 @@ typedef enum ExpressionType {
     EXPRESSION_GROUPING,
     EXPRESSION_PRIMARY,
     EXPRESSION_VARIABLE,
+    EXPRESSION_ASSIGNMENT,
 } ExpressionType;
 
 typedef enum OrsoDeclarationType {
@@ -60,6 +61,11 @@ typedef struct OrsoVariable {
     OrsoSymbol* name;
 } OrsoVariable;
 
+typedef struct OrsoAssignment {
+    OrsoSymbol* variable_name;
+    OrsoExpressionNode* right_side;
+} OrsoAssignment;
+
 struct OrsoExpressionNode {
     Token start;
     Token end;
@@ -72,6 +78,7 @@ struct OrsoExpressionNode {
         OrsoGrouping grouping;
         OrsoPrimary primary;
         OrsoVariable variable;
+        OrsoAssignment assignment;
     };
 };
 

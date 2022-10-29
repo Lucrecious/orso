@@ -133,6 +133,12 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
                 break;
             }
 
+            case ORSO_OP_SET_GLOBAL: {
+                OrsoSymbol* name = (OrsoSymbol*)vm->chunk->constants[instruction->constant.index].p;
+                orso_symbol_table_set(&vm->globals, name, *TOP_SLOT);
+                break;
+            }
+
             case ORSO_OP_PRINT_EXPR: {
                 OrsoString* expression_string = (OrsoString*)POP().p;
                 printf("%s => ", expression_string->text);
