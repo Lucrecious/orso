@@ -10,8 +10,10 @@ src = [
   'src/chunk.c',
   'src/codegen.c',
   'src/debug.c',
+  'src/garbage_collector.c',
   'src/interpreter.c',
   'src/lexer.c',
+  'src/object.c',
   'src/parser.c',
   'src/static_analyzer.c',
   'src/symbol_table.c',
@@ -29,6 +31,14 @@ endif
 
 if get_option('debug_print')
   c_args += '-DDEBUG_PRINT'
+endif
+
+if get_option('debug_gc_stress')
+  c_args += '-DDEBUG_GC_STRESS'
+endif
+
+if get_option('debug_gc_print')
+  c_args += '-DDEBUG_GC_PRINT'
 endif
 
 executable('orso', [src, 'main.c'], install : false, include_directories : inc, c_args : c_args)

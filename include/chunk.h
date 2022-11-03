@@ -1,5 +1,5 @@
-#ifndef BYTE_CODE_H_
-#define BYTE_CODE_H_
+#ifndef CHUNK_H_
+#define CHUNK_H_
 
 #include "def.h"
 #include "object.h"

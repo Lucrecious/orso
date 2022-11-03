@@ -41,7 +41,37 @@ static i32 identifier_constant(OrsoSymbol* identifier, Chunk* chunk) {
     return index;
 }
 
-static void expression(OrsoExpressionNode* expression_node, Chunk* chunk) {
+static OrsoSlot zero_value(OrsoType type, OrsoGarbageCollector* gc, OrsoSymbolTable* symbol_table) {
+    OrsoSlot slot;
+#ifdef DEBUG_TRACE_EXECUTION
+    slot.type = type;
+#endif
+    switch (type) {
+        case ORSO_TYPE_NULL:
+        case ORSO_TYPE_BOOL:
+        case ORSO_TYPE_INT32:
+        case ORSO_TYPE_INT64:
+            slot.i = 0;
+            break;
+        case ORSO_TYPE_FLOAT32:
+        case ORSO_TYPE_FLOAT64:
+            slot.f = 0.0;
+            break;
+        case ORSO_TYPE_STRING:
+            slot.p = orso_new_string_from_cstrn(gc, "", 0);
+            break;
+        case ORSO_TYPE_SYMBOL:
+            slot.p = orso_new_symbol_from_cstrn(gc, "", 0, symbol_table);
+            break;
+        default:
+            slot.i = 0;
+            break;
+    }
+
+    return slot;
+}
+
+static void expression(OrsoVM* vm, OrsoExpressionNode* expression_node, Chunk* chunk) {
 #define EMIT_BINARY_OP(OP, TYPE) do { \
     const OrsoInstruction instruction = { .op_code = ORSO_OP_##OP##_##TYPE }; \
     emit_instruction(&instruction, chunk, operator.line); \
@@ -65,8 +95,8 @@ static void expression(OrsoExpressionNode* expression_node, Chunk* chunk) {
             Token operator = expression_node->binary.operator;
             OrsoExpressionNode* left = expression_node->binary.left;
             OrsoExpressionNode* right = expression_node->binary.right;
-            expression(left, chunk);
-            expression(right, chunk);
+            expression(vm, left, chunk);
+            expression(vm, right, chunk);
 
             if (orso_is_integer_type(left->value_type, true)) {
                 switch (operator.type) {
@@ -114,7 +144,7 @@ static void expression(OrsoExpressionNode* expression_node, Chunk* chunk) {
         }
 
         case EXPRESSION_UNARY: {
-            expression(expression_node->unary.operand, chunk);
+            expression(vm, expression_node->unary.operand, chunk);
 
             OrsoExpressionNode* unary = expression_node->unary.operand;
             Token operator = expression_node->unary.operator;
@@ -141,39 +171,76 @@ static void expression(OrsoExpressionNode* expression_node, Chunk* chunk) {
         }
 
         case EXPRESSION_GROUPING: {
-            expression(expression_node->grouping.expression, chunk);
+            expression(vm, expression_node->grouping.expression, chunk);
             break;
         }
         
         case EXPRESSION_PRIMARY: {
-            if (expression_node->primary.constant.i == 0) {
-                const OrsoInstruction instruction = {
-                    .op_code = ORSO_OP_PUSH_0,
+            switch (expression_node->value_type) {
+                case ORSO_TYPE_BOOL:
+                case ORSO_TYPE_INT32:
+                case ORSO_TYPE_INT64:
+                case ORSO_TYPE_FLOAT32:
+                case ORSO_TYPE_FLOAT64:
+                case ORSO_TYPE_NULL: {
+                    if (expression_node->primary.constant.i == 0) {
+                        const OrsoInstruction instruction = {
+                            .op_code = ORSO_OP_PUSH_0,
 #ifdef DEBUG_TRACE_EXECUTION
-                    .constant.type = expression_node->value_type,
+                            .constant.type = expression_node->value_type,
 #endif
-                };
-                emit_instruction(&instruction, chunk, expression_node->primary.token.line);
-            } else if (expression_node->primary.constant.i == 1) {
-                const OrsoInstruction instruction = {
-                    .op_code = ORSO_OP_PUSH_1,
+                        };
+                        emit_instruction(&instruction, chunk, expression_node->primary.token.line);
+                    } else if (expression_node->primary.constant.i == 1) {
+                        const OrsoInstruction instruction = {
+                            .op_code = ORSO_OP_PUSH_1,
 #ifdef DEBUG_TRACE_EXECUTION
-                    .constant.type = expression_node->value_type,
+                            .constant.type = expression_node->value_type,
+#endif
+                        };
+                        emit_instruction(&instruction, chunk, expression_node->primary.token.line);
+                    } else {
+                        OrsoSlot slot = expression_node->primary.constant;
+#ifdef DEBUG_TRACE_EXECUTION
+                        slot.type = expression_node->value_type;
+#endif
+                        emit_constant(chunk, slot, expression_node->primary.token.line);
+                    }
+                    break;
+                }
+                case ORSO_TYPE_STRING: {
+                    OrsoString* string = orso_new_string_from_cstrn(&vm->gc, expression_node->primary.token.start + 1, expression_node->primary.token.length - 2);
+                    OrsoSlot slot = {
+                        .p = string,
+#ifdef DEBUG_TRACE_EXECUTION
+                        slot.type = expression_node->value_type;
 #endif
                     };
-                emit_instruction(&instruction, chunk, expression_node->primary.token.line);
-            } else {
-                OrsoSlot slot = expression_node->primary.constant;
+
+                    emit_constant(chunk, slot, expression_node->primary.token.line);
+                    break;
+                }
+                case ORSO_TYPE_SYMBOL: {
+                    OrsoSymbol* symbol = orso_new_symbol_from_cstrn(&vm->gc, expression_node->primary.token.start + 1, expression_node->primary.token.length - 2, &vm->symbol_table);
+                    OrsoSlot slot = {
+                        .p = symbol,
 #ifdef DEBUG_TRACE_EXECUTION
-                slot.type = expression_node->value_type;
+                        slot.type = expression_node->value_type;
 #endif
-                emit_constant(chunk, slot, expression_node->primary.token.line);
+                    };
+
+                    emit_constant(chunk, slot, expression_node->primary.token.line);
+                    break;
+                }
+                default: break; // Unreachable
             }
             break;
         }
 
         case EXPRESSION_VARIABLE: {
-            i32 index = identifier_constant(expression_node->variable.name, chunk);
+            Token identifier_token = expression_node->variable.name;
+            OrsoSymbol* identifier = orso_new_symbol_from_cstrn(&vm->gc, identifier_token.start, identifier_token.length, &vm->symbol_table);
+            i32 index = identifier_constant(identifier, chunk);
 
             const OrsoInstruction instruction = { 
                 .op_code = ORSO_OP_GET_GLOBAL,
@@ -188,7 +255,10 @@ static void expression(OrsoExpressionNode* expression_node, Chunk* chunk) {
         }
 
         case EXPRESSION_ASSIGNMENT: {
-            i32 index = identifier_constant(expression_node->assignment.variable_name, chunk);
+            Token identifier_token = expression_node->assignment.variable_name;
+            OrsoSymbol* identifier = orso_new_symbol_from_cstrn(&vm->gc,
+                identifier_token.start, identifier_token.length, &vm->symbol_table);
+            i32 index = identifier_constant(identifier, chunk);
             
             const OrsoInstruction instruction = {
                 .op_code = ORSO_OP_SET_GLOBAL,
@@ -198,7 +268,7 @@ static void expression(OrsoExpressionNode* expression_node, Chunk* chunk) {
 #endif
             };
 
-            expression(expression_node->assignment.right_side, chunk);
+            expression(vm, expression_node->assignment.right_side, chunk);
 
             emit_instruction(&instruction, chunk, expression_node->start.line);
             break;
@@ -206,7 +276,7 @@ static void expression(OrsoExpressionNode* expression_node, Chunk* chunk) {
 
         case EXPRESSION_IMPLICIT_CAST: {
             OrsoExpressionNode* operand = expression_node->cast.operand;
-            expression(operand, chunk);
+            expression(vm, operand, chunk);
             emit_type_convert(operand->value_type, expression_node->value_type, chunk, operand->start.line);
             break;
         }
@@ -219,11 +289,11 @@ static void expression(OrsoExpressionNode* expression_node, Chunk* chunk) {
 #undef EMIT_BINARY_OP
 }
 
-static void statement(OrsoStatementNode* statement, Chunk* chunk) {
+static void statement(OrsoVM* vm, OrsoStatementNode* statement, Chunk* chunk) {
     switch (statement->type) {
         case ORSO_STATEMENT_EXPRESSION: {
             OrsoExpressionNode* expression_ = statement->expression;
-            expression(expression_, chunk);
+            expression(vm, expression_, chunk);
 
             const OrsoInstruction instruction = {
                 .op_code = ORSO_OP_POP,
@@ -232,13 +302,13 @@ static void statement(OrsoStatementNode* statement, Chunk* chunk) {
             break;
         }
         case ORSO_STATEMENT_PRINT_EXPR: {
-                OrsoExpressionNode* expression_ = statement->expression;
-                expression(expression_, chunk);
+                expression(vm, statement->expression, chunk);
 
-                Token start = expression_->start;
-                Token end = expression_->end;
+                Token start = statement->expression->start;
+                Token end = statement->expression->end;
 
-                OrsoString* expression_string = orso_new_string_from_cstrn(start.start, (end.start + end.length) - start.start);
+                OrsoString* expression_string = orso_new_string_from_cstrn(&vm->gc, start.start, (end.start + end.length) - start.start);
+
                 OrsoSlot slot = {
                     .p = expression_string,
 #ifdef DEBUG_TRACE_EXECUTION
@@ -250,7 +320,7 @@ static void statement(OrsoStatementNode* statement, Chunk* chunk) {
 
                 const OrsoInstruction instruction = {
                     .op_code = ORSO_OP_PRINT_EXPR,
-                    .print_expr.type = expression_->value_type,
+                    .print_expr.type = statement->expression->value_type,
                 };
                 emit_instruction(&instruction, chunk, start.line);
             break;
@@ -259,30 +329,38 @@ static void statement(OrsoStatementNode* statement, Chunk* chunk) {
     }
 }
 
-static void var_declaration(OrsoVarDeclarationNode* var_declaration, Chunk* chunk) {
-    expression(var_declaration->expression, chunk);
+static void var_declaration(OrsoVM* vm, OrsoVarDeclarationNode* var_declaration, Chunk* chunk) {
+    if (var_declaration->expression != NULL) {
+        expression(vm, var_declaration->expression, chunk);
+    } else {
+        OrsoSlot slot = zero_value(var_declaration->var_type, &vm->gc, &vm->symbol_table);
+        emit_constant(chunk, slot, var_declaration->start.line);
+    }
+
+    Token identifier_token = var_declaration->variable_name;
+    OrsoSymbol* identifier = orso_new_symbol_from_cstrn(&vm->gc, identifier_token.start, identifier_token.length, &vm->symbol_table);
 
     const OrsoInstruction instruction = {
         .op_code = ORSO_OP_DEFINE_GLOBAL,
-        .constant.index = identifier_constant(var_declaration->identifier, chunk),
+        .constant.index = identifier_constant(identifier, chunk),
     };
 
     emit_instruction(&instruction, chunk, var_declaration->start.line);
 }
 
-static void declaration(OrsoDeclarationNode* declaration, Chunk* chunk) {
+static void declaration(OrsoVM* vm, OrsoDeclarationNode* declaration, Chunk* chunk) {
     switch (declaration->type) {
-        case ORSO_DECLARATION_STATEMENT: statement(declaration->statement, chunk); break;
-        case ORSO_DECLARATION_VAR: var_declaration(declaration->var, chunk); break;
+        case ORSO_DECLARATION_STATEMENT: statement(vm, declaration->statement, chunk); break;
+        case ORSO_DECLARATION_VAR: var_declaration(vm, declaration->var, chunk); break;
         case ORSO_DECLARATION_NONE: break; // Unreachable
     }
 }
 
-bool orso_generate_code(OrsoAST* ast, Chunk* chunk) {
+bool orso_generate_code(OrsoVM* vm, OrsoAST* ast, Chunk* chunk) {
     const OrsoInstruction instruction = { .op_code = ORSO_OP_RETURN };
 
     for (i32 i = 0; i < sb_count(ast->declarations); i++) {
-        declaration(ast->declarations[i], chunk);
+        declaration(vm, ast->declarations[i], chunk);
     }
 
     emit_instruction(&instruction, chunk, -1);

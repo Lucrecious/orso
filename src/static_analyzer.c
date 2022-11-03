@@ -62,7 +62,7 @@ static OrsoType orso_resolve_unary(TokenType operator, OrsoType operand) {
 }
 
 static OrsoExpressionNode* implicit_cast(OrsoExpressionNode* parent, OrsoExpressionNode* operand, OrsoType value_type) {
-    OrsoExpressionNode* implicit_cast = ALLOCATE(OrsoExpressionNode);
+    OrsoExpressionNode* implicit_cast = ORSO_ALLOCATE(OrsoExpressionNode);
     implicit_cast->start = operand->start;
     implicit_cast->end = operand->end;
     implicit_cast->type = EXPRESSION_IMPLICIT_CAST;
@@ -162,8 +162,9 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoExpressionNode* e
         }
         case EXPRESSION_VARIABLE: {
             OrsoSlot slot;
-            if (!orso_symbol_table_get(&analyzer->defined_variables, expression->variable.name, &slot)) {
-                error(analyzer, expression->variable.token.line, "Variable does not exist.");
+            OrsoSymbol* variable_name = orso_unmanaged_symbol_from_cstrn(expression->variable.name.start, expression->variable.name.length, &analyzer->symbols);
+            if (!orso_symbol_table_get(&analyzer->defined_variables, variable_name, &slot)) {
+                error(analyzer, expression->variable.name.line, "Variable does not exist.");
             } else {
                 expression->value_type = slot.i;
             }
@@ -172,7 +173,8 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoExpressionNode* e
 
         case EXPRESSION_ASSIGNMENT: {
             OrsoSlot type_slot;
-            bool exist = orso_symbol_table_get(&analyzer->defined_variables, expression->assignment.variable_name, &type_slot);
+            OrsoSymbol* variable_name = orso_unmanaged_symbol_from_cstrn(expression->assignment.variable_name.start, expression->assignment.variable_name.length, &analyzer->symbols);
+            bool exist = orso_symbol_table_get(&analyzer->defined_variables, variable_name, &type_slot);
             if (!exist) {
                 error(analyzer, expression->start.line, "Variable does not exist.");
             }
@@ -192,36 +194,6 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoExpressionNode* e
     }
 }
 
-static OrsoSlot zero_value(OrsoType type, OrsoSymbolTable* symbol_table) {
-    OrsoSlot slot;
-#ifdef DEBUG_TRACE_EXECUTION
-    slot.type = type;
-#endif
-    switch (type) {
-        case ORSO_TYPE_NULL:
-        case ORSO_TYPE_BOOL:
-        case ORSO_TYPE_INT32:
-        case ORSO_TYPE_INT64:
-            slot.i = 0;
-            break;
-        case ORSO_TYPE_FLOAT32:
-        case ORSO_TYPE_FLOAT64:
-            slot.f = 0.0;
-            break;
-        case ORSO_TYPE_STRING:
-            slot.p = orso_new_string_from_cstrn("", 0);
-            break;
-        case ORSO_TYPE_SYMBOL:
-            slot.p = orso_new_symbol_from_cstrn("", 0, symbol_table);
-            break;
-        default:
-            slot.i = 0;
-            break;
-    }
-
-    return slot;
-}
-
 static void resolve_var_declaration(OrsoStaticAnalyzer* analyzer, OrsoVarDeclarationNode* var_declaration) {
     if (var_declaration->type_identifier.length != 0) {
         var_declaration->var_type = resolve_type_identifier(analyzer, var_declaration->type_identifier);
@@ -229,19 +201,6 @@ static void resolve_var_declaration(OrsoStaticAnalyzer* analyzer, OrsoVarDeclara
 
     if (var_declaration->expression != NULL) {
         orso_resolve_expression(analyzer, var_declaration->expression);
-    } else {
-        OrsoSlot slot = zero_value(var_declaration->var_type, analyzer->vm_symbol_table);
-        OrsoExpressionNode* zero = ALLOCATE(OrsoExpressionNode);
-        zero->type = EXPRESSION_PRIMARY;
-        zero->value_type = var_declaration->var_type;
-        zero->primary.constant = slot;
-        
-        Token token = { .length = 0, .line = var_declaration->start.line };
-        zero->start = token;
-        zero->end = token;
-        zero->primary.token = token;
-
-        var_declaration->expression = zero;
     }
 
     switch (var_declaration->var_type) {
@@ -254,7 +213,7 @@ static void resolve_var_declaration(OrsoStaticAnalyzer* analyzer, OrsoVarDeclara
             break;
         }
         default: {
-            if (var_declaration->var_type != var_declaration->expression->value_type) {
+            if (var_declaration->expression != NULL && var_declaration->var_type != var_declaration->expression->value_type) {
                 error(analyzer, var_declaration->start.line, "Must cast expression explicitly to match var type.");
             }
             break;
@@ -265,19 +224,21 @@ static void resolve_var_declaration(OrsoStaticAnalyzer* analyzer, OrsoVarDeclara
         return;
     }
 
-    bool is_new = orso_symbol_table_set(&analyzer->defined_variables, var_declaration->identifier, (OrsoSlot){
+    OrsoSymbol* identifier = orso_unmanaged_symbol_from_cstrn(var_declaration->variable_name.start, var_declaration->variable_name.length, &analyzer->symbols);
+    OrsoSlot slot_type;
+    if (orso_symbol_table_get(&analyzer->defined_variables, identifier, &slot_type)) {
+        const char message[100];
+        sprintf(message, "Duplicate variable definition of '%.*s'.", var_declaration->variable_name.length, var_declaration->variable_name.start);
+        error(analyzer, var_declaration->start.line, message);
+        return;
+    }
+
+    orso_symbol_table_set(&analyzer->defined_variables, identifier, (OrsoSlot){
         .i = var_declaration->var_type,
 #ifdef DEBUG_TRACE_EXECUTION
         .type = ORSO_TYPE_INT64,
 #endif
     });
-
-    if (!is_new) {
-        const char message[100];
-        sprintf(message, "Duplicate variable definition of '%s'.", var_declaration->identifier->text);
-        error(analyzer, var_declaration->start.line, message);
-        return;
-    }
 }
 
 static void resolve_declaration(OrsoStaticAnalyzer* analyzer, OrsoDeclarationNode* declaration_node) {
@@ -319,7 +280,7 @@ bool orso_resolve_ast_types(OrsoStaticAnalyzer* analyzer, OrsoAST* ast) {
 
 static add_builtin_types(OrsoStaticAnalyzer* analyzer) {
 #define ADD_TYPE(CTYPE, N, ORSO_TYPE) do { \
-    OrsoSymbol* symbol_##CTYPE = orso_new_symbol_from_cstrn(#CTYPE, N, &analyzer->symbol_to_type); \
+    OrsoSymbol* symbol_##CTYPE = orso_new_symbol_from_cstrn(analyzer->gc, #CTYPE, N, &analyzer->symbol_to_type); \
     OrsoSlot slot = { .i = ORSO_TYPE }; \
     orso_symbol_table_set(&analyzer->symbol_to_type, symbol_##CTYPE, slot); \
     } while (false)
@@ -331,28 +292,31 @@ static add_builtin_types(OrsoStaticAnalyzer* analyzer) {
     ADD_TYPE(f32, 3, ORSO_TYPE_FLOAT32);
     ADD_TYPE(f64, 3, ORSO_TYPE_FLOAT64);
     ADD_TYPE(string, 6, ORSO_TYPE_STRING);
-    ADD_TYPE(symbol, 6, ORSO_TYPE_STRING);
+    ADD_TYPE(symbol, 6, ORSO_TYPE_SYMBOL);
 
 #undef ADD_TYPE
 }
 
-void orso_static_analyzer_init(OrsoStaticAnalyzer* analyzer, OrsoSymbolTable* vm_symbol_table, OrsoErrorFunction error_fn) {
+void orso_static_analyzer_init(OrsoStaticAnalyzer* analyzer, OrsoGarbageCollector* gc, OrsoSymbolTable* vm_symbol_table, OrsoErrorFunction error_fn) {
+    analyzer->gc = gc;
+    analyzer->error_fn = error_fn;
+    analyzer->had_error = false;
+    analyzer->panic_mode = false;
+
+    orso_symbol_table_init(&analyzer->symbols);
+
     orso_symbol_table_init(&analyzer->symbol_to_type);
     add_builtin_types(analyzer);
 
     orso_symbol_table_init(&analyzer->defined_variables);
 
-    analyzer->vm_symbol_table = vm_symbol_table;
-    analyzer->error_fn = error_fn;
-    analyzer->had_error = false;
-    analyzer->panic_mode = false;
 }
 
 void orso_static_analyzer_free(OrsoStaticAnalyzer* analyzer) {
     orso_symbol_table_free(&analyzer->symbol_to_type);
     orso_symbol_table_free(&analyzer->defined_variables);
+    orso_symbol_table_free(&analyzer->symbols);
 
-    analyzer->vm_symbol_table = NULL;
     analyzer->error_fn = NULL;
     analyzer->had_error = false;
     analyzer->panic_mode = false;

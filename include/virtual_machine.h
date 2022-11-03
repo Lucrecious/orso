@@ -12,6 +12,7 @@ typedef struct OrsoVM {
 
     OrsoSymbolTable symbol_table;
     OrsoSymbolTable globals;
+    OrsoGarbageCollector gc;
     
     OrsoSlot* stack;
     OrsoSlot* stack_top;

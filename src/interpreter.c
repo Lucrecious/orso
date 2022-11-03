@@ -8,7 +8,7 @@
 
 void orso_interpreter_init(OrsoInterpreter* interpreter, OrsoErrorFunction error_fn) {
     orso_vm_init(&interpreter->vm);
-    orso_static_analyzer_init(&interpreter->static_analyzer, &interpreter->vm.symbol_table, error_fn);
+    orso_static_analyzer_init(&interpreter->static_analyzer, &interpreter->vm.gc, &interpreter->vm.symbol_table, error_fn);
     interpreter->error_fn = error_fn;
 }
 
@@ -17,13 +17,13 @@ void orso_interpreter_free(OrsoInterpreter* interpreter) {
     orso_static_analyzer_free(&interpreter->static_analyzer);
 }
 
-static bool compile(const char* source, Chunk* chunk, OrsoStaticAnalyzer* analyzer, OrsoErrorFunction error_fn) {
+static bool compile(const char* source, OrsoVM* vm, OrsoStaticAnalyzer* analyzer, OrsoErrorFunction error_fn) {
     OrsoAST ast;
     orso_ast_init(&ast);
 
     analyzer->panic_mode = false;
 
-    if (!orso_parse(&ast, source, analyzer->vm_symbol_table, error_fn)) {
+    if (!orso_parse(&ast, source, error_fn)) {
         orso_ast_free(&ast);
         return false;
     }
@@ -41,7 +41,7 @@ static bool compile(const char* source, Chunk* chunk, OrsoStaticAnalyzer* analyz
     bool succeeded = resolved;
 
     if (succeeded) {
-        succeeded = orso_generate_code(&ast, chunk);
+        succeeded = orso_generate_code(vm, &ast, vm->chunk);
     }
 
     orso_ast_free(&ast);
@@ -54,16 +54,16 @@ static void interpret_continuous(OrsoVM* vm, OrsoStaticAnalyzer* analyzer, const
     chunk_init(&chunk);
     chunk.max_stack_size = 256;
 
-    if (!compile(source, &chunk, analyzer, error_fn)) {
+    vm->chunk = &chunk;
+
+    if (!compile(source, vm, analyzer, error_fn)) {
         analyzer->had_error = false;
         return;
     }
 
-
-    vm->stack = ALLOCATE_N(OrsoSlot, chunk.max_stack_size);
+    vm->stack = ORSO_ALLOCATE_N(OrsoSlot, chunk.max_stack_size);
     vm->stack_top = vm->stack;
 
-    vm->chunk = &chunk;
     vm->ip = vm->chunk->code;
 
     orso_vm_interpret(vm, error_fn);

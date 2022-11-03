@@ -1,5 +1,5 @@
-#ifndef ABSTRACT_SYNTAX_TREE_H_
-#define ABSTRACT_SYNTAX_TREE_H_
+#ifndef PARSER_H_
+#define PARSER_H_
 
 #include "chunk.h"
 #include "lexer.h"
@@ -57,12 +57,11 @@ typedef struct OrsoPrimary {
 } OrsoPrimary;
 
 typedef struct OrsoVariable {
-    Token token;
-    OrsoSymbol* name;
+    Token name;
 } OrsoVariable;
 
 typedef struct OrsoAssignment {
-    OrsoSymbol* variable_name;
+    Token variable_name;
     OrsoExpressionNode* right_side;
 } OrsoAssignment;
 
@@ -88,7 +87,7 @@ typedef struct OrsoVarDeclarationNode {
 
     // Unresolved means inferred
     OrsoType var_type;
-    OrsoSymbol* identifier;
+    Token variable_name;
     Token type_identifier;
     OrsoExpressionNode* expression;
 
@@ -119,7 +118,7 @@ typedef struct OrsoAST {
 
 void orso_ast_print(OrsoAST* ast, const char* name);
 
-bool orso_parse(OrsoAST* ast, const char* source, OrsoSymbolTable* symbol_table, OrsoErrorFunction error_fn);
+bool orso_parse(OrsoAST* ast, const char* source, OrsoErrorFunction error_fn);
 
 void orso_ast_init(OrsoAST* ast);
 void orso_ast_free(OrsoAST* ast);

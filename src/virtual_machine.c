@@ -15,6 +15,7 @@
 void orso_vm_init(OrsoVM* vm) {
     orso_symbol_table_init(&vm->symbol_table);
     orso_symbol_table_init(&vm->globals);
+    orso_gc_init(&vm->gc, vm);
 
     vm->chunk = NULL;
     vm->stack = NULL;
@@ -92,7 +93,7 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
             case ORSO_OP_GREATER_F64: { f64 b = POP().f; TOP_SLOT->i = (TOP_SLOT->f > b); SLOT_ADD_TYPE(TOP_SLOT, ORSO_TYPE_BOOL); break; }
 
             case ORSO_OP_EQUAL_STRING: { ptr b = POP().p; TOP_SLOT->i = orso_string_equal(TOP_SLOT->p, b); SLOT_ADD_TYPE(TOP_SLOT, ORSO_TYPE_BOOL); break; }
-            case ORSO_OP_CONCAT_STRING: { ptr b = POP().p; TOP_SLOT->p = orso_string_concat(TOP_SLOT->p, b); break; }
+            case ORSO_OP_CONCAT_STRING: { ptr b = POP().p; TOP_SLOT->p = orso_string_concat(&vm->gc, TOP_SLOT->p, b); break; }
 
             case ORSO_OP_LOGICAL_NOT: TOP_SLOT->i = !TOP_SLOT->i; SLOT_ADD_TYPE(TOP_SLOT, ORSO_TYPE_BOOL); break;
 

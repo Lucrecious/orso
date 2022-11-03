@@ -37,7 +37,7 @@ static OrsoSymbolTableEntry* find_entry(OrsoSymbolTableEntry* entries, i32 capac
 }
 
 static void adjust_capacity(OrsoSymbolTable* table, i32 capacity) {
-    OrsoSymbolTableEntry* entries = ALLOCATE_N(OrsoSymbolTableEntry, capacity);
+    OrsoSymbolTableEntry* entries = ORSO_ALLOCATE_N(OrsoSymbolTableEntry, capacity);
     for (i32 i = 0; i < capacity; i++) {
         entries[i].key = NULL;
         entries[i].value.i = 0;
