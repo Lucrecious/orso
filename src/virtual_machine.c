@@ -13,7 +13,7 @@
 #endif
 
 void orso_vm_init(OrsoVM* vm) {
-    orso_symbol_table_init(&vm->symbol_table);
+    orso_symbol_table_init(&vm->symbols);
     orso_symbol_table_init(&vm->globals);
     orso_gc_init(&vm->gc, vm);
 
@@ -23,7 +23,7 @@ void orso_vm_init(OrsoVM* vm) {
 }
 
 void orso_vm_free(OrsoVM* vm) {
-    orso_symbol_table_free(&vm->symbol_table);
+    orso_symbol_table_free(&vm->symbols);
     orso_symbol_table_free(&vm->globals);
 }
 

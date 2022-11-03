@@ -10,7 +10,7 @@ typedef struct OrsoVM {
     Chunk* chunk;
     OrsoInstruction* ip;
 
-    OrsoSymbolTable symbol_table;
+    OrsoSymbolTable symbols;
     OrsoSymbolTable globals;
     OrsoGarbageCollector gc;
     

@@ -8,7 +8,7 @@
 
 void orso_interpreter_init(OrsoInterpreter* interpreter, OrsoErrorFunction error_fn) {
     orso_vm_init(&interpreter->vm);
-    orso_static_analyzer_init(&interpreter->static_analyzer, &interpreter->vm.gc, &interpreter->vm.symbol_table, error_fn);
+    orso_static_analyzer_init(&interpreter->static_analyzer, &interpreter->vm.gc, &interpreter->vm.symbols, error_fn);
     interpreter->error_fn = error_fn;
 }
 
