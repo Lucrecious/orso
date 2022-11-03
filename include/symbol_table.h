@@ -52,6 +52,10 @@ FORCE_INLINE OrsoSymbol* orso_unmanaged_symbol_from_cstrn(const char* start, i32
     return symbol;
 }
 
+FORCE_INLINE void orso_unmanaged_symbol_free(OrsoSymbol* symbol) {
+    free(symbol);
+}
+
 FORCE_INLINE OrsoSymbol* orso_new_symbol_from_cstrn(OrsoGarbageCollector* gc, const char* start, i32 length, OrsoSymbolTable* symbol_table) {
     u32 hash = orso_hash_cstrn(start, length);
     OrsoSymbol* symbol = orso_symbol_table_find_cstrn(symbol_table, start, length, hash);

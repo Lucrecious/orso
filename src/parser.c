@@ -78,7 +78,28 @@ static void orso_free_expression(OrsoExpressionNode* expression) {
     }
 }
 
+static void free_declaration(OrsoDeclarationNode* declaration_node) {
+    switch (declaration_node->type) {
+        case ORSO_DECLARATION_STATEMENT: {
+            orso_free_expression(declaration_node->statement->expression);
+            free(declaration_node->statement->expression);
+            free(declaration_node->statement);
+            break;
+        }
+        case ORSO_DECLARATION_VAR: {
+            orso_free_expression(declaration_node->var->expression);
+            free(declaration_node->var->expression);
+            free(declaration_node->var);
+            break;
+        }
+    }
+}
+
 void orso_ast_free(OrsoAST* ast) {
+    for (i32 i = 0; i < sb_count(ast->declarations); i++) {
+        free_declaration(ast->declarations[i]);
+        free(ast->declarations[i]);
+    }
     sb_free(ast->declarations);
 }
 
