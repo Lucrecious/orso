@@ -23,7 +23,7 @@ static bool compile(const char* source, OrsoVM* vm, OrsoStaticAnalyzer* analyzer
 
     analyzer->panic_mode = false;
 
-    if (!orso_parse(&ast, source, error_fn) || true) {
+    if (!orso_parse(&ast, source, error_fn)) {
         orso_ast_free(&ast);
         return false;
     }
@@ -41,7 +41,7 @@ static bool compile(const char* source, OrsoVM* vm, OrsoStaticAnalyzer* analyzer
     bool succeeded = false && resolved;
 
     if (succeeded) {
-        // succeeded = orso_generate_code(vm, &ast, vm->chunk);
+        //succeeded = orso_generate_code(vm, &ast, vm->chunk);
     }
 
     orso_ast_free(&ast);
