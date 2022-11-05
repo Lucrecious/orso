@@ -10,9 +10,9 @@ static void emit_instruction(const OrsoInstruction* instruction, Chunk* chunk, i
     chunk_write(chunk, instruction, line);
 }
 
-static void emit_constant(Chunk* chunk, OrsoSlot slot, i32 line) {
+static void emit_constant(Chunk* chunk, OrsoSlot slot, i32 line, bool is_ptr) {
     i32 index = chunk_add_constant(chunk, slot);
-    const OrsoInstruction instruction = { .op_code = ORSO_OP_CONSTANT, .constant.index = index };
+    const OrsoInstruction instruction = { .op_code = is_ptr ? ORSO_OP_CONSTANT_PTR : ORSO_OP_CONSTANT, .constant.index = index };
     chunk_write(chunk, &instruction, line);
 }
 
@@ -197,7 +197,7 @@ static void expression(OrsoVM* vm, OrsoExpressionNode* expression_node, Chunk* c
 #ifdef DEBUG_TRACE_EXECUTION
                         slot.type = expression_node->value_type;
 #endif
-                        emit_constant(chunk, slot, expression_node->primary.token.line);
+                        emit_constant(chunk, slot, expression_node->primary.token.line, orso_is_gc_type(expression_node->value_type));
                     }
                     break;
                 }
@@ -205,14 +205,14 @@ static void expression(OrsoVM* vm, OrsoExpressionNode* expression_node, Chunk* c
                     OrsoString* string = orso_new_string_from_cstrn(&vm->gc, expression_node->primary.token.start + 1, expression_node->primary.token.length - 2);
                     OrsoSlot slot = ORSO_SLOT_P(string, expression_node->value_type);
 
-                    emit_constant(chunk, slot, expression_node->primary.token.line);
+                    emit_constant(chunk, slot, expression_node->primary.token.line, true);
                     break;
                 }
                 case ORSO_TYPE_SYMBOL: {
                     OrsoSymbol* symbol = orso_new_symbol_from_cstrn(&vm->gc, expression_node->primary.token.start + 1, expression_node->primary.token.length - 2, &vm->symbols);
                     OrsoSlot slot = ORSO_SLOT_P(symbol, expression_node->value_type);
 
-                    emit_constant(chunk, slot, expression_node->primary.token.line);
+                    emit_constant(chunk, slot, expression_node->primary.token.line, true);
                     break;
                 }
                 default: break; // Unreachable
@@ -226,7 +226,7 @@ static void expression(OrsoVM* vm, OrsoExpressionNode* expression_node, Chunk* c
             i32 index = identifier_constant(identifier, chunk);
 
             const OrsoInstruction instruction = { 
-                .op_code = ORSO_OP_GET_GLOBAL,
+                .op_code = orso_is_gc_type(expression_node->value_type) ? ORSO_OP_GET_GLOBAL_PTR : ORSO_OP_GET_GLOBAL,
                 .constant.index = index,
 #ifdef DEBUG_TRACE_EXECUTION
                 .constant.type = expression_node->value_type,
@@ -279,7 +279,7 @@ static void statement(OrsoVM* vm, OrsoStatementNode* statement, Chunk* chunk) {
             expression(vm, expression_, chunk);
 
             const OrsoInstruction instruction = {
-                .op_code = ORSO_OP_POP,
+                .op_code = orso_is_gc_type(expression_->value_type) ? ORSO_OP_POP_PTR : ORSO_OP_POP,
             };
             emit_instruction(&instruction, chunk, statement->start.line);
             break;
@@ -294,7 +294,7 @@ static void statement(OrsoVM* vm, OrsoStatementNode* statement, Chunk* chunk) {
 
                 OrsoSlot slot = ORSO_SLOT_P(expression_string, ORSO_TYPE_STRING);
 
-                emit_constant(chunk, slot, start.line);
+                emit_constant(chunk, slot, start.line, true);
 
                 const OrsoInstruction instruction = {
                     .op_code = ORSO_OP_PRINT_EXPR,
@@ -312,14 +312,14 @@ static void var_declaration(OrsoVM* vm, OrsoVarDeclarationNode* var_declaration,
         expression(vm, var_declaration->expression, chunk);
     } else {
         OrsoSlot slot = zero_value(var_declaration->var_type, &vm->gc, &vm->symbols);
-        emit_constant(chunk, slot, var_declaration->start.line);
+        emit_constant(chunk, slot, var_declaration->start.line, orso_is_gc_type(var_declaration->var_type));
     }
 
     Token identifier_token = var_declaration->variable_name;
     OrsoSymbol* identifier = orso_new_symbol_from_cstrn(&vm->gc, identifier_token.start, identifier_token.length, &vm->symbols);
 
     const OrsoInstruction instruction = {
-        .op_code = ORSO_OP_DEFINE_GLOBAL,
+        .op_code = orso_is_gc_type(var_declaration->expression->value_type) ? ORSO_OP_DEFINE_GLOBAL_PTR : ORSO_OP_DEFINE_GLOBAL,
         .constant.index = identifier_constant(identifier, chunk),
     };
 

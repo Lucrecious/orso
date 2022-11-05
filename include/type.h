@@ -55,6 +55,16 @@ const FORCE_INLINE char* orso_type_to_cstr(OrsoType type) {
     }
 }
 
+bool FORCE_INLINE orso_is_gc_type(OrsoType type) {
+    switch (type) {
+        case ORSO_TYPE_STRING:
+        case ORSO_TYPE_SYMBOL: {
+            return true;
+        }
+        default: return false;
+    }
+}
+
 bool FORCE_INLINE orso_is_float_type(OrsoType type) {
     switch (type) {
         case ORSO_TYPE_FLOAT32:

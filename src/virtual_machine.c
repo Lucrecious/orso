@@ -19,7 +19,9 @@ void orso_vm_init(OrsoVM* vm) {
 
     vm->chunk = NULL;
     vm->stack = NULL;
+    vm->object_stack = NULL;
     vm->stack_top = NULL;
+    vm->object_stack_top = NULL;
 }
 
 void orso_vm_free(OrsoVM* vm) {
@@ -27,14 +29,27 @@ void orso_vm_free(OrsoVM* vm) {
     orso_symbol_table_free(&vm->globals);
 }
 
-static void FORCE_INLINE push_i64(OrsoVM* vm, OrsoSlot value) {
+static FORCE_INLINE void push_i64(OrsoVM* vm, OrsoSlot value) {
     *vm->stack_top = value;
     vm->stack_top++;
 }
 
-static OrsoSlot FORCE_INLINE pop(OrsoVM* vm) {
+static FORCE_INLINE void push_ptr(OrsoVM* vm, OrsoSlot value) {
+    push_i64(vm, value);
+    *vm->object_stack_top = &(*(vm->stack_top - 1));
+    vm->object_stack_top++;
+
+}
+
+static FORCE_INLINE OrsoSlot pop(OrsoVM* vm) {
     vm->stack_top--;
     return *vm->stack_top;
+}
+
+static FORCE_INLINE OrsoSlot pop_ptr(OrsoVM* vm) {
+    pop(vm);
+    vm->object_stack_top--;
+    return **vm->object_stack_top;
 }
 
 static FORCE_INLINE OrsoSlot* peek(OrsoVM* vm, i32 i) {
@@ -45,7 +60,9 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
 #define READ_INSTRUCTION() (vm->ip++)
 #define PEEK(I) peek(vm, I)
 #define POP() pop(vm)
+#define POP_PTR() pop_ptr(vm)
 #define PUSH(VALUE) push_i64(vm, VALUE)
+#define PUSH_PTR(VALUE) push_ptr(vm, VALUE)
 #ifdef DEBUG_TRACE_EXECUTION
 #define SLOT_ADD_TYPE(SLOT, TYPE) SLOT->type = TYPE
 #else
@@ -55,6 +72,14 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
     for (;;) {
         OrsoInstruction* instruction = READ_INSTRUCTION();
 #ifdef DEBUG_TRACE_EXECUTION
+        printf("PTR SLOTS = { ");
+        for (OrsoSlot** slot = vm->object_stack; slot < vm->object_stack_top; slot++) {
+            printf("[");
+            orso_print_slot(**slot, (*slot)->type);
+            printf("]");
+        }
+        printf(" }\n");
+
         printf("SLOTS = { ");
         for (OrsoSlot* slot = vm->stack; slot < vm->stack_top; slot++) {
             printf("[");
@@ -66,6 +91,7 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
 #endif
         switch (instruction->op_code) {
             case ORSO_OP_POP: POP(); break;
+            case ORSO_OP_POP_PTR: POP_PTR(); break;
             //case ORSO_OP_PUSH_I64: PUSH(instruction->constant.index); break;
 
             case ORSO_OP_I64_TO_F64: PEEK(0)->f = (f64)PEEK(0)->i; break;
@@ -92,8 +118,8 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
             case ORSO_OP_LESS_F64: { f64 b = POP().f; PEEK(0)->i = (PEEK(0)->f < b); SLOT_ADD_TYPE(PEEK(0), ORSO_TYPE_BOOL); break; }
             case ORSO_OP_GREATER_F64: { f64 b = POP().f; PEEK(0)->i = (PEEK(0)->f > b); SLOT_ADD_TYPE(PEEK(0), ORSO_TYPE_BOOL); break; }
 
-            case ORSO_OP_EQUAL_STRING: { PEEK(1)->i = orso_string_equal(PEEK(1)->p, PEEK(0)->p); POP(); SLOT_ADD_TYPE(PEEK(0), ORSO_TYPE_BOOL); break; }
-            case ORSO_OP_CONCAT_STRING: { PEEK(1)->p = orso_string_concat(&vm->gc, PEEK(1)->p, PEEK(0)->p); POP(); break; } 
+            case ORSO_OP_EQUAL_STRING: { PEEK(1)->i = orso_string_equal(PEEK(1)->p, PEEK(0)->p); POP_PTR(); SLOT_ADD_TYPE(PEEK(0), ORSO_TYPE_BOOL); break; }
+            case ORSO_OP_CONCAT_STRING: { PEEK(1)->p = orso_string_concat(&vm->gc, PEEK(1)->p, PEEK(0)->p); POP_PTR(); break; } 
 
             case ORSO_OP_LOGICAL_NOT: PEEK(0)->i = !PEEK(0)->i; SLOT_ADD_TYPE(PEEK(0), ORSO_TYPE_BOOL); break;
 
@@ -109,6 +135,7 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
             }
 
             case ORSO_OP_CONSTANT: PUSH(vm->chunk->constants[instruction->constant.index]); break;
+            case ORSO_OP_CONSTANT_PTR: PUSH_PTR(vm->chunk->constants[instruction->constant.index]); break;
 
             case ORSO_OP_DEFINE_GLOBAL: {
                 OrsoSymbol* name = (OrsoSymbol*)vm->chunk->constants[instruction->constant.index].p;
@@ -116,11 +143,27 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
                 POP();
                 break;
             }
+
+            case ORSO_OP_DEFINE_GLOBAL_PTR: {
+                OrsoSymbol* name = (OrsoSymbol*)vm->chunk->constants[instruction->constant.index].p;
+                orso_symbol_table_set(&vm->globals, name, *PEEK(0));
+                POP_PTR();
+                break;
+            }
+
             case ORSO_OP_GET_GLOBAL: {
                 OrsoSymbol* name = (OrsoSymbol*)vm->chunk->constants[instruction->constant.index].p;
                 OrsoSlot slot;
                 orso_symbol_table_get(&vm->globals, name, &slot);
                 PUSH(slot);
+                break;
+            }
+
+            case ORSO_OP_GET_GLOBAL_PTR: {
+                OrsoSymbol* name = (OrsoSymbol*)vm->chunk->constants[instruction->constant.index].p;
+                OrsoSlot slot;
+                orso_symbol_table_get(&vm->globals, name, &slot);
+                PUSH_PTR(slot);
                 break;
             }
 
@@ -131,11 +174,17 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
             }
 
             case ORSO_OP_PRINT_EXPR: {
-                OrsoString* expression_string = (OrsoString*)POP().p;
+                OrsoString* expression_string = (OrsoString*)POP_PTR().p;
                 printf("%s => ", expression_string->text);
 
-                OrsoSlot slot = POP();
-                orso_print_slot(slot, instruction->print_expr.type);
+                orso_print_slot(*PEEK(0), instruction->print_expr.type);
+
+                if (orso_is_gc_type(instruction->print_expr.type)) {
+                    POP_PTR();
+                } else {
+                    POP();
+                }
+
                 printf("\n");
                 break;
             }
@@ -144,7 +193,10 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
         }
     }
 
+#undef SLOT_ADD_TYPE
+#undef PUSH_PTR
 #undef PUSH
+#undef POP_PTR
 #undef POP
 #undef TOP_SLOT
 #undef READ_INSTRUCTION
