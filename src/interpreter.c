@@ -41,7 +41,7 @@ static bool compile(const char* source, OrsoVM* vm, OrsoStaticAnalyzer* analyzer
     bool succeeded = false && resolved;
 
     if (succeeded) {
-        //succeeded = orso_generate_code(vm, &ast, vm->chunk);
+        succeeded = orso_generate_code(vm, &ast, vm->chunk);
     }
 
     orso_ast_free(&ast);

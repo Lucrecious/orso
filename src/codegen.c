@@ -157,7 +157,7 @@ static void expression(OrsoVM* vm, OrsoExpressionNode* expression_node, Chunk* c
                 }
             } else if (orso_is_float_type(unary->value_type)) {
                 switch (operator.type) {
-                    case TOKEN_MINUS: EMIT_NEGATE(I64); break;
+                    case TOKEN_MINUS: EMIT_NEGATE(F64); break;
                     case TOKEN_NOT: EMIT_NOT(); break;
                     default: break; // unreachable
                 }

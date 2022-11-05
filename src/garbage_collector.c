@@ -55,10 +55,13 @@ void orso_gc_register(OrsoGarbageCollector* gc, OrsoGCHeader* object) {
     set_color(object, gc->white);
 }
 
+static void mark_roots(OrsoGarbageCollector* gc) {
+}
+
 void orso_gc_step(OrsoGarbageCollector* gc) {
     switch (gc->state) {
         case ORSO_GC_STATE_IDLE: {
-            //mark_from_roots(gc, gc->vm);
+            mark_roots(gc);
             gc->state = ORSO_GC_STATE_MARKING;
             break;
         }
