@@ -37,13 +37,13 @@ static OrsoSlot FORCE_INLINE pop(OrsoVM* vm) {
     return *vm->stack_top;
 }
 
-static FORCE_INLINE OrsoSlot* get_top_slot(OrsoVM* vm) {
-    return (vm->stack_top - 1);
+static FORCE_INLINE OrsoSlot* peek(OrsoVM* vm, i32 i) {
+    return (vm->stack_top - (i + 1));
 }
 
 static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
 #define READ_INSTRUCTION() (vm->ip++)
-#define TOP_SLOT get_top_slot(vm)
+#define PEEK(I) peek(vm, I)
 #define POP() pop(vm)
 #define PUSH(VALUE) push_i64(vm, VALUE)
 #ifdef DEBUG_TRACE_EXECUTION
@@ -68,34 +68,34 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
             case ORSO_OP_POP: POP(); break;
             //case ORSO_OP_PUSH_I64: PUSH(instruction->constant.index); break;
 
-            case ORSO_OP_I64_TO_F64: TOP_SLOT->f = (f64)TOP_SLOT->i; break;
-            case ORSO_OP_F64_TO_I64: TOP_SLOT->i = (i64)TOP_SLOT->f; break;
+            case ORSO_OP_I64_TO_F64: PEEK(0)->f = (f64)PEEK(0)->i; break;
+            case ORSO_OP_F64_TO_I64: PEEK(0)->i = (i64)PEEK(0)->f; break;
 
-            case ORSO_OP_ADD_I64: { i64 b = POP().i; TOP_SLOT->i = TOP_SLOT->i + b; break; }
-            case ORSO_OP_SUBTRACT_I64: { i64 b = POP().i; TOP_SLOT->i = TOP_SLOT->i - b; break; }
-            case ORSO_OP_MULTIPLY_I64: { i64 b = POP().i; TOP_SLOT->i = TOP_SLOT->i * b; break; }
-            case ORSO_OP_DIVIDE_I64: { i64 b = POP().i; TOP_SLOT->i = TOP_SLOT->i / b; break; }
+            case ORSO_OP_ADD_I64: { i64 b = POP().i; PEEK(0)->i = PEEK(0)->i + b; break; }
+            case ORSO_OP_SUBTRACT_I64: { i64 b = POP().i; PEEK(0)->i = PEEK(0)->i - b; break; }
+            case ORSO_OP_MULTIPLY_I64: { i64 b = POP().i; PEEK(0)->i = PEEK(0)->i * b; break; }
+            case ORSO_OP_DIVIDE_I64: { i64 b = POP().i; PEEK(0)->i = PEEK(0)->i / b; break; }
 
-            case ORSO_OP_ADD_F64: { f64 b = POP().f; TOP_SLOT->f = TOP_SLOT->f + b; break; }
-            case ORSO_OP_SUBTRACT_F64: { f64 b = POP().f; TOP_SLOT->f = TOP_SLOT->f - b; break; }
-            case ORSO_OP_MULTIPLY_F64: { f64 b = POP().f; TOP_SLOT->f = TOP_SLOT->f * b; break; }
-            case ORSO_OP_DIVIDE_F64: { f64 b = POP().f; TOP_SLOT->f = TOP_SLOT->f / b; break; }
+            case ORSO_OP_ADD_F64: { f64 b = POP().f; PEEK(0)->f = PEEK(0)->f + b; break; }
+            case ORSO_OP_SUBTRACT_F64: { f64 b = POP().f; PEEK(0)->f = PEEK(0)->f - b; break; }
+            case ORSO_OP_MULTIPLY_F64: { f64 b = POP().f; PEEK(0)->f = PEEK(0)->f * b; break; }
+            case ORSO_OP_DIVIDE_F64: { f64 b = POP().f; PEEK(0)->f = PEEK(0)->f / b; break; }
 
-            case ORSO_OP_NEGATE_I64: TOP_SLOT->i = -TOP_SLOT->i; break;
-            case ORSO_OP_NEGATE_F64: TOP_SLOT->f = -TOP_SLOT->f; break;
+            case ORSO_OP_NEGATE_I64: PEEK(0)->i = -PEEK(0)->i; break;
+            case ORSO_OP_NEGATE_F64: PEEK(0)->f = -PEEK(0)->f; break;
 
-            case ORSO_OP_EQUAL_I64: { i64 b = POP().i; TOP_SLOT->i = (TOP_SLOT->i == b); SLOT_ADD_TYPE(TOP_SLOT, ORSO_TYPE_BOOL); break; }
-            case ORSO_OP_LESS_I64: { i64 b = POP().i; TOP_SLOT->i = (TOP_SLOT->i < b); SLOT_ADD_TYPE(TOP_SLOT, ORSO_TYPE_BOOL); break; }
-            case ORSO_OP_GREATER_I64: { i64 b = POP().i; TOP_SLOT->i = (TOP_SLOT->i > b); SLOT_ADD_TYPE(TOP_SLOT, ORSO_TYPE_BOOL); break; }
+            case ORSO_OP_EQUAL_I64: { i64 b = POP().i; PEEK(0)->i = (PEEK(0)->i == b); SLOT_ADD_TYPE(PEEK(0), ORSO_TYPE_BOOL); break; }
+            case ORSO_OP_LESS_I64: { i64 b = POP().i; PEEK(0)->i = (PEEK(0)->i < b); SLOT_ADD_TYPE(PEEK(0), ORSO_TYPE_BOOL); break; }
+            case ORSO_OP_GREATER_I64: { i64 b = POP().i; PEEK(0)->i = (PEEK(0)->i > b); SLOT_ADD_TYPE(PEEK(0), ORSO_TYPE_BOOL); break; }
 
-            case ORSO_OP_EQUAL_F64: { f64 b = POP().f; TOP_SLOT->i = (TOP_SLOT->f == b); SLOT_ADD_TYPE(TOP_SLOT, ORSO_TYPE_BOOL); break; }
-            case ORSO_OP_LESS_F64: { f64 b = POP().f; TOP_SLOT->i = (TOP_SLOT->f < b); SLOT_ADD_TYPE(TOP_SLOT, ORSO_TYPE_BOOL); break; }
-            case ORSO_OP_GREATER_F64: { f64 b = POP().f; TOP_SLOT->i = (TOP_SLOT->f > b); SLOT_ADD_TYPE(TOP_SLOT, ORSO_TYPE_BOOL); break; }
+            case ORSO_OP_EQUAL_F64: { f64 b = POP().f; PEEK(0)->i = (PEEK(0)->f == b); SLOT_ADD_TYPE(PEEK(0), ORSO_TYPE_BOOL); break; }
+            case ORSO_OP_LESS_F64: { f64 b = POP().f; PEEK(0)->i = (PEEK(0)->f < b); SLOT_ADD_TYPE(PEEK(0), ORSO_TYPE_BOOL); break; }
+            case ORSO_OP_GREATER_F64: { f64 b = POP().f; PEEK(0)->i = (PEEK(0)->f > b); SLOT_ADD_TYPE(PEEK(0), ORSO_TYPE_BOOL); break; }
 
-            case ORSO_OP_EQUAL_STRING: { ptr b = POP().p; TOP_SLOT->i = orso_string_equal(TOP_SLOT->p, b); SLOT_ADD_TYPE(TOP_SLOT, ORSO_TYPE_BOOL); break; }
-            case ORSO_OP_CONCAT_STRING: { ptr b = POP().p; TOP_SLOT->p = orso_string_concat(&vm->gc, TOP_SLOT->p, b); break; }
+            case ORSO_OP_EQUAL_STRING: { PEEK(1)->i = orso_string_equal(PEEK(1)->p, PEEK(0)->p); POP(); SLOT_ADD_TYPE(PEEK(0), ORSO_TYPE_BOOL); break; }
+            case ORSO_OP_CONCAT_STRING: { PEEK(1)->p = orso_string_concat(&vm->gc, PEEK(1)->p, PEEK(0)->p); POP(); break; } 
 
-            case ORSO_OP_LOGICAL_NOT: TOP_SLOT->i = !TOP_SLOT->i; SLOT_ADD_TYPE(TOP_SLOT, ORSO_TYPE_BOOL); break;
+            case ORSO_OP_LOGICAL_NOT: PEEK(0)->i = !PEEK(0)->i; SLOT_ADD_TYPE(PEEK(0), ORSO_TYPE_BOOL); break;
 
             case ORSO_OP_PUSH_0: {
                 const OrsoSlot zero = {
@@ -122,7 +122,7 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
 
             case ORSO_OP_DEFINE_GLOBAL: {
                 OrsoSymbol* name = (OrsoSymbol*)vm->chunk->constants[instruction->constant.index].p;
-                orso_symbol_table_set(&vm->globals, name, *TOP_SLOT);
+                orso_symbol_table_set(&vm->globals, name, *PEEK(0));
                 POP();
                 break;
             }
@@ -136,7 +136,7 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
 
             case ORSO_OP_SET_GLOBAL: {
                 OrsoSymbol* name = (OrsoSymbol*)vm->chunk->constants[instruction->constant.index].p;
-                orso_symbol_table_set(&vm->globals, name, *TOP_SLOT);
+                orso_symbol_table_set(&vm->globals, name, *PEEK(0));
                 break;
             }
 
