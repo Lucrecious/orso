@@ -209,19 +209,13 @@ static OrsoExpressionNode* number(Parser* parser) {
         case TOKEN_INTEGER: {
             i64 value = cstrn_to_i64(parser->previous.start, parser->previous.length);
             expression_node->value_type = ORSO_TYPE_INT64;
-            expression_node->primary.constant.i = value;
-#ifdef DEBUG_TRACE_EXECUTION
-            expression_node->primary.constant.type = ORSO_TYPE_INT64;
-#endif
+            expression_node->primary.constant = ORSO_SLOT_I(value, ORSO_TYPE_INT64);
             break;
         }
         case TOKEN_FLOAT: {
             f64 value = cstrn_to_f64(parser->previous.start, parser->previous.length);
             expression_node->value_type = ORSO_TYPE_FLOAT64;
-            expression_node->primary.constant.f = value;
-#ifdef DEBUG_TRACE_EXECUTION
-            expression_node->primary.constant.type = ORSO_TYPE_FLOAT64;
-#endif
+            expression_node->primary.constant = ORSO_SLOT_F(value, ORSO_TYPE_FLOAT64);
             break;
         }
         default: break; // unreachable
@@ -240,37 +234,27 @@ static OrsoExpressionNode* literal(Parser* parser) {
         case TOKEN_FALSE:
         case TOKEN_TRUE: {
             expression_node->value_type = ORSO_TYPE_BOOL;
-            expression_node->primary.constant.i = (i64)(parser->previous.type == TOKEN_TRUE);
-#ifdef DEBUG_TRACE_EXECUTION
-            expression_node->primary.constant.type = ORSO_TYPE_BOOL;
-#endif
+
+            i64 is_true = (i64)(parser->previous.type == TOKEN_TRUE);
+            expression_node->primary.constant = ORSO_SLOT_I(is_true, ORSO_TYPE_BOOL);
             break;
         }
         case TOKEN_NULL: {
             expression_node->value_type = ORSO_TYPE_NULL;
-            expression_node->primary.constant.i = 0;
-#ifdef DEBUG_TRACE_EXECUTION
-            expression_node->primary.constant.type = ORSO_TYPE_NULL;
-#endif
+            expression_node->primary.constant = ORSO_SLOT_I(0, ORSO_TYPE_NULL);
             break;
         }
         case TOKEN_STRING: {
             expression_node->value_type = ORSO_TYPE_STRING;
             Token string = expression_node->primary.token;
-            expression_node->primary.constant.p = 0;
-#ifdef DEBUG_TRACE_EXECUTION
-            expression_node->primary.constant.type = ORSO_TYPE_STRING;
-#endif
+            expression_node->primary.constant = ORSO_SLOT_P(0, ORSO_TYPE_STRING);
             break;
         };
 
         case TOKEN_SYMBOL: {
             expression_node->value_type = ORSO_TYPE_SYMBOL;
             Token symbol = expression_node->primary.token;
-            expression_node->primary.constant.p = 0;
-#ifdef DEBUG_TRACE_EXECUTION
-            expression_node->primary.constant.type = ORSO_TYPE_SYMBOL;
-#endif
+            expression_node->primary.constant = ORSO_SLOT_P(0, ORSO_TYPE_SYMBOL);
             break;
         }
     }

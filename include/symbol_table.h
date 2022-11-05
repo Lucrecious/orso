@@ -43,10 +43,7 @@ FORCE_INLINE OrsoSymbol* orso_unmanaged_symbol_from_cstrn(const char* start, i32
     symbol->text[length] = '\0';
     symbol->object.gc_header.next = symbol->object.gc_header.previous = NULL;
 
-    OrsoSlot slot = { .i = 0 };
-#ifdef DEBUG_TRACE_EXECUTION
-    slot.type = ORSO_TYPE_NULL;
-#endif
+    OrsoSlot slot = ORSO_SLOT_I(0, ORSO_TYPE_NULL);
     orso_symbol_table_set(symbol_table, symbol, slot);
 
     return symbol;
@@ -69,10 +66,7 @@ FORCE_INLINE OrsoSymbol* orso_new_symbol_from_cstrn(OrsoGarbageCollector* gc, co
     memcpy(symbol->text, start, length);
     symbol->text[length] = '\0';
 
-    OrsoSlot slot = { .i = 0 };
-#ifdef DEBUG_TRACE_EXECUTION
-    slot.type = ORSO_TYPE_NULL;
-#endif
+    OrsoSlot slot = ORSO_SLOT_I(0, ORSO_TYPE_NULL);
     orso_symbol_table_set(symbol_table, symbol, slot);
 
     return symbol;

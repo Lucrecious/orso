@@ -30,12 +30,7 @@ static void emit_type_convert(OrsoType from_type, OrsoType to_type, Chunk* chunk
 }
 
 static i32 identifier_constant(OrsoSymbol* identifier, Chunk* chunk) {
-    OrsoSlot slot = {
-        .p = identifier,
-#ifdef DEBUG_TRACE_EXECUTION
-        .type = ORSO_TYPE_SYMBOL,
-#endif
-    };
+    OrsoSlot slot = ORSO_SLOT_P(identifier, ORSO_TYPE_SYMBOL);
     i32 index = chunk_add_constant(chunk, slot);
 
     return index;
@@ -43,28 +38,26 @@ static i32 identifier_constant(OrsoSymbol* identifier, Chunk* chunk) {
 
 static OrsoSlot zero_value(OrsoType type, OrsoGarbageCollector* gc, OrsoSymbolTable* symbol_table) {
     OrsoSlot slot;
-#ifdef DEBUG_TRACE_EXECUTION
-    slot.type = type;
-#endif
     switch (type) {
         case ORSO_TYPE_NULL:
         case ORSO_TYPE_BOOL:
         case ORSO_TYPE_INT32:
         case ORSO_TYPE_INT64:
-            slot.i = 0;
+            slot = ORSO_SLOT_I(0, type);
             break;
         case ORSO_TYPE_FLOAT32:
         case ORSO_TYPE_FLOAT64:
-            slot.f = 0.0;
+            slot = ORSO_SLOT_F(0.0, type);
             break;
         case ORSO_TYPE_STRING:
-            slot.p = orso_new_string_from_cstrn(gc, "", 0);
+            slot = ORSO_SLOT_P(orso_new_string_from_cstrn(gc, "", 0), type);
             break;
         case ORSO_TYPE_SYMBOL:
-            slot.p = orso_new_symbol_from_cstrn(gc, "", 0, symbol_table);
+            slot = ORSO_SLOT_P(orso_new_symbol_from_cstrn(gc, "", 0, symbol_table), type);
             break;
         default:
-            slot.i = 0;
+            // Unreachable
+            slot = ORSO_SLOT_I(0, ORSO_TYPE_INVALID);
             break;
     }
 
@@ -210,24 +203,14 @@ static void expression(OrsoVM* vm, OrsoExpressionNode* expression_node, Chunk* c
                 }
                 case ORSO_TYPE_STRING: {
                     OrsoString* string = orso_new_string_from_cstrn(&vm->gc, expression_node->primary.token.start + 1, expression_node->primary.token.length - 2);
-                    OrsoSlot slot = {
-                        .p = string,
-#ifdef DEBUG_TRACE_EXECUTION
-                        slot.type = expression_node->value_type;
-#endif
-                    };
+                    OrsoSlot slot = ORSO_SLOT_P(string, expression_node->value_type);
 
                     emit_constant(chunk, slot, expression_node->primary.token.line);
                     break;
                 }
                 case ORSO_TYPE_SYMBOL: {
                     OrsoSymbol* symbol = orso_new_symbol_from_cstrn(&vm->gc, expression_node->primary.token.start + 1, expression_node->primary.token.length - 2, &vm->symbols);
-                    OrsoSlot slot = {
-                        .p = symbol,
-#ifdef DEBUG_TRACE_EXECUTION
-                        slot.type = expression_node->value_type;
-#endif
-                    };
+                    OrsoSlot slot = ORSO_SLOT_P(symbol, expression_node->value_type);
 
                     emit_constant(chunk, slot, expression_node->primary.token.line);
                     break;
@@ -309,12 +292,7 @@ static void statement(OrsoVM* vm, OrsoStatementNode* statement, Chunk* chunk) {
 
                 OrsoString* expression_string = orso_new_string_from_cstrn(&vm->gc, start.start, (end.start + end.length) - start.start);
 
-                OrsoSlot slot = {
-                    .p = expression_string,
-#ifdef DEBUG_TRACE_EXECUTION
-                    .type = ORSO_TYPE_STRING,
-#endif
-                    };
+                OrsoSlot slot = ORSO_SLOT_P(expression_string, ORSO_TYPE_STRING);
 
                 emit_constant(chunk, slot, start.line);
 

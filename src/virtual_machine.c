@@ -98,22 +98,12 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
             case ORSO_OP_LOGICAL_NOT: PEEK(0)->i = !PEEK(0)->i; SLOT_ADD_TYPE(PEEK(0), ORSO_TYPE_BOOL); break;
 
             case ORSO_OP_PUSH_0: {
-                const OrsoSlot zero = {
-                    .i = 0,
-#ifdef DEBUG_TRACE_EXECUTION
-                    .type = instruction->constant.type,
-#endif
-                };
+                const OrsoSlot zero = ORSO_SLOT_I(0, instruction->constant.type);
                 PUSH(zero);
                 break;
             }
             case ORSO_OP_PUSH_1: {
-                const OrsoSlot one = {
-                    .i = 1,
-#ifdef DEBUG_TRACE_EXECUTION
-                    .type = instruction->constant.type,
-#endif
-                };
+                const OrsoSlot one = ORSO_SLOT_I(1, instruction->constant.type);
                 PUSH(one);
                 break;
             }

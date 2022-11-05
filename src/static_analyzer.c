@@ -233,12 +233,8 @@ static void resolve_var_declaration(OrsoStaticAnalyzer* analyzer, OrsoVarDeclara
         return;
     }
 
-    orso_symbol_table_set(&analyzer->defined_variables, identifier, (OrsoSlot){
-        .i = var_declaration->var_type,
-#ifdef DEBUG_TRACE_EXECUTION
-        .type = ORSO_TYPE_INT64,
-#endif
-    });
+    orso_symbol_table_set(&analyzer->defined_variables, identifier,
+            ORSO_SLOT_I(var_declaration->var_type, ORSO_TYPE_INT64));
 }
 
 static void resolve_declaration(OrsoStaticAnalyzer* analyzer, OrsoDeclarationNode* declaration_node) {

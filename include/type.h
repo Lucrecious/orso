@@ -29,6 +29,16 @@ typedef struct OrsoSlot {
     };
 } OrsoSlot;
 
+#ifndef DEBUG_TRACE_EXECUTION
+#define ORSO_SLOT_I(VALUE, TYPE) (OrsoSlot){ .i = VALUE }
+#define ORSO_SLOT_F(VALUE, TYPE) (OrsoSlot){ .f = VALUE }
+#define ORSO_SLOT_P(VALUE, TYPE) (OrsoSlot){ .p = VALUE }
+#else
+#define ORSO_SLOT_I(VALUE, TYPE) (OrsoSlot){ .i = VALUE, .type = TYPE }
+#define ORSO_SLOT_F(VALUE, TYPE) (OrsoSlot){ .f = VALUE, .type = TYPE }
+#define ORSO_SLOT_P(VALUE, TYPE) (OrsoSlot){ .p = VALUE, .type = TYPE }
+#endif
+
 const FORCE_INLINE char* orso_type_to_cstr(OrsoType type) {
     switch (type) {
         case ORSO_TYPE_NULL: return "null";
