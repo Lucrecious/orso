@@ -128,8 +128,8 @@ static void expression(OrsoVM* vm, OrsoExpressionNode* expression_node, Chunk* c
                 }
             } else if (left->value_type == ORSO_TYPE_SYMBOL) {
                 switch (operator.type) {
-                    case TOKEN_EQUAL_EQUAL: EMIT_BINARY_OP_I64(EQUAL); break;
-                    case TOKEN_BANG_EQUAL: EMIT_BINARY_OP_I64(EQUAL); EMIT_NOT(); break;
+                    case TOKEN_EQUAL_EQUAL: EMIT_BINARY_OP(EQUAL, SYMBOL); break;
+                    case TOKEN_BANG_EQUAL: EMIT_BINARY_OP(EQUAL, SYMBOL); EMIT_NOT(); break;
                     default: break; // Unreachable
                 }
             }
@@ -319,7 +319,7 @@ static void var_declaration(OrsoVM* vm, OrsoVarDeclarationNode* var_declaration,
     OrsoSymbol* identifier = orso_new_symbol_from_cstrn(&vm->gc, identifier_token.start, identifier_token.length, &vm->symbols);
 
     const OrsoInstruction instruction = {
-        .op_code = orso_is_gc_type(var_declaration->expression->value_type) ? ORSO_OP_DEFINE_GLOBAL_PTR : ORSO_OP_DEFINE_GLOBAL,
+        .op_code = orso_is_gc_type(var_declaration->var_type) ? ORSO_OP_DEFINE_GLOBAL_PTR : ORSO_OP_DEFINE_GLOBAL,
         .constant.index = identifier_constant(identifier, chunk),
     };
 
