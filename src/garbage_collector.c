@@ -1,6 +1,12 @@
 #include "garbage_collector.h"
 #include "virtual_machine.h"
 
+#ifdef DEBUG_GC_PRINT
+#include <stdio.h>
+#endif
+
+#define GREY 2
+
 void list_clear(OrsoGCHeader* list) {
     list->next = list;
     list->previous = list;
@@ -55,12 +61,43 @@ void orso_gc_register(OrsoGarbageCollector* gc, OrsoGCHeader* object) {
     set_color(object, gc->white);
 }
 
+static void unlink(OrsoGCHeader* object) {
+    OrsoGCHeader* previous_object = previous(object);
+    OrsoGCHeader* next_object = next(object);
+
+    set_previous(next_object, previous_object);
+    set_next(previous_object, next_object);
+}
+
+static void grey(OrsoGarbageCollector* gc, OrsoGCHeader* object) {
+    if (object == gc->iterator) {
+        gc->iterator = previous(object);
+    }
+
+    unlink(object);
+    list_push(gc->to, object);
+    set_color(object, GREY);
+}
+
+static void visit(OrsoGarbageCollector* gc, OrsoGCHeader* object) {
+    if (color(object) == gc->white) {
+        grey(gc, object);
+    }
+}
+
 static void mark_roots(OrsoGarbageCollector* gc) {
+    OrsoVM* vm = gc->vm;
+    for (OrsoSlot** slot = vm->object_stack; slot < vm->object_stack_top; slot++) {
+        visit(gc, (OrsoGCHeader*)(*slot)->p);
+    }
 }
 
 void orso_gc_step(OrsoGarbageCollector* gc) {
     switch (gc->state) {
         case ORSO_GC_STATE_IDLE: {
+#ifdef DEBUG_GC_PRINT
+            printf("-- gc begin\n");
+#endif
             mark_roots(gc);
             gc->state = ORSO_GC_STATE_MARKING;
             break;
@@ -74,7 +111,7 @@ void orso_gc_step(OrsoGarbageCollector* gc) {
 
                 //mark_reachable(gc, object);
             } else {
-                //mark_from_roots(gc, gc->vm);
+                mark_roots(gc);
 
                 object = next(gc->iterator);
                 if (object == gc->to) {
@@ -103,10 +140,14 @@ void orso_gc_step(OrsoGarbageCollector* gc) {
             OrsoGCHeader* object = gc->iterator;
             if (object != gc->to) {
                 gc->iterator = next(object);
-                ORSO_OBJECT_FREE(gc, object);
+                orso_object_free(gc, (OrsoObject*)object);
             } else {
                 list_clear(gc->to);
                 gc->state = ORSO_GC_STATE_IDLE;
+
+#ifdef DEBUG_GC_PRINT
+                printf("-- gc end\n");
+#endif
             }
             break;
         }
@@ -114,6 +155,7 @@ void orso_gc_step(OrsoGarbageCollector* gc) {
 }
 
 void orso_gc_collect(OrsoGarbageCollector* gc) {
+
     if (gc->state == ORSO_GC_STATE_IDLE) {
         orso_gc_step(gc);
     }
@@ -122,3 +164,5 @@ void orso_gc_collect(OrsoGarbageCollector* gc) {
         orso_gc_step(gc);
     }
 }
+
+#undef GREY

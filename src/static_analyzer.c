@@ -276,7 +276,7 @@ bool orso_resolve_ast_types(OrsoStaticAnalyzer* analyzer, OrsoAST* ast) {
 
 static add_builtin_types(OrsoStaticAnalyzer* analyzer) {
 #define ADD_TYPE(CTYPE, N, ORSO_TYPE) do { \
-    OrsoSymbol* symbol_##CTYPE = orso_new_symbol_from_cstrn(analyzer->gc, #CTYPE, N, &analyzer->symbols); \
+    OrsoSymbol* symbol_##CTYPE = orso_unmanaged_symbol_from_cstrn(#CTYPE, N, &analyzer->symbols); \
     OrsoSlot slot = { .i = ORSO_TYPE }; \
     orso_symbol_table_set(&analyzer->symbol_to_type, symbol_##CTYPE, slot); \
     } while (false)

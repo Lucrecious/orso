@@ -2,9 +2,11 @@
 #define OBJECT_H_
 
 #include "def.h"
+#include "type.h"
 #include "garbage_collector.h"
 
 typedef struct OrsoObject {
+    OrsoType type;
     OrsoGCHeader gc_header;
 } OrsoObject;
 
@@ -21,12 +23,12 @@ typedef struct OrsoSymbol {
     char text[];
 } OrsoSymbol;
 
-void* orso_object_reallocate(OrsoGarbageCollector* gc, OrsoGCHeader* pointer, size_t old_size, size_t new_size);
+void* orso_object_reallocate(OrsoGarbageCollector* gc, OrsoGCHeader* pointer, OrsoType type, size_t old_size, size_t new_size);
+void orso_object_free(OrsoGarbageCollector* gc, OrsoObject* pointer);
 
-#define ORSO_OBJECT_ALLOCATE_N(GC, TYPE, N) (TYPE*)orso_object_reallocate(GC, NULL, 0, sizeof(TYPE) * N)
-#define ORSO_OBJECT_ALLOCATE(GC, TYPE) ORSO_OBJECT_ALLOCATE_N(GC, TYPE, 1)
-#define ORSO_OBJECT_ALLOCATE_FLEX(GC, TYPE, N) (TYPE*)orso_object_reallocate(GC, NULL, 0, sizeof(TYPE) + N)
-#define ORSO_OBJECT_FREE(GC, POINTER) orso_object_reallocate(GC, POINTER, sizeof(POINTER), 0)
+#define ORSO_OBJECT_ALLOCATE_N(GC, TYPE, ORSO_TYPE, N) (TYPE*)orso_object_reallocate(GC, NULL, ORSO_TYPE, 0, sizeof(TYPE) * N)
+#define ORSO_OBJECT_ALLOCATE(GC, TYPE, ORSO_TYPE) ORSO_OBJECT_ALLOCATE_N(GC, TYPE, ORSO_TYPE, 1)
+#define ORSO_OBJECT_ALLOCATE_FLEX(GC, TYPE, ORSO_TYPE, N) (TYPE*)orso_object_reallocate(GC, NULL, ORSO_TYPE, 0, sizeof(TYPE) + N)
 
 FORCE_INLINE u32 orso_hash_cstrn(const char* start, i32 length);
 FORCE_INLINE bool orso_string_equal(OrsoString* a, OrsoString* b);

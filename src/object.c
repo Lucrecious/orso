@@ -1,6 +1,10 @@
 #include "object.h"
 
-void* orso_object_reallocate(OrsoGarbageCollector* gc, OrsoGCHeader* pointer, size_t old_size, size_t new_size) {
+#ifdef DEBUG_GC_PRINT
+#include <stdio.h>
+#endif
+
+void* orso_object_reallocate(OrsoGarbageCollector* gc, OrsoGCHeader* pointer, OrsoType type, size_t old_size, size_t new_size) {
     if (new_size == 0) {
         // Should only be here when called by GC
         free(pointer);
@@ -11,18 +15,40 @@ void* orso_object_reallocate(OrsoGarbageCollector* gc, OrsoGCHeader* pointer, si
     orso_gc_collect(gc);
 #endif
 
-    OrsoGCHeader* result = realloc(pointer, new_size);
+    OrsoObject* result = realloc(pointer, new_size);
     if (result == NULL) {
         exit(1);
     }
+
+    result->type = type;
+#ifdef DEBUG_GC_PRINT
+    printf("%p allocate %zu for %s\n", (void*)result, new_size, orso_type_to_cstr(result->type));
+#endif
 
     orso_gc_register(gc, result);
 
     return result;
 }
 
+void orso_object_free(OrsoGarbageCollector* gc, OrsoObject* object) {
+#ifdef DEBUG_GC_PRINT
+    printf("%p free type %s\n", (void*)object, orso_type_to_cstr(((OrsoObject*)object)->type));
+#endif
+    switch (object->type) {
+        case ORSO_TYPE_SYMBOL: {
+            OrsoSymbol* symbol = (OrsoSymbol*)object;
+            orso_object_reallocate(gc, symbol, ORSO_TYPE_SYMBOL, sizeof(OrsoSymbol) + symbol->length, 0);
+            break;
+        }
+        case ORSO_TYPE_STRING: {
+            OrsoString* string = (OrsoString*)object;
+            orso_object_reallocate(gc, string, ORSO_TYPE_SYMBOL, sizeof(OrsoString) + string->length, 0);
+        }
+    }
+}
+
 OrsoString* orso_new_string_from_cstrn(OrsoGarbageCollector* gc, const char* start, i32 length) {
-    OrsoString* string = ORSO_OBJECT_ALLOCATE_FLEX(gc, OrsoString, length + 1);
+    OrsoString* string = ORSO_OBJECT_ALLOCATE_FLEX(gc, OrsoString, ORSO_TYPE_STRING, length + 1);
     string->length = length;
     memcpy(string->text, start, length);
     string->text[length] = '\0';
@@ -49,7 +75,7 @@ bool orso_string_equal(OrsoString* a, OrsoString* b) {
 }
 
 OrsoString* orso_string_concat(OrsoGarbageCollector* gc, OrsoString* a, OrsoString* b) {
-    OrsoString* string = ORSO_OBJECT_ALLOCATE_FLEX(gc, OrsoString, a->length + b->length + 1);
+    OrsoString* string = ORSO_OBJECT_ALLOCATE_FLEX(gc, OrsoString, ORSO_TYPE_STRING, a->length + b->length + 1);
     string->length = a->length + b->length;
     memcpy(string->text, a->text, a->length);
     memcpy(string->text + a->length, b->text, b->length);
