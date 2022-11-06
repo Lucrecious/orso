@@ -5,15 +5,20 @@
 #include "def.h"
 #include "sb.h"
 
-i32 chunk_add_constant(Chunk* chunk, OrsoSlot value) {
+i32 chunk_add_constant(Chunk* chunk, OrsoSlot value, bool is_object) {
     i32 index = sb_count(chunk->constants);
     sb_push(chunk->constants, value);
+
+    if (is_object) {
+        sb_push(chunk->constant_object_offsets, index);
+    }
     return index;
 }
 
 void chunk_init(Chunk* chunk) {
     chunk->max_stack_size = 0;
     chunk->constants = NULL;
+    chunk->constant_object_offsets = NULL;
     chunk->code = NULL;
     chunk->lines = NULL;
 }
@@ -22,6 +27,7 @@ void chunk_free(Chunk* chunk) {
     sb_free(chunk->code);
     sb_free(chunk->lines);
     sb_free(chunk->constants);
+    sb_free(chunk->constant_object_offsets);
 }
 
 void chunk_write(Chunk* chunk, const OrsoInstruction* instruction, i32 line) {

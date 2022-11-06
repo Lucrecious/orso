@@ -72,8 +72,10 @@ static void interpret_continuous(OrsoVM* vm, OrsoStaticAnalyzer* analyzer, const
     orso_vm_interpret(vm, error_fn);
 
     free(vm->stack);
+    free(vm->object_stack);
     chunk_free(&chunk);
     vm->stack_top = NULL;
+    vm->object_stack_top = NULL;
 }
 
 void orso_interpreter_run(OrsoInterpreter* interpreter, const char* source) {

@@ -19,14 +19,17 @@ void orso_vm_init(OrsoVM* vm) {
 
     vm->chunk = NULL;
     vm->stack = NULL;
-    vm->object_stack = NULL;
     vm->stack_top = NULL;
+
+    vm->object_stack = NULL;
     vm->object_stack_top = NULL;
 }
 
 void orso_vm_free(OrsoVM* vm) {
     orso_symbol_table_free(&vm->symbols);
     orso_symbol_table_free(&vm->globals);
+
+    orso_gc_collect(&vm->gc);
 }
 
 static FORCE_INLINE void push_i64(OrsoVM* vm, OrsoSlot value) {

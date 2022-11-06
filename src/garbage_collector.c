@@ -1,5 +1,6 @@
 #include "garbage_collector.h"
 #include "virtual_machine.h"
+#include "sb.h"
 
 #ifdef DEBUG_GC_PRINT
 #include <stdio.h>
@@ -89,6 +90,14 @@ static void mark_roots(OrsoGarbageCollector* gc) {
     OrsoVM* vm = gc->vm;
     for (OrsoSlot** slot = vm->object_stack; slot < vm->object_stack_top; slot++) {
         visit(gc, (OrsoGCHeader*)(*slot)->p);
+    }
+
+    // Assert that chunk is not null in gc until callframes
+    u32* constant_offsets = vm->chunk->constant_object_offsets;
+    for (i32 i = 0; i < sb_count(constant_offsets); i++) {
+        u32 offset = constant_offsets[i];
+        OrsoSlot* slot = &vm->chunk->constants[offset];
+        visit(gc, (OrsoGCHeader*)slot->p);
     }
 }
 

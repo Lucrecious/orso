@@ -6,8 +6,8 @@
 #include "garbage_collector.h"
 
 typedef struct OrsoObject {
-    OrsoType type;
     OrsoGCHeader gc_header;
+    OrsoType type;
 } OrsoObject;
 
 typedef struct OrsoString {

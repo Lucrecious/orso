@@ -32,7 +32,7 @@ void* orso_object_reallocate(OrsoGarbageCollector* gc, OrsoGCHeader* pointer, Or
 
 void orso_object_free(OrsoGarbageCollector* gc, OrsoObject* object) {
 #ifdef DEBUG_GC_PRINT
-    printf("%p free type %s\n", (void*)object, orso_type_to_cstr(((OrsoObject*)object)->type));
+    printf("%p free type %s\n", (void*)object, orso_type_to_cstr(object->type));
 #endif
     switch (object->type) {
         case ORSO_TYPE_SYMBOL: {
@@ -43,7 +43,9 @@ void orso_object_free(OrsoGarbageCollector* gc, OrsoObject* object) {
         case ORSO_TYPE_STRING: {
             OrsoString* string = (OrsoString*)object;
             orso_object_reallocate(gc, string, ORSO_TYPE_SYMBOL, sizeof(OrsoString) + string->length, 0);
+            break;
         }
+        default: break; // Unreachable
     }
 }
 

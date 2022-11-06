@@ -11,7 +11,7 @@ static void emit_instruction(const OrsoInstruction* instruction, Chunk* chunk, i
 }
 
 static void emit_constant(Chunk* chunk, OrsoSlot slot, i32 line, bool is_ptr) {
-    i32 index = chunk_add_constant(chunk, slot);
+    i32 index = chunk_add_constant(chunk, slot, is_ptr);
     const OrsoInstruction instruction = { .op_code = is_ptr ? ORSO_OP_CONSTANT_PTR : ORSO_OP_CONSTANT, .constant.index = index };
     chunk_write(chunk, &instruction, line);
 }
@@ -31,7 +31,7 @@ static void emit_type_convert(OrsoType from_type, OrsoType to_type, Chunk* chunk
 
 static i32 identifier_constant(OrsoSymbol* identifier, Chunk* chunk) {
     OrsoSlot slot = ORSO_SLOT_P(identifier, ORSO_TYPE_SYMBOL);
-    i32 index = chunk_add_constant(chunk, slot);
+    i32 index = chunk_add_constant(chunk, slot, true);
 
     return index;
 }
