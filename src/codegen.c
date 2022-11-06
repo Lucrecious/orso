@@ -244,7 +244,7 @@ static void expression(OrsoVM* vm, OrsoExpressionNode* expression_node, Chunk* c
             i32 index = identifier_constant(identifier, chunk);
             
             const OrsoInstruction instruction = {
-                .op_code = ORSO_OP_SET_GLOBAL,
+                .op_code = orso_is_gc_type(expression_node->value_type) ? ORSO_OP_SET_GLOBAL_PTR : ORSO_OP_SET_GLOBAL,
                 .constant.index = index,
 #ifdef DEBUG_TRACE_EXECUTION
                 .constant.type = expression_node->value_type,

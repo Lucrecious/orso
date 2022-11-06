@@ -11,7 +11,8 @@ typedef struct OrsoVM {
     OrsoInstruction* ip;
 
     OrsoSymbolTable symbols;
-    OrsoSymbolTable globals;
+    OrsoSymbolTable stack_globals;
+    OrsoSymbolTable object_globals;
     OrsoGarbageCollector gc;
 
     // Address to actual stack

@@ -68,6 +68,7 @@ i32 disassemble_instruction(Chunk* chunk, i32 offset) {
         case ORSO_OP_GET_GLOBAL: return simple_instruction("OP_GET_GLOBAL", offset);
         case ORSO_OP_GET_GLOBAL_PTR: return simple_instruction("OP_GET_GLOBAL_PTR", offset);
         case ORSO_OP_SET_GLOBAL: return simple_instruction("OP_SET_GLOBAL", offset);
+        case ORSO_OP_SET_GLOBAL_PTR: return simple_instruction("OP_SET_GLOBAL_PTR", offset);
         case ORSO_OP_CONCAT_STRING: return simple_instruction("OP_CONCAT_STRING", offset);
         case ORSO_OP_RETURN: return simple_instruction("OP_RETURN", offset);
         case ORSO_OP_PRINT_EXPR: return simple_instruction("OP_PRINT_EXPR", offset);

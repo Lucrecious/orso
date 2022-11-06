@@ -14,7 +14,8 @@
 
 void orso_vm_init(OrsoVM* vm) {
     orso_symbol_table_init(&vm->symbols);
-    orso_symbol_table_init(&vm->globals);
+    orso_symbol_table_init(&vm->stack_globals);
+    orso_symbol_table_init(&vm->object_globals);
     orso_gc_init(&vm->gc, vm);
 
     vm->chunk = NULL;
@@ -27,7 +28,8 @@ void orso_vm_init(OrsoVM* vm) {
 
 void orso_vm_free(OrsoVM* vm) {
     orso_symbol_table_free(&vm->symbols);
-    orso_symbol_table_free(&vm->globals);
+    orso_symbol_table_free(&vm->stack_globals);
+    orso_symbol_table_free(&vm->object_globals);
 
     orso_gc_collect(&vm->gc);
 }
@@ -145,14 +147,14 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
 
             case ORSO_OP_DEFINE_GLOBAL: {
                 OrsoSymbol* name = (OrsoSymbol*)vm->chunk->constants[instruction->constant.index].p;
-                orso_symbol_table_set(&vm->globals, name, *PEEK(0));
+                orso_symbol_table_set(&vm->stack_globals, name, *PEEK(0));
                 POP();
                 break;
             }
 
             case ORSO_OP_DEFINE_GLOBAL_PTR: {
                 OrsoSymbol* name = (OrsoSymbol*)vm->chunk->constants[instruction->constant.index].p;
-                orso_symbol_table_set(&vm->globals, name, *PEEK(0));
+                orso_symbol_table_set(&vm->object_globals, name, *PEEK(0));
                 POP_PTR();
                 break;
             }
@@ -160,7 +162,7 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
             case ORSO_OP_GET_GLOBAL: {
                 OrsoSymbol* name = (OrsoSymbol*)vm->chunk->constants[instruction->constant.index].p;
                 OrsoSlot slot;
-                orso_symbol_table_get(&vm->globals, name, &slot);
+                orso_symbol_table_get(&vm->stack_globals, name, &slot);
                 PUSH(slot);
                 break;
             }
@@ -168,14 +170,20 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
             case ORSO_OP_GET_GLOBAL_PTR: {
                 OrsoSymbol* name = (OrsoSymbol*)vm->chunk->constants[instruction->constant.index].p;
                 OrsoSlot slot;
-                orso_symbol_table_get(&vm->globals, name, &slot);
+                orso_symbol_table_get(&vm->object_globals, name, &slot);
                 PUSH_PTR(slot);
                 break;
             }
 
             case ORSO_OP_SET_GLOBAL: {
                 OrsoSymbol* name = (OrsoSymbol*)vm->chunk->constants[instruction->constant.index].p;
-                orso_symbol_table_set(&vm->globals, name, *PEEK(0));
+                orso_symbol_table_set(&vm->stack_globals, name, *PEEK(0));
+                break;
+            }
+
+            case ORSO_OP_SET_GLOBAL_PTR: {
+                OrsoSymbol* name = (OrsoSymbol*)vm->chunk->constants[instruction->constant.index].p;
+                orso_symbol_table_set(&vm->object_globals, name, *PEEK(0));
                 break;
             }
 
