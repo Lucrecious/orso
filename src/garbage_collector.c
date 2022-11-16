@@ -156,10 +156,15 @@ void orso_gc_step(OrsoGarbageCollector* gc) {
             break;
         }
         case ORSO_GC_STATE_SWEEPING: {
-            OrsoGCHeader* object = gc->iterator;
+            OrsoObject* object = (OrsoObject*)gc->iterator;
             if (object != gc->to) {
                 gc->iterator = next(object);
-                orso_object_free(gc, (OrsoObject*)object);
+
+                switch (object->type) {
+                    case ORSO_TYPE_SYMBOL: orso_symbol_table_remove(&gc->vm->symbols, (OrsoSymbol*)object); break;
+                    default: break; // Fast if I guess
+                }
+                orso_object_free(gc, object);
             } else {
                 list_clear(gc->to);
                 gc->state = ORSO_GC_STATE_IDLE;
