@@ -185,6 +185,10 @@ static void synchronize(Parser* parser) {
     parser->panic_mode = false;
 
     while (parser->current.type != TOKEN_EOF) {
+        if (parser->previous.type == TOKEN_SEMICOLON) {
+            return;
+        }
+
         switch (parser->current.type) {
             case TOKEN_PRINT_EXPR: 
                 return;
@@ -367,7 +371,7 @@ ParseRule rules[] = {
     [TOKEN_PLUS]                    = { NULL,       binary,     PREC_TERM },
     [TOKEN_STAR]                    = { NULL,       binary,     PREC_FACTOR },
     [TOKEN_SLASH]                   = { NULL,       binary,     PREC_FACTOR },
-    [TOKEN_COLIN]                   = { NULL,       NULL,       PREC_NONE },
+    [TOKEN_COLON]                   = { NULL,       NULL,       PREC_NONE },
     [TOKEN_EQUAL]                   = { NULL,       assignment, PREC_ASSIGNMENT},
     [TOKEN_BANG]                    = { NULL,       NULL,       PREC_NONE },
     [TOKEN_LESS]                    = { NULL,       binary,     PREC_COMPARISON },
@@ -454,6 +458,9 @@ static OrsoStatementNode* statement(Parser* parser) {
     }
 
     statement_node->expression = expression(parser);
+
+    consume(parser, TOKEN_SEMICOLON, "Expect end of statement semicolin");
+
     statement_node->end = parser->previous;
 
     return statement_node;
@@ -477,7 +484,7 @@ static OrsoVarDeclarationNode* var_declaration(Parser* parser) {
 
     var_declaration_node->variable_name = parse_variable(parser);
 
-    consume(parser, TOKEN_COLIN, "Expect explicit type.");
+    consume(parser, TOKEN_COLON, "Expect explicit type.");
     if (match(parser, TOKEN_IDENTIFIER) || match(parser, TOKEN_TYPE)) {
         var_declaration_node->type_identifier = parser->previous;
         if (match(parser, TOKEN_EQUAL)) {
@@ -487,6 +494,8 @@ static OrsoVarDeclarationNode* var_declaration(Parser* parser) {
         consume(parser, TOKEN_EQUAL, "Expect define assignment.");
         var_declaration_node->expression = expression(parser);
     }
+
+    consume(parser, TOKEN_SEMICOLON, "Expect end of declaration semicolin.");
 
     var_declaration_node->end = parser->previous;
     return var_declaration_node;
@@ -501,7 +510,7 @@ static bool variable_declaration_look_ahead(Parser* parser) {
 
     Token token = lexer_next_token(&lookahead_lexer);
 
-    return token.type == TOKEN_COLIN;
+    return token.type == TOKEN_COLON;
 }
 
 static OrsoDeclarationNode* declaration(Parser* parser) {

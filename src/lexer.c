@@ -247,7 +247,8 @@ Token lexer_next_token(Lexer* lexer) {
         case '-': return create_token(lexer, TOKEN_MINUS);
         case '*': return create_token(lexer, TOKEN_STAR);
         case '/': return create_token(lexer, TOKEN_SLASH);
-        case ':': return create_token(lexer, TOKEN_COLIN);
+        case ':': return create_token(lexer, TOKEN_COLON);
+        case ';': return create_token(lexer, TOKEN_SEMICOLON);
         case '+': return create_token(lexer, match(lexer, '+') ? TOKEN_PLUS_PLUS : TOKEN_PLUS);
         case '=': return create_token(lexer, match(lexer, '=') ? TOKEN_EQUAL_EQUAL : TOKEN_EQUAL);
         case '!': return create_token(lexer, match(lexer, '=') ? TOKEN_BANG_EQUAL : TOKEN_BANG);
