@@ -29,6 +29,8 @@ typedef struct OrsoSlot {
     };
 } OrsoSlot;
 
+#define ORSO_SLOT_IS_FALSE(SLOT) (SLOT.i == 0)
+
 #ifndef DEBUG_TRACE_EXECUTION
 #define ORSO_SLOT_I(VALUE, TYPE) (OrsoSlot){ .i = VALUE }
 #define ORSO_SLOT_F(VALUE, TYPE) (OrsoSlot){ .f = VALUE }

@@ -189,18 +189,22 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
             }
 
             case ORSO_OP_PRINT_EXPR: {
-                OrsoString* expression_string = (OrsoString*)POP_PTR().p;
-                printf("%s => ", expression_string->text);
+                OrsoString* expression_string = (OrsoString*)(PEEK(0)->p);
+                OrsoString* string = orso_slot_to_string(&vm->gc, *PEEK(1), instruction->print_expr.type);
 
-                orso_print_slot(*PEEK(0), instruction->print_expr.type);
+                if (vm->write_fn != NULL) {
+                    vm->write_fn(expression_string->text);
+                    vm->write_fn(" => ");
+                    vm->write_fn(string->text);
+                }
+
+                POP_PTR();
 
                 if (orso_is_gc_type(instruction->print_expr.type)) {
                     POP_PTR();
                 } else {
                     POP();
                 }
-
-                printf("\n");
                 break;
             }
             

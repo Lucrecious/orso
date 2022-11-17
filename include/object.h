@@ -34,8 +34,11 @@ FORCE_INLINE u32 orso_hash_cstrn(const char* start, i32 length);
 FORCE_INLINE bool orso_string_equal(OrsoString* a, OrsoString* b);
 FORCE_INLINE OrsoString* orso_string_concat(OrsoGarbageCollector* gc, OrsoString* a, OrsoString* b);
 
+OrsoString* orso_slot_to_string(OrsoGarbageCollector* gc, OrsoSlot slot, OrsoType type);
+
 OrsoString* orso_new_string_from_cstrn(OrsoGarbageCollector* gc, const char* start, i32 length);
 i64 cstrn_to_i64(const char* text, i32 length);
 f64 cstrn_to_f64(const char* text, i32 length);
+
 
 #endif

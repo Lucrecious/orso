@@ -1,8 +1,6 @@
 #include "object.h"
 
-#ifdef DEBUG_GC_PRINT
 #include <stdio.h>
-#endif
 
 void* orso_object_reallocate(OrsoGarbageCollector* gc, OrsoGCHeader* pointer, OrsoType type, size_t old_size, size_t new_size) {
     if (new_size == 0) {
@@ -56,6 +54,52 @@ OrsoString* orso_new_string_from_cstrn(OrsoGarbageCollector* gc, const char* sta
     string->text[length] = '\0';
 
     return string;
+}
+
+OrsoString* orso_slot_to_string(OrsoGarbageCollector* gc, OrsoSlot slot, OrsoType type) {
+    switch (type) {
+        case ORSO_TYPE_BOOL: {
+            if (ORSO_SLOT_IS_FALSE(slot)) {
+                return orso_new_string_from_cstrn(gc, "false", 5);
+            } else {
+                return orso_new_string_from_cstrn(gc, "true", 4);
+            }
+        }
+
+        case ORSO_TYPE_INT32:
+        case ORSO_TYPE_INT64: {
+            // Max characters for i64 is 19 + sign and \0
+            char buffer[21];
+            i32 length = sprintf(buffer, "%d", slot.i);
+            return orso_new_string_from_cstrn(gc, buffer, length);
+        }
+
+        case ORSO_TYPE_FLOAT32:
+        case ORSO_TYPE_FLOAT64: {
+            // Using Wren's num to string for this: https://github.com/wren-lang/wren/blob/main/src/vm/wren_value.c#L775
+            char buffer[24];
+            i32 length = sprintf(buffer, "%.14g", slot.f);
+            return orso_new_string_from_cstrn(gc, buffer, length);
+        }
+
+        case ORSO_TYPE_NULL: return orso_new_string_from_cstrn(gc, "null", 4);
+
+        case ORSO_TYPE_STRING: return ((OrsoString*)slot.p);
+
+        case ORSO_TYPE_SYMBOL: {
+            OrsoSymbol* symbol = (OrsoSymbol*)slot.p;
+            // 2 single quotes
+            // 1 \0
+            char buffer[symbol->length + 3];
+            sprintf(buffer, "'%s'", symbol->text);
+            return orso_new_string_from_cstrn(gc, buffer, symbol->length + 3);
+        }
+
+        case ORSO_TYPE_UNRESOLVED:
+        case ORSO_TYPE_INVALID: return orso_new_string_from_cstrn(gc, "<?>", 3);
+
+        default: return orso_new_string_from_cstrn(gc, "<?>", 3); // Unreachable
+    }
 }
 
 u32 orso_hash_cstrn(const char* start, i32 length) {

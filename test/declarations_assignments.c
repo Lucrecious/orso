@@ -34,7 +34,7 @@ OrsoInterpreter test_interpreter;
 MU_TEST(declaration_i32_explicit) {
     INTERPRETER_STARTUP();
 
-    INTERPRETER_RUN("x: i32 = 1; print_expr x;");
+    INTERPRETER_RUN("x: i64 = 1; print_expr x;");
 
     MU_ASSERT_STRING_EQ("x => 1", test_buffer);
 
