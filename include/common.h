@@ -9,5 +9,6 @@ typedef enum OrsoErrorType {
 } OrsoErrorType;
 
 typedef void (*OrsoErrorFunction)(OrsoErrorType error, i32 line, const char* message);
+typedef void (*OrsoWriteFunction)(const char* chars);
 
 #endif
