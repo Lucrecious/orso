@@ -31,7 +31,7 @@ OrsoInterpreter test_interpreter;
     clear_test_buffer(); \
 } while(false)
 
-MU_TEST(declaration_i32_explicit) {
+MU_TEST(declaration_i64_explicit) {
     INTERPRETER_STARTUP();
 
     INTERPRETER_RUN("x: i64 = 1; print_expr x;");
@@ -41,7 +41,7 @@ MU_TEST(declaration_i32_explicit) {
     INTERPRETER_TEARDOWN();
 }
 
-MU_TEST(declaration_i32_implicit) {
+MU_TEST(declaration_i64_implicit) {
     INTERPRETER_STARTUP();
 
     INTERPRETER_RUN("x := 1; print_expr x;");
@@ -52,8 +52,8 @@ MU_TEST(declaration_i32_implicit) {
 }
 
 MU_TEST_SUITE(all_tests) {
-    MU_RUN_TEST(declaration_i32_explicit);
-    MU_RUN_TEST(declaration_i32_implicit);
+    MU_RUN_TEST(declaration_i64_explicit);
+    MU_RUN_TEST(declaration_i64_implicit);
 }
 
 int main(int argc, char** argv) {
