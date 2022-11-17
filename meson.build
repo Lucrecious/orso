@@ -20,9 +20,9 @@ src = [
   'src/virtual_machine.c',
 ]
 
-# test_variable_retrieval = executable('test_variable_retrieval', [src, 'test/variable_retrieval.c'],
-#   install : false,
-#   include_directories : inc)
+test_declarations_assignments = executable('test_declarations_assignments', [src, 'test/declarations_assignments.c'],
+  install : false,
+  include_directories : inc)
 
 c_args = []
 if get_option('debug_trace')
@@ -43,4 +43,4 @@ endif
 
 executable('orso', [src, 'main.c'], install : false, include_directories : inc, c_args : c_args)
 
-# test('variable_retrieval', test_variable_retrieval)
+test('test_declarations_assignments', test_declarations_assignments)

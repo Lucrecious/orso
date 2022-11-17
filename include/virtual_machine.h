@@ -7,6 +7,7 @@
 #include "symbol_table.h"
 
 typedef struct OrsoVM {
+    OrsoWriteFunction write_fn;
     Chunk* chunk;
     OrsoInstruction* ip;
 
@@ -23,7 +24,7 @@ typedef struct OrsoVM {
     OrsoSlot* stack_top;
 } OrsoVM;
 
-void orso_vm_init(OrsoVM* vm);
+void orso_vm_init(OrsoVM* vm, OrsoWriteFunction write_fn);
 void orso_vm_free(OrsoVM* vm);
 
 void orso_vm_interpret(OrsoVM* vm, OrsoErrorFunction error_fn);

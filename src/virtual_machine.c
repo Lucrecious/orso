@@ -12,12 +12,13 @@
 #include "debug.h"
 #endif
 
-void orso_vm_init(OrsoVM* vm) {
+void orso_vm_init(OrsoVM* vm, OrsoWriteFunction write_fn) {
     orso_symbol_table_init(&vm->symbols);
     orso_symbol_table_init(&vm->stack_globals);
     orso_symbol_table_init(&vm->object_globals);
     orso_gc_init(&vm->gc, vm);
 
+    vm->write_fn = write_fn;
     vm->chunk = NULL;
     vm->stack = NULL;
     vm->stack_top = NULL;

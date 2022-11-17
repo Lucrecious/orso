@@ -10,7 +10,7 @@ typedef struct OrsoInterpreter {
     OrsoErrorFunction error_fn;
 } OrsoInterpreter;
 
-void orso_interpreter_init(OrsoInterpreter* interpreter, OrsoErrorFunction error_fn);
+void orso_interpreter_init(OrsoInterpreter* interpreter, OrsoWriteFunction write_fn, OrsoErrorFunction error_fn);
 void orso_interpreter_free(OrsoInterpreter* interpreter);
 
 void orso_interpreter_run(OrsoInterpreter* interpreter, const char* source);

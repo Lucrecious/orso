@@ -14,11 +14,15 @@ void error(OrsoErrorType error, i32 line, const char* message) {
     }
 }
 
+void write(const char* chars) {
+    printf(chars);
+}
+
 int main(int argc, char **argv) {
     char source_code[1000];
 
     OrsoInterpreter interpreter;
-    orso_interpreter_init(&interpreter, error);
+    orso_interpreter_init(&interpreter, write, error);
 
     printf("Orso interpreter initialized.\n\n");
 
