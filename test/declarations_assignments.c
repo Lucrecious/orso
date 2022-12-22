@@ -129,18 +129,6 @@ INTERPRETER_TEST(declaration_bool_explicit,
     "x: bool = false; print_expr x;",
     "x => false")
 
-INTERPRETER_TEST(declaration_type_default,
-    "x: type; print_expr x;",
-    "x => <void>")
-
-INTERPRETER_TEST(declaration_type_implicit,
-    "x := bool; print_expr x;",
-    "x => <bool>")
-
-INTERPRETER_TEST(declaration_type_explicit,
-    "x: type = symbol; print_expr x;",
-    "x => <symbol>")
-
 MU_TEST_SUITE(all_tests) {
     MU_RUN_TEST(declaration_i64_default);
     MU_RUN_TEST(declaration_i64_implicit);
@@ -164,9 +152,6 @@ MU_TEST_SUITE(all_tests) {
     MU_RUN_TEST(declaration_bool_default);
     MU_RUN_TEST(declaration_bool_implicit);
     MU_RUN_TEST(declaration_bool_explicit);
-    MU_RUN_TEST(declaration_type_default);
-    MU_RUN_TEST(declaration_type_implicit);
-    MU_RUN_TEST(declaration_type_explicit);
 }
 
 int main(int argc, char** argv) {
