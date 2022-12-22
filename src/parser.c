@@ -8,6 +8,27 @@
 #include "type.h"
 #include "sb.h"
 
+/*
+program                  -> declaration* EOF
+declaration              -> variable_declaration | statement
+variable_declaration     -> IDENTIFIER `:` types? (`=` expression)? `;`
+statement                -> expression_statement
+expression_statement     -> expression `;`
+types                    -> type (`| type)*
+
+expression               -> assignment
+assignment               -> IDENTIFIER `=` expression
+                          | equality
+equality                 -> comparison ((`!=` | `==`) comparison)*
+comparison               -> term ((`<` | `>` | `<=` | `>=`) term)*
+term                     -> factor ((`+` | `-`) factor)*
+factor                   -> unary ((`/` | `*`) unary)*
+unary                    -> (`not`)? unary | primary
+
+primary                  -> `true` | `false` | `null` | IDENTIFIER | INTEGER | DECIMAL
+                          | STRING | SYMBOL
+*/
+
 typedef struct Parser {
     OrsoErrorFunction error_fn;
     Lexer lexer;
