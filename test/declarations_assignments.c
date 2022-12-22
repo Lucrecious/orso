@@ -41,24 +41,37 @@ OrsoInterpreter test_interpreter;
     INTERPRETER_TEARDOWN(); \
 }
 
+INTERPRETER_TEST(declaration_i64_default,
+    "x: i64; print_expr x;",
+    "x => 0")
 
-INTERPRETER_TEST(
-    declaration_i64_explicit,
+INTERPRETER_TEST(declaration_i64_implicit,
+    "x := 3000000000; print_expr x;",
+    "x => 3000000000")
+
+INTERPRETER_TEST(declaration_i64_explicit,
     "x: i64 = 1; print_expr x;",
+    "x => 1")
+
+INTERPRETER_TEST(declaration_i32_default,
+    "x: i32; print_expr x;",
+    "x => 0")
+
+INTERPRETER_TEST(declaration_i32_implicit,
+    "x := 1; print_expr x;",
     "x => 1")
 
 INTERPRETER_TEST(declaration_i32_explicit,
     "x: i32 = 42; print_expr x;",
     "x => 42")
 
-INTERPRETER_TEST(
-    declaration_i32_implicit,
-    "x := 1; print_expr x;",
+INTERPRETER_TEST(declaration_i32_explicit_bool,
+    "x: i32 = true; print_expr x;",
     "x => 1")
 
-INTERPRETER_TEST(declaration_i64_implicit,
-    "x := 3000000000; print_expr x;",
-    "x => 3000000000")
+INTERPRETER_TEST(declaration_f64_default,
+    "x: f64; print_expr x;",
+    "x => 0")
 
 INTERPRETER_TEST(declaration_f64_implicit,
     "x := 0.5; print_expr x;",
@@ -68,6 +81,10 @@ INTERPRETER_TEST(declaration_f64_explicit,
     "x: f64 = 420.69; print_expr x;",
     "x => 420.69")
 
+INTERPRETER_TEST(declaration_symbol_default,
+    "x: symbol; print_expr x;",
+    "x => ''")
+
 INTERPRETER_TEST(declaration_symbol_implicit,
     "x := 'foo'; print_expr x;",
     "x => 'foo'")
@@ -75,6 +92,10 @@ INTERPRETER_TEST(declaration_symbol_implicit,
 INTERPRETER_TEST(declaration_symbol_explicit,
     "x: symbol = 'bar'; print_expr x;",
     "x => 'bar'")
+
+INTERPRETER_TEST(declaration_string_default,
+    "x: string; print_expr x;",
+    "x => ")
 
 INTERPRETER_TEST(declaration_string_implicit,
     "x := \"foo\"; print_expr x;",
@@ -84,6 +105,10 @@ INTERPRETER_TEST(declaration_string_explicit,
     "x: string = \"bar\"; print_expr x;",
     "x => bar")
 
+INTERPRETER_TEST(declaration_void_default,
+    "x: void; print_expr x;",
+    "x => null")
+
 INTERPRETER_TEST(declaration_void_implicit,
     "x := null; print_expr x;",
     "x => null")
@@ -92,19 +117,56 @@ INTERPRETER_TEST(declaration_void_explicit,
     "x: void = null; print_expr x;",
     "x => null")
 
+INTERPRETER_TEST(declaration_bool_default,
+    "x: bool; print_expr x;",
+    "x => false")
+
+INTERPRETER_TEST(declaration_bool_implicit,
+    "x := true; print_expr x;",
+    "x => true")
+
+INTERPRETER_TEST(declaration_bool_explicit,
+    "x: bool = false; print_expr x;",
+    "x => false")
+
+INTERPRETER_TEST(declaration_type_default,
+    "x: type; print_expr x;",
+    "x => <void>")
+
+INTERPRETER_TEST(declaration_type_implicit,
+    "x := bool; print_expr x;",
+    "x => <bool>")
+
+INTERPRETER_TEST(declaration_type_explicit,
+    "x: type = symbol; print_expr x;",
+    "x => <symbol>")
+
 MU_TEST_SUITE(all_tests) {
-    MU_RUN_TEST(declaration_i64_explicit);
+    MU_RUN_TEST(declaration_i64_default);
     MU_RUN_TEST(declaration_i64_implicit);
-    MU_RUN_TEST(declaration_i32_explicit);
+    MU_RUN_TEST(declaration_i64_explicit);
+    MU_RUN_TEST(declaration_i32_default);
     MU_RUN_TEST(declaration_i32_implicit);
+    MU_RUN_TEST(declaration_i32_explicit);
+    MU_RUN_TEST(declaration_i32_explicit_bool);
+    MU_RUN_TEST(declaration_f64_default);
     MU_RUN_TEST(declaration_f64_implicit);
     MU_RUN_TEST(declaration_f64_explicit);
+    MU_RUN_TEST(declaration_symbol_default);
     MU_RUN_TEST(declaration_symbol_implicit);
     MU_RUN_TEST(declaration_symbol_explicit);
+    MU_RUN_TEST(declaration_string_default);
     MU_RUN_TEST(declaration_string_implicit);
     MU_RUN_TEST(declaration_string_explicit);
+    MU_RUN_TEST(declaration_void_default);
     MU_RUN_TEST(declaration_void_implicit);
     MU_RUN_TEST(declaration_void_explicit);
+    MU_RUN_TEST(declaration_bool_default);
+    MU_RUN_TEST(declaration_bool_implicit);
+    MU_RUN_TEST(declaration_bool_explicit);
+    MU_RUN_TEST(declaration_type_default);
+    MU_RUN_TEST(declaration_type_implicit);
+    MU_RUN_TEST(declaration_type_explicit);
 }
 
 int main(int argc, char** argv) {
