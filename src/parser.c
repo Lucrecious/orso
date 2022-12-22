@@ -14,7 +14,7 @@ declaration              -> variable_declaration | statement
 variable_declaration     -> IDENTIFIER `:` types? (`=` expression)? `;`
 statement                -> expression_statement
 expression_statement     -> expression `;`
-types                    -> type (`| type)*
+types                    -> type (`|` type)*
 
 expression               -> assignment
 assignment               -> IDENTIFIER `=` expression
