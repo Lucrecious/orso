@@ -16,12 +16,13 @@ void write_to_test_buffer(const char* chars) {
 
 void clear_test_buffer() {
     buffer_length = 0;
+    test_buffer[0] = '\0';
 }
 
 OrsoInterpreter test_interpreter;
 
 #define INTERPRETER_STARTUP() do { \
-    test_buffer[0] = '\0'; \
+    clear_test_buffer(); \
     orso_interpreter_init(&test_interpreter, write_to_test_buffer, NULL); \
 } while(false)
 
@@ -29,7 +30,6 @@ OrsoInterpreter test_interpreter;
 
 #define INTERPRETER_TEARDOWN()  do { \
     orso_interpreter_free(&test_interpreter); \
-    clear_test_buffer(); \
 } while(false)
 
 #define INTERPRETER_CHECK(EXPECTED) MU_ASSERT_STRING_EQ(EXPECTED, test_buffer)
