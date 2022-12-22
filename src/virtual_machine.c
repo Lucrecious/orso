@@ -194,7 +194,9 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
 
                 if (vm->write_fn != NULL) {
                     vm->write_fn(expression_string->text);
-                    vm->write_fn(" => ");
+                    vm->write_fn(" (");
+                    vm->write_fn(orso_type_to_cstr(instruction->print_expr.type));
+                    vm->write_fn(") => ");
                     vm->write_fn(string->text);
                 }
 

@@ -43,7 +43,7 @@ typedef struct OrsoSlot {
 
 const FORCE_INLINE char* orso_type_to_cstr(OrsoType type) {
     switch (type) {
-        case ORSO_TYPE_NULL: return "null";
+        case ORSO_TYPE_NULL: return "void";
         case ORSO_TYPE_BOOL: return "bool";
         case ORSO_TYPE_INT32: return "i32";
         case ORSO_TYPE_INT64: return "i64";
