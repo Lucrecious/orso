@@ -43,91 +43,91 @@ OrsoInterpreter test_interpreter;
 
 INTERPRETER_TEST(declaration_i64_default,
     "x: i64; print_expr x;",
-    "x => 0")
+    "x (i64) => 0")
 
 INTERPRETER_TEST(declaration_i64_implicit,
     "x := 3000000000; print_expr x;",
-    "x => 3000000000")
+    "x (i64) => 3000000000")
 
 INTERPRETER_TEST(declaration_i64_explicit,
     "x: i64 = 1; print_expr x;",
-    "x => 1")
+    "x (i64) => 1")
 
 INTERPRETER_TEST(declaration_i32_default,
     "x: i32; print_expr x;",
-    "x => 0")
+    "x (i32) => 0")
 
 INTERPRETER_TEST(declaration_i32_implicit,
     "x := 1; print_expr x;",
-    "x => 1")
+    "x (i32) => 1")
 
 INTERPRETER_TEST(declaration_i32_explicit,
     "x: i32 = 42; print_expr x;",
-    "x => 42")
+    "x (i32) => 42")
 
 INTERPRETER_TEST(declaration_i32_explicit_bool,
     "x: i32 = true; print_expr x;",
-    "x => 1")
+    "x (i32) => 1")
 
 INTERPRETER_TEST(declaration_f64_default,
     "x: f64; print_expr x;",
-    "x => 0")
+    "x (f64) => 0")
 
 INTERPRETER_TEST(declaration_f64_implicit,
     "x := 0.5; print_expr x;",
-    "x => 0.5")
+    "x (f64) => 0.5")
 
 INTERPRETER_TEST(declaration_f64_explicit,
     "x: f64 = 420.69; print_expr x;",
-    "x => 420.69")
+    "x (f64) => 420.69")
 
 INTERPRETER_TEST(declaration_symbol_default,
     "x: symbol; print_expr x;",
-    "x => ''")
+    "x (symbol) => ''")
 
 INTERPRETER_TEST(declaration_symbol_implicit,
     "x := 'foo'; print_expr x;",
-    "x => 'foo'")
+    "x (symbol) => 'foo'")
 
 INTERPRETER_TEST(declaration_symbol_explicit,
     "x: symbol = 'bar'; print_expr x;",
-    "x => 'bar'")
+    "x (symbol) => 'bar'")
 
 INTERPRETER_TEST(declaration_string_default,
     "x: string; print_expr x;",
-    "x => ")
+    "x (string) => ")
 
 INTERPRETER_TEST(declaration_string_implicit,
     "x := \"foo\"; print_expr x;",
-    "x => foo")
+    "x (string) => foo")
 
 INTERPRETER_TEST(declaration_string_explicit,
     "x: string = \"bar\"; print_expr x;",
-    "x => bar")
+    "x (string) => bar")
 
 INTERPRETER_TEST(declaration_void_default,
     "x: void; print_expr x;",
-    "x => null")
+    "x (void) => null")
 
 INTERPRETER_TEST(declaration_void_implicit,
     "x := null; print_expr x;",
-    "x => null")
+    "x (void) => null")
 
 INTERPRETER_TEST(declaration_void_explicit,
     "x: void = null; print_expr x;",
-    "x => null")
+    "x (void) => null")
 
 INTERPRETER_TEST(declaration_bool_default,
     "x: bool; print_expr x;",
-    "x => false")
+    "x (bool) => false")
 
 INTERPRETER_TEST(declaration_bool_implicit,
     "x := true; print_expr x;",
-    "x => true")
+    "x (bool) => true")
 
 INTERPRETER_TEST(declaration_bool_explicit,
     "x: bool = false; print_expr x;",
-    "x => false")
+    "x (bool) => false")
 
 MU_TEST_SUITE(all_tests) {
     MU_RUN_TEST(declaration_i64_default);
