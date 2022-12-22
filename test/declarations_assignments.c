@@ -129,6 +129,18 @@ INTERPRETER_TEST(declaration_bool_explicit,
     "x: bool = false; print_expr x;",
     "x (bool) => false")
 
+INTERPRETER_TEST(declaration_union_explicit_default_void,
+    "x: bool | void; print_expr x;",
+    "x (bool|*void) => null")
+
+INTERPRETER_TEST(declaration_union_explicit,
+    "x: bool | void = true; print_expr x;",
+    "x (*bool|void) => true")
+
+INTERPRETER_TEST(declaration_union_explicit_no_void,
+    "x: bool | string = \"true\"; print_expr x;",
+    "x (bool|*string) => true")
+
 MU_TEST_SUITE(all_tests) {
     MU_RUN_TEST(declaration_i64_default);
     MU_RUN_TEST(declaration_i64_implicit);
@@ -152,6 +164,9 @@ MU_TEST_SUITE(all_tests) {
     MU_RUN_TEST(declaration_bool_default);
     MU_RUN_TEST(declaration_bool_implicit);
     MU_RUN_TEST(declaration_bool_explicit);
+    MU_RUN_TEST(declaration_union_explicit_default_void);
+    MU_RUN_TEST(declaration_union_explicit);
+    MU_RUN_TEST(declaration_union_explicit_no_void);
 }
 
 int main(int argc, char** argv) {
