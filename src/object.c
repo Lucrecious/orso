@@ -70,7 +70,7 @@ OrsoString* orso_slot_to_string(OrsoGarbageCollector* gc, OrsoSlot slot, OrsoTyp
         case ORSO_TYPE_INT64: {
             // Max characters for i64 is 19 + sign and \0
             char buffer[21];
-            i32 length = sprintf(buffer, "%d", slot.i);
+            i32 length = sprintf(buffer, "%ld", slot.i);
             return orso_new_string_from_cstrn(gc, buffer, length);
         }
 

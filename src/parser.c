@@ -1,6 +1,7 @@
 #include "parser.h"
 
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 
 #include "common.h"
@@ -203,6 +204,13 @@ static OrsoExpressionNode* expression(Parser* parser);
 static ParseRule* get_rule(TokenType type);
 static OrsoExpressionNode* parse_precedence(Parser* parser, Precedence precedence);
 
+static OrsoType integer_type(i64 value) {
+    if (value >= INT32_MIN && value <= INT32_MAX) {
+        return ORSO_TYPE_INT32;
+    }
+    return ORSO_TYPE_INT64;
+}
+
 static OrsoExpressionNode* number(Parser* parser) {
     OrsoExpressionNode* expression_node = ORSO_ALLOCATE(OrsoExpressionNode);
     expression_node->start = expression_node->end = parser->previous;
@@ -212,8 +220,8 @@ static OrsoExpressionNode* number(Parser* parser) {
     switch (parser->previous.type)  {
         case TOKEN_INTEGER: {
             i64 value = cstrn_to_i64(parser->previous.start, parser->previous.length);
-            expression_node->value_type = ORSO_TYPE_INT64;
-            expression_node->primary.constant = ORSO_SLOT_I(value, ORSO_TYPE_INT64);
+            expression_node->value_type = integer_type(value);
+            expression_node->primary.constant = ORSO_SLOT_I(value, expression_node->value_type);
             break;
         }
         case TOKEN_FLOAT: {

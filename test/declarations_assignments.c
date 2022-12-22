@@ -21,6 +21,7 @@ void clear_test_buffer() {
 OrsoInterpreter test_interpreter;
 
 #define INTERPRETER_STARTUP() do { \
+    test_buffer[0] = '\0'; \
     orso_interpreter_init(&test_interpreter, write_to_test_buffer, NULL); \
 } while(false)
 
@@ -31,29 +32,79 @@ OrsoInterpreter test_interpreter;
     clear_test_buffer(); \
 } while(false)
 
-MU_TEST(declaration_i64_explicit) {
-    INTERPRETER_STARTUP();
+#define INTERPRETER_CHECK(EXPECTED) MU_ASSERT_STRING_EQ(EXPECTED, test_buffer)
 
-    INTERPRETER_RUN("x: i64 = 1; print_expr x;");
-
-    MU_ASSERT_STRING_EQ("x => 1", test_buffer);
-
-    INTERPRETER_TEARDOWN();
+#define INTERPRETER_TEST(NAME, SOURCE, EXPECTED) MU_TEST(NAME) { \
+    INTERPRETER_STARTUP(); \
+    INTERPRETER_RUN(SOURCE); \
+    INTERPRETER_CHECK(EXPECTED); \
+    INTERPRETER_TEARDOWN(); \
 }
 
-MU_TEST(declaration_i64_implicit) {
-    INTERPRETER_STARTUP();
 
-    INTERPRETER_RUN("x := 1; print_expr x;");
+INTERPRETER_TEST(
+    declaration_i64_explicit,
+    "x: i64 = 1; print_expr x;",
+    "x => 1")
 
-    MU_ASSERT_STRING_EQ("x => 1", test_buffer);
+INTERPRETER_TEST(declaration_i32_explicit,
+    "x: i32 = 42; print_expr x;",
+    "x => 42")
 
-    INTERPRETER_TEARDOWN();
-}
+INTERPRETER_TEST(
+    declaration_i32_implicit,
+    "x := 1; print_expr x;",
+    "x => 1")
+
+INTERPRETER_TEST(declaration_i64_implicit,
+    "x := 3000000000; print_expr x;",
+    "x => 3000000000")
+
+INTERPRETER_TEST(declaration_f64_implicit,
+    "x := 0.5; print_expr x;",
+    "x => 0.5")
+
+INTERPRETER_TEST(declaration_f64_explicit,
+    "x: f64 = 420.69; print_expr x;",
+    "x => 420.69")
+
+INTERPRETER_TEST(declaration_symbol_implicit,
+    "x := 'foo'; print_expr x;",
+    "x => 'foo'")
+
+INTERPRETER_TEST(declaration_symbol_explicit,
+    "x: symbol = 'bar'; print_expr x;",
+    "x => 'bar'")
+
+INTERPRETER_TEST(declaration_string_implicit,
+    "x := \"foo\"; print_expr x;",
+    "x => foo")
+
+INTERPRETER_TEST(declaration_string_explicit,
+    "x: string = \"bar\"; print_expr x;",
+    "x => bar")
+
+INTERPRETER_TEST(declaration_void_implicit,
+    "x := null; print_expr x;",
+    "x => null")
+
+INTERPRETER_TEST(declaration_void_explicit,
+    "x: void = null; print_expr x;",
+    "x => null")
 
 MU_TEST_SUITE(all_tests) {
     MU_RUN_TEST(declaration_i64_explicit);
     MU_RUN_TEST(declaration_i64_implicit);
+    MU_RUN_TEST(declaration_i32_explicit);
+    MU_RUN_TEST(declaration_i32_implicit);
+    MU_RUN_TEST(declaration_f64_implicit);
+    MU_RUN_TEST(declaration_f64_explicit);
+    MU_RUN_TEST(declaration_symbol_implicit);
+    MU_RUN_TEST(declaration_symbol_explicit);
+    MU_RUN_TEST(declaration_string_implicit);
+    MU_RUN_TEST(declaration_string_explicit);
+    MU_RUN_TEST(declaration_void_implicit);
+    MU_RUN_TEST(declaration_void_explicit);
 }
 
 int main(int argc, char** argv) {

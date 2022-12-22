@@ -84,6 +84,18 @@ static OrsoType resolve_type_identifier(OrsoStaticAnalyzer* analyzer, Token iden
     return slot.i;
 }
 
+static bool is_integer_fit(OrsoType storage_type, OrsoType value_type, bool include_bool) {
+    if (!orso_is_integer_type(storage_type, include_bool)) {
+        return false;
+    }
+
+    if (!orso_is_integer_type(value_type, include_bool)) {
+        return false;
+    }
+
+    return orso_number_and_bool_type_bit_count(storage_type) >= orso_number_and_bool_type_bit_count(value_type);
+}
+
 void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoExpressionNode* expression) {
     if (expression->value_type != ORSO_TYPE_UNRESOLVED) {
         return;
@@ -96,6 +108,8 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoExpressionNode* e
             break;
         }
         case EXPRESSION_PRIMARY: {
+            // Should be an error if we get here because all primary types should be defined
+            // on the spot
             expression->value_type = ORSO_TYPE_INT64;
             break;
         }
@@ -183,9 +197,9 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoExpressionNode* e
             orso_resolve_expression(analyzer, expression->assignment.right_side);
             expression->value_type = expression->assignment.right_side->value_type;
             if (type != expression->value_type) {
-                error(analyzer, expression->start.line, "Expression needs explicit cast to store in variable");
-            } else {
-                expression->value_type = type;
+                if (!is_integer_fit(type, expression->value_type, true)) {
+                    error(analyzer, expression->start.line, "Expression needs explicit cast to store in variable");
+                }
             }
             break;
         }
@@ -209,12 +223,20 @@ static void resolve_var_declaration(OrsoStaticAnalyzer* analyzer, OrsoVarDeclara
             break;
         }
         case ORSO_TYPE_UNRESOLVED: {
-            var_declaration->var_type = var_declaration->expression->value_type;
+            // Should not be possible when expression is null because otherwise that's a
+            // a parsing error ASSERT
+            if (is_integer_fit(ORSO_TYPE_INT32, var_declaration->expression->value_type, false)) {
+                var_declaration->var_type = ORSO_TYPE_INT32;
+            } else {
+                var_declaration->var_type = var_declaration->expression->value_type;
+            }
             break;
         }
         default: {
             if (var_declaration->expression != NULL && var_declaration->var_type != var_declaration->expression->value_type) {
-                error(analyzer, var_declaration->start.line, "Must cast expression explicitly to match var type.");
+                if (!is_integer_fit(var_declaration->var_type, var_declaration->expression->value_type, true)) {
+                    error(analyzer, var_declaration->start.line, "Must cast expression explicitly to match var type.");
+                }
             }
             break;
         }
