@@ -425,7 +425,6 @@ ParseRule rules[] = {
     [TOKEN_TRUE]                    = { literal,    NULL,       PREC_NONE },
     [TOKEN_FALSE]                   = { literal,    NULL,       PREC_NONE },
     [TOKEN_NULL]                    = { literal,    NULL,       PREC_NONE },
-    [TOKEN_TYPE]                    = { NULL,       NULL,       PREC_NONE },
     [TOKEN_PRINT_EXPR]              = { NULL,       NULL,       PREC_NONE },
     [TOKEN_ERROR]                   = { NULL,       NULL,       PREC_NONE },
     [TOKEN_EOF]                     = { NULL,       NULL,       PREC_NONE },
@@ -488,7 +487,7 @@ static OrsoStatementNode* statement(Parser* parser) {
 
     statement_node->expression = expression(parser);
 
-    consume(parser, TOKEN_SEMICOLON, "Expect end of statement semicolin");
+    consume(parser, TOKEN_SEMICOLON, "Expect end of statement semicolin.");
 
     statement_node->end = parser->previous;
 
@@ -514,7 +513,7 @@ static OrsoVarDeclarationNode* var_declaration(Parser* parser) {
     var_declaration_node->variable_name = parse_variable(parser);
 
     consume(parser, TOKEN_COLON, "Expect explicit type.");
-    if (match(parser, TOKEN_IDENTIFIER) || match(parser, TOKEN_TYPE)) {
+    if (match(parser, TOKEN_IDENTIFIER)) {
         var_declaration_node->type_identifier = parser->previous;
         if (match(parser, TOKEN_EQUAL)) {
             var_declaration_node->expression = expression(parser);
@@ -549,7 +548,7 @@ static OrsoDeclarationNode* declaration(Parser* parser) {
     declaration_node->type = ORSO_DECLARATION_NONE;
     if (variable_declaration_look_ahead(parser)) {
         declaration_node->type = ORSO_DECLARATION_VAR;
-        declaration_node->var= var_declaration(parser);
+        declaration_node->var = var_declaration(parser);
     } else {
         declaration_node->type = ORSO_DECLARATION_STATEMENT;
         declaration_node->statement = statement(parser);
