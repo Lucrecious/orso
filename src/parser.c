@@ -502,6 +502,18 @@ static Token parse_variable(Parser* parser) {
     return identifier;
 }
 
+static Token parse_types(Parser* parser) {
+    consume(parser, TOKEN_IDENTIFIER, "Expect type identifier.");
+
+    Token token = parser->previous;
+
+    while (match(parser, TOKEN_BAR)) {
+        consume(parser, TOKEN_IDENTIFIER, "Expect type identifier.");
+    }
+
+    return token;
+}
+
 static OrsoVarDeclarationNode* var_declaration(Parser* parser) {
     OrsoVarDeclarationNode* var_declaration_node = ORSO_ALLOCATE(OrsoVarDeclarationNode);
     var_declaration_node->start = parser->current;
@@ -515,8 +527,9 @@ static OrsoVarDeclarationNode* var_declaration(Parser* parser) {
     var_declaration_node->variable_name = parse_variable(parser);
 
     consume(parser, TOKEN_COLON, "Expect explicit type.");
-    if (match(parser, TOKEN_IDENTIFIER)) {
-        var_declaration_node->type_identifier = parser->previous;
+    if (check(parser, TOKEN_IDENTIFIER)) {
+        Token type_token = parse_types(parser);
+        var_declaration_node->type_identifier = type_token;
         if (match(parser, TOKEN_EQUAL)) {
             var_declaration_node->expression = expression(parser);
         }
