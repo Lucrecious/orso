@@ -102,6 +102,15 @@ static void mark_roots(OrsoGarbageCollector* gc) {
         visit(gc, entry->value.p);
     }
 
+    for (i32 i = 0; i < vm->stack_globals.capacity; i++) {
+        OrsoSymbolTableEntry* entry = &vm->stack_globals.entries[i];
+        if (entry->key == NULL) {
+            continue;
+        }
+
+        visit(gc, entry->key);
+    }
+
     // Assert that chunk is not null in gc until callframes
     u32* constant_offsets = vm->chunk->constant_object_offsets;
     for (i32 i = 0; i < sb_count(constant_offsets); i++) {
