@@ -258,29 +258,34 @@ static void resolve_var_declaration(OrsoStaticAnalyzer* analyzer, OrsoVarDeclara
         orso_resolve_expression(analyzer, var_declaration->expression);
     }
 
-    switch (var_declaration->var_type.one) {
-        case ORSO_TYPE_INVALID: {
-            error(analyzer, var_declaration->start.length, "Type does not exist.");
-            break;
-        }
-        case ORSO_TYPE_UNRESOLVED: {
-            // Should not be possible when expression is null because otherwise that's a
-            // a parsing error ASSERT
-            if (orso_integer_fit(ORSO_TYPE_ONE(ORSO_TYPE_INT32), var_declaration->expression->value_type, false)) {
-                var_declaration->var_type.one = ORSO_TYPE_INT32;
-            } else if (var_declaration->expression != NULL) {
-                var_declaration->var_type = var_declaration->expression->value_type;
-            } else {
-                // ASSERT this is union type
-                error(analyzer, var_declaration->start.line, "Union types must have a default value.");
+    if (ORSO_TYPE_IS_SINGLE(var_declaration->var_type)) {
+        switch (var_declaration->var_type.one) {
+            case ORSO_TYPE_INVALID: {
+                error(analyzer, var_declaration->start.length, "Type does not exist.");
+                break;
             }
-            break;
-        }
-        default: {
-            if (var_declaration->expression != NULL && !orso_type_fits(var_declaration->var_type, var_declaration->expression->value_type)) {
-                error(analyzer, var_declaration->start.line, "Must cast expression explicitly to match var type.");
+            case ORSO_TYPE_UNRESOLVED: {
+                // Should not be possible when expression is null because otherwise that's a
+                // a parsing error ASSERT
+                if (orso_integer_fit(ORSO_TYPE_ONE(ORSO_TYPE_INT32), var_declaration->expression->value_type, false)) {
+                    var_declaration->var_type.one = ORSO_TYPE_INT32;
+                } else {
+                    var_declaration->var_type = var_declaration->expression->value_type;
+                }
+                break;
             }
-            break;
+            default: {
+                if (var_declaration->expression != NULL && !orso_type_fits(var_declaration->var_type, var_declaration->expression->value_type)) {
+                    error(analyzer, var_declaration->start.line, "Must cast expression explicitly to match var type.");
+                }
+                break;
+            }
+        }
+    } else {
+        if (var_declaration->expression == NULL) {
+            error(analyzer, var_declaration->start.line, "Union types must have a default value.");
+        } else if (!orso_type_fits(var_declaration->var_type, var_declaration->expression->value_type)) {
+            error(analyzer, var_declaration->start.line, "Type mismatch between expression and declaration.");
         }
     }
 
