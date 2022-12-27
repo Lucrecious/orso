@@ -37,7 +37,7 @@ FORCE_INLINE OrsoSymbol* orso_unmanaged_symbol_from_cstrn(const char* start, i32
     }
 
     symbol = ORSO_ALLOCATE_FLEX(OrsoSymbol, length + 1);
-    symbol->object.type = ORSO_TYPE_SYMBOL;
+    symbol->object.type_kind = ORSO_TYPE_SYMBOL;
     symbol->hash = hash;
     symbol->length = length;
     memcpy(symbol->text, start, length);

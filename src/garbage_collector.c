@@ -169,7 +169,7 @@ void orso_gc_step(OrsoGarbageCollector* gc) {
             if (object != gc->to) {
                 gc->iterator = next(object);
 
-                switch (object->type) {
+                switch (object->type_kind) {
                     case ORSO_TYPE_SYMBOL: orso_symbol_table_remove(&gc->vm->symbols, (OrsoSymbol*)object); break;
                     default: break; // Fast if I guess
                 }

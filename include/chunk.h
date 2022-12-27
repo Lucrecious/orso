@@ -22,7 +22,7 @@ void chunk_write(Chunk* chunk, const OrsoInstruction* instruction, i32 line);
 i32 chunk_get_line(Chunk* chunk, i32 offset);
 i32 chunk_add_constant(Chunk* chunk, OrsoSlot value, bool is_object);
 
-void orso_print_slot(OrsoSlot slot, OrsoType type);
+void orso_print_slot(OrsoSlot slot, OrsoTypeKind type_kind);
 
 void chunk_free(Chunk* chunk);
 

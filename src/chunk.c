@@ -54,8 +54,8 @@ i32 chunk_get_line(Chunk* chunk, i32 offset) {
     return -1;
 }
 
-void orso_print_slot(OrsoSlot slot, OrsoType type) {
-    switch (type) {
+void orso_print_slot(OrsoSlot slot, OrsoTypeKind type_kind) {
+    switch (type_kind) {
         case ORSO_TYPE_BOOL: if (slot.i) { printf("true"); } else { printf("false"); } break;
         case ORSO_TYPE_INT32:
         case ORSO_TYPE_INT64: printf("%d", slot.i); break;

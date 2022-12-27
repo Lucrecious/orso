@@ -2,7 +2,7 @@
 
 #include <stdio.h>
 
-void* orso_object_reallocate(OrsoGarbageCollector* gc, OrsoGCHeader* pointer, OrsoType type, size_t old_size, size_t new_size) {
+void* orso_object_reallocate(OrsoGarbageCollector* gc, OrsoGCHeader* pointer, OrsoTypeKind type_kind, size_t old_size, size_t new_size) {
     if (new_size == 0) {
         // Should only be here when called by GC
         free(pointer);
@@ -18,9 +18,9 @@ void* orso_object_reallocate(OrsoGarbageCollector* gc, OrsoGCHeader* pointer, Or
         exit(1);
     }
 
-    result->type = type;
+    result->type_kind = type_kind;
 #ifdef DEBUG_GC_PRINT
-    printf("%p allocate %zu for %s\n", (void*)result, new_size, orso_type_to_cstr(result->type));
+    printf("%p allocate %zu for %s\n", (void*)result, new_size, orso_type_kind_to_cstr(result->type_kind));
 #endif
 
     orso_gc_register(gc, result);
@@ -30,9 +30,9 @@ void* orso_object_reallocate(OrsoGarbageCollector* gc, OrsoGCHeader* pointer, Or
 
 void orso_object_free(OrsoGarbageCollector* gc, OrsoObject* object) {
 #ifdef DEBUG_GC_PRINT
-    printf("%p free type %s\n", (void*)object, orso_type_to_cstr(object->type));
+    printf("%p free type %s\n", (void*)object, orso_type_kind_to_cstr(object->type_kind));
 #endif
-    switch (object->type) {
+    switch (object->type_kind) {
         case ORSO_TYPE_SYMBOL: {
             OrsoSymbol* symbol = (OrsoSymbol*)object;
             orso_object_reallocate(gc, symbol, ORSO_TYPE_SYMBOL, sizeof(OrsoSymbol) + symbol->length, 0);
@@ -56,8 +56,8 @@ OrsoString* orso_new_string_from_cstrn(OrsoGarbageCollector* gc, const char* sta
     return string;
 }
 
-OrsoString* orso_slot_to_string(OrsoGarbageCollector* gc, OrsoSlot slot, OrsoType type) {
-    switch (type) {
+OrsoString* orso_slot_to_string(OrsoGarbageCollector* gc, OrsoSlot slot, OrsoTypeKind type_kind) {
+    switch (type_kind) {
         case ORSO_TYPE_BOOL: {
             if (ORSO_SLOT_IS_FALSE(slot)) {
                 return orso_new_string_from_cstrn(gc, "false", 5);
