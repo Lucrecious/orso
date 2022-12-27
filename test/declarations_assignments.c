@@ -142,6 +142,10 @@ INTERPRETER_TEST(declaration_void_explicit,
     "x: void = null; print_expr x;",
     "x (void) => null\n")
 
+INTERPRETER_TEST(assignment_void,
+    "x := null; print_expr x; x = null; print_expr x;",
+    "x (void) => null\nx (void) => null\n")
+
 
 INTERPRETER_TEST(declaration_bool_default,
     "x: bool; print_expr x;",
@@ -215,6 +219,7 @@ MU_TEST_SUITE(all_tests) {
     MU_RUN_TEST(declaration_void_default);
     MU_RUN_TEST(declaration_void_implicit);
     MU_RUN_TEST(declaration_void_explicit);
+    MU_RUN_TEST(assignment_void);
 
     MU_RUN_TEST(declaration_bool_default);
     MU_RUN_TEST(declaration_bool_implicit);
