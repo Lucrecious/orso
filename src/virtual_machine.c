@@ -146,7 +146,7 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
             case ORSO_OP_CONSTANT: PUSH(vm->chunk->constants[instruction->constant.index]); break;
             case ORSO_OP_CONSTANT_PTR: PUSH_PTR(vm->chunk->constants[instruction->constant.index]); break;
 
-            case ORSO_OP_DEFINE_GLOBAL: {
+            case ORSO_OP_DEFINE_GLOBAL_STACK: {
                 OrsoSymbol* name = (OrsoSymbol*)vm->chunk->constants[instruction->constant.index].p;
                 orso_symbol_table_set(&vm->stack_globals, name, *PEEK(0));
                 POP();
@@ -160,7 +160,7 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
                 break;
             }
 
-            case ORSO_OP_GET_GLOBAL: {
+            case ORSO_OP_GET_GLOBAL_STACK: {
                 OrsoSymbol* name = (OrsoSymbol*)vm->chunk->constants[instruction->constant.index].p;
                 OrsoSlot slot;
                 orso_symbol_table_get(&vm->stack_globals, name, &slot);
@@ -176,7 +176,7 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
                 break;
             }
 
-            case ORSO_OP_SET_GLOBAL: {
+            case ORSO_OP_SET_GLOBAL_STACK: {
                 OrsoSymbol* name = (OrsoSymbol*)vm->chunk->constants[instruction->constant.index].p;
                 orso_symbol_table_set(&vm->stack_globals, name, *PEEK(0));
                 break;

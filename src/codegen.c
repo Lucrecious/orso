@@ -226,7 +226,7 @@ static void expression(OrsoVM* vm, OrsoExpressionNode* expression_node, Chunk* c
             i32 index = identifier_constant(identifier, chunk);
 
             const OrsoInstruction instruction = { 
-                .op_code = orso_is_gc_type(expression_node->value_type) ? ORSO_OP_GET_GLOBAL_PTR : ORSO_OP_GET_GLOBAL,
+                .op_code = orso_is_gc_type(expression_node->value_type) ? ORSO_OP_GET_GLOBAL_PTR : ORSO_OP_GET_GLOBAL_STACK,
                 .constant.index = index,
 #ifdef DEBUG_TRACE_EXECUTION
                 .constant.type = expression_node->value_type,
@@ -244,7 +244,7 @@ static void expression(OrsoVM* vm, OrsoExpressionNode* expression_node, Chunk* c
             i32 index = identifier_constant(identifier, chunk);
             
             const OrsoInstruction instruction = {
-                .op_code = orso_is_gc_type(expression_node->value_type) ? ORSO_OP_SET_GLOBAL_PTR : ORSO_OP_SET_GLOBAL,
+                .op_code = orso_is_gc_type(expression_node->value_type) ? ORSO_OP_SET_GLOBAL_PTR : ORSO_OP_SET_GLOBAL_STACK,
                 .constant.index = index,
 #ifdef DEBUG_TRACE_EXECUTION
                 .constant.type = expression_node->value_type,
@@ -319,7 +319,7 @@ static void var_declaration(OrsoVM* vm, OrsoVarDeclarationNode* var_declaration,
     OrsoSymbol* identifier = orso_new_symbol_from_cstrn(&vm->gc, identifier_token.start, identifier_token.length, &vm->symbols);
 
     const OrsoInstruction instruction = {
-        .op_code = orso_is_gc_type(var_declaration->var_type) ? ORSO_OP_DEFINE_GLOBAL_PTR : ORSO_OP_DEFINE_GLOBAL,
+        .op_code = orso_is_gc_type(var_declaration->var_type) ? ORSO_OP_DEFINE_GLOBAL_PTR : ORSO_OP_DEFINE_GLOBAL_STACK,
         .constant.index = identifier_constant(identifier, chunk),
     };
 

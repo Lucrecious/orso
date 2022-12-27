@@ -8,6 +8,12 @@
 
 #define ORSO_UNION_NUM_MAX 4
 
+typedef enum OrsoTypeType {
+    ORSO_TYPE_TYPE_PTR,
+    ORSO_TYPE_TYPE_STACK,
+    ORSO_TYPE_TYPE_UNION,
+} OrsoTypeType;
+
 typedef enum OrsoTypeKind {
     ORSO_TYPE_INVALID = 0,
     ORSO_TYPE_UNRESOLVED = 1,

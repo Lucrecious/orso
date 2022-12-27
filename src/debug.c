@@ -63,11 +63,11 @@ i32 disassemble_instruction(Chunk* chunk, i32 offset) {
         case ORSO_OP_EQUAL_STRING: return simple_instruction("OP_EQUAL_STRING", offset);
         case ORSO_OP_CONSTANT: return constant_instruction("OP_CONSTANT", chunk, offset);
         case ORSO_OP_CONSTANT_PTR: return constant_instruction("OP_CONSTANT_PTR", chunk, offset);
-        case ORSO_OP_DEFINE_GLOBAL: return constant_instruction("OP_DEFINE_GLOBAL", chunk, offset);
+        case ORSO_OP_DEFINE_GLOBAL_STACK: return constant_instruction("OP_DEFINE_GLOBAL_STACK", chunk, offset);
         case ORSO_OP_DEFINE_GLOBAL_PTR: return constant_instruction("OP_DEFINE_GLOBAL_PTR", chunk, offset);
-        case ORSO_OP_GET_GLOBAL: return simple_instruction("OP_GET_GLOBAL", offset);
+        case ORSO_OP_GET_GLOBAL_STACK: return simple_instruction("OP_GET_GLOBAL_STACK", offset);
         case ORSO_OP_GET_GLOBAL_PTR: return simple_instruction("OP_GET_GLOBAL_PTR", offset);
-        case ORSO_OP_SET_GLOBAL: return simple_instruction("OP_SET_GLOBAL", offset);
+        case ORSO_OP_SET_GLOBAL_STACK: return simple_instruction("OP_SET_GLOBAL_STACK", offset);
         case ORSO_OP_SET_GLOBAL_PTR: return simple_instruction("OP_SET_GLOBAL_PTR", offset);
         case ORSO_OP_CONCAT_STRING: return simple_instruction("OP_CONCAT_STRING", offset);
         case ORSO_OP_RETURN: return simple_instruction("OP_RETURN", offset);
