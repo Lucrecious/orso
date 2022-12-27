@@ -208,9 +208,9 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoExpressionNode* e
                 OrsoType type = ORSO_TYPE_ONE(type_slot.u);
 
                 orso_resolve_expression(analyzer, expression->assignment.right_side);
-                expression->value_type = expression->assignment.right_side->value_type;
+                expression->value_type = type;
                 
-                if (!orso_type_fits(type, expression->value_type)) {
+                if (!orso_type_fits(type, expression->assignment.right_side->value_type)) {
                     error(analyzer, expression->start.line, "Expression needs explicit cast to store in variable");
                 }
             }
