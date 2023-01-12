@@ -363,7 +363,7 @@ static add_builtin_types(OrsoStaticAnalyzer* analyzer) {
 #undef ADD_TYPE
 }
 
-void orso_static_analyzer_init(OrsoStaticAnalyzer* analyzer, OrsoSymbolTable* vm_symbol_table, OrsoErrorFunction error_fn) {
+void orso_static_analyzer_init(OrsoStaticAnalyzer* analyzer, OrsoErrorFunction error_fn) {
     analyzer->error_fn = error_fn;
     analyzer->had_error = false;
     analyzer->panic_mode = false;
@@ -378,7 +378,6 @@ void orso_static_analyzer_init(OrsoStaticAnalyzer* analyzer, OrsoSymbolTable* vm
 }
 
 void orso_static_analyzer_free(OrsoStaticAnalyzer* analyzer) {
-    orso_symbol_table_free(&analyzer->symbol_to_type);
     orso_symbol_table_free(&analyzer->defined_variables);
 
     for (i32 i = 0; i < analyzer->symbols.capacity; i++) {
@@ -389,6 +388,8 @@ void orso_static_analyzer_free(OrsoStaticAnalyzer* analyzer) {
 
         orso_unmanaged_symbol_free(entry->key);
     }
+
+    orso_symbol_table_free(&analyzer->symbol_to_type);
     orso_symbol_table_free(&analyzer->symbols);
 
     analyzer->error_fn = NULL;

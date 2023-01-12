@@ -22,8 +22,8 @@ int main(int argc, char **argv) {
     char source_code[1000];
 
     OrsoInterpreter interpreter;
-    orso_interpreter_init(&interpreter, write, error);
 
+    orso_interpreter_init(&interpreter, write, error);
     printf("Orso interpreter initialized.\n\n");
 
     for (;;) {
@@ -31,6 +31,7 @@ int main(int argc, char **argv) {
         if (fgets(source_code, 1000, stdin) == NULL) {
             break;
         }
+        
 
         if (source_code[0] == '\n') {
             break;

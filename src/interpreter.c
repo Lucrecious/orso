@@ -8,13 +8,14 @@
 
 void orso_interpreter_init(OrsoInterpreter* interpreter, OrsoWriteFunction write_fn, OrsoErrorFunction error_fn) {
     orso_vm_init(&interpreter->vm, write_fn);
-    orso_static_analyzer_init(&interpreter->static_analyzer, &interpreter->vm.symbols, error_fn);
+    orso_static_analyzer_init(&interpreter->static_analyzer, error_fn);
     interpreter->error_fn = error_fn;
 }
 
 void orso_interpreter_free(OrsoInterpreter* interpreter) {
     orso_vm_free(&interpreter->vm);
     orso_static_analyzer_free(&interpreter->static_analyzer);
+    interpreter->error_fn = NULL;
 }
 
 static bool compile(const char* source, OrsoVM* vm, OrsoStaticAnalyzer* analyzer, OrsoErrorFunction error_fn) {
@@ -74,6 +75,7 @@ static void interpret_continuous(OrsoVM* vm, OrsoStaticAnalyzer* analyzer, const
     free(vm->stack);
     free(vm->object_stack);
     chunk_free(&chunk);
+    vm->chunk = NULL;
     vm->stack_top = NULL;
     vm->object_stack_top = NULL;
 }

@@ -15,7 +15,7 @@ typedef struct OrsoStaticAnalyzer {
     bool panic_mode;
 } OrsoStaticAnalyzer;
 
-void orso_static_analyzer_init(OrsoStaticAnalyzer* analyzer, OrsoSymbolTable* vm_symbol_table, OrsoErrorFunction error_fn);
+void orso_static_analyzer_init(OrsoStaticAnalyzer* analyzer, OrsoErrorFunction error_fn);
 void orso_static_analyzer_free(OrsoStaticAnalyzer* analyzer);
 
 void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoExpressionNode* expression);

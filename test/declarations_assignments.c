@@ -27,9 +27,9 @@ OrsoInterpreter test_interpreter;
 \
     orso_interpreter_run(&test_interpreter, SOURCE); \
 \
-    MU_ASSERT_STRING_EQ(EXPECTED, test_buffer); \
-\
     orso_interpreter_free(&test_interpreter); \
+\
+    MU_ASSERT_STRING_EQ(EXPECTED, test_buffer); \
 }
 
 INTERPRETER_TEST(declaration_i64_default,
