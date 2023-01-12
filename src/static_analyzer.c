@@ -363,8 +363,7 @@ static add_builtin_types(OrsoStaticAnalyzer* analyzer) {
 #undef ADD_TYPE
 }
 
-void orso_static_analyzer_init(OrsoStaticAnalyzer* analyzer, OrsoGarbageCollector* gc, OrsoSymbolTable* vm_symbol_table, OrsoErrorFunction error_fn) {
-    analyzer->gc = gc;
+void orso_static_analyzer_init(OrsoStaticAnalyzer* analyzer, OrsoSymbolTable* vm_symbol_table, OrsoErrorFunction error_fn) {
     analyzer->error_fn = error_fn;
     analyzer->had_error = false;
     analyzer->panic_mode = false;

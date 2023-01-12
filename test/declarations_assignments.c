@@ -21,24 +21,15 @@ void clear_test_buffer() {
 
 OrsoInterpreter test_interpreter;
 
-#define INTERPRETER_STARTUP() do { \
+#define INTERPRETER_TEST(NAME, SOURCE, EXPECTED) MU_TEST(NAME) { \
     clear_test_buffer(); \
     orso_interpreter_init(&test_interpreter, write_to_test_buffer, NULL); \
-} while(false)
-
-#define INTERPRETER_RUN(SOURCE) orso_interpreter_run(&test_interpreter, SOURCE)
-
-#define INTERPRETER_TEARDOWN()  do { \
+\
+    orso_interpreter_run(&test_interpreter, SOURCE); \
+\
+    MU_ASSERT_STRING_EQ(EXPECTED, test_buffer); \
+\
     orso_interpreter_free(&test_interpreter); \
-} while(false)
-
-#define INTERPRETER_CHECK(EXPECTED) MU_ASSERT_STRING_EQ(EXPECTED, test_buffer)
-
-#define INTERPRETER_TEST(NAME, SOURCE, EXPECTED) MU_TEST(NAME) { \
-    INTERPRETER_STARTUP(); \
-    INTERPRETER_RUN(SOURCE); \
-    INTERPRETER_CHECK(EXPECTED); \
-    INTERPRETER_TEARDOWN(); \
 }
 
 INTERPRETER_TEST(declaration_i64_default,
