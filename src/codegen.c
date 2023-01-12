@@ -10,10 +10,26 @@ static void emit_instruction(const OrsoInstruction* instruction, Chunk* chunk, i
     chunk_write(chunk, instruction, line);
 }
 
+static void emit_push_top_object() {
+    const OrsoInstruction instruction = {
+        .op_code = ORSO_OP_PUSH_TOP_OBJECT,
+    };
+}
+
+static void emit_pop_top_object() {
+    const OrsoInstruction instruction = {
+        .op_code = ORSO_OP_POP_TOP_OBJECT,
+    };
+}
+
 static void emit_constant(Chunk* chunk, OrsoSlot slot, i32 line, bool is_ptr) {
     i32 index = chunk_add_constant(chunk, slot, is_ptr);
-    const OrsoInstruction instruction = { .op_code = is_ptr ? ORSO_OP_CONSTANT_PTR : ORSO_OP_CONSTANT, .constant.index = index };
+    const OrsoInstruction instruction = { .op_code = ORSO_OP_CONSTANT, .constant.index = index };
     chunk_write(chunk, &instruction, line);
+
+    if (is_ptr) {
+        emit_push_top_object();
+    }
 }
 
 static void emit_type_convert(OrsoTypeKind from_type_kind, OrsoTypeKind to_type_kind, Chunk* chunk, i32 line) {
@@ -233,7 +249,7 @@ static void expression(OrsoVM* vm, OrsoExpressionNode* expression_node, Chunk* c
             i32 index = identifier_constant(vm, identifier, chunk);
 
             const OrsoInstruction instruction = { 
-                .op_code = orso_is_gc_type(expression_node->value_type) ? ORSO_OP_GET_GLOBAL_PTR : ORSO_OP_GET_GLOBAL_STACK,
+                .op_code = ORSO_OP_GET_GLOBAL,
                 .constant.index = index,
 #ifdef DEBUG_TRACE_EXECUTION
                 .constant.type = expression_node->value_type,
@@ -241,6 +257,10 @@ static void expression(OrsoVM* vm, OrsoExpressionNode* expression_node, Chunk* c
             };
 
             emit_instruction(&instruction, chunk, expression_node->start.line);
+
+            if (orso_is_gc_type(expression_node->value_type)) {
+                emit_push_top_object();
+            }
             break;
         }
 
@@ -251,7 +271,7 @@ static void expression(OrsoVM* vm, OrsoExpressionNode* expression_node, Chunk* c
             i32 index = identifier_constant(vm, identifier, chunk);
             
             const OrsoInstruction instruction = {
-                .op_code = orso_is_gc_type(expression_node->value_type) ? ORSO_OP_SET_GLOBAL_PTR : ORSO_OP_SET_GLOBAL_STACK,
+                .op_code = ORSO_OP_SET_GLOBAL,
                 .constant.index = index,
 #ifdef DEBUG_TRACE_EXECUTION
                 .constant.type = expression_node->value_type,
@@ -286,9 +306,12 @@ static void statement(OrsoVM* vm, OrsoStatementNode* statement, Chunk* chunk) {
             expression(vm, expression_, chunk);
 
             const OrsoInstruction instruction = {
-                .op_code = orso_is_gc_type(expression_->value_type) ? ORSO_OP_POP_PTR : ORSO_OP_POP,
+                .op_code = ORSO_OP_POP,
             };
             emit_instruction(&instruction, chunk, statement->start.line);
+            if (orso_is_gc_type(expression_->value_type)) {
+                emit_pop_top_object();
+            }
             break;
         }
         case ORSO_STATEMENT_PRINT_EXPR: {
@@ -327,15 +350,17 @@ static void var_declaration(OrsoVM* vm, OrsoVarDeclarationNode* var_declaration,
 
     i32 index = identifier_constant(vm, identifier, chunk);
     const OrsoInstruction instruction = {
-        .op_code = orso_is_gc_type(var_declaration->var_type) ? ORSO_OP_DEFINE_GLOBAL_PTR : ORSO_OP_DEFINE_GLOBAL_STACK,
+        .op_code = ORSO_OP_DEFINE_GLOBAL,
         .constant.index = index,
     };
 
+    emit_instruction(&instruction, chunk, var_declaration->start.line);
+
     if (orso_is_gc_type(var_declaration->var_type)) {
         sb_push(vm->globals.gc_values_indices, index);
-    }
 
-    emit_instruction(&instruction, chunk, var_declaration->start.line);
+        emit_pop_top_object();
+    }
 }
 
 static void declaration(OrsoVM* vm, OrsoDeclarationNode* declaration, Chunk* chunk) {

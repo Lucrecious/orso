@@ -46,9 +46,8 @@ static FORCE_INLINE void push_i64(OrsoVM* vm, OrsoSlot value) {
     vm->stack_top++;
 }
 
-static FORCE_INLINE void push_ptr(OrsoVM* vm, OrsoSlot value) {
-    push_i64(vm, value);
-    *vm->object_stack_top = value.p;
+static FORCE_INLINE void push_top_object(OrsoVM* vm) {
+    *vm->object_stack_top = (vm->stack_top - 1)->p;
     vm->object_stack_top++;
 }
 
@@ -57,9 +56,9 @@ static FORCE_INLINE OrsoSlot pop(OrsoVM* vm) {
     return *vm->stack_top;
 }
 
-static FORCE_INLINE OrsoSlot pop_ptr(OrsoVM* vm) {
-    pop(vm);
+static FORCE_INLINE OrsoObject* pop_top_object(OrsoVM* vm) {
     vm->object_stack_top--;
+    return *vm->object_stack_top;
 }
 
 static FORCE_INLINE OrsoSlot* peek(OrsoVM* vm, i32 i) {
@@ -70,9 +69,10 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
 #define READ_INSTRUCTION() (vm->ip++)
 #define PEEK(I) peek(vm, I)
 #define POP() pop(vm)
-#define POP_PTR() pop_ptr(vm)
+#define POP_TOP_OBJECT() pop_top_object(vm)
+#define POP_PTR() pop(vm); pop_top_object(vm)
 #define PUSH(VALUE) push_i64(vm, VALUE)
-#define PUSH_PTR(VALUE) push_ptr(vm, VALUE)
+#define PUSH_TOP_OBJECT() push_top_object(vm)
 #ifdef DEBUG_TRACE_EXECUTION
 #define SLOT_ADD_TYPE(SLOT, TYPE) SLOT->type = TYPE
 #else
@@ -102,8 +102,8 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
 #endif
         switch (instruction->op_code) {
             case ORSO_OP_POP: POP(); break;
-            case ORSO_OP_POP_PTR: POP_PTR(); break;
-            //case ORSO_OP_PUSH_I64: PUSH(instruction->constant.index); break;
+            case ORSO_OP_POP_TOP_OBJECT: POP_TOP_OBJECT(); break;
+            case ORSO_OP_PUSH_TOP_OBJECT: PUSH_TOP_OBJECT(); break;
 
             case ORSO_OP_I64_TO_F64: PEEK(0)->f = (f64)PEEK(0)->i; break;
             case ORSO_OP_F64_TO_I64: PEEK(0)->i = (i64)PEEK(0)->f; break;
@@ -148,38 +148,20 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
             }
 
             case ORSO_OP_CONSTANT: PUSH(vm->chunk->constants[instruction->constant.index]); break;
-            case ORSO_OP_CONSTANT_PTR: PUSH_PTR(vm->chunk->constants[instruction->constant.index]); break;
 
-            case ORSO_OP_DEFINE_GLOBAL_STACK: {
+            case ORSO_OP_DEFINE_GLOBAL: {
                 vm->globals.values[instruction->constant.index] = *PEEK(0);
                 POP();
                 break;
             }
 
-            case ORSO_OP_DEFINE_GLOBAL_PTR: {
-                vm->globals.values[instruction->constant.index] = *PEEK(0);
-                POP_PTR();
-                break;
-            }
-
-            case ORSO_OP_GET_GLOBAL_STACK: {
+            case ORSO_OP_GET_GLOBAL: {
                 OrsoSlot slot = vm->globals.values[instruction->constant.index];
                 PUSH(slot);
                 break;
             }
 
-            case ORSO_OP_GET_GLOBAL_PTR: {
-                OrsoSlot slot = vm->globals.values[instruction->constant.index];
-                PUSH_PTR(slot);
-                break;
-            }
-
-            case ORSO_OP_SET_GLOBAL_STACK: {
-                vm->globals.values[instruction->constant.index] = *PEEK(0);
-                break;
-            }
-
-            case ORSO_OP_SET_GLOBAL_PTR: {
+            case ORSO_OP_SET_GLOBAL: {
                 vm->globals.values[instruction->constant.index] = *PEEK(0);
                 break;
             }
@@ -216,9 +198,9 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
     }
 
 #undef SLOT_ADD_TYPE
-#undef PUSH_PTR
+#undef PUSH_TOP_OBJECT
 #undef PUSH
-#undef POP_PTR
+#undef POP_TOP_OBJECT
 #undef POP
 #undef TOP_SLOT
 #undef READ_INSTRUCTION
