@@ -22,11 +22,8 @@ typedef struct OrsoVM {
     OrsoSymbolTable symbols;
     OrsoGarbageCollector gc;
     
-    // TODO: Make offsets instead beacuse changing stack might cuz to be invalidated.
-    // This is only for gcing anyways, which happens incrementally, so it should be cheap 
-    // enough to do the double lookup (lookup into this array, and then look up on stack)
-    OrsoSlot** object_stack; // addresses to stack
-    OrsoSlot** object_stack_top;
+    OrsoObject** object_stack;
+    OrsoObject** object_stack_top;
     
     OrsoSlot* stack;
     OrsoSlot* stack_top;

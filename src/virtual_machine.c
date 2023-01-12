@@ -48,9 +48,8 @@ static FORCE_INLINE void push_i64(OrsoVM* vm, OrsoSlot value) {
 
 static FORCE_INLINE void push_ptr(OrsoVM* vm, OrsoSlot value) {
     push_i64(vm, value);
-    *vm->object_stack_top = &(*(vm->stack_top - 1));
+    *vm->object_stack_top = value.p;
     vm->object_stack_top++;
-
 }
 
 static FORCE_INLINE OrsoSlot pop(OrsoVM* vm) {
@@ -61,7 +60,6 @@ static FORCE_INLINE OrsoSlot pop(OrsoVM* vm) {
 static FORCE_INLINE OrsoSlot pop_ptr(OrsoVM* vm) {
     pop(vm);
     vm->object_stack_top--;
-    return **vm->object_stack_top;
 }
 
 static FORCE_INLINE OrsoSlot* peek(OrsoVM* vm, i32 i) {
