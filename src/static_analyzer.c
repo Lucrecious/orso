@@ -287,6 +287,8 @@ static void resolve_var_declaration(OrsoStaticAnalyzer* analyzer, OrsoVarDeclara
         } else if (!orso_type_fits(var_declaration->var_type, var_declaration->expression->value_type)) {
             error(analyzer, var_declaration->start.line, "Type mismatch between expression and declaration.");
         }
+
+        error(analyzer, var_declaration->start.line, "Union types are not allowed at the moment.");
     }
 
     if (analyzer->had_error) {

@@ -11,13 +11,21 @@ typedef struct OrsoVM {
     Chunk* chunk;
     OrsoInstruction* ip;
 
-    OrsoSymbolTable symbols;
-    OrsoSymbolTable stack_globals;
-    OrsoSymbolTable object_globals;
-    OrsoGarbageCollector gc;
+    struct {
+        OrsoSymbolTable name_to_index;
 
-    // Address to actual stack
-    OrsoSlot** object_stack;
+        // TODO: figure a way for union
+        i32* gc_values_indices; // addresses to values or union object (see TODO above)
+        OrsoSlot* values;
+    } globals;
+
+    OrsoSymbolTable symbols;
+    OrsoGarbageCollector gc;
+    
+    // TODO: Make offsets instead beacuse changing stack might cuz to be invalidated.
+    // This is only for gcing anyways, which happens incrementally, so it should be cheap 
+    // enough to do the double lookup (lookup into this array, and then look up on stack)
+    OrsoSlot** object_stack; // addresses to stack
     OrsoSlot** object_stack_top;
     
     OrsoSlot* stack;

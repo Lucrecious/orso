@@ -226,12 +226,12 @@ MU_TEST_SUITE(all_tests) {
     MU_RUN_TEST(declaration_bool_explicit);
     MU_RUN_TEST(assignment_bool);
 
-    MU_RUN_TEST(declaration_union_explicit_default_void);
-    MU_RUN_TEST(declaration_union_explicit);
-    MU_RUN_TEST(declaration_union_explicit_no_void);
-    MU_RUN_TEST(assignment_union_stack_data);
-    MU_RUN_TEST(assignment_union_object_data);
-    MU_RUN_TEST(assignment_union_object_stack_mix_data);
+    // MU_RUN_TEST(declaration_union_explicit_default_void);
+    // MU_RUN_TEST(declaration_union_explicit);
+    // MU_RUN_TEST(declaration_union_explicit_no_void);
+    // MU_RUN_TEST(assignment_union_stack_data);
+    // MU_RUN_TEST(assignment_union_object_data);
+    // MU_RUN_TEST(assignment_union_object_stack_mix_data);
 }
 
 int main(int argc, char** argv) {

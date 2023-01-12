@@ -29,9 +29,16 @@ static void emit_type_convert(OrsoTypeKind from_type_kind, OrsoTypeKind to_type_
     }
 }
 
-static i32 identifier_constant(OrsoSymbol* identifier, Chunk* chunk) {
-    OrsoSlot slot = ORSO_SLOT_P(identifier, ORSO_TYPE_SYMBOL);
-    i32 index = chunk_add_constant(chunk, slot, true);
+static i32 identifier_constant(OrsoVM* vm, OrsoSymbol* identifier, Chunk* chunk) {
+    OrsoSlot index_slot;
+    if (!orso_symbol_table_get(&vm->globals.name_to_index, identifier, &index_slot)) {
+        index_slot = ORSO_SLOT_I(sb_count(vm->globals.values), ORSO_TYPE_INT32);
+        orso_symbol_table_set(&vm->globals.name_to_index, identifier, index_slot);
+
+        sb_push(vm->globals.values, ORSO_SLOT_I(0, ORSO_TYPE_INVALID));
+    }
+
+    i32 index = index_slot.i;
 
     return index;
 }
@@ -223,7 +230,7 @@ static void expression(OrsoVM* vm, OrsoExpressionNode* expression_node, Chunk* c
         case EXPRESSION_VARIABLE: {
             Token identifier_token = expression_node->variable.name;
             OrsoSymbol* identifier = orso_new_symbol_from_cstrn(&vm->gc, identifier_token.start, identifier_token.length, &vm->symbols);
-            i32 index = identifier_constant(identifier, chunk);
+            i32 index = identifier_constant(vm, identifier, chunk);
 
             const OrsoInstruction instruction = { 
                 .op_code = orso_is_gc_type(expression_node->value_type) ? ORSO_OP_GET_GLOBAL_PTR : ORSO_OP_GET_GLOBAL_STACK,
@@ -241,7 +248,7 @@ static void expression(OrsoVM* vm, OrsoExpressionNode* expression_node, Chunk* c
             Token identifier_token = expression_node->assignment.variable_name;
             OrsoSymbol* identifier = orso_new_symbol_from_cstrn(&vm->gc,
                 identifier_token.start, identifier_token.length, &vm->symbols);
-            i32 index = identifier_constant(identifier, chunk);
+            i32 index = identifier_constant(vm, identifier, chunk);
             
             const OrsoInstruction instruction = {
                 .op_code = orso_is_gc_type(expression_node->value_type) ? ORSO_OP_SET_GLOBAL_PTR : ORSO_OP_SET_GLOBAL_STACK,
@@ -318,10 +325,15 @@ static void var_declaration(OrsoVM* vm, OrsoVarDeclarationNode* var_declaration,
     Token identifier_token = var_declaration->variable_name;
     OrsoSymbol* identifier = orso_new_symbol_from_cstrn(&vm->gc, identifier_token.start, identifier_token.length, &vm->symbols);
 
+    i32 index = identifier_constant(vm, identifier, chunk);
     const OrsoInstruction instruction = {
         .op_code = orso_is_gc_type(var_declaration->var_type) ? ORSO_OP_DEFINE_GLOBAL_PTR : ORSO_OP_DEFINE_GLOBAL_STACK,
-        .constant.index = identifier_constant(identifier, chunk),
+        .constant.index = index,
     };
+
+    if (orso_is_gc_type(var_declaration->var_type)) {
+        sb_push(vm->globals.gc_values_indices, index);
+    }
 
     emit_instruction(&instruction, chunk, var_declaration->start.line);
 }

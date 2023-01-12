@@ -92,27 +92,23 @@ static void mark_roots(OrsoGarbageCollector* gc) {
         visit(gc, (OrsoGCHeader*)(*slot)->p);
     }
 
-    for (i32 i = 0; i < vm->object_globals.capacity; i++) {
-        OrsoSymbolTableEntry* entry = &vm->object_globals.entries[i];
+    for (i32 i = 0; i < vm->globals.name_to_index.capacity; i++) {
+        OrsoSymbolTableEntry* entry = &vm->globals.name_to_index.entries[i];
         if (entry->key == NULL) {
             continue;
         }
 
         visit(gc, entry->key);
-        visit(gc, entry->value.p);
     }
 
-    for (i32 i = 0; i < vm->stack_globals.capacity; i++) {
-        OrsoSymbolTableEntry* entry = &vm->stack_globals.entries[i];
-        if (entry->key == NULL) {
-            continue;
-        }
-
-        visit(gc, entry->key);
+    for (i32 i = 0; i < sb_count(vm->globals.gc_values_indices); i++) {
+        i32 index = vm->globals.gc_values_indices[i];
+        visit(gc, vm->globals.values[index].p);
     }
 
     // Assert that chunk is not null in gc until callframes
     u32* constant_offsets = vm->chunk->constant_object_offsets;
+    i32 constant_offset_count = sb_count(constant_offsets);
     for (i32 i = 0; i < sb_count(constant_offsets); i++) {
         u32 offset = constant_offsets[i];
         OrsoSlot* slot = &vm->chunk->constants[offset];

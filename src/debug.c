@@ -20,6 +20,14 @@ static i32 constant_instruction(const char* name, Chunk* chunk, i32 offset) {
     return offset + 1;
 }
 
+static i32 define_global_instruction(const char* name, Chunk* chunk, i32 offset) {
+    OrsoInstruction define_global = chunk->code[offset];
+    printf("%-16s %d", name, define_global.constant.index);
+    printf("\n");
+
+    return offset + 1;
+}
+
 static i32 simple_instruction(const char* name, i32 offset) {
     printf("%s\n", name);
     return offset + 1;
@@ -63,8 +71,8 @@ i32 disassemble_instruction(Chunk* chunk, i32 offset) {
         case ORSO_OP_EQUAL_STRING: return simple_instruction("OP_EQUAL_STRING", offset);
         case ORSO_OP_CONSTANT: return constant_instruction("OP_CONSTANT", chunk, offset);
         case ORSO_OP_CONSTANT_PTR: return constant_instruction("OP_CONSTANT_PTR", chunk, offset);
-        case ORSO_OP_DEFINE_GLOBAL_STACK: return constant_instruction("OP_DEFINE_GLOBAL_STACK", chunk, offset);
-        case ORSO_OP_DEFINE_GLOBAL_PTR: return constant_instruction("OP_DEFINE_GLOBAL_PTR", chunk, offset);
+        case ORSO_OP_DEFINE_GLOBAL_STACK: return define_global_instruction("OP_DEFINE_GLOBAL_STACK", chunk, offset);
+        case ORSO_OP_DEFINE_GLOBAL_PTR: return define_global_instruction("OP_DEFINE_GLOBAL_PTR", chunk, offset);
         case ORSO_OP_GET_GLOBAL_STACK: return simple_instruction("OP_GET_GLOBAL_STACK", offset);
         case ORSO_OP_GET_GLOBAL_PTR: return simple_instruction("OP_GET_GLOBAL_PTR", offset);
         case ORSO_OP_SET_GLOBAL_STACK: return simple_instruction("OP_SET_GLOBAL_STACK", offset);

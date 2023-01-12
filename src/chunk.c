@@ -28,6 +28,7 @@ void chunk_free(Chunk* chunk) {
     sb_free(chunk->lines);
     sb_free(chunk->constants);
     sb_free(chunk->constant_object_offsets);
+    chunk_init(chunk);
 }
 
 void chunk_write(Chunk* chunk, const OrsoInstruction* instruction, i32 line) {
