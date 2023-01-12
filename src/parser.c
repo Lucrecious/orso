@@ -111,8 +111,8 @@ static void free_declaration(OrsoDeclarationNode* declaration_node) {
         case ORSO_DECLARATION_VAR: {
             orso_free_expression(declaration_node->var->expression);
             free(declaration_node->var->expression);
-            free(declaration_node->var);
             sb_free(declaration_node->var->type_identifiers);
+            free(declaration_node->var);
             break;
         }
     }
