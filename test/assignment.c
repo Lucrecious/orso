@@ -30,6 +30,11 @@ INTERPRETER_TEST(assignment_bool,
     "x := false; print_expr x; x = true; print_expr x;",
     "x (bool) => false\nx (bool) => true\n")
 
+INTERPRETER_TEST(assignment_variable_to_variable,
+    "x := 1; y := 2; x = y; print_expr x; print_expr y;",
+    "x (i32) => 2\ny (i32) => 2\n")
+
+
 INTERPRETER_TEST(assignment_union_stack_data,
     "x: bool | i32 = true; print_expr x; x = 32; print_expr x;",
     "x (bool|i32) => true\nx (bool|i32) => 32\n");
@@ -42,6 +47,19 @@ INTERPRETER_TEST(assignment_union_object_stack_mix_data,
     "x: bool | symbol = 'foo'; print_expr x; x = false; print_expr x;",
     "x (bool|symbol) => 'foo'\nx (bool|symbol) => false\n");
 
+INTERPRETER_TEST(assignment_union_to_single,
+    "foo: symbol; bar: symbol|void = 'foobar'; foo = bar; print_expr foo;",
+    "foo (symbol) => 'foobar'\n");
+
+INTERPRETER_TEST(assignment_union_to_single_after_change,
+    "foo: symbol; bar: symbol|void; print_expr bar; bar = 'foobar'; foo = bar; print_expr foo;",
+    "bar (symbol|void) => null\nfoo (symbol) => 'foobar'");
+
+INTERPRETER_TEST(assignment_union_to_union,
+    "foo: bool|void = false; bar: bool|void = true; foo = bar; print_expr foo;",
+    "foo (bool|void) => true\n");
+
+
 
 MU_TEST_SUITE(tests) {
     MU_RUN_TEST(assignment_i64);
@@ -51,9 +69,13 @@ MU_TEST_SUITE(tests) {
     MU_RUN_TEST(assignment_string);
     MU_RUN_TEST(assignment_void);
     MU_RUN_TEST(assignment_bool);
+    MU_RUN_TEST(assignment_variable_to_variable);
     MU_RUN_TEST(assignment_union_stack_data);
     MU_RUN_TEST(assignment_union_object_data);
     MU_RUN_TEST(assignment_union_object_stack_mix_data);
+    MU_RUN_TEST(assignment_union_to_single);
+    MU_RUN_TEST(assignment_union_to_single_after_change);
+    MU_RUN_TEST(assignment_union_to_union);
 }
 
 int main(int argc, char** argv) {
