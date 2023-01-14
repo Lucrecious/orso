@@ -25,8 +25,10 @@ typedef enum OrsoTypeKind {
     ORSO_TYPE_FLOAT64 = 7,
     ORSO_TYPE_STRING = 8,
     ORSO_TYPE_SYMBOL = 9,
-    ORSO_TYPE_USER = 10,
-    ORSO_TYPE_MAX = 65010,
+    ORSO_TYPE_TYPE = 11,
+    ORSO_TYPE_USER = 12,
+    // Aiming to allow for 65k custom types. This number must be less than 0xFFFF (largest u16)
+    ORSO_TYPE_MAX = 65012,
 } OrsoTypeKind;
 
 typedef union OrsoType {
@@ -106,17 +108,26 @@ bool FORCE_INLINE orso_is_number_type_kind(OrsoTypeKind type_kind, bool include_
     return orso_is_float_type_kind(type_kind) || orso_is_integer_type_kind(type_kind, include_bool) || orso_is_unsigned_integer_type(type_kind);
 }
 
-i32 FORCE_INLINE orso_number_and_bool_type_bit_count(OrsoTypeKind number_type_kind) {
-    switch (number_type_kind) {
+i32 FORCE_INLINE orso_get_builtin_type_kind_bits(OrsoTypeKind type_kind) {
+    switch (type_kind) {
+        case ORSO_TYPE_NULL: return 0;
+
         case ORSO_TYPE_INT64:
         case ORSO_TYPE_FLOAT64: return 64;
 
         case ORSO_TYPE_FLOAT32:
         case ORSO_TYPE_INT32: return 32;
 
+        case ORSO_TYPE_STRING:
+        case ORSO_TYPE_SYMBOL: return 64;
+
         case ORSO_TYPE_BOOL: return 1;
 
-        default: return 0;
+        case ORSO_TYPE_TYPE: return 64;
+
+        // TODO: Add assert here should never go here
+        case ORSO_TYPE_INVALID:
+        case ORSO_TYPE_UNRESOLVED: return 0;
     }
 }
 
@@ -137,7 +148,7 @@ const FORCE_INLINE bool orso_integer_fit(OrsoType storage_type, OrsoType value_t
         return false;
     }
 
-    return orso_number_and_bool_type_bit_count(storage_type.one) >= orso_number_and_bool_type_bit_count(value_type.one);
+    return orso_get_builtin_type_kind_bits(storage_type.one) >= orso_get_builtin_type_kind_bits(value_type.one);
 }
 
 const FORCE_INLINE bool orso_type_fits(OrsoType storage_type, OrsoType value_type) {
@@ -183,6 +194,7 @@ const FORCE_INLINE char* orso_type_kind_to_cstr(OrsoTypeKind type_kind) {
         case ORSO_TYPE_FLOAT64: return "f64";
         case ORSO_TYPE_STRING: return "string";
         case ORSO_TYPE_SYMBOL: return "symbol";
+        case ORSO_TYPE_TYPE: return "type";
         case ORSO_TYPE_UNRESOLVED: return "<unresolved>";
         case ORSO_TYPE_INVALID: return "<invalid>";
         default: return "<unknown>";
@@ -227,8 +239,16 @@ OrsoType FORCE_INLINE orso_binary_arithmetic_cast(OrsoType a, OrsoType b, TokenT
         return ORSO_TYPE_ONE(ORSO_TYPE_STRING);
     }
 
-    i32 a_count = orso_number_and_bool_type_bit_count(a.one);
-    i32 b_count = orso_number_and_bool_type_bit_count(b.one);
+    if (!orso_is_number_type_kind(a.one, true)) {
+        return ORSO_TYPE_ONE(ORSO_TYPE_INVALID);
+    }
+
+    if (!orso_is_number_type_kind(b.one, true)) {
+        return ORSO_TYPE_ONE(ORSO_TYPE_INVALID);
+    }
+
+    i32 a_count = orso_get_builtin_type_kind_bits(a.one);
+    i32 b_count = orso_get_builtin_type_kind_bits(b.one);
 
     if (a_count == 0 || b_count == 0) {
         return ORSO_TYPE_ONE(ORSO_TYPE_INVALID);
@@ -270,8 +290,8 @@ void FORCE_INLINE orso_binary_comparison_casts(OrsoType a, OrsoType b, OrsoType*
             return;
         }
 
-        i32 a_count = orso_number_and_bool_type_bit_count(a.one);
-        i32 b_count = orso_number_and_bool_type_bit_count(b.one);
+        i32 a_count = orso_get_builtin_type_kind_bits(a.one);
+        i32 b_count = orso_get_builtin_type_kind_bits(b.one);
 
         if (a_count <= 32 && b_count <= 32) {
             *a_cast = ORSO_TYPE_ONE(ORSO_TYPE_FLOAT32);

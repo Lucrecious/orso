@@ -102,12 +102,15 @@ static void mark_roots(OrsoGarbageCollector* gc) {
     }
 
     for (i32 i = 0; i < sb_count(vm->globals.gc_values_indices); i++) {
-        i32 index = vm->globals.gc_values_indices[i];
-        visit(gc, vm->globals.values[index].p);
+        OrsoGCValueIndex index = vm->globals.gc_values_indices[i];
+        if (!index.is_object) {
+            continue;
+        }
+
+        visit(gc, vm->globals.values[index.index].p);
     }
 
     if (vm->chunk) {
-        // Assert that chunk is not null in gc until callframes
         u32* constant_offsets = vm->chunk->constant_object_offsets;
         i32 constant_offset_count = sb_count(constant_offsets);
         for (i32 i = 0; i < sb_count(constant_offsets); i++) {

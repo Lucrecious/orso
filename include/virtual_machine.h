@@ -6,6 +6,11 @@
 #include "object.h"
 #include "symbol_table.h"
 
+typedef struct OrsoGCValueIndex {
+    u32 is_object : 1;
+    u32 index : 31;
+} OrsoGCValueIndex;
+
 typedef struct OrsoVM {
     OrsoWriteFunction write_fn;
     Chunk* chunk;
@@ -14,13 +19,17 @@ typedef struct OrsoVM {
     struct {
         OrsoSymbolTable name_to_index;
 
-        // TODO: figure a way for union
-        i32* gc_values_indices; // addresses to values or union object (see TODO above)
+        // negative indices indicate a union object type that is holding a stack item
+        // only union types with a gc type are included in this list
+        OrsoGCValueIndex* gc_values_indices;
         OrsoSlot* values;
     } globals;
 
     OrsoSymbolTable symbols;
     OrsoGarbageCollector gc;
+
+    i32 union_object_stack_count;
+    i32* union_object_stack;
     
     OrsoObject** object_stack;
     OrsoObject** object_stack_top;

@@ -74,6 +74,11 @@ i32 disassemble_instruction(Chunk* chunk, i32 offset) {
         case ORSO_OP_DEFINE_GLOBAL: return define_global_instruction("OP_DEFINE_GLOBAL", chunk, offset);
         case ORSO_OP_GET_GLOBAL: return simple_instruction("OP_GET_GLOBAL", offset);
         case ORSO_OP_SET_GLOBAL: return simple_instruction("OP_SET_GLOBAL", offset);
+        case ORSO_OP_DEFINE_GLOBAL_UNION: return define_global_instruction("OP_DEFINE_GLOBAL_UNION", chunk, offset);
+        case ORSO_OP_GET_GLOBAL_UNION: return simple_instruction("OP_GET_GLOBAL_UNION", offset);
+        case ORSO_OP_SET_GLOBAL_UNION: return simple_instruction("OP_SET_GLOBAL_UNION", offset);
+        case ORSO_OP_UPDATE_GLOBAL_UNION_TYPE: return simple_instruction("OP_UPDATE_GLOBAL_UNION_TYPE", offset);
+        case ORSO_OP_PUT_IN_UNION: return simple_instruction("OP_PUT_IN_UNION", offset);
         case ORSO_OP_CONCAT_STRING: return simple_instruction("OP_CONCAT_STRING", offset);
         case ORSO_OP_RETURN: return simple_instruction("OP_RETURN", offset);
         case ORSO_OP_PRINT_EXPR: return simple_instruction("OP_PRINT_EXPR", offset);

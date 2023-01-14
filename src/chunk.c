@@ -65,6 +65,12 @@ void orso_print_slot(OrsoSlot slot, OrsoTypeKind type_kind) {
         case ORSO_TYPE_NULL: printf("null"); break;
         case ORSO_TYPE_STRING: printf("\"%s\"", ((OrsoString*)slot.p)->text); break;
         case ORSO_TYPE_SYMBOL: printf("'%s'", ((OrsoSymbol*)slot.p)->text); break;
+        case ORSO_TYPE_TYPE: {
+            char type_string[256];
+            orso_type_to_cstr(ORSO_TYPE_ONE(slot.u), type_string);
+            printf("<"); printf(type_string); printf(">");
+            break;
+        }
         default: printf("i64(%lld), f64(%.2f), ptr(%x)", slot.i, slot.f, slot.p); break;
     }
     

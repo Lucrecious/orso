@@ -70,7 +70,7 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
 #define PEEK(I) peek(vm, I)
 #define POP() pop(vm)
 #define POP_TOP_OBJECT() pop_top_object(vm)
-#define POP_PTR() pop(vm); pop_top_object(vm)
+#define POP_PTR() pop_top_object(vm); pop(vm)
 #define PUSH(VALUE) push_i64(vm, VALUE)
 #define PUSH_TOP_OBJECT() push_top_object(vm)
 #ifdef DEBUG_TRACE_EXECUTION
@@ -83,9 +83,10 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
         OrsoInstruction* instruction = READ_INSTRUCTION();
 #ifdef DEBUG_TRACE_EXECUTION
         printf("PTR SLOTS = { ");
-        for (OrsoSlot** slot = vm->object_stack; slot < vm->object_stack_top; slot++) {
+        for (OrsoObject** object = vm->object_stack; object < vm->object_stack_top; object++) {
             printf("[");
-            orso_print_slot(**slot, (*slot)->type.one);
+            OrsoSlot slot = ORSO_SLOT_P(*object, ORSO_TYPE_ONE((u64)(*object)->type_kind));
+            orso_print_slot(slot, slot.type.one);
             printf("]");
         }
         printf(" }\n");
@@ -155,9 +156,36 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
                 break;
             }
 
+            case ORSO_OP_DEFINE_GLOBAL_UNION: {
+                OrsoSlot type = *PEEK(1);
+                vm->globals.values[instruction->constant.index] = type;
+                vm->globals.values[instruction->constant.index + 1] = *PEEK(0);
+
+                if (orso_is_gc_type(ORSO_TYPE_ONE(type.u))) {
+                    POP_TOP_OBJECT();
+                }
+
+                POP();
+                POP();
+                break;
+            }
+
             case ORSO_OP_GET_GLOBAL: {
                 OrsoSlot slot = vm->globals.values[instruction->constant.index];
                 PUSH(slot);
+                break;
+            }
+
+            case ORSO_OP_GET_GLOBAL_UNION: {
+                OrsoSlot type = vm->globals.values[instruction->constant.index];
+                OrsoSlot value = vm->globals.values[instruction->constant.index + 1];
+
+                PUSH(type);
+                PUSH(value);
+
+                if (orso_is_gc_type(ORSO_TYPE_ONE(type.u))) {
+                    PUSH_TOP_OBJECT();
+                }
                 break;
             }
 
@@ -166,9 +194,45 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
                 break;
             }
 
+            case ORSO_OP_SET_GLOBAL_UNION: {
+                OrsoSlot type = *PEEK(1);
+                OrsoSlot value = *PEEK(0);
+                vm->globals.values[instruction->constant.index] = type;
+                vm->globals.values[instruction->constant.index + 1] = value;
+                break;
+            }
+
+            case ORSO_OP_PUT_IN_UNION: {
+                OrsoType type = instruction->put_in_union.type;
+                OrsoSlot value = POP();
+                PUSH(ORSO_SLOT_U(type.one, ORSO_TYPE_TYPE));
+                PUSH(value);
+                break;
+            }
+
+            case ORSO_OP_UPDATE_GLOBAL_UNION_TYPE: {
+                OrsoType type = ORSO_TYPE_ONE(PEEK(1)->u);
+                OrsoGCValueIndex gc_value_index = vm->globals.gc_values_indices[instruction->constant.index];
+                if (orso_is_gc_type(type)) {
+                    vm->globals.gc_values_indices[instruction->constant.index].is_object = true;
+                } else {
+                    vm->globals.gc_values_indices[instruction->constant.index].is_object = false;
+                }
+                break;
+            }
+
             case ORSO_OP_PRINT_EXPR: {
-                OrsoString* expression_string = (OrsoString*)(PEEK(0)->p);
-                OrsoString* string = orso_slot_to_string(&vm->gc, *PEEK(1), instruction->print_expr.type.one);
+                OrsoString* expression_string;
+                OrsoString* value_string;
+                if (ORSO_TYPE_IS_SINGLE(instruction->print_expr.type)) {
+                    expression_string = (OrsoString*)(PEEK(0)->p);
+                    value_string = orso_slot_to_string(&vm->gc, *PEEK(1), instruction->print_expr.type.one);
+                } else {
+                    expression_string = (OrsoString*)(PEEK(0)->p);
+                    // ASSERT that PEEK(2) is single type
+                    OrsoTypeKind union_type = (OrsoTypeKind)PEEK(2)->u;
+                    value_string = orso_slot_to_string(&vm->gc, *PEEK(1), union_type);
+                }
 
                 if (vm->write_fn != NULL) {
                     vm->write_fn(expression_string->text);
@@ -179,7 +243,7 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
 
                     vm->write_fn(type_str);
                     vm->write_fn(") => ");
-                    vm->write_fn(string->text);
+                    vm->write_fn(value_string->text);
                     vm->write_fn("\n");
                 }
 
@@ -188,6 +252,10 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
                 if (orso_is_gc_type(instruction->print_expr.type)) {
                     POP_PTR();
                 } else {
+                    POP();
+                }
+
+                if (ORSO_TYPE_IS_UNION(instruction->print_expr.type)) {
                     POP();
                 }
                 break;
