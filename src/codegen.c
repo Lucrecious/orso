@@ -418,8 +418,17 @@ static void var_declaration(OrsoVM* vm, OrsoVarDeclarationNode* var_declaration,
     if (var_declaration->expression != NULL) {
         expression(vm, var_declaration->expression, chunk);
     } else {
-        OrsoSlot slot = zero_value(var_declaration->var_type.one, &vm->gc, &vm->symbols);
-        emit_constant(chunk, slot, var_declaration->start.line, orso_is_gc_type(var_declaration->var_type));
+        if (ORSO_TYPE_IS_UNION(var_declaration->var_type)) {
+            // ASSERT that the var_type's union has void in it
+            const OrsoInstruction push_null_union = {
+                .op_code = ORSO_OP_PUSH_NULL_UNION,
+            };
+
+            emit_instruction(&push_null_union, chunk, var_declaration->start.line);
+        } else {
+            OrsoSlot slot = zero_value(var_declaration->var_type.one, &vm->gc, &vm->symbols);
+            emit_constant(chunk, slot, var_declaration->start.line, orso_is_gc_type(var_declaration->var_type));
+        }
     }
 
     Token identifier_token = var_declaration->variable_name;
@@ -446,7 +455,7 @@ static void var_declaration(OrsoVM* vm, OrsoVarDeclarationNode* var_declaration,
         // ASSERT var_declaration->expression cannot be NULL if the declaration type is a union type.
         i32 index = identifier_constant(vm, identifier, chunk, 2);
 
-        if (ORSO_TYPE_IS_SINGLE(var_declaration->expression->value_type)) {
+        if (var_declaration->expression && ORSO_TYPE_IS_SINGLE(var_declaration->expression->value_type)) {
             const OrsoInstruction put_in_union = {
                 .op_code = ORSO_OP_PUT_IN_UNION,
                 .put_in_union.type = var_declaration->expression->value_type,

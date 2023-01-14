@@ -50,6 +50,7 @@ i32 disassemble_instruction(Chunk* chunk, i32 offset) {
         case ORSO_OP_PUSH_TOP_OBJECT: return simple_instruction("OP_PUSH_TOP_OBJECT", offset);
         case ORSO_OP_PUSH_0: return simple_instruction("OP_PUSH_0", offset);
         case ORSO_OP_PUSH_1: return simple_instruction("OP_PUSH_1", offset);
+        case ORSO_OP_PUSH_NULL_UNION: return simple_instruction("OP_PUSH_NULL_UNION", offset);
         case ORSO_OP_NEGATE_I64: return simple_instruction("OP_NEGATE_I64", offset);
         case ORSO_OP_NEGATE_F64: return simple_instruction("OP_NEGATE_F64", offset);
         case ORSO_OP_ADD_I64: return simple_instruction("OP_ADD_I64", offset);

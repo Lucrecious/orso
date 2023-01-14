@@ -148,6 +148,14 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
                 break;
             }
 
+            case ORSO_OP_PUSH_NULL_UNION: {
+                const OrsoSlot void_type = ORSO_SLOT_U((u64)ORSO_TYPE_NULL, ORSO_TYPE_TYPE);
+                const OrsoSlot null_value = ORSO_SLOT_I(0, ORSO_TYPE_NULL);
+                PUSH(void_type);
+                PUSH(null_value);
+                break;
+            }
+
             case ORSO_OP_CONSTANT: PUSH(vm->chunk->constants[instruction->constant.index]); break;
 
             case ORSO_OP_DEFINE_GLOBAL: {

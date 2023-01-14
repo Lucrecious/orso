@@ -283,7 +283,9 @@ static void resolve_var_declaration(OrsoStaticAnalyzer* analyzer, OrsoVarDeclara
         }
     } else {
         if (var_declaration->expression == NULL) {
-            error(analyzer, var_declaration->start.line, "Union types must have a default value.");
+            if (!orso_type_fits(var_declaration->var_type, ORSO_TYPE_ONE(ORSO_TYPE_NULL))) {
+                error(analyzer, var_declaration->start.line, "Non-void union types must have a default value.");
+            } 
         } else if (!orso_type_fits(var_declaration->var_type, var_declaration->expression->value_type)) {
             error(analyzer, var_declaration->start.line, "Type mismatch between expression and declaration.");
         }
