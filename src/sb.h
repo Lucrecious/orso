@@ -26,7 +26,7 @@
 
 #include <stdlib.h>
 
-static void *stb__sbgrowf(void *arr, int increment, int itemsize) {
+static __attribute__((unused)) /* prevents unused warning */ void *stb__sbgrowf(void *arr, int increment, int itemsize) {
     int dbl_cur = arr ? 2 * stb__sbm(arr) : 0;
     int min_needed = stb_sb_count(arr) + increment;
     int m = dbl_cur > min_needed ? dbl_cur : min_needed;
