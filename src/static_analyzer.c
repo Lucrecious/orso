@@ -205,7 +205,7 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoExpressionNode* e
                 expression->value_type = type;
                 
                 if (!orso_type_fits(type, expression->expr.assignment.right_side->value_type)) {
-                    error(analyzer, expression->start.line, "Expression needs explicit cast to store in variable");
+                    error(analyzer, expression->start.line, "Expression needs explicit cast to store in variable.");
                 }
             }
             break;

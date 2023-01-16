@@ -20,6 +20,10 @@ src = [
   'src/virtual_machine.c',
 ]
 
+test_error = executable('test_error', [src, 'test/error.c'],
+  install : false,
+  include_directories : inc)
+
 test_variable_declaration = executable('test_variable_declaration', [src, 'test/variable_declaration.c'],
   install : false,
   include_directories : inc)
@@ -47,5 +51,6 @@ endif
 
 executable('orso', [src, 'main.c'], install : false, include_directories : inc, c_args : c_args)
 
+test('test_error', test_error)
 test('test_variable_declaration', test_variable_declaration)
 test('test_assignment', test_assignment)
