@@ -21,7 +21,7 @@ static OrsoSymbolTableEntry* find_entry(OrsoSymbolTableEntry* entries, i32 capac
         OrsoSymbolTableEntry* entry = &entries[index];
 
         if (entry->key == NULL) {
-            if (entry->value.i == 0) {
+            if (entry->value.as.i == 0) {
                 return tombstone != NULL ? tombstone : entry;
             } else {
                 if (tombstone == NULL) {
@@ -84,7 +84,7 @@ bool orso_symbol_table_set(OrsoSymbolTable* table, OrsoSymbol* key, OrsoSlot val
     OrsoSymbolTableEntry* entry = find_entry(table->entries, table->capacity, key);
     bool is_new_key = (entry->key == NULL);
 
-    if (is_new_key && entry->value.i == 0) {
+    if (is_new_key && entry->value.as.i == 0) {
         table->count++;
     }
 
@@ -105,7 +105,7 @@ bool orso_symbol_table_remove(OrsoSymbolTable* table, OrsoSymbol* key) {
     }
 
     entry->key = NULL;
-    entry->value.i = 1;
+    entry->value.as.i = 1;
 }
 
 void orso_symbol_table_add_all(OrsoSymbolTable* source, OrsoSymbolTable* destination) {
@@ -129,7 +129,7 @@ OrsoSymbol* orso_symbol_table_find_cstrn(OrsoSymbolTable* table, const char* sta
         OrsoSymbolTableEntry* entry = &table->entries[index++];
 
         if (entry->key == NULL) {
-            if (entry->value.i == 0) {
+            if (entry->value.as.i == 0) {
                 return NULL;
             }
         } else if (entry->key->length == length && entry->key->hash == hash

@@ -47,27 +47,27 @@ typedef struct OrsoSlot {
         f64 f;
         ptr p;
         u64 u;
-    };
+    } as;
 } OrsoSlot;
 
-#define ORSO_SLOT_IS_FALSE(SLOT) (SLOT.i == 0)
+#define ORSO_SLOT_IS_FALSE(SLOT) (SLOT.as.i == 0)
 
 #ifndef DEBUG_TRACE_EXECUTION
-#define ORSO_SLOT_I(VALUE, TYPE) (OrsoSlot){ .i = VALUE }
-#define ORSO_SLOT_U(VALUE, TYPE) (OrsoSlot){ .u = VALUE }
-#define ORSO_SLOT_F(VALUE, TYPE) (OrsoSlot){ .f = VALUE }
-#define ORSO_SLOT_P(VALUE, TYPE) (OrsoSlot){ .p = VALUE }
+#define ORSO_SLOT_I(VALUE, TYPE) (OrsoSlot){ .as.i = VALUE }
+#define ORSO_SLOT_U(VALUE, TYPE) (OrsoSlot){ .as.u = VALUE }
+#define ORSO_SLOT_F(VALUE, TYPE) (OrsoSlot){ .as.f = VALUE }
+#define ORSO_SLOT_P(VALUE, TYPE) (OrsoSlot){ .as.p = VALUE }
 #else
-#define ORSO_SLOT_I(VALUE, TYPE) (OrsoSlot){ .i = VALUE, .type = TYPE }
-#define ORSO_SLOT_U(VALUE, TYPE) (OrsoSlot){ .u = VALUE, .type = TYPE }
-#define ORSO_SLOT_F(VALUE, TYPE) (OrsoSlot){ .f = VALUE, .type = TYPE }
-#define ORSO_SLOT_P(VALUE, TYPE) (OrsoSlot){ .p = VALUE, .type = TYPE }
+#define ORSO_SLOT_I(VALUE, TYPE) (OrsoSlot){ .as.i = VALUE, .type = TYPE }
+#define ORSO_SLOT_U(VALUE, TYPE) (OrsoSlot){ .as.u = VALUE, .type = TYPE }
+#define ORSO_SLOT_F(VALUE, TYPE) (OrsoSlot){ .as.f = VALUE, .type = TYPE }
+#define ORSO_SLOT_P(VALUE, TYPE) (OrsoSlot){ .as.p = VALUE, .type = TYPE }
 #endif
 
 #define ORSO_TYPE_IS_UNION(TYPE) TYPE.one >= ORSO_TYPE_MAX
 #define ORSO_TYPE_IS_SINGLE(TYPE) TYPE.one < ORSO_TYPE_MAX
 
-const FORCE_INLINE bool orso_type_has_kind(OrsoType type, OrsoTypeKind kind) {
+FORCE_INLINE bool orso_type_has_kind(OrsoType type, OrsoTypeKind kind) {
     if (type.one == kind) {
         return true;
     }
@@ -101,6 +101,7 @@ bool FORCE_INLINE orso_is_integer_type_kind(OrsoTypeKind type_kind, bool include
 }
 
 bool FORCE_INLINE orso_is_unsigned_integer_type(OrsoTypeKind type_kind) {
+    (void)type_kind;
     return false;
 }
 
@@ -127,11 +128,12 @@ i32 FORCE_INLINE orso_get_builtin_type_kind_bits(OrsoTypeKind type_kind) {
 
         // TODO: Add assert here should never go here
         case ORSO_TYPE_INVALID:
-        case ORSO_TYPE_UNRESOLVED: return 0;
+        case ORSO_TYPE_UNRESOLVED:
+        default: return 0;
     }
 }
 
-const FORCE_INLINE bool orso_integer_fit(OrsoType storage_type, OrsoType value_type, bool include_bool) {
+FORCE_INLINE bool orso_integer_fit(OrsoType storage_type, OrsoType value_type, bool include_bool) {
     if (ORSO_TYPE_IS_UNION(storage_type)) {
         return false;
     }
@@ -151,7 +153,7 @@ const FORCE_INLINE bool orso_integer_fit(OrsoType storage_type, OrsoType value_t
     return orso_get_builtin_type_kind_bits(storage_type.one) >= orso_get_builtin_type_kind_bits(value_type.one);
 }
 
-const FORCE_INLINE bool orso_type_fits(OrsoType storage_type, OrsoType value_type) {
+FORCE_INLINE bool orso_type_fits(OrsoType storage_type, OrsoType value_type) {
     if (storage_type.one == value_type.one) {
         return true;
     }
@@ -201,7 +203,7 @@ const FORCE_INLINE char* orso_type_kind_to_cstr(OrsoTypeKind type_kind) {
     }
 }
 
-const FORCE_INLINE void orso_type_to_cstr(OrsoType type, char type_str[128]) {
+FORCE_INLINE void orso_type_to_cstr(OrsoType type, char type_str[128]) {
     if (ORSO_TYPE_IS_SINGLE(type)) {
         sprintf(type_str, "%s", orso_type_kind_to_cstr(type.one));
     } else {

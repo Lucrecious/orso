@@ -70,7 +70,7 @@ OrsoString* orso_slot_to_string(OrsoGarbageCollector* gc, OrsoSlot slot, OrsoTyp
         case ORSO_TYPE_INT64: {
             // Max characters for i64 is 19 + sign and \0
             char buffer[21];
-            i32 length = sprintf(buffer, "%ld", slot.i);
+            i32 length = sprintf(buffer, "%ld", slot.as.i);
             return orso_new_string_from_cstrn(gc, buffer, length);
         }
 
@@ -78,16 +78,16 @@ OrsoString* orso_slot_to_string(OrsoGarbageCollector* gc, OrsoSlot slot, OrsoTyp
         case ORSO_TYPE_FLOAT64: {
             // Using Wren's num to string for this: https://github.com/wren-lang/wren/blob/main/src/vm/wren_value.c#L775
             char buffer[24];
-            i32 length = sprintf(buffer, "%.14g", slot.f);
+            i32 length = sprintf(buffer, "%.14g", slot.as.f);
             return orso_new_string_from_cstrn(gc, buffer, length);
         }
 
         case ORSO_TYPE_NULL: return orso_new_string_from_cstrn(gc, "null", 4);
 
-        case ORSO_TYPE_STRING: return ((OrsoString*)slot.p);
+        case ORSO_TYPE_STRING: return ((OrsoString*)slot.as.p);
 
         case ORSO_TYPE_SYMBOL: {
-            OrsoSymbol* symbol = (OrsoSymbol*)slot.p;
+            OrsoSymbol* symbol = (OrsoSymbol*)slot.as.p;
             // 2 single quotes
             // 1 \0
             char buffer[symbol->length + 3];
@@ -100,24 +100,6 @@ OrsoString* orso_slot_to_string(OrsoGarbageCollector* gc, OrsoSlot slot, OrsoTyp
 
         default: return orso_new_string_from_cstrn(gc, "<?>", 3); // Unreachable
     }
-}
-
-u32 orso_hash_cstrn(const char* start, i32 length) {
-    u32 hash = 2166136261u;
-    for (i32 i = 0; i < length; i++) {
-        hash ^= (byte)start[i];
-        hash *= 16777619;
-    }
-
-    return hash;
-}
-
-bool orso_string_equal(OrsoString* a, OrsoString* b) {
-    if (a->length != b->length) {
-        return false;
-    }
-
-    return memcmp(a->text, b->text, a->length) == 0;
 }
 
 OrsoString* orso_string_concat(OrsoGarbageCollector* gc, OrsoString* a, OrsoString* b) {

@@ -78,7 +78,7 @@ struct OrsoExpressionNode {
         OrsoPrimary primary;
         OrsoVariable variable;
         OrsoAssignment assignment;
-    };
+    } expr;
 };
 
 typedef struct OrsoVarDeclarationNode {
@@ -99,7 +99,7 @@ typedef struct OrsoStatementNode {
     Token end;
     union {
         OrsoExpressionNode* expression;
-    };
+    } stmt;
 } OrsoStatementNode;
 
 typedef struct OrsoDeclarationNode {
@@ -109,7 +109,7 @@ typedef struct OrsoDeclarationNode {
     union {
         OrsoStatementNode* statement;
         OrsoVarDeclarationNode* var;
-    };
+    } decl;
 } OrsoDeclarationNode;
 
 typedef struct OrsoAST {

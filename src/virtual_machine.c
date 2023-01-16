@@ -47,7 +47,7 @@ static FORCE_INLINE void push_i64(OrsoVM* vm, OrsoSlot value) {
 }
 
 static FORCE_INLINE void push_top_object(OrsoVM* vm) {
-    *vm->object_stack_top = (vm->stack_top - 1)->p;
+    *vm->object_stack_top = (vm->stack_top - 1)->as.p;
     vm->object_stack_top++;
 }
 
@@ -112,36 +112,36 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
             case ORSO_OP_POP_TOP_OBJECT: POP_TOP_OBJECT(); break;
             case ORSO_OP_PUSH_TOP_OBJECT: PUSH_TOP_OBJECT(); break;
 
-            case ORSO_OP_I64_TO_F64: PEEK(0)->f = (f64)PEEK(0)->i; break;
-            case ORSO_OP_F64_TO_I64: PEEK(0)->i = (i64)PEEK(0)->f; break;
+            case ORSO_OP_I64_TO_F64: PEEK(0)->as.f = (f64)PEEK(0)->as.i; break;
+            case ORSO_OP_F64_TO_I64: PEEK(0)->as.i = (i64)PEEK(0)->as.f; break;
 
-            case ORSO_OP_ADD_I64: { i64 b = POP().i; PEEK(0)->i = PEEK(0)->i + b; break; }
-            case ORSO_OP_SUBTRACT_I64: { i64 b = POP().i; PEEK(0)->i = PEEK(0)->i - b; break; }
-            case ORSO_OP_MULTIPLY_I64: { i64 b = POP().i; PEEK(0)->i = PEEK(0)->i * b; break; }
-            case ORSO_OP_DIVIDE_I64: { i64 b = POP().i; PEEK(0)->i = PEEK(0)->i / b; break; }
+            case ORSO_OP_ADD_I64: { i64 b = POP().as.i; PEEK(0)->as.i = PEEK(0)->as.i + b; break; }
+            case ORSO_OP_SUBTRACT_I64: { i64 b = POP().as.i; PEEK(0)->as.i = PEEK(0)->as.i - b; break; }
+            case ORSO_OP_MULTIPLY_I64: { i64 b = POP().as.i; PEEK(0)->as.i = PEEK(0)->as.i * b; break; }
+            case ORSO_OP_DIVIDE_I64: { i64 b = POP().as.i; PEEK(0)->as.i = PEEK(0)->as.i / b; break; }
 
-            case ORSO_OP_ADD_F64: { f64 b = POP().f; PEEK(0)->f = PEEK(0)->f + b; break; }
-            case ORSO_OP_SUBTRACT_F64: { f64 b = POP().f; PEEK(0)->f = PEEK(0)->f - b; break; }
-            case ORSO_OP_MULTIPLY_F64: { f64 b = POP().f; PEEK(0)->f = PEEK(0)->f * b; break; }
-            case ORSO_OP_DIVIDE_F64: { f64 b = POP().f; PEEK(0)->f = PEEK(0)->f / b; break; }
+            case ORSO_OP_ADD_F64: { f64 b = POP().as.f; PEEK(0)->as.f = PEEK(0)->as.f + b; break; }
+            case ORSO_OP_SUBTRACT_F64: { f64 b = POP().as.f; PEEK(0)->as.f = PEEK(0)->as.f - b; break; }
+            case ORSO_OP_MULTIPLY_F64: { f64 b = POP().as.f; PEEK(0)->as.f = PEEK(0)->as.f * b; break; }
+            case ORSO_OP_DIVIDE_F64: { f64 b = POP().as.f; PEEK(0)->as.f = PEEK(0)->as.f / b; break; }
 
-            case ORSO_OP_NEGATE_I64: PEEK(0)->i = -PEEK(0)->i; break;
-            case ORSO_OP_NEGATE_F64: PEEK(0)->f = -PEEK(0)->f; break;
+            case ORSO_OP_NEGATE_I64: PEEK(0)->as.i = -PEEK(0)->as.i; break;
+            case ORSO_OP_NEGATE_F64: PEEK(0)->as.f = -PEEK(0)->as.f; break;
 
-            case ORSO_OP_EQUAL_I64: { i64 b = POP().i; PEEK(0)->i = (PEEK(0)->i == b); SLOT_ADD_TYPE(PEEK(0), ORSO_TYPE_ONE(ORSO_TYPE_BOOL)); break; }
-            case ORSO_OP_LESS_I64: { i64 b = POP().i; PEEK(0)->i = (PEEK(0)->i < b); SLOT_ADD_TYPE(PEEK(0), ORSO_TYPE_ONE(ORSO_TYPE_BOOL)); break; }
-            case ORSO_OP_GREATER_I64: { i64 b = POP().i; PEEK(0)->i = (PEEK(0)->i > b); SLOT_ADD_TYPE(PEEK(0), ORSO_TYPE_ONE(ORSO_TYPE_BOOL)); break; }
+            case ORSO_OP_EQUAL_I64: { i64 b = POP().as.i; PEEK(0)->as.i = (PEEK(0)->as.i == b); SLOT_ADD_TYPE(PEEK(0), ORSO_TYPE_ONE(ORSO_TYPE_BOOL)); break; }
+            case ORSO_OP_LESS_I64: { i64 b = POP().as.i; PEEK(0)->as.i = (PEEK(0)->as.i < b); SLOT_ADD_TYPE(PEEK(0), ORSO_TYPE_ONE(ORSO_TYPE_BOOL)); break; }
+            case ORSO_OP_GREATER_I64: { i64 b = POP().as.i; PEEK(0)->as.i = (PEEK(0)->as.i > b); SLOT_ADD_TYPE(PEEK(0), ORSO_TYPE_ONE(ORSO_TYPE_BOOL)); break; }
 
-            case ORSO_OP_EQUAL_F64: { f64 b = POP().f; PEEK(0)->i = (PEEK(0)->f == b); SLOT_ADD_TYPE(PEEK(0), ORSO_TYPE_ONE(ORSO_TYPE_BOOL)); break; }
-            case ORSO_OP_LESS_F64: { f64 b = POP().f; PEEK(0)->i = (PEEK(0)->f < b); SLOT_ADD_TYPE(PEEK(0), ORSO_TYPE_ONE(ORSO_TYPE_BOOL)); break; }
-            case ORSO_OP_GREATER_F64: { f64 b = POP().f; PEEK(0)->i = (PEEK(0)->f > b); SLOT_ADD_TYPE(PEEK(0), ORSO_TYPE_ONE(ORSO_TYPE_BOOL)); break; }
+            case ORSO_OP_EQUAL_F64: { f64 b = POP().as.f; PEEK(0)->as.i = (PEEK(0)->as.f == b); SLOT_ADD_TYPE(PEEK(0), ORSO_TYPE_ONE(ORSO_TYPE_BOOL)); break; }
+            case ORSO_OP_LESS_F64: { f64 b = POP().as.f; PEEK(0)->as.i = (PEEK(0)->as.f < b); SLOT_ADD_TYPE(PEEK(0), ORSO_TYPE_ONE(ORSO_TYPE_BOOL)); break; }
+            case ORSO_OP_GREATER_F64: { f64 b = POP().as.f; PEEK(0)->as.i = (PEEK(0)->as.f > b); SLOT_ADD_TYPE(PEEK(0), ORSO_TYPE_ONE(ORSO_TYPE_BOOL)); break; }
 
-            case ORSO_OP_EQUAL_SYMBOL: { i32 result = (PEEK(1)->p == PEEK(0)->p); POP_PTR(); POP_PTR(); PUSH(ORSO_SLOT_I(result, ORSO_TYPE_ONE(ORSO_TYPE_BOOL))); break; }
+            case ORSO_OP_EQUAL_SYMBOL: { i32 result = (PEEK(1)->as.p == PEEK(0)->as.p); POP_PTR(); POP_PTR(); PUSH(ORSO_SLOT_I(result, ORSO_TYPE_ONE(ORSO_TYPE_BOOL))); break; }
 
-            case ORSO_OP_EQUAL_STRING: { i32 result = orso_string_equal(PEEK(1)->p, PEEK(0)->p); POP_PTR(); POP_PTR(); PUSH(ORSO_SLOT_I(result, ORSO_TYPE_ONE(ORSO_TYPE_BOOL))); break; }
-            case ORSO_OP_CONCAT_STRING: { PEEK(1)->p = orso_string_concat(&vm->gc, PEEK(1)->p, PEEK(0)->p); POP_PTR(); break; } 
+            case ORSO_OP_EQUAL_STRING: { i32 result = orso_string_equal(PEEK(1)->as.p, PEEK(0)->as.p); POP_PTR(); POP_PTR(); PUSH(ORSO_SLOT_I(result, ORSO_TYPE_ONE(ORSO_TYPE_BOOL))); break; }
+            case ORSO_OP_CONCAT_STRING: { PEEK(1)->as.p = orso_string_concat(&vm->gc, PEEK(1)->as.p, PEEK(0)->as.p); POP_PTR(); break; } 
 
-            case ORSO_OP_LOGICAL_NOT: PEEK(0)->i = !PEEK(0)->i; SLOT_ADD_TYPE(PEEK(0), ORSO_TYPE_ONE(ORSO_TYPE_BOOL)); break;
+            case ORSO_OP_LOGICAL_NOT: PEEK(0)->as.i = !PEEK(0)->as.i; SLOT_ADD_TYPE(PEEK(0), ORSO_TYPE_ONE(ORSO_TYPE_BOOL)); break;
 
             case ORSO_OP_PUSH_0: {
                 const OrsoSlot zero = ORSO_SLOT_I(0, instruction->constant.type);
@@ -181,7 +181,7 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
                 vm->globals.values[index] = type;
                 vm->globals.values[index + 1] = *PEEK(0);
 
-                if (orso_is_gc_type(ORSO_TYPE_ONE(type.u))) {
+                if (orso_is_gc_type(ORSO_TYPE_ONE(type.as.u))) {
                     POP_TOP_OBJECT();
                 }
 
@@ -205,7 +205,7 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
                 PUSH(type);
                 PUSH(value);
 
-                if (orso_is_gc_type(ORSO_TYPE_ONE(type.u))) {
+                if (orso_is_gc_type(ORSO_TYPE_ONE(type.as.u))) {
                     PUSH_TOP_OBJECT();
                 }
                 break;
@@ -236,7 +236,7 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
             }
 
             case ORSO_OP_UPDATE_GLOBAL_UNION_GC_TYPE: {
-                OrsoType type = ORSO_TYPE_ONE(PEEK(1)->u);
+                OrsoType type = ORSO_TYPE_ONE(PEEK(1)->as.u);
                 u32 index = READ_U24();
                 if (orso_is_gc_type(type)) {
                     vm->globals.gc_values_indices[index].is_object = true;
@@ -251,12 +251,12 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
                 OrsoString* value_string;
                 OrsoType type = READ_TYPE();
                 if (ORSO_TYPE_IS_SINGLE(type)) {
-                    expression_string = (OrsoString*)(PEEK(0)->p);
+                    expression_string = (OrsoString*)(PEEK(0)->as.p);
                     value_string = orso_slot_to_string(&vm->gc, *PEEK(1), type.one);
                 } else {
-                    expression_string = (OrsoString*)(PEEK(0)->p);
+                    expression_string = (OrsoString*)(PEEK(0)->as.p);
                     // ASSERT that PEEK(2) is single type
-                    OrsoTypeKind union_type = (OrsoTypeKind)PEEK(2)->u;
+                    OrsoTypeKind union_type = (OrsoTypeKind)PEEK(2)->as.u;
                     value_string = orso_slot_to_string(&vm->gc, *PEEK(1), union_type);
                 }
 

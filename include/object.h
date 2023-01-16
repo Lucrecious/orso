@@ -30,9 +30,25 @@ void orso_object_free(OrsoGarbageCollector* gc, OrsoObject* pointer);
 #define ORSO_OBJECT_ALLOCATE(GC, TYPE, ORSO_TYPE) ORSO_OBJECT_ALLOCATE_N(GC, TYPE, ORSO_TYPE, 1)
 #define ORSO_OBJECT_ALLOCATE_FLEX(GC, TYPE, ORSO_TYPE, N) (TYPE*)orso_object_reallocate(GC, NULL, ORSO_TYPE, 0, sizeof(TYPE) + N)
 
-FORCE_INLINE u32 orso_hash_cstrn(const char* start, i32 length);
-FORCE_INLINE bool orso_string_equal(OrsoString* a, OrsoString* b);
-FORCE_INLINE OrsoString* orso_string_concat(OrsoGarbageCollector* gc, OrsoString* a, OrsoString* b);
+FORCE_INLINE u32 orso_hash_cstrn(const char* start, i32 length) {
+    u32 hash = 2166136261u;
+    for (i32 i = 0; i < length; i++) {
+        hash ^= (byte)start[i];
+        hash *= 16777619;
+    }
+
+    return hash;
+}
+
+FORCE_INLINE bool orso_string_equal(OrsoString* a, OrsoString* b) {
+    if (a->length != b->length) {
+        return false;
+    }
+
+    return memcmp(a->text, b->text, a->length) == 0;
+}
+
+OrsoString* orso_string_concat(OrsoGarbageCollector* gc, OrsoString* a, OrsoString* b);
 
 OrsoString* orso_slot_to_string(OrsoGarbageCollector* gc, OrsoSlot slot, OrsoTypeKind type_kind);
 

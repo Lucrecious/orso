@@ -107,7 +107,7 @@ static void mark_roots(OrsoGarbageCollector* gc) {
             continue;
         }
 
-        visit(gc, vm->globals.values[index.index].p);
+        visit(gc, vm->globals.values[index.index].as.p);
     }
 
     if (vm->chunk) {
@@ -116,7 +116,7 @@ static void mark_roots(OrsoGarbageCollector* gc) {
         for (i32 i = 0; i < sb_count(constant_offsets); i++) {
             u32 offset = constant_offsets[i];
             OrsoSlot* slot = &vm->chunk->constants[offset];
-            visit(gc, (OrsoGCHeader*)slot->p);
+            visit(gc, (OrsoGCHeader*)slot->as.p);
         }
     }
 }
