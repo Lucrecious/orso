@@ -106,6 +106,8 @@ bool orso_symbol_table_remove(OrsoSymbolTable* table, OrsoSymbol* key) {
 
     entry->key = NULL;
     entry->value.as.i = 1;
+
+    return true;
 }
 
 void orso_symbol_table_add_all(OrsoSymbolTable* source, OrsoSymbolTable* destination) {

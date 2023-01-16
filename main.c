@@ -15,10 +15,13 @@ void error(OrsoErrorType error, i32 line, const char* message) {
 }
 
 void write(const char* chars) {
-    printf(chars);
+    printf("%s", chars);
 }
 
 int main(int argc, char **argv) {
+    (void)argc; // unused
+    (void)argv; // unused
+
     char source_code[1000];
 
     OrsoInterpreter interpreter;

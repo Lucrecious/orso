@@ -97,6 +97,9 @@ static void orso_free_expression(OrsoExpressionNode* expression) {
         case EXPRESSION_PRIMARY:
             // no need
             break;
+        default:
+            // ASSERT false
+            break;
     }
 }
 
@@ -115,6 +118,9 @@ static void free_declaration(OrsoDeclarationNode* declaration_node) {
             free(declaration_node->decl.var);
             break;
         }
+        default:
+            // ASSERT false
+            break;
     }
 }
 
@@ -282,17 +288,18 @@ static OrsoExpressionNode* literal(Parser* parser) {
         }
         case TOKEN_STRING: {
             expression_node->value_type.one = ORSO_TYPE_STRING;
-            Token string = expression_node->expr.primary.token;
             expression_node->expr.primary.constant = ORSO_SLOT_P(0, ORSO_TYPE_STRING);
             break;
         };
 
         case TOKEN_SYMBOL: {
             expression_node->value_type.one = ORSO_TYPE_SYMBOL;
-            Token symbol = expression_node->expr.primary.token;
             expression_node->expr.primary.constant = ORSO_SLOT_P(0, ORSO_TYPE_SYMBOL);
             break;
         }
+        default:
+            // ASSERT fail
+            break;
     }
 
     return expression_node;
@@ -523,7 +530,6 @@ static OrsoVarDeclarationNode* var_declaration(Parser* parser) {
 
     var_declaration_node->var_type.one = ORSO_TYPE_UNRESOLVED;
 
-    Token type_token = { .type = TOKEN_ERROR, .length = 0 };
     var_declaration_node->type_identifiers = NULL;
     var_declaration_node->expression = NULL;
 
@@ -599,8 +605,8 @@ bool orso_parse(OrsoAST* ast, const char* source, OrsoErrorFunction error_fn) {
 
 void ast_print_expression(OrsoExpressionNode* expression, i32 initial) {
     const char type_str[128];
-    orso_type_to_cstr(expression->value_type, type_str);
-    printf("%*s [%s] ", initial, "", type_str);
+    orso_type_to_cstr(expression->value_type, (char*)type_str);
+    printf("%*s [%s] ", initial, "", (char*)type_str);
 
     switch (expression->type) {
         case EXPRESSION_BINARY: {
@@ -642,6 +648,9 @@ void ast_print_expression(OrsoExpressionNode* expression, i32 initial) {
             ast_print_expression(expression->expr.assignment.right_side, initial + 1);
             break;
         }
+        default:
+            // ASSERT impossible
+            break;
     }
 }
 
@@ -666,8 +675,8 @@ void ast_print_var_declaration(OrsoVarDeclarationNode* var_declaration_node, i32
     printf("VAR DECLARATION - identifier: %.*s, type: ", var_declaration_node->variable_name.length, var_declaration_node->variable_name.start);
 
     const char type_str[128];
-    orso_type_to_cstr(var_declaration_node->var_type, type_str);
-    printf(type_str);
+    orso_type_to_cstr(var_declaration_node->var_type, (char*)type_str);
+    printf("%s", (char*)type_str);
     printf("\n");
 
     if (var_declaration_node->expression != NULL) {
@@ -682,7 +691,7 @@ void ast_print_declaration(OrsoDeclarationNode* declaration, i32 initial_indent)
 
     Token start = declaration->start;
     Token end = declaration->end;
-    printf("DECLARATION %*s %.*s\n", initial_indent, "", (end.start + end.length) - start.start, start.start);
+    printf("DECLARATION %*s %.*s\n", initial_indent, "", (u32)((end.start + end.length) - start.start), start.start);
 
     switch (declaration->type) {
         case ORSO_DECLARATION_NONE: return;

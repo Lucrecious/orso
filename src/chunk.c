@@ -59,7 +59,7 @@ void orso_print_slot(OrsoSlot slot, OrsoTypeKind type_kind) {
     switch (type_kind) {
         case ORSO_TYPE_BOOL: if (slot.as.i) { printf("true"); } else { printf("false"); } break;
         case ORSO_TYPE_INT32:
-        case ORSO_TYPE_INT64: printf("%d", slot.as.i); break;
+        case ORSO_TYPE_INT64: printf("%lld", slot.as.i); break;
         case ORSO_TYPE_FLOAT32:
         case ORSO_TYPE_FLOAT64: printf("%f", slot.as.f); break;
         case ORSO_TYPE_NULL: printf("null"); break;
@@ -68,10 +68,10 @@ void orso_print_slot(OrsoSlot slot, OrsoTypeKind type_kind) {
         case ORSO_TYPE_TYPE: {
             char type_string[256];
             orso_type_to_cstr(ORSO_TYPE_ONE(slot.as.u), type_string);
-            printf("<"); printf(type_string); printf(">");
+            printf("<"); printf("%s", type_string); printf(">");
             break;
         }
-        default: printf("i64(%lld), f64(%.2f), ptr(%x)", slot.as.i, slot.as.f, slot.as.p); break;
+        default: printf("i64(%lld), f64(%.2f), ptr(%p)", slot.as.i, slot.as.f, slot.as.p); break;
     }
     
 }

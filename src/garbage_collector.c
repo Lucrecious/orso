@@ -98,7 +98,7 @@ static void mark_roots(OrsoGarbageCollector* gc) {
             continue;
         }
 
-        visit(gc, entry->key);
+        visit(gc, (OrsoGCHeader*)entry->key);
     }
 
     for (i32 i = 0; i < sb_count(vm->globals.gc_values_indices); i++) {
@@ -107,12 +107,11 @@ static void mark_roots(OrsoGarbageCollector* gc) {
             continue;
         }
 
-        visit(gc, vm->globals.values[index.index].as.p);
+        visit(gc, (OrsoGCHeader*)vm->globals.values[index.index].as.p);
     }
 
     if (vm->chunk) {
         u32* constant_offsets = vm->chunk->constant_object_offsets;
-        i32 constant_offset_count = sb_count(constant_offsets);
         for (i32 i = 0; i < sb_count(constant_offsets); i++) {
             u32 offset = constant_offsets[i];
             OrsoSlot* slot = &vm->chunk->constants[offset];
@@ -167,8 +166,8 @@ void orso_gc_step(OrsoGarbageCollector* gc) {
         }
         case ORSO_GC_STATE_SWEEPING: {
             OrsoObject* object = (OrsoObject*)gc->iterator;
-            if (object != gc->to) {
-                gc->iterator = next(object);
+            if ((OrsoGCHeader*)object != gc->to) {
+                gc->iterator = next((OrsoGCHeader*)object);
 
                 switch (object->type_kind) {
                     case ORSO_TYPE_SYMBOL: orso_symbol_table_remove(&gc->vm->symbols, (OrsoSymbol*)object); break;

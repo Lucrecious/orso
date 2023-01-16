@@ -85,6 +85,8 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
 #define SLOT_ADD_TYPE(SLOT, TYPE)
 #endif
 
+    (void)error_fn; // unused
+
     for (;;) {
         OrsoOPCode op_code = READ_BYTE();
 #ifdef DEBUG_TRACE_EXECUTION
@@ -265,7 +267,7 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
                     vm->write_fn(" (");
 
                     const char type_str[128];
-                    orso_type_to_cstr(type, type_str);
+                    orso_type_to_cstr(type, (char*)type_str);
 
                     vm->write_fn(type_str);
                     vm->write_fn(") => ");
@@ -307,4 +309,3 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
 void orso_vm_interpret(OrsoVM* vm, OrsoErrorFunction error_fn) {
     run(vm, error_fn);
 }
-

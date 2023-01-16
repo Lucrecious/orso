@@ -86,7 +86,7 @@ static void emit_type_convert(OrsoTypeKind from_type_kind, OrsoTypeKind to_type_
     }
 }
 
-static i32 identifier_constant(OrsoVM* vm, OrsoSymbol* identifier, Chunk* chunk, i32 slot_count) {
+static i32 identifier_constant(OrsoVM* vm, OrsoSymbol* identifier, i32 slot_count) {
     OrsoSlot index_slot;
     if (!orso_symbol_table_get(&vm->globals.name_to_index, identifier, &index_slot)) {
         index_slot = ORSO_SLOT_I(sb_count(vm->globals.values), ORSO_TYPE_INT32);
@@ -146,8 +146,7 @@ static i32 find_global_gc_index(OrsoVM* vm, i32 global_index) {
 
 static void expression(OrsoVM* vm, OrsoExpressionNode* expression_node, Chunk* chunk) {
 #define EMIT_BINARY_OP(OP, TYPE) do { \
-    const binary_op_code = ORSO_OP_##OP##_##TYPE;\
-    emit_instruction(binary_op_code, chunk, operator.line); \
+    emit_instruction(ORSO_OP_##OP##_##TYPE, chunk, operator.line); \
      } while(false)
 
 #define EMIT_BINARY_OP_I64(OP) EMIT_BINARY_OP(OP, I64)
@@ -158,8 +157,7 @@ static void expression(OrsoVM* vm, OrsoExpressionNode* expression_node, Chunk* c
 } while(false)
 
 #define EMIT_NEGATE(TYPE) do { \
-    const negate_op_code = ORSO_OP_NEGATE_##TYPE;\
-    emit_instruction(negate_op_code, chunk, operator.line); \
+    emit_instruction(ORSO_OP_NEGATE_##TYPE, chunk, operator.line); \
 } while (false)
 
     switch(expression_node->type) {
@@ -292,7 +290,7 @@ static void expression(OrsoVM* vm, OrsoExpressionNode* expression_node, Chunk* c
             OrsoSymbol* identifier = orso_new_symbol_from_cstrn(&vm->gc, identifier_token.start, identifier_token.length, &vm->symbols);
 
             if (ORSO_TYPE_IS_SINGLE(expression_node->value_type)) {
-                i32 index = identifier_constant(vm, identifier, chunk, 1);
+                i32 index = identifier_constant(vm, identifier, 1);
 
                 emit_global(ORSO_OP_GET_GLOBAL, index, chunk, expression_node->start.line);
 
@@ -301,7 +299,7 @@ static void expression(OrsoVM* vm, OrsoExpressionNode* expression_node, Chunk* c
                 }
             } else {
                 // ASSERT somehow that the identifier is already defined
-                i32 index = identifier_constant(vm, identifier, chunk, 2);
+                i32 index = identifier_constant(vm, identifier, 2);
                 emit_global(ORSO_OP_GET_GLOBAL_UNION, index, chunk, expression_node->start.line);
             }
             break;
@@ -315,7 +313,7 @@ static void expression(OrsoVM* vm, OrsoExpressionNode* expression_node, Chunk* c
             expression(vm, expression_node->expr.assignment.right_side, chunk);
 
             if (ORSO_TYPE_IS_SINGLE(expression_node->value_type)) {
-                i32 index = identifier_constant(vm, identifier, chunk, 1);
+                i32 index = identifier_constant(vm, identifier, 1);
                 emit_global(ORSO_OP_SET_GLOBAL, index, chunk, expression_node->start.line);
             } else {
                 if (ORSO_TYPE_IS_SINGLE(expression_node->expr.assignment.right_side->value_type)) {
@@ -323,7 +321,7 @@ static void expression(OrsoVM* vm, OrsoExpressionNode* expression_node, Chunk* c
                     emit_put_in_union(right_side_type_kind, chunk, expression_node->start.line);
                 }
 
-                i32 index = identifier_constant(vm, identifier, chunk, 2);
+                i32 index = identifier_constant(vm, identifier, 2);
 
                 if (orso_is_gc_type(expression_node->value_type)) {
                     const i32 gc_index = find_global_gc_index(vm, index + 1);
@@ -342,6 +340,10 @@ static void expression(OrsoVM* vm, OrsoExpressionNode* expression_node, Chunk* c
             emit_type_convert(operand->value_type.one, expression_node->value_type.one, chunk, operand->start.line);
             break;
         }
+
+        default:
+            // ASSERT false
+            break;
     }
 
 #undef EMIT_NEGATE
@@ -405,7 +407,7 @@ static void var_declaration(OrsoVM* vm, OrsoVarDeclarationNode* var_declaration,
     OrsoSymbol* identifier = orso_new_symbol_from_cstrn(&vm->gc, identifier_token.start, identifier_token.length, &vm->symbols);
 
     if (ORSO_TYPE_IS_SINGLE(var_declaration->var_type)) {
-        i32 index = identifier_constant(vm, identifier, chunk, 1);
+        i32 index = identifier_constant(vm, identifier, 1);
 
         if (orso_is_gc_type(var_declaration->var_type)) {
             sb_push(vm->globals.gc_values_indices, ((OrsoGCValueIndex){
@@ -419,7 +421,7 @@ static void var_declaration(OrsoVM* vm, OrsoVarDeclarationNode* var_declaration,
         emit_global(ORSO_OP_DEFINE_GLOBAL, index, chunk, var_declaration->start.line);
     } else {
         // ASSERT var_declaration->expression cannot be NULL if the declaration type is a union type.
-        i32 index = identifier_constant(vm, identifier, chunk, 2);
+        i32 index = identifier_constant(vm, identifier, 2);
 
         if (var_declaration->expression && ORSO_TYPE_IS_SINGLE(var_declaration->expression->value_type)) {
             emit_put_in_union(var_declaration->expression->value_type.one, chunk, var_declaration->start.line);

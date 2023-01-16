@@ -46,7 +46,7 @@ static i32 print_expr_instruction(Chunk* chunk, i32 offset) {
     OrsoType type = ORSO_TYPE_ONE(ORSO_u8s_to_u64(BYTE(1), BYTE(2), BYTE(3), BYTE(4), BYTE(5), BYTE(6), BYTE(7), BYTE(8)));
 
     const char type_string[126];
-    orso_type_to_cstr(type, type_string);
+    orso_type_to_cstr(type, (char*)type_string);
 
     printf("%-16s <%s>\n", "OP_PRINT_EXPR", type_string);
 

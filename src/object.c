@@ -3,6 +3,8 @@
 #include <stdio.h>
 
 void* orso_object_reallocate(OrsoGarbageCollector* gc, OrsoGCHeader* pointer, OrsoTypeKind type_kind, size_t old_size, size_t new_size) {
+    (void)old_size;
+
     if (new_size == 0) {
         // Should only be here when called by GC
         free(pointer);
@@ -23,7 +25,7 @@ void* orso_object_reallocate(OrsoGarbageCollector* gc, OrsoGCHeader* pointer, Or
     printf("%p allocate %zu for %s\n", (void*)result, new_size, orso_type_kind_to_cstr(result->type_kind));
 #endif
 
-    orso_gc_register(gc, result);
+    orso_gc_register(gc, (OrsoGCHeader*)result);
 
     return result;
 }
@@ -35,12 +37,12 @@ void orso_object_free(OrsoGarbageCollector* gc, OrsoObject* object) {
     switch (object->type_kind) {
         case ORSO_TYPE_SYMBOL: {
             OrsoSymbol* symbol = (OrsoSymbol*)object;
-            orso_object_reallocate(gc, symbol, ORSO_TYPE_SYMBOL, sizeof(OrsoSymbol) + symbol->length, 0);
+            orso_object_reallocate(gc, (OrsoGCHeader*)symbol, ORSO_TYPE_SYMBOL, sizeof(OrsoSymbol) + symbol->length, 0);
             break;
         }
         case ORSO_TYPE_STRING: {
             OrsoString* string = (OrsoString*)object;
-            orso_object_reallocate(gc, string, ORSO_TYPE_SYMBOL, sizeof(OrsoString) + string->length, 0);
+            orso_object_reallocate(gc, (OrsoGCHeader*)string, ORSO_TYPE_SYMBOL, sizeof(OrsoString) + string->length, 0);
             break;
         }
         default: break; // Unreachable
@@ -70,7 +72,7 @@ OrsoString* orso_slot_to_string(OrsoGarbageCollector* gc, OrsoSlot slot, OrsoTyp
         case ORSO_TYPE_INT64: {
             // Max characters for i64 is 19 + sign and \0
             char buffer[21];
-            i32 length = sprintf(buffer, "%ld", slot.as.i);
+            i32 length = sprintf(buffer, "%lld", slot.as.i);
             return orso_new_string_from_cstrn(gc, buffer, length);
         }
 
@@ -138,7 +140,7 @@ f64 cstrn_to_f64(const char* text, i32 length) {
     f64 fact = 1;
     bool point_seen = false;
 
-    for (char* c = text; c != (text + length); c++) {
+    for (char* c = (char*)text; c != (text + length); c++) {
         if (*c == '.') {
             point_seen = true;
             continue;

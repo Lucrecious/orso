@@ -4,7 +4,7 @@
 
 INTERPRETER_TEST(assignment_i64,
     "x: i64 = 42; print_expr x; x = 420; print_expr x;",
-    "x (i64) => 42\nx (i64) => 420\n");
+    "x (i64) => 42\nx (i64) => 420\n")
 
 INTERPRETER_TEST(assignment_i32,
     "y := 69; print_expr y; y = 690; print_expr y;",
@@ -37,27 +37,27 @@ INTERPRETER_TEST(assignment_variable_to_variable,
 
 INTERPRETER_TEST(assignment_union_stack_data,
     "x: bool | i32 = true; print_expr x; x = 32; print_expr x;",
-    "x (bool|i32) => true\nx (bool|i32) => 32\n");
+    "x (bool|i32) => true\nx (bool|i32) => 32\n")
 
 INTERPRETER_TEST(assignment_union_object_data,
     "x: string | symbol = 'foo'; print_expr x; x = \"bar\"; print_expr x;",
-    "x (string|symbol) => 'foo'\nx (string|symbol) => bar\n");
+    "x (string|symbol) => 'foo'\nx (string|symbol) => bar\n")
 
 INTERPRETER_TEST(assignment_union_object_stack_mix_data,
     "x: bool | symbol = 'foo'; print_expr x; x = false; print_expr x;",
-    "x (bool|symbol) => 'foo'\nx (bool|symbol) => false\n");
+    "x (bool|symbol) => 'foo'\nx (bool|symbol) => false\n")
 
 INTERPRETER_TEST(assignment_union_to_single,
     "foo: symbol; bar: symbol|void = 'foobar'; foo = bar; print_expr foo;",
-    "foo (symbol) => 'foobar'\n");
+    "foo (symbol) => 'foobar'\n")
 
 INTERPRETER_TEST(assignment_union_to_single_after_change,
     "foo: symbol; bar: symbol|void; print_expr bar; bar = 'foobar'; foo = bar; print_expr foo;",
-    "bar (symbol|void) => null\nfoo (symbol) => 'foobar'");
+    "bar (symbol|void) => null\nfoo (symbol) => 'foobar'")
 
 INTERPRETER_TEST(assignment_union_to_union,
     "foo: bool|void = false; bar: bool|void = true; foo = bar; print_expr foo;",
-    "foo (bool|void) => true\n");
+    "foo (bool|void) => true\n")
 
 
 
@@ -79,6 +79,9 @@ MU_TEST_SUITE(tests) {
 }
 
 int main(int argc, char** argv) {
+    (void)argc; // unused
+    (void)argv; // unused
+
     MU_RUN_SUITE(tests);
     MU_REPORT();
     return MU_EXIT_CODE;
