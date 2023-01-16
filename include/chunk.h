@@ -14,13 +14,13 @@ typedef struct Chunk {
     u32* constant_object_offsets;
 
     i32* lines; // run-length encoded
-    OrsoInstruction* code;
+    byte* code;
 } Chunk;
 
 void chunk_init(Chunk* chunk);
-void chunk_write(Chunk* chunk, const OrsoInstruction* instruction, i32 line);
+void chunk_write(Chunk* chunk, byte byte, i32 line);
 i32 chunk_get_line(Chunk* chunk, i32 offset);
-i32 chunk_add_constant(Chunk* chunk, OrsoSlot value, bool is_object);
+u32 chunk_add_constant(Chunk* chunk, OrsoSlot value, bool is_object);
 
 void orso_print_slot(OrsoSlot slot, OrsoTypeKind type_kind);
 

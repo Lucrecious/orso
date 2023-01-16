@@ -73,9 +73,9 @@ MU_TEST_SUITE(tests) {
     MU_RUN_TEST(assignment_union_stack_data);
     MU_RUN_TEST(assignment_union_object_data);
     MU_RUN_TEST(assignment_union_object_stack_mix_data);
+    MU_RUN_TEST(assignment_union_to_union);
     MU_RUN_TEST(assignment_union_to_single);
     MU_RUN_TEST(assignment_union_to_single_after_change);
-    MU_RUN_TEST(assignment_union_to_union);
 }
 
 int main(int argc, char** argv) {

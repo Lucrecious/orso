@@ -5,8 +5,8 @@
 #include "def.h"
 #include "sb.h"
 
-i32 chunk_add_constant(Chunk* chunk, OrsoSlot value, bool is_object) {
-    i32 index = sb_count(chunk->constants);
+u32 chunk_add_constant(Chunk* chunk, OrsoSlot value, bool is_object) {
+    u32 index = sb_count(chunk->constants);
     sb_push(chunk->constants, value);
 
     if (is_object) {
@@ -31,8 +31,8 @@ void chunk_free(Chunk* chunk) {
     chunk_init(chunk);
 }
 
-void chunk_write(Chunk* chunk, const OrsoInstruction* instruction, i32 line) {
-    sb_push(chunk->code, (*instruction));
+void chunk_write(Chunk* chunk, byte byte, i32 line) {
+    sb_push(chunk->code, byte);
 
     i32 lines_count = sb_count(chunk->lines);
     if ((lines_count > 1 && (chunk->lines[lines_count - 2] == line || line < 0))) {

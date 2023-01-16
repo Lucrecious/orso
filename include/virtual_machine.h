@@ -14,7 +14,7 @@ typedef struct OrsoGCValueIndex {
 typedef struct OrsoVM {
     OrsoWriteFunction write_fn;
     Chunk* chunk;
-    OrsoInstruction* ip;
+    byte* ip;
 
     struct {
         OrsoSymbolTable name_to_index;
