@@ -51,7 +51,7 @@ INTERPRETER_TEST(assign_union_to_single,
 
 INTERPRETER_TEST(assign_union_to_single_after_change,
     "foo: symbol; bar: symbol|void; print_expr bar; bar = 'foobar'; foo = bar; print_expr foo;",
-    "bar (symbol|void) => null\nfoo (symbol) => 'foobar'")
+    "bar (symbol|void) => null\nfoo (symbol) => 'foobar'\n")
 
 INTERPRETER_TEST(assign_union_to_union,
     "foo: bool|void = false; bar: bool|void = true; foo = bar; print_expr foo;",

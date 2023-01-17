@@ -69,6 +69,7 @@ struct OrsoExpressionNode {
     Token start;
     Token end;
     OrsoType value_type;
+    OrsoType narrowed_value_type; // only set for union types
     ExpressionType type;
     union {
         OrsoImplicitCastOp cast;

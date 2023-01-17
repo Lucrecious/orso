@@ -18,8 +18,6 @@ typedef struct OrsoStaticAnalyzer {
 void orso_static_analyzer_init(OrsoStaticAnalyzer* analyzer, OrsoErrorFunction error_fn);
 void orso_static_analyzer_free(OrsoStaticAnalyzer* analyzer);
 
-void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoExpressionNode* expression);
-
 bool orso_resolve_ast_types(OrsoStaticAnalyzer* analyzer, OrsoAST* ast);
 
 

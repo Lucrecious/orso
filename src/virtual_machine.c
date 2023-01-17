@@ -88,7 +88,6 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
     (void)error_fn; // unused
 
     for (;;) {
-        OrsoOPCode op_code = READ_BYTE();
 #ifdef DEBUG_TRACE_EXECUTION
         printf("PTR SLOTS = { ");
         for (OrsoObject** object = vm->object_stack; object < vm->object_stack_top; object++) {
@@ -106,9 +105,10 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
             printf("]");
         }
         printf(" }\n");
-        disassemble_instruction(vm->chunk, instruction - vm->chunk->code);
+        disassemble_instruction(vm->chunk, vm->ip - vm->chunk->code);
         printf("\n");
 #endif
+        OrsoOPCode op_code = READ_BYTE();
         switch (op_code) {
             case ORSO_OP_POP: POP(); break;
             case ORSO_OP_POP_TOP_OBJECT: POP_TOP_OBJECT(); break;
@@ -146,19 +146,19 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
             case ORSO_OP_LOGICAL_NOT: PEEK(0)->as.i = !PEEK(0)->as.i; SLOT_ADD_TYPE(PEEK(0), ORSO_TYPE_ONE(ORSO_TYPE_BOOL)); break;
 
             case ORSO_OP_PUSH_0: {
-                const OrsoSlot zero = ORSO_SLOT_I(0, instruction->constant.type);
+                const OrsoSlot zero = ORSO_SLOT_I(0, ORSO_TYPE_ONE(ORSO_TYPE_INT64));
                 PUSH(zero);
                 break;
             }
             case ORSO_OP_PUSH_1: {
-                const OrsoSlot one = ORSO_SLOT_I(1, instruction->constant.type);
+                const OrsoSlot one = ORSO_SLOT_I(1, ORSO_TYPE_ONE(ORSO_TYPE_INT64));
                 PUSH(one);
                 break;
             }
 
             case ORSO_OP_PUSH_NULL_UNION: {
-                const OrsoSlot void_type = ORSO_SLOT_U((u64)ORSO_TYPE_NULL, ORSO_TYPE_TYPE);
-                const OrsoSlot null_value = ORSO_SLOT_I(0, ORSO_TYPE_NULL);
+                const OrsoSlot void_type = ORSO_SLOT_U((u64)ORSO_TYPE_NULL, ORSO_TYPE_ONE(ORSO_TYPE_TYPE));
+                const OrsoSlot null_value = ORSO_SLOT_I(0, ORSO_TYPE_ONE(ORSO_TYPE_NULL));
                 PUSH(void_type);
                 PUSH(null_value);
                 break;
@@ -232,7 +232,14 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
             case ORSO_OP_PUT_IN_UNION: {
                 OrsoType type = ORSO_TYPE_ONE(READ_TYPE_KIND());
                 OrsoSlot value = POP();
-                PUSH(ORSO_SLOT_U(type.one, ORSO_TYPE_TYPE));
+                PUSH(ORSO_SLOT_U(type.one, ORSO_TYPE_ONE(ORSO_TYPE_TYPE)));
+                PUSH(value);
+                break;
+            }
+
+            case ORSO_OP_NARROW_UNION: {
+                OrsoSlot value = POP();
+                POP(); // pop type
                 PUSH(value);
                 break;
             }

@@ -89,11 +89,11 @@ static void emit_type_convert(OrsoTypeKind from_type_kind, OrsoTypeKind to_type_
 static i32 identifier_constant(OrsoVM* vm, OrsoSymbol* identifier, i32 slot_count) {
     OrsoSlot index_slot;
     if (!orso_symbol_table_get(&vm->globals.name_to_index, identifier, &index_slot)) {
-        index_slot = ORSO_SLOT_I(sb_count(vm->globals.values), ORSO_TYPE_INT32);
+        index_slot = ORSO_SLOT_I(sb_count(vm->globals.values), ORSO_TYPE_ONE(ORSO_TYPE_INT32));
         orso_symbol_table_set(&vm->globals.name_to_index, identifier, index_slot);
 
         for (i32 i = 0; i < slot_count; i++) {
-            sb_push(vm->globals.values, ORSO_SLOT_I(0, ORSO_TYPE_INVALID));
+            sb_push(vm->globals.values, ORSO_SLOT_I(0, ORSO_TYPE_ONE(ORSO_TYPE_INVALID)));
         }
     }
 
@@ -124,7 +124,7 @@ static OrsoSlot zero_value(OrsoTypeKind type_kind, OrsoGarbageCollector* gc, Ors
         case ORSO_TYPE_TYPE:
         default:
             // Unreachable
-            slot = ORSO_SLOT_I(0, ORSO_TYPE_INVALID);
+            slot = ORSO_SLOT_I(0, ORSO_TYPE_ONE(ORSO_TYPE_INVALID));
             break;
     }
 
@@ -166,9 +166,18 @@ static void expression(OrsoVM* vm, OrsoExpressionNode* expression_node, Chunk* c
             OrsoExpressionNode* left = expression_node->expr.binary.left;
             OrsoExpressionNode* right = expression_node->expr.binary.right;
             expression(vm, left, chunk);
+
+            if (ORSO_TYPE_IS_UNION(left->value_type)) {
+                emit_instruction(ORSO_OP_NARROW_UNION, chunk, left->start.line);
+            }
+
             expression(vm, right, chunk);
 
-            if (orso_is_integer_type_kind(left->value_type.one, true)) {
+            if (ORSO_TYPE_IS_UNION(right->value_type)) {
+                emit_instruction(ORSO_OP_NARROW_UNION, chunk, right->start.line);
+            }
+
+            if (orso_is_integer_type_kind(left->narrowed_value_type.one, true)) {
                 switch (operator.type) {
                     case TOKEN_PLUS: EMIT_BINARY_OP_I64(ADD); break;
                     case TOKEN_MINUS: EMIT_BINARY_OP_I64(SUBTRACT); break;
@@ -182,7 +191,7 @@ static void expression(OrsoVM* vm, OrsoExpressionNode* expression_node, Chunk* c
                     case TOKEN_EQUAL_EQUAL: EMIT_BINARY_OP_I64(EQUAL); break;
                     default: break; // Unreachable
                 }
-            } else if (orso_is_float_type_kind(left->value_type.one)) {
+            } else if (orso_is_float_type_kind(left->narrowed_value_type.one)) {
                 switch (operator.type) {
                     case TOKEN_PLUS: EMIT_BINARY_OP_F64(ADD); break;
                     case TOKEN_MINUS: EMIT_BINARY_OP_F64(SUBTRACT); break;
@@ -196,14 +205,14 @@ static void expression(OrsoVM* vm, OrsoExpressionNode* expression_node, Chunk* c
                     case TOKEN_EQUAL_EQUAL: EMIT_BINARY_OP_F64(EQUAL); break;
                     default: break; // Unreachable
                 }
-            } else if (left->value_type.one == ORSO_TYPE_STRING) {
+            } else if (left->narrowed_value_type.one == ORSO_TYPE_STRING) {
                 switch (operator.type) {
                     case TOKEN_PLUS: EMIT_BINARY_OP(CONCAT, STRING); break;
                     case TOKEN_BANG_EQUAL: EMIT_BINARY_OP(EQUAL, STRING); EMIT_NOT(); break;
                     case TOKEN_EQUAL_EQUAL: EMIT_BINARY_OP(EQUAL, STRING); break;
                     default: break; // Unreachable
                 }
-            } else if (left->value_type.one == ORSO_TYPE_SYMBOL) {
+            } else if (left->narrowed_value_type.one == ORSO_TYPE_SYMBOL) {
                 switch (operator.type) {
                     case TOKEN_EQUAL_EQUAL: EMIT_BINARY_OP(EQUAL, SYMBOL); break;
                     case TOKEN_BANG_EQUAL: EMIT_BINARY_OP(EQUAL, SYMBOL); EMIT_NOT(); break;
@@ -215,17 +224,22 @@ static void expression(OrsoVM* vm, OrsoExpressionNode* expression_node, Chunk* c
 
         case EXPRESSION_UNARY: {
             expression(vm, expression_node->expr.unary.operand, chunk);
+            if (ORSO_TYPE_IS_SINGLE(expression_node->value_type)
+            && ORSO_TYPE_IS_UNION(expression_node->expr.assignment.right_side->value_type)
+            && ORSO_TYPE_IS_SINGLE(expression_node->expr.assignment.right_side->narrowed_value_type)) {
+                emit_instruction(ORSO_OP_NARROW_UNION, chunk, expression_node->start.line);
+            }
 
             OrsoExpressionNode* unary = expression_node->expr.unary.operand;
             Token operator = expression_node->expr.unary.operator;
 
-            if (orso_is_integer_type_kind(unary->value_type.one, true)) {
+            if (orso_is_integer_type_kind(unary->narrowed_value_type.one, true)) {
                 switch (operator.type) {
                     case TOKEN_MINUS: EMIT_NEGATE(I64); break;
                     case TOKEN_NOT: EMIT_NOT(); break;
                     default: break; // unreachable
                 }
-            } else if (orso_is_float_type_kind(unary->value_type.one)) {
+            } else if (orso_is_float_type_kind(unary->narrowed_value_type.one)) {
                 switch (operator.type) {
                     case TOKEN_MINUS: EMIT_NEGATE(F64); break;
                     case TOKEN_NOT: EMIT_NOT(); break;
@@ -312,11 +326,15 @@ static void expression(OrsoVM* vm, OrsoExpressionNode* expression_node, Chunk* c
             
             expression(vm, expression_node->expr.assignment.right_side, chunk);
 
+            if (ORSO_TYPE_IS_SINGLE(expression_node->value_type) && ORSO_TYPE_IS_UNION(expression_node->expr.assignment.right_side->value_type)) {
+                emit_instruction(ORSO_OP_NARROW_UNION, chunk, expression_node->start.line);
+            }
+
             if (ORSO_TYPE_IS_SINGLE(expression_node->value_type)) {
                 i32 index = identifier_constant(vm, identifier, 1);
                 emit_global(ORSO_OP_SET_GLOBAL, index, chunk, expression_node->start.line);
             } else {
-                if (ORSO_TYPE_IS_SINGLE(expression_node->expr.assignment.right_side->value_type)) {
+                if (ORSO_TYPE_IS_SINGLE(expression_node->expr.assignment.right_side->narrowed_value_type)) {
                     const OrsoTypeKind right_side_type_kind = expression_node->expr.assignment.right_side->value_type.one;
                     emit_put_in_union(right_side_type_kind, chunk, expression_node->start.line);
                 }
@@ -379,7 +397,7 @@ static void statement(OrsoVM* vm, OrsoStatementNode* statement, Chunk* chunk) {
 
                 OrsoString* expression_string = orso_new_string_from_cstrn(&vm->gc, start.start, (end.start + end.length) - start.start);
 
-                OrsoSlot slot = ORSO_SLOT_P(expression_string, ORSO_TYPE_STRING);
+                OrsoSlot slot = ORSO_SLOT_P(expression_string, ORSO_TYPE_ONE(ORSO_TYPE_STRING));
 
                 emit_constant(chunk, slot, start.line, true);
 
@@ -407,6 +425,11 @@ static void var_declaration(OrsoVM* vm, OrsoVarDeclarationNode* var_declaration,
     OrsoSymbol* identifier = orso_new_symbol_from_cstrn(&vm->gc, identifier_token.start, identifier_token.length, &vm->symbols);
 
     if (ORSO_TYPE_IS_SINGLE(var_declaration->var_type)) {
+        if (var_declaration->expression && ORSO_TYPE_IS_UNION(var_declaration->expression->value_type)
+        && ORSO_TYPE_IS_SINGLE(var_declaration->expression->narrowed_value_type)) {
+            emit_instruction(ORSO_OP_NARROW_UNION, chunk, var_declaration->start.line);
+        }
+
         i32 index = identifier_constant(vm, identifier, 1);
 
         if (orso_is_gc_type(var_declaration->var_type)) {

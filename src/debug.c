@@ -10,7 +10,7 @@ static i32 constant_instruction(const char* name, Chunk* chunk, i32 offset) {
     printf("%-16s %4d => ", name, index);
     orso_print_slot(chunk->constants[index],
 #ifdef DEBUG_TRACE_EXECUTION
-        chunk->constants[constant.constant.index].type.one
+        chunk->constants[index].type.one
 #else
         ORSO_TYPE_UNRESOLVED
 #endif
@@ -107,6 +107,7 @@ i32 disassemble_instruction(Chunk* chunk, i32 offset) {
         case ORSO_OP_SET_GLOBAL_UNION: return global_instruction("OP_SET_GLOBAL_UNION", chunk, offset);
         case ORSO_OP_UPDATE_GLOBAL_UNION_GC_TYPE: return update_global_union_gc_type_instruction(chunk, offset);
         case ORSO_OP_PUT_IN_UNION: return put_in_union_instruction(chunk, offset);
+        case ORSO_OP_NARROW_UNION: return simple_instruction("OP_NARROW_UNION", offset);
         case ORSO_OP_CONCAT_STRING: return simple_instruction("OP_CONCAT_STRING", offset);
         case ORSO_OP_RETURN: return simple_instruction("OP_RETURN", offset);
         case ORSO_OP_PRINT_EXPR: return print_expr_instruction(chunk, offset);

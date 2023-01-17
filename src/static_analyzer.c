@@ -5,6 +5,49 @@
 #include "sb.h"
 #include "mathutils.h"
 
+typedef OrsoSymbolTable SymbolTable;
+
+typedef struct {
+    SymbolTable types;
+    SymbolTable implications;
+} VariableInferences;
+
+static void init_variable_inferences(VariableInferences* variable_inferences) {
+    orso_symbol_table_init(&variable_inferences->types);
+    orso_symbol_table_init(&variable_inferences->implications);
+}
+
+static void free_variable_inferences(VariableInferences* variable_inferences) {
+    orso_symbol_table_free(&variable_inferences->types);
+
+    for (i32 i = 0; i < variable_inferences->implications.capacity; i++) {
+        OrsoSymbolTableEntry entry = variable_inferences->implications.entries[i];
+        if (entry.key == NULL) {
+            continue;
+        }
+
+        orso_symbol_table_free((SymbolTable*)entry.value.as.p);
+        free((SymbolTable*)entry.value.as.p);
+    }
+    orso_symbol_table_free(&variable_inferences->implications);
+}
+
+static void update_variable_inference(VariableInferences* variable_inferences, OrsoSymbol* variable_name, OrsoType type, SymbolTable* implications) {
+    orso_symbol_table_set(&variable_inferences->types, variable_name, ORSO_SLOT_U(type.one, ORSO_TYPE_ONE(ORSO_TYPE_TYPE)));
+
+    OrsoSlot variable_implications;
+    if (!orso_symbol_table_get(&variable_inferences->implications, variable_name, &variable_implications)) {
+        SymbolTable* new_implications = ORSO_ALLOCATE(SymbolTable);
+        orso_symbol_table_init(new_implications);
+
+        variable_implications.as.p = new_implications;
+        orso_symbol_table_set(&variable_inferences->implications, variable_name, variable_implications);
+
+    }
+
+    orso_symbol_table_add_all(implications, (SymbolTable*)variable_implications.as.p);
+}
+
 static void error(OrsoStaticAnalyzer* analyzer, i32 line, const char* message) {
     if (analyzer->panic_mode) {
         return;
@@ -102,15 +145,43 @@ static OrsoTypeKind resolve_type_kind_identifier(OrsoStaticAnalyzer* analyzer, T
     return slot.as.u;
 }
 
-void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoExpressionNode* expression) {
+// static void reconcile_type_assumptions_with_implications(OrsoStaticAnalyzer* analyzer, SymbolTable* assumptions, SymbolTable* implications) {
+//     for (i32 i = 0; i < implications->capacity; i++) {
+//         OrsoSymbolTableEntry entry = implications->entries[i];
+//         if (entry.key == NULL) {
+//             continue;
+//         }
+
+//         OrsoSlot type;
+//         bool replace_assumption = false;
+//         if (orso_symbol_table_get(assumptions, entry.key, &type)) {
+//             OrsoSlot full_type;
+//             bool found_type = orso_symbol_table_get(&analyzer->defined_variables, entry.key, &full_type);
+//             // ASSERT that found_type actually found something
+//             replace_assumption = orso_type_fits(ORSO_TYPE_ONE(full_type.as.u), ORSO_TYPE_ONE(type.as.u));
+//         } else {
+//             replace_assumption = true;
+//         }
+
+//         // ASSERT replace_assumption is true
+
+//         orso_symbol_table_set(assumptions, entry.key, entry.value);
+//     }
+// }
+
+void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, VariableInferences* inferences, SymbolTable* type_implications, OrsoExpressionNode* expression) {
     if (expression->value_type.one != ORSO_TYPE_UNRESOLVED) {
         return;
     }
 
+    SymbolTable new_type_implications;
+    orso_symbol_table_init(&new_type_implications);
+
     switch (expression->type) {
         case EXPRESSION_GROUPING: {
-            orso_resolve_expression(analyzer, expression->expr.grouping.expression);
+            orso_resolve_expression(analyzer, inferences, &new_type_implications, expression->expr.grouping.expression);
             expression->value_type = expression->expr.grouping.expression->value_type;
+            expression->narrowed_value_type = expression->value_type;
             break;
         }
         case EXPRESSION_PRIMARY: {
@@ -120,8 +191,12 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoExpressionNode* e
         case EXPRESSION_BINARY: {
             OrsoExpressionNode* left = expression->expr.binary.left;
             OrsoExpressionNode* right = expression->expr.binary.right;
-            orso_resolve_expression(analyzer, left);
-            orso_resolve_expression(analyzer, right);
+            orso_resolve_expression(analyzer, inferences, &new_type_implications, left);
+            orso_resolve_expression(analyzer, inferences, &new_type_implications, right);
+
+            // TODO: Remember to do different things depending on operation
+            //   if it's arthimetic, or comparisons, then let them merge at the end
+            //   if it's logical, then you need to do special things
 
             OrsoType cast_left;
             OrsoType cast_right;
@@ -131,7 +206,7 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoExpressionNode* e
                 case TOKEN_MINUS:
                 case TOKEN_STAR:
                 case TOKEN_SLASH: {
-                    OrsoType combined_type = orso_binary_arithmetic_cast(left->value_type, right->value_type, expression->expr.binary.operator.type);
+                    OrsoType combined_type = orso_binary_arithmetic_cast(left->narrowed_value_type, right->narrowed_value_type, expression->expr.binary.operator.type);
                     expression->value_type = combined_type;
 
                     cast_left = combined_type;
@@ -143,13 +218,13 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoExpressionNode* e
                 case TOKEN_GREATER:
                 case TOKEN_LESS_EQUAL:
                 case TOKEN_GREATER_EQUAL: {
-                    orso_binary_comparison_casts(left->value_type, right->value_type, &cast_left, &cast_right);
+                    orso_binary_comparison_casts(left->narrowed_value_type, right->narrowed_value_type, &cast_left, &cast_right);
                     expression->value_type.one = ORSO_TYPE_BOOL;
                     break;
                 }
                 case TOKEN_BANG_EQUAL:
                 case TOKEN_EQUAL_EQUAL: {
-                    orso_binary_equality_casts(left->value_type, right->value_type, &cast_left, &cast_right);
+                    orso_binary_equality_casts(left->narrowed_value_type, right->narrowed_value_type, &cast_left, &cast_right);
                     expression->value_type.one = ORSO_TYPE_BOOL;
                     break;
                 }
@@ -158,15 +233,17 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoExpressionNode* e
                     break;
             }
 
+            expression->narrowed_value_type = expression->value_type;
+
             if (cast_left.one == ORSO_TYPE_INVALID || cast_right.one == ORSO_TYPE_INVALID) {
                 expression->value_type.one = ORSO_TYPE_INVALID;
-                error_incompatible_binary_types(analyzer, expression->expr.binary.operator, left->value_type, right->value_type, expression->expr.binary.operator.line);
+                error_incompatible_binary_types(analyzer, expression->expr.binary.operator, left->narrowed_value_type, right->narrowed_value_type, expression->expr.binary.operator.line);
             } else {
-                if (cast_left.one != left->value_type.one) {
+                if (cast_left.one != left->narrowed_value_type.one) {
                     expression->expr.binary.left = implicit_cast(left, cast_left);
                 }
 
-                if (cast_right.one != right->value_type.one) {
+                if (cast_right.one != right->narrowed_value_type.one) {
                     expression->expr.binary.right = implicit_cast(right, cast_right);
                 }
             }
@@ -174,10 +251,14 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoExpressionNode* e
         }
         case EXPRESSION_UNARY: {
             OrsoUnaryOp* unary_op = &expression->expr.unary;
-            orso_resolve_expression(analyzer, unary_op->operand);
+            orso_resolve_expression(analyzer, inferences, &new_type_implications, unary_op->operand);
             expression->value_type = orso_resolve_unary(unary_op->operator.type, unary_op->operand->value_type);
-            if (expression->value_type.one == ORSO_TYPE_INVALID) {
-                error_incompatible_unary_type(analyzer, unary_op->operator, unary_op->operand->value_type, unary_op->operator.line);
+            expression->narrowed_value_type = expression->value_type;
+            
+            // TODO: Must negate the new type implications if the unary operation is NOT
+
+            if (expression->narrowed_value_type.one == ORSO_TYPE_INVALID) {
+                error_incompatible_unary_type(analyzer, unary_op->operator, unary_op->operand->narrowed_value_type, unary_op->operator.line);
             }
             break;
         }
@@ -188,6 +269,15 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoExpressionNode* e
                 error(analyzer, expression->expr.variable.name.line, "Variable does not exist.");
             } else {
                 expression->value_type.one = slot.as.u;
+                if (orso_symbol_table_get(&inferences->types, variable_name, &slot)) {
+                    expression->narrowed_value_type.one = slot.as.u;
+                } else {
+                    expression->narrowed_value_type = expression->value_type;
+                }
+
+                if (orso_symbol_table_get(&inferences->implications, variable_name, &slot)) {
+                    orso_symbol_table_add_all((SymbolTable*)slot.as.p, &new_type_implications);
+                }
             }
             break;
         }
@@ -201,11 +291,16 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoExpressionNode* e
             } else {
                 OrsoType type = ORSO_TYPE_ONE(type_slot.as.u);
 
-                orso_resolve_expression(analyzer, expression->expr.assignment.right_side);
+                orso_resolve_expression(analyzer, inferences, &new_type_implications, expression->expr.assignment.right_side);
                 expression->value_type = type;
+                expression->narrowed_value_type = expression->expr.assignment.right_side->narrowed_value_type;
                 
-                if (!orso_type_fits(type, expression->expr.assignment.right_side->value_type)) {
+                if (!orso_type_fits(type, expression->expr.assignment.right_side->narrowed_value_type)) {
                     error(analyzer, expression->start.line, "Expression needs explicit cast to store in variable.");
+                }
+
+                if (ORSO_TYPE_IS_UNION(type)) {
+                    update_variable_inference(inferences, variable_name, expression->narrowed_value_type, &new_type_implications);
                 }
             }
             break;
@@ -213,9 +308,13 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoExpressionNode* e
 
         default: break; // unreachable
     }
+
+    // TODO: Replace this with a better merge function (since types need to be merged not replaced)
+    orso_symbol_table_add_all(&new_type_implications, type_implications);
+    orso_symbol_table_free(&new_type_implications);
 }
 
-static void resolve_var_declaration(OrsoStaticAnalyzer* analyzer, OrsoVarDeclarationNode* var_declaration) {
+static void resolve_var_declaration(OrsoStaticAnalyzer* analyzer, VariableInferences* inferences, OrsoVarDeclarationNode* var_declaration) {
     if (sb_count(var_declaration->type_identifiers) >= ORSO_UNION_NUM_MAX) {
         error(analyzer, var_declaration->type_identifiers[0].line, "Orso only allows for a maximum of 4 types in a union.");
         return;
@@ -248,8 +347,11 @@ static void resolve_var_declaration(OrsoStaticAnalyzer* analyzer, OrsoVarDeclara
 
     var_declaration->var_type = type;
 
+    SymbolTable type_implications;
+    orso_symbol_table_init(&type_implications);
+
     if (var_declaration->expression != NULL) {
-        orso_resolve_expression(analyzer, var_declaration->expression);
+        orso_resolve_expression(analyzer, inferences, &type_implications, var_declaration->expression);
     }
 
     if (ORSO_TYPE_IS_SINGLE(var_declaration->var_type)) {
@@ -285,33 +387,52 @@ static void resolve_var_declaration(OrsoStaticAnalyzer* analyzer, OrsoVarDeclara
         }
     }
 
-    if (analyzer->had_error) {
-        return;
+    if (!analyzer->had_error) {
+        OrsoSymbol* identifier = orso_unmanaged_symbol_from_cstrn(var_declaration->variable_name.start, var_declaration->variable_name.length, &analyzer->symbols);
+        OrsoSlot slot_type;
+        if (orso_symbol_table_get(&analyzer->defined_variables, identifier, &slot_type)) {
+            const char message[126];
+            sprintf((char*)message, "Duplicate variable definition of '%.*s'.", var_declaration->variable_name.length, var_declaration->variable_name.start);
+            error(analyzer, var_declaration->start.line, (char*)message);
+            return;
+        }
+
+        orso_symbol_table_set(&analyzer->defined_variables, identifier, ORSO_SLOT_U(var_declaration->var_type.one, ORSO_TYPE_ONE(ORSO_TYPE_TYPE)));
+
+        if (ORSO_TYPE_IS_UNION(ORSO_TYPE_ONE(var_declaration->var_type.one))) {
+            OrsoType narrowed_type;
+            if (var_declaration->expression) {
+                narrowed_type = var_declaration->expression->narrowed_value_type;
+            } else {
+                // ASSERT union type is void
+                narrowed_type = ORSO_TYPE_ONE(ORSO_TYPE_NULL);
+            }
+
+            update_variable_inference(inferences, identifier, narrowed_type, &type_implications);
+        }
     }
 
-    OrsoSymbol* identifier = orso_unmanaged_symbol_from_cstrn(var_declaration->variable_name.start, var_declaration->variable_name.length, &analyzer->symbols);
-    OrsoSlot slot_type;
-    if (orso_symbol_table_get(&analyzer->defined_variables, identifier, &slot_type)) {
-        const char message[126];
-        sprintf((char*)message, "Duplicate variable definition of '%.*s'.", var_declaration->variable_name.length, var_declaration->variable_name.start);
-        error(analyzer, var_declaration->start.line, (char*)message);
-        return;
-    }
-
-    orso_symbol_table_set(&analyzer->defined_variables, identifier, ORSO_SLOT_U(var_declaration->var_type.one, ORSO_TYPE_INVALID));
+    orso_symbol_table_free(&type_implications);
 }
 
-static void resolve_declaration(OrsoStaticAnalyzer* analyzer, OrsoDeclarationNode* declaration_node) {
+static void resolve_declaration(OrsoStaticAnalyzer* analyzer, VariableInferences* inferences, OrsoDeclarationNode* declaration_node) {
     analyzer->panic_mode = false;
     switch (declaration_node->type) {
-        case ORSO_DECLARATION_NONE: break;
         case ORSO_DECLARATION_STATEMENT: {
             OrsoStatementNode* statement_node = declaration_node->decl.statement;
             switch (statement_node->type) {
-                case ORSO_STATEMENT_NONE: break;
                 case ORSO_STATEMENT_PRINT_EXPR:
                 case ORSO_STATEMENT_EXPRESSION: {
-                    orso_resolve_expression(analyzer, declaration_node->decl.statement->stmt.expression);
+                    OrsoSymbolTable type_implications;
+                    orso_symbol_table_init(&type_implications);
+
+                    orso_resolve_expression(analyzer, inferences, &type_implications, declaration_node->decl.statement->stmt.expression);
+
+                    orso_symbol_table_free(&type_implications);
+                    break;
+                }
+                case ORSO_STATEMENT_NONE: {
+                    // ASSERT unreachable
                     break;
                 }
             }
@@ -320,9 +441,12 @@ static void resolve_declaration(OrsoStaticAnalyzer* analyzer, OrsoDeclarationNod
             break;
         }
         case ORSO_DECLARATION_VAR: {
-            resolve_var_declaration(analyzer, declaration_node->decl.var);
+            resolve_var_declaration(analyzer, inferences, declaration_node->decl.var);
             break;
         }
+        case ORSO_DECLARATION_NONE:
+            // ASSERT unreachable
+            break;
     }
 }
 
@@ -331,9 +455,14 @@ bool orso_resolve_ast_types(OrsoStaticAnalyzer* analyzer, OrsoAST* ast) {
         return true;
     }
 
+    VariableInferences variable_inferences;
+    init_variable_inferences(&variable_inferences);
+
     for (i32 i = 0; i < sb_count(ast->declarations); i++) {
-        resolve_declaration(analyzer, ast->declarations[i]);
+        resolve_declaration(analyzer, &variable_inferences, ast->declarations[i]);
     }
+
+    free_variable_inferences(&variable_inferences);
 
     return !analyzer->had_error;
 }
