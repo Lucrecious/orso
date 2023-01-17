@@ -96,16 +96,16 @@ INTERPRETER_TEST(bool_explicit,
 
 
 INTERPRETER_TEST(union_explicit_default_void,
-    "x: bool | void; print_expr x;",
-    "x (bool|void) => null\n")
+    "x: bool|void; print_expr x;",
+    "x (void) => null\n")
 
 INTERPRETER_TEST(union_explicit,
-    "x: bool | void = true; print_expr x;",
-    "x (bool|void) => true\n")
+    "x: bool|void = true; print_expr x;",
+    "x (bool) => true\n")
 
 INTERPRETER_TEST(union_explicit_no_void,
-    "x: bool | string = \"true\"; print_expr x;",
-    "x (bool|string) => true\n")
+    "x: bool|string = \"true\"; print_expr x;",
+    "x (string) => true\n")
 
 
 INTERPRETER_ERROR_TEST(missing_end_semicolin,

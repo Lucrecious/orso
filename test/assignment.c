@@ -35,15 +35,15 @@ INTERPRETER_TEST(assign_variable_to_variable,
 
 INTERPRETER_TEST(assign_union_stack_data,
     "x: bool | i32 = true; print_expr x; x = 32; print_expr x;",
-    "x (bool|i32) => true\nx (bool|i32) => 32\n")
+    "x (bool) => true\nx (i32) => 32\n")
 
 INTERPRETER_TEST(assign_union_object_data,
     "x: string | symbol = 'foo'; print_expr x; x = \"bar\"; print_expr x;",
-    "x (string|symbol) => 'foo'\nx (string|symbol) => bar\n")
+    "x (symbol) => 'foo'\nx (string) => bar\n")
 
 INTERPRETER_TEST(assign_union_object_stack_mix_data,
     "x: bool | symbol = 'foo'; print_expr x; x = false; print_expr x;",
-    "x (bool|symbol) => 'foo'\nx (bool|symbol) => false\n")
+    "x (symbol) => 'foo'\nx (bool) => false\n")
 
 INTERPRETER_TEST(assign_union_to_single,
     "foo: symbol; bar: symbol|void = 'foobar'; foo = bar; print_expr foo;",
@@ -51,11 +51,19 @@ INTERPRETER_TEST(assign_union_to_single,
 
 INTERPRETER_TEST(assign_union_to_single_after_change,
     "foo: symbol; bar: symbol|void; print_expr bar; bar = 'foobar'; foo = bar; print_expr foo;",
-    "bar (symbol|void) => null\nfoo (symbol) => 'foobar'\n")
+    "bar (void) => null\nfoo (symbol) => 'foobar'\n")
 
 INTERPRETER_TEST(assign_union_to_union,
     "foo: bool|void = false; bar: bool|void = true; foo = bar; print_expr foo;",
-    "foo (bool|void) => true\n")
+    "foo (bool) => true\n")
+
+INTERPRETER_TEST(assign_inside_expressions,
+    "foo: i32|void = null; bar := 42; foobar := (foo = 1) + (bar = foo); print_expr foobar; print_expr bar;",
+    "foobar (i32) => 2\nbar (i32) => 1\n")
+
+INTERPRETER_TEST(assign_inside_expressions2,
+    "foo := 42; bar: i32|void = null; print_expr bar = 1; print_expr foo = bar + foo; print_expr foo;",
+    "bar = 1 (i32) => 1\nfoo = bar + foo (i32) => 43\nfoo (i32) => 43\n")
 
 
 INTERPRETER_ERROR_TEST(undefined_variable,
@@ -85,6 +93,8 @@ MU_TEST_SUITE(tests) {
     MU_RUN_TEST(assign_union_to_union);
     MU_RUN_TEST(assign_union_to_single);
     MU_RUN_TEST(assign_union_to_single_after_change);
+    MU_RUN_TEST(assign_inside_expressions);
+    MU_RUN_TEST(assign_inside_expressions2);
 
     MU_RUN_TEST(undefined_variable);
     MU_RUN_TEST(assign_type_mismatch);

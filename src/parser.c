@@ -319,6 +319,7 @@ static OrsoExpressionNode* convert_assignment_expression(Parser* parser, OrsoExp
         return left_operand;
     }
 
+    assignment->start = left_operand->start;
     assignment->expr.assignment.variable_name = left_operand->expr.variable.name;
     orso_free_expression(left_operand);
     free(left_operand);

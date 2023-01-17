@@ -392,6 +392,10 @@ static void statement(OrsoVM* vm, OrsoStatementNode* statement, Chunk* chunk) {
         case ORSO_STATEMENT_PRINT_EXPR: {
                 expression(vm, statement->stmt.expression, chunk);
 
+                if (ORSO_TYPE_IS_UNION(statement->stmt.expression->value_type) && ORSO_TYPE_IS_SINGLE(statement->stmt.expression->narrowed_value_type)) {
+                    emit_instruction(ORSO_OP_NARROW_UNION, chunk, statement->start.line);
+                }
+
                 Token start = statement->stmt.expression->start;
                 Token end = statement->stmt.expression->end;
 
@@ -401,7 +405,7 @@ static void statement(OrsoVM* vm, OrsoStatementNode* statement, Chunk* chunk) {
 
                 emit_constant(chunk, slot, start.line, true);
 
-                emit_print_expr(statement->stmt.expression->value_type, chunk, start.line);
+                emit_print_expr(statement->stmt.expression->narrowed_value_type, chunk, start.line);
             break;
         }
         case ORSO_STATEMENT_NONE: break; // Unreachable

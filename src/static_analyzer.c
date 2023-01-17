@@ -180,7 +180,7 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, VariableInferences* i
     switch (expression->type) {
         case EXPRESSION_GROUPING: {
             orso_resolve_expression(analyzer, inferences, &new_type_implications, expression->expr.grouping.expression);
-            expression->value_type = expression->expr.grouping.expression->value_type;
+            expression->value_type = expression->expr.grouping.expression->narrowed_value_type;
             expression->narrowed_value_type = expression->value_type;
             break;
         }
@@ -366,7 +366,7 @@ static void resolve_var_declaration(OrsoStaticAnalyzer* analyzer, VariableInfere
                 if (orso_integer_fit(ORSO_TYPE_ONE(ORSO_TYPE_INT32), var_declaration->expression->value_type, false)) {
                     var_declaration->var_type.one = ORSO_TYPE_INT32;
                 } else {
-                    var_declaration->var_type = var_declaration->expression->value_type;
+                    var_declaration->var_type = var_declaration->expression->narrowed_value_type;
                 }
                 break;
             }
