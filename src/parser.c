@@ -16,14 +16,15 @@ statement                -> expression_statement
 expression_statement     -> expression `;`
 types                    -> type (`|` type)*
 
-expression               -> assignment
+expression               -> assignment | block
+block                    -> `{` declaration* `}`
 assignment               -> IDENTIFIER `=` expression
                           | equality
 equality                 -> comparison ((`!=` | `==`) comparison)*
 comparison               -> term ((`<` | `>` | `<=` | `>=`) term)*
 term                     -> factor ((`+` | `-`) factor)*
 factor                   -> unary ((`/` | `*`) unary)*
-unary                    -> (`not`)? unary | primary
+unary                    -> (`not` | `-`) unary | primary
 
 primary                  -> `true` | `false` | `null` | IDENTIFIER | INTEGER | DECIMAL
                           | STRING | SYMBOL
