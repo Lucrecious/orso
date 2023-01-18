@@ -32,7 +32,7 @@ INTERPRETER_TEST(i32_explicit_bool,
 
 INTERPRETER_TEST(f64_default,
     "x: f64; print_expr x;",
-    "x (f64) => 0\n")
+    "x (f64) => 0.0\n")
 
 INTERPRETER_TEST(f64_implicit,
     "x := 0.5; print_expr x;",

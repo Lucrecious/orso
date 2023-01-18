@@ -128,6 +128,7 @@ static OrsoExpressionNode* implicit_cast(OrsoExpressionNode* operand, OrsoType v
     implicit_cast->end = operand->end;
     implicit_cast->type = EXPRESSION_IMPLICIT_CAST;
     implicit_cast->value_type = value_type;
+    implicit_cast->narrowed_value_type = implicit_cast->value_type;
     implicit_cast->expr.cast.operand = operand;
 
     return implicit_cast;

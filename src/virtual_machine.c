@@ -114,8 +114,8 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
             case ORSO_OP_POP_TOP_OBJECT: POP_TOP_OBJECT(); break;
             case ORSO_OP_PUSH_TOP_OBJECT: PUSH_TOP_OBJECT(); break;
 
-            case ORSO_OP_I64_TO_F64: PEEK(0)->as.f = (f64)PEEK(0)->as.i; break;
-            case ORSO_OP_F64_TO_I64: PEEK(0)->as.i = (i64)PEEK(0)->as.f; break;
+            case ORSO_OP_I64_TO_F64: *PEEK(0) = ORSO_SLOT_F((f64)PEEK(0)->as.i, ORSO_TYPE_ONE(ORSO_TYPE_FLOAT64)); break;
+            case ORSO_OP_F64_TO_I64: *PEEK(0) = ORSO_SLOT_I((i64)PEEK(0)->as.f, ORSO_TYPE_ONE(ORSO_TYPE_INT64)); break;
 
             case ORSO_OP_ADD_I64: { i64 b = POP().as.i; PEEK(0)->as.i = PEEK(0)->as.i + b; break; }
             case ORSO_OP_SUBTRACT_I64: { i64 b = POP().as.i; PEEK(0)->as.i = PEEK(0)->as.i - b; break; }

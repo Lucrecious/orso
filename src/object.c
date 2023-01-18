@@ -80,7 +80,12 @@ OrsoString* orso_slot_to_string(OrsoGarbageCollector* gc, OrsoSlot slot, OrsoTyp
         case ORSO_TYPE_FLOAT64: {
             // Using Wren's num to string for this: https://github.com/wren-lang/wren/blob/main/src/vm/wren_value.c#L775
             char buffer[24];
-            i32 length = sprintf(buffer, "%.14g", slot.as.f);
+            i32 length;
+            if (slot.as.f == (i64)slot.as.f) {
+                length = sprintf(buffer, "%.1f", slot.as.f);
+            } else {
+                length = sprintf(buffer, "%.14g", slot.as.f);
+            }
             return orso_new_string_from_cstrn(gc, buffer, length);
         }
 

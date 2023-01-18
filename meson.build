@@ -32,6 +32,10 @@ test_assignment = executable('test_assignment', [src, 'test/assignment.c'],
   install : false,
   include_directories : inc)
 
+test_arithmetic = executable('test_arithmetic', [src, 'test/arithmetic.c'],
+  install : false,
+  include_directories : inc)
+
 c_args = []
 if get_option('debug_trace')
   c_args += '-DDEBUG_TRACE_EXECUTION'
@@ -54,3 +58,4 @@ executable('orso', [src, 'main.c'], install : false, include_directories : inc, 
 test('test_error', test_error)
 test('test_variable_declaration', test_variable_declaration)
 test('test_assignment', test_assignment)
+test('test_arithmetic', test_arithmetic)
