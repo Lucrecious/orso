@@ -99,8 +99,7 @@ static void orso_free_expression(OrsoExpressionNode* expression) {
             // no need
             break;
         default:
-            // ASSERT false
-            break;
+            UNREACHABLE();
     }
 }
 
@@ -120,8 +119,7 @@ static void free_declaration(OrsoDeclarationNode* declaration_node) {
             break;
         }
         default:
-            // ASSERT false
-            break;
+            UNREACHABLE();
     }
 }
 
@@ -260,7 +258,7 @@ static OrsoExpressionNode* number(Parser* parser) {
             expression_node->expr.primary.constant = ORSO_SLOT_F(value, ORSO_TYPE_ONE(ORSO_TYPE_FLOAT64));
             break;
         }
-        default: break; // unreachable
+        default: UNREACHABLE();
     }
 
     expression_node->narrowed_value_type = expression_node->value_type;
@@ -301,8 +299,7 @@ static OrsoExpressionNode* literal(Parser* parser) {
             break;
         }
         default:
-            // ASSERT fail
-            break;
+            UNREACHABLE();
     }
 
     expression_node->narrowed_value_type = expression_node->value_type;
@@ -482,8 +479,7 @@ static OrsoExpressionNode* parse_precedence(Parser* parser, Precedence precedenc
             case EXPRESSION_ASSIGNMENT:
                 left_operand = convert_assignment_expression(parser, left_operand, right_operand);
                 break;
-            default: // unreachable
-                break;
+            default: UNREACHABLE();
         }
     }
 
@@ -664,8 +660,7 @@ void ast_print_expression(OrsoExpressionNode* expression, i32 initial) {
             break;
         }
         default:
-            // ASSERT impossible
-            break;
+            UNREACHABLE();
     }
 }
 

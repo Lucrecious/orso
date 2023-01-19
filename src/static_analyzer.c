@@ -230,8 +230,7 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, VariableInferences* i
                     break;
                 }
                 default:
-                    // ASSERT impossible
-                    break;
+                    UNREACHABLE();
             }
 
             expression->narrowed_value_type = expression->value_type;
@@ -307,7 +306,7 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, VariableInferences* i
             break;
         }
 
-        default: break; // unreachable
+        default: UNREACHABLE();
     }
 
     // TODO: Replace this with a better merge function (since types need to be merged not replaced)
@@ -362,8 +361,7 @@ static void resolve_var_declaration(OrsoStaticAnalyzer* analyzer, VariableInfere
                 break;
             }
             case ORSO_TYPE_UNRESOLVED: {
-                // Should not be possible when expression is null because otherwise that's a
-                // a parsing error ASSERT
+                ASSERT(var_declaration->expression != NULL, "this should be a parsing error.");
                 if (orso_integer_fit(ORSO_TYPE_ONE(ORSO_TYPE_INT32), var_declaration->expression->value_type, false)) {
                     var_declaration->var_type.one = ORSO_TYPE_INT32;
                 } else {
@@ -405,7 +403,7 @@ static void resolve_var_declaration(OrsoStaticAnalyzer* analyzer, VariableInfere
             if (var_declaration->expression) {
                 narrowed_type = var_declaration->expression->narrowed_value_type;
             } else {
-                // ASSERT union type is void
+                ASSERT(orso_type_has_kind(var_declaration->var_type, ORSO_TYPE_NULL), "must contain void type here.");
                 narrowed_type = ORSO_TYPE_ONE(ORSO_TYPE_NULL);
             }
 
@@ -432,10 +430,7 @@ static void resolve_declaration(OrsoStaticAnalyzer* analyzer, VariableInferences
                     orso_symbol_table_free(&type_implications);
                     break;
                 }
-                case ORSO_STATEMENT_NONE: {
-                    // ASSERT unreachable
-                    break;
-                }
+                case ORSO_STATEMENT_NONE: UNREACHABLE();
             }
 
             analyzer->panic_mode = false;
@@ -445,9 +440,7 @@ static void resolve_declaration(OrsoStaticAnalyzer* analyzer, VariableInferences
             resolve_var_declaration(analyzer, inferences, declaration_node->decl.var);
             break;
         }
-        case ORSO_DECLARATION_NONE:
-            // ASSERT unreachable
-            break;
+        case ORSO_DECLARATION_NONE: UNREACHABLE();
     }
 }
 

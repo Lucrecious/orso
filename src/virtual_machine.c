@@ -264,7 +264,7 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
                     value_string = orso_slot_to_string(&vm->gc, *PEEK(1), type.one);
                 } else {
                     expression_string = (OrsoString*)(PEEK(0)->as.p);
-                    // ASSERT that PEEK(2) is single type
+                    ASSERT(ORSO_TYPE_IS_SINGLE((OrsoTypeKind)PEEK(2)), "must be single type.");
                     OrsoTypeKind union_type = (OrsoTypeKind)PEEK(2)->as.u;
                     value_string = orso_slot_to_string(&vm->gc, *PEEK(1), union_type);
                 }

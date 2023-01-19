@@ -14,7 +14,7 @@ static void emit_constant(Chunk* chunk, OrsoSlot slot, i32 line, bool is_ptr) {
     u32 index = chunk_add_constant(chunk, slot, is_ptr);
     chunk_write(chunk, ORSO_OP_CONSTANT, line);
 
-    // ASSERT index < largest 24 bit number
+    ASSERT(index < 0xFFFFFF, "index must be less than the largest 24 bit unsigned int.");
     byte b1, b2, b3;
     ORSO_u24_to_u8s(index, b1, b2, b3);
     chunk_write(chunk, b1, line);
@@ -27,10 +27,16 @@ static void emit_constant(Chunk* chunk, OrsoSlot slot, i32 line, bool is_ptr) {
 }
 
 static void emit_global(OrsoOPCode op_code, u32 index, Chunk* chunk, i32 line) {
-    // ASSERT op_code is one of the global instructions (set, get, define for either union or single)
+    ASSERT(op_code == ORSO_OP_GET_GLOBAL
+        || op_code == ORSO_OP_SET_GLOBAL
+        || op_code == ORSO_OP_DEFINE_GLOBAL
+        || op_code == ORSO_OP_GET_GLOBAL_UNION
+        || op_code == ORSO_OP_SET_GLOBAL_UNION
+        || op_code == ORSO_OP_DEFINE_GLOBAL_UNION, "must be a global op code.");
     emit_instruction(op_code, chunk, line);
 
-    // ASSERT index < largest 24 bit number
+    ASSERT(index < 0xFFFFFF, "index must be less than the largest 24 bit unsigned int.");
+
     byte b1, b2, b3;
     ORSO_u24_to_u8s(index, b1, b2, b3);
     chunk_write(chunk, b1, line);
@@ -41,7 +47,7 @@ static void emit_global(OrsoOPCode op_code, u32 index, Chunk* chunk, i32 line) {
 static void emit_put_in_union(OrsoTypeKind type_kind, Chunk* chunk, i32 line) {
     emit_instruction(ORSO_OP_PUT_IN_UNION, chunk, line);
 
-    // ASSERT type_kind < largest u16
+    ASSERT(type_kind < ORSO_TYPE_MAX, "type kind must be smaller than max (around 65000)");
     byte b1, b2;
     ORSO_TypeKind_to_u8s(type_kind, b1, b2);
     chunk_write(chunk, b1, line);
@@ -51,7 +57,7 @@ static void emit_put_in_union(OrsoTypeKind type_kind, Chunk* chunk, i32 line) {
 static void emit_update_global_union_gc_type(i32 gc_index, Chunk* chunk, i32 line) {
     emit_instruction(ORSO_OP_UPDATE_GLOBAL_UNION_GC_TYPE, chunk, line);
 
-    // ASSERT gc_index < largest u24
+    ASSERT(index < 0xFFFFFF, "gc_index must be less than the largest 24 bit unsigned int.");
     byte b1, b2, b3;
     ORSO_u24_to_u8s(gc_index, b1, b2, b3);
     chunk_write(chunk, b1, line);
@@ -237,18 +243,18 @@ static void expression(OrsoVM* vm, OrsoExpressionNode* expression_node, Chunk* c
                 switch (operator.type) {
                     case TOKEN_MINUS: EMIT_NEGATE(I64); break;
                     case TOKEN_NOT: EMIT_NOT(); break;
-                    default: break; // unreachable
+                    default: UNREACHABLE();
                 }
             } else if (orso_is_float_type_kind(unary->narrowed_value_type.one)) {
                 switch (operator.type) {
                     case TOKEN_MINUS: EMIT_NEGATE(F64); break;
                     case TOKEN_NOT: EMIT_NOT(); break;
-                    default: break; // unreachable
+                    default: UNREACHABLE();
                 }
             } else if (unary->value_type.one == ORSO_TYPE_NULL) {
                 switch (operator.type) {
                     case TOKEN_NOT: EMIT_NOT(); break;
-                    default: break; // unreachable
+                    default: UNREACHABLE();
                 }
             }
             break;
@@ -343,7 +349,7 @@ static void expression(OrsoVM* vm, OrsoExpressionNode* expression_node, Chunk* c
 
                 if (orso_is_gc_type(expression_node->value_type)) {
                     const i32 gc_index = find_global_gc_index(vm, index + 1);
-                    // ASSERT that the .constant.index is not negative
+                    ASSERT(gc_index >= 0, "gc_index must exist.");
                     emit_update_global_union_gc_type(gc_index, chunk, expression_node->start.line);
                 }
 
@@ -360,8 +366,7 @@ static void expression(OrsoVM* vm, OrsoExpressionNode* expression_node, Chunk* c
         }
 
         default:
-            // ASSERT false
-            break;
+            UNREACHABLE();
     }
 
 #undef EMIT_NEGATE
@@ -417,7 +422,7 @@ static void var_declaration(OrsoVM* vm, OrsoVarDeclarationNode* var_declaration,
         expression(vm, var_declaration->expression, chunk);
     } else {
         if (ORSO_TYPE_IS_UNION(var_declaration->var_type)) {
-            // ASSERT that the var_type's union has void in it
+            ASSERT(orso_type_has_kind(var_declaration->var_type, ORSO_TYPE_NULL), "default type only allowed for void type unions.");
             emit_instruction(ORSO_OP_PUSH_NULL_UNION, chunk, var_declaration->start.line);
         } else {
             OrsoSlot slot = zero_value(var_declaration->var_type.one, &vm->gc, &vm->symbols);
@@ -447,7 +452,6 @@ static void var_declaration(OrsoVM* vm, OrsoVarDeclarationNode* var_declaration,
 
         emit_global(ORSO_OP_DEFINE_GLOBAL, index, chunk, var_declaration->start.line);
     } else {
-        // ASSERT var_declaration->expression cannot be NULL if the declaration type is a union type.
         i32 index = identifier_constant(vm, identifier, 2);
 
         if (var_declaration->expression && ORSO_TYPE_IS_SINGLE(var_declaration->expression->value_type)) {
