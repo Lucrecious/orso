@@ -225,11 +225,28 @@ INTERPRETER_TEST(declaration_from_block_multiple_expressions,
     "x (i32) => 6\ny (i32) => 16\n")
 
 INTERPRETER_TEST(declaration_from_empty_block,
-    "foo := {};",
+    "foo := {}; print_expr foo;",
     "foo (void) => null\n")
 
 INTERPRETER_TEST(declaration_from_block_only_declarations,
-    "foo := { var bar := 0; };",
+    "foo := { var bar := 0; }; print_expr foo;",
+    "foo (void) => null\n")
+
+
+INTERPRETER_TEST(local_declaration_from_block,
+    "{ x := { 5 }; print_expr x; };",
+    "x (i32) => 5\n")
+
+INTERPRETER_TEST(local_declaration_from_block_multiple_expressions,
+    "{ x := 1; y := { x = x + 5; x + 10; }; print_expr x; print_expr y; };",
+    "x (i32) => 6\ny (i32) => 16\n")
+
+INTERPRETER_TEST(local_declaration_from_empty_block,
+    "{ foo := {}; print_expr x; };",
+    "foo (void) => null\n")
+
+INTERPRETER_TEST(local_declaration_from_block_only_declarations,
+    "{ foo := { var bar := 0; }; print_expr foo; };",
     "foo (void) => null\n")
 
 
@@ -337,6 +354,11 @@ MU_TEST_SUITE(tests) {
     MU_RUN_TEST(declaration_from_block_multiple_expressions);
     MU_RUN_TEST(declaration_from_empty_block);
     MU_RUN_TEST(declaration_from_block_only_declarations);
+
+    MU_RUN_TEST(local_declaration_from_block);
+    MU_RUN_TEST(local_declaration_from_block_multiple_expressions);
+    MU_RUN_TEST(local_declaration_from_empty_block);
+    MU_RUN_TEST(local_declaration_from_block_only_declarations);
 
     MU_RUN_TEST(missing_end_semicolin);
     MU_RUN_TEST(missing_bar_between_types);
