@@ -6,6 +6,22 @@
 
 #include "sb.h"
 
+typedef struct {
+    Token name;
+    i32 depth;
+} Local;
+
+typedef struct {
+    Local locals[UINT8_COUNT];
+    i32 local_count;
+    i32 scope_depth;
+} Compiler;
+
+static void compiler_init(Compiler* compiler) {
+    compiler->local_count = 0;
+    compiler->scope_depth = 0;
+}
+
 static void emit_instruction(const OrsoOPCode op_code, Chunk* chunk, i32 line) {
     chunk_write(chunk, op_code, line);
 }
@@ -150,7 +166,17 @@ static i32 find_global_gc_index(OrsoVM* vm, i32 global_index) {
     return -1;
 }
 
-static void expression(OrsoVM* vm, OrsoExpressionNode* expression_node, Chunk* chunk) {
+static void begin_scope(Compiler* compiler) {
+    compiler->scope_depth++;
+}
+
+static void end_scope(Compiler* compiler) {
+    compiler->scope_depth--;
+}
+
+static void declaration(OrsoVM* vm, Compiler* compiler, OrsoDeclarationNode* declaration, Chunk* chunk);
+
+static void expression(OrsoVM* vm, Compiler* compiler, OrsoExpressionNode* expression_node, Chunk* chunk) {
 #define EMIT_BINARY_OP(OP, TYPE) do { \
     emit_instruction(ORSO_OP_##OP##_##TYPE, chunk, operator.line); \
      } while(false)
@@ -171,13 +197,13 @@ static void expression(OrsoVM* vm, OrsoExpressionNode* expression_node, Chunk* c
             Token operator = expression_node->expr.binary.operator;
             OrsoExpressionNode* left = expression_node->expr.binary.left;
             OrsoExpressionNode* right = expression_node->expr.binary.right;
-            expression(vm, left, chunk);
+            expression(vm, compiler, left, chunk);
 
             if (ORSO_TYPE_IS_UNION(left->value_type)) {
                 emit_instruction(ORSO_OP_NARROW_UNION, chunk, left->start.line);
             }
 
-            expression(vm, right, chunk);
+            expression(vm, compiler, right, chunk);
 
             if (ORSO_TYPE_IS_UNION(right->value_type)) {
                 emit_instruction(ORSO_OP_NARROW_UNION, chunk, right->start.line);
@@ -229,7 +255,7 @@ static void expression(OrsoVM* vm, OrsoExpressionNode* expression_node, Chunk* c
         }
 
         case EXPRESSION_UNARY: {
-            expression(vm, expression_node->expr.unary.operand, chunk);
+            expression(vm, compiler, expression_node->expr.unary.operand, chunk);
             if (ORSO_TYPE_IS_SINGLE(expression_node->value_type)
             && ORSO_TYPE_IS_UNION(expression_node->expr.assignment.right_side->value_type)
             && ORSO_TYPE_IS_SINGLE(expression_node->expr.assignment.right_side->narrowed_value_type)) {
@@ -261,7 +287,7 @@ static void expression(OrsoVM* vm, OrsoExpressionNode* expression_node, Chunk* c
         }
 
         case EXPRESSION_GROUPING: {
-            expression(vm, expression_node->expr.grouping.expression, chunk);
+            expression(vm, compiler, expression_node->expr.grouping.expression, chunk);
             break;
         }
         
@@ -330,7 +356,7 @@ static void expression(OrsoVM* vm, OrsoExpressionNode* expression_node, Chunk* c
             OrsoSymbol* identifier = orso_new_symbol_from_cstrn(&vm->gc,
                 identifier_token.start, identifier_token.length, &vm->symbols);
             
-            expression(vm, expression_node->expr.assignment.right_side, chunk);
+            expression(vm, compiler, expression_node->expr.assignment.right_side, chunk);
 
             if (ORSO_TYPE_IS_SINGLE(expression_node->value_type) && ORSO_TYPE_IS_UNION(expression_node->expr.assignment.right_side->value_type)) {
                 emit_instruction(ORSO_OP_NARROW_UNION, chunk, expression_node->start.line);
@@ -360,8 +386,25 @@ static void expression(OrsoVM* vm, OrsoExpressionNode* expression_node, Chunk* c
 
         case EXPRESSION_IMPLICIT_CAST: {
             OrsoExpressionNode* operand = expression_node->expr.cast.operand;
-            expression(vm, operand, chunk);
+            expression(vm, compiler, operand, chunk);
             emit_type_convert(operand->value_type.one, expression_node->value_type.one, chunk, operand->start.line);
+            break;
+        }
+
+        case EXPRESSION_BLOCK: {
+            begin_scope(compiler);
+            OrsoStatementNode* final_expression_statement = expression_node->expr.block.final_expression_statement->decl.statement;
+            for (i32 i = 0; i < sb_count(expression_node->expr.block.declarations) - (final_expression_statement != NULL); i++) {
+                declaration(vm, compiler, expression_node->expr.block.declarations[i], chunk);
+            }
+
+            if (final_expression_statement != NULL) {
+                expression(vm, compiler, final_expression_statement->stmt.expression, chunk);
+            } else {
+                emit_instruction(ORSO_OP_PUSH_0, chunk, expression_node->end.line);
+            }
+
+            end_scope(compiler);
             break;
         }
 
@@ -376,11 +419,11 @@ static void expression(OrsoVM* vm, OrsoExpressionNode* expression_node, Chunk* c
 #undef EMIT_BINARY_OP
 }
 
-static void statement(OrsoVM* vm, OrsoStatementNode* statement, Chunk* chunk) {
+static void statement(OrsoVM* vm, Compiler* compiler, OrsoStatementNode* statement, Chunk* chunk) {
     switch (statement->type) {
         case ORSO_STATEMENT_EXPRESSION: {
             OrsoExpressionNode* expression_ = statement->stmt.expression;
-            expression(vm, expression_, chunk);
+            expression(vm, compiler, expression_, chunk);
 
             if (orso_is_gc_type(expression_->value_type)) {
                 emit_instruction(ORSO_OP_POP_TOP_OBJECT, chunk, statement->start.line);
@@ -395,7 +438,7 @@ static void statement(OrsoVM* vm, OrsoStatementNode* statement, Chunk* chunk) {
             break;
         }
         case ORSO_STATEMENT_PRINT_EXPR: {
-                expression(vm, statement->stmt.expression, chunk);
+                expression(vm, compiler, statement->stmt.expression, chunk);
 
                 if (ORSO_TYPE_IS_UNION(statement->stmt.expression->value_type) && ORSO_TYPE_IS_SINGLE(statement->stmt.expression->narrowed_value_type)) {
                     emit_instruction(ORSO_OP_NARROW_UNION, chunk, statement->start.line);
@@ -417,9 +460,9 @@ static void statement(OrsoVM* vm, OrsoStatementNode* statement, Chunk* chunk) {
     }
 }
 
-static void var_declaration(OrsoVM* vm, OrsoVarDeclarationNode* var_declaration, Chunk* chunk) {
+static void var_declaration(OrsoVM* vm, Compiler* compiler, OrsoVarDeclarationNode* var_declaration, Chunk* chunk) {
     if (var_declaration->expression != NULL) {
-        expression(vm, var_declaration->expression, chunk);
+        expression(vm, compiler, var_declaration->expression, chunk);
     } else {
         if (ORSO_TYPE_IS_UNION(var_declaration->var_type)) {
             ASSERT(orso_type_has_kind(var_declaration->var_type, ORSO_TYPE_NULL), "default type only allowed for void type unions.");
@@ -473,17 +516,20 @@ static void var_declaration(OrsoVM* vm, OrsoVarDeclarationNode* var_declaration,
     }
 }
 
-static void declaration(OrsoVM* vm, OrsoDeclarationNode* declaration, Chunk* chunk) {
+static void declaration(OrsoVM* vm, Compiler* compiler, OrsoDeclarationNode* declaration, Chunk* chunk) {
     switch (declaration->type) {
-        case ORSO_DECLARATION_STATEMENT: statement(vm, declaration->decl.statement, chunk); break;
-        case ORSO_DECLARATION_VAR: var_declaration(vm, declaration->decl.var, chunk); break;
+        case ORSO_DECLARATION_STATEMENT: statement(vm, compiler, declaration->decl.statement, chunk); break;
+        case ORSO_DECLARATION_VAR: var_declaration(vm, compiler, declaration->decl.var, chunk); break;
         case ORSO_DECLARATION_NONE: break; // Unreachable
     }
 }
 
 bool orso_generate_code(OrsoVM* vm, OrsoAST* ast, Chunk* chunk) {
+    Compiler compiler;
+    compiler_init(&compiler);
+
     for (i32 i = 0; i < sb_count(ast->declarations); i++) {
-        declaration(vm, ast->declarations[i], chunk);
+        declaration(vm, &compiler, ast->declarations[i], chunk);
     }
 
     emit_instruction(ORSO_OP_RETURN, chunk, -1);

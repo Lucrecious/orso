@@ -170,6 +170,8 @@ static OrsoTypeKind resolve_type_kind_identifier(OrsoStaticAnalyzer* analyzer, T
 //     }
 // }
 
+static void resolve_declaration(OrsoStaticAnalyzer* analyzer, VariableInferences* inferences, OrsoDeclarationNode* declaration_node);
+
 void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, VariableInferences* inferences, SymbolTable* type_implications, OrsoExpressionNode* expression) {
     if (expression->value_type.one != ORSO_TYPE_UNRESOLVED) {
         return;
@@ -303,6 +305,29 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, VariableInferences* i
                     update_variable_inference(inferences, variable_name, expression->narrowed_value_type, &new_type_implications);
                 }
             }
+            break;
+        }
+
+        case EXPRESSION_BLOCK: {
+            OrsoDeclarationNode* last_expression_statement = NULL;
+            for (i32 i = 0; i < sb_count(expression->expr.block.declarations); i++) {
+                OrsoDeclarationNode* declaration = expression->expr.block.declarations[i];
+                resolve_declaration(analyzer, inferences, declaration);
+                if (declaration->type == ORSO_DECLARATION_STATEMENT && declaration->decl.statement->type == ORSO_STATEMENT_EXPRESSION) {
+                    last_expression_statement = declaration;
+                } else {
+                    last_expression_statement = NULL;
+                }
+            }
+
+            if (last_expression_statement == NULL) {
+                expression->value_type = ORSO_TYPE_ONE(ORSO_TYPE_NULL);
+            } else {
+                expression->value_type = last_expression_statement->decl.statement->stmt.expression->narrowed_value_type;
+                expression->expr.block.final_expression_statement = last_expression_statement;
+            }
+
+            expression->narrowed_value_type = expression->value_type;
             break;
         }
 

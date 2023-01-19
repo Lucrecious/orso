@@ -250,6 +250,15 @@ INTERPRETER_TEST(local_declaration_from_block_only_declarations,
     "foo (void) => null\n")
 
 
+INTERPRETER_TEST(block_implication_variable_declaration_and_then_expression_statement,
+    "print_expr { var y := 10; 10; };",
+    "{ var y := 10; 10; } (i32) => 10\n")
+
+INTERPRETER_TEST(block_implication_expression_statement_and_then_variable_declaration,
+    "print_expr { 10; var y := 10; };",
+    "{ 10; var y := 10; } (void) => null\n")
+
+
 INTERPRETER_ERROR_TEST(missing_end_semicolin,
     "x := 0",
     ORSO_ERROR_COMPILE, 0, "Error at end: Expect end of declaration semicolin.")

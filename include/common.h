@@ -3,6 +3,8 @@
 
 #include "def.h"
 
+#define UINT8_COUNT (UINT8_MAX + 1)
+
 typedef enum OrsoErrorType {
     ORSO_ERROR_COMPILE,
     ORSO_ERROR_RUNTIME,

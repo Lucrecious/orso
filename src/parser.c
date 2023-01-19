@@ -227,6 +227,7 @@ static void synchronize(Parser* parser) {
     }
 }
 
+static OrsoDeclarationNode* declaration(Parser* parser);
 static OrsoExpressionNode* expression(Parser* parser);
 static ParseRule* get_rule(TokenType type);
 static OrsoExpressionNode* parse_precedence(Parser* parser, Precedence precedence);
@@ -356,6 +357,29 @@ static OrsoExpressionNode* variable(Parser* parser) {
     return named_variable(parser);
 }
 
+static OrsoExpressionNode* block(Parser* parser) {
+    OrsoExpressionNode* expression_node = ORSO_ALLOCATE(OrsoExpressionNode);
+
+    expression_node->value_type = ORSO_TYPE_ONE(ORSO_TYPE_UNRESOLVED);
+    expression_node->type = EXPRESSION_BLOCK;
+    expression_node->start = parser->previous;
+    expression_node->expr.block.declarations = NULL;
+    expression_node->expr.block.final_expression_statement = NULL;
+
+    while (!check(parser, TOKEN_BRACE_CLOSE) && !check(parser, TOKEN_EOF)) {
+        OrsoDeclarationNode* declaration_node = declaration(parser);
+        sb_push(expression_node->expr.block.declarations, declaration_node);
+    }
+
+    consume(parser, TOKEN_BRACE_CLOSE, "Expect '}' after block.");
+
+    expression_node->end = parser->previous;
+    expression_node->value_type = ORSO_TYPE_ONE(ORSO_TYPE_UNRESOLVED);
+    expression_node->narrowed_value_type = expression_node->value_type;
+
+    return expression_node;
+}
+
 static OrsoExpressionNode* grouping(Parser* parser) {
     OrsoExpressionNode* expression_node = ORSO_ALLOCATE(OrsoExpressionNode);
 
@@ -363,11 +387,13 @@ static OrsoExpressionNode* grouping(Parser* parser) {
     expression_node->type = EXPRESSION_GROUPING;
     expression_node->start = parser->previous;
     expression_node->expr.grouping.expression = expression(parser);
-    expression_node->value_type = expression_node->expr.grouping.expression->value_type;
-    expression_node->narrowed_value_type = expression_node->value_type;
+
     consume(parser, TOKEN_PARENTHESIS_CLOSE, "Expect ')' after expression.");
 
     expression_node->end = parser->previous;
+    expression_node->value_type = expression_node->expr.grouping.expression->value_type;
+    expression_node->narrowed_value_type = expression_node->value_type;
+
 
     return expression_node;
 }
@@ -408,7 +434,7 @@ static OrsoExpressionNode* binary(Parser* parser) {
 ParseRule rules[] = {
     [TOKEN_PARENTHESIS_OPEN]        = { grouping,   NULL,       PREC_NONE },
     [TOKEN_PARENTHESIS_CLOSE]       = { NULL,       NULL,       PREC_NONE },
-    [TOKEN_BRACE_OPEN]              = { NULL,       NULL,       PREC_NONE },
+    [TOKEN_BRACE_OPEN]              = { block,      NULL,       PREC_PRIMARY },
     [TOKEN_BRACE_CLOSE]             = { NULL,       NULL,       PREC_NONE },
     [TOKEN_BRACKET_OPEN]            = { NULL,       NULL,       PREC_NONE },
     [TOKEN_BRACKET_CLOSE]           = { NULL,       NULL,       PREC_NONE },

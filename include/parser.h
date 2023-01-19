@@ -16,6 +16,7 @@ typedef enum ExpressionType {
     EXPRESSION_PRIMARY,
     EXPRESSION_VARIABLE,
     EXPRESSION_ASSIGNMENT,
+    EXPRESSION_BLOCK,
 } ExpressionType;
 
 typedef enum OrsoDeclarationType {
@@ -31,6 +32,7 @@ typedef enum OrsoStatementType {
 } OrsoStatementType;
 
 typedef struct OrsoExpressionNode OrsoExpressionNode;
+typedef struct OrsoDeclarationNode OrsoDeclarationNode;
 
 typedef struct OrsoImplicitCastOp {
     OrsoExpressionNode* operand;
@@ -65,6 +67,11 @@ typedef struct OrsoAssignment {
     OrsoExpressionNode* right_side;
 } OrsoAssignment;
 
+typedef struct OrsoBlock {
+    OrsoDeclarationNode** declarations;
+    OrsoDeclarationNode* final_expression_statement;
+} OrsoBlock;
+
 struct OrsoExpressionNode {
     Token start;
     Token end;
@@ -79,6 +86,7 @@ struct OrsoExpressionNode {
         OrsoPrimary primary;
         OrsoVariable variable;
         OrsoAssignment assignment;
+        OrsoBlock block;
     } expr;
 };
 
