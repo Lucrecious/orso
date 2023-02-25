@@ -309,14 +309,17 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, VariableInferences* i
         }
 
         case EXPRESSION_BLOCK: {
-            OrsoDeclarationNode* last_expression_statement = NULL;
-            for (i32 i = 0; i < sb_count(expression->expr.block.declarations); i++) {
+            i32 declarations_count = sb_count(expression->expr.block.declarations);
+            for (i32 i = 0; i < declarations_count; i++) {
                 OrsoDeclarationNode* declaration = expression->expr.block.declarations[i];
                 resolve_declaration(analyzer, inferences, declaration);
-                if (declaration->type == ORSO_DECLARATION_STATEMENT && declaration->decl.statement->type == ORSO_STATEMENT_EXPRESSION) {
-                    last_expression_statement = declaration;
-                } else {
-                    last_expression_statement = NULL;
+            }
+
+            OrsoDeclarationNode* last_expression_statement = NULL;
+            if (declarations_count > 0) {
+                OrsoDeclarationNode* last_declaration = expression->expr.block.declarations[declarations_count - 1];
+                if (last_declaration->type == ORSO_DECLARATION_STATEMENT && last_declaration->decl.statement->type == ORSO_STATEMENT_EXPRESSION) {
+                    last_expression_statement = last_declaration;
                 }
             }
 

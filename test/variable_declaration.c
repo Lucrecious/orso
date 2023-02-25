@@ -246,17 +246,26 @@ INTERPRETER_TEST(local_declaration_from_empty_block,
     "foo (void) => null\n")
 
 INTERPRETER_TEST(local_declaration_from_block_only_declarations,
-    "{ foo := { var bar := 0; }; print_expr foo; };",
+    "{ foo := { bar := 0; }; print_expr foo; };",
     "foo (void) => null\n")
 
 
 INTERPRETER_TEST(block_implication_variable_declaration_and_then_expression_statement,
-    "print_expr { var y := 10; 10; };",
-    "{ var y := 10; 10; } (i32) => 10\n")
+    "print_expr { y := 10; 10; };",
+    "{ y := 10; 10; } (i32) => 10\n")
 
 INTERPRETER_TEST(block_implication_expression_statement_and_then_variable_declaration,
-    "print_expr { 10; var y := 10; };",
-    "{ 10; var y := 10; } (void) => null\n")
+    "print_expr { 10; y := 10; };",
+    "{ 10; y := 10; } (void) => null\n")
+
+
+INTERPRETER_TEST(shadowing_globals,
+    "x := 10; { x := 50; x = 40; }; print_expr x;",
+    "x (i32) => 10\n")
+
+INTERPRETER_TEST(shadowing_locals,
+    "{ x := 10; { x := 50; x = 40; }; print_expr x; };",
+    "x (i32) => 10\n")
 
 
 INTERPRETER_ERROR_TEST(missing_end_semicolin,
@@ -290,6 +299,14 @@ INTERPRETER_ERROR_TEST(too_many_types,
 INTERPRETER_ERROR_TEST(duplicate_definitions,
     "x: string; x: void;",
     ORSO_ERROR_COMPILE, 0, "Duplicate variable definition of 'x'.")
+
+INTERPRETER_ERROR_TEST(local_variables_dont_exist_after_block,
+    "{ x := 10; }; print_expr x;",
+    ORSO_ERROR_COMPILE, 0, "Undefined global variable x;")
+
+INTERPRETER_ERROR_TEST(local_variables_dont_exist_after_block2,
+    "{ { x := 10; }; print_expr x; };",
+    ORSO_ERROR_COMPILE, 0, "Undefined local variable x;")
 
 
 MU_TEST_SUITE(tests) {
@@ -368,6 +385,11 @@ MU_TEST_SUITE(tests) {
     MU_RUN_TEST(local_declaration_from_block_multiple_expressions);
     MU_RUN_TEST(local_declaration_from_empty_block);
     MU_RUN_TEST(local_declaration_from_block_only_declarations);
+    MU_RUN_TEST(block_implication_expression_statement_and_then_variable_declaration);
+    MU_RUN_TEST(block_implication_variable_declaration_and_then_expression_statement);
+
+    MU_RUN_TEST(shadowing_globals);
+    MU_RUN_TEST(shadowing_locals);
 
     MU_RUN_TEST(missing_end_semicolin);
     MU_RUN_TEST(missing_bar_between_types);
@@ -377,6 +399,8 @@ MU_TEST_SUITE(tests) {
     MU_RUN_TEST(undefined_type);
     MU_RUN_TEST(too_many_types);
     MU_RUN_TEST(duplicate_definitions);
+    MU_RUN_TEST(local_variables_dont_exist_after_block);
+    MU_RUN_TEST(local_variables_dont_exist_after_block2);
 }
 
 int main(int argc, char** argv) {

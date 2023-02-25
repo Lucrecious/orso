@@ -111,7 +111,7 @@ typedef struct OrsoStatementNode {
     } stmt;
 } OrsoStatementNode;
 
-typedef struct OrsoDeclarationNode {
+struct OrsoDeclarationNode {
     OrsoDeclarationType type;
     Token start;
     Token end;
@@ -119,7 +119,7 @@ typedef struct OrsoDeclarationNode {
         OrsoStatementNode* statement;
         OrsoVarDeclarationNode* var;
     } decl;
-} OrsoDeclarationNode;
+};
 
 typedef struct OrsoAST {
     OrsoDeclarationNode** declarations;

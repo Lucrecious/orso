@@ -9,16 +9,18 @@
 typedef struct {
     Token name;
     i32 depth;
+    byte slot_count;
+    bool is_gc_type;
 } Local;
 
 typedef struct {
     Local locals[UINT8_COUNT];
-    i32 local_count;
+    i32 local_slot_count;
     i32 scope_depth;
 } Compiler;
 
 static void compiler_init(Compiler* compiler) {
-    compiler->local_count = 0;
+    compiler->local_slot_count = 0;
     compiler->scope_depth = 0;
 }
 
@@ -108,7 +110,8 @@ static void emit_type_convert(OrsoTypeKind from_type_kind, OrsoTypeKind to_type_
     }
 }
 
-static i32 identifier_constant(OrsoVM* vm, OrsoSymbol* identifier, i32 slot_count) {
+static i32 add_global(OrsoVM* vm, Token* name, i32 slot_count) {
+    OrsoSymbol* identifier = orso_new_symbol_from_cstrn(&vm->gc, name->start, name->length, &vm->symbols);
     OrsoSlot index_slot;
     if (!orso_symbol_table_get(&vm->globals.name_to_index, identifier, &index_slot)) {
         index_slot = ORSO_SLOT_I(sb_count(vm->globals.values), ORSO_TYPE_ONE(ORSO_TYPE_INT32));
@@ -122,6 +125,24 @@ static i32 identifier_constant(OrsoVM* vm, OrsoSymbol* identifier, i32 slot_coun
     i32 index = index_slot.as.i;
 
     return index;
+}
+
+static void add_local(Compiler* compiler, Token name, i32 slot_count) {
+    Local* local = &compiler->locals[compiler->local_slot_count];
+    local->name = name;
+    local->depth = compiler->scope_depth;
+    local->slot_count = slot_count;
+
+    compiler->local_slot_count += slot_count;
+}
+
+static i32 declare_variable(OrsoVM* vm, Compiler* compiler, Token* name, i32 slot_count) {
+    if (compiler->scope_depth == 0) {
+        return add_global(vm, name, slot_count);
+    } else {
+        add_local(compiler, *name, slot_count);
+        return -1;
+    }
 }
 
 static OrsoSlot zero_value(OrsoTypeKind type_kind, OrsoGarbageCollector* gc, OrsoSymbolTable* symbol_table) {
@@ -333,10 +354,9 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoExpressionNode* expre
 
         case EXPRESSION_VARIABLE: {
             Token identifier_token = expression_node->expr.variable.name;
-            OrsoSymbol* identifier = orso_new_symbol_from_cstrn(&vm->gc, identifier_token.start, identifier_token.length, &vm->symbols);
 
             if (ORSO_TYPE_IS_SINGLE(expression_node->value_type)) {
-                i32 index = identifier_constant(vm, identifier, 1);
+                i32 index = declare_variable(vm, compiler, &identifier_token, 1);
 
                 emit_global(ORSO_OP_GET_GLOBAL, index, chunk, expression_node->start.line);
 
@@ -345,7 +365,7 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoExpressionNode* expre
                 }
             } else {
                 // ASSERT somehow that the identifier is already defined
-                i32 index = identifier_constant(vm, identifier, 2);
+                i32 index = declare_variable(vm, compiler, &identifier_token, 2);
                 emit_global(ORSO_OP_GET_GLOBAL_UNION, index, chunk, expression_node->start.line);
             }
             break;
@@ -353,8 +373,6 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoExpressionNode* expre
 
         case EXPRESSION_ASSIGNMENT: {
             Token identifier_token = expression_node->expr.assignment.variable_name;
-            OrsoSymbol* identifier = orso_new_symbol_from_cstrn(&vm->gc,
-                identifier_token.start, identifier_token.length, &vm->symbols);
             
             expression(vm, compiler, expression_node->expr.assignment.right_side, chunk);
 
@@ -363,7 +381,7 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoExpressionNode* expre
             }
 
             if (ORSO_TYPE_IS_SINGLE(expression_node->value_type)) {
-                i32 index = identifier_constant(vm, identifier, 1);
+                i32 index = declare_variable(vm, compiler, &identifier_token, 1);
                 emit_global(ORSO_OP_SET_GLOBAL, index, chunk, expression_node->start.line);
             } else {
                 if (ORSO_TYPE_IS_SINGLE(expression_node->expr.assignment.right_side->narrowed_value_type)) {
@@ -371,7 +389,7 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoExpressionNode* expre
                     emit_put_in_union(right_side_type_kind, chunk, expression_node->start.line);
                 }
 
-                i32 index = identifier_constant(vm, identifier, 2);
+                i32 index = declare_variable(vm, compiler, &identifier_token, 2);
 
                 if (orso_is_gc_type(expression_node->value_type)) {
                     const i32 gc_index = find_global_gc_index(vm, index + 1);
@@ -393,13 +411,13 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoExpressionNode* expre
 
         case EXPRESSION_BLOCK: {
             begin_scope(compiler);
-            OrsoStatementNode* final_expression_statement = expression_node->expr.block.final_expression_statement->decl.statement;
+            OrsoDeclarationNode* final_expression_statement = expression_node->expr.block.final_expression_statement;
             for (i32 i = 0; i < sb_count(expression_node->expr.block.declarations) - (final_expression_statement != NULL); i++) {
                 declaration(vm, compiler, expression_node->expr.block.declarations[i], chunk);
             }
 
             if (final_expression_statement != NULL) {
-                expression(vm, compiler, final_expression_statement->stmt.expression, chunk);
+                expression(vm, compiler, final_expression_statement->decl.statement->stmt.expression, chunk);
             } else {
                 emit_instruction(ORSO_OP_PUSH_0, chunk, expression_node->end.line);
             }
@@ -474,7 +492,6 @@ static void var_declaration(OrsoVM* vm, Compiler* compiler, OrsoVarDeclarationNo
     }
 
     Token identifier_token = var_declaration->variable_name;
-    OrsoSymbol* identifier = orso_new_symbol_from_cstrn(&vm->gc, identifier_token.start, identifier_token.length, &vm->symbols);
 
     if (ORSO_TYPE_IS_SINGLE(var_declaration->var_type)) {
         if (var_declaration->expression && ORSO_TYPE_IS_UNION(var_declaration->expression->value_type)
@@ -482,7 +499,10 @@ static void var_declaration(OrsoVM* vm, Compiler* compiler, OrsoVarDeclarationNo
             emit_instruction(ORSO_OP_NARROW_UNION, chunk, var_declaration->start.line);
         }
 
-        i32 index = identifier_constant(vm, identifier, 1);
+        i32 index = declare_variable(vm, compiler, &identifier_token, 1);
+        if (compiler->scope_depth > 0) {
+            return;
+        }
 
         if (orso_is_gc_type(var_declaration->var_type)) {
             sb_push(vm->globals.gc_values_indices, ((OrsoGCValueIndex){
@@ -495,10 +515,14 @@ static void var_declaration(OrsoVM* vm, Compiler* compiler, OrsoVarDeclarationNo
 
         emit_global(ORSO_OP_DEFINE_GLOBAL, index, chunk, var_declaration->start.line);
     } else {
-        i32 index = identifier_constant(vm, identifier, 2);
+        i32 index = declare_variable(vm, compiler, &identifier_token, 2);
 
         if (var_declaration->expression && ORSO_TYPE_IS_SINGLE(var_declaration->expression->value_type)) {
             emit_put_in_union(var_declaration->expression->value_type.one, chunk, var_declaration->start.line);
+        }
+
+        if (compiler->scope_depth > 0) {
+            return;
         }
 
         if (orso_is_gc_type(var_declaration->var_type)) {
