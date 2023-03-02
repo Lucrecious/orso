@@ -47,7 +47,8 @@ static FORCE_INLINE void push_i64(OrsoVM* vm, OrsoSlot value) {
 }
 
 static FORCE_INLINE void push_top_object(OrsoVM* vm) {
-    *vm->object_stack_top = (vm->stack_top - 1)->as.p;
+    vm->object_stack_top->is_object = true;
+    vm->object_stack_top->index = (vm->stack_top - 1) - vm->stack;
     vm->object_stack_top++;
 }
 
@@ -58,7 +59,7 @@ static FORCE_INLINE OrsoSlot pop(OrsoVM* vm) {
 
 static FORCE_INLINE OrsoObject* pop_top_object(OrsoVM* vm) {
     vm->object_stack_top--;
-    return *vm->object_stack_top;
+    return (OrsoObject*)vm->stack[vm->object_stack_top->index].as.p;
 }
 
 static FORCE_INLINE OrsoSlot* peek(OrsoVM* vm, i32 i) {
@@ -90,11 +91,15 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
     for (;;) {
 #ifdef DEBUG_TRACE_EXECUTION
         printf("PTR SLOTS = { ");
-        for (OrsoObject** object = vm->object_stack; object < vm->object_stack_top; object++) {
-            printf("[");
-            OrsoSlot slot = ORSO_SLOT_P(*object, ORSO_TYPE_ONE((u64)(*object)->type_kind));
-            orso_print_slot(slot, slot.type.one);
-            printf("]");
+        for (OrsoGCValueIndex* index = vm->object_stack; index < vm->object_stack_top; index++) {
+            if (index->is_object) {
+                printf("[-]");
+            } else {
+                printf("[");
+                OrsoSlot slot = vm->stack[index->index];
+                orso_print_slot(slot, slot.type.one);
+                printf("]");
+            }
         }
         printf(" }\n");
 

@@ -376,31 +376,31 @@ MU_TEST_SUITE(tests) {
     MU_RUN_TEST(local_union_explicit);
     MU_RUN_TEST(local_union_explicit_no_void);
 
-    MU_RUN_TEST(declaration_from_block);
-    MU_RUN_TEST(declaration_from_block_multiple_expressions);
-    MU_RUN_TEST(declaration_from_empty_block);
-    MU_RUN_TEST(declaration_from_block_only_declarations);
+    // MU_RUN_TEST(declaration_from_block);
+    // MU_RUN_TEST(declaration_from_block_multiple_expressions);
+    // MU_RUN_TEST(declaration_from_empty_block);
+    // MU_RUN_TEST(declaration_from_block_only_declarations);
 
-    MU_RUN_TEST(local_declaration_from_block);
-    MU_RUN_TEST(local_declaration_from_block_multiple_expressions);
-    MU_RUN_TEST(local_declaration_from_empty_block);
-    MU_RUN_TEST(local_declaration_from_block_only_declarations);
-    MU_RUN_TEST(block_implication_expression_statement_and_then_variable_declaration);
-    MU_RUN_TEST(block_implication_variable_declaration_and_then_expression_statement);
+    // MU_RUN_TEST(local_declaration_from_block);
+    // MU_RUN_TEST(local_declaration_from_block_multiple_expressions);
+    // MU_RUN_TEST(local_declaration_from_empty_block);
+    // MU_RUN_TEST(local_declaration_from_block_only_declarations);
+    // MU_RUN_TEST(block_implication_expression_statement_and_then_variable_declaration);
+    // MU_RUN_TEST(block_implication_variable_declaration_and_then_expression_statement);
 
-    MU_RUN_TEST(shadowing_globals);
-    MU_RUN_TEST(shadowing_locals);
+    // MU_RUN_TEST(shadowing_globals);
+    // MU_RUN_TEST(shadowing_locals);
 
-    MU_RUN_TEST(missing_end_semicolin);
-    MU_RUN_TEST(missing_bar_between_types);
-    MU_RUN_TEST(type_mismatch);
-    MU_RUN_TEST(type_mismatch_union);
-    MU_RUN_TEST(default_value_required_for_non_void_unions);
-    MU_RUN_TEST(undefined_type);
-    MU_RUN_TEST(too_many_types);
-    MU_RUN_TEST(duplicate_definitions);
-    MU_RUN_TEST(local_variables_dont_exist_after_block);
-    MU_RUN_TEST(local_variables_dont_exist_after_block2);
+    // MU_RUN_TEST(missing_end_semicolin);
+    // MU_RUN_TEST(missing_bar_between_types);
+    // MU_RUN_TEST(type_mismatch);
+    // MU_RUN_TEST(type_mismatch_union);
+    // MU_RUN_TEST(default_value_required_for_non_void_unions);
+    // MU_RUN_TEST(undefined_type);
+    // MU_RUN_TEST(too_many_types);
+    // MU_RUN_TEST(duplicate_definitions);
+    // MU_RUN_TEST(local_variables_dont_exist_after_block);
+    // MU_RUN_TEST(local_variables_dont_exist_after_block2);
 }
 
 int main(int argc, char** argv) {

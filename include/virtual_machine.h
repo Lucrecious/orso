@@ -28,11 +28,8 @@ typedef struct OrsoVM {
     OrsoSymbolTable symbols;
     OrsoGarbageCollector gc;
 
-    i32 union_object_stack_count;
-    i32* union_object_stack;
-    
-    OrsoObject** object_stack;
-    OrsoObject** object_stack_top;
+    OrsoGCValueIndex* object_stack;
+    OrsoGCValueIndex* object_stack_top;
     
     OrsoSlot* stack;
     OrsoSlot* stack_top;

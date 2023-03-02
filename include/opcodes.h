@@ -8,6 +8,7 @@ typedef enum OrsoOPCode {
     ORSO_OP_POP_TOP_OBJECT,
 
     ORSO_OP_PUSH_TOP_OBJECT,
+    ORSO_OP_SET_TOP_OBJECT,
 
     ORSO_OP_I64_TO_F64,
     ORSO_OP_F64_TO_I64,

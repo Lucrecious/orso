@@ -65,7 +65,7 @@ static void interpret_continuous(OrsoVM* vm, OrsoStaticAnalyzer* analyzer, const
     vm->stack = ORSO_ALLOCATE_N(OrsoSlot, chunk.max_stack_size);
     vm->stack_top = vm->stack;
 
-    vm->object_stack = ORSO_ALLOCATE_N(OrsoObject*, chunk.max_stack_size);
+    vm->object_stack = ORSO_ALLOCATE_N(OrsoGCValueIndex, chunk.max_stack_size);
     vm->object_stack_top = vm->object_stack;
 
     vm->ip = vm->chunk->code;
@@ -73,7 +73,11 @@ static void interpret_continuous(OrsoVM* vm, OrsoStaticAnalyzer* analyzer, const
     orso_vm_interpret(vm, error_fn);
 
     free(vm->stack);
+    vm->stack = NULL;
+
     free(vm->object_stack);
+    vm->object_stack = NULL;
+    
     chunk_free(&chunk);
     vm->chunk = NULL;
     vm->stack_top = NULL;
