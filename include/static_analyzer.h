@@ -4,12 +4,20 @@
 #include "parser.h"
 #include "common.h"
 
+typedef struct OrsoDefinedVariables {
+    OrsoSymbolTable scope;
+    struct OrsoDefinedVariables* previous;
+} OrsoDefinedVariables;
+
 typedef struct OrsoStaticAnalyzer {
     OrsoErrorFunction error_fn;
     OrsoSymbolTable symbol_to_type;
 
     OrsoSymbolTable symbols;
-    OrsoSymbolTable defined_variables;
+    //OrsoSymbolTable defined_variables;
+
+    OrsoDefinedVariables* defined_variables_scopes;
+    OrsoDefinedVariables* defined_variables_innermost_scope;
 
     bool had_error;
     bool panic_mode;

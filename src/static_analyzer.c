@@ -9,7 +9,6 @@ typedef OrsoSymbolTable SymbolTable;
 
 typedef struct {
     SymbolTable types;
-    SymbolTable implications;
 } VariableInferences;
 
 static void init_variable_inferences(VariableInferences* variable_inferences) {

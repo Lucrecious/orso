@@ -204,10 +204,31 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
                 break;
             }
 
+            case ORSO_OP_GET_LOCAL: {
+                u32 index = READ_U24();
+                OrsoSlot slot = vm->stack[index];
+                PUSH(slot);
+                break;
+            }
+
             case ORSO_OP_GET_GLOBAL_UNION: {
                 u32 index = READ_U24();
                 OrsoSlot type = vm->globals.values[index];
                 OrsoSlot value = vm->globals.values[index + 1];
+
+                PUSH(type);
+                PUSH(value);
+
+                if (orso_is_gc_type(ORSO_TYPE_ONE(type.as.u))) {
+                    PUSH_TOP_OBJECT();
+                }
+                break;
+            }
+
+            case ORSO_OP_GET_LOCAL_UNION: {
+                u32 index = READ_U24();
+                OrsoSlot type = vm->stack[index];
+                OrsoSlot value = vm->stack[index + 1];
 
                 PUSH(type);
                 PUSH(value);
@@ -224,6 +245,12 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
                 break;
             }
 
+            case ORSO_OP_SET_LOCAL: {
+                u32 index = READ_U24();
+                vm->stack[index] = *PEEK(0);
+                break;
+            }
+
             case ORSO_OP_SET_GLOBAL_UNION: {
                 OrsoSlot type = *PEEK(1);
                 OrsoSlot value = *PEEK(0);
@@ -231,6 +258,16 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
                 u32 index = READ_U24();
                 vm->globals.values[index] = type;
                 vm->globals.values[index + 1] = value;
+                break;
+            }
+
+            case ORSO_OP_SET_LOCAL_UNION: {
+                OrsoSlot type = *PEEK(1);
+                OrsoSlot value = *PEEK(0);
+
+                u32 index = READ_U24();
+                vm->stack[index] = type;
+                vm->stack[index + 1] = value;
                 break;
             }
 
@@ -252,11 +289,14 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
             case ORSO_OP_UPDATE_GLOBAL_UNION_GC_TYPE: {
                 OrsoType type = ORSO_TYPE_ONE(PEEK(1)->as.u);
                 u32 index = READ_U24();
-                if (orso_is_gc_type(type)) {
-                    vm->globals.gc_values_indices[index].is_object = true;
-                } else {
-                    vm->globals.gc_values_indices[index].is_object = false;
-                }
+                vm->globals.gc_values_indices[index].is_object = orso_is_gc_type(type);
+                break;
+            }
+
+            case ORSO_OP_UPDATE_LOCAL_UNION_GC_TYPE: {
+                OrsoType type = ORSO_TYPE_ONE(PEEK(1)->as.u);
+                u32 index = READ_U24();
+                vm->object_stack[index].is_object = orso_is_gc_type(type);
                 break;
             }
 
