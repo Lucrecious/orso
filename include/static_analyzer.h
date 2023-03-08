@@ -6,7 +6,7 @@
 
 typedef struct OrsoDefinedVariables {
     OrsoSymbolTable scope;
-    struct OrsoDefinedVariables* previous;
+    struct OrsoDefinedVariables* outer;
 } OrsoDefinedVariables;
 
 typedef struct OrsoStaticAnalyzer {
@@ -16,8 +16,8 @@ typedef struct OrsoStaticAnalyzer {
     OrsoSymbolTable symbols;
     //OrsoSymbolTable defined_variables;
 
-    OrsoDefinedVariables* defined_variables_scopes;
-    OrsoDefinedVariables* defined_variables_innermost_scope;
+    OrsoDefinedVariables defined_variables_scopes;
+    OrsoDefinedVariables* defined_variables_bottom_scope;
 
     bool had_error;
     bool panic_mode;

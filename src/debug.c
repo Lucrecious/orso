@@ -20,17 +20,11 @@ static i32 constant_instruction(const char* name, Chunk* chunk, i32 offset) {
     return offset + 4;
 }
 
-static i32 global_instruction(const char* name, Chunk* chunk, i32 offset) {
+static i32 instruction_3arg(const char* name, Chunk* chunk, i32 offset) {
     u32 index = ORSO_u8s_to_u24(chunk->code[offset + 1], chunk->code[offset + 2], chunk->code[offset + 3]);
     printf("%-16s %d", name, index);
     printf("\n");
 
-    return offset + 4;
-}
-
-static i32 update_global_union_gc_type_instruction(Chunk* chunk, i32 offset) {
-    u32 index = ORSO_u8s_to_u24(chunk->code[offset + 1], chunk->code[offset + 2], chunk->code[offset + 3]);
-    printf("%-16s %d\n", "OP_UPDATE_GLOBAL_UNION_GC_TYPE", index);
     return offset + 4;
 }
 
@@ -99,13 +93,18 @@ i32 disassemble_instruction(Chunk* chunk, i32 offset) {
         case ORSO_OP_GREATER_F64: return simple_instruction("OP_GREATER_F64", offset);
         case ORSO_OP_EQUAL_STRING: return simple_instruction("OP_EQUAL_STRING", offset);
         case ORSO_OP_CONSTANT: return constant_instruction("OP_CONSTANT", chunk, offset);
-        case ORSO_OP_DEFINE_GLOBAL: return global_instruction("OP_DEFINE_GLOBAL", chunk, offset);
-        case ORSO_OP_GET_GLOBAL: return global_instruction("OP_GET_GLOBAL", chunk, offset);
-        case ORSO_OP_SET_GLOBAL: return global_instruction("OP_SET_GLOBAL", chunk, offset);
-        case ORSO_OP_DEFINE_GLOBAL_UNION: return global_instruction("OP_DEFINE_GLOBAL_UNION", chunk, offset);
-        case ORSO_OP_GET_GLOBAL_UNION: return global_instruction("OP_GET_GLOBAL_UNION", chunk, offset);
-        case ORSO_OP_SET_GLOBAL_UNION: return global_instruction("OP_SET_GLOBAL_UNION", chunk, offset);
-        case ORSO_OP_UPDATE_GLOBAL_UNION_GC_TYPE: return update_global_union_gc_type_instruction(chunk, offset);
+        case ORSO_OP_DEFINE_GLOBAL: return instruction_3arg("OP_DEFINE_GLOBAL", chunk, offset);
+        case ORSO_OP_GET_GLOBAL: return instruction_3arg("OP_GET_GLOBAL", chunk, offset);
+        case ORSO_OP_SET_GLOBAL: return instruction_3arg("OP_SET_GLOBAL", chunk, offset);
+        case ORSO_OP_DEFINE_GLOBAL_UNION: return instruction_3arg("OP_DEFINE_GLOBAL_UNION", chunk, offset);
+        case ORSO_OP_GET_GLOBAL_UNION: return instruction_3arg("OP_GET_GLOBAL_UNION", chunk, offset);
+        case ORSO_OP_SET_GLOBAL_UNION: return instruction_3arg("OP_SET_GLOBAL_UNION", chunk, offset);
+        case ORSO_OP_GET_LOCAL: return instruction_3arg("OP_GET_GLOBAL", chunk, offset);
+        case ORSO_OP_GET_LOCAL_UNION: return instruction_3arg("OP_SET_GLOBAL", chunk, offset);
+        case ORSO_OP_SET_LOCAL: return instruction_3arg("OP_GET_GLOBAL_UNION", chunk, offset);
+        case ORSO_OP_SET_LOCAL_UNION: return instruction_3arg("OP_SET_GLOBAL_UNION", chunk, offset);
+        case ORSO_OP_UPDATE_GLOBAL_UNION_GC_TYPE: return instruction_3arg("OP_UPDATE_GLOBAL_UNION_GC_TYPE", chunk, offset);
+        case ORSO_OP_UPDATE_LOCAL_UNION_GC_TYPE: return instruction_3arg("OP_UPDATE_LOCAL_UNION_GC_TYPE", chunk, offset);
         case ORSO_OP_PUT_IN_UNION: return put_in_union_instruction(chunk, offset);
         case ORSO_OP_NARROW_UNION: return simple_instruction("OP_NARROW_UNION", offset);
         case ORSO_OP_CONCAT_STRING: return simple_instruction("OP_CONCAT_STRING", offset);
