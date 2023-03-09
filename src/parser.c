@@ -112,6 +112,9 @@ static void orso_free_expression(OrsoExpressionNode* expression) {
                 free(expression->expr.block.declarations[i]);
                 expression->expr.block.declarations[i] = NULL;
             }
+
+            sb_free(expression->expr.block.declarations);
+            expression->expr.block.declarations = NULL;
             break;
         }
         default:
