@@ -69,6 +69,10 @@ INTERPRETER_TEST(assign_inside_expressions3,
     "foo: symbol|i32 = 'hello'; bar: i32|void = null; baz := 0; print_expr baz = bar = foo = 10;",
     "baz = bar = foo = 10 (i32) => 10\n")
 
+INTERPRETER_TEST(assign_assumed_union_from_block,
+    "x := 42; x = { y: i32|void = 30; y; }; print_expr x;",
+    "x (i32) => 30\n")
+
 
 INTERPRETER_ERROR_TEST(undefined_variable,
     "x = 0;",
@@ -100,6 +104,8 @@ MU_TEST_SUITE(tests) {
     MU_RUN_TEST(assign_inside_expressions);
     MU_RUN_TEST(assign_inside_expressions2);
     MU_RUN_TEST(assign_inside_expressions3);
+
+    MU_RUN_TEST(assign_assumed_union_from_block);
 
     MU_RUN_TEST(undefined_variable);
     MU_RUN_TEST(assign_type_mismatch);

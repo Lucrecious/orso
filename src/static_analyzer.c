@@ -336,12 +336,12 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, TypeInferences* type_
 
             if (last_expression_statement == NULL) {
                 expression->value_type = ORSO_TYPE_ONE(ORSO_TYPE_NULL);
+                expression->narrowed_value_type = ORSO_TYPE_ONE(ORSO_TYPE_NULL);
             } else {
                 expression->value_type = last_expression_statement->decl.statement->stmt.expression->value_type;
                 expression->expr.block.final_expression_statement = last_expression_statement;
+                expression->narrowed_value_type = last_expression_statement->decl.statement->stmt.expression->narrowed_value_type;
             }
-
-            expression->narrowed_value_type = expression->value_type;
 
             type_inferences = inner_type_inference.outer_scope;
             inner_type_inference.outer_scope = NULL;
