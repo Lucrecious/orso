@@ -125,7 +125,7 @@ static void emit_type_convert(OrsoTypeKind from_type_kind, OrsoTypeKind to_type_
     }
 }
 
-static i32 add_global(OrsoVM* vm, Token* name, i32 slot_count, bool is_gc_type) {
+static i32 add_global(OrsoVM* vm, Token* name, i32 slot_count, bool is_gc_type, bool is_union) {
     OrsoSymbol* identifier = orso_new_symbol_from_cstrn(&vm->gc, name->start, name->length, &vm->symbols);
     ASSERT(!orso_symbol_table_get(&vm->globals.name_to_index, identifier, &index_slot), "double global definition");
 
@@ -140,8 +140,8 @@ static i32 add_global(OrsoVM* vm, Token* name, i32 slot_count, bool is_gc_type) 
 
     if (is_gc_type) {
         sb_push(vm->globals.gc_values_indices, ((OrsoGCValueIndex){
-            .is_object = true,
-            .index = index,
+            .is_object = false,
+            .index = is_union ? index + 1 : index,
         }));
     }
 
@@ -189,8 +189,8 @@ static FORCE_INLINE bool is_global_scope(Compiler* compiler) {
     return compiler->scope_depth == 0;
 }
 
-static i32 declare_global_variable(OrsoVM* vm, Token* name, i32 slot_count, bool is_gc_type) {
-    return add_global(vm, name, slot_count, is_gc_type);
+static i32 declare_global_variable(OrsoVM* vm, Token* name, i32 slot_count, bool is_gc_type, bool is_union) {
+    return add_global(vm, name, slot_count, is_gc_type, is_union);
 }
 
 static i32 declare_local_variable(Compiler* compiler, Token* name, i32 slot_count, bool is_gc_type) {
@@ -683,7 +683,7 @@ static void var_declaration(OrsoVM* vm, Compiler* compiler, OrsoVarDeclarationNo
         }
 
         if (is_global_scope(compiler)) {
-            i32 index = declare_global_variable(vm, &identifier_token, 1, is_gc_type);
+            i32 index = declare_global_variable(vm, &identifier_token, 1, is_gc_type, false);
 
             emit_variable(ORSO_OP_DEFINE_GLOBAL, index, chunk, var_declaration->start.line);
             if (is_gc_type) {
@@ -701,15 +701,16 @@ static void var_declaration(OrsoVM* vm, Compiler* compiler, OrsoVarDeclarationNo
         }
 
         if (is_global_scope(compiler)) {
-            i32 index = declare_global_variable(vm, &identifier_token, 2, is_gc_type);
+            i32 index = declare_global_variable(vm, &identifier_token, 2, is_gc_type, true);
 
-            if (orso_is_gc_type(var_declaration->var_type)) {
-                sb_push(vm->globals.gc_values_indices, ((OrsoGCValueIndex) {
-                    .is_object = false,
-                    .index = index + 1,
-                }));
+            if (is_gc_type) {
+                const u32 gc_values_index = find_global_gc_index(vm, index + 1);
+                // sb_push(vm->globals.gc_values_indices, ((OrsoGCValueIndex) {
+                //     .is_object = false,
+                //     .index = index + 1,
+                // }));
 
-                const u32 gc_values_index = sb_count(vm->globals.gc_values_indices) - 1;
+                // const u32 gc_values_index = sb_count(vm->globals.gc_values_indices) - 1;
 
                 emit_variable(ORSO_OP_UPDATE_GLOBAL_UNION_GC_TYPE, gc_values_index, chunk, var_declaration->start.line);
             }

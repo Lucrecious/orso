@@ -247,7 +247,6 @@ INTERPRETER_TEST(assignment_expression_group_narrows_expression,
 
 // ^ move to own file
 
-
 INTERPRETER_TEST(declaration_from_block,
     "x := { 5; }; print_expr x;",
     "x (i32) => 5\n")
@@ -259,6 +258,14 @@ INTERPRETER_TEST(declaration_from_block_multiple_expressions,
 INTERPRETER_TEST(declaration_from_empty_block,
     "foo := {}; print_expr foo;",
     "foo (void) => null\n")
+
+INTERPRETER_TEST(nested_blocks_declarations,
+    "x := { y := { z := 10; z + 5; }; y + 5; }; print_expr x;",
+    "x (i32) => 20\n")
+
+INTERPRETER_TEST(many_nested_blocks_declarations,
+    "x := { y := { z := { w := 10; w + 5; }; z + 5; }; y + 5; }; print_expr x;",
+    "x (i32) => 25\n")
 
 INTERPRETER_TEST(declaration_from_block_only_declarations,
     "foo := { bar := 0; }; print_expr foo;",
@@ -302,6 +309,10 @@ INTERPRETER_TEST(shadowing_globals,
 INTERPRETER_TEST(shadowing_locals,
     "{ x := 10; { x := 50; x = 40; }; print_expr x; };",
     "x (i32) => 10\n")
+
+INTERPRETER_TEST(concating_strings_in_block,
+    "x := { \"a\" + \"b\" + \"c\"; }; print_expr x;",
+    "x (string) => abc\n")
 
 
 INTERPRETER_ERROR_TEST(missing_end_semicolin,
@@ -423,6 +434,8 @@ MU_TEST_SUITE(tests) {
     MU_RUN_TEST(declaration_from_block);
     MU_RUN_TEST(declaration_from_block_multiple_expressions);
     MU_RUN_TEST(declaration_from_empty_block);
+    MU_RUN_TEST(nested_blocks_declarations);
+    MU_RUN_TEST(many_nested_blocks_declarations);
     MU_RUN_TEST(declaration_from_block_only_declarations);
 
     MU_RUN_TEST(local_declaration_from_block);
@@ -435,6 +448,7 @@ MU_TEST_SUITE(tests) {
 
     MU_RUN_TEST(shadowing_globals);
     MU_RUN_TEST(shadowing_locals);
+    MU_RUN_TEST(concating_strings_in_block);
 
     MU_RUN_TEST(missing_end_semicolin);
     MU_RUN_TEST(missing_bar_between_types);

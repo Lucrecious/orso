@@ -112,6 +112,17 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
         printf(" }\n");
         disassemble_instruction(vm->chunk, vm->ip - vm->chunk->code);
         printf("\n");
+        for (i32 i = 0; i < vm->globals.name_to_index.capacity; i++) {
+            OrsoSymbolTableEntry* entry = &vm->globals.name_to_index.entries[i];
+            if (entry->key == NULL) {
+                continue;
+            }
+
+            i32 index = entry->value.as.u;
+            printf("%s = ", entry->key->text);
+            orso_print_slot(entry->value, entry->value.type.one);
+            printf("\n");
+        }
 #endif
         OrsoOPCode op_code = READ_BYTE();
         switch (op_code) {
