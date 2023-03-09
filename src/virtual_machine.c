@@ -88,18 +88,18 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
 
     (void)error_fn; // unused
 
+#ifdef DEBUG_TRACE_EXECUTION
+    printf("=== trace ===\n");
+#endif
+
     for (;;) {
 #ifdef DEBUG_TRACE_EXECUTION
         printf("PTR SLOTS = { ");
         for (OrsoGCValueIndex* index = vm->object_stack; index < vm->object_stack_top; index++) {
-            if (index->is_object) {
-                printf("[-]");
-            } else {
-                printf("[");
-                OrsoSlot slot = vm->stack[index->index];
-                orso_print_slot(slot, slot.type.one);
-                printf("]");
-            }
+            printf("[");
+            OrsoSlot slot = vm->stack[index->index];
+            orso_print_slot(slot, slot.type.one);
+            printf("]");
         }
         printf(" }\n");
 

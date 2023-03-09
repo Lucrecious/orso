@@ -192,32 +192,64 @@ INTERPRETER_TEST(local_bool_explicit,
 
 INTERPRETER_TEST(union_explicit_default_void,
     "x: bool|void; print_expr x;",
-    "x (void) => null\n")
+    "x (bool|void) => null\n")
 
 INTERPRETER_TEST(union_explicit,
     "x: bool|void = true; print_expr x;",
-    "x (bool) => true\n")
+    "x (bool|void) => true\n")
 
 INTERPRETER_TEST(union_explicit_no_void,
     "x: bool|string = \"true\"; print_expr x;",
-    "x (string) => true\n")
+    "x (bool|string) => true\n")
 
 
 INTERPRETER_TEST(local_union_explicit_default_void,
     "{ x: bool|void; print_expr x; };",
-    "x (void) => null\n")
+    "x (bool|void) => null\n")
 
 INTERPRETER_TEST(local_union_explicit,
     "{ x: bool|void = true; print_expr x; };",
-    "x (bool) => true\n")
+    "x (bool|void) => true\n")
 
 INTERPRETER_TEST(local_union_explicit_no_void,
     "{ x: bool|string = \"true\"; print_expr x; };",
-    "x (string) => true\n")
+    "x (bool|string) => true\n")
+
+
+// move to inference file on its own
+INTERPRETER_TEST(straight_assign_infers_full_type,
+    "x: i32|void = 42; y := x; print_expr y;",
+    "y (i32|void) => 42\n")
+
+INTERPRETER_TEST(group_narrows_expression,
+    "x: i32|void = 42; y := (x); print_expr y;",
+    "y (i32) => 42\n")
+
+INTERPRETER_TEST(unary_narrows_expression,
+    "x: i32|void = 42; y := -x; print_expr y;",
+    "y (i32) => -42\n")
+
+INTERPRETER_TEST(binary_narrows_expression,
+    "x: i32|void = 42; y := x + 1; print_expr y;",
+    "y (i32) => 43\n")
+
+INTERPRETER_TEST(binary_both_variables_narrows_expression,
+    "x: i32|void = 42; y: i32|void = 1; z := x + y; print_expr z;",
+    "z (i32) => 43\n")
+
+INTERPRETER_TEST(assignment_expression_infers_full_type,
+    "x: i32|void = 1; y: i32|void = 2; z: i32|void = 3; x = y = z; print_expr x;",
+    "x (i32|void) => 3\n")
+
+INTERPRETER_TEST(assignment_expression_group_narrows_expression,
+    "x: i32|void = 1; y: i32|void = 2; z: i32|void = 3; x = (y = z); print_expr x;",
+    "x (i32|void) => 3\n")
+
+// ^ move to own file
 
 
 INTERPRETER_TEST(declaration_from_block,
-    "x := { 5 }; print_expr x;",
+    "x := { 5; }; print_expr x;",
     "x (i32) => 5\n")
 
 INTERPRETER_TEST(declaration_from_block_multiple_expressions,
@@ -229,20 +261,24 @@ INTERPRETER_TEST(declaration_from_empty_block,
     "foo (void) => null\n")
 
 INTERPRETER_TEST(declaration_from_block_only_declarations,
-    "foo := { var bar := 0; }; print_expr foo;",
+    "foo := { bar := 0; }; print_expr foo;",
     "foo (void) => null\n")
 
 
 INTERPRETER_TEST(local_declaration_from_block,
-    "{ x := { 5 }; print_expr x; };",
+    "{ x := { 5; }; print_expr x; };",
     "x (i32) => 5\n")
+
+INTERPRETER_TEST(access_variable_from_inside_and_return,
+    "{ x := 1; y := { x = x; }; print_expr x; };",
+    "x (i32) => 1\n")
 
 INTERPRETER_TEST(local_declaration_from_block_multiple_expressions,
     "{ x := 1; y := { x = x + 5; x + 10; }; print_expr x; print_expr y; };",
     "x (i32) => 6\ny (i32) => 16\n")
 
 INTERPRETER_TEST(local_declaration_from_empty_block,
-    "{ foo := {}; print_expr x; };",
+    "{ foo := {}; print_expr foo; };",
     "foo (void) => null\n")
 
 INTERPRETER_TEST(local_declaration_from_block_only_declarations,
@@ -302,11 +338,11 @@ INTERPRETER_ERROR_TEST(duplicate_definitions,
 
 INTERPRETER_ERROR_TEST(local_variables_dont_exist_after_block,
     "{ x := 10; }; print_expr x;",
-    ORSO_ERROR_COMPILE, 0, "Undefined global variable x;")
+    ORSO_ERROR_COMPILE, 0, "Variable does not exist.")
 
 INTERPRETER_ERROR_TEST(local_variables_dont_exist_after_block2,
     "{ { x := 10; }; print_expr x; };",
-    ORSO_ERROR_COMPILE, 0, "Undefined local variable x;")
+    ORSO_ERROR_COMPILE, 0, "Variable does not exist.")
 
 
 MU_TEST_SUITE(tests) {
@@ -376,31 +412,40 @@ MU_TEST_SUITE(tests) {
     MU_RUN_TEST(local_union_explicit);
     MU_RUN_TEST(local_union_explicit_no_void);
 
-    // MU_RUN_TEST(declaration_from_block);
-    // MU_RUN_TEST(declaration_from_block_multiple_expressions);
-    // MU_RUN_TEST(declaration_from_empty_block);
-    // MU_RUN_TEST(declaration_from_block_only_declarations);
+    MU_RUN_TEST(straight_assign_infers_full_type);
+    MU_RUN_TEST(group_narrows_expression);
+    MU_RUN_TEST(unary_narrows_expression);
+    MU_RUN_TEST(binary_narrows_expression);
+    MU_RUN_TEST(binary_both_variables_narrows_expression);
+    MU_RUN_TEST(assignment_expression_infers_full_type);
+    MU_RUN_TEST(assignment_expression_group_narrows_expression);
 
-    // MU_RUN_TEST(local_declaration_from_block);
-    // MU_RUN_TEST(local_declaration_from_block_multiple_expressions);
-    // MU_RUN_TEST(local_declaration_from_empty_block);
-    // MU_RUN_TEST(local_declaration_from_block_only_declarations);
-    // MU_RUN_TEST(block_implication_expression_statement_and_then_variable_declaration);
-    // MU_RUN_TEST(block_implication_variable_declaration_and_then_expression_statement);
+    MU_RUN_TEST(declaration_from_block);
+    MU_RUN_TEST(declaration_from_block_multiple_expressions);
+    MU_RUN_TEST(declaration_from_empty_block);
+    MU_RUN_TEST(declaration_from_block_only_declarations);
 
-    // MU_RUN_TEST(shadowing_globals);
-    // MU_RUN_TEST(shadowing_locals);
+    MU_RUN_TEST(local_declaration_from_block);
+    MU_RUN_TEST(access_variable_from_inside_and_return);
+    MU_RUN_TEST(local_declaration_from_block_multiple_expressions);
+    MU_RUN_TEST(local_declaration_from_empty_block);
+    MU_RUN_TEST(local_declaration_from_block_only_declarations);
+    MU_RUN_TEST(block_implication_expression_statement_and_then_variable_declaration);
+    MU_RUN_TEST(block_implication_variable_declaration_and_then_expression_statement);
 
-    // MU_RUN_TEST(missing_end_semicolin);
-    // MU_RUN_TEST(missing_bar_between_types);
-    // MU_RUN_TEST(type_mismatch);
-    // MU_RUN_TEST(type_mismatch_union);
-    // MU_RUN_TEST(default_value_required_for_non_void_unions);
-    // MU_RUN_TEST(undefined_type);
-    // MU_RUN_TEST(too_many_types);
-    // MU_RUN_TEST(duplicate_definitions);
-    // MU_RUN_TEST(local_variables_dont_exist_after_block);
-    // MU_RUN_TEST(local_variables_dont_exist_after_block2);
+    MU_RUN_TEST(shadowing_globals);
+    MU_RUN_TEST(shadowing_locals);
+
+    MU_RUN_TEST(missing_end_semicolin);
+    MU_RUN_TEST(missing_bar_between_types);
+    MU_RUN_TEST(type_mismatch);
+    MU_RUN_TEST(type_mismatch_union);
+    MU_RUN_TEST(default_value_required_for_non_void_unions);
+    MU_RUN_TEST(undefined_type);
+    MU_RUN_TEST(too_many_types);
+    MU_RUN_TEST(duplicate_definitions);
+    MU_RUN_TEST(local_variables_dont_exist_after_block);
+    MU_RUN_TEST(local_variables_dont_exist_after_block2);
 }
 
 int main(int argc, char** argv) {

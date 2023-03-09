@@ -34,16 +34,16 @@ INTERPRETER_TEST(assign_variable_to_variable,
 
 
 INTERPRETER_TEST(assign_union_stack_data,
-    "x: bool | i32 = true; print_expr x; x = 32; print_expr x;",
-    "x (bool) => true\nx (i32) => 32\n")
+    "x: bool|i32 = true; print_expr x; x = 32; print_expr x;",
+    "x (bool|i32) => true\nx (bool|i32) => 32\n")
 
 INTERPRETER_TEST(assign_union_object_data,
-    "x: string | symbol = 'foo'; print_expr x; x = \"bar\"; print_expr x;",
-    "x (symbol) => 'foo'\nx (string) => bar\n")
+    "x: string|symbol = 'foo'; print_expr (x); x = \"bar\"; print_expr (x);",
+    "(x) (symbol) => 'foo'\n(x) (string) => bar\n")
 
 INTERPRETER_TEST(assign_union_object_stack_mix_data,
-    "x: bool | symbol = 'foo'; print_expr x; x = false; print_expr x;",
-    "x (symbol) => 'foo'\nx (bool) => false\n")
+    "x: bool|symbol = 'foo'; print_expr (x); x = false; print_expr (x);",
+    "(x) (symbol) => 'foo'\n(x) (bool) => false\n")
 
 INTERPRETER_TEST(assign_union_to_single,
     "foo: symbol; bar: symbol|void = 'foobar'; foo = bar; print_expr foo;",
@@ -51,11 +51,11 @@ INTERPRETER_TEST(assign_union_to_single,
 
 INTERPRETER_TEST(assign_union_to_single_after_change,
     "foo: symbol; bar: symbol|void; print_expr bar; bar = 'foobar'; foo = bar; print_expr foo;",
-    "bar (void) => null\nfoo (symbol) => 'foobar'\n")
+    "bar (symbol|void) => null\nfoo (symbol) => 'foobar'\n")
 
 INTERPRETER_TEST(assign_union_to_union,
     "foo: bool|void = false; bar: bool|void = true; foo = bar; print_expr foo;",
-    "foo (bool) => true\n")
+    "foo (bool|void) => true\n")
 
 INTERPRETER_TEST(assign_inside_expressions,
     "foo: i32|void = null; bar := 42; foobar := (foo = 1) + (bar = foo); print_expr foobar; print_expr bar;",
@@ -63,7 +63,7 @@ INTERPRETER_TEST(assign_inside_expressions,
 
 INTERPRETER_TEST(assign_inside_expressions2,
     "foo := 42; bar: i32|void = null; print_expr bar = 1; print_expr foo = bar + foo; print_expr foo;",
-    "bar = 1 (i32) => 1\nfoo = bar + foo (i32) => 43\nfoo (i32) => 43\n")
+    "bar = 1 (i32|void) => 1\nfoo = bar + foo (i32) => 43\nfoo (i32) => 43\n")
 
 INTERPRETER_TEST(assign_inside_expressions3,
     "foo: symbol|i32 = 'hello'; bar: i32|void = null; baz := 0; print_expr baz = bar = foo = 10;",

@@ -65,6 +65,8 @@ void orso_ast_init(OrsoAST* ast) {
     ast->declarations = NULL;
 }
 
+static void free_declaration(OrsoDeclarationNode* declaration_node);
+
 static void orso_free_expression(OrsoExpressionNode* expression) {
     if (!expression) {
         return;
@@ -76,28 +78,42 @@ static void orso_free_expression(OrsoExpressionNode* expression) {
             orso_free_expression(expression->expr.binary.right);
             free(expression->expr.binary.left);
             free(expression->expr.binary.right);
+            expression->expr.binary.left = NULL;
+            expression->expr.binary.right = NULL;
             break;
         case EXPRESSION_GROUPING:
             orso_free_expression(expression->expr.grouping.expression);
             free(expression->expr.grouping.expression);
+            expression->expr.grouping.expression = NULL;
             break;
         case EXPRESSION_IMPLICIT_CAST:
             orso_free_expression(expression->expr.cast.operand);
             free(expression->expr.cast.operand);
+            expression->expr.cast.operand = NULL;
             break;
         case EXPRESSION_UNARY:
             orso_free_expression(expression->expr.unary.operand);
             free(expression->expr.unary.operand);
+            expression->expr.unary.operand = NULL;
             break;
         case EXPRESSION_ASSIGNMENT:
             orso_free_expression(expression->expr.assignment.right_side);
             free(expression->expr.assignment.right_side);
+            expression->expr.assignment.right_side = NULL;
             break;
         case EXPRESSION_VARIABLE:
             // identifier symbol is freed by gc
         case EXPRESSION_PRIMARY:
             // no need
             break;
+        case EXPRESSION_BLOCK: {
+            for (i32 i = 0; i < sb_count(expression->expr.block.declarations); i++) {
+                free_declaration(expression->expr.block.declarations[i]);
+                free(expression->expr.block.declarations[i]);
+                expression->expr.block.declarations[i] = NULL;
+            }
+            break;
+        }
         default:
             UNREACHABLE();
     }
@@ -636,6 +652,8 @@ bool orso_parse(OrsoAST* ast, const char* source, OrsoErrorFunction error_fn) {
     return !parser.had_error;
 }
 
+void ast_print_declaration(OrsoDeclarationNode* declaration, i32 initial_indent);
+
 void ast_print_expression(OrsoExpressionNode* expression, i32 initial) {
     const char type_str[128];
     orso_type_to_cstr(expression->value_type, (char*)type_str);
@@ -685,6 +703,15 @@ void ast_print_expression(OrsoExpressionNode* expression, i32 initial) {
             ast_print_expression(expression->expr.assignment.right_side, initial + 1);
             break;
         }
+
+        case EXPRESSION_BLOCK: {
+            printf("BLOCK\n");
+            for (i32 i = 0; i < sb_count(expression->expr.block.declarations); i++) {
+                ast_print_declaration(expression->expr.block.declarations[i], initial + 1);
+            }
+            break;
+        }
+
         default:
             UNREACHABLE();
     }

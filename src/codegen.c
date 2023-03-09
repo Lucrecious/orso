@@ -379,8 +379,7 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoExpressionNode* expre
         case EXPRESSION_UNARY: {
             expression(vm, compiler, expression_node->expr.unary.operand, chunk);
             if (ORSO_TYPE_IS_SINGLE(expression_node->value_type)
-            && ORSO_TYPE_IS_UNION(expression_node->expr.assignment.right_side->value_type)
-            && ORSO_TYPE_IS_SINGLE(expression_node->expr.assignment.right_side->narrowed_value_type)) {
+            && ORSO_TYPE_IS_UNION(expression_node->expr.unary.operand->value_type)) {
                 emit_instruction(ORSO_OP_NARROW_UNION, chunk, expression_node->start.line);
             }
 
@@ -410,6 +409,10 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoExpressionNode* expre
 
         case EXPRESSION_GROUPING: {
             expression(vm, compiler, expression_node->expr.grouping.expression, chunk);
+            if (ORSO_TYPE_IS_UNION(expression_node->expr.grouping.expression->value_type)
+                && ORSO_TYPE_IS_SINGLE(expression_node->value_type)) {
+                emit_instruction(ORSO_OP_NARROW_UNION, chunk, expression_node->end.line);
+            }
             break;
         }
         
@@ -467,6 +470,7 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoExpressionNode* expre
                 get_op = ORSO_OP_GET_GLOBAL;
                 get_union_op = ORSO_OP_GET_GLOBAL_UNION;
             } else {
+                index = compiler->locals[index].stack_position;
                 get_op = ORSO_OP_GET_LOCAL;
                 get_union_op = ORSO_OP_GET_LOCAL_UNION;
             }
@@ -496,6 +500,7 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoExpressionNode* expre
             OrsoOPCode set_union_op;
 
             i32 index = retrieve_local_variable(compiler, &identifier_token);
+            i32 local_index;
             if (index < 0) {
                 index = retrieve_global_variable(vm, &identifier_token);
                 ASSERT(index >= 0, "global must be defined.");
@@ -503,6 +508,8 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoExpressionNode* expre
                 set_op = ORSO_OP_SET_GLOBAL;
                 set_union_op = ORSO_OP_SET_GLOBAL_UNION;
             } else {
+                local_index = index;
+                index = compiler->locals[index].stack_position;
                 set_op = ORSO_OP_SET_LOCAL;
                 set_union_op = ORSO_OP_SET_LOCAL_UNION;
             }
@@ -521,7 +528,7 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoExpressionNode* expre
                         ASSERT(gc_index >= 0, "gc_index must exist.");
                         emit_variable(ORSO_OP_UPDATE_GLOBAL_UNION_GC_TYPE, gc_index, chunk, expression_node->start.line);
                     } else {
-                        const i32 object_stack_position = compiler->locals[index].object_stack_position;
+                        const i32 object_stack_position = compiler->locals[local_index].object_stack_position;
                         ASSERT(object_stack_position >= 0, "must be on object stack.");
                         emit_variable(ORSO_OP_UPDATE_LOCAL_UNION_GC_TYPE, object_stack_position, chunk, expression_node->start.line);
                     }
@@ -573,21 +580,30 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoExpressionNode* expre
                     expression(vm, compiler, final_expression_statement->decl.statement->stmt.expression, chunk);
 
                     if (ORSO_TYPE_IS_UNION(return_variable_type)) {
-                        emit_variable(ORSO_OP_SET_LOCAL_UNION, return_variable_index, chunk, final_expression_statement->start.line);
-
                         if (compiler->locals[return_variable_index].is_gc_type) {
                             const u32 object_stack_position = compiler->locals[return_variable_index].object_stack_position;
-                            emit_variable(ORSO_OP_UPDATE_LOCAL_UNION_GC_TYPE, object_stack_position, chunk, final_expression_statement->start.line);
+                            emit_variable(ORSO_OP_UPDATE_LOCAL_UNION_GC_TYPE, object_stack_position, chunk, expression_node->end.line);
+                        }
+
+                        emit_variable(ORSO_OP_SET_LOCAL_UNION, return_variable_index, chunk, expression_node->end.line);
+
+                        emit_instruction(ORSO_OP_POP, chunk, expression_node->end.line);
+                        emit_instruction(ORSO_OP_POP, chunk, expression_node->end.line);
+
+                        if (orso_is_gc_type(return_variable_type)) {
+                            emit_instruction(ORSO_OP_POP_TOP_OBJECT, chunk, expression_node->end.line);
                         }
                     } else {
-                        emit_variable(ORSO_OP_SET_LOCAL, return_variable_index, chunk, final_expression_statement->start.line);
+                        emit_variable(ORSO_OP_SET_LOCAL, return_variable_index, chunk, expression_node->end.line);
+                        emit_instruction(ORSO_OP_POP, chunk, expression_node->end.line);
                         if (orso_is_gc_type(return_variable_type)) {
-                            emit_instruction(ORSO_OP_POP_TOP_OBJECT, chunk, final_expression_statement->start.line);
+                            emit_instruction(ORSO_OP_POP_TOP_OBJECT, chunk, expression_node->end.line);
                         }
                     }
                 } else {
                     emit_instruction(ORSO_OP_PUSH_0, chunk, expression_node->end.line);
-                    emit_variable(ORSO_OP_SET_LOCAL, return_variable_index, chunk, final_expression_statement->start.line);
+                    emit_variable(ORSO_OP_SET_LOCAL, return_variable_index, chunk, expression_node->end.line);
+                    emit_instruction(ORSO_OP_POP, chunk, expression_node->end.line);
                 }
             }
 
@@ -627,10 +643,6 @@ static void statement(OrsoVM* vm, Compiler* compiler, OrsoStatementNode* stateme
         case ORSO_STATEMENT_PRINT_EXPR: {
                 expression(vm, compiler, statement->stmt.expression, chunk);
 
-                if (ORSO_TYPE_IS_UNION(statement->stmt.expression->value_type) && ORSO_TYPE_IS_SINGLE(statement->stmt.expression->narrowed_value_type)) {
-                    emit_instruction(ORSO_OP_NARROW_UNION, chunk, statement->start.line);
-                }
-
                 Token start = statement->stmt.expression->start;
                 Token end = statement->stmt.expression->end;
 
@@ -640,7 +652,7 @@ static void statement(OrsoVM* vm, Compiler* compiler, OrsoStatementNode* stateme
 
                 emit_constant(chunk, slot, start.line, true);
 
-                emit_print_expr(statement->stmt.expression->narrowed_value_type, chunk, start.line);
+                emit_print_expr(statement->stmt.expression->value_type, chunk, start.line);
             break;
         }
         case ORSO_STATEMENT_NONE: break; // Unreachable

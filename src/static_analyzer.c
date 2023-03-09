@@ -225,7 +225,7 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, TypeInferences* type_
         case EXPRESSION_UNARY: {
             OrsoUnaryOp* unary_op = &expression->expr.unary;
             orso_resolve_expression(analyzer, type_inferences, unary_op->operand);
-            expression->value_type = orso_resolve_unary(unary_op->operator.type, unary_op->operand->value_type);
+            expression->value_type = orso_resolve_unary(unary_op->operator.type, unary_op->operand->narrowed_value_type);
             expression->narrowed_value_type = expression->value_type;
             
             // TODO: Must negate the new type implications if the unary operation is NOT
@@ -281,6 +281,7 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, TypeInferences* type_
 
                     if (exists = orso_symbol_table_get(&current_scope->scope, variable_name, &type_)) {
                         assumption_scope = current_inference_scope;
+                        break;
                     }
 
                     current_scope = current_scope->outer;
@@ -336,7 +337,7 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, TypeInferences* type_
             if (last_expression_statement == NULL) {
                 expression->value_type = ORSO_TYPE_ONE(ORSO_TYPE_NULL);
             } else {
-                expression->value_type = last_expression_statement->decl.statement->stmt.expression->narrowed_value_type;
+                expression->value_type = last_expression_statement->decl.statement->stmt.expression->value_type;
                 expression->expr.block.final_expression_statement = last_expression_statement;
             }
 
@@ -389,9 +390,6 @@ static void resolve_var_declaration(OrsoStaticAnalyzer* analyzer, TypeInferences
 
     var_declaration->var_type = type;
 
-    SymbolTable type_implications;
-    orso_symbol_table_init(&type_implications);
-
     if (var_declaration->expression != NULL) {
         orso_resolve_expression(analyzer, type_inferences, var_declaration->expression);
     }
@@ -407,7 +405,7 @@ static void resolve_var_declaration(OrsoStaticAnalyzer* analyzer, TypeInferences
                 if (orso_integer_fit(ORSO_TYPE_ONE(ORSO_TYPE_INT32), var_declaration->expression->value_type, false)) {
                     var_declaration->var_type.one = ORSO_TYPE_INT32;
                 } else {
-                    var_declaration->var_type = var_declaration->expression->narrowed_value_type;
+                    var_declaration->var_type = var_declaration->expression->value_type;
                 }
                 break;
             }
@@ -452,8 +450,6 @@ static void resolve_var_declaration(OrsoStaticAnalyzer* analyzer, TypeInferences
             update_type_assumption(&type_inferences->assumptions, identifier, narrowed_type);
         }
     }
-
-    orso_symbol_table_free(&type_implications);
 }
 
 static void resolve_declaration(OrsoStaticAnalyzer* analyzer, TypeInferences* inferences, OrsoDeclarationNode* declaration_node) {
