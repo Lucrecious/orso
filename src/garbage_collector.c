@@ -89,11 +89,15 @@ static void visit(OrsoGarbageCollector* gc, OrsoGCHeader* object) {
 static void mark_roots(OrsoGarbageCollector* gc) {
     OrsoVM* vm = gc->vm;
     for (OrsoGCValueIndex* index = vm->object_stack; index < vm->object_stack_top; index++) {
-        if (index->is_object) {
+        if (!index->is_object) {
             continue;
         }
 
         OrsoObject* object = (OrsoObject*)vm->stack[index->index].as.p;
+        if (object == NULL) {
+            continue;
+        }
+
         visit(gc, (OrsoGCHeader*)object);
     }
 
@@ -111,6 +115,7 @@ static void mark_roots(OrsoGarbageCollector* gc) {
         if (!index.is_object) {
             continue;
         }
+
 
         visit(gc, (OrsoGCHeader*)vm->globals.values[index.index].as.p);
     }

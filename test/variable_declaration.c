@@ -311,8 +311,16 @@ INTERPRETER_TEST(shadowing_locals,
     "x (i32) => 10\n")
 
 INTERPRETER_TEST(concating_strings_declare,
-    "x := \"a\" + \"b\" + \"c\";",
+    "x := \"a\" + \"b\" + \"c\"; print_expr x;",
     "x (string) => abc\n")
+
+INTERPRETER_TEST(concating_strings_concat_in_block,
+    "x: string|void = { y := \"hello\"; y + \" world\"; }; print_expr x;",
+    "x (string|void) => hello world\n")
+
+INTERPRETER_TEST(memory_leak_issue_with_locals,
+    "{ x: string|void; x = \"hello\"; \"a\" + \"b\"; print_expr x; };",
+    "x (string|void) => hello\n")
 
 
 INTERPRETER_ERROR_TEST(missing_end_semicolin,
@@ -449,6 +457,8 @@ MU_TEST_SUITE(tests) {
     MU_RUN_TEST(shadowing_globals);
     MU_RUN_TEST(shadowing_locals);
     MU_RUN_TEST(concating_strings_declare);
+    MU_RUN_TEST(concating_strings_concat_in_block);
+    MU_RUN_TEST(memory_leak_issue_with_locals);
 
     MU_RUN_TEST(missing_end_semicolin);
     MU_RUN_TEST(missing_bar_between_types);

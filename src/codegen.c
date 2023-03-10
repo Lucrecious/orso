@@ -565,7 +565,7 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoExpressionNode* expre
                 }
 
                 if (orso_is_gc_type(return_variable_type)) {
-                    emit_instruction(ORSO_OP_PUSH_TOP_OBJECT, chunk, expression_node->start.line);
+                    emit_instruction(ORSO_OP_PUSH_TOP_OBJECT_NULL, chunk, expression_node->start.line);
                 }
             }
 
@@ -666,6 +666,10 @@ static void var_declaration(OrsoVM* vm, Compiler* compiler, OrsoVarDeclarationNo
         if (ORSO_TYPE_IS_UNION(var_declaration->var_type)) {
             ASSERT(orso_type_has_kind(var_declaration->var_type, ORSO_TYPE_NULL), "default type only allowed for void type unions.");
             emit_instruction(ORSO_OP_PUSH_NULL_UNION, chunk, var_declaration->start.line);
+
+            if (orso_is_gc_type(var_declaration->var_type)) {
+                emit_instruction(ORSO_OP_PUSH_TOP_OBJECT, chunk, var_declaration->start.line);
+            }
         } else {
             OrsoSlot slot = zero_value(var_declaration->var_type.one, &vm->gc, &vm->symbols);
             emit_constant(chunk, slot, var_declaration->start.line, orso_is_gc_type(var_declaration->var_type));
@@ -687,6 +691,8 @@ static void var_declaration(OrsoVM* vm, Compiler* compiler, OrsoVarDeclarationNo
 
             emit_variable(ORSO_OP_DEFINE_GLOBAL, index, chunk, var_declaration->start.line);
             if (is_gc_type) {
+                u32 gc_index = find_global_gc_index(vm, index);
+                emit_variable(ORSO_OP_SET_GLOBAL_GC_TYPE, gc_index, chunk, var_declaration->start.line);
                 emit_instruction(ORSO_OP_POP_TOP_OBJECT, chunk, var_declaration->start.line);
             }
 
@@ -705,13 +711,6 @@ static void var_declaration(OrsoVM* vm, Compiler* compiler, OrsoVarDeclarationNo
 
             if (is_gc_type) {
                 const u32 gc_values_index = find_global_gc_index(vm, index + 1);
-                // sb_push(vm->globals.gc_values_indices, ((OrsoGCValueIndex) {
-                //     .is_object = false,
-                //     .index = index + 1,
-                // }));
-
-                // const u32 gc_values_index = sb_count(vm->globals.gc_values_indices) - 1;
-
                 emit_variable(ORSO_OP_UPDATE_GLOBAL_UNION_GC_TYPE, gc_values_index, chunk, var_declaration->start.line);
             }
 
@@ -723,7 +722,6 @@ static void var_declaration(OrsoVM* vm, Compiler* compiler, OrsoVarDeclarationNo
                 const u32 object_stack_index = compiler->locals[index].object_stack_position;
                 emit_variable(ORSO_OP_UPDATE_LOCAL_UNION_GC_TYPE, object_stack_index, chunk, var_declaration->start.line);
             }
-
         }
     }
 }

@@ -197,6 +197,12 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
                 break;
             }
 
+            case ORSO_OP_SET_GLOBAL_GC_TYPE: {
+                u32 index = READ_U24();
+                vm->globals.gc_values_indices[index].is_object = true;
+                break;
+            }
+
             case ORSO_OP_DEFINE_GLOBAL_UNION: {
                 u32 index = READ_U24();
                 OrsoSlot type = *PEEK(1);
