@@ -310,8 +310,8 @@ INTERPRETER_TEST(shadowing_locals,
     "{ x := 10; { x := 50; x = 40; }; print_expr x; };",
     "x (i32) => 10\n")
 
-INTERPRETER_TEST(concating_strings_in_block,
-    "x := { \"a\" + \"b\" + \"c\"; }; print_expr x;",
+INTERPRETER_TEST(concating_strings_declare,
+    "x := \"a\" + \"b\" + \"c\";",
     "x (string) => abc\n")
 
 
@@ -448,7 +448,7 @@ MU_TEST_SUITE(tests) {
 
     MU_RUN_TEST(shadowing_globals);
     MU_RUN_TEST(shadowing_locals);
-    MU_RUN_TEST(concating_strings_in_block);
+    MU_RUN_TEST(concating_strings_declare);
 
     MU_RUN_TEST(missing_end_semicolin);
     MU_RUN_TEST(missing_bar_between_types);

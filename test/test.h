@@ -40,9 +40,8 @@ void clear_test_error_buffer() {
     error_line = -1;
 }
 
-OrsoInterpreter test_interpreter;
-
 #define INTERPRETER_TEST(NAME, SOURCE, EXPECTED) MU_TEST(NAME) { \
+    OrsoInterpreter test_interpreter; \
     clear_test_buffer(); \
     orso_interpreter_init(&test_interpreter, write_to_test_buffer, NULL); \
     orso_interpreter_run(&test_interpreter, SOURCE); \
@@ -51,6 +50,7 @@ OrsoInterpreter test_interpreter;
 }
 
 #define INTERPRETER_ERROR_TEST(NAME, SOURCE, ERROR_TYPE, LINE, MESSAGE) MU_TEST(NAME) { \
+    OrsoInterpreter test_interpreter; \
     clear_test_error_buffer(); \
     orso_interpreter_init(&test_interpreter, NULL, write_to_test_error_buffer); \
     orso_interpreter_run(&test_interpreter, SOURCE); \

@@ -94,9 +94,24 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
 
     for (;;) {
 #ifdef DEBUG_TRACE_EXECUTION
+        for (i32 i = 0; i < vm->globals.name_to_index.capacity; i++) {
+            OrsoSymbolTableEntry* entry = &vm->globals.name_to_index.entries[i];
+            if (entry->key == NULL) {
+                continue;
+            }
+
+            i32 index = entry->value.as.u;
+            printf("%s = ", entry->key->text);
+            OrsoSlot value = vm->globals.values[entry->value.as.u];
+            orso_print_slot(value, value.type.one);
+            printf("\n");
+        }
         printf("PTR SLOTS = { ");
         for (OrsoGCValueIndex* index = vm->object_stack; index < vm->object_stack_top; index++) {
             printf("[");
+            if (!index->is_object) {
+                printf("!");
+            }
             OrsoSlot slot = vm->stack[index->index];
             orso_print_slot(slot, slot.type.one);
             printf("]");
@@ -112,17 +127,6 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
         printf(" }\n");
         disassemble_instruction(vm->chunk, vm->ip - vm->chunk->code);
         printf("\n");
-        for (i32 i = 0; i < vm->globals.name_to_index.capacity; i++) {
-            OrsoSymbolTableEntry* entry = &vm->globals.name_to_index.entries[i];
-            if (entry->key == NULL) {
-                continue;
-            }
-
-            i32 index = entry->value.as.u;
-            printf("%s = ", entry->key->text);
-            orso_print_slot(entry->value, entry->value.type.one);
-            printf("\n");
-        }
 #endif
         OrsoOPCode op_code = READ_BYTE();
         switch (op_code) {

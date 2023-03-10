@@ -20,22 +20,6 @@ src = [
   'src/virtual_machine.c',
 ]
 
-test_error = executable('test_error', [src, 'test/error.c'],
-  install : false,
-  include_directories : inc)
-
-test_variable_declaration = executable('test_variable_declaration', [src, 'test/variable_declaration.c'],
-  install : false,
-  include_directories : inc)
-
-test_assignment = executable('test_assignment', [src, 'test/assignment.c'],
-  install : false,
-  include_directories : inc)
-
-test_arithmetic = executable('test_arithmetic', [src, 'test/arithmetic.c'],
-  install : false,
-  include_directories : inc)
-
 c_args = []
 if get_option('debug_trace')
   c_args += '-DDEBUG_TRACE_EXECUTION'
@@ -54,6 +38,28 @@ if get_option('debug_gc_print')
 endif
 
 executable('orso', [src, 'main.c'], install : false, include_directories : inc, c_args : c_args)
+
+test_c_args = '-DDEBUG_GC_STRESS'
+
+test_error = executable('test_error', [src, 'test/error.c'],
+  install : false,
+  include_directories : inc,
+  c_args : test_c_args)
+
+test_variable_declaration = executable('test_variable_declaration', [src, 'test/variable_declaration.c'],
+  install : false,
+  include_directories : inc,
+  c_args : test_c_args)
+
+test_assignment = executable('test_assignment', [src, 'test/assignment.c'],
+  install : false,
+  include_directories : inc,
+  c_args : test_c_args)
+
+test_arithmetic = executable('test_arithmetic', [src, 'test/arithmetic.c'],
+  install : false,
+  include_directories : inc,
+  c_args : test_c_args)
 
 test('test_error', test_error)
 test('test_variable_declaration', test_variable_declaration)
