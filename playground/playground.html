@@ -1,29 +1,64 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-<title>ACE in Action</title>
-<style type="text/css" media="screen">
-    #editor { 
-        position: absolute;
-        top: 0;
-        right: 0;
-        bottom: 0;
-        left: 0;
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>Orso Interpreter Demo</title>
+  </head>
+  <style>
+    .readonly {
+        display: block;
+        font-family: monospace;
+        padding: 10px;
+        background-color: #f4f4f4;
+        border: 1px solid #ccc;
+        margin: 0;
+        white-space: pre-wrap;
     }
-</style>
-</head>
-<body>
-
-<div id="editor">function foo(items) {
-    var x = "All this is syntax highlighted";
-    return x;
-}</div>
+  </style>
+  <body>
+    <h1>Orso Interpreter Demo</h1>
+    <textarea id="input" rows="10" cols="50">print_expr "Hello, World!";</textarea>
+    <button onclick="runCode()">Run</button>
+    <pre><code id="output" class="readonly">
+    </code></pre>
     
-<script src="ace-builds/src-noconflict/ace.js" type="text/javascript" charset="utf-8"></script>
-<script>
-    var editor = ace.edit("editor");
-    editor.setTheme("ace/theme/monokai");
-    editor.session.setMode("ace/mode/javascript");
-</script>
-</body>
+    <script src="./orso.js"></script>
+    <script>
+        function writeFunction(chars) {
+            var string = Module.UTF8ToString(chars)
+            document.getElementById("output").textContent += string;
+        }
+
+        function errorFunction(error, line, message) {
+            document.getElementById("output").textContent += `Error at line ${line}: ${Module.UTF8ToString(message)}\n`
+        }
+
+        let api = {
+        }
+
+        Module.onRuntimeInitialized = async () => {
+            api = {
+                interpreter_new: Module.cwrap("interpreter_new", "number", ["number", "number"]),
+                interpreter_free: Module.cwrap("interpreter_free", "null", ["number"]),
+                interpreter_run: Module.cwrap("interpreter_run", "null", ["number", "string"]),
+            };
+        };
+        function runCode() {
+            let writeFunctionPtr = Module.addFunction(writeFunction, 'vi');
+            let errorFunctionPtr = Module.addFunction(errorFunction, 'viii');
+            let interpreter = api.interpreter_new(writeFunctionPtr, errorFunctionPtr)
+
+            document.getElementById("output").innerText = "";
+
+            let inputRaw = document.getElementById("input").value;
+            let asciiText = unescape(encodeURIComponent(inputRaw))
+            api.interpreter_run(interpreter, asciiText)
+
+            api.interpreter_free(interpreter);
+
+            Module.removeFunction(writeFunctionPtr);
+            Module.removeFunction(errorFunctionPtr);
+        }
+    </script>
+  </body>
 </html>

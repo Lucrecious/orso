@@ -113,6 +113,10 @@ INTERPRETER_TEST(variable_add_unions_after_assign,
     "foo: i32|void = null; bar: i32|void = 9; print_expr (foo = 60) + bar;",
     "(foo = 60) + bar (i32) => 69\n")
 
+INTERPRETER_TEST(block_add_expression,
+    "print_expr 10 + { 10; };",
+    "10 + { 10; }; (i32) => 20\n")
+
 MU_TEST_SUITE(tests) {
     MU_RUN_TEST(constant_add_i32s);
     MU_RUN_TEST(constant_add_f64s);
@@ -146,6 +150,8 @@ MU_TEST_SUITE(tests) {
     MU_RUN_TEST(variable_add);
     MU_RUN_TEST(variable_add_unions);
     MU_RUN_TEST(variable_add_unions_after_assign);
+
+    MU_RUN_TEST(block_add_expression);
 }
 
 int main(int argc, char** argv) {
