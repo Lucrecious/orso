@@ -668,6 +668,11 @@ static void var_declaration(OrsoVM* vm, Compiler* compiler, OrsoVarDeclarationNo
             emit_instruction(ORSO_OP_PUSH_NULL_UNION, chunk, var_declaration->start.line);
 
             if (orso_is_gc_type(var_declaration->var_type)) {
+                /* 
+                 * push top object will make the object stack point to a null stack slot
+                 * but the garbage collector already does a null check on the object before
+                 * visiting it. So I don't bother to emit an "update object stack" instruction
+                 */
                 emit_instruction(ORSO_OP_PUSH_TOP_OBJECT, chunk, var_declaration->start.line);
             }
         } else {

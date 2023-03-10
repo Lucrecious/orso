@@ -94,6 +94,12 @@ static void mark_roots(OrsoGarbageCollector* gc) {
         }
 
         OrsoObject* object = (OrsoObject*)vm->stack[index->index].as.p;
+        /*
+         * This needs be to be checked on the stack beacuse of blocks.
+         * Local variables can temporarily be of an object type but point to a null stack slot. This happens
+         * in blocks when creating a temporary variable for holding the result of the final expression.
+         * In all other cases, the gc value index should point to an object is is_object is true.
+        */
         if (object == NULL) {
             continue;
         }
