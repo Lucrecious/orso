@@ -1,64 +1,77 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="UTF-8">
-    <title>Orso Interpreter Demo</title>
-  </head>
-  <style>
-    .readonly {
-        display: block;
-        font-family: monospace;
-        padding: 10px;
-        background-color: #f4f4f4;
-        border: 1px solid #ccc;
-        margin: 0;
-        white-space: pre-wrap;
+<html lang="en">
+
+<head>
+  <title>Orso Interpreter</title>
+  <link rel="stylesheet" type="text/css" href="playground.css">
+</head>
+
+<body>
+
+  <div class="code-grid">
+    <div id="editor">print_expr "hello world";</div>
+    <div id="output-block"></div>
+    <button onclick="runCode()" style="width: 100px; height: 50px;">Run</button>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.15.3/ace.js" type="text/javascript" charset="utf-8"></script>
+  <script>
+    var editor = ace.edit("editor");
+    editor.setTheme("ace/theme/monokai");
+    editor.session.setMode("ace/mode/javascript");
+
+    var outputBlock = ace.edit("output-block")
+    outputBlock.setTheme("ace/theme/monokai");
+    outputBlock.session.setUseWorker(false)
+    outputBlock.setShowPrintMargin(false)
+    outputBlock.setOptions({readOnly: true, highlightActiveLine: false, highlightGutterLine: false});
+    outputBlock.renderer.setShowGutter(false)
+    outputBlock.renderer.$cursorLayer.element.style.display = "none"
+  </script>
+
+  <script src="./orso.js"></script>
+  <script>
+    function writeFunction(chars) {
+      let string = Module.UTF8ToString(chars)
+      let outputBlock = ace.edit("output-block")
+      outputBlock.setValue(outputBlock.getValue() + string)
     }
-  </style>
-  <body>
-    <h1>Orso Interpreter Demo</h1>
-    <textarea id="input" rows="10" cols="50">print_expr "Hello, World!";</textarea>
-    <button onclick="runCode()">Run</button>
-    <pre><code id="output" class="readonly">
-    </code></pre>
-    
-    <script src="./orso.js"></script>
-    <script>
-        function writeFunction(chars) {
-            var string = Module.UTF8ToString(chars)
-            document.getElementById("output").textContent += string;
-        }
 
-        function errorFunction(error, line, message) {
-            document.getElementById("output").textContent += `Error at line ${line}: ${Module.UTF8ToString(message)}\n`
-        }
+    function errorFunction(error, line, message) {
+      let string = `Error at line ${line}: ${Module.UTF8ToString(message)}\n`
+      let outputBlock = ace.edit("output-block")
+      outputBlock.setValue(outputBlock.getValue() + string)
+    }
 
-        let api = {
-        }
+    let api = {
+    }
 
-        Module.onRuntimeInitialized = async () => {
-            api = {
-                interpreter_new: Module.cwrap("interpreter_new", "number", ["number", "number"]),
-                interpreter_free: Module.cwrap("interpreter_free", "null", ["number"]),
-                interpreter_run: Module.cwrap("interpreter_run", "null", ["number", "string"]),
-            };
-        };
-        function runCode() {
-            let writeFunctionPtr = Module.addFunction(writeFunction, 'vi');
-            let errorFunctionPtr = Module.addFunction(errorFunction, 'viii');
-            let interpreter = api.interpreter_new(writeFunctionPtr, errorFunctionPtr)
+    Module.onRuntimeInitialized = async () => {
+      api = {
+        interpreter_new: Module.cwrap("interpreter_new", "number", ["number", "number"]),
+        interpreter_free: Module.cwrap("interpreter_free", "null", ["number"]),
+        interpreter_run: Module.cwrap("interpreter_run", "null", ["number", "string"]),
+      };
+    };
+    function runCode() {
+      let writeFunctionPtr = Module.addFunction(writeFunction, 'vi');
+      let errorFunctionPtr = Module.addFunction(errorFunction, 'viii');
+      let interpreter = api.interpreter_new(writeFunctionPtr, errorFunctionPtr)
 
-            document.getElementById("output").innerText = "";
+      ace.edit("output-block").setValue("")
 
-            let inputRaw = document.getElementById("input").value;
-            let asciiText = unescape(encodeURIComponent(inputRaw))
-            api.interpreter_run(interpreter, asciiText)
+      let inputRaw = ace.edit("editor").getValue()
+      let asciiText = unescape(encodeURIComponent(inputRaw))
+      api.interpreter_run(interpreter, asciiText)
 
-            api.interpreter_free(interpreter);
+      ace.edit("output-block").clearSelection();
 
-            Module.removeFunction(writeFunctionPtr);
-            Module.removeFunction(errorFunctionPtr);
-        }
-    </script>
-  </body>
+      api.interpreter_free(interpreter);
+
+      Module.removeFunction(writeFunctionPtr);
+      Module.removeFunction(errorFunctionPtr);
+    }
+  </script>
+</body>
+
 </html>

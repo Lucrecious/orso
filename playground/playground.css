@@ -1,0 +1,24 @@
+body, html {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+.code-grid {
+    display: grid;
+    grid-template-columns: 50% 50%;
+    grid-column-gap: 1px;
+    background-color: #0c1116;
+    height: 100%;
+    width: 100%;
+}
+
+#editor {
+    width: 100%;
+    height: 100%;
+}
+
+#output-block {
+    width: 100%;
+    height: 100%;
+}
