@@ -155,7 +155,7 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, TypeInferences* type_
         case EXPRESSION_GROUPING: {
             orso_resolve_expression(analyzer, type_inferences, expression->expr.grouping.expression);
             expression->value_type = expression->expr.grouping.expression->narrowed_value_type;
-            expression->narrowed_value_type = expression->value_type;
+            expression->narrowed_value_type = expression->expr.grouping.expression->narrowed_value_type;
             break;
         }
         case EXPRESSION_PRIMARY: {
@@ -182,6 +182,8 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, TypeInferences* type_
                 case TOKEN_SLASH: {
                     OrsoType combined_type = orso_binary_arithmetic_cast(left->narrowed_value_type, right->narrowed_value_type, expression->expr.binary.operator.type);
                     expression->value_type = combined_type;
+
+                    ASSERT(ORSO_TYPE_IS_SINGLE(expression->value_type), "arthimetic must narrow down to a single type");
 
                     cast_left = combined_type;
                     cast_right = combined_type;
@@ -225,8 +227,10 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, TypeInferences* type_
         case EXPRESSION_UNARY: {
             OrsoUnaryOp* unary_op = &expression->expr.unary;
             orso_resolve_expression(analyzer, type_inferences, unary_op->operand);
-            expression->value_type = orso_resolve_unary(unary_op->operator.type, unary_op->operand->narrowed_value_type);
-            expression->narrowed_value_type = expression->value_type;
+
+            OrsoType new_type = orso_resolve_unary(unary_op->operator.type, unary_op->operand->narrowed_value_type);
+            expression->value_type = new_type;
+            expression->narrowed_value_type = new_type;
             
             // TODO: Must negate the new type implications if the unary operation is NOT
 
@@ -295,11 +299,14 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, TypeInferences* type_
                 OrsoType type = ORSO_TYPE_ONE(type_.as.u);
 
                 orso_resolve_expression(analyzer, type_inferences, expression->expr.assignment.right_side);
+                OrsoType right_side_narrowed_type = expression->expr.assignment.right_side->narrowed_value_type;
                 expression->value_type = type;
-                expression->narrowed_value_type = expression->expr.assignment.right_side->narrowed_value_type;
+                expression->narrowed_value_type = type;
                 
-                if (!orso_type_fits(type, expression->expr.assignment.right_side->narrowed_value_type)) {
+                if (!orso_type_fits(type, right_side_narrowed_type)) {
                     error(analyzer, expression->start.line, "Expression needs explicit cast to store in variable.");
+                } else {
+                    expression->narrowed_value_type = right_side_narrowed_type;
                 }
 
                 if (ORSO_TYPE_IS_UNION(type)) {
@@ -338,8 +345,8 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, TypeInferences* type_
                 expression->value_type = ORSO_TYPE_ONE(ORSO_TYPE_NULL);
                 expression->narrowed_value_type = ORSO_TYPE_ONE(ORSO_TYPE_NULL);
             } else {
-                expression->value_type = last_expression_statement->decl.statement->stmt.expression->value_type;
                 expression->expr.block.final_expression_statement = last_expression_statement;
+                expression->value_type = last_expression_statement->decl.statement->stmt.expression->value_type;
                 expression->narrowed_value_type = last_expression_statement->decl.statement->stmt.expression->narrowed_value_type;
             }
 
@@ -410,7 +417,7 @@ static void resolve_var_declaration(OrsoStaticAnalyzer* analyzer, TypeInferences
                 break;
             }
             default: {
-                if (var_declaration->expression != NULL && !orso_type_fits(var_declaration->var_type, var_declaration->expression->value_type)) {
+                if (var_declaration->expression != NULL && !orso_type_fits(var_declaration->var_type, var_declaration->expression->narrowed_value_type)) {
                     error(analyzer, var_declaration->start.line, "Must cast expression explicitly to match var type.");
                 }
                 break;

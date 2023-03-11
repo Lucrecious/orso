@@ -115,7 +115,19 @@ INTERPRETER_TEST(variable_add_unions_after_assign,
 
 INTERPRETER_TEST(block_add_expression,
     "print_expr 10 + { 10; };",
-    "10 + { 10; }; (i32) => 20\n")
+    "10 + { 10; } (i32) => 20\n")
+
+INTERPRETER_TEST(block_add_expression_nested,
+    "x := 10 + { 10 + { 10 + 10 * {2;}; }; }; print_expr x;",
+    "x (i32) => 50\n")
+
+INTERPRETER_TEST(block_adds_together,
+    "print_expr {3;} + {1;};",
+    "{3;} + {1;} (i32) => 4\n")
+
+INTERPRETER_TEST(block_adds_together_nested,
+    "x := { { { 10; }; }; } + { { { {10;}; }; }; }; print_expr x;",
+    "x (i32) => 20\n")
 
 MU_TEST_SUITE(tests) {
     MU_RUN_TEST(constant_add_i32s);
@@ -152,6 +164,9 @@ MU_TEST_SUITE(tests) {
     MU_RUN_TEST(variable_add_unions_after_assign);
 
     MU_RUN_TEST(block_add_expression);
+    MU_RUN_TEST(block_add_expression_nested);
+    MU_RUN_TEST(block_adds_together);
+    MU_RUN_TEST(block_adds_together_nested);
 }
 
 int main(int argc, char** argv) {

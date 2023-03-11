@@ -209,10 +209,6 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
                 vm->globals.values[index] = type;
                 vm->globals.values[index + 1] = *PEEK(0);
 
-                if (orso_is_gc_type(ORSO_TYPE_ONE(type.as.u))) {
-                    POP_TOP_OBJECT();
-                }
-
                 POP();
                 POP();
                 break;
@@ -239,10 +235,6 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
 
                 PUSH(type);
                 PUSH(value);
-
-                if (orso_is_gc_type(ORSO_TYPE_ONE(type.as.u))) {
-                    PUSH_TOP_OBJECT();
-                }
                 break;
             }
 
@@ -253,10 +245,6 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
 
                 PUSH(type);
                 PUSH(value);
-
-                if (orso_is_gc_type(ORSO_TYPE_ONE(type.as.u))) {
-                    PUSH_TOP_OBJECT();
-                }
                 break;
             }
 
@@ -294,16 +282,34 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
 
             case ORSO_OP_PUT_IN_UNION: {
                 OrsoType type = ORSO_TYPE_ONE(READ_TYPE_KIND());
+
+                if (orso_is_gc_type(type)) {
+                    POP_TOP_OBJECT();
+                }
+
                 OrsoSlot value = POP();
                 PUSH(ORSO_SLOT_U(type.one, ORSO_TYPE_ONE(ORSO_TYPE_TYPE)));
                 PUSH(value);
+
+                if (orso_is_gc_type(type)) {
+                    PUSH_TOP_OBJECT();
+                }
                 break;
             }
 
             case ORSO_OP_NARROW_UNION: {
                 OrsoSlot value = POP();
-                POP(); // pop type
+                OrsoType type = ORSO_TYPE_ONE(POP().as.u);
+
+                if (orso_is_gc_type(type)) {
+                    POP_TOP_OBJECT();
+                }
+
                 PUSH(value);
+
+                if (orso_is_gc_type(type)) {
+                    PUSH_TOP_OBJECT();
+                }
                 break;
             }
 
@@ -314,7 +320,7 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
                 break;
             }
 
-            case ORSO_OP_UPDATE_LOCAL_UNION_GC_TYPE: {
+            case ORSO_OP_UPDATE_STACK_GC_TYPE: {
                 OrsoType type = ORSO_TYPE_ONE(PEEK(1)->as.u);
                 u32 index = READ_U24();
                 vm->object_stack[index].is_object = orso_is_gc_type(type);
@@ -322,18 +328,12 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
             }
 
             case ORSO_OP_PRINT_EXPR: {
-                OrsoString* expression_string;
-                OrsoString* value_string;
-                OrsoType type = READ_TYPE();
-                if (ORSO_TYPE_IS_SINGLE(type)) {
-                    expression_string = (OrsoString*)(PEEK(0)->as.p);
-                    value_string = orso_slot_to_string(&vm->gc, *PEEK(1), type.one);
-                } else {
-                    expression_string = (OrsoString*)(PEEK(0)->as.p);
-                    ASSERT(ORSO_TYPE_IS_SINGLE((OrsoTypeKind)PEEK(2)), "must be single type.");
-                    OrsoTypeKind union_type = (OrsoTypeKind)PEEK(2)->as.u;
-                    value_string = orso_slot_to_string(&vm->gc, *PEEK(1), union_type);
-                }
+                OrsoType type = ORSO_TYPE_ONE(POP().as.u); // pop expression type
+
+                OrsoString* expression_string = (OrsoString*)(PEEK(0)->as.p);
+                ASSERT(ORSO_TYPE_IS_SINGLE((OrsoTypeKind)PEEK(2)), "must be single type.");
+                OrsoTypeKind union_type = (OrsoTypeKind)PEEK(2)->as.u;
+                OrsoString* value_string = orso_slot_to_string(&vm->gc, *PEEK(1), union_type);
 
                 if (vm->write_fn != NULL) {
                     vm->write_fn(expression_string->text);
@@ -348,17 +348,9 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
                     vm->write_fn("\n");
                 }
 
-                POP_PTR();
-
-                if (orso_is_gc_type(type)) {
-                    POP_PTR();
-                } else {
-                    POP();
-                }
-
-                if (ORSO_TYPE_IS_UNION(type)) {
-                    POP();
-                }
+                POP_PTR(); // pop expression string and pointer
+                POP_PTR(); // pop value and union pointer
+                POP(); // pop union type
                 break;
             }
             
