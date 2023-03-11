@@ -1,3 +1,0 @@
-[submodule "playground/ace"]
-	path = playground/ace
-	url = https://github.com/ajaxorg/ace-builds
