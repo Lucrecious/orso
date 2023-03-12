@@ -35,11 +35,6 @@ jobs:
         with:
           path: 'playground'
       - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
+        uses: Sauloxd/review-apps@v2.0.0
         with:
-          # Deploy to the playground branch
           branch: playground
-          publish_dir: ./playground
-          # Remove existing files from the playground branch before deploying
-          clean: true
-          commit_message: Deploy playground to GitHub Pages
