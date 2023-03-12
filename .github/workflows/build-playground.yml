@@ -25,9 +25,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
       - name: Install emscripten
-        uses: lovasoa/setup-emscripten@master
-        with:
-          emscripten-version: '1.38.47'
+        uses: mymindstorm/setup-emsdk@v12
       - name: Generate WASM
         run: ./generate_wasm
       - name: Setup Pages
