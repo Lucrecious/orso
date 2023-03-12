@@ -35,6 +35,7 @@ jobs:
         with:
           path: 'playground'
       - name: Deploy to GitHub Pages
-        uses: Sauloxd/review-apps@v2.0.0
+        uses: peaceiris/actions-gh-pages@v3
         with:
           branch: playground
+          publish_dir: ./playground
