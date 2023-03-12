@@ -37,5 +37,5 @@ jobs:
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
-          branch: playground
+          public_branch: playground
           publish_dir: ./playground
