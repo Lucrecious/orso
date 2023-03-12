@@ -127,3 +127,6 @@ packagecache
 
 *.pyc
 /*venv*
+
+playground/orso.js
+playground/orso.wasm

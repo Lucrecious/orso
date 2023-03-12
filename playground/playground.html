@@ -9,16 +9,37 @@
 <body>
 
   <div class="code-grid">
-    <div id="editor">print_expr "hello world";</div>
+    <div id="editor">greeting := "hello world";
+print_expr greeting;
+
+number_or_null: i32|void;
+print_expr number_or_null;
+
+number_or_null = 42;
+print_expr number_or_null;
+
+meaning_of_life: i32 = number_or_null;
+print_expr meaning_of_life;
+
+leaving := {
+    good := "good";
+    bye := "bye";
+    good + bye;
+};
+
+print_expr leaving;</div>
     <div id="output-block"></div>
     <button onclick="runCode()" style="width: 100px; height: 50px;">Run</button>
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.15.3/ace.js" type="text/javascript" charset="utf-8"></script>
+  <script src="./mode-orso.js" type="text/javascript" charset="utf-8"></script>
   <script>
+    ace.config.setModuleUrl("ace/mode/orso", "./mode-orso.js")
+
     var editor = ace.edit("editor");
     editor.setTheme("ace/theme/monokai");
-    editor.session.setMode("ace/mode/javascript");
+    editor.setOption("mode", "ace/mode/orso")
 
     var outputBlock = ace.edit("output-block")
     outputBlock.setTheme("ace/theme/monokai");
@@ -38,7 +59,7 @@
     }
 
     function errorFunction(error, line, message) {
-      let string = `Error at line ${line}: ${Module.UTF8ToString(message)}\n`
+      let string = `Error at line ${line + 1}: ${Module.UTF8ToString(message)}\n`
       let outputBlock = ace.edit("output-block")
       outputBlock.setValue(outputBlock.getValue() + string)
     }
