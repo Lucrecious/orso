@@ -250,7 +250,7 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, TypeInferences* type_
                 while (current_scope) {
                     ASSERT(current_inference_scope, "there must be one type inference per defined variable scope");
 
-                    if (exists = orso_symbol_table_get(&current_scope->scope, variable_name, &type)) {
+                    if ((exists = orso_symbol_table_get(&current_scope->scope, variable_name, &type))) {
                         if (!orso_symbol_table_get(&current_inference_scope->assumptions, variable_name, &narrowed_type)) {
                             narrowed_type = type;
                         }
@@ -283,8 +283,8 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, TypeInferences* type_
                 while (current_scope) {
                     ASSERT(current_inference_scope, "there must be one inference per defined variable.");
 
-                    if (exists = orso_symbol_table_get(&current_scope->scope, variable_name, &type_)) {
-                        assumption_scope = current_inference_scope;
+                    if ((exists = orso_symbol_table_get(&current_scope->scope, variable_name, &type_))) {
+                        assumption_scope = &current_inference_scope->assumptions;
                         break;
                     }
 

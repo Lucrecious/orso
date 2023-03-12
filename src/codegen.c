@@ -30,7 +30,6 @@ static i32 OP_STACK_EFFECT[] = {
 
     [ORSO_OP_PUSH_TOP_OBJECT] = 0,
     [ORSO_OP_PUSH_TOP_OBJECT_NULL] = 0,
-    [ORSO_OP_SET_TOP_OBJECT] = 0,
 
     [ORSO_OP_I64_TO_F64] = 0,
     [ORSO_OP_F64_TO_I64] = 0,
@@ -100,7 +99,6 @@ static i32 OP_OBJECT_STACK_EFFECT[] = {
 
     [ORSO_OP_PUSH_TOP_OBJECT] = 1,
     [ORSO_OP_PUSH_TOP_OBJECT_NULL] = 1,
-    [ORSO_OP_SET_TOP_OBJECT] = 0,
 
     [ORSO_OP_I64_TO_F64] = 0,
     [ORSO_OP_F64_TO_I64] = 0,
@@ -245,33 +243,6 @@ static void emit_put_in_union(Compiler* compiler, OrsoTypeKind type_kind, Chunk*
     chunk_write(chunk, b2, line);
 }
 
-static void emit_set_top_object(Compiler* compiler, i32 object_stack_index, Chunk* chunk, i32 line) {
-    emit_instruction(ORSO_OP_SET_TOP_OBJECT, compiler, chunk, line);
-
-    ASSERT(index < 0xFFFFFF, "object_stack_index must be less than the largest 24 bit unsigned int.");
-    byte b1, b2, b3;
-    ORSO_u24_to_u8s(object_stack_index, b1, b2, b3);
-    chunk_write(chunk, b1, line);
-    chunk_write(chunk, b2, line);
-    chunk_write(chunk, b3, line);
-}
-
-// static void emit_print_expr(Compiler* compiler, OrsoType type, Chunk* chunk, i32 line) {
-//     emit_instruction(ORSO_OP_PRINT_EXPR, compiler, chunk, line);
-
-//     u64 utype = type.one;
-//     byte a, b, c, d, e, f, g, h;
-//     ORSO_u64_to_u8s(utype, a, b, c, d, e, f, g, h);
-//     chunk_write(chunk, a, line);
-//     chunk_write(chunk, b, line);
-//     chunk_write(chunk, c, line);
-//     chunk_write(chunk, d, line);
-//     chunk_write(chunk, e, line);
-//     chunk_write(chunk, f, line);
-//     chunk_write(chunk, g, line);
-//     chunk_write(chunk, h, line);
-// }
-
 static void emit_type_convert(Compiler* compiler, OrsoTypeKind from_type_kind, OrsoTypeKind to_type_kind, Chunk* chunk, i32 line) {
     bool include_bool = true;
     if (orso_is_float_type_kind(from_type_kind) && (orso_is_integer_type_kind(to_type_kind, include_bool))) {
@@ -310,7 +281,7 @@ static i32 add_local(Compiler* compiler, Token name, i32 slot_count, bool is_gc_
     ASSERT(slot_count > 0, "local must consume stack space");
 
     while (sb_count(compiler->locals) <= compiler->count) {
-        sb_push(compiler->locals, (Local){});
+        sb_push(compiler->locals, (Local){ .depth = 0 });
     }
 
     Local* local = &compiler->locals[compiler->count++];
@@ -327,10 +298,6 @@ static i32 add_local(Compiler* compiler, Token name, i32 slot_count, bool is_gc_
     }
 
     return compiler->count - 1;
-}
-
-static FORCE_INLINE bool is_local_scope(Compiler* compiler) {
-    return compiler->scope_depth > 0;
 }
 
 static FORCE_INLINE bool is_global_scope(Compiler* compiler) {
@@ -711,7 +678,7 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoExpressionNode* expre
             // create local variable at the beginning of the stack to hold block return value
             OrsoType return_variable_type = final_expression_statement == NULL ?
                     ORSO_TYPE_ONE(ORSO_TYPE_NULL) : final_expression_statement->decl.statement->stmt.expression->value_type;
-            const Token return_identifier = { .length = 0, .line = expression_node->start.line, .start = "", .type = TOKEN_IDENTIFIER };
+            Token return_identifier = { .length = 0, .line = expression_node->start.line, .start = "", .type = TOKEN_IDENTIFIER };
             i32 return_value_slot_count = ORSO_TYPE_IS_UNION(return_variable_type) ? 2 : 1;
 
             if (ORSO_TYPE_IS_UNION(return_variable_type)) {
@@ -816,7 +783,7 @@ static void statement(OrsoVM* vm, Compiler* compiler, OrsoStatementNode* stateme
                 OrsoSlot slot = ORSO_SLOT_P(expression_string, ORSO_TYPE_ONE(ORSO_TYPE_STRING));
                 emit_constant(compiler, chunk, slot, start.line, true);
 
-                OrsoSlot value_type = ORSO_SLOT_U(statement->stmt.expression->value_type.one, ORSO_TYPE_TYPE);
+                OrsoSlot value_type = ORSO_SLOT_U(statement->stmt.expression->value_type.one, ORSO_TYPE_ONE(ORSO_TYPE_TYPE));
                 emit_constant(compiler, chunk, value_type, start.line, false);
 
                 emit_instruction(ORSO_OP_PRINT_EXPR, compiler, chunk, start.line);

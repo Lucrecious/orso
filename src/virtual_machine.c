@@ -52,6 +52,12 @@ static FORCE_INLINE void push_top_object(OrsoVM* vm) {
     vm->object_stack_top++;
 }
 
+static FORCE_INLINE void push_top_object_null(OrsoVM* vm) {
+    vm->object_stack_top->is_object = false;
+    vm->object_stack_top->index = (vm->stack_top - 1) - vm->stack;
+    vm->object_stack_top++;
+}
+
 static FORCE_INLINE OrsoSlot pop(OrsoVM* vm) {
     vm->stack_top--;
     return *vm->stack_top;
@@ -80,6 +86,7 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
 #define POP_PTR() pop_top_object(vm); pop(vm)
 #define PUSH(VALUE) push_i64(vm, VALUE)
 #define PUSH_TOP_OBJECT() push_top_object(vm)
+#define PUSH_TOP_OBJECT_NULL() push_top_object_null(vm)
 #ifdef DEBUG_TRACE_EXECUTION
 #define SLOT_ADD_TYPE(SLOT, TYPE) SLOT->type = TYPE
 #else
@@ -100,9 +107,9 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
                 continue;
             }
 
-            i32 index = entry->value.as.u;
+            u32 index = entry->value.as.u;
             printf("%s = ", entry->key->text);
-            OrsoSlot value = vm->globals.values[entry->value.as.u];
+            OrsoSlot value = vm->globals.values[index];
             orso_print_slot(value, value.type.one);
             printf("\n");
         }
@@ -133,6 +140,7 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
             case ORSO_OP_POP: POP(); break;
             case ORSO_OP_POP_TOP_OBJECT: POP_TOP_OBJECT(); break;
             case ORSO_OP_PUSH_TOP_OBJECT: PUSH_TOP_OBJECT(); break;
+            case ORSO_OP_PUSH_TOP_OBJECT_NULL: PUSH_TOP_OBJECT_NULL(); break;
 
             case ORSO_OP_I64_TO_F64: *PEEK(0) = ORSO_SLOT_F((f64)PEEK(0)->as.i, ORSO_TYPE_ONE(ORSO_TYPE_FLOAT64)); break;
             case ORSO_OP_F64_TO_I64: *PEEK(0) = ORSO_SLOT_I((i64)PEEK(0)->as.f, ORSO_TYPE_ONE(ORSO_TYPE_INT64)); break;
@@ -358,6 +366,7 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
         }
     }
 
+#undef PUSH_TOP_OBJECT_NULL
 #undef PUSH_TOP_OBJECT
 #undef PUSH
 #undef POP_PTR
