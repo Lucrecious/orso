@@ -8,8 +8,10 @@
 
 <body>
 
-  <div class="code-grid">
-    <div id="editor">greeting := "hello world";
+  <div class="code-container">
+    <h1 class="title">Orso Interpreter Playground</h1>
+    <div class="code-display">
+      <div id="editor">greeting := "hello world";
 print_expr greeting;
 
 number_or_null: i32|void;
@@ -28,8 +30,9 @@ leaving := {
 };
 
 print_expr leaving;</div>
-    <div id="output-block"></div>
-    <button onclick="runCode()" style="width: 100px; height: 50px;">Run</button>
+      <div id="output-block"></div>
+    </div>
+    <button class="button-3" onclick="runCode()" style="width: 100px; height: 50px; margin-left: calc(-70% + 100px);">Run</button>
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.15.3/ace.js" type="text/javascript" charset="utf-8"></script>
