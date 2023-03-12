@@ -38,6 +38,5 @@ jobs:
         uses: peaceiris/actions-gh-pages@v3
         with:
           personal_token: ${{ secrets.PERSONAL_ACCESS_TOKEN_ORSO_PLAYGROUND }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: playground
           publish_dir: ./playground
