@@ -112,7 +112,7 @@ FORCE_INLINE OrsoType orso_type_merge(OrsoType type1, OrsoType type2) {
         }
 
         if (!orso_type_add_kind(&type1, type2_kind)) {
-            UNREACHABLE();
+            return ORSO_TYPE_ONE(ORSO_TYPE_INVALID);
         }
     }
 

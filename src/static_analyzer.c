@@ -411,15 +411,16 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, TypeInferences* type_
                         }
 
                         OrsoSlot else_slot;
-                        if (!orso_symbol_table_get(elses, entry->key, &else_slot)) {
+                        if (!orso_symbol_table_get(&elses->assumptions, entry->key, &else_slot)) {
                             UNREACHABLE();
                         }
 
                         OrsoType then_type = ORSO_TYPE_ONE(entry->value.as.u);
                         OrsoType else_type = ORSO_TYPE_ONE(else_slot.as.u);
                         OrsoType merged_type = orso_type_merge(then_type, else_type);
+                        ASSERT(merged_type.one != ORSO_TYPE_INVALID, "merge must happen since these are assigns");
 
-                        orso_symbol_table_set(&present->assumptions, entry->key, ORSO_SLOT_U(merged_type.one, ORSO_TYPE_TYPE));
+                        orso_symbol_table_set(&present->assumptions, entry->key, ORSO_SLOT_U(merged_type.one, ORSO_TYPE_ONE(ORSO_TYPE_TYPE)));
                     }
 
                     thens = thens->outer_scope;
@@ -431,6 +432,24 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, TypeInferences* type_
             free_type_inferences_on_heap(then_inferences);
             free_type_inferences_on_heap(else_inferences);
 
+            OrsoType else_block_type = ORSO_TYPE_ONE(ORSO_TYPE_NULL);
+            OrsoType else_block_narrowed_type = else_block_type;
+            if (expression->expr.ifelse.else_) {
+                else_block_type = expression->expr.ifelse.else_->value_type;
+                else_block_narrowed_type = expression->expr.ifelse.else_->narrowed_value_type;
+            }
+
+            expression->value_type = orso_type_merge(
+                expression->expr.ifelse.then->value_type, else_block_type
+            );
+
+            if (expression->value_type.one == ORSO_TYPE_INVALID) {
+                error(analyzer, expression->end.line, "if expression union type is too large.");
+            }
+
+            expression->narrowed_value_type = orso_type_merge(
+                expression->expr.ifelse.then->narrowed_value_type, else_block_narrowed_type
+            );
             break;
         }
 

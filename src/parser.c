@@ -761,7 +761,7 @@ void ast_print_expression(OrsoExpressionNode* expression, i32 initial) {
         }
         case EXPRESSION_IFELSE: {
             OrsoExpressionNode* condition = expression->expr.ifelse.condition;
-            printf("IFELSE - %.*s\n", condition->end.start + condition->end.length - condition->start.start, condition->start.start);
+            printf("IFELSE - %.*s\n", (i32)(condition->end.start + condition->end.length - condition->start.start), condition->start.start);
             ast_print_expression(expression->expr.ifelse.then, initial + 1);
             if (expression->expr.ifelse.else_) {
                 ast_print_expression(expression->expr.ifelse.else_, initial + 1);
