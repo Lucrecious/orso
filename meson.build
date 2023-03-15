@@ -20,7 +20,7 @@ src = [
   'src/virtual_machine.c',
 ]
 
-c_args = []
+c_args = ['-DDEBUG']
 if get_option('debug_trace')
   c_args += '-DDEBUG_TRACE_EXECUTION'
 endif
@@ -39,7 +39,7 @@ endif
 
 executable('orso', [src, 'main.c'], install : false, include_directories : inc, c_args : c_args)
 
-test_c_args = '-DDEBUG_GC_STRESS'
+test_c_args = ['-DDEBUG_GC_STRESS', '-DDEBUG']
 
 test_error = executable('test_error', [src, 'test/error.c'],
   install : false,

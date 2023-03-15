@@ -84,7 +84,7 @@ FORCE_INLINE bool orso_type_has_kind(OrsoType type, OrsoTypeKind kind) {
 }
 
 FORCE_INLINE bool orso_type_add_kind(OrsoType* type, OrsoTypeKind kind) {
-    ASSERT(!orso_type_has_kind(type, kind), "type must not already have kind");
+    ASSERT(!orso_type_has_kind(*type, kind), "type must not already have kind");
 
     for (i32 i = 0; i < ORSO_UNION_NUM_MAX; i++) {
         if (type->union_[i] == ORSO_TYPE_INVALID) {

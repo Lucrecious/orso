@@ -208,20 +208,6 @@ static void emit_constant(Compiler* compiler, Chunk* chunk, OrsoSlot slot, i32 l
 }
 
 static void emit_instruction3(OrsoOPCode op_code, Compiler* compiler, u32 index, Chunk* chunk, i32 line) {
-    ASSERT(op_code == ORSO_OP_GET_GLOBAL
-        || op_code == ORSO_OP_SET_GLOBAL
-        || op_code == ORSO_OP_DEFINE_GLOBAL
-        || op_code == ORSO_OP_GET_GLOBAL_UNION
-        || op_code == ORSO_OP_SET_GLOBAL_UNION
-        || op_code == ORSO_OP_DEFINE_GLOBAL_UNION
-        || op_code == ORSO_OP_UPDATE_GLOBAL_UNION_GC_TYPE
-
-        || op_code == ORSO_OP_DEFINE_LOCAL_UNION
-        || op_code == ORSO_OP_SET_LOCAL
-        || op_code == ORSO_OP_SET_LOCAL_UNION
-        || op_code == ORSO_OP_GET_LOCAL
-        || op_code == ORSO_OP_GET_LOCAL_UNION
-        || op_code == ORSO_OP_UPDATE_STACK_GC_TYPE, "must be a local or global op code.");
     emit_instruction(op_code, compiler, chunk, line);
 
     ASSERT(index < 0xFFFFFF, "index must be less than the largest 24 bit unsigned int.");
@@ -256,9 +242,11 @@ static void emit_type_convert(Compiler* compiler, OrsoTypeKind from_type_kind, O
 
 static i32 add_global(OrsoVM* vm, Token* name, i32 slot_count, bool is_gc_type, bool is_union) {
     OrsoSymbol* identifier = orso_new_symbol_from_cstrn(&vm->gc, name->start, name->length, &vm->symbols);
+
+    OrsoSlot index_slot;
     ASSERT(!orso_symbol_table_get(&vm->globals.name_to_index, identifier, &index_slot), "double global definition");
 
-    OrsoSlot index_slot = ORSO_SLOT_I(sb_count(vm->globals.values), ORSO_TYPE_ONE(ORSO_TYPE_INT32));
+    index_slot = ORSO_SLOT_I(sb_count(vm->globals.values), ORSO_TYPE_ONE(ORSO_TYPE_INT32));
     orso_symbol_table_set(&vm->globals.name_to_index, identifier, index_slot);
 
     for (i32 i = 0; i < slot_count; i++) {

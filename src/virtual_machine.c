@@ -339,7 +339,7 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
                 OrsoType type = ORSO_TYPE_ONE(POP().as.u); // pop expression type
 
                 OrsoString* expression_string = (OrsoString*)(PEEK(0)->as.p);
-                ASSERT(ORSO_TYPE_IS_SINGLE((OrsoTypeKind)PEEK(2)), "must be single type.");
+                ASSERT(ORSO_TYPE_IS_SINGLE(ORSO_TYPE_ONE(PEEK(2)->as.u)), "must be single type.");
                 OrsoTypeKind union_type = (OrsoTypeKind)PEEK(2)->as.u;
                 OrsoString* value_string = orso_slot_to_string(&vm->gc, *PEEK(1), union_type);
 
