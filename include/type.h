@@ -83,6 +83,42 @@ FORCE_INLINE bool orso_type_has_kind(OrsoType type, OrsoTypeKind kind) {
     return false;
 }
 
+FORCE_INLINE bool orso_type_add_kind(OrsoType* type, OrsoTypeKind kind) {
+    ASSERT(!orso_type_has_kind(type, kind), "type must not already have kind");
+
+    for (i32 i = 0; i < ORSO_UNION_NUM_MAX; i++) {
+        if (type->union_[i] == ORSO_TYPE_INVALID) {
+            type->union_[i] = kind;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+FORCE_INLINE OrsoType orso_type_merge(OrsoType type1, OrsoType type2) {
+    if (type1.one == type2.one) {
+        return type1;
+    }
+
+    for (i32 i = 0; i < ORSO_UNION_NUM_MAX; i++) {
+        OrsoTypeKind type2_kind = type2.union_[i];
+        if (type2_kind == ORSO_TYPE_INVALID) {
+            continue;
+        }
+
+        if (orso_type_has_kind(type1, type2_kind)) {
+            continue;
+        }
+
+        if (!orso_type_add_kind(&type1, type2_kind)) {
+            UNREACHABLE();
+        }
+    }
+
+    return type1;
+}
+
 bool FORCE_INLINE orso_is_float_type_kind(OrsoTypeKind type_kind) {
     switch (type_kind) {
         case ORSO_TYPE_FLOAT32:

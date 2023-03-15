@@ -28,6 +28,32 @@ static void free_type_inferences(TypeInferences* type_inferences) {
     type_inferences->outer_scope = NULL;
 }
 
+static void free_type_inferences_on_heap(TypeInferences* type_inferences) {
+    while (type_inferences) {
+        TypeInferences* outer = type_inferences->outer_scope;
+        type_inferences->outer_scope = NULL;
+        free_type_inferences(type_inferences);
+        free(type_inferences);
+
+        type_inferences = outer;
+    }
+}
+
+static TypeInferences* copy_type_inferences(TypeInferences* type_inferences) {
+    if (!type_inferences) {
+        return NULL;
+    }
+
+    TypeInferences* duplicate = ORSO_ALLOCATE(TypeInferences);
+    init_type_inferences(duplicate);
+
+    orso_symbol_table_add_all(&type_inferences->assumptions, &duplicate->assumptions);
+
+    duplicate->outer_scope = copy_type_inferences(type_inferences->outer_scope);
+
+    return duplicate;
+}
+
 static void update_type_assumption(SymbolTable* assumptions, OrsoSymbol* variable_name, OrsoType type) {
     orso_symbol_table_set(assumptions, variable_name, ORSO_SLOT_U(type.one, ORSO_TYPE_ONE(ORSO_TYPE_TYPE)));
 }
@@ -360,6 +386,54 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, TypeInferences* type_
             break;
         }
 
+        case EXPRESSION_IFELSE: {
+            orso_resolve_expression(analyzer, type_inferences, expression->expr.ifelse.condition);
+
+            TypeInferences* then_inferences = copy_type_inferences(type_inferences);
+
+            orso_resolve_expression(analyzer, then_inferences, expression->expr.ifelse.then);
+
+            TypeInferences* else_inferences = copy_type_inferences(type_inferences);
+            if (expression->expr.ifelse.else_) {
+                orso_resolve_expression(analyzer, else_inferences, expression->expr.ifelse.else_);
+            }
+
+            // merge inferences
+            {
+                TypeInferences* thens = then_inferences;
+                TypeInferences* elses = else_inferences;
+                TypeInferences* present = type_inferences;
+                while (thens) {
+                    for (i32 i = 0; i < thens->assumptions.capacity; i++) {
+                        OrsoSymbolTableEntry* entry = &thens->assumptions.entries[i];
+                        if (entry->key == NULL) {
+                            continue;
+                        }
+
+                        OrsoSlot else_slot;
+                        if (!orso_symbol_table_get(elses, entry->key, &else_slot)) {
+                            UNREACHABLE();
+                        }
+
+                        OrsoType then_type = ORSO_TYPE_ONE(entry->value.as.u);
+                        OrsoType else_type = ORSO_TYPE_ONE(else_slot.as.u);
+                        OrsoType merged_type = orso_type_merge(then_type, else_type);
+
+                        orso_symbol_table_set(&present->assumptions, entry->key, ORSO_SLOT_U(merged_type.one, ORSO_TYPE_TYPE));
+                    }
+
+                    thens = thens->outer_scope;
+                    elses = elses->outer_scope;
+                    present = present->outer_scope;
+                }
+            }
+
+            free_type_inferences_on_heap(then_inferences);
+            free_type_inferences_on_heap(else_inferences);
+
+            break;
+        }
+
         default: UNREACHABLE();
     }
 }
@@ -433,29 +507,31 @@ static void resolve_var_declaration(OrsoStaticAnalyzer* analyzer, TypeInferences
         }
     }
 
-    if (!analyzer->had_error) {
-        OrsoSymbol* identifier = orso_unmanaged_symbol_from_cstrn(var_declaration->variable_name.start, var_declaration->variable_name.length, &analyzer->symbols);
-        OrsoSlot slot_type;
-        if (orso_symbol_table_get(&analyzer->defined_variables_bottom_scope->scope, identifier, &slot_type)) {
-            const char message[126];
-            sprintf((char*)message, "Duplicate variable definition of '%.*s'.", var_declaration->variable_name.length, var_declaration->variable_name.start);
-            error(analyzer, var_declaration->start.line, (char*)message);
-            return;
+    if (analyzer->had_error) {
+        return;
+    }
+
+    OrsoSymbol* identifier = orso_unmanaged_symbol_from_cstrn(var_declaration->variable_name.start, var_declaration->variable_name.length, &analyzer->symbols);
+    OrsoSlot slot_type;
+    if (orso_symbol_table_get(&analyzer->defined_variables_bottom_scope->scope, identifier, &slot_type)) {
+        const char message[126];
+        sprintf((char*)message, "Duplicate variable definition of '%.*s'.", var_declaration->variable_name.length, var_declaration->variable_name.start);
+        error(analyzer, var_declaration->start.line, (char*)message);
+        return;
+    }
+
+    orso_symbol_table_set(&analyzer->defined_variables_bottom_scope->scope, identifier, ORSO_SLOT_U(var_declaration->var_type.one, ORSO_TYPE_ONE(ORSO_TYPE_TYPE)));
+
+    if (ORSO_TYPE_IS_UNION(var_declaration->var_type)) {
+        OrsoType narrowed_type;
+        if (var_declaration->expression) {
+            narrowed_type = var_declaration->expression->narrowed_value_type;
+        } else {
+            ASSERT(orso_type_has_kind(var_declaration->var_type, ORSO_TYPE_NULL), "must contain void type here.");
+            narrowed_type = ORSO_TYPE_ONE(ORSO_TYPE_NULL);
         }
 
-        orso_symbol_table_set(&analyzer->defined_variables_bottom_scope->scope, identifier, ORSO_SLOT_U(var_declaration->var_type.one, ORSO_TYPE_ONE(ORSO_TYPE_TYPE)));
-
-        if (ORSO_TYPE_IS_UNION(ORSO_TYPE_ONE(var_declaration->var_type.one))) {
-            OrsoType narrowed_type;
-            if (var_declaration->expression) {
-                narrowed_type = var_declaration->expression->narrowed_value_type;
-            } else {
-                ASSERT(orso_type_has_kind(var_declaration->var_type, ORSO_TYPE_NULL), "must contain void type here.");
-                narrowed_type = ORSO_TYPE_ONE(ORSO_TYPE_NULL);
-            }
-
-            update_type_assumption(&type_inferences->assumptions, identifier, narrowed_type);
-        }
+        update_type_assumption(&type_inferences->assumptions, identifier, narrowed_type);
     }
 }
 

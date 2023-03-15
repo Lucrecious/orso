@@ -16,8 +16,9 @@ statement                -> expression_statement
 expression_statement     -> expression `;`
 types                    -> type (`|` type)*
 
-expression               -> assignment | block
+expression               -> assignment | block | ifthen
 block                    -> `{` declaration* `}`
+ifthen                   -> `if` expression block (`else` (ifthen | block))?
 assignment               -> IDENTIFIER `=` expression
                           | equality
 equality                 -> comparison ((`!=` | `==`) comparison)*
@@ -115,6 +116,20 @@ static void orso_free_expression(OrsoExpressionNode* expression) {
 
             sb_free(expression->expr.block.declarations);
             expression->expr.block.declarations = NULL;
+            break;
+        }
+        case EXPRESSION_IFELSE: {
+            orso_free_expression(expression->expr.ifelse.condition);
+            free(expression->expr.ifelse.condition);
+            expression->expr.ifelse.condition = NULL;
+            
+            orso_free_expression(expression->expr.ifelse.then);
+            free(expression->expr.ifelse.then);
+            expression->expr.ifelse.then = NULL;
+
+            orso_free_expression(expression->expr.ifelse.else_);
+            free(expression->expr.ifelse.else_);
+            expression->expr.ifelse.else_ = NULL;
             break;
         }
         default:
@@ -399,6 +414,35 @@ static OrsoExpressionNode* block(Parser* parser) {
     return expression_node;
 }
 
+static OrsoExpressionNode* ifelse(Parser* parser) {
+    OrsoExpressionNode* expression_node = ORSO_ALLOCATE(OrsoExpressionNode);
+    expression_node->value_type = ORSO_TYPE_ONE(ORSO_TYPE_UNRESOLVED);
+    expression_node->type = EXPRESSION_IFELSE;
+    expression_node->start = parser->previous;
+
+    expression_node->expr.ifelse.condition = expression(parser);
+
+    consume(parser, TOKEN_BRACE_OPEN, "Expect '{' after condition.");
+
+    expression_node->expr.ifelse.then = block(parser);
+
+    if (!match(parser, TOKEN_ELSE)) {
+        expression_node->expr.ifelse.else_ = NULL;
+        return expression_node;
+    }
+
+    if (match(parser, TOKEN_IF)) {
+        expression_node->expr.ifelse.else_ = ifelse(parser);
+        return expression_node;
+    }
+
+    consume(parser, TOKEN_BRACE_OPEN, "Expect '{' after else.");
+
+    expression_node->expr.ifelse.else_ = block(parser);
+
+    return expression_node;
+}
+
 static OrsoExpressionNode* grouping(Parser* parser) {
     OrsoExpressionNode* expression_node = ORSO_ALLOCATE(OrsoExpressionNode);
 
@@ -453,7 +497,7 @@ static OrsoExpressionNode* binary(Parser* parser) {
 ParseRule rules[] = {
     [TOKEN_PARENTHESIS_OPEN]        = { grouping,   NULL,       PREC_NONE },
     [TOKEN_PARENTHESIS_CLOSE]       = { NULL,       NULL,       PREC_NONE },
-    [TOKEN_BRACE_OPEN]              = { block,      NULL,       PREC_PRIMARY },
+    [TOKEN_BRACE_OPEN]              = { block,      NULL,       PREC_NONE },
     [TOKEN_BRACE_CLOSE]             = { NULL,       NULL,       PREC_NONE },
     [TOKEN_BRACKET_OPEN]            = { NULL,       NULL,       PREC_NONE },
     [TOKEN_BRACKET_CLOSE]           = { NULL,       NULL,       PREC_NONE },
@@ -487,6 +531,8 @@ ParseRule rules[] = {
     [TOKEN_NOT]                     = { unary,      NULL,       PREC_NONE },
     [TOKEN_AND]                     = { NULL,       NULL,       PREC_NONE },
     [TOKEN_OR]                      = { NULL,       NULL,       PREC_NONE },
+    [TOKEN_IF]                      = { ifelse,     NULL,       PREC_NONE },
+    [TOKEN_ELSE]                    = { NULL,       NULL,       PREC_NONE },
     [TOKEN_TRUE]                    = { literal,    NULL,       PREC_NONE },
     [TOKEN_FALSE]                   = { literal,    NULL,       PREC_NONE },
     [TOKEN_NULL]                    = { literal,    NULL,       PREC_NONE },
@@ -706,11 +752,19 @@ void ast_print_expression(OrsoExpressionNode* expression, i32 initial) {
             ast_print_expression(expression->expr.assignment.right_side, initial + 1);
             break;
         }
-
         case EXPRESSION_BLOCK: {
             printf("BLOCK\n");
             for (i32 i = 0; i < sb_count(expression->expr.block.declarations); i++) {
                 ast_print_declaration(expression->expr.block.declarations[i], initial + 1);
+            }
+            break;
+        }
+        case EXPRESSION_IFELSE: {
+            OrsoExpressionNode* condition = expression->expr.ifelse.condition;
+            printf("IFELSE - %.*s\n", condition->end.start + condition->end.length - condition->start.start, condition->start.start);
+            ast_print_expression(expression->expr.ifelse.then, initial + 1);
+            if (expression->expr.ifelse.else_) {
+                ast_print_expression(expression->expr.ifelse.else_, initial + 1);
             }
             break;
         }
@@ -757,7 +811,7 @@ void ast_print_declaration(OrsoDeclarationNode* declaration, i32 initial_indent)
 
     Token start = declaration->start;
     Token end = declaration->end;
-    printf("DECLARATION %*s %.*s\n", initial_indent, "", (u32)((end.start + end.length) - start.start), start.start);
+    printf("%*s DECLARATION %.*s\n", initial_indent, "", (u32)((end.start + end.length) - start.start), start.start);
 
     switch (declaration->type) {
         case ORSO_DECLARATION_NONE: return;
@@ -766,7 +820,7 @@ void ast_print_declaration(OrsoDeclarationNode* declaration, i32 initial_indent)
             break;
         }
         case ORSO_DECLARATION_VAR: {
-            ast_print_var_declaration(declaration->decl.var, initial_indent + 1);
+            ast_print_var_declaration(declaration->decl.var, initial_indent + 2);
             break;
         }
     }
