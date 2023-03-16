@@ -93,6 +93,7 @@ static i32 OP_STACK_EFFECT[] = {
     [ORSO_OP_JUMP] = 0,
 
     [ORSO_OP_PRINT_EXPR] = -4,
+    [ORSO_OP_PRINT] = -4,
 
     [ORSO_OP_RETURN] = 0,
 };
@@ -166,6 +167,7 @@ static i32 OP_OBJECT_STACK_EFFECT[] = {
     [ORSO_OP_JUMP] = 0,
 
     [ORSO_OP_PRINT_EXPR] = -2,
+    [ORSO_OP_PRINT] = -2,
 
     [ORSO_OP_RETURN] = 0,
 };
@@ -785,6 +787,13 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoExpressionNode* expre
 
             i32 then_jump = emit_jump(ORSO_OP_JUMP_IF_FALSE, compiler, chunk, condition->end.line);
 
+            /*
+             * The then or else branch get ran once but during code-gen, both branches are processed
+             * therefore before any branch is processed, I save the object and regular stack.
+            */
+            i32 stack_count = compiler->current_stack_size;
+            i32 object_stack_count = compiler->current_object_stack_size;
+
             emit_pop(compiler, chunk, condition->value_type, condition->end.line);
 
             expression(vm, compiler, expression_node->expr.ifelse.then, chunk);
@@ -794,6 +803,13 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoExpressionNode* expre
                     expression_node->expr.ifelse.then->end.line);
 
             i32 else_jump = emit_jump(ORSO_OP_JUMP, compiler, chunk, expression_node->expr.ifelse.then->end.line);
+
+            /*
+             * In the else branch, I restore the old stack count and object stack count so that they can be
+             * calculated properly
+            */
+            compiler->current_stack_size = stack_count;
+            compiler->current_object_stack_size = object_stack_count;
 
             emit_pop(compiler, chunk, condition->value_type, condition->end.line);
 
