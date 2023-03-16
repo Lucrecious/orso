@@ -145,6 +145,10 @@ bool FORCE_INLINE orso_is_number_type_kind(OrsoTypeKind type_kind, bool include_
     return orso_is_float_type_kind(type_kind) || orso_is_integer_type_kind(type_kind, include_bool) || orso_is_unsigned_integer_type(type_kind);
 }
 
+bool FORCE_INLINE orso_slot_is_falsey(OrsoSlot slot) {
+    return slot.as.u == 0;
+}
+
 i32 FORCE_INLINE orso_get_builtin_type_kind_bits(OrsoTypeKind type_kind) {
     switch (type_kind) {
         case ORSO_TYPE_NULL: return 0;

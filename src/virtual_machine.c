@@ -75,6 +75,7 @@ static FORCE_INLINE OrsoSlot* peek(OrsoVM* vm, i32 i) {
 static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
 #define READ_BYTE() *(vm->ip++)
 #define READ_U24() ORSO_u8s_to_u24(READ_BYTE(), READ_BYTE(), READ_BYTE())
+#define READ_U16() ORSO_u8s_to_u16(READ_BYTE(), READ_BYTE())
 #define READ_TYPE_KIND() ORSO_u8s_to_TypeKind(READ_BYTE(), READ_BYTE())
 #define READ_TYPE() ORSO_TYPE_ONE(\
     ORSO_u8s_to_u64(\
@@ -335,6 +336,28 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
                 break;
             }
 
+            case ORSO_OP_JUMP_IF_FALSE: {
+                u16 offset = READ_U16();
+                if (orso_slot_is_falsey(*PEEK(0))) {
+                    vm->ip += offset;
+                }
+                break;
+            }
+
+            case ORSO_OP_JUMP_IF_TRUE: {
+                u16 offset = READ_U16();
+                if (!orso_slot_is_falsey(*PEEK(0))) {
+                    vm->ip += offset;
+                }
+                break;
+            }
+
+            case ORSO_OP_JUMP: {
+                u16 offset = READ_U16();
+                vm->ip += offset;
+                break;
+            }
+
             case ORSO_OP_PRINT_EXPR: {
                 OrsoType type = ORSO_TYPE_ONE(POP().as.u); // pop expression type
 
@@ -375,6 +398,7 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
 #undef PEEK
 #undef READ_TYPE
 #undef READ_TYPE_KIND
+#undef READ_U16
 #undef READ_U24
 #undef READ_BYTE
 }

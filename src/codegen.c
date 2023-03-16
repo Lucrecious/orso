@@ -88,6 +88,10 @@ static i32 OP_STACK_EFFECT[] = {
     [ORSO_OP_UPDATE_GLOBAL_UNION_GC_TYPE] = 0,
     [ORSO_OP_UPDATE_STACK_GC_TYPE] = 0,
 
+    [ORSO_OP_JUMP_IF_FALSE] = 0,
+    [ORSO_OP_JUMP_IF_TRUE] = 0,
+    [ORSO_OP_JUMP] = 0,
+
     [ORSO_OP_PRINT_EXPR] = -4,
 
     [ORSO_OP_RETURN] = 0,
@@ -157,6 +161,10 @@ static i32 OP_OBJECT_STACK_EFFECT[] = {
     [ORSO_OP_UPDATE_GLOBAL_UNION_GC_TYPE] = 0,
     [ORSO_OP_UPDATE_STACK_GC_TYPE] = 0,
 
+    [ORSO_OP_JUMP_IF_FALSE] = 0,
+    [ORSO_OP_JUMP_IF_TRUE] = 0,
+    [ORSO_OP_JUMP] = 0,
+
     [ORSO_OP_PRINT_EXPR] = -2,
 
     [ORSO_OP_RETURN] = 0,
@@ -207,6 +215,26 @@ static void emit_constant(Compiler* compiler, Chunk* chunk, OrsoSlot slot, i32 l
     }
 }
 
+static i32 emit_jump(OrsoOPCode op_code, Compiler* compiler, Chunk* chunk, i32 line) {
+    emit_instruction(op_code, compiler, chunk, line);
+    chunk_write(chunk, 0xFF, line);
+    chunk_write(chunk, 0xFF, line);
+    return sb_count(chunk->code) - 2;
+}
+
+static void patch_jump(Chunk* chunk, i32 offset) {
+    i32 jump = sb_count(chunk->code) - offset - 2;
+
+    if (jump > UINT16_MAX) {
+        ASSERT(false, "TODO");
+    }
+
+    byte b1, b2;
+    ORSO_u16_to_u8s(jump, b1, b2);
+    chunk->code[offset] = b1;
+    chunk->code[offset + 1] = b2;
+}
+
 static void emit_instruction3(OrsoOPCode op_code, Compiler* compiler, u32 index, Chunk* chunk, i32 line) {
     emit_instruction(op_code, compiler, chunk, line);
 
@@ -237,6 +265,18 @@ static void emit_type_convert(Compiler* compiler, OrsoTypeKind from_type_kind, O
         emit_instruction(ORSO_OP_I64_TO_F64, compiler, chunk, line);
     } else {
         // Unreachable
+    }
+}
+
+static void emit_pop(Compiler* compiler, Chunk* chunk, OrsoType type, i32 line) {
+    if (orso_is_gc_type(type)) {
+        emit_instruction(ORSO_OP_POP_TOP_OBJECT, compiler, chunk, line);
+    }
+
+    emit_instruction(ORSO_OP_POP, compiler, chunk, line);
+
+    if (ORSO_TYPE_IS_UNION(type)) {
+        emit_instruction(ORSO_OP_POP, compiler, chunk, line);
     }
 }
 
@@ -721,6 +761,34 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoExpressionNode* expre
             }
 
             end_scope(compiler, chunk, expression_node->end.line);
+            break;
+        }
+        
+        case EXPRESSION_IFELSE: {
+            OrsoExpressionNode* condition = expression_node->expr.ifelse.condition;
+
+            expression(vm, compiler, condition, chunk);
+
+            i32 then_jump = emit_jump(ORSO_OP_JUMP_IF_FALSE, compiler, chunk, condition->end.line);
+
+            emit_pop(compiler, chunk, condition->value_type, condition->end.line);
+
+            expression(vm, compiler, expression_node->expr.ifelse.then, chunk);
+
+            i32 else_jump = emit_jump(ORSO_OP_JUMP, compiler, chunk, expression_node->expr.ifelse.then->end.line);
+
+            emit_pop(compiler, chunk, condition->value_type, condition->end.line);
+
+            patch_jump(chunk, then_jump);
+
+            if (expression_node->expr.ifelse.else_) {
+                expression(vm, compiler, expression_node->expr.ifelse.else_, chunk);
+            } else {
+                emit_instruction(ORSO_OP_PUSH_0, compiler, chunk, expression_node->end.line);
+            }
+
+            patch_jump(chunk, else_jump);
+
             break;
         }
 

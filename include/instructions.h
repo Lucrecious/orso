@@ -12,6 +12,12 @@
 
 #define ORSO_u8s_to_u24(A, B, C) (A << 16) | (B << 8) | (C)
 
+#define ORSO_u16_to_u8s(BIG, A, B)\
+    A = (byte)((BIG >> 8) & 0xFF);\
+    B = (byte)((BIG) & 0xFF)
+
+#define ORSO_u8s_to_u16(A, B) (A << 8) | (B)
+
 #define ORSO_TypeKind_to_u8s(KIND, A, B)\
     A = (byte)((KIND >> 8) & 0xFF);\
     B = (byte)((KIND) & 0xFF)

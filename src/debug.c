@@ -34,6 +34,12 @@ static i32 put_in_union_instruction(Chunk* chunk, i32 offset) {
     return offset + 3;
 }
 
+static int jump_instruction(const char* name, int sign, Chunk* chunk, int offset) {
+    u16 jump = ORSO_u8s_to_u16(chunk->code[offset + 1], chunk->code[offset + 2]);
+    printf("%-16s %4d -> %d\n", name, offset, offset + 3 + sign * jump);
+    return offset + 3;
+}
+
 static i32 simple_instruction(const char* name, i32 offset) {
     printf("%s\n", name);
     return offset + 1;
@@ -92,6 +98,9 @@ i32 disassemble_instruction(Chunk* chunk, i32 offset) {
         case ORSO_OP_SET_LOCAL_UNION: return instruction_3arg("OP_SET_LOCAL_UNION", chunk, offset);
         case ORSO_OP_UPDATE_GLOBAL_UNION_GC_TYPE: return instruction_3arg("OP_UPDATE_GLOBAL_UNION_GC_TYPE", chunk, offset);
         case ORSO_OP_UPDATE_STACK_GC_TYPE: return instruction_3arg("OP_UPDATE_STACK_UNION_GC_TYPE", chunk, offset);
+        case ORSO_OP_JUMP_IF_FALSE: return jump_instruction("OP_JUMP_IF_FALSE", 1, chunk, offset);
+        case ORSO_OP_JUMP_IF_TRUE: return jump_instruction("OP_JUMP_IF_TRUE", 1, chunk, offset);
+        case ORSO_OP_JUMP: return jump_instruction("OP_JUMP", 1, chunk, offset);
         case ORSO_OP_PUT_IN_UNION: return put_in_union_instruction(chunk, offset);
         case ORSO_OP_NARROW_UNION: return simple_instruction("OP_NARROW_UNION", offset);
         case ORSO_OP_CONCAT_STRING: return simple_instruction("OP_CONCAT_STRING", offset);
