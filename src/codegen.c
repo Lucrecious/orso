@@ -257,7 +257,7 @@ static void emit_put_in_union(Compiler* compiler, OrsoTypeKind type_kind, Chunk*
     chunk_write(chunk, b2, line);
 }
 
-static void emit_type_convert(Compiler* compiler, OrsoTypeKind from_type_kind, OrsoTypeKind to_type_kind, Chunk* chunk, i32 line) {
+static void emit_type_kind_convert(Compiler* compiler, OrsoTypeKind from_type_kind, OrsoTypeKind to_type_kind, Chunk* chunk, i32 line) {
     bool include_bool = true;
     if (orso_is_float_type_kind(from_type_kind) && (orso_is_integer_type_kind(to_type_kind, include_bool))) {
         emit_instruction(ORSO_OP_F64_TO_I64, compiler, chunk, line);
@@ -266,6 +266,20 @@ static void emit_type_convert(Compiler* compiler, OrsoTypeKind from_type_kind, O
     } else {
         // Unreachable
     }
+}
+
+static void emit_storage_type_convert(Compiler* compiler, Chunk* chunk,  OrsoType source, OrsoType destination, i32 line) {
+    if (ORSO_TYPE_IS_UNION(source) && ORSO_TYPE_IS_SINGLE(destination)) {
+        emit_instruction(ORSO_OP_NARROW_UNION, compiler, chunk, line);
+    } else if (ORSO_TYPE_IS_SINGLE(source) && ORSO_TYPE_IS_UNION(destination)) {
+        emit_put_in_union(compiler, (OrsoTypeKind)source.one, chunk, line);
+    }
+
+    if (!orso_is_gc_type(source) && orso_is_gc_type(destination)) {
+        emit_instruction(ORSO_OP_PUSH_TOP_OBJECT_NULL, compiler, chunk, line);
+    }
+
+    ASSERT(!orso_is_gc_type(source) || orso_is_gc_type(destination), "cannot convert from gc type to non-gc type");
 }
 
 static void emit_pop(Compiler* compiler, Chunk* chunk, OrsoType type, i32 line) {
@@ -695,7 +709,7 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoExpressionNode* expre
         case EXPRESSION_IMPLICIT_CAST: {
             OrsoExpressionNode* operand = expression_node->expr.cast.operand;
             expression(vm, compiler, operand, chunk);
-            emit_type_convert(compiler, operand->value_type.one, expression_node->value_type.one, chunk, operand->start.line);
+            emit_type_kind_convert(compiler, operand->value_type.one, expression_node->value_type.one, chunk, operand->start.line);
             break;
         }
 
@@ -775,16 +789,29 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoExpressionNode* expre
 
             expression(vm, compiler, expression_node->expr.ifelse.then, chunk);
 
+            emit_storage_type_convert(compiler, chunk,
+                    expression_node->expr.ifelse.then->value_type, expression_node->value_type,
+                    expression_node->expr.ifelse.then->end.line);
+
             i32 else_jump = emit_jump(ORSO_OP_JUMP, compiler, chunk, expression_node->expr.ifelse.then->end.line);
 
             emit_pop(compiler, chunk, condition->value_type, condition->end.line);
+
 
             patch_jump(chunk, then_jump);
 
             if (expression_node->expr.ifelse.else_) {
                 expression(vm, compiler, expression_node->expr.ifelse.else_, chunk);
+
+                emit_storage_type_convert(compiler, chunk,
+                        expression_node->expr.ifelse.else_->value_type, expression_node->value_type,
+                        expression_node->expr.ifelse.else_->end.line);
             } else {
                 emit_instruction(ORSO_OP_PUSH_0, compiler, chunk, expression_node->end.line);
+
+                emit_storage_type_convert(compiler, chunk,
+                        ORSO_TYPE_ONE(ORSO_TYPE_NULL), expression_node->value_type,
+                        expression_node->expr.ifelse.else_->end.line);
             }
 
             patch_jump(chunk, else_jump);
