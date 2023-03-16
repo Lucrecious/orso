@@ -68,6 +68,11 @@ test_control_flow = executable('test_control_flow', [src, 'test/control_flow.c']
   include_directories : inc,
   c_args : test_c_args)
 
+test_logical_operators = executable('test_logical_operators', [src, 'test/logical_operators.c'],
+  install : false,
+  include_directories : inc,
+  c_args : test_c_args)
+
 test_tmp = executable('test_tmp', [src, 'test/tmp.c'],
   install : false,
   include_directories : inc,
@@ -78,4 +83,5 @@ test('test_variable_declaration', test_variable_declaration)
 test('test_assignment', test_assignment)
 test('test_arithmetic', test_arithmetic)
 test('test_control_flow', test_control_flow)
+test('test_logical_operators', test_logical_operators)
 test('test_tmp', test_tmp)

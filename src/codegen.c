@@ -814,6 +814,8 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoExpressionNode* expre
 
             i32 else_jump = emit_jump(ORSO_OP_JUMP, compiler, chunk, expression_node->expr.ifelse.then->end.line);
 
+            patch_jump(chunk, then_jump);
+
             /*
              * In the else branch, I restore the old stack count and object stack count so that they can be
              * calculated properly
@@ -822,9 +824,6 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoExpressionNode* expre
             compiler->current_object_stack_size = object_stack_count;
 
             emit_pop(compiler, chunk, condition->value_type, condition->end.line);
-
-
-            patch_jump(chunk, then_jump);
 
             if (expression_node->expr.ifelse.else_) {
                 expression(vm, compiler, expression_node->expr.ifelse.else_, chunk);

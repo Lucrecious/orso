@@ -56,6 +56,14 @@ INTERPRETER_TEST(if_else_nested_unless,
     "if false { print 'first'; } else { unless false { print 'second'; } else { print 'third'; }; };",
     "'second'\n")
 
+INTERPRETER_TEST(if_condition_is_string,
+	"x := \"hello\";\nif x { print x; };",
+	"hello\n")
+
+INTERPRETER_TEST(else_ifset,
+	"x := 2;\ny := 1;\nz := if x < y { x - y; } else { y - x; };\nprint z;",
+	"-1\n")
+
 MU_TEST_SUITE(tests) {
     MU_RUN_TEST(then_branch_print);
     MU_RUN_TEST(else_branch_print);
@@ -71,6 +79,8 @@ MU_TEST_SUITE(tests) {
     MU_RUN_TEST(unless_nested_else_if);
     MU_RUN_TEST(if_else_nested_if);
     MU_RUN_TEST(if_else_nested_unless);
+    MU_RUN_TEST(if_condition_is_string);
+    MU_RUN_TEST(else_ifset);
 }
 
 int main(int argc, char** argv) {
