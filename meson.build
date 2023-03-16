@@ -63,7 +63,13 @@ test_arithmetic = executable('test_arithmetic', [src, 'test/arithmetic.c'],
   include_directories : inc,
   c_args : test_c_args)
 
+test_control_flow = executable('test_control_flow', [src, 'test/control_flow.c'],
+  install : false,
+  include_directories : inc,
+  c_args : test_c_args)
+
 test('test_error', test_error)
 test('test_variable_declaration', test_variable_declaration)
 test('test_assignment', test_assignment)
 test('test_arithmetic', test_arithmetic)
+test('test_control_flow', test_control_flow)

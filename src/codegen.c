@@ -811,7 +811,7 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoExpressionNode* expre
 
                 emit_storage_type_convert(compiler, chunk,
                         ORSO_TYPE_ONE(ORSO_TYPE_NULL), expression_node->value_type,
-                        expression_node->expr.ifelse.else_->end.line);
+                        expression_node->end.line);
             }
 
             patch_jump(chunk, else_jump);
