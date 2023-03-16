@@ -550,23 +550,28 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoExpressionNode* expre
             OrsoExpressionNode* unary = expression_node->expr.unary.operand;
             Token operator = expression_node->expr.unary.operator;
 
-            if (orso_is_integer_type_kind(unary->narrowed_value_type.one, true)) {
-                switch (operator.type) {
-                    case TOKEN_MINUS: EMIT_NEGATE(I64); break;
-                    case TOKEN_NOT: EMIT_NOT(); break;
-                    default: UNREACHABLE();
+            switch (operator.type) {
+                case TOKEN_MINUS: {
+                    if (orso_has_integer_type(unary->value_type, true)) {
+                        EMIT_NEGATE(I64);
+                    } else if (orso_has_float_type(unary->value_type)) {
+                        EMIT_NEGATE(F64);
+                    } else {
+                        UNREACHABLE();
+                    }
+                    break;
                 }
-            } else if (orso_is_float_type_kind(unary->narrowed_value_type.one)) {
-                switch (operator.type) {
-                    case TOKEN_MINUS: EMIT_NEGATE(F64); break;
-                    case TOKEN_NOT: EMIT_NOT(); break;
-                    default: UNREACHABLE();
+
+                case TOKEN_NOT: {
+                    EMIT_NOT();
+
+                    if (orso_is_gc_type(unary->value_type)) {
+                        emit_instruction(ORSO_OP_POP_TOP_OBJECT, compiler, chunk, expression_node->end.line);
+                    }
+                    break;
                 }
-            } else if (unary->value_type.one == ORSO_TYPE_NULL) {
-                switch (operator.type) {
-                    case TOKEN_NOT: EMIT_NOT(); break;
-                    default: UNREACHABLE();
-                }
+
+                default: UNREACHABLE();
             }
             break;
         }

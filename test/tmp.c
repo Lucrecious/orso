@@ -1,8 +1,8 @@
 #include "test.h"
 
 INTERPRETER_TEST(test,
-	"x := if true { \"hello world\"; };\nx = null;\nif not x {\n	print x;\n};",
-	"null")
+    "x: i32|void = 42; y := -x; print_expr y;",
+    "y (i32) => -42\n")
 
 MU_TEST_SUITE(tests) {
     MU_RUN_TEST(test);

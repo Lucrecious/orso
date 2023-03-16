@@ -117,10 +117,6 @@ static void error_incompatible_unary_type(OrsoStaticAnalyzer* analyzer, Token op
 }
 
 static OrsoType orso_resolve_unary(TokenType operator, OrsoType operand) {
-    if (ORSO_TYPE_IS_UNION(operand)) {
-        return ORSO_TYPE_ONE(ORSO_TYPE_INVALID);
-    }
-
     if (operand.one == ORSO_TYPE_INVALID) {
         return ORSO_TYPE_ONE(ORSO_TYPE_INVALID);
     }
@@ -131,10 +127,14 @@ static OrsoType orso_resolve_unary(TokenType operator, OrsoType operand) {
 
     switch (operator) {
         case TOKEN_MINUS: {
-            if (orso_is_number_type_kind(operand.one, false)) {
-                return operand;
-            } else if (operand.one == ORSO_TYPE_BOOL) {
-                return ORSO_TYPE_ONE(ORSO_TYPE_INT32);
+            if (ORSO_TYPE_IS_SINGLE(operand)) {
+                if (orso_is_number_type_kind(operand.one, false)) {
+                    return operand;
+                } else if (operand.one == ORSO_TYPE_BOOL) {
+                    return ORSO_TYPE_ONE(ORSO_TYPE_INT32);
+                } else {
+                    return ORSO_TYPE_ONE(ORSO_TYPE_INVALID);
+                }
             } else {
                 return ORSO_TYPE_ONE(ORSO_TYPE_INVALID);
             }

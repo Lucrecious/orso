@@ -30,7 +30,7 @@ INTERPRETER_TEST(if_union_condition_not_null,
 
 INTERPRETER_TEST(if_union_condition_is_null,
 	"x := if true { \"hello world\"; };\nx = null;\nif not x {\n	print x;\n};",
-	"null")
+	"null\n")
 
 INTERPRETER_TEST(multiple_if_statements,
     "if true { print 'first'; };\nif true { print 'second'; };",

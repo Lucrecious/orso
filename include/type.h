@@ -127,6 +127,11 @@ bool FORCE_INLINE orso_is_float_type_kind(OrsoTypeKind type_kind) {
     }
 }
 
+bool FORCE_INLINE orso_has_float_type(OrsoType type) {
+    return orso_is_float_type_kind(type.union_[0]) || orso_is_float_type_kind(type.union_[1])
+        || orso_is_float_type_kind(type.union_[2]) || orso_is_float_type_kind(type.union_[3]);
+}
+
 bool FORCE_INLINE orso_is_integer_type_kind(OrsoTypeKind type_kind, bool include_bool) {
     switch (type_kind) {
         case ORSO_TYPE_BOOL: return include_bool ? true : false;
@@ -134,6 +139,11 @@ bool FORCE_INLINE orso_is_integer_type_kind(OrsoTypeKind type_kind, bool include
         case ORSO_TYPE_INT64: return true;
         default: return false;
     }
+}
+
+bool FORCE_INLINE orso_has_integer_type(OrsoType type, bool include_bool) {
+    return orso_is_integer_type_kind(type.union_[0], include_bool) || orso_is_integer_type_kind(type.union_[1], include_bool)
+        || orso_is_integer_type_kind(type.union_[2], include_bool) || orso_is_integer_type_kind(type.union_[3], include_bool);
 }
 
 bool FORCE_INLINE orso_is_unsigned_integer_type(OrsoTypeKind type_kind) {
