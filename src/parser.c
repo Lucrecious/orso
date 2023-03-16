@@ -132,6 +132,10 @@ static void orso_free_expression(OrsoExpressionNode* expression) {
             expression->expr.ifelse.else_ = NULL;
             break;
         }
+        case EXPRESSION_NONE: {
+            break;
+        }
+
         default:
             UNREACHABLE();
     }
