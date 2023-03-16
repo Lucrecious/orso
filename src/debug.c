@@ -106,6 +106,7 @@ i32 disassemble_instruction(Chunk* chunk, i32 offset) {
         case ORSO_OP_CONCAT_STRING: return simple_instruction("OP_CONCAT_STRING", offset);
         case ORSO_OP_RETURN: return simple_instruction("OP_RETURN", offset);
         case ORSO_OP_PRINT_EXPR: return simple_instruction("OP_PRINT_EXPR", offset);
+        case ORSO_OP_PRINT: return simple_instruction("OP_PRINT", offset);
         default: return simple_instruction("OP_UNKNOWN", offset);
     }
 }

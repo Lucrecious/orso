@@ -358,6 +358,7 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
                 break;
             }
 
+            case ORSO_OP_PRINT:
             case ORSO_OP_PRINT_EXPR: {
                 OrsoType type = ORSO_TYPE_ONE(POP().as.u); // pop expression type
 
@@ -367,16 +368,21 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
                 OrsoString* value_string = orso_slot_to_string(&vm->gc, *PEEK(1), union_type);
 
                 if (vm->write_fn != NULL) {
-                    vm->write_fn(expression_string->text);
-                    vm->write_fn(" (");
+                    if (op_code == ORSO_OP_PRINT_EXPR) {
+                        vm->write_fn(expression_string->text);
+                        vm->write_fn(" (");
 
-                    const char type_str[128];
-                    orso_type_to_cstr(type, (char*)type_str);
+                        const char type_str[128];
+                        orso_type_to_cstr(type, (char*)type_str);
 
-                    vm->write_fn(type_str);
-                    vm->write_fn(") => ");
-                    vm->write_fn(value_string->text);
-                    vm->write_fn("\n");
+                        vm->write_fn(type_str);
+                        vm->write_fn(") => ");
+                        vm->write_fn(value_string->text);
+                        vm->write_fn("\n");
+                    } else {
+                        vm->write_fn(value_string->text);
+                        vm->write_fn("\n");
+                    }
                 }
 
                 POP_PTR(); // pop expression string and pointer

@@ -177,7 +177,15 @@ static TokenType identifier_type(Lexer* lexer) {
             break;
         }
         case 'o': return check_keyword(lexer, 1, 1, "r", TOKEN_OR);
-        case 'p': return check_keyword(lexer, 1, 9, "rint_expr", TOKEN_PRINT_EXPR);
+        case 'p':
+            if (memcmp(lexer->start + 1, "rint", 4) == 0) {
+                if (lexer->current - lexer->start == 5) {
+                    return TOKEN_PRINT;
+                }
+
+                return check_keyword(lexer, 1, 9, "rint_expr", TOKEN_PRINT_EXPR);
+            }
+            break;
         case 's': return check_keyword(lexer, 1, 5, "truct", TOKEN_STRUCT);
         case 't': return check_keyword(lexer, 1, 3, "rue", TOKEN_TRUE);
     }

@@ -1,12 +1,12 @@
 #include "test.h"
 
 INTERPRETER_TEST(then_branch_print,
-    "if true { print_expr 'then'; };",
-    "'then' (symbol) => 'then'\n")
+    "if true { print 'then'; };",
+    "'then'\n")
 
 INTERPRETER_TEST(else_branch_print,
-    "if false { print_expr 'then'; } else { print_expr 'else'; };",
-    "'else' (symbol) => 'else'\n")
+    "if false { print 'then'; } else { print 'else'; };",
+    "'else'\n")
 
 MU_TEST_SUITE(tests) {
     MU_RUN_TEST(then_branch_print);

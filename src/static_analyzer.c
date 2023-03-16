@@ -561,6 +561,7 @@ static void resolve_declaration(OrsoStaticAnalyzer* analyzer, TypeInferences* in
             OrsoStatementNode* statement_node = declaration_node->decl.statement;
             switch (statement_node->type) {
                 case ORSO_STATEMENT_PRINT_EXPR:
+                case ORSO_STATEMENT_PRINT:
                 case ORSO_STATEMENT_EXPRESSION: {
                     OrsoSymbolTable type_implications;
                     orso_symbol_table_init(&type_implications);

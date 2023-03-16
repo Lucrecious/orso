@@ -26,7 +26,7 @@ typedef enum TokenType {
     TOKEN_TRUE, TOKEN_FALSE, TOKEN_NULL,
 
     // builtin functions
-    TOKEN_PRINT_EXPR,
+    TOKEN_PRINT_EXPR, TOKEN_PRINT,
 
     TOKEN_ERROR, TOKEN_EOF, TOKEN_SIZE,
 } TokenType;

@@ -847,6 +847,8 @@ static void statement(OrsoVM* vm, Compiler* compiler, OrsoStatementNode* stateme
             }
             break;
         }
+        
+        case ORSO_STATEMENT_PRINT:
         case ORSO_STATEMENT_PRINT_EXPR: {
                 expression(vm, compiler, statement->stmt.expression, chunk);
 
@@ -869,7 +871,11 @@ static void statement(OrsoVM* vm, Compiler* compiler, OrsoStatementNode* stateme
                 OrsoSlot value_type = ORSO_SLOT_U(statement->stmt.expression->value_type.one, ORSO_TYPE_ONE(ORSO_TYPE_TYPE));
                 emit_constant(compiler, chunk, value_type, start.line, false);
 
-                emit_instruction(ORSO_OP_PRINT_EXPR, compiler, chunk, start.line);
+                if (statement->type == ORSO_STATEMENT_PRINT_EXPR) {
+                    emit_instruction(ORSO_OP_PRINT_EXPR, compiler, chunk, start.line);
+                } else {
+                    emit_instruction(ORSO_OP_PRINT, compiler, chunk, start.line);
+                }
             break;
         }
         case ORSO_STATEMENT_NONE: break; // Unreachable

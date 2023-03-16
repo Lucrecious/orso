@@ -29,6 +29,7 @@ typedef enum OrsoDeclarationType {
 typedef enum OrsoStatementType {
     ORSO_STATEMENT_NONE,
     ORSO_STATEMENT_PRINT_EXPR,
+    ORSO_STATEMENT_PRINT,
     ORSO_STATEMENT_EXPRESSION,
 } OrsoStatementType;
 
@@ -116,6 +117,7 @@ typedef struct OrsoStatementNode {
     Token end;
     union {
         OrsoExpressionNode* expression;
+        bool is_print_expr;
     } stmt;
 } OrsoStatementNode;
 

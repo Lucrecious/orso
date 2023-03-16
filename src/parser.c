@@ -257,6 +257,7 @@ static void synchronize(Parser* parser) {
 
         switch (parser->current.type) {
             case TOKEN_PRINT_EXPR: 
+            case TOKEN_PRINT:
                 return;
             default: break;
         }
@@ -541,6 +542,7 @@ ParseRule rules[] = {
     [TOKEN_FALSE]                   = { literal,    NULL,       PREC_NONE },
     [TOKEN_NULL]                    = { literal,    NULL,       PREC_NONE },
     [TOKEN_PRINT_EXPR]              = { NULL,       NULL,       PREC_NONE },
+    [TOKEN_PRINT]                   = { NULL,       NULL,       PREC_NONE },
     [TOKEN_ERROR]                   = { NULL,       NULL,       PREC_NONE },
     [TOKEN_EOF]                     = { NULL,       NULL,       PREC_NONE },
     [TOKEN_SIZE]                    = { NULL,       NULL,       PREC_NONE },
@@ -594,8 +596,11 @@ static OrsoStatementNode* statement(Parser* parser) {
 
     statement_node->start = parser->current;
 
-    if (match(parser, TOKEN_PRINT_EXPR)) {
+    if (match(parser, TOKEN_PRINT_EXPR) || match(parser, TOKEN_PRINT)) {
         statement_node->type = ORSO_STATEMENT_PRINT_EXPR;
+        if (parser->previous.type == TOKEN_PRINT) {
+            statement_node->type = ORSO_STATEMENT_PRINT;
+        }
     } else {
         statement_node->type = ORSO_STATEMENT_EXPRESSION;
     }
@@ -785,6 +790,10 @@ void ast_print_statement(OrsoStatementNode* statement, i32 indent) {
         case ORSO_STATEMENT_NONE: return;
         case ORSO_STATEMENT_PRINT_EXPR:
             printf("print_expr\n");
+            ast_print_expression(statement->stmt.expression, indent + 1);
+            break;
+        case ORSO_STATEMENT_PRINT:
+            printf("print\n");
             ast_print_expression(statement->stmt.expression, indent + 1);
             break;
         case ORSO_STATEMENT_EXPRESSION:
