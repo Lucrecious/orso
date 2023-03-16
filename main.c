@@ -19,31 +19,36 @@ void write(const char* chars) {
 }
 
 int main(int argc, char **argv) {
-    (void)argc; // unused
-    (void)argv; // unused
+    if (argc < 2) {
+        printf("Requires valid orso file.\n");
+        exit(1);
+    }
 
-    char source_code[1000];
+    FILE* file;
+    file = fopen(argv[1], "r");
+
+    if (file == NULL) {
+        printf("Error opening file: %s\n", argv[1]);
+        exit(1);
+    }
+
+    fseek(file, 0L, SEEK_END);
+    long int size = ftell(file);
+    rewind(file);
+
+    char source[size + 1];
+
+    fread(source, size, 1, file);
+
+    fclose(file);
+
+    source[size] = '\0';
 
     OrsoInterpreter interpreter;
 
     orso_interpreter_init(&interpreter, write, error);
-    printf("Orso interpreter initialized.\n\n");
 
-    for (;;) {
-        printf("orso>> ");
-        if (fgets(source_code, 1000, stdin) == NULL) {
-            break;
-        }
-        
-
-        if (source_code[0] == '\n') {
-            break;
-        }
-
-        orso_interpreter_run(&interpreter, source_code);
-
-        printf("\n");
-    }
+    orso_interpreter_run(&interpreter, source);
 
     orso_interpreter_free(&interpreter);
 

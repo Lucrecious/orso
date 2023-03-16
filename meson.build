@@ -37,7 +37,9 @@ if get_option('debug_gc_print')
   c_args += '-DDEBUG_GC_PRINT'
 endif
 
-executable('orso', [src, 'main.c'], install : false, include_directories : inc, c_args : c_args)
+executable('debug-orso', [src, 'main.c'], install : false, include_directories : inc, c_args : c_args)
+
+executable('orso', [src, 'main.c'], install : false, include_directories: inc)
 
 test_c_args = ['-DDEBUG_GC_STRESS', '-DDEBUG']
 
