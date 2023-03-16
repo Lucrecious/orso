@@ -785,7 +785,12 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoExpressionNode* expre
 
             expression(vm, compiler, condition, chunk);
 
-            i32 then_jump = emit_jump(ORSO_OP_JUMP_IF_FALSE, compiler, chunk, condition->end.line);
+            OrsoOPCode jump_instruction = ORSO_OP_JUMP_IF_FALSE;
+            if (expression_node->expr.ifelse.is_unless) {
+                jump_instruction = ORSO_OP_JUMP_IF_TRUE;
+            }
+
+            i32 then_jump = emit_jump(jump_instruction, compiler, chunk, condition->end.line);
 
             /*
              * The then or else branch get ran once but during code-gen, both branches are processed

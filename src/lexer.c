@@ -188,6 +188,7 @@ static TokenType identifier_type(Lexer* lexer) {
             break;
         case 's': return check_keyword(lexer, 1, 5, "truct", TOKEN_STRUCT);
         case 't': return check_keyword(lexer, 1, 3, "rue", TOKEN_TRUE);
+        case 'u': return check_keyword(lexer, 1, 5, "nless", TOKEN_UNLESS);
     }
 
     return TOKEN_IDENTIFIER;

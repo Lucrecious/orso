@@ -75,6 +75,7 @@ typedef struct OrsoBlock {
 } OrsoBlock;
 
 typedef struct OrsoIfElse {
+    bool is_unless;
     OrsoExpressionNode* condition;
     OrsoExpressionNode* then;
     OrsoExpressionNode* else_;

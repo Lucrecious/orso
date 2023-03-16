@@ -425,6 +425,11 @@ static OrsoExpressionNode* ifelse(Parser* parser) {
     expression_node->type = EXPRESSION_IFELSE;
     expression_node->start = parser->previous;
 
+    expression_node->expr.ifelse.is_unless = false;
+    if (parser->previous.type == TOKEN_UNLESS) {
+        expression_node->expr.ifelse.is_unless = true;
+    }
+
     expression_node->expr.ifelse.condition = expression(parser);
 
     consume(parser, TOKEN_BRACE_OPEN, "Expect '{' after condition.");
@@ -436,7 +441,7 @@ static OrsoExpressionNode* ifelse(Parser* parser) {
         return expression_node;
     }
 
-    if (match(parser, TOKEN_IF)) {
+    if (match(parser, TOKEN_IF) || match(parser, TOKEN_UNLESS)) {
         expression_node->expr.ifelse.else_ = ifelse(parser);
         return expression_node;
     }
@@ -537,6 +542,7 @@ ParseRule rules[] = {
     [TOKEN_AND]                     = { NULL,       NULL,       PREC_NONE },
     [TOKEN_OR]                      = { NULL,       NULL,       PREC_NONE },
     [TOKEN_IF]                      = { ifelse,     NULL,       PREC_NONE },
+    [TOKEN_UNLESS]                  = { ifelse,     NULL,       PREC_NONE },
     [TOKEN_ELSE]                    = { NULL,       NULL,       PREC_NONE },
     [TOKEN_TRUE]                    = { literal,    NULL,       PREC_NONE },
     [TOKEN_FALSE]                   = { literal,    NULL,       PREC_NONE },
