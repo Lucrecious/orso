@@ -68,6 +68,54 @@ INTERPRETER_TEST(bracketed_expressions_narrows_type,
 	"y := \"\" or null;\ny = \"hello\";\nx := true and (y) and false;\nprint_expr x;",
 	"x (bool|string) => false\n")
 
+INTERPRETER_TEST(or_union_with_different_types,
+    "x := 42 or \"hello world\"; print_expr x;",
+    "x (i32|string) => 42\n")
+
+INTERPRETER_TEST(and_union_with_different_types,
+    "x := 42 and \"hello world\"; print_expr x;",
+    "x (i32|string) => hello world\n")
+
+INTERPRETER_TEST(or_nested_unions,
+    "x := 42 or (\"hello world\" or 3.14); print_expr x;",
+    "x (i32|string|f64) => 42\n")
+
+INTERPRETER_TEST(and_nested_unions,
+    "x := 42 and (\"hello world\" or 3.14); print_expr x;",
+    "x (i32|string|f64) => hello world\n")
+
+INTERPRETER_TEST(or_union_with_void,
+    "x := null or (\"hello world\" or 42); print_expr x;",
+    "x (void|string|i32) => hello world\n")
+
+INTERPRETER_TEST(and_union_with_void,
+    "x := null and (\"hello world\" or 42); print_expr x;",
+    "x (void|string|i32) => null\n")
+
+INTERPRETER_TEST(or_union_returning_different_types,
+    "x := false or (if true { 42; } else { \"hello world\"; }); print_expr x;",
+    "x (bool|i32|string) => 42\n")
+
+INTERPRETER_TEST(and_union_returning_different_types,
+    "x := true and (if true { 42; } else { \"hello world\"; }); print_expr x;",
+    "x (bool|i32|string) => 42\n")
+
+INTERPRETER_TEST(or_union_with_multiple_conditions,
+    "x := (false or 42) and (true or \"hello world\"); print_expr x;",
+    "x (bool|i32|string) => true\n")
+
+INTERPRETER_TEST(and_union_with_multiple_conditions,
+    "x := (true and 42) or (false and \"hello world\"); print_expr x;",
+    "x (bool|i32|string) => 42\n")
+
+INTERPRETER_TEST(or_union_with_multiple_conditions_void,
+    "x := (false or null) and (true or \"hello world\"); print_expr x;",
+    "x (bool|void|string) => null\n")
+
+INTERPRETER_TEST(and_union_with_multiple_conditions_void,
+    "x := (true and null) or (false and \"hello world\"); print_expr x;",
+    "x (bool|void|string) => false\n")
+
 
 MU_TEST_SUITE(tests) {
     MU_RUN_TEST(not_not_string);
@@ -88,6 +136,19 @@ MU_TEST_SUITE(tests) {
     MU_RUN_TEST(and_return_last);
     MU_RUN_TEST(and_and_ors_infers_full_type);
     MU_RUN_TEST(bracketed_expressions_narrows_type);
+
+    MU_RUN_TEST(or_union_with_different_types);
+    MU_RUN_TEST(and_union_with_different_types);
+    MU_RUN_TEST(or_nested_unions);
+    MU_RUN_TEST(and_nested_unions);
+    MU_RUN_TEST(or_union_with_void);
+    MU_RUN_TEST(and_union_with_void);
+    MU_RUN_TEST(or_union_returning_different_types);
+    MU_RUN_TEST(and_union_returning_different_types);
+    MU_RUN_TEST(or_union_with_multiple_conditions);
+    MU_RUN_TEST(and_union_with_multiple_conditions);
+    MU_RUN_TEST(or_union_with_multiple_conditions_void);
+    MU_RUN_TEST(and_union_with_multiple_conditions_void);
 }
 int main(int argc, char** argv) {
     (void)argc; // unused
