@@ -18,9 +18,11 @@ types                    -> type (`|` type)*
 
 expression               -> assignment | block | ifthen
 block                    -> `{` declaration* `}`
-ifthen                   -> `if` expression block (`else` (ifthen | block))?
+ifthen                   -> (`if` | `unless`) expression block (`else` (ifthen | block))?
 assignment               -> IDENTIFIER `=` expression
-                          | equality
+                          | logic_or
+logic_or                 -> logic_and (`or` logic_and)*
+logic_and                -> equality (`and` equality)*
 equality                 -> comparison ((`!=` | `==`) comparison)*
 comparison               -> term ((`<` | `>` | `<=` | `>=`) term)*
 term                     -> factor ((`+` | `-`) factor)*
@@ -539,8 +541,8 @@ ParseRule rules[] = {
     [TOKEN_STRUCT]                  = { NULL,       NULL,       PREC_NONE },
     [TOKEN_FUNCTION]                = { NULL,       NULL,       PREC_NONE },
     [TOKEN_NOT]                     = { unary,      NULL,       PREC_NONE },
-    [TOKEN_AND]                     = { NULL,       NULL,       PREC_NONE },
-    [TOKEN_OR]                      = { NULL,       NULL,       PREC_NONE },
+    [TOKEN_AND]                     = { NULL,       binary,     PREC_AND },
+    [TOKEN_OR]                      = { NULL,       binary,     PREC_OR },
     [TOKEN_IF]                      = { ifelse,     NULL,       PREC_NONE },
     [TOKEN_UNLESS]                  = { ifelse,     NULL,       PREC_NONE },
     [TOKEN_ELSE]                    = { NULL,       NULL,       PREC_NONE },

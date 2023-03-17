@@ -201,6 +201,8 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, TypeInferences* type_
             OrsoType cast_left;
             OrsoType cast_right;
 
+            expression->narrowed_value_type = ORSO_TYPE_ONE(ORSO_TYPE_UNRESOLVED);
+
             switch (expression->expr.binary.operator.type) {
                 case TOKEN_PLUS:
                 case TOKEN_MINUS:
@@ -230,11 +232,29 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, TypeInferences* type_
                     expression->value_type.one = ORSO_TYPE_BOOL;
                     break;
                 }
+
+                case TOKEN_AND:
+                case TOKEN_OR: {
+                    cast_left = left->value_type;
+                    cast_right = right->value_type;
+
+                    OrsoType merged_type = orso_type_merge(left->value_type, right->value_type);
+                    if (merged_type.one == ORSO_TYPE_INVALID) {
+                        error(analyzer, expression->expr.binary.operator.line, "too many types in union for logical operations.");
+                    } else {
+                        expression->narrowed_value_type = orso_type_merge(left->narrowed_value_type, right->narrowed_value_type);
+                    }
+
+                    expression->value_type = merged_type;
+                    break;
+                }
                 default:
                     UNREACHABLE();
             }
 
-            expression->narrowed_value_type = expression->value_type;
+            if (expression->narrowed_value_type.one == ORSO_TYPE_UNRESOLVED) {
+                expression->narrowed_value_type = expression->value_type;
+            }
 
             if (cast_left.one == ORSO_TYPE_INVALID || cast_right.one == ORSO_TYPE_INVALID) {
                 expression->value_type.one = ORSO_TYPE_INVALID;

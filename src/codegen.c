@@ -478,65 +478,96 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoExpressionNode* expre
             Token operator = expression_node->expr.binary.operator;
             OrsoExpressionNode* left = expression_node->expr.binary.left;
             OrsoExpressionNode* right = expression_node->expr.binary.right;
-            expression(vm, compiler, left, chunk);
 
-            if (ORSO_TYPE_IS_UNION(left->value_type)) {
-                emit_instruction(ORSO_OP_NARROW_UNION, compiler, chunk, left->start.line);
+            switch (operator.type) {
+                case TOKEN_OR:
+                case TOKEN_AND: {
+                    expression(vm, compiler, left, chunk);
+
+                    emit_storage_type_convert(compiler, chunk, left->value_type, expression_node->value_type, left->end.line);
+
+                    OrsoOPCode jump_instruction = operator.type == TOKEN_AND ? ORSO_OP_JUMP_IF_FALSE : ORSO_OP_JUMP_IF_TRUE;
+                    i32 jump_rest = emit_jump(jump_instruction, compiler, chunk, operator.line);
+
+                    i32 previous_stack_count = compiler->current_stack_size;
+                    i32 previous_object_stack_count = compiler->current_object_stack_size;
+                    (void)previous_stack_count;
+                    (void)previous_object_stack_count;
+
+                    emit_pop(compiler, chunk, expression_node->value_type, right->start.line);
+
+                    expression(vm, compiler, right, chunk);
+
+                    emit_storage_type_convert(compiler, chunk, right->value_type, expression_node->value_type, right->end.line);
+
+                    patch_jump(chunk, jump_rest);
+
+                    ASSERT(previous_stack_count == compiler->current_stack_size, "must be the as before jump.");
+                    ASSERT(previous_object_stack_count == compiler->current_object_stack_size, "must be the same as before jump.");
+                    break;
+                }
+
+                default: {
+                    expression(vm, compiler, left, chunk);
+
+                    if (ORSO_TYPE_IS_UNION(left->value_type)) {
+                        emit_instruction(ORSO_OP_NARROW_UNION, compiler, chunk, left->start.line);
+                    }
+
+                    expression(vm, compiler, right, chunk);
+
+                    if (ORSO_TYPE_IS_UNION(right->value_type)) {
+                        emit_instruction(ORSO_OP_NARROW_UNION, compiler, chunk, right->start.line);
+                    }
+
+                    if (orso_is_integer_type_kind(left->narrowed_value_type.one, true)) {
+                        switch (operator.type) {
+                            case TOKEN_PLUS: EMIT_BINARY_OP_I64(ADD); break;
+                            case TOKEN_MINUS: EMIT_BINARY_OP_I64(SUBTRACT); break;
+                            case TOKEN_STAR: EMIT_BINARY_OP_I64(MULTIPLY); break;
+                            case TOKEN_SLASH: EMIT_BINARY_OP_I64(DIVIDE); break;
+                            case TOKEN_LESS: EMIT_BINARY_OP_I64(LESS); break;
+                            case TOKEN_GREATER: EMIT_BINARY_OP_I64(GREATER); break;
+                            case TOKEN_LESS_EQUAL: EMIT_BINARY_OP_I64(GREATER); EMIT_NOT(); break;
+                            case TOKEN_GREATER_EQUAL: EMIT_BINARY_OP_I64(LESS); EMIT_NOT(); break;
+                            case TOKEN_BANG_EQUAL: EMIT_BINARY_OP_I64(EQUAL); EMIT_NOT(); break;
+                            case TOKEN_EQUAL_EQUAL: EMIT_BINARY_OP_I64(EQUAL); break;
+                            default: UNREACHABLE();
+                        }
+
+                    } else if (orso_is_float_type_kind(left->narrowed_value_type.one)) {
+                        switch (operator.type) {
+                            case TOKEN_PLUS: EMIT_BINARY_OP_F64(ADD); break;
+                            case TOKEN_MINUS: EMIT_BINARY_OP_F64(SUBTRACT); break;
+                            case TOKEN_STAR: EMIT_BINARY_OP_F64(MULTIPLY); break;
+                            case TOKEN_SLASH: EMIT_BINARY_OP_F64(DIVIDE); break;
+                            case TOKEN_LESS: EMIT_BINARY_OP_F64(LESS); break;
+                            case TOKEN_GREATER: EMIT_BINARY_OP_F64(GREATER); break;
+                            case TOKEN_LESS_EQUAL: EMIT_BINARY_OP_F64(GREATER); EMIT_NOT(); break;
+                            case TOKEN_GREATER_EQUAL: EMIT_BINARY_OP_F64(LESS); EMIT_NOT(); break;
+                            case TOKEN_BANG_EQUAL: EMIT_BINARY_OP_F64(EQUAL); EMIT_NOT(); break;
+                            case TOKEN_EQUAL_EQUAL: EMIT_BINARY_OP_F64(EQUAL); break;
+                            default: UNREACHABLE();
+                        }
+
+                    } else if (left->narrowed_value_type.one == ORSO_TYPE_STRING) {
+                        switch (operator.type) {
+                            case TOKEN_PLUS: EMIT_BINARY_OP(CONCAT, STRING); break;
+                            case TOKEN_BANG_EQUAL: EMIT_BINARY_OP(EQUAL, STRING); EMIT_NOT(); break;
+                            case TOKEN_EQUAL_EQUAL: EMIT_BINARY_OP(EQUAL, STRING); break;
+                            default: UNREACHABLE();
+                        }
+
+                    } else if (left->narrowed_value_type.one == ORSO_TYPE_SYMBOL) {
+                        switch (operator.type) {
+                            case TOKEN_EQUAL_EQUAL: EMIT_BINARY_OP(EQUAL, SYMBOL); break;
+                            case TOKEN_BANG_EQUAL: EMIT_BINARY_OP(EQUAL, SYMBOL); EMIT_NOT(); break;
+                            default: UNREACHABLE();
+                        }
+                    }
+                    break;
+                }
             }
-
-            expression(vm, compiler, right, chunk);
-
-            if (ORSO_TYPE_IS_UNION(right->value_type)) {
-                emit_instruction(ORSO_OP_NARROW_UNION, compiler, chunk, right->start.line);
-            }
-
-            if (orso_is_integer_type_kind(left->narrowed_value_type.one, true)) {
-                switch (operator.type) {
-                    case TOKEN_PLUS: EMIT_BINARY_OP_I64(ADD); break;
-                    case TOKEN_MINUS: EMIT_BINARY_OP_I64(SUBTRACT); break;
-                    case TOKEN_STAR: EMIT_BINARY_OP_I64(MULTIPLY); break;
-                    case TOKEN_SLASH: EMIT_BINARY_OP_I64(DIVIDE); break;
-                    case TOKEN_LESS: EMIT_BINARY_OP_I64(LESS); break;
-                    case TOKEN_GREATER: EMIT_BINARY_OP_I64(GREATER); break;
-                    case TOKEN_LESS_EQUAL: EMIT_BINARY_OP_I64(GREATER); EMIT_NOT(); break;
-                    case TOKEN_GREATER_EQUAL: EMIT_BINARY_OP_I64(LESS); EMIT_NOT(); break;
-                    case TOKEN_BANG_EQUAL: EMIT_BINARY_OP_I64(EQUAL); EMIT_NOT(); break;
-                    case TOKEN_EQUAL_EQUAL: EMIT_BINARY_OP_I64(EQUAL); break;
-                    default: break; // Unreachable
-                }
-
-            } else if (orso_is_float_type_kind(left->narrowed_value_type.one)) {
-                switch (operator.type) {
-                    case TOKEN_PLUS: EMIT_BINARY_OP_F64(ADD); break;
-                    case TOKEN_MINUS: EMIT_BINARY_OP_F64(SUBTRACT); break;
-                    case TOKEN_STAR: EMIT_BINARY_OP_F64(MULTIPLY); break;
-                    case TOKEN_SLASH: EMIT_BINARY_OP_F64(DIVIDE); break;
-                    case TOKEN_LESS: EMIT_BINARY_OP_F64(LESS); break;
-                    case TOKEN_GREATER: EMIT_BINARY_OP_F64(GREATER); break;
-                    case TOKEN_LESS_EQUAL: EMIT_BINARY_OP_F64(GREATER); EMIT_NOT(); break;
-                    case TOKEN_GREATER_EQUAL: EMIT_BINARY_OP_F64(LESS); EMIT_NOT(); break;
-                    case TOKEN_BANG_EQUAL: EMIT_BINARY_OP_F64(EQUAL); EMIT_NOT(); break;
-                    case TOKEN_EQUAL_EQUAL: EMIT_BINARY_OP_F64(EQUAL); break;
-                    default: break; // Unreachable
-                }
-
-            } else if (left->narrowed_value_type.one == ORSO_TYPE_STRING) {
-                switch (operator.type) {
-                    case TOKEN_PLUS: EMIT_BINARY_OP(CONCAT, STRING); break;
-                    case TOKEN_BANG_EQUAL: EMIT_BINARY_OP(EQUAL, STRING); EMIT_NOT(); break;
-                    case TOKEN_EQUAL_EQUAL: EMIT_BINARY_OP(EQUAL, STRING); break;
-                    default: break; // Unreachable
-                }
-
-            } else if (left->narrowed_value_type.one == ORSO_TYPE_SYMBOL) {
-                switch (operator.type) {
-                    case TOKEN_EQUAL_EQUAL: EMIT_BINARY_OP(EQUAL, SYMBOL); break;
-                    case TOKEN_BANG_EQUAL: EMIT_BINARY_OP(EQUAL, SYMBOL); EMIT_NOT(); break;
-                    default: break; // Unreachable
-                }
-
-            }
-
             break;
         }
 
