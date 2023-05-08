@@ -892,15 +892,7 @@ static void statement(OrsoVM* vm, Compiler* compiler, OrsoStatementNode* stateme
             OrsoExpressionNode* expression_ = statement->stmt.expression;
             expression(vm, compiler, expression_, chunk);
 
-            emit_instruction(ORSO_OP_POP, compiler, chunk, statement->start.line);
-
-            if (orso_is_gc_type(expression_->value_type)) {
-                emit_instruction(ORSO_OP_POP_TOP_OBJECT, compiler, chunk, statement->start.line);
-            }
-
-            if (ORSO_TYPE_IS_UNION(expression_->value_type)) {
-                emit_instruction(ORSO_OP_POP, compiler, chunk, statement->start.line);
-            }
+            emit_pop(compiler, chunk, expression_->value_type, statement->end.line);
             break;
         }
         
