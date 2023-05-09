@@ -792,7 +792,6 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoExpressionNode* expre
                 emit_instruction(ORSO_OP_PUSH_0, compiler, chunk, expression_node->end.line);
             }
 
-
             end_scope(compiler, chunk, return_value_type, expression_node->end.line);
             break;
         }
@@ -828,6 +827,11 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoExpressionNode* expre
 
             patch_jump(chunk, then_jump);
 
+            i32 then_stack_count = compiler->current_stack_size;
+            i32 then_object_stack_size = compiler->current_object_stack_size;
+            (void)then_stack_count;
+            (void)then_object_stack_size;
+
             /*
              * In the else branch, I restore the old stack count and object stack count so that they can be
              * calculated properly
@@ -852,6 +856,9 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoExpressionNode* expre
             }
 
             patch_jump(chunk, else_jump);
+
+            ASSERT(then_stack_count == compiler->current_stack_size, "then and else branch should end up with the same stack size");
+            ASSERT(then_object_stack_size == compiler->current_object_stack_size, "then and else branch should end up with same object stack size");
 
             break;
         }
