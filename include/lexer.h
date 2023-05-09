@@ -23,6 +23,7 @@ typedef enum TokenType {
 
     // keywords
     TOKEN_STRUCT, TOKEN_FUNCTION, TOKEN_NOT, TOKEN_AND, TOKEN_OR, TOKEN_IF, TOKEN_UNLESS, TOKEN_ELSE,
+    TOKEN_WHILE, TOKEN_UNTIL, TOKEN_FOR,
     TOKEN_TRUE, TOKEN_FALSE, TOKEN_NULL,
 
     // builtin functions

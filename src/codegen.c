@@ -229,6 +229,18 @@ static i32 emit_jump(OrsoOPCode op_code, Compiler* compiler, Chunk* chunk, i32 l
     return sb_count(chunk->code) - 2;
 }
 
+static void emit_loop(Compiler* compiler, Chunk* chunk, i32 line, u32 loop_start) {
+    emit_instruction(ORSO_OP_LOOP, compiler, chunk, line);
+
+    u32 offset = sb_count(chunk->code) - loop_start + 2;
+    ASSERT(offset <= UINT16_MAX, "loop cant go back more than 2^16");
+    byte a;
+    byte b;
+    ORSO_u16_to_u8s(offset, a, b);
+    chunk_write(chunk, a, line);
+    chunk_write(chunk, b, line);
+}
+
 static void patch_jump(Chunk* chunk, i32 offset) {
     i32 jump = sb_count(chunk->code) - offset - 2;
 
@@ -859,6 +871,39 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoExpressionNode* expre
 
             ASSERT(then_stack_count == compiler->current_stack_size, "then and else branch should end up with the same stack size");
             ASSERT(then_object_stack_size == compiler->current_object_stack_size, "then and else branch should end up with same object stack size");
+
+            break;
+        }
+        case EXPRESSION_WHILE: {
+            emit_instruction(ORSO_OP_PUSH_0, compiler, chunk, expression_node->start.line);
+            emit_storage_type_convert(compiler, chunk, ORSO_TYPE_ONE(ORSO_TYPE_NULL), expression_node->value_type, expression_node->start.line);
+
+            u32 loop_start = sb_count(chunk->code);
+
+            OrsoExpressionNode* condition = expression_node->expr.while_.condition;
+
+            expression(vm, compiler, condition, chunk);
+
+            OrsoOPCode jump_instruction = ORSO_OP_JUMP_IF_FALSE;
+            if (expression_node->expr.while_.is_until) {
+                jump_instruction = ORSO_OP_JUMP_IF_TRUE;
+            }
+
+            i32 exit_jump = emit_jump(jump_instruction, compiler, chunk, condition->end.line);
+
+            emit_pop(compiler, chunk, condition->value_type, condition->end.line);
+
+            emit_pop(compiler, chunk, expression_node->value_type, condition->start.line);
+
+            expression(vm, compiler, expression_node->expr.while_.loop, chunk);
+            emit_storage_type_convert(compiler, chunk,
+                    expression_node->expr.while_.loop->value_type, expression_node->value_type, expression_node->end.line);
+
+            emit_loop(compiler, chunk, expression_node->end.line, loop_start);
+
+            patch_jump(chunk, exit_jump);
+
+            emit_pop(compiler, chunk, condition->value_type, expression_node->end.line);
 
             break;
         }

@@ -18,6 +18,8 @@ typedef enum ExpressionType {
     EXPRESSION_ASSIGNMENT,
     EXPRESSION_BLOCK,
     EXPRESSION_IFELSE,
+    EXPRESSION_WHILE,
+    EXPRESSION_FOR,
 } ExpressionType;
 
 typedef enum OrsoDeclarationType {
@@ -81,6 +83,12 @@ typedef struct OrsoIfElse {
     OrsoExpressionNode* else_;
 } OrsoIfElse;
 
+typedef struct OrsoWhile {
+    bool is_until;
+    OrsoExpressionNode* condition;
+    OrsoExpressionNode* loop;
+} OrsoWhile;
+
 struct OrsoExpressionNode {
     Token start;
     Token end;
@@ -97,6 +105,7 @@ struct OrsoExpressionNode {
         OrsoAssignment assignment;
         OrsoBlock block;
         OrsoIfElse ifelse;
+        OrsoWhile while_;
     } expr;
 };
 

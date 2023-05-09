@@ -376,6 +376,12 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
                 break;
             }
 
+            case ORSO_OP_LOOP: {
+                u16 offset = READ_U16();
+                vm->ip -= offset;
+                break;
+            }
+
             case ORSO_OP_PRINT:
             case ORSO_OP_PRINT_EXPR: {
                 OrsoType type = ORSO_TYPE_ONE(POP().as.u); // pop expression type

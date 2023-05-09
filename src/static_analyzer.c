@@ -54,6 +54,33 @@ static TypeInferences* copy_type_inferences(TypeInferences* type_inferences) {
     return duplicate;
 }
 
+static void merge_type_inferences(TypeInferences* destination, TypeInferences* a, TypeInferences* b) {
+    while (a) {
+        for (i32 i = 0; i < a->assumptions.capacity; i++) {
+            OrsoSymbolTableEntry* entry = &a->assumptions.entries[i];
+            if (entry->key == NULL) {
+                continue;
+            }
+
+            OrsoSlot b_slot;
+            if (!orso_symbol_table_get(&b->assumptions, entry->key, &b_slot)) {
+                UNREACHABLE();
+            }
+
+            OrsoType a_type = ORSO_TYPE_ONE(entry->value.as.u);
+            OrsoType b_type = ORSO_TYPE_ONE(b_slot.as.u);
+            OrsoType merged_type = orso_type_merge(a_type, b_type);
+            ASSERT(merged_type.one != ORSO_TYPE_INVALID, "merge must happen since these are assigns");
+
+            orso_symbol_table_set(&destination->assumptions, entry->key, ORSO_SLOT_U(merged_type.one, ORSO_TYPE_ONE(ORSO_TYPE_TYPE)));
+        }
+
+        a = a->outer_scope;
+        b = b->outer_scope;
+        destination = destination->outer_scope;
+    }
+}
+
 static void update_type_assumption(SymbolTable* assumptions, OrsoSymbol* variable_name, OrsoType type) {
     orso_symbol_table_set(assumptions, variable_name, ORSO_SLOT_U(type.one, ORSO_TYPE_ONE(ORSO_TYPE_TYPE)));
 }
@@ -418,36 +445,7 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, TypeInferences* type_
                 orso_resolve_expression(analyzer, else_inferences, expression->expr.ifelse.else_);
             }
 
-            // merge inferences
-            {
-                TypeInferences* thens = then_inferences;
-                TypeInferences* elses = else_inferences;
-                TypeInferences* present = type_inferences;
-                while (thens) {
-                    for (i32 i = 0; i < thens->assumptions.capacity; i++) {
-                        OrsoSymbolTableEntry* entry = &thens->assumptions.entries[i];
-                        if (entry->key == NULL) {
-                            continue;
-                        }
-
-                        OrsoSlot else_slot;
-                        if (!orso_symbol_table_get(&elses->assumptions, entry->key, &else_slot)) {
-                            UNREACHABLE();
-                        }
-
-                        OrsoType then_type = ORSO_TYPE_ONE(entry->value.as.u);
-                        OrsoType else_type = ORSO_TYPE_ONE(else_slot.as.u);
-                        OrsoType merged_type = orso_type_merge(then_type, else_type);
-                        ASSERT(merged_type.one != ORSO_TYPE_INVALID, "merge must happen since these are assigns");
-
-                        orso_symbol_table_set(&present->assumptions, entry->key, ORSO_SLOT_U(merged_type.one, ORSO_TYPE_ONE(ORSO_TYPE_TYPE)));
-                    }
-
-                    thens = thens->outer_scope;
-                    elses = elses->outer_scope;
-                    present = present->outer_scope;
-                }
-            }
+            merge_type_inferences(type_inferences, then_inferences, else_inferences);
 
             free_type_inferences_on_heap(then_inferences);
             free_type_inferences_on_heap(else_inferences);
@@ -470,6 +468,27 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, TypeInferences* type_
             expression->narrowed_value_type = orso_type_merge(
                 expression->expr.ifelse.then->narrowed_value_type, else_block_narrowed_type
             );
+            break;
+        }
+        case EXPRESSION_WHILE: {
+            orso_resolve_expression(analyzer, type_inferences, expression->expr.while_.condition);
+
+            TypeInferences* while_inferences = copy_type_inferences(type_inferences);
+
+            orso_resolve_expression(analyzer, while_inferences, expression->expr.while_.loop);
+
+            // TODO: possible else clause
+            TypeInferences* exit_inferences = copy_type_inferences(type_inferences);
+
+            merge_type_inferences(type_inferences, while_inferences, exit_inferences);
+
+            free_type_inferences_on_heap(while_inferences);
+            free_type_inferences_on_heap(exit_inferences);
+
+            OrsoType exit_type = ORSO_TYPE_ONE(ORSO_TYPE_NULL);
+
+            expression->value_type = orso_type_merge(expression->expr.while_.loop->value_type, exit_type);
+            expression->narrowed_value_type = expression->value_type;
             break;
         }
 

@@ -162,17 +162,22 @@ static TokenType identifier_type(Lexer* lexer) {
         case 'a': return check_keyword(lexer, 1, 2, "nd", TOKEN_AND);
         case 'e': return check_keyword(lexer, 1, 3, "lse", TOKEN_ELSE);
         case 'f': {
-            switch (lexer->start[1]) {
-                case 'a': return check_keyword(lexer, 2, 3, "lse", TOKEN_FALSE);
-                case 'u': return check_keyword(lexer, 2, 2, "nc", TOKEN_FUNCTION);
+            if (lexer->current - lexer->start > 1) {
+                switch (lexer->start[1]) {
+                    case 'a': return check_keyword(lexer, 2, 3, "lse", TOKEN_FALSE);
+                    case 'u': return check_keyword(lexer, 2, 2, "nc", TOKEN_FUNCTION);
+                    case 'o': return check_keyword(lexer, 2, 1, "r", TOKEN_FOR);
+                }
             }
             break;
         }
         case 'i': return check_keyword(lexer, 1, 1, "f", TOKEN_IF);
         case 'n': {
-            switch (lexer->start[1]) {
-                case 'o': return check_keyword(lexer, 2, 1, "t", TOKEN_NOT);
-                case 'u': return check_keyword(lexer, 2, 2, "ll", TOKEN_NULL);
+            if (lexer->current - lexer->start > 1) {
+                switch (lexer->start[1]) {
+                    case 'o': return check_keyword(lexer, 2, 1, "t", TOKEN_NOT);
+                    case 'u': return check_keyword(lexer, 2, 2, "ll", TOKEN_NULL);
+                }
             }
             break;
         }
@@ -188,7 +193,17 @@ static TokenType identifier_type(Lexer* lexer) {
             break;
         case 's': return check_keyword(lexer, 1, 5, "truct", TOKEN_STRUCT);
         case 't': return check_keyword(lexer, 1, 3, "rue", TOKEN_TRUE);
-        case 'u': return check_keyword(lexer, 1, 5, "nless", TOKEN_UNLESS);
+        case 'u': {
+            if (lexer->current - lexer->start > 2 && lexer->start[1] == 'n') {
+                switch (lexer->start[2]) {
+                    case 'l': return check_keyword(lexer, 3, 3, "ess", TOKEN_UNLESS);
+                    case 't': return check_keyword(lexer, 3, 2, "il", TOKEN_UNTIL);
+                }
+            }
+            break;
+        }
+        return check_keyword(lexer, 1, 5, "nless", TOKEN_UNLESS);
+        case 'w': return check_keyword(lexer, 1, 4, "hile", TOKEN_WHILE);
     }
 
     return TOKEN_IDENTIFIER;
