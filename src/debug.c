@@ -20,6 +20,15 @@ static i32 constant_instruction(const char* name, Chunk* chunk, i32 offset) {
     return offset + 4;
 }
 
+static i32 pop_scope_instruction(const char* name, Chunk* chunk, i32 offset) {
+    byte stack_pop_count = chunk->code[offset + 1];
+    byte block_slot_count = chunk->code[offset + 2];
+    printf("%-16s %d %d", name, stack_pop_count, block_slot_count);
+    printf("\n");
+
+    return offset + 3;
+}
+
 static i32 instruction_3arg(const char* name, Chunk* chunk, i32 offset) {
     u32 index = ORSO_u8s_to_u24(chunk->code[offset + 1], chunk->code[offset + 2], chunk->code[offset + 3]);
     printf("%-16s %d", name, index);
@@ -58,6 +67,7 @@ i32 disassemble_instruction(Chunk* chunk, i32 offset) {
     OrsoOPCode instruction = chunk->code[offset];
     switch(instruction) {
         case ORSO_OP_POP: return simple_instruction("OP_POP", offset);
+        case ORSO_OP_POP_SCOPE: return pop_scope_instruction("OP_POP_SCOPE", chunk, offset);
         case ORSO_OP_POP_TOP_OBJECT: return simple_instruction("OP_POP_TOP_OBJECT", offset);
         case ORSO_OP_PUSH_TOP_OBJECT: return simple_instruction("OP_PUSH_TOP_OBJECT", offset);
         case ORSO_OP_PUSH_TOP_OBJECT_NULL: return simple_instruction("OP_PUSH_TOP_OBJECT_NULL", offset);

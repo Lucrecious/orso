@@ -17,7 +17,7 @@ typedef struct {
 
 typedef struct {
     Local* locals;
-    i32 count;
+    i32 locals_count;
     i32 scope_depth;
     i32 current_stack_size;
     i32 current_object_stack_size;
@@ -26,6 +26,7 @@ typedef struct {
 
 static i32 OP_STACK_EFFECT[] = {
     [ORSO_OP_POP] = -1,
+    [ORSO_OP_POP_SCOPE] = 0,
     [ORSO_OP_POP_TOP_OBJECT] = 0,
 
     [ORSO_OP_PUSH_TOP_OBJECT] = 0,
@@ -100,6 +101,7 @@ static i32 OP_STACK_EFFECT[] = {
 
 static i32 OP_OBJECT_STACK_EFFECT[] = {
     [ORSO_OP_POP] = 0,
+    [ORSO_OP_POP_SCOPE] = 0,
     [ORSO_OP_POP_TOP_OBJECT] = -1,
 
     [ORSO_OP_PUSH_TOP_OBJECT] = 1,
@@ -175,7 +177,7 @@ static i32 OP_OBJECT_STACK_EFFECT[] = {
 static void compiler_init(Compiler* compiler) {
     compiler->locals = NULL;
     compiler->scope_depth = 0;
-    compiler->count = 0;
+    compiler->locals_count = 0;
 
     compiler->current_stack_size = 0;
     compiler->current_object_stack_size = 0;
@@ -185,20 +187,23 @@ static void compiler_init(Compiler* compiler) {
 static void compiler_free(Compiler* compiler) {
     sb_free(compiler->locals);
     compiler->locals = NULL;
-    compiler->count = 0;
+    compiler->locals_count = 0;
 
     compiler->current_stack_size = 0;
     compiler->current_object_stack_size = 0;
     compiler->max_stack_size = 0;
 }
 
+static void _apply_stack_effects(Compiler* compiler, i32 stack_effects, i32 object_stack_effects) {
+    compiler->current_stack_size += stack_effects;
+    compiler->current_object_stack_size += object_stack_effects;
+    compiler->max_stack_size = compiler->current_stack_size > compiler->max_stack_size
+        ? compiler->current_stack_size : compiler->max_stack_size;
+}
+
 static void emit_instruction(const OrsoOPCode op_code, Compiler* compiler, Chunk* chunk, i32 line) {
     chunk_write(chunk, op_code, line);
-
-    compiler->current_stack_size += OP_STACK_EFFECT[op_code];
-    compiler->current_object_stack_size += OP_OBJECT_STACK_EFFECT[op_code];
-    compiler->max_stack_size = compiler->current_stack_size > compiler->max_stack_size 
-        ? compiler->current_stack_size : compiler->max_stack_size;
+    _apply_stack_effects(compiler, OP_STACK_EFFECT[op_code], OP_OBJECT_STACK_EFFECT[op_code]);
 }
 
 static void emit_constant(Compiler* compiler, Chunk* chunk, OrsoSlot slot, i32 line, bool is_ptr) {
@@ -296,6 +301,18 @@ static void emit_pop(Compiler* compiler, Chunk* chunk, OrsoType type, i32 line) 
     }
 }
 
+static void emit_pop_scope(Compiler* compiler, Chunk* chunk, byte scope_size_slots, byte block_value_slots, bool block_value_is_gc_type, i32 line) {
+    emit_instruction(ORSO_OP_POP_SCOPE, compiler, chunk, line);
+    chunk_write(chunk, scope_size_slots, line);
+    chunk_write(chunk, block_value_slots, line);
+
+    _apply_stack_effects(compiler, -scope_size_slots, 0);
+
+    if (block_value_is_gc_type) {
+        emit_instruction(ORSO_OP_PUSH_TOP_OBJECT, compiler, chunk, line);
+    }
+}
+
 static i32 add_global(OrsoVM* vm, Token* name, i32 slot_count, bool is_gc_type, bool is_union) {
     OrsoSymbol* identifier = orso_new_symbol_from_cstrn(&vm->gc, name->start, name->length, &vm->symbols);
 
@@ -324,11 +341,11 @@ static i32 add_global(OrsoVM* vm, Token* name, i32 slot_count, bool is_gc_type, 
 static i32 add_local(Compiler* compiler, Token name, i32 slot_count, bool is_gc_type) {
     ASSERT(slot_count > 0, "local must consume stack space");
 
-    while (sb_count(compiler->locals) <= compiler->count) {
+    while (sb_count(compiler->locals) <= compiler->locals_count) {
         sb_push(compiler->locals, (Local){ .depth = 0 });
     }
 
-    Local* local = &compiler->locals[compiler->count++];
+    Local* local = &compiler->locals[compiler->locals_count++];
     local->name = name;
     local->depth = compiler->scope_depth;
     local->slot_count = slot_count;
@@ -341,7 +358,7 @@ static i32 add_local(Compiler* compiler, Token name, i32 slot_count, bool is_gc_
         local->object_stack_position = -1;
     }
 
-    return compiler->count - 1;
+    return compiler->locals_count - 1;
 }
 
 static FORCE_INLINE bool is_global_scope(Compiler* compiler) {
@@ -375,7 +392,7 @@ static bool identifiers_equal(Token* a, Token* b) {
 }
 
 static i32 retrieve_local_variable(Compiler* compiler, Token* name) {
-    for (i32 i = compiler->count - 1; i >= 0; i--) {
+    for (i32 i = compiler->locals_count - 1; i >= 0; i--) {
         Local* local = &compiler->locals[i];
         if (identifiers_equal(name, &local->name)) {
             return i;
@@ -431,28 +448,34 @@ static void begin_scope(Compiler* compiler) {
     compiler->scope_depth++;
 }
 
-static void end_scope(Compiler* compiler, Chunk* chunk, i32 line) {
-#define IS_RETURN_VARIABLE(INDEX) (compiler->locals[INDEX].name.length == 0)
-
+static void end_scope(Compiler* compiler, Chunk* chunk, OrsoType block_value_type, i32 line) {
     compiler->scope_depth--;
-    while (compiler->count > 0) {
-        compiler->count--;
-        Local* local = &compiler->locals[compiler->count];
 
-        if (IS_RETURN_VARIABLE(compiler->count)) {
+    // pop left-over expression object marker
+    bool block_value_is_gc_type = orso_is_gc_type(block_value_type);
+    if (block_value_is_gc_type) {
+        emit_instruction(ORSO_OP_POP_TOP_OBJECT, compiler, chunk, line);
+    }
+
+    // pop all local object markers
+    i32 total_local_slot_count = 0;
+    while (compiler->locals_count > 0) {
+        Local* local = &compiler->locals[compiler->locals_count - 1];
+        if (local->depth <= compiler->scope_depth) {
             break;
         }
 
-        for (i32 i = 0; i < local->slot_count; i++) {
-            emit_instruction(ORSO_OP_POP, compiler, chunk, line);
-        }
+        total_local_slot_count += local->slot_count;
+        compiler->locals_count--;
 
         if (local->is_gc_type) {
             emit_instruction(ORSO_OP_POP_TOP_OBJECT, compiler, chunk, line);
         }
     }
 
-#undef IS_RETURN_VARIABLE
+    i32 block_value_slots = ORSO_TYPE_IS_UNION(block_value_type) ? 2 : 1;
+
+    emit_pop_scope(compiler, chunk, total_local_slot_count, block_value_slots, block_value_is_gc_type, line);
 }
 
 static void declaration(OrsoVM* vm, Compiler* compiler, OrsoDeclarationNode* declaration, Chunk* chunk);
@@ -755,64 +778,22 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoExpressionNode* expre
             begin_scope(compiler);
             OrsoDeclarationNode* final_expression_statement = expression_node->expr.block.final_expression_statement;
 
-            // create local variable at the beginning of the stack to hold block return value
-            OrsoType return_variable_type = final_expression_statement == NULL ?
-                    ORSO_TYPE_ONE(ORSO_TYPE_NULL) : final_expression_statement->decl.statement->stmt.expression->value_type;
-            Token return_identifier = { .length = 0, .line = expression_node->start.line, .start = "", .type = TOKEN_IDENTIFIER };
-            i32 return_value_slot_count = ORSO_TYPE_IS_UNION(return_variable_type) ? 2 : 1;
-
-            if (ORSO_TYPE_IS_UNION(return_variable_type)) {
-                emit_instruction(ORSO_OP_PUSH_NULL_UNION, compiler, chunk, expression_node->start.line);
-            } else {
-                emit_instruction(ORSO_OP_PUSH_0, compiler, chunk, expression_node->start.line);
-            }
-
-            if (orso_is_gc_type(return_variable_type)) {
-                emit_instruction(ORSO_OP_PUSH_TOP_OBJECT, compiler, chunk, expression_node->start.line);
-            }
-
-            i32 return_variable_index = declare_local_variable(compiler, &return_identifier, return_value_slot_count, orso_is_gc_type(return_variable_type));
-
-            // regular declaration stuff
             for (i32 i = 0; i < sb_count(expression_node->expr.block.declarations) - (final_expression_statement != NULL); i++) {
                 declaration(vm, compiler, expression_node->expr.block.declarations[i], chunk);
             }
 
-            // store final expression in first auto-generated local variable
-            {
-                if (final_expression_statement != NULL) {
-                    expression(vm, compiler, final_expression_statement->decl.statement->stmt.expression, chunk);
-                    i32 stack_position = compiler->locals[return_variable_index].stack_position;
-
-                    if (ORSO_TYPE_IS_UNION(return_variable_type)) {
-                        if (compiler->locals[return_variable_index].is_gc_type) {
-                            const u32 object_stack_position = compiler->locals[return_variable_index].object_stack_position;
-                            emit_instruction3(ORSO_OP_UPDATE_STACK_GC_TYPE, compiler, object_stack_position, chunk, expression_node->end.line);
-                        }
-
-                        emit_instruction3(ORSO_OP_SET_LOCAL_UNION, compiler, stack_position, chunk, expression_node->end.line);
-
-                        emit_instruction(ORSO_OP_POP, compiler, chunk, expression_node->end.line);
-                        emit_instruction(ORSO_OP_POP, compiler, chunk, expression_node->end.line);
-
-                        if (orso_is_gc_type(return_variable_type)) {
-                            emit_instruction(ORSO_OP_POP_TOP_OBJECT, compiler, chunk, expression_node->end.line);
-                        }
-                    } else {
-                        emit_instruction3(ORSO_OP_SET_LOCAL, compiler, stack_position, chunk, expression_node->end.line);
-                        emit_instruction(ORSO_OP_POP, compiler, chunk, expression_node->end.line);
-                        if (orso_is_gc_type(return_variable_type)) {
-                            emit_instruction(ORSO_OP_POP_TOP_OBJECT, compiler, chunk, expression_node->end.line);
-                        }
-                    }
-                } else {
-                    emit_instruction(ORSO_OP_PUSH_0, compiler, chunk, expression_node->end.line);
-                    emit_instruction3(ORSO_OP_SET_LOCAL, compiler, return_variable_index, chunk, expression_node->end.line);
-                    emit_instruction(ORSO_OP_POP, compiler, chunk, expression_node->end.line);
-                }
+            OrsoType return_value_type = ORSO_TYPE_ONE(ORSO_TYPE_INVALID);
+            if (final_expression_statement) {
+                OrsoExpressionNode* final_expression = final_expression_statement->decl.statement->stmt.expression;
+                return_value_type.one = final_expression->value_type.one;
+                expression(vm, compiler, final_expression, chunk);
+            } else {
+                return_value_type = ORSO_TYPE_ONE(ORSO_TYPE_NULL);
+                emit_instruction(ORSO_OP_PUSH_0, compiler, chunk, expression_node->end.line);
             }
 
-            end_scope(compiler, chunk, expression_node->end.line);
+
+            end_scope(compiler, chunk, return_value_type, expression_node->end.line);
             break;
         }
         

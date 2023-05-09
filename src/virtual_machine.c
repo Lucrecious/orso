@@ -63,6 +63,10 @@ static FORCE_INLINE OrsoSlot pop(OrsoVM* vm) {
     return *vm->stack_top;
 }
 
+static FORCE_INLINE void pop_n(OrsoVM* vm, u32 count) {
+    vm->stack_top -= count;
+}
+
 static FORCE_INLINE OrsoObject* pop_top_object(OrsoVM* vm) {
     vm->object_stack_top--;
     return (OrsoObject*)vm->stack[vm->object_stack_top->index].as.p;
@@ -83,6 +87,7 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
         READ_BYTE(), READ_BYTE(), READ_BYTE(), READ_BYTE()))
 #define PEEK(I) peek(vm, I)
 #define POP() pop(vm)
+#define POPN(N) pop_n(vm, N);
 #define POP_TOP_OBJECT() pop_top_object(vm)
 #define POP_PTR() pop_top_object(vm); pop(vm)
 #define PUSH(VALUE) push_i64(vm, VALUE)
@@ -190,6 +195,19 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
                 const OrsoSlot null_value = ORSO_SLOT_I(0, ORSO_TYPE_ONE(ORSO_TYPE_NULL));
                 PUSH(void_type);
                 PUSH(null_value);
+                break;
+            }
+
+            case ORSO_OP_POP_SCOPE: {
+                byte local_slot_count = READ_BYTE();
+                byte block_value_slots = READ_BYTE();
+                u32 stack_size = vm->stack_top - vm->stack;
+
+                for (i32 i = 0; i < block_value_slots; i++) {
+                    vm->stack[stack_size - (local_slot_count + block_value_slots) + i] = *(vm->stack_top - block_value_slots + i);
+                }
+
+                POPN(local_slot_count);
                 break;
             }
 
@@ -400,6 +418,7 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
 #undef PUSH
 #undef POP_PTR
 #undef POP_TOP_OBJECT
+#undef POPN
 #undef POP
 #undef PEEK
 #undef READ_TYPE
