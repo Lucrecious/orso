@@ -5,12 +5,12 @@ ace.define("ace/mode/orso_highlighting_rules", ["require", "exports", "module", 
   var TextHighlightRules = require("./text_highlight_rules").TextHighlightRules;
 
   var OrsoHighlightRules = function () {
-    var keywords = ("not|if|else|unless|and|or");
+    var keywords = ("not|if|else|unless|while|until|and|or");
     var builtinTypes = (
       "string|i32|i64|f64|symbol|void|bool"
     );
     var builtinFunctions = (
-      "print_expr"
+      "print_expr|print"
     );
     var builtinConstants = ("null|true|false");
 
