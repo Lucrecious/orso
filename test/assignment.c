@@ -35,7 +35,7 @@ INTERPRETER_TEST(assign_variable_to_variable,
 
 INTERPRETER_TEST(assign_union_stack_data,
     "x: bool|i32 = true; print_expr x; x = 32; print_expr x;",
-    "x (bool|i32) => true\nx (bool|i32) => 32\n")
+    "x (i32|bool) => true\nx (i32|bool) => 32\n")
 
 INTERPRETER_TEST(assign_union_object_data,
     "x: string|symbol = 'foo'; print_expr (x); x = \"bar\"; print_expr (x);",

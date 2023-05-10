@@ -4,6 +4,7 @@
 #include "def.h"
 #include "object.h"
 #include "type.h"
+#include "type_set.h"
 
 #define ORSO_SYMBOL_TABLE_MAX_LOAD 0.75
 
@@ -16,7 +17,6 @@ typedef struct OrsoSymbolTable {
     i32 count;
     i32 capacity;
     OrsoSymbolTableEntry* entries;
-
 } OrsoSymbolTable;
 
 void orso_symbol_table_init(OrsoSymbolTable* symbol_table);
@@ -37,14 +37,14 @@ FORCE_INLINE OrsoSymbol* orso_unmanaged_symbol_from_cstrn(const char* start, i32
     }
 
     symbol = ORSO_ALLOCATE_FLEX(OrsoSymbol, length + 1);
-    symbol->object.type_kind = ORSO_TYPE_SYMBOL;
+    symbol->object.type = &OrsoTypeSymbol;
     symbol->hash = hash;
     symbol->length = length;
     memcpy(symbol->text, start, length);
     symbol->text[length] = '\0';
     symbol->object.gc_header.next = symbol->object.gc_header.previous = NULL;
 
-    OrsoSlot slot = ORSO_SLOT_I(0, ORSO_TYPE_ONE(ORSO_TYPE_NULL));
+    OrsoSlot slot = ORSO_SLOT_I(0, &OrsoTypeVoid);
     orso_symbol_table_set(symbol_table, symbol, slot);
 
     return symbol;
@@ -61,13 +61,13 @@ FORCE_INLINE OrsoSymbol* orso_new_symbol_from_cstrn(OrsoGarbageCollector* gc, co
         return symbol;
     }
 
-    symbol = ORSO_OBJECT_ALLOCATE_FLEX(gc, OrsoSymbol, ORSO_TYPE_SYMBOL, length + 1);
+    symbol = ORSO_OBJECT_ALLOCATE_FLEX(gc, OrsoSymbol, &OrsoTypeSymbol, length + 1);
     symbol->hash = hash;
     symbol->length = length;
     memcpy(symbol->text, start, length);
     symbol->text[length] = '\0';
 
-    OrsoSlot slot = ORSO_SLOT_I(0, ORSO_TYPE_ONE(ORSO_TYPE_NULL));
+    OrsoSlot slot = ORSO_SLOT_I(0, &OrsoTypeVoid);
     orso_symbol_table_set(symbol_table, symbol, slot);
 
     return symbol;

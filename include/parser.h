@@ -6,25 +6,34 @@
 #include "object.h"
 #include "symbol_table.h"
 #include "type.h"
+#include "type_set.h"
 
-typedef enum ExpressionType {
+typedef enum OrsoTypeNodeType {
+    ORSO_TYPE_NODE_TYPE_UNION,
+    ORSO_TYPE_NODE_TYPE_FUNCTION,
+    ORSO_TYPE_NODE_TYPE_PRIMITIVE,
+} OrsoTypeNodeType;
+
+typedef enum OrsoExpressionType {
     EXPRESSION_NONE,
     EXPRESSION_IMPLICIT_CAST,
     EXPRESSION_UNARY,
     EXPRESSION_BINARY,
     EXPRESSION_GROUPING,
+    EXPRESSION_CALL,
     EXPRESSION_PRIMARY,
     EXPRESSION_VARIABLE,
     EXPRESSION_ASSIGNMENT,
     EXPRESSION_BLOCK,
     EXPRESSION_IFELSE,
     EXPRESSION_FOR,
-} ExpressionType;
+} OrsoExpressionType;
 
 typedef enum OrsoDeclarationType {
     ORSO_DECLARATION_NONE,
     ORSO_DECLARATION_STATEMENT,
     ORSO_DECLARATION_VAR,
+    ORSO_DECLARATION_FUNCTION,
 } OrsoDeclarationType;
 
 typedef enum OrsoStatementType {
@@ -32,10 +41,32 @@ typedef enum OrsoStatementType {
     ORSO_STATEMENT_PRINT_EXPR,
     ORSO_STATEMENT_PRINT,
     ORSO_STATEMENT_EXPRESSION,
+    ORSO_STATEMENT_RETURN,
 } OrsoStatementType;
+
+typedef struct OrsoFunctionSignature {
+    OrsoType* return_type;
+    OrsoType** parameter_types;
+} OrsoFunctionSignature;
 
 typedef struct OrsoExpressionNode OrsoExpressionNode;
 typedef struct OrsoDeclarationNode OrsoDeclarationNode;
+typedef struct OrsoFunctionDeclarationNode OrsoFunctionDeclarationNode;
+typedef struct OrsoTypeNode OrsoTypeNode;
+
+struct OrsoTypeNode {
+    Token start;
+    Token end;
+    OrsoTypeNodeType type;
+    union {
+        OrsoTypeNode** union_;
+        struct {
+            OrsoTypeNode* return_type;
+            OrsoTypeNode** argument_types;
+        } function;
+        Token primitive;
+    } items;
+};
 
 typedef struct OrsoImplicitCastOp {
     OrsoExpressionNode* operand;
@@ -56,6 +87,13 @@ typedef struct OrsoGrouping {
     OrsoExpressionNode* expression;
 } OrsoGrouping;
 
+typedef struct OrsoCall {
+    OrsoType* callee_type;
+    OrsoFunctionType* callee_function_type;
+    Token callee;
+    OrsoExpressionNode** arguments;
+} OrsoCall;
+
 typedef struct OrsoPrimary {
     Token token;
     OrsoSlot constant;
@@ -66,7 +104,7 @@ typedef struct OrsoVariable {
 } OrsoVariable;
 
 typedef struct OrsoAssignment {
-    Token variable_name;
+    Token name;
     OrsoExpressionNode* right_side;
 } OrsoAssignment;
 
@@ -86,14 +124,15 @@ typedef struct OrsoIfElse {
 struct OrsoExpressionNode {
     Token start;
     Token end;
-    OrsoType value_type;
-    OrsoType narrowed_value_type; // only set for union types
-    ExpressionType type;
+    OrsoType* value_type;
+    OrsoType* narrowed_value_type; // only set for union types
+    OrsoExpressionType type;
     union {
         OrsoImplicitCastOp cast;
         OrsoBinaryOp binary;
         OrsoUnaryOp unary;
         OrsoGrouping grouping;
+        OrsoCall call;
         OrsoPrimary primary;
         OrsoVariable variable;
         OrsoAssignment assignment;
@@ -102,17 +141,17 @@ struct OrsoExpressionNode {
     } expr;
 };
 
-typedef struct OrsoVarDeclarationNode {
+typedef struct OrsoVariableDeclarationNode {
     Token start;
     Token end;
 
     // Unresolved means inferred
-    OrsoType var_type;
-    Token variable_name;
-    Token* type_identifiers;
+    OrsoType* type;
+    Token name;
+    OrsoTypeNode* type_node;
     OrsoExpressionNode* expression;
 
-} OrsoVarDeclarationNode;
+} OrsoVariableDeclarationNode;
 
 typedef struct OrsoStatementNode {
     OrsoStatementType type;
@@ -124,13 +163,27 @@ typedef struct OrsoStatementNode {
     } stmt;
 } OrsoStatementNode;
 
+struct OrsoFunctionDeclarationNode {
+    Token start;
+    Token end;
+
+    OrsoFunctionType* type;
+
+    OrsoVariableDeclarationNode** parameters;
+
+    OrsoTypeNode* return_type;
+    Token name;
+    OrsoBlock block;
+};
+
 struct OrsoDeclarationNode {
     OrsoDeclarationType type;
     Token start;
     Token end;
     union {
         OrsoStatementNode* statement;
-        OrsoVarDeclarationNode* var;
+        OrsoVariableDeclarationNode* variable;
+        OrsoFunctionDeclarationNode* function;
     } decl;
 };
 

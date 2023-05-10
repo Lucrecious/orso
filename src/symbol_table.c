@@ -1,4 +1,5 @@
 #include "symbol_table.h"
+#include "type_set.h"
 
 #define GROW_CAPACITY(capacity) capacity == 0 ? 8 : capacity * 2
 
@@ -40,7 +41,7 @@ static void adjust_capacity(OrsoSymbolTable* table, i32 capacity) {
     OrsoSymbolTableEntry* entries = ORSO_ALLOCATE_N(OrsoSymbolTableEntry, capacity);
     for (i32 i = 0; i < capacity; i++) {
         entries[i].key = NULL;
-        entries[i].value = ORSO_SLOT_I(0, ORSO_TYPE_ONE(ORSO_TYPE_NULL));
+        entries[i].value = ORSO_SLOT_I(0, &OrsoTypeVoid);
     }
 
     table->count = 0;

@@ -191,6 +191,7 @@ static TokenType identifier_type(Lexer* lexer) {
                 return check_keyword(lexer, 1, 9, "rint_expr", TOKEN_PRINT_EXPR);
             }
             break;
+        case 'r': return check_keyword(lexer, 1, 5, "eturn", TOKEN_RETURN);
         case 's': return check_keyword(lexer, 1, 5, "truct", TOKEN_STRUCT);
         case 't': return check_keyword(lexer, 1, 3, "rue", TOKEN_TRUE);
         case 'u': {
@@ -245,7 +246,7 @@ Token lexer_next_token(Lexer* lexer) {
         case ']': return create_token(lexer, TOKEN_BRACKET_CLOSE);
         case ',': return create_token(lexer, TOKEN_COMMA);
         case '.': return create_token(lexer, TOKEN_DOT);
-        case '-': return create_token(lexer, TOKEN_MINUS);
+        case '-': return create_token(lexer, match(lexer, '>') ? TOKEN_ARROW_RIGHT : TOKEN_MINUS);
         case '*': return create_token(lexer, TOKEN_STAR);
         case '/': return create_token(lexer, TOKEN_SLASH);
         case ':': return create_token(lexer, TOKEN_COLON);

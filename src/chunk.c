@@ -3,20 +3,20 @@
 #include <stdio.h>
 
 #include "def.h"
+#include "object.h"
 #include "sb.h"
 
-u32 chunk_add_constant(Chunk* chunk, OrsoSlot value, bool is_object) {
+u32 chunk_add_constant(Chunk* chunk, OrsoSlot value, bool is_gc_type) {
     u32 index = sb_count(chunk->constants);
     sb_push(chunk->constants, value);
 
-    if (is_object) {
+    if (is_gc_type) {
         sb_push(chunk->constant_object_offsets, index);
     }
     return index;
 }
 
 void chunk_init(Chunk* chunk) {
-    chunk->max_stack_size = 0;
     chunk->constants = NULL;
     chunk->constant_object_offsets = NULL;
     chunk->code = NULL;
@@ -55,23 +55,8 @@ i32 chunk_get_line(Chunk* chunk, i32 offset) {
     return -1;
 }
 
-void orso_print_slot(OrsoSlot slot, OrsoTypeKind type_kind) {
-    switch (type_kind) {
-        case ORSO_TYPE_BOOL: if (slot.as.i) { printf("true"); } else { printf("false"); } break;
-        case ORSO_TYPE_INT32:
-        case ORSO_TYPE_INT64: printf("%lld", slot.as.i); break;
-        case ORSO_TYPE_FLOAT32:
-        case ORSO_TYPE_FLOAT64: printf("%f", slot.as.f); break;
-        case ORSO_TYPE_NULL: printf("null"); break;
-        case ORSO_TYPE_STRING: printf("\"%s\"", ((OrsoString*)slot.as.p)->text); break;
-        case ORSO_TYPE_SYMBOL: printf("'%s'", ((OrsoSymbol*)slot.as.p)->text); break;
-        case ORSO_TYPE_TYPE: {
-            char type_string[256];
-            orso_type_to_cstr(ORSO_TYPE_ONE(slot.as.u), type_string);
-            printf("<"); printf("%s", type_string); printf(">");
-            break;
-        }
-        default: printf("i64(%lld), f64(%.2f), ptr(%p)", slot.as.i, slot.as.f, slot.as.p); break;
-    }
-    
+void orso_print_slot(OrsoSlot slot, OrsoType* type) {
+    char* cstr = orso_slot_to_new_cstrn(slot, type);
+    printf("%s", cstr);
+    free(cstr);
 }

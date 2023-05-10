@@ -1,8 +1,10 @@
 #include "object.h"
 
+#include "sb.h"
 #include <stdio.h>
+#include "type_set.h"
 
-void* orso_object_reallocate(OrsoGarbageCollector* gc, OrsoGCHeader* pointer, OrsoTypeKind type_kind, size_t old_size, size_t new_size) {
+void* orso_object_reallocate(OrsoGarbageCollector* gc, OrsoGCHeader* pointer, OrsoType* type, size_t old_size, size_t new_size) {
     (void)old_size;
 
     if (new_size == 0) {
@@ -20,9 +22,11 @@ void* orso_object_reallocate(OrsoGarbageCollector* gc, OrsoGCHeader* pointer, Or
         exit(1);
     }
 
-    result->type_kind = type_kind;
+    result->type = type;
 #ifdef DEBUG_GC_PRINT
-    printf("%p allocate %zu for %s\n", (void*)result, new_size, orso_type_kind_to_cstr(result->type_kind));
+    char tmp_buffer[256];
+    orso_type_to_cstrn(result->type, tmp_buffer, 256);
+    printf("%p allocate %zu for %s\n", (void*)result, new_size, tmp_buffer);
 #endif
 
     orso_gc_register(gc, (OrsoGCHeader*)result);
@@ -32,25 +36,33 @@ void* orso_object_reallocate(OrsoGarbageCollector* gc, OrsoGCHeader* pointer, Or
 
 void orso_object_free(OrsoGarbageCollector* gc, OrsoObject* object) {
 #ifdef DEBUG_GC_PRINT
-    printf("%p free type %s\n", (void*)object, orso_type_kind_to_cstr(object->type_kind));
+    char type_buffer[256];
+    orso_type_to_cstrn(object->type, type_buffer, 256);
+    printf("%p free type %s\n", (void*)object, type_buffer);
 #endif
-    switch (object->type_kind) {
+    switch (object->type->kind) {
         case ORSO_TYPE_SYMBOL: {
             OrsoSymbol* symbol = (OrsoSymbol*)object;
-            orso_object_reallocate(gc, (OrsoGCHeader*)symbol, ORSO_TYPE_SYMBOL, sizeof(OrsoSymbol) + symbol->length, 0);
+            orso_object_reallocate(gc, (OrsoGCHeader*)symbol, &OrsoTypeSymbol, sizeof(OrsoSymbol) + symbol->length, 0);
             break;
         }
         case ORSO_TYPE_STRING: {
             OrsoString* string = (OrsoString*)object;
-            orso_object_reallocate(gc, (OrsoGCHeader*)string, ORSO_TYPE_SYMBOL, sizeof(OrsoString) + string->length, 0);
+            orso_object_reallocate(gc, (OrsoGCHeader*)string, &OrsoTypeString, sizeof(OrsoString) + string->length, 0);
             break;
         }
-        default: break; // Unreachable
+        case ORSO_TYPE_FUNCTION: {
+            OrsoFunction* function = (OrsoFunction*)object;
+            chunk_free(&function->chunk);
+            orso_object_reallocate(gc, (OrsoGCHeader*)function, (OrsoType*)&OrsoTypeEmptyFunction, sizeof(OrsoFunction), 0);
+            break;
+        }
+        default: UNREACHABLE();
     }
 }
 
 OrsoString* orso_new_string_from_cstrn(OrsoGarbageCollector* gc, const char* start, i32 length) {
-    OrsoString* string = ORSO_OBJECT_ALLOCATE_FLEX(gc, OrsoString, ORSO_TYPE_STRING, length + 1);
+    OrsoString* string = ORSO_OBJECT_ALLOCATE_FLEX(gc, OrsoString, &OrsoTypeString, length + 1);
     string->length = length;
     memcpy(string->text, start, length);
     string->text[length] = '\0';
@@ -58,13 +70,21 @@ OrsoString* orso_new_string_from_cstrn(OrsoGarbageCollector* gc, const char* sta
     return string;
 }
 
-OrsoString* orso_slot_to_string(OrsoGarbageCollector* gc, OrsoSlot slot, OrsoTypeKind type_kind) {
-    switch (type_kind) {
+char* cstrn_new(const char* start, i32 length) {
+    char* cstr = ORSO_ALLOCATE_N(char, length + 1);
+    memcpy(cstr, start, length);
+    cstr[length] = '\0';
+
+    return cstr;
+}
+
+char* orso_slot_to_new_cstrn(OrsoSlot slot, OrsoType* type) {
+    switch (type->kind) {
         case ORSO_TYPE_BOOL: {
             if (ORSO_SLOT_IS_FALSE(slot)) {
-                return orso_new_string_from_cstrn(gc, "false", 5);
+                return cstrn_new("false", 5);
             } else {
-                return orso_new_string_from_cstrn(gc, "true", 4);
+                return cstrn_new("true", 4);
             }
         }
 
@@ -73,7 +93,7 @@ OrsoString* orso_slot_to_string(OrsoGarbageCollector* gc, OrsoSlot slot, OrsoTyp
             // Max characters for i64 is 19 + sign and \0
             char buffer[21];
             i32 length = sprintf(buffer, "%lld", slot.as.i);
-            return orso_new_string_from_cstrn(gc, buffer, length);
+            return cstrn_new(buffer, length);
         }
 
         case ORSO_TYPE_FLOAT32:
@@ -86,12 +106,12 @@ OrsoString* orso_slot_to_string(OrsoGarbageCollector* gc, OrsoSlot slot, OrsoTyp
             } else {
                 length = sprintf(buffer, "%.14g", slot.as.f);
             }
-            return orso_new_string_from_cstrn(gc, buffer, length);
+            return cstrn_new(buffer, length);
         }
 
-        case ORSO_TYPE_NULL: return orso_new_string_from_cstrn(gc, "null", 4);
+        case ORSO_TYPE_VOID: return cstrn_new("null", 4);
 
-        case ORSO_TYPE_STRING: return ((OrsoString*)slot.as.p);
+        case ORSO_TYPE_STRING: return cstrn_new(((OrsoString*)slot.as.p)->text, ((OrsoString*)slot.as.p)->length);
 
         case ORSO_TYPE_SYMBOL: {
             OrsoSymbol* symbol = (OrsoSymbol*)slot.as.p;
@@ -99,24 +119,81 @@ OrsoString* orso_slot_to_string(OrsoGarbageCollector* gc, OrsoSlot slot, OrsoTyp
             // 1 \0
             char buffer[symbol->length + 3];
             sprintf(buffer, "'%s'", symbol->text);
-            return orso_new_string_from_cstrn(gc, buffer, symbol->length + 3);
+            return cstrn_new(buffer, symbol->length + 3);
         }
 
-        case ORSO_TYPE_UNRESOLVED:
-        case ORSO_TYPE_INVALID: return orso_new_string_from_cstrn(gc, "<?>", 3);
+        case ORSO_TYPE_FUNCTION: {
+            OrsoFunction* function = (OrsoFunction*)slot.as.p;
+            if (function->name == NULL) {
+                char* script_name = "<_ :: ()>";
+                return cstrn_new(script_name, strlen(script_name));
+            }
 
-        default: return orso_new_string_from_cstrn(gc, "<?>", 3); // Unreachable
+            char buffer[500];
+            i32 n = sprintf(buffer, "<%s :: (", function->name->text);
+
+            char tmp_buffer[128];
+            for (i32 i = 0; i < function->type->argument_count; i++) {
+                orso_type_to_cstrn(function->type->argument_types[i], tmp_buffer, 128);
+
+                n += sprintf(buffer + n, "%s%s", tmp_buffer,
+                        i == function->type->argument_count - 1 ? "" : ", ");
+            }
+
+            orso_type_to_cstrn(function->type->return_type, tmp_buffer, 128);
+            n += sprintf(buffer + n, ") -> %s>", tmp_buffer);
+            
+            buffer[n] = '\0';
+
+            return cstrn_new(buffer, n);
+        }
+
+        case ORSO_TYPE_TYPE: {
+            OrsoType* type = (OrsoType*)slot.as.p;
+
+            char buffer[128];
+
+            char tmp_buffer[128];
+            orso_type_to_cstrn(type, tmp_buffer, 128);
+
+            sprintf(buffer, "<%s>", tmp_buffer);
+
+            return cstrn_new(buffer, strlen(buffer));
+        }
+        case ORSO_TYPE_UNRESOLVED: return cstrn_new("<unresolved>", 12);
+        case ORSO_TYPE_INVALID: return cstrn_new("<invalid>", 9);
+
+        case ORSO_TYPE_UNION:
+        case ORSO_TYPE_USER:
+        case ORSO_TYPE_MAX: UNREACHABLE(); return NULL;
     }
 }
 
+OrsoString* orso_slot_to_string(OrsoGarbageCollector* gc, OrsoSlot slot, OrsoType* type) {
+    char* cstr = orso_slot_to_new_cstrn(slot, type);
+    OrsoString* string = orso_new_string_from_cstrn(gc, cstr, strlen(cstr));
+    free(cstr);
+
+    return string;
+}
+
 OrsoString* orso_string_concat(OrsoGarbageCollector* gc, OrsoString* a, OrsoString* b) {
-    OrsoString* string = ORSO_OBJECT_ALLOCATE_FLEX(gc, OrsoString, ORSO_TYPE_STRING, a->length + b->length + 1);
+    OrsoString* string = ORSO_OBJECT_ALLOCATE_FLEX(gc, OrsoString, &OrsoTypeString, a->length + b->length + 1);
     string->length = a->length + b->length;
     memcpy(string->text, a->text, a->length);
     memcpy(string->text + a->length, b->text, b->length);
     string->text[a->length + b->length] = '\0';
 
     return string;
+}
+
+OrsoFunction* orso_new_function(OrsoGarbageCollector* gc) {
+    OrsoFunction* function = ORSO_OBJECT_ALLOCATE(gc, OrsoFunction, (OrsoType * const)&OrsoTypeEmptyFunction);
+    function->name = NULL;
+    function->type = &OrsoTypeEmptyFunction;
+    chunk_init(&function->chunk);
+
+    return function;
 }
 
 i64 cstrn_to_i64(const char* text, i32 length) {

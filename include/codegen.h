@@ -3,8 +3,9 @@
 
 #include "parser.h"
 #include "chunk.h"
+#include "type_set.h"
 #include "virtual_machine.h"
 
-bool orso_generate_code(OrsoVM* vm, OrsoAST* ast, Chunk* chunk);
+OrsoFunction* orso_generate_code(OrsoVM* vm, OrsoAST* ast, OrsoTypeSet* type_set);
 
 #endif

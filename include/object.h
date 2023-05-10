@@ -1,13 +1,14 @@
 #ifndef OBJECT_H_
 #define OBJECT_H_
 
+#include "chunk.h"
 #include "def.h"
 #include "type.h"
 #include "garbage_collector.h"
 
 typedef struct OrsoObject {
     OrsoGCHeader gc_header;
-    OrsoTypeKind type_kind;
+    OrsoType* type;
 } OrsoObject;
 
 typedef struct OrsoString {
@@ -23,7 +24,14 @@ typedef struct OrsoSymbol {
     char text[];
 } OrsoSymbol;
 
-void* orso_object_reallocate(OrsoGarbageCollector* gc, OrsoGCHeader* pointer, OrsoTypeKind type_kind, size_t old_size, size_t new_size);
+typedef struct OrsoFunction {
+    OrsoObject object;
+    Chunk chunk;
+    OrsoSymbol* name;
+    OrsoFunctionType const * type;
+} OrsoFunction;
+
+void* orso_object_reallocate(OrsoGarbageCollector* gc, OrsoGCHeader* pointer, OrsoType* type, size_t old_size, size_t new_size);
 void orso_object_free(OrsoGarbageCollector* gc, OrsoObject* pointer);
 
 #define ORSO_OBJECT_ALLOCATE_N(GC, TYPE, ORSO_TYPE, N) (TYPE*)orso_object_reallocate(GC, NULL, ORSO_TYPE, 0, sizeof(TYPE) * N)
@@ -50,9 +58,15 @@ FORCE_INLINE bool orso_string_equal(OrsoString* a, OrsoString* b) {
 
 OrsoString* orso_string_concat(OrsoGarbageCollector* gc, OrsoString* a, OrsoString* b);
 
-OrsoString* orso_slot_to_string(OrsoGarbageCollector* gc, OrsoSlot slot, OrsoTypeKind type_kind);
+// TODO: move to a better file
+char* orso_slot_to_new_cstrn(OrsoSlot slot, OrsoType* type);
+
+OrsoString* orso_slot_to_string(OrsoGarbageCollector* gc, OrsoSlot slot, OrsoType* type);
 
 OrsoString* orso_new_string_from_cstrn(OrsoGarbageCollector* gc, const char* start, i32 length);
+
+OrsoFunction* orso_new_function(OrsoGarbageCollector* gc);
+
 i64 cstrn_to_i64(const char* text, i32 length);
 f64 cstrn_to_f64(const char* text, i32 length);
 

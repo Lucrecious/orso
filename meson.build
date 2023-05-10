@@ -1,6 +1,6 @@
 project('orso', 'c',
   version : '0.1',
-  default_options : ['warning_level=3', 'c_std=c99'])
+  default_options : ['warning_level=3', 'c_std=c99', '-Db_sanitize=address'])
 
 add_global_arguments(['-Wunused-function'], language: 'c')
 
@@ -17,6 +17,8 @@ src = [
   'src/parser.c',
   'src/static_analyzer.c',
   'src/symbol_table.c',
+  'src/type.c',
+  'src/type_set.c',
   'src/virtual_machine.c',
 ]
 
@@ -83,6 +85,14 @@ test_tmp = executable('test_tmp', [src, 'test/tmp.c'],
   include_directories : inc,
   c_args : test_c_args)
 
+test_file_runner = executable('test_file_runner', [src, 'test/test_file_runner.c'],
+  install : false,
+  include_directories : inc,
+  c_args : test_c_args)
+
+
+#configure_file('./test/function_tests.orso', join_paths(meson.current_build_dir(), 'function_tests.orso'), copy: true)
+
 test('test_error', test_error)
 test('test_variable_declaration', test_variable_declaration)
 test('test_assignment', test_assignment)
@@ -91,3 +101,9 @@ test('test_control_flow', test_control_flow)
 test('test_logical_operators', test_logical_operators)
 test('test_loops', test_loops)
 test('test_tmp', test_tmp)
+
+
+test_functions_file = files('test/function_tests.orso')
+test('test_functions', test_file_runner, args: test_functions_file)
+
+

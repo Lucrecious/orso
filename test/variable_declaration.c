@@ -200,7 +200,7 @@ INTERPRETER_TEST(union_explicit,
 
 INTERPRETER_TEST(union_explicit_no_void,
     "x: bool|string = \"true\"; print_expr x;",
-    "x (bool|string) => true\n")
+    "x (string|bool) => true\n")
 
 
 INTERPRETER_TEST(local_union_explicit_default_void,
@@ -213,7 +213,7 @@ INTERPRETER_TEST(local_union_explicit,
 
 INTERPRETER_TEST(local_union_explicit_no_void,
     "{ x: bool|string = \"true\"; print_expr x; };",
-    "x (bool|string) => true\n")
+    "x (string|bool) => true\n")
 
 
 // move to inference file on its own
@@ -323,13 +323,13 @@ INTERPRETER_TEST(memory_leak_issue_with_locals,
     "x (string|void) => hello\n")
 
 
-INTERPRETER_ERROR_TEST(missing_end_semicolin,
+INTERPRETER_ERROR_TEST(missing_end_semicolon,
     "x := 0",
-    ORSO_ERROR_COMPILE, 0, "Error at end: Expect end of declaration semicolin.")
+    ORSO_ERROR_COMPILE, 0, "Error at end: Expect end of declaration semicolon.")
 
 INTERPRETER_ERROR_TEST(missing_bar_between_types,
     "x: string i32;",
-    ORSO_ERROR_COMPILE, 0, "Error at 'i32': Expect end of declaration semicolin.")
+    ORSO_ERROR_COMPILE, 0, "Error at 'i32': Expect end of declaration semicolon.")
 
 INTERPRETER_ERROR_TEST(type_mismatch,
     "x: string = 0;",
@@ -460,7 +460,7 @@ MU_TEST_SUITE(tests) {
     MU_RUN_TEST(concating_strings_concat_in_block);
     MU_RUN_TEST(memory_leak_issue_with_locals);
 
-    MU_RUN_TEST(missing_end_semicolin);
+    MU_RUN_TEST(missing_end_semicolon);
     MU_RUN_TEST(missing_bar_between_types);
     MU_RUN_TEST(type_mismatch);
     MU_RUN_TEST(type_mismatch_union);

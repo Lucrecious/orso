@@ -1,0 +1,170 @@
+## empty
+foo :: () {
+}
+
+print_expr foo;
+# ---
+foo (() -> void) => <foo :: () -> void>
+# ---
+
+## stack-arg
+foo :: (arg: i32) {
+}
+
+print_expr foo;
+# ---
+foo ((i32) -> void) => <foo :: (i32) -> void>
+# ---
+
+## stack-args
+foo :: (arg1: i32, arg2: bool, arg3: void) {
+}
+
+print_expr foo;
+# ---
+foo ((i32,bool,void) -> void) => <foo :: (i32, bool, void) -> void>
+# ---
+
+## stack-return
+foo :: () -> i32 {
+    return 42;
+}
+
+print_expr foo;
+print foo();
+# ---
+foo (() -> i32) => <foo :: () -> i32>
+42
+# ---
+
+## object-arg
+foo :: (arg: string) {
+}
+
+print_expr foo;
+# ---
+foo ((string) -> void) => <foo :: (string) -> void>
+# ---
+
+## object-args
+foo :: (arg1: string, arg2: symbol, arg3: string) {
+}
+
+print_expr foo;
+# ---
+foo ((string,symbol,string) -> void) => <foo :: (string, symbol, string) -> void>
+# ---
+
+
+## object-return
+foo :: () -> string {
+    return "hello world";
+}
+
+print_expr foo;
+print foo();
+# ---
+foo (() -> string) => <foo :: () -> string>
+hello world
+# ---
+
+
+## args
+printn :: (n: i32, text: string) -> void {
+    while n > 0 {
+        print text;
+        n = n - 1;
+    };
+}
+
+print_expr printn;
+printn(3, "foo");
+# ---
+printn ((i32,string) -> void) => <printn :: (i32, string) -> void>
+foo
+foo
+foo
+# ---
+
+
+## args-return
+concatn :: (n: i32, text: string) -> string {
+    textn := "";
+    return while n > 0 {
+        n = n - 1;
+        textn = textn + text;
+    } else {
+        textn;
+    };
+}
+
+print_expr concatn;
+print concatn(3, "foo");
+# ---
+concatn ((i32,string) -> string) => <concatn :: (i32, string) -> string>
+foofoofoo
+# ---
+
+## fib
+fib :: (n: i32) -> i32 {
+    return if n <= 1 {
+        n;
+    } else {
+        fib(n - 1) + fib(n - 2);
+    };
+}
+
+print fib(10);
+# ---
+55
+# ---
+
+## local fib
+{
+    fib :: (n: i32) -> i32 {
+        return if n <= 1 {
+            n;
+        } else {
+            fib(n - 1) + fib(n - 2);
+        };
+    }
+
+    print fib(10);
+};
+# ---
+55
+# ---
+
+## call unnarrowed union
+foo::() -> i32 {
+    return 1;
+}
+
+bar := foo or null;
+
+print bar();
+# ---
+compile error, 6: Cannot call unnarrowed union type.
+# ---
+
+## call nonfunction
+bar := 1;
+
+print bar();
+# ---
+compile error, 2: Cannot call non-function type.
+# ---
+
+
+## call narrowed union
+foo::() -> i32 {
+    return 1;
+}
+
+bar := foo or null;
+bar = foo;
+
+print bar();
+# ---
+1
+# ---

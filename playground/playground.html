@@ -11,25 +11,15 @@
   <div class="code-container">
     <h1 class="title">Orso Interpreter Playground</h1>
     <div class="code-display">
-      <div id="editor">greeting := "hello world";
-print_expr greeting;
+      <div id="editor">fib :: (n: i32) {
+  return if n <= 1 {
+    n;
+  } else {
+    fib(n - 1) + fib(n - 2);
+  };
+}
 
-number_or_null: i32|void;
-print_expr number_or_null;
-
-number_or_null = 42;
-print_expr number_or_null;
-
-meaning_of_life: i32 = number_or_null;
-print_expr meaning_of_life;
-
-leaving := {
-    good := "good";
-    bye := "bye";
-    good + bye;
-};
-
-print_expr leaving;</div>
+print fib(10);</div>
       <div id="output-block"></div>
     </div>
     <button class="button-3" onclick="runCode()" style="width: 100px; height: 50px; margin-left: calc(-70% + 100px);">Run</button>

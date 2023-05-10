@@ -18,6 +18,18 @@ i32 error_buffer_length;
 OrsoErrorType error_type;
 i32 error_line;
 
+void clear_test_buffer(void) {
+    buffer_length = 0;
+    test_buffer[0] = '\0';
+}
+
+void clear_test_error_buffer(void) {
+    error_buffer_length = 0;
+    test_error_buffer[0] = '\0';
+    error_type = -1;
+    error_line = -1;
+}
+
 void write_to_test_buffer(const char* chars) {
     buffer_length += sprintf(test_buffer + buffer_length, "%s", chars);
 }
@@ -26,18 +38,6 @@ void write_to_test_error_buffer(OrsoErrorType type, i32 line, const char* messag
     error_buffer_length += sprintf(test_error_buffer + error_buffer_length, "%s", message);
     error_type = type;
     error_line = line;
-}
-
-void clear_test_buffer() {
-    buffer_length = 0;
-    test_buffer[0] = '\0';
-}
-
-void clear_test_error_buffer() {
-    error_buffer_length = 0;
-    test_error_buffer[0] = '\0';
-    error_type = -1;
-    error_line = -1;
 }
 
 #define INTERPRETER_TEST(NAME, SOURCE, EXPECTED) MU_TEST(NAME) { \

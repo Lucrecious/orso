@@ -58,6 +58,8 @@ typedef enum OrsoOPCode {
     ORSO_OP_JUMP,
     ORSO_OP_LOOP,
 
+    ORSO_OP_CALL,
+
     ORSO_OP_PRINT_EXPR,
     ORSO_OP_PRINT,
 

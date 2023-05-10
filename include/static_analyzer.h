@@ -3,21 +3,21 @@
 
 #include "parser.h"
 #include "common.h"
+#include "type_set.h"
 
-typedef struct OrsoDefinedVariables {
+typedef struct OrsoDeclaredState {
     OrsoSymbolTable scope;
-    struct OrsoDefinedVariables* outer;
-} OrsoDefinedVariables;
+    struct OrsoDeclaredState* outer;
+} OrsoDeclaredState;
 
 typedef struct OrsoStaticAnalyzer {
+    OrsoFunctionDeclarationNode* function;
+
     OrsoErrorFunction error_fn;
     OrsoSymbolTable symbol_to_type;
+    OrsoTypeSet type_set;
 
     OrsoSymbolTable symbols;
-    //OrsoSymbolTable defined_variables;
-
-    OrsoDefinedVariables defined_variables_scopes;
-    OrsoDefinedVariables* defined_variables_bottom_scope;
 
     bool had_error;
     bool panic_mode;

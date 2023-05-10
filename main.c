@@ -20,7 +20,7 @@ void write(const char* chars) {
 
 int main(int argc, char **argv) {
     if (argc < 2) {
-        argv[1] = "script.orso";
+        argv[1] = "/Users/lucrecious/dev/project_orso_lang/script.orso";
     }
 
     FILE* file;

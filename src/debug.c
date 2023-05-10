@@ -3,16 +3,20 @@
 #include <stdio.h>
 
 #include "def.h"
+#include "instructions.h"
+#include "opcodes.h"
 #include "sb.h"
+#include "type_set.h"
+#include "gc.h"
 
 static i32 constant_instruction(const char* name, Chunk* chunk, i32 offset) {
     u32 index = ORSO_u8s_to_u24(chunk->code[offset + 1], chunk->code[offset + 2], chunk->code[offset + 3]);
     printf("%-16s %4d => ", name, index);
     orso_print_slot(chunk->constants[index],
 #ifdef DEBUG_TRACE_EXECUTION
-        chunk->constants[index].type.one
+        chunk->constants[index].type
 #else
-        ORSO_TYPE_UNRESOLVED
+        &OrsoTypeUnresolved
 #endif
     );
     printf("\n");
@@ -35,12 +39,6 @@ static i32 instruction_3arg(const char* name, Chunk* chunk, i32 offset) {
     printf("\n");
 
     return offset + 4;
-}
-
-static i32 put_in_union_instruction(Chunk* chunk, i32 offset) {
-    OrsoTypeKind type_kind = ORSO_u8s_to_TypeKind(chunk->code[offset + 1], chunk->code[offset + 2]);
-    printf("%-16s %s\n", "OP_PUT_IN_UNION", orso_type_kind_to_cstr(type_kind));
-    return offset + 3;
 }
 
 static int jump_instruction(const char* name, int sign, Chunk* chunk, int offset) {
@@ -94,6 +92,7 @@ i32 disassemble_instruction(Chunk* chunk, i32 offset) {
         case ORSO_OP_GREATER_I64: return simple_instruction("OP_GREATER_I64", offset);
         case ORSO_OP_GREATER_F64: return simple_instruction("OP_GREATER_F64", offset);
         case ORSO_OP_EQUAL_STRING: return simple_instruction("OP_EQUAL_STRING", offset);
+        case ORSO_OP_EQUAL_SYMBOL: return simple_instruction("OP_EQUAL_SYMBOL", offset);
         case ORSO_OP_CONSTANT: return constant_instruction("OP_CONSTANT", chunk, offset);
         case ORSO_OP_DEFINE_GLOBAL: return instruction_3arg("OP_DEFINE_GLOBAL", chunk, offset);
         case ORSO_OP_GET_GLOBAL: return instruction_3arg("OP_GET_GLOBAL", chunk, offset);
@@ -112,13 +111,13 @@ i32 disassemble_instruction(Chunk* chunk, i32 offset) {
         case ORSO_OP_JUMP_IF_TRUE: return jump_instruction("OP_JUMP_IF_TRUE", 1, chunk, offset);
         case ORSO_OP_JUMP: return jump_instruction("OP_JUMP", 1, chunk, offset);
         case ORSO_OP_LOOP: return jump_instruction("OP_LOOP", -1, chunk, offset);
-        case ORSO_OP_PUT_IN_UNION: return put_in_union_instruction(chunk, offset);
+        case ORSO_OP_CALL: return simple_instruction("OP_CALL", offset + 2);
+        case ORSO_OP_PUT_IN_UNION: return simple_instruction("OP_PUT_IN_UNION", offset);
         case ORSO_OP_NARROW_UNION: return simple_instruction("OP_NARROW_UNION", offset);
         case ORSO_OP_CONCAT_STRING: return simple_instruction("OP_CONCAT_STRING", offset);
         case ORSO_OP_RETURN: return simple_instruction("OP_RETURN", offset);
         case ORSO_OP_PRINT_EXPR: return simple_instruction("OP_PRINT_EXPR", offset);
         case ORSO_OP_PRINT: return simple_instruction("OP_PRINT", offset);
-        default: return simple_instruction("OP_UNKNOWN", offset);
     }
 }
 

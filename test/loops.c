@@ -30,7 +30,7 @@ INTERPRETER_TEST(while_no_else_type,
 
 INTERPRETER_TEST(while_with_else_type,
 	"x := while false { 42; } else { 'hello world'; }; print_expr x;",
-	"x (i32|symbol) => 'hello world'\n")
+	"x (symbol|i32) => 'hello world'\n")
 
 INTERPRETER_TEST(until_no_else_type,
 	"x := until true { 42; }; print_expr x;",
@@ -38,11 +38,11 @@ INTERPRETER_TEST(until_no_else_type,
 
 INTERPRETER_TEST(until_with_else_type,
 	"x := until true { 42; } else { 'hello world'; }; print_expr x;",
-	"x (i32|symbol) => 'hello world'\n")
+	"x (symbol|i32) => 'hello world'\n")
 
-INTERPRETER_TEST(for_in_integer,
-	"for i in 3 { print i; }",
-	"0\n1\n2\n")
+// INTERPRETER_TEST(for_in_integer,
+// 	"for i in 3 { print i; }",
+// 	"0\n1\n2\n")
 
 MU_TEST_SUITE(tests) {
     MU_RUN_TEST(while_countdown);

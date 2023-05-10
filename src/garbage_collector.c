@@ -88,6 +88,16 @@ static void visit(OrsoGarbageCollector* gc, OrsoGCHeader* object) {
 
 static void mark_roots(OrsoGarbageCollector* gc) {
     OrsoVM* vm = gc->vm;
+
+    for (i32 i = 0; i < sb_count(vm->object_hooks); i++) {
+        OrsoVMHook* hook = &vm->object_hooks[i];
+        if (!hook->is_object) {
+            continue;
+        }
+
+        visit(gc, (OrsoGCHeader*)hook->value.hook);
+    }
+
     for (OrsoGCValueIndex* index = vm->object_stack; index < vm->object_stack_top; index++) {
         if (!index->is_object) {
             continue;
@@ -126,13 +136,33 @@ static void mark_roots(OrsoGarbageCollector* gc) {
         visit(gc, (OrsoGCHeader*)vm->globals.values[index.index].as.p);
     }
 
-    if (vm->chunk) {
-        u32* constant_offsets = vm->chunk->constant_object_offsets;
-        for (i32 i = 0; i < sb_count(constant_offsets); i++) {
-            u32 offset = constant_offsets[i];
-            OrsoSlot* slot = &vm->chunk->constants[offset];
-            visit(gc, (OrsoGCHeader*)slot->as.p);
+    for (i32 i = 0; i < vm->frame_count; i++) {
+        CallFrame* frame = &vm->frames[i];
+        visit(gc, (OrsoGCHeader*)frame->function);
+    }
+}
+
+static void mark_reachable(OrsoGarbageCollector* gc, OrsoObject* root) {
+    switch (root->type->kind) {
+        case ORSO_TYPE_FUNCTION: {
+                OrsoFunction* function = (OrsoFunction*)root;
+
+                if (function->name) {
+                    visit(gc, (OrsoGCHeader*)function->name);
+                }
+
+                u32* constant_offsets = function->chunk.constant_object_offsets;
+                for (i32 j = 0; j < sb_count(constant_offsets); j++) {
+                    u32 offset = constant_offsets[j];
+                    OrsoSlot* slot = &function->chunk.constants[offset];
+                    visit(gc, (OrsoGCHeader*)slot->as.p);
+                }
+            break;
         }
+        case ORSO_TYPE_STRING:
+        case ORSO_TYPE_SYMBOL: break;
+
+        default: UNREACHABLE();
     }
 }
 
@@ -153,7 +183,7 @@ void orso_gc_step(OrsoGarbageCollector* gc) {
                 gc->iterator = object;
                 set_color(gc->iterator, !white);
 
-                //mark_reachable(gc, object);
+                mark_reachable(gc, (OrsoObject*)object);
             } else {
                 mark_roots(gc);
 
@@ -185,7 +215,7 @@ void orso_gc_step(OrsoGarbageCollector* gc) {
             if ((OrsoGCHeader*)object != gc->to) {
                 gc->iterator = next((OrsoGCHeader*)object);
 
-                switch (object->type_kind) {
+                switch (object->type->kind) {
                     case ORSO_TYPE_SYMBOL: orso_symbol_table_remove(&gc->vm->symbols, (OrsoSymbol*)object); break;
                     default: break; // Fast if I guess
                 }
