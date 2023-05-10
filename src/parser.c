@@ -134,16 +134,6 @@ static void orso_free_expression(OrsoExpressionNode* expression) {
             expression->expr.ifelse.else_ = NULL;
             break;
         }
-        case EXPRESSION_WHILE: {
-            orso_free_expression(expression->expr.while_.condition);
-            free(expression->expr.ifelse.condition);
-            expression->expr.ifelse.condition = NULL;
-
-            orso_free_expression(expression->expr.while_.loop);
-            free(expression->expr.while_.loop);
-            expression->expr.while_.loop = NULL;
-            break;
-        }
         case EXPRESSION_NONE: {
             break;
         }
@@ -437,9 +427,14 @@ static OrsoExpressionNode* ifelse(Parser* parser) {
     expression_node->type = EXPRESSION_IFELSE;
     expression_node->start = parser->previous;
 
-    expression_node->expr.ifelse.is_unless = false;
-    if (parser->previous.type == TOKEN_UNLESS) {
-        expression_node->expr.ifelse.is_unless = true;
+    expression_node->expr.ifelse.is_negated = false;
+    if (parser->previous.type == TOKEN_UNLESS || parser->previous.type == TOKEN_UNTIL) {
+        expression_node->expr.ifelse.is_negated = true;
+    }
+
+    expression_node->expr.ifelse.loop_block = false;
+    if (parser->previous.type == TOKEN_WHILE || parser->previous.type == TOKEN_UNTIL) {
+        expression_node->expr.ifelse.loop_block = true;
     }
 
     expression_node->expr.ifelse.condition = expression(parser);
@@ -453,7 +448,8 @@ static OrsoExpressionNode* ifelse(Parser* parser) {
         return expression_node;
     }
 
-    if (match(parser, TOKEN_IF) || match(parser, TOKEN_UNLESS)) {
+    if (match(parser, TOKEN_IF) || match(parser, TOKEN_UNLESS) ||
+        match(parser, TOKEN_WHILE) || match(parser, TOKEN_UNTIL)) {
         expression_node->expr.ifelse.else_ = ifelse(parser);
         return expression_node;
     }
@@ -461,26 +457,6 @@ static OrsoExpressionNode* ifelse(Parser* parser) {
     consume(parser, TOKEN_BRACE_OPEN, "Expect '{' after else.");
 
     expression_node->expr.ifelse.else_ = block(parser);
-
-    return expression_node;
-}
-
-static OrsoExpressionNode* while_(Parser* parser) {
-    OrsoExpressionNode* expression_node = ORSO_ALLOCATE(OrsoExpressionNode);
-    expression_node->value_type = ORSO_TYPE_ONE(ORSO_TYPE_UNRESOLVED);
-    expression_node->type = EXPRESSION_WHILE;
-    expression_node->start = parser->previous;
-
-    expression_node->expr.while_.is_until = false;
-    if (parser->previous.type == TOKEN_UNTIL) {
-        expression_node->expr.while_.is_until = true;
-    }
-
-    expression_node->expr.while_.condition = expression(parser);
-
-    consume(parser, TOKEN_BRACE_OPEN, "Expect { after condition.");
-
-    expression_node->expr.while_.loop = block(parser);
 
     return expression_node;
 }
@@ -575,9 +551,9 @@ ParseRule rules[] = {
     [TOKEN_OR]                      = { NULL,       binary,     PREC_OR },
     [TOKEN_IF]                      = { ifelse,     NULL,       PREC_NONE },
     [TOKEN_UNLESS]                  = { ifelse,     NULL,       PREC_NONE },
-    [TOKEN_WHILE]                   = { while_,     NULL,       PREC_NONE },
-    [TOKEN_UNTIL]                   = { while_,     NULL,       PREC_NONE },
-    [TOKEN_FOR]                     = { NULL,     NULL,         PREC_NONE },
+    [TOKEN_WHILE]                   = { ifelse,     NULL,       PREC_NONE },
+    [TOKEN_UNTIL]                   = { ifelse,     NULL,       PREC_NONE },
+    [TOKEN_FOR]                     = { NULL,       NULL,       PREC_NONE },
     [TOKEN_ELSE]                    = { NULL,       NULL,       PREC_NONE },
     [TOKEN_TRUE]                    = { literal,    NULL,       PREC_NONE },
     [TOKEN_FALSE]                   = { literal,    NULL,       PREC_NONE },
@@ -811,20 +787,13 @@ void ast_print_expression(OrsoExpressionNode* expression, i32 initial) {
         }
         case EXPRESSION_IFELSE: {
             OrsoExpressionNode* condition = expression->expr.ifelse.condition;
-            printf("IFELSE - %.*s\n", (i32)(condition->end.start + condition->end.length - condition->start.start), condition->start.start);
+            printf("IFWHILEELSE - %.*s\n", (i32)(condition->end.start + condition->end.length - condition->start.start), condition->start.start);
             ast_print_expression(expression->expr.ifelse.then, initial + 1);
             if (expression->expr.ifelse.else_) {
                 ast_print_expression(expression->expr.ifelse.else_, initial + 1);
             }
             break;
         }
-        case EXPRESSION_WHILE: {
-            OrsoExpressionNode* condition = expression->expr.while_.condition;
-            printf("WHILE - %.*s\n", (i32)(condition->end.start + condition->end.length - condition->start.start), condition->start.start);
-            ast_print_expression(expression->expr.while_.loop, initial + 1);
-            break;
-        }
-
         default:
             UNREACHABLE();
     }

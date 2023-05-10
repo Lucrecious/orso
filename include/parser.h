@@ -18,7 +18,6 @@ typedef enum ExpressionType {
     EXPRESSION_ASSIGNMENT,
     EXPRESSION_BLOCK,
     EXPRESSION_IFELSE,
-    EXPRESSION_WHILE,
     EXPRESSION_FOR,
 } ExpressionType;
 
@@ -77,17 +76,12 @@ typedef struct OrsoBlock {
 } OrsoBlock;
 
 typedef struct OrsoIfElse {
-    bool is_unless;
+    bool is_negated;
+    bool loop_block;
     OrsoExpressionNode* condition;
     OrsoExpressionNode* then;
     OrsoExpressionNode* else_;
 } OrsoIfElse;
-
-typedef struct OrsoWhile {
-    bool is_until;
-    OrsoExpressionNode* condition;
-    OrsoExpressionNode* loop;
-} OrsoWhile;
 
 struct OrsoExpressionNode {
     Token start;
@@ -105,7 +99,6 @@ struct OrsoExpressionNode {
         OrsoAssignment assignment;
         OrsoBlock block;
         OrsoIfElse ifelse;
-        OrsoWhile while_;
     } expr;
 };
 

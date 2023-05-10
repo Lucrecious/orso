@@ -809,12 +809,18 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoExpressionNode* expre
         }
         
         case EXPRESSION_IFELSE: {
-            OrsoExpressionNode* condition = expression_node->expr.ifelse.condition;
+            if (expression_node->expr.ifelse.loop_block) {
+                emit_instruction(ORSO_OP_PUSH_0, compiler, chunk, expression_node->start.line);
+                emit_storage_type_convert(compiler, chunk, ORSO_TYPE_ONE(ORSO_TYPE_NULL), expression_node->value_type, expression_node->start.line);
+            }
 
+            u32 position_before_condition_evaluation = sb_count(chunk->code);
+
+            OrsoExpressionNode* condition = expression_node->expr.ifelse.condition;
             expression(vm, compiler, condition, chunk);
 
             OrsoOPCode jump_instruction = ORSO_OP_JUMP_IF_FALSE;
-            if (expression_node->expr.ifelse.is_unless) {
+            if (expression_node->expr.ifelse.is_negated) {
                 jump_instruction = ORSO_OP_JUMP_IF_TRUE;
             }
 
@@ -828,12 +834,18 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoExpressionNode* expre
             i32 object_stack_count = compiler->current_object_stack_size;
 
             emit_pop(compiler, chunk, condition->value_type, condition->end.line);
+            if (expression_node->expr.ifelse.loop_block) {
+                emit_pop(compiler, chunk, expression_node->value_type, condition->start.line);
+            }
 
             expression(vm, compiler, expression_node->expr.ifelse.then, chunk);
-
             emit_storage_type_convert(compiler, chunk,
                     expression_node->expr.ifelse.then->value_type, expression_node->value_type,
                     expression_node->expr.ifelse.then->end.line);
+
+            if (expression_node->expr.ifelse.loop_block) {
+                emit_loop(compiler, chunk, expression_node->expr.ifelse.then->end.line, position_before_condition_evaluation);
+            }
 
             i32 else_jump = emit_jump(ORSO_OP_JUMP, compiler, chunk, expression_node->expr.ifelse.then->end.line);
 
@@ -852,6 +864,9 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoExpressionNode* expre
             compiler->current_object_stack_size = object_stack_count;
 
             emit_pop(compiler, chunk, condition->value_type, condition->end.line);
+            if (expression_node->expr.ifelse.loop_block) {
+                emit_pop(compiler, chunk, expression_node->value_type, expression_node->expr.ifelse.then->end.line);
+            }
 
             if (expression_node->expr.ifelse.else_) {
                 expression(vm, compiler, expression_node->expr.ifelse.else_, chunk);
@@ -874,39 +889,38 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoExpressionNode* expre
 
             break;
         }
-        case EXPRESSION_WHILE: {
-            emit_instruction(ORSO_OP_PUSH_0, compiler, chunk, expression_node->start.line);
-            emit_storage_type_convert(compiler, chunk, ORSO_TYPE_ONE(ORSO_TYPE_NULL), expression_node->value_type, expression_node->start.line);
+        // case EXPRESSION_WHILE: {
+            // emit_instruction(ORSO_OP_PUSH_0, compiler, chunk, expression_node->start.line);
+            // emit_storage_type_convert(compiler, chunk, ORSO_TYPE_ONE(ORSO_TYPE_NULL), expression_node->value_type, expression_node->start.line);
 
-            u32 loop_start = sb_count(chunk->code);
+            // u32 loop_start = sb_count(chunk->code);
 
-            OrsoExpressionNode* condition = expression_node->expr.while_.condition;
+            // OrsoExpressionNode* condition = expression_node->expr.while_.condition;
 
-            expression(vm, compiler, condition, chunk);
+            // expression(vm, compiler, condition, chunk);
 
-            OrsoOPCode jump_instruction = ORSO_OP_JUMP_IF_FALSE;
-            if (expression_node->expr.while_.is_until) {
-                jump_instruction = ORSO_OP_JUMP_IF_TRUE;
-            }
+            // OrsoOPCode jump_instruction = ORSO_OP_JUMP_IF_FALSE;
+            // if (expression_node->expr.while_.is_until) {
+            //     jump_instruction = ORSO_OP_JUMP_IF_TRUE;
+            // }
 
-            i32 exit_jump = emit_jump(jump_instruction, compiler, chunk, condition->end.line);
+            // i32 exit_jump = emit_jump(jump_instruction, compiler, chunk, condition->end.line);
 
-            emit_pop(compiler, chunk, condition->value_type, condition->end.line);
+            // emit_pop(compiler, chunk, condition->value_type, condition->end.line);
+            // emit_pop(compiler, chunk, expression_node->value_type, condition->end.line);
 
-            emit_pop(compiler, chunk, expression_node->value_type, condition->start.line);
+            // expression(vm, compiler, expression_node->expr.while_.loop, chunk);
+            // emit_storage_type_convert(compiler, chunk,
+            //         expression_node->expr.while_.loop->value_type, expression_node->value_type, expression_node->end.line);
 
-            expression(vm, compiler, expression_node->expr.while_.loop, chunk);
-            emit_storage_type_convert(compiler, chunk,
-                    expression_node->expr.while_.loop->value_type, expression_node->value_type, expression_node->end.line);
+            // emit_loop(compiler, chunk, expression_node->end.line, loop_start);
 
-            emit_loop(compiler, chunk, expression_node->end.line, loop_start);
+            // patch_jump(chunk, exit_jump);
 
-            patch_jump(chunk, exit_jump);
+            // emit_pop(compiler, chunk, condition->value_type, expression_node->end.line);
 
-            emit_pop(compiler, chunk, condition->value_type, expression_node->end.line);
-
-            break;
-        }
+            // break;
+        // }
 
         default:
             UNREACHABLE();

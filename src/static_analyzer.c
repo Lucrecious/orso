@@ -470,28 +470,6 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, TypeInferences* type_
             );
             break;
         }
-        case EXPRESSION_WHILE: {
-            orso_resolve_expression(analyzer, type_inferences, expression->expr.while_.condition);
-
-            TypeInferences* while_inferences = copy_type_inferences(type_inferences);
-
-            orso_resolve_expression(analyzer, while_inferences, expression->expr.while_.loop);
-
-            // TODO: possible else clause
-            TypeInferences* exit_inferences = copy_type_inferences(type_inferences);
-
-            merge_type_inferences(type_inferences, while_inferences, exit_inferences);
-
-            free_type_inferences_on_heap(while_inferences);
-            free_type_inferences_on_heap(exit_inferences);
-
-            OrsoType exit_type = ORSO_TYPE_ONE(ORSO_TYPE_NULL);
-
-            expression->value_type = orso_type_merge(expression->expr.while_.loop->value_type, exit_type);
-            expression->narrowed_value_type = expression->value_type;
-            break;
-        }
-
         default: UNREACHABLE();
     }
 }
