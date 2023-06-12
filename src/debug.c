@@ -7,7 +7,6 @@
 #include "opcodes.h"
 #include "sb.h"
 #include "type_set.h"
-#include "gc.h"
 
 static i32 constant_instruction(const char* name, Chunk* chunk, i32 offset) {
     u32 index = ORSO_u8s_to_u24(chunk->code[offset + 1], chunk->code[offset + 2], chunk->code[offset + 3]);

@@ -9,6 +9,8 @@ emcc src/wasm.c \
      src/parser.c \
      src/static_analyzer.c \
      src/symbol_table.c \
+     src/type.c \
+     src/type_set.c \
      src/virtual_machine.c \
      -I include \
      -s WASM=1 \
