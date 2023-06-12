@@ -45,7 +45,7 @@ ace.define("ace/mode/orso_highlighting_rules", ["require", "exports", "module", 
           regex: "==|=|!=|<=|>=|<|>"
         }, {
           token: "punctuation.operator",
-          regex: "\\:|\\;|\\|"
+          regex: "\\:|\\;|\\|\\-\\>"
         }, {
           token: "paren.lparen",
           regex: "[({]"
