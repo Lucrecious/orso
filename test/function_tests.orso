@@ -168,3 +168,15 @@ print bar();
 # ---
 1
 # ---
+
+## union parameters
+foo :: (a: string|void) {
+    print a;
+}
+
+foo("hello world");
+foo(null);
+# ---
+hello world
+null
+# ---
