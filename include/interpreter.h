@@ -3,16 +3,13 @@
 
 #include "static_analyzer.h"
 #include "virtual_machine.h"
+#include "codegen.h"
 
-typedef struct OrsoInterpreter {
-    OrsoStaticAnalyzer static_analyzer;
-    OrsoVM vm;
-    OrsoErrorFunction error_fn;
-} OrsoInterpreter;
+OrsoFunction* orso_compile_ast(OrsoVM* vm, OrsoAST* ast);
 
-void orso_interpreter_init(OrsoInterpreter* interpreter, OrsoWriteFunction write_fn, OrsoErrorFunction error_fn);
-void orso_interpreter_free(OrsoInterpreter* interpreter);
+// leaves return value on the stack and returns its stack position (since it can be any size)
+OrsoSlot* orso_call_function(OrsoVM* vm, OrsoFunction* function, OrsoErrorFunction error_fn);
 
-void orso_interpreter_run(OrsoInterpreter* interpreter, const char* source);
+void orso_run_source(OrsoVM* vm, const char* source, OrsoErrorFunction error_fn);
 
 #endif

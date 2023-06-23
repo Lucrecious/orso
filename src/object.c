@@ -6,6 +6,7 @@
 
 void* orso_object_reallocate(OrsoGarbageCollector* gc, OrsoGCHeader* pointer, OrsoType* type, size_t old_size, size_t new_size) {
     (void)old_size;
+    (void)gc; // TODO: repalce gc with free/alloc and use ref counting for things I want to be considered "value" types
 
     if (new_size == 0) {
         // Should only be here when called by GC
@@ -14,7 +15,7 @@ void* orso_object_reallocate(OrsoGarbageCollector* gc, OrsoGCHeader* pointer, Or
     }
 
 #ifdef DEBUG_GC_STRESS
-    orso_gc_collect(gc);
+    //orso_gc_collect(gc);
 #endif
 
     OrsoObject* result = realloc(pointer, new_size);
@@ -29,7 +30,7 @@ void* orso_object_reallocate(OrsoGarbageCollector* gc, OrsoGCHeader* pointer, Or
     printf("%p allocate %zu for %s\n", (void*)result, new_size, tmp_buffer);
 #endif
 
-    orso_gc_register(gc, (OrsoGCHeader*)result);
+    //orso_gc_register(gc, (OrsoGCHeader*)result);
 
     return result;
 }
@@ -124,13 +125,8 @@ char* orso_slot_to_new_cstrn(OrsoSlot slot, OrsoType* type) {
 
         case ORSO_TYPE_FUNCTION: {
             OrsoFunction* function = (OrsoFunction*)slot.as.p;
-            if (function->name == NULL) {
-                char* script_name = "<_ :: ()>";
-                return cstrn_new(script_name, strlen(script_name));
-            }
-
             char buffer[500];
-            i32 n = sprintf(buffer, "<%s :: (", function->name->text);
+            i32 n = sprintf(buffer, "<(");
 
             char tmp_buffer[128];
             for (i32 i = 0; i < function->type->argument_count; i++) {
@@ -189,7 +185,6 @@ OrsoString* orso_string_concat(OrsoGarbageCollector* gc, OrsoString* a, OrsoStri
 
 OrsoFunction* orso_new_function(OrsoGarbageCollector* gc) {
     OrsoFunction* function = ORSO_OBJECT_ALLOCATE(gc, OrsoFunction, (OrsoType * const)&OrsoTypeEmptyFunction);
-    function->name = NULL;
     function->type = &OrsoTypeEmptyFunction;
     chunk_init(&function->chunk);
 

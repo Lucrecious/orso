@@ -102,8 +102,7 @@ test('test_logical_operators', test_logical_operators)
 test('test_loops', test_loops)
 test('test_tmp', test_tmp)
 
-
-test_functions_file = files('test/function_tests.orso')
-test('test_functions', test_file_runner, args: test_functions_file)
+test('test_functions', test_file_runner, args: files('test/functions.orso'))
+test('test_compile_time_evaluation', test_file_runner, args: files('test/compile_time_evaluation.orso'))
 
 

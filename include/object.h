@@ -27,8 +27,7 @@ typedef struct OrsoSymbol {
 typedef struct OrsoFunction {
     OrsoObject object;
     Chunk chunk;
-    OrsoSymbol* name;
-    OrsoFunctionType const * type;
+    OrsoFunctionType* type;
 } OrsoFunction;
 
 void* orso_object_reallocate(OrsoGarbageCollector* gc, OrsoGCHeader* pointer, OrsoType* type, size_t old_size, size_t new_size);

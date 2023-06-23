@@ -6,78 +6,74 @@
 
 #include <stdio.h>
 
-void orso_interpreter_init(OrsoInterpreter* interpreter, OrsoWriteFunction write_fn, OrsoErrorFunction error_fn) {
-    orso_vm_init(&interpreter->vm, write_fn);
-    orso_static_analyzer_init(&interpreter->static_analyzer, error_fn);
-    interpreter->error_fn = error_fn;
+OrsoSlot* orso_call_function(OrsoVM* vm, OrsoFunction* function, OrsoErrorFunction error_fn) {
+    orso_vm_push_object(vm, (OrsoObject*)function);
+    orso_vm_call(vm, function);
+
+    orso_vm_interpret(vm, error_fn);
+
+    // skip the function local and land on the return type
+    // caller is responsible for knowing the type of the return value
+    return vm->stack + 1;
 }
 
-void orso_interpreter_free(OrsoInterpreter* interpreter) {
-    orso_vm_free(&interpreter->vm);
-    orso_static_analyzer_free(&interpreter->static_analyzer);
-    interpreter->error_fn = NULL;
-}
+OrsoFunction* orso_compile_ast(OrsoVM* vm, OrsoAST* ast) {
+    ASSERT(ast->resolved, "must be resolved");
 
-static OrsoFunction* compile(const char* source, OrsoVM* vm, OrsoStaticAnalyzer* analyzer, OrsoErrorFunction error_fn) {
-    OrsoAST ast;
-    orso_ast_init(&ast);
-
-    analyzer->panic_mode = false;
-
-    if (!orso_parse(&ast, source, error_fn)) {
-        orso_ast_free(&ast);
-        return NULL;
-    }
-
-#ifdef DEBUG_PRINT
-    orso_ast_print(&ast, "unresolved");
-#endif
-
-    bool resolved = orso_resolve_ast_types(analyzer, &ast);
-
-#ifdef DEBUG_PRINT
-    orso_ast_print(&ast, "resolved");
-#endif
-
-    OrsoFunction* main_function = NULL;
-    if (resolved) {
-        main_function = orso_generate_code(vm, &ast, &analyzer->type_set);
-    }
-
-    orso_ast_free(&ast);
+    OrsoFunction* main_function = orso_generate_code(vm, ast);
 
     return main_function;
 }
 
-static void interpret_continuous(OrsoVM* vm, OrsoStaticAnalyzer* analyzer, const char* source, OrsoErrorFunction error_fn) {
-    OrsoFunction* main_function = compile(source, vm, analyzer, error_fn);
+void orso_run_source(OrsoVM* vm, const char* source, OrsoErrorFunction error_fn) {
+    OrsoStaticAnalyzer analyzer;
+    orso_static_analyzer_init(&analyzer, vm->write_fn, error_fn);
 
-    if (!main_function) {
-        analyzer->had_error = false;
+    OrsoAST ast;
+    orso_ast_init(&ast);
+
+    if (!orso_parse(&ast, source, error_fn)) {
+        orso_ast_free(&ast);
         return;
     }
 
-    vm->stack = ORSO_ALLOCATE_N(OrsoSlot, 256);
+    #ifdef DEBUG_PRINT
+        orso_ast_print(&ast, "unresolved");
+    #endif
+
+    bool resolved = orso_resolve_ast(&analyzer, &ast);
+    if (!resolved) {
+        orso_ast_free(&ast);
+        return;
+    }
+
+    #ifdef DEBUG_PRINT
+        orso_ast_print(&ast, "resolved");
+    #endif
+
+
+    OrsoFunction* main_function = orso_compile_ast(vm, &ast);
+
+    orso_ast_free(&ast);
+
+    if (!main_function) {
+        analyzer.had_error = false;
+        return;
+    }
+
+    OrsoSlot stack_slots[256];
+    vm->stack = stack_slots;
     vm->stack_top = vm->stack;
 
-    vm->object_stack = ORSO_ALLOCATE_N(OrsoGCValueIndex, 256);
+    OrsoGCValueIndex value_indices[256];
+    vm->object_stack = value_indices;
     vm->object_stack_top = vm->object_stack;
 
-    orso_vm_push_object(vm, (OrsoObject*)main_function);
-    orso_vm_call(vm, main_function);
+    orso_call_function(vm, main_function, error_fn);
 
-    orso_vm_interpret(vm, error_fn);
-
-    free(vm->stack);
     vm->stack = NULL;
-
-    free(vm->object_stack);
     vm->object_stack = NULL;
     
     vm->stack_top = NULL;
     vm->object_stack_top = NULL;
-}
-
-void orso_interpreter_run(OrsoInterpreter* interpreter, const char* source) {
-    interpret_continuous(&interpreter->vm, &interpreter->static_analyzer, source, interpreter->error_fn);
 }

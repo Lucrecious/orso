@@ -4,29 +4,30 @@
 #include "parser.h"
 #include "common.h"
 #include "type_set.h"
+#include "virtual_machine.h"
 
-typedef struct OrsoDeclaredState {
-    OrsoSymbolTable scope;
-    struct OrsoDeclaredState* outer;
-} OrsoDeclaredState;
+typedef struct OrsoScope {
+    OrsoExpressionNode* creator;
+    OrsoSymbolTable named_entities;
+    struct OrsoScope* outer;
+} OrsoScope;
+
+struct OrsoInterpreter;
 
 typedef struct OrsoStaticAnalyzer {
-    OrsoFunctionDeclarationNode* function;
+    OrsoVM evaluator;
 
     OrsoErrorFunction error_fn;
-    OrsoSymbolTable symbol_to_type;
-    OrsoTypeSet type_set;
-
     OrsoSymbolTable symbols;
 
     bool had_error;
     bool panic_mode;
 } OrsoStaticAnalyzer;
 
-void orso_static_analyzer_init(OrsoStaticAnalyzer* analyzer, OrsoErrorFunction error_fn);
+void orso_static_analyzer_init(OrsoStaticAnalyzer* analyzer, OrsoWriteFunction write_fn, OrsoErrorFunction error_fn);
 void orso_static_analyzer_free(OrsoStaticAnalyzer* analyzer);
 
-bool orso_resolve_ast_types(OrsoStaticAnalyzer* analyzer, OrsoAST* ast);
+bool orso_resolve_ast(OrsoStaticAnalyzer* analyzer, OrsoAST* ast);
 
 
 #endif

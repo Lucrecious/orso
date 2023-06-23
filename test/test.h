@@ -41,20 +41,20 @@ void write_to_test_error_buffer(OrsoErrorType type, i32 line, const char* messag
 }
 
 #define INTERPRETER_TEST(NAME, SOURCE, EXPECTED) MU_TEST(NAME) { \
-    OrsoInterpreter test_interpreter; \
     clear_test_buffer(); \
-    orso_interpreter_init(&test_interpreter, write_to_test_buffer, NULL); \
-    orso_interpreter_run(&test_interpreter, SOURCE); \
-    orso_interpreter_free(&test_interpreter); \
+    OrsoVM vm; \
+    orso_vm_init(&vm, write_to_test_buffer); \
+    orso_run_source(&vm, SOURCE, NULL); \
+    orso_vm_free(&vm); \
     MU_ASSERT_STRING_EQ(EXPECTED, test_buffer); \
 }
 
 #define INTERPRETER_ERROR_TEST(NAME, SOURCE, ERROR_TYPE, LINE, MESSAGE) MU_TEST(NAME) { \
-    OrsoInterpreter test_interpreter; \
     clear_test_error_buffer(); \
-    orso_interpreter_init(&test_interpreter, NULL, write_to_test_error_buffer); \
-    orso_interpreter_run(&test_interpreter, SOURCE); \
-    orso_interpreter_free(&test_interpreter); \
+    OrsoVM vm; \
+    orso_vm_init(&vm, NULL); \
+    orso_run_source(&vm, SOURCE, write_to_test_error_buffer); \
+    orso_vm_free(&vm); \
     MU_ASSERT_STRING_EQ(MESSAGE, test_error_buffer); \
     MU_ASSERT_INT_EQ(ERROR_TYPE, error_type); \
     MU_ASSERT_INT_EQ(LINE, error_line) ;\

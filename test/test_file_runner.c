@@ -97,13 +97,16 @@ void parse_tests(const char* filename, Test* tests, int* numTests) {
     *numTests = current_test + 1;
 }
 
-bool run_test(OrsoInterpreter* interpreter, Test* test) {
-    orso_interpreter_init(interpreter, write_to_test_buffer, write_to_test_error_buffer);
-
+bool run_test(Test* test) {
     char* source = test->code;
-    orso_interpreter_run(interpreter, source);
 
-    orso_interpreter_free(interpreter);
+    OrsoVM vm;
+    orso_vm_init(&vm, write_to_test_buffer);
+
+    orso_run_source(&vm, source, write_to_test_error_buffer);
+
+    orso_vm_free(&vm);
+
 
     char* expected = test->expected;
     size_t expected_length = strlen(expected);
@@ -131,11 +134,10 @@ int main(int argc, char** argv) {
 
     bool test_failed = false;
 
-    OrsoInterpreter interpreter;
     for (i32 i = 0; i < test_count; i++) {
         clear_test_buffer();
 
-        bool passed = run_test(&interpreter, &tests[i]);
+        bool passed = run_test(&tests[i]);
 
         if (!passed) {
             printf("Test '%s' failed.\nExpected:\n%sActual:\n%.*s\n\n", tests[i].name, tests[i].expected, buffer_length, test_buffer);

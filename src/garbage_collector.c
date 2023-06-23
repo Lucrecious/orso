@@ -147,10 +147,6 @@ static void mark_reachable(OrsoGarbageCollector* gc, OrsoObject* root) {
         case ORSO_TYPE_FUNCTION: {
                 OrsoFunction* function = (OrsoFunction*)root;
 
-                if (function->name) {
-                    visit(gc, (OrsoGCHeader*)function->name);
-                }
-
                 u32* constant_offsets = function->chunk.constant_object_offsets;
                 for (i32 j = 0; j < sb_count(constant_offsets); j++) {
                     u32 offset = constant_offsets[j];

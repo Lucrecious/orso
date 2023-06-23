@@ -1,0 +1,154 @@
+## ordered assign - TODO: Redo syntax for tests to make them clearer
+A :: 10;
+B :: A;
+
+print B;
+# ---
+10
+# ---
+
+## unordered assign
+A :: B;
+B :: 10;
+
+print A;
+# ---
+10
+# ---
+
+## simple recursive dependency
+A :: B;
+B :: A;
+
+print A;
+# ---
+Cannot resolve A since it requires recursive definition A -> B -> A
+# ---
+
+
+## skip non-constant declarations in blocks
+A :: 10;
+
+{
+    A := 5;
+    {
+        B :: A;
+        print B;
+    };
+};
+# ---
+10
+# ---
+
+
+## error for trying to set a constant by a mutable entity
+A := 10;
+
+{
+    A := 5;
+    {
+        B :: A;
+        print B;
+    };
+};
+# ---
+Cannot resolve B. A constant A is not declared in the scope or higher scope.
+# ---
+
+
+## Access local mutables within function
+{
+    foo :: () {
+        A := 5;
+        {
+            B := A;
+            print B;
+        };
+    };
+};
+# ---
+5
+# ---
+
+
+## Cannot access local mutables outside function
+{
+    A := 5;
+    foo :: () {
+        {
+            B := A;
+            print B;
+        };
+    };
+};
+# ---
+Error undeclared entity A.
+# ---
+
+
+## Access global mutables outside function
+A := 5;
+
+{
+    foo :: () {
+        {
+            B := A;
+            print B;
+        };
+    };
+};
+# ---
+5
+# ---
+
+
+## Cannot set inner constant through global mutable entity
+A := 5;
+
+{
+    foo :: () {
+        {
+            B :: A;
+            print B;
+        };
+    };
+};
+# ---
+Cannot use global mutable A to resolve local constant B.
+# ---
+
+
+## partial struct required
+
+A :: struct {
+    x := #compile B().a;
+    y := "foo";
+};
+
+B :: struct {
+    a := 42;
+    b := #compile A().y;
+};
+
+print A().x;
+# ---
+42
+# ---
+
+
+## partial struct required 2
+
+Foo :: struct {
+    X :: Bar.A;
+    Y :: "foo";
+};
+
+Bar :: struct {
+    A :: 42;
+    B :: A.Y;
+};
+
+print A.X;
+# ---
+42
+# ---

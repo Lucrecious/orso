@@ -11,7 +11,7 @@
 typedef enum OrsoTypeNodeType {
     ORSO_TYPE_NODE_TYPE_UNION,
     ORSO_TYPE_NODE_TYPE_FUNCTION,
-    ORSO_TYPE_NODE_TYPE_PRIMITIVE,
+    ORSO_TYPE_NODE_TYPE_IDENTIFIER,
 } OrsoTypeNodeType;
 
 typedef enum OrsoExpressionType {
@@ -22,18 +22,20 @@ typedef enum OrsoExpressionType {
     EXPRESSION_GROUPING,
     EXPRESSION_CALL,
     EXPRESSION_PRIMARY,
-    EXPRESSION_VARIABLE,
+    EXPRESSION_ENTITY,
     EXPRESSION_ASSIGNMENT,
     EXPRESSION_BLOCK,
     EXPRESSION_IFELSE,
+    EXPRESSION_FUNCTION_DEFINITION,
     EXPRESSION_FOR,
 } OrsoExpressionType;
 
+// TODO: Reduce declaration type to just declarations
+// declaration statements are just anonymous declarations
 typedef enum OrsoDeclarationType {
     ORSO_DECLARATION_NONE,
     ORSO_DECLARATION_STATEMENT,
-    ORSO_DECLARATION_VAR,
-    ORSO_DECLARATION_FUNCTION,
+    ORSO_DECLARATION_ENTITY,
 } OrsoDeclarationType;
 
 typedef enum OrsoStatementType {
@@ -51,7 +53,6 @@ typedef struct OrsoFunctionSignature {
 
 typedef struct OrsoExpressionNode OrsoExpressionNode;
 typedef struct OrsoDeclarationNode OrsoDeclarationNode;
-typedef struct OrsoFunctionDeclarationNode OrsoFunctionDeclarationNode;
 typedef struct OrsoTypeNode OrsoTypeNode;
 
 struct OrsoTypeNode {
@@ -96,12 +97,12 @@ typedef struct OrsoCall {
 
 typedef struct OrsoPrimary {
     Token token;
-    OrsoSlot constant;
+    i32 value_index;
 } OrsoPrimary;
 
-typedef struct OrsoVariable {
+typedef struct OrsoEntity {
     Token name;
-} OrsoVariable;
+} OrsoEntity;
 
 typedef struct OrsoAssignment {
     Token name;
@@ -121,12 +122,40 @@ typedef struct OrsoIfElse {
     OrsoExpressionNode* else_;
 } OrsoIfElse;
 
+typedef struct OrsoEntityDeclarationNode {
+    Token start;
+    Token end;
+
+    // Unresolved means inferred
+    bool is_mutable;
+    OrsoType* type;
+    Token name;
+    OrsoTypeNode* type_node;
+    OrsoExpressionNode* expression;
+
+} OrsoEntityDeclarationNode;
+
+typedef struct OrsoFunctionDefinition {
+    OrsoEntityDeclarationNode** parameters;
+
+    OrsoTypeNode* return_type;
+    OrsoBlock block;
+} OrsoFunctionDefinition;
+
 struct OrsoExpressionNode {
     Token start;
     Token end;
     OrsoType* value_type;
     OrsoType* narrowed_value_type; // only set for union types
     OrsoExpressionType type;
+
+    // the expression is foldable but is not necessarily folded
+    bool foldable; 
+
+    // -1 means no value has been folded, >= 0 indicates the index of the value
+    // it's up to the user to know the size of the expression in bits
+    i32 folded_value_index;
+
     union {
         OrsoImplicitCastOp cast;
         OrsoBinaryOp binary;
@@ -134,24 +163,13 @@ struct OrsoExpressionNode {
         OrsoGrouping grouping;
         OrsoCall call;
         OrsoPrimary primary;
-        OrsoVariable variable;
+        OrsoEntity entity;
         OrsoAssignment assignment;
         OrsoBlock block;
         OrsoIfElse ifelse;
+        OrsoFunctionDefinition function_definition;
     } expr;
 };
-
-typedef struct OrsoVariableDeclarationNode {
-    Token start;
-    Token end;
-
-    // Unresolved means inferred
-    OrsoType* type;
-    Token name;
-    OrsoTypeNode* type_node;
-    OrsoExpressionNode* expression;
-
-} OrsoVariableDeclarationNode;
 
 typedef struct OrsoStatementNode {
     OrsoStatementType type;
@@ -163,32 +181,21 @@ typedef struct OrsoStatementNode {
     } stmt;
 } OrsoStatementNode;
 
-struct OrsoFunctionDeclarationNode {
-    Token start;
-    Token end;
-
-    OrsoFunctionType* type;
-
-    OrsoVariableDeclarationNode** parameters;
-
-    OrsoTypeNode* return_type;
-    Token name;
-    OrsoBlock block;
-};
-
 struct OrsoDeclarationNode {
     OrsoDeclarationType type;
     Token start;
     Token end;
     union {
         OrsoStatementNode* statement;
-        OrsoVariableDeclarationNode* variable;
-        OrsoFunctionDeclarationNode* function;
+        OrsoEntityDeclarationNode* entity;
     } decl;
 };
 
 typedef struct OrsoAST {
+    bool resolved;
+    OrsoTypeSet type_set;
     OrsoDeclarationNode** declarations;
+    OrsoSlot* folded_constants;
 } OrsoAST;
 
 void orso_ast_print(OrsoAST* ast, const char* name);

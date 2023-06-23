@@ -3,22 +3,13 @@
 #include "interpreter.h"
 
 EMSCRIPTEN_KEEPALIVE
-uint8_t* interpreter_new(OrsoWriteFunction write_fn, OrsoErrorFunction error_fn) {
-    OrsoInterpreter* interpreter = ORSO_ALLOCATE(OrsoInterpreter);
-    orso_interpreter_init(interpreter, write_fn, error_fn);
-    
-    return (uint8_t*)interpreter;
-}
+void run_source(char* source, OrsoWriteFunction write_fn, OrsoErrorFunction error_fn) {
+    OrsoVM vm;
+    orso_vm_init(&vm, write_fn);
 
-EMSCRIPTEN_KEEPALIVE
-void interpreter_run(uint8_t* interpreter, char* source) {
-    orso_interpreter_run((OrsoInterpreter*)interpreter, source);
-}
+    orso_run_source(*vm, source, error_fn);
 
-EMSCRIPTEN_KEEPALIVE
-void interpreter_free(uint8_t* interpreter) {
-    orso_interpreter_free((OrsoInterpreter*)interpreter);
-    free((OrsoInterpreter*)interpreter);
+    orso_vm_free(&vm);
 }
 
 int main(int argc, char** argsc) {

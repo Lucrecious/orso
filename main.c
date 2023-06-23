@@ -43,13 +43,10 @@ int main(int argc, char **argv) {
 
     source[size] = '\0';
 
-    OrsoInterpreter interpreter;
-
-    orso_interpreter_init(&interpreter, write, error);
-
-    orso_interpreter_run(&interpreter, source);
-
-    orso_interpreter_free(&interpreter);
+    OrsoVM vm;
+    orso_vm_init(&vm, write);
+    orso_run_source(&vm, source, error);
+    orso_vm_free(&vm);
 
     return 0;
 }
