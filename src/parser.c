@@ -914,6 +914,8 @@ static OrsoEntityDeclarationNode* entity_declaration(Parser* parser, bool as_par
 
     consume(parser, TOKEN_COLON, "Expect explicit type.");
     entity_declaration_node->type_node = parse_type(parser, true);
+
+    // TODO: try to do constant vs variable detection a little more clever...
     bool requires_expression = false;
     if (entity_declaration_node->type_node) {
         if (match(parser, TOKEN_EQUAL)) {
@@ -933,6 +935,10 @@ static OrsoEntityDeclarationNode* entity_declaration(Parser* parser, bool as_par
 
     if (requires_expression) {
         entity_declaration_node->expression = expression(parser);
+    }
+
+    if (entity_declaration_node->expression == NULL) {
+        entity_declaration_node->is_mutable = true;
     }
 
     if (!as_parameter) {

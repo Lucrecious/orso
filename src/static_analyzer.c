@@ -10,6 +10,7 @@
 typedef OrsoSymbolTable SymbolTable;
 
 typedef struct Entity {
+    // TODO: instead of using declarad type just use narrowed type and the type of the decalrtion node
     OrsoType* declared_type;
     OrsoType* narrowed_type;
     OrsoEntityDeclarationNode* declaration_node;
@@ -408,7 +409,7 @@ static void resolve_foldable(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
         }
 
         case EXPRESSION_ASSIGNMENT: {
-            fold_constants(analyzer, ast, scope, expression->expr.assignment.right_side);
+            //fold_constants(analyzer, ast, scope, expression->expr.assignment.right_side);
 
             foldable = expression->expr.assignment.right_side->foldable;
             folded_index = expression->expr.assignment.right_side->folded_value_index;
@@ -624,7 +625,7 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
             Entity* entity = get_entity_by_identifier(analyzer, ast, scope, expression->expr.assignment.name, NULL, &entity_scope, &is_cyclic);
 
             if (entity == NULL) {
-                error(analyzer, expression->start.line, "Variable does not exist.");
+                error(analyzer, expression->start.line, "Entity does not exist.");
                 break;
             }
 
@@ -633,7 +634,7 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
 
             OrsoType* right_side_narrowed_type = expression->expr.assignment.right_side->narrowed_value_type;
             expression->value_type = entity->declared_type;
-            expression->narrowed_value_type = entity->declared_type;
+            //expression->narrowed_value_type = right_side_narrowed_type;
             
             if (!orso_type_fits(entity->declared_type, right_side_narrowed_type)) {
                 error(analyzer, expression->start.line, "Expression needs explicit cast to store in variable.");
@@ -880,6 +881,10 @@ static void declare_entity(OrsoStaticAnalyzer* analyzer, OrsoScope* scope, OrsoE
 }
 
 static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, OrsoEntityDeclarationNode* entity_declaration) {
+    if (entity_declaration->type != &OrsoTypeUnresolved)  {
+        return;
+    }
+
     OrsoType* type = resolve_type(analyzer, ast, scope, entity_declaration->type_node);
     if (analyzer->had_error) {
         return;
@@ -892,6 +897,7 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
         fold_constants(analyzer, ast, scope, entity_declaration->expression);
     }
 
+    // TODO: Outer if should be if the expression is null or not
     if (!ORSO_TYPE_IS_UNION(entity_declaration->type)) {
         if (entity_declaration->type == &OrsoTypeUnresolved) {
             ASSERT(entity_declaration->expression != NULL, "this should be a parsing error.");
@@ -914,6 +920,27 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
         } else if (!orso_type_fits(entity_declaration->type, entity_declaration->expression->value_type)) {
             error(analyzer, entity_declaration->start.line, "Type mismatch between expression and declaration.");
         }
+    }
+
+
+    OrsoSymbol* name = orso_unmanaged_symbol_from_cstrn(entity_declaration->name.start, entity_declaration->name.length, &analyzer->symbols);
+    OrsoSlot entity_slot;
+
+    ASSERT(orso_symbol_table_get(&scope->named_entities, name, &entity_slot), "should be forward_declared already");
+
+    orso_symbol_table_get(&scope->named_entities, name, &entity_slot);
+
+    Entity* entity = (Entity*)entity_slot.as.p;
+
+    entity->declared_type = entity_declaration->type;
+    entity->narrowed_type = entity_declaration->type;
+
+    if (entity_declaration->expression == NULL) {
+        if (ORSO_TYPE_IS_UNION(entity_declaration->type)) {
+            entity->narrowed_type = &OrsoTypeVoid;
+        } 
+    } else {
+        entity->narrowed_type = entity_declaration->expression->narrowed_value_type;
     }
 }
 
@@ -1005,11 +1032,11 @@ static Entity* get_entity_by_identifier(OrsoStaticAnalyzer* analyzer, OrsoAST* a
 
         resolve_entity_declaration(analyzer, ast, *search_scope, entity->declaration_node);
 
-        entity->declared_type = entity->declaration_node->type;
-        entity->narrowed_type = entity->declaration_node->type;
-        if (entity->declaration_node->expression != NULL) {
-            entity->narrowed_type = entity->declaration_node->expression->narrowed_value_type;
-        }
+        // entity->declared_type = entity->declaration_node->type;
+        // entity->narrowed_type = entity->declaration_node->type;
+        // if (entity->declaration_node->expression != NULL) {
+        //     entity->narrowed_type = entity->declaration_node->expression->narrowed_value_type;
+        // }
 
         if (!type_hint) {
             return entity;
