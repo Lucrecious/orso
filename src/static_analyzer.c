@@ -606,28 +606,18 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
         }
 
         case EXPRESSION_ASSIGNMENT: {
-            bool exists = false;
-            OrsoSymbol* variable_name = orso_unmanaged_symbol_from_cstrn(expression->expr.assignment.name.start, expression->expr.assignment.name.length, &analyzer->symbols);
-            OrsoSlot entity_slot;
-            {
-                OrsoScope* current_scope = scope;
-                while (current_scope) {
-                    if ((exists = orso_symbol_table_get(&current_scope->named_entities, variable_name, &entity_slot))) {
-                        break;
-                    }
+            OrsoScope* entity_scope;
+            bool is_cyclic;
+            Entity* entity = get_entity_by_identifier(analyzer, ast, scope, expression->expr.assignment.name, NULL, &entity_scope, &is_cyclic);
 
-                    current_scope = current_scope->outer;
-                }
-            }
-
-            if (!exists) {
+            if (entity == NULL) {
                 error(analyzer, expression->start.line, "Variable does not exist.");
                 break;
             }
 
-            Entity* entity = (Entity*)entity_slot.as.p;
-
             orso_resolve_expression(analyzer, ast, scope, expression->expr.assignment.right_side);
+            fold_constants(analyzer, ast, scope, expression->expr.assignment.right_side);
+
             OrsoType* right_side_narrowed_type = expression->expr.assignment.right_side->narrowed_value_type;
             expression->value_type = entity->declared_type;
             expression->narrowed_value_type = entity->declared_type;
