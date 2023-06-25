@@ -643,6 +643,8 @@ static void function_expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, Or
     Compiler function_compiler;
     compiler_init(&function_compiler, ORSO_FUNCTION_TYPE_FUNCTION, vm, function_defintion_expression->value_type);
 
+    // this is placed down by the caller
+    function_compiler.max_stack_size = function_compiler.current_stack_size = function_compiler.current_object_stack_size = 1;
     declare_local_function_definition(&function_compiler, function_compiler.function);
     
     //Token empty = { .start = "", .length = 0 };
@@ -674,7 +676,8 @@ static void function_expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, Or
                 parameter->type, &parameter->name, parameter->start.line);
     }
 
-    gen_block(vm, &function_compiler, ast, function_chunk, &function_definition->block, true, function_defintion_expression->end.line);
+    expression(vm, &function_compiler, ast, function_definition->block_expression, function_chunk);
+    //gen_block(vm, &function_compiler, ast, function_chunk, &function_definition->block_expression->expr.block, true, function_defintion_expression->end.line);
 
     compiler_end(&function_compiler, function_chunk, function_defintion_expression->end.line);
 

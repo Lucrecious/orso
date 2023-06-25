@@ -1063,47 +1063,29 @@ static Entity* get_entity_by_identifier(OrsoStaticAnalyzer* analyzer, OrsoAST* a
     return NULL;
 }
 
-static void resolve_function_definition(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, OrsoExpressionNode* function_definition_expression) {
-    ASSERT(function_definition_expression->type == EXPRESSION_FUNCTION_DEFINITION, "must be a function definition");
-
-    OrsoFunctionDefinition* function_definition = &function_definition_expression->expr.function_definition;
-
-    if (sb_count(function_definition->parameters) > MAX_PARAMETERS - 1) {
-        error(analyzer, function_definition->parameters[0]->name.line, "Orso only allows a maximum of 100 parameters");
-        return;
-    }
-
-    {
-        OrsoScope function_scope;
-        scope_init(&function_scope, scope, function_definition_expression);
-
-        for (i32 i = 0; i < sb_count(function_definition->parameters); i++) {
-            declare_entity(analyzer, scope, function_definition->parameters[i]);
-        }
-
-        forward_declare_entities(analyzer, &function_scope, function_definition->block.declarations);
-
-        for (i32 i = 0; i < sb_count(function_definition->block.declarations); i++) {
-            resolve_declaration(analyzer, ast, &function_scope, function_definition->block.declarations[i]);
-        }
-
-        scope_free(&function_scope);
-
-        if (analyzer->had_error) {
-            return;
-        }
-    }
-}
-
 static void resolve_function_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, OrsoExpressionNode* function_definition_expression) {
     ASSERT(function_definition_expression->type == EXPRESSION_FUNCTION_DEFINITION, "must be function declaration at this point");
 
     OrsoFunctionDefinition* definition = &function_definition_expression->expr.function_definition;
     i32 parameter_count = sb_count(definition->parameters);
+    // TODO: instead of hardcoding the number of parameters, instead use the numbers of bytes the params take up
+    if (parameter_count > MAX_PARAMETERS - 1) {
+        error(analyzer, definition->parameters[0]->name.line, "Orso only allows a maximum of 100 parameters");
+    }
+
+    OrsoScope function_scope;
+    scope_init(&function_scope, scope, function_definition_expression);
     OrsoType* parameter_types[parameter_count];
 
+
+    // forward declare parameters
+    for (i32 i = 0; i < sb_count(definition->parameters); i++) {
+        declare_entity(analyzer, &function_scope, definition->parameters[i]);
+    }
+
+    // Resolves parameters for function type
     for (i32 i = 0; i < parameter_count; i++) {
-        resolve_entity_declaration(analyzer, ast, scope, definition->parameters[i]);
+        resolve_entity_declaration(analyzer, ast, &function_scope, definition->parameters[i]);
         parameter_types[i] = definition->parameters[i]->type;
     }
 
@@ -1118,11 +1100,28 @@ static void resolve_function_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* a
     }
 
     OrsoFunctionType* function_type = (OrsoFunctionType*)orso_type_set_fetch_function(&ast->type_set, return_type, parameter_types, parameter_count);
+
     // TODO: Maybe use a marco defined for this file for setting both the value and type, maybe an inlined function
     function_definition_expression->value_type = (OrsoType*)function_type;
     function_definition_expression->narrowed_value_type = (OrsoType*)function_type;
 
-    resolve_function_definition(analyzer, ast, scope, function_definition_expression);
+    ASSERT(definition->block_expression->type == EXPRESSION_BLOCK, "must be block expression");
+
+    orso_resolve_expression(analyzer, ast, &function_scope, definition->block_expression);
+    // OrsoScope function_block_scope;
+    // scope_init(&function_block_scope, &function_scope, definition->block_expression);
+
+    // // forward declare the block declarations
+    // forward_declare_entities(analyzer, &function_block_scope, ->block);
+
+    // // resolve the block declarations
+    // for (i32 i = 0; i < sb_count(function_definition->block.declarations); i++) {
+    //     resolve_declaration(analyzer, ast, &function_block_scope, function_definition->block.declarations[i]);
+    // }
+
+    // scope_free(&function_block_scope);
+
+    scope_free(&function_scope);
 }
 
 static OrsoScope* get_closest_outer_function_scope(OrsoScope* scope) {

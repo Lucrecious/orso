@@ -577,18 +577,12 @@ static bool is_incoming_expression_function_definition(Parser* parser) {
 
     Lexer look_ahead_lexer = parser->lexer;
     i32 parenthesis_level = 1;
-    Token next;
+    Token next = parser->current;
     // get matching close parenthesis
-    while (true) {
-        next = lexer_next_token(&look_ahead_lexer);
+    while (parenthesis_level > 0) {
         if (next.type == TOKEN_EOF) {
             error(parser, "File ended before closing the parenthesis.");
             return false;
-        }
-
-        if (next.type == TOKEN_PARENTHESIS_OPEN) {
-            parenthesis_level++;
-            continue;
         }
 
         if (next.type == TOKEN_PARENTHESIS_CLOSE) {
@@ -596,9 +590,11 @@ static bool is_incoming_expression_function_definition(Parser* parser) {
             continue;
         }
 
-        if (parenthesis_level == 0) {
-            break;
+        if (next.type == TOKEN_PARENTHESIS_OPEN) {
+            parenthesis_level++;
         }
+
+        next = lexer_next_token(&look_ahead_lexer);
     }
 
     next = lexer_next_token(&look_ahead_lexer);
@@ -664,15 +660,6 @@ static void parse_function_definition(Parser* parser, OrsoFunctionDefinition* fu
     function_definition->parameters = NULL;
     function_definition->return_type = NULL;
 
-    // garbage collection paranoia
-    function_definition->block.declarations = NULL;
-    function_definition->block.final_expression_statement = NULL;
-
-    consume(parser, TOKEN_COLON, "Expect function double colon.");
-    consume(parser, TOKEN_COLON, "Expect function double colon.");
-
-    consume(parser, TOKEN_PARENTHESIS_OPEN, "Expect open parenthesis for arguments.");
-
     function_definition->parameters = parse_parameters(parser);
 
     consume(parser, TOKEN_PARENTHESIS_CLOSE, "Expect close parenthesis for end of arguments.");
@@ -683,7 +670,7 @@ static void parse_function_definition(Parser* parser, OrsoFunctionDefinition* fu
 
     consume(parser, TOKEN_BRACE_OPEN, "Expect open brace for function body.");
 
-    parse_block(parser, &function_definition->block);
+    function_definition->block_expression = block(parser);
 }
 
 static OrsoExpressionNode* grouping_or_function_definition(Parser* parser) {

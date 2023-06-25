@@ -1,6 +1,6 @@
 ## empty
 foo :: () {
-}
+};
 
 print_expr foo;
 # ---
@@ -9,7 +9,7 @@ foo (() -> void) => <foo :: () -> void>
 
 ## stack-arg
 foo :: (arg: i32) {
-}
+};
 
 print_expr foo;
 # ---
@@ -18,7 +18,7 @@ foo ((i32) -> void) => <foo :: (i32) -> void>
 
 ## stack-args
 foo :: (arg1: i32, arg2: bool, arg3: void) {
-}
+};
 
 print_expr foo;
 # ---
@@ -28,7 +28,7 @@ foo ((i32,bool,void) -> void) => <foo :: (i32, bool, void) -> void>
 ## stack-return
 foo :: () -> i32 {
     return 42;
-}
+};
 
 print_expr foo;
 print foo();
@@ -39,7 +39,7 @@ foo (() -> i32) => <foo :: () -> i32>
 
 ## object-arg
 foo :: (arg: string) {
-}
+};
 
 print_expr foo;
 # ---
@@ -48,7 +48,7 @@ foo ((string) -> void) => <foo :: (string) -> void>
 
 ## object-args
 foo :: (arg1: string, arg2: symbol, arg3: string) {
-}
+};
 
 print_expr foo;
 # ---
@@ -59,7 +59,7 @@ foo ((string,symbol,string) -> void) => <foo :: (string, symbol, string) -> void
 ## object-return
 foo :: () -> string {
     return "hello world";
-}
+};
 
 print_expr foo;
 print foo();
@@ -75,7 +75,7 @@ printn :: (n: i32, text: string) -> void {
         print text;
         n = n - 1;
     };
-}
+};
 
 print_expr printn;
 printn(3, "foo");
@@ -96,7 +96,7 @@ concatn :: (n: i32, text: string) -> string {
     } else {
         textn;
     };
-}
+};
 
 print_expr concatn;
 print concatn(3, "foo");
@@ -112,7 +112,7 @@ fib :: (n: i32) -> i32 {
     } else {
         fib(n - 1) + fib(n - 2);
     };
-}
+};
 
 print fib(10);
 # ---
@@ -138,7 +138,7 @@ print fib(10);
 ## call unnarrowed union
 foo::() -> i32 {
     return 1;
-}
+};
 
 bar := foo or null;
 
@@ -159,7 +159,7 @@ compile error, 2: Cannot call non-function type.
 ## call narrowed union
 foo::() -> i32 {
     return 1;
-}
+};
 
 bar := foo or null;
 bar = foo;
@@ -172,7 +172,7 @@ print bar();
 ## union parameters
 foo :: (a: string|void) {
     print a;
-}
+};
 
 foo("hello world");
 foo(null);

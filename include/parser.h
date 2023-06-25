@@ -140,7 +140,7 @@ typedef struct OrsoFunctionDefinition {
     OrsoEntityDeclarationNode** parameters;
 
     OrsoTypeNode* return_type;
-    OrsoBlock block;
+    OrsoExpressionNode* block_expression;
 } OrsoFunctionDefinition;
 
 struct OrsoExpressionNode {
