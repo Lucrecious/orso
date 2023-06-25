@@ -429,14 +429,14 @@ static OrsoExpressionNode* literal(Parser* parser) {
         }
         case TOKEN_STRING: {
             expression_node->value_type = &OrsoTypeString;
-            OrsoString* value = orso_new_string_from_cstrn(NULL, expression_node->start.start + 1, expression_node->start.length - 1);
+            OrsoString* value = orso_new_string_from_cstrn(NULL, expression_node->start.start + 1, expression_node->start.length - 2);
             expression_node->expr.primary.value_index = add_constant_value(parser, ORSO_SLOT_P(value, &OrsoTypeString));
             break;
         };
 
         case TOKEN_SYMBOL: {
             expression_node->value_type = &OrsoTypeSymbol;
-            OrsoSymbol* value = orso_new_symbol_from_cstrn(NULL, expression_node->start.start + 1, expression_node->start.length - 1, parser->ast->symbols);
+            OrsoSymbol* value = orso_new_symbol_from_cstrn(NULL, expression_node->start.start + 1, expression_node->start.length - 2, parser->ast->symbols);
             expression_node->expr.primary.value_index = add_constant_value(parser, ORSO_SLOT_P(value, &OrsoTypeSymbol));
             break;
         }

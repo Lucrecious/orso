@@ -199,7 +199,7 @@ static i32 get_object_stack_effect(OrsoOPCode op_code) {
 static i32 add_local(Compiler* compiler, Token name, i32 slot_count, bool is_gc_type);
 
 // A Token* is passed in instead of OrsoSymbol* because Token* cant be garbage collected and OrsoSymbol* can and would be.
-static void compiler_init(Compiler* compiler, OrsoCompilerFunctionType function_type, OrsoVM* vm) {
+static void compiler_init(Compiler* compiler, OrsoCompilerFunctionType function_type, OrsoVM* vm, OrsoType* creator_type) {
     compiler->folded_constants_only = false;
     compiler->function = NULL;
     compiler->function_type = function_type;
@@ -213,6 +213,7 @@ static void compiler_init(Compiler* compiler, OrsoCompilerFunctionType function_
     compiler->max_stack_size = 0;
 
     compiler->function = orso_new_function(&vm->gc);
+    compiler->function->type = (OrsoFunctionType*)creator_type;
 }
 
 static void compiler_free(Compiler* compiler) {
@@ -237,6 +238,7 @@ static void emit_instruction(const OrsoOPCode op_code, Compiler* compiler, Chunk
     _apply_stack_effects(compiler, get_stack_effect(op_code), get_object_stack_effect(op_code));
 }
 
+// TODO: Remove compiler from the parameters... instead try to bubble up the stack effect somehow
 static void emit_constant(Compiler* compiler, Chunk* chunk, OrsoSlot slot, i32 line, bool is_gc_type) {
     u32 index = chunk_add_constant(chunk, slot, is_gc_type);
     emit_instruction(ORSO_OP_CONSTANT, compiler, chunk, line);
@@ -625,18 +627,26 @@ static void define_entity(OrsoVM* vm, Compiler* compiler, Chunk* chunk, OrsoType
     }
 }
 
+static void declare_local_function_definition(Compiler* compiler, OrsoFunction* function){ 
+    // used in assert
+    (void)function;
+    // TODO: fix this assert, why does function->type need to be converted to type? Will it never be unresolved?
+    ASSERT((OrsoType*)function->type != &OrsoTypeUnresolved, "Must have resolved type");
+
+    Token empty = { .start = "", .length = 0 };
+    declare_local_entity(compiler, &empty, 1, true);
+}
+
 static void function_expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoExpressionNode* function_defintion_expression, Chunk* chunk) {
     ASSERT(function_defintion_expression->value_type->kind == ORSO_TYPE_FUNCTION, "must be function if calling this");
 
     Compiler function_compiler;
-    compiler_init(&function_compiler, ORSO_FUNCTION_TYPE_FUNCTION, vm);
+    compiler_init(&function_compiler, ORSO_FUNCTION_TYPE_FUNCTION, vm, function_defintion_expression->value_type);
 
-    emit_constant(compiler, chunk,
-            ORSO_SLOT_P(function_compiler.function, (OrsoType*)function_compiler.function->type),
-            function_defintion_expression->start.line, true);
+    declare_local_function_definition(&function_compiler, function_compiler.function);
     
-    Token empty = { .start = "", .length = 0 };
-    declare_local_entity(&function_compiler, &empty, 1, true);
+    //Token empty = { .start = "", .length = 0 };
+    //declare_local_entity(&function_compiler, &empty, 1, true);
 
     // if (is_global_scope(compiler)) {
     //     i32 global_index = declare_global_variable(vm, &function_declaration->name, 1, true, false);
@@ -667,6 +677,8 @@ static void function_expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, Or
     gen_block(vm, &function_compiler, ast, function_chunk, &function_definition->block, true, function_defintion_expression->end.line);
 
     compiler_end(&function_compiler, function_chunk, function_defintion_expression->end.line);
+
+    emit_constant(compiler, chunk, ORSO_SLOT_P(function_compiler.function, (OrsoType*)function_compiler.function->type), function_defintion_expression->start.line, true);
 }
 
 static void gen_primary(Compiler* compiler, Chunk* chunk, OrsoAST* ast, OrsoType* value_type, i32 value_index, i32 line) {
@@ -1221,16 +1233,19 @@ void orso_code_builder_free(OrsoCodeBuilder* builder) {
 
 OrsoFunction* orso_generate_expression_function(OrsoCodeBuilder* builder, OrsoExpressionNode* expression_node, bool folded_constants_only) {
     Compiler compiler;
-    compiler_init(&compiler, ORSO_FUNCTION_TYPE_SCRIPT, builder->vm);
-    compiler.folded_constants_only = folded_constants_only;
-    compiler.function->type = (OrsoFunctionType*)orso_type_set_fetch_function(&builder->ast->type_set, expression_node->value_type, NULL, 0);
+    OrsoFunctionType* function_type = (OrsoFunctionType*)orso_type_set_fetch_function(&builder->ast->type_set, expression_node->value_type, NULL, 0);
 
-    Chunk* top_chunk = &compiler.function->chunk;
+    compiler_init(&compiler, ORSO_FUNCTION_TYPE_SCRIPT, builder->vm, (OrsoType*)function_type);
+    compiler.folded_constants_only = folded_constants_only;
+
+    declare_local_function_definition(&compiler, compiler.function);
 
     //emit_constant(&compiler, top_chunk, ORSO_SLOT_P(compiler.function, compiler.function->type), 0, true);
 
     // Token empty = {.start = "", .length = 0};
     // declare_global_entity(builder->vm, &empty, 1, false, false);
+
+    Chunk* top_chunk = &compiler.function->chunk;
 
     expression(builder->vm, &compiler, builder->ast, expression_node, top_chunk);
 
@@ -1245,8 +1260,14 @@ OrsoFunction* orso_generate_expression_function(OrsoCodeBuilder* builder, OrsoEx
 
 OrsoFunction* orso_generate_code(OrsoVM* vm, OrsoAST* ast) {
     Compiler compiler;
-    compiler_init(&compiler, ORSO_FUNCTION_TYPE_SCRIPT, vm);
-    compiler.function->type = (OrsoFunctionType*)orso_type_set_fetch_function(&ast->type_set, &OrsoTypeVoid, NULL, 0);
+    OrsoFunctionType* function_type = (OrsoFunctionType*)orso_type_set_fetch_function(&ast->type_set, &OrsoTypeVoid, NULL, 0);
+    compiler_init(&compiler, ORSO_FUNCTION_TYPE_SCRIPT, vm, (OrsoType*)function_type);
+
+    // when a function is called it is placed on the stack. The caller does this... In this case,
+    // the caller is the virtual machine. So we start at stack size 1 since it should be there when
+    // the program starts.
+    compiler.max_stack_size = compiler.current_stack_size = compiler.current_object_stack_size = 1;
+    declare_local_function_definition(&compiler, compiler.function);
 
     Chunk* top_chunk = &compiler.function->chunk;
 
