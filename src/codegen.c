@@ -684,7 +684,7 @@ static void function_expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, Or
 static void gen_primary(Compiler* compiler, Chunk* chunk, OrsoAST* ast, OrsoType* value_type, i32 value_index, i32 line) {
     ASSERT(value_index >= 0, "must be pointing to a contant value...");
 
-    OrsoSlot value = ast->folded_constants[value_index];
+    OrsoSlot* value = &ast->folded_constants[value_index];
     switch (value_type->kind) {
         case ORSO_TYPE_BOOL:
         case ORSO_TYPE_INT32:
@@ -692,25 +692,29 @@ static void gen_primary(Compiler* compiler, Chunk* chunk, OrsoAST* ast, OrsoType
         case ORSO_TYPE_FLOAT32:
         case ORSO_TYPE_FLOAT64:
         case ORSO_TYPE_VOID: {
-            if (value.as.i == 0) {
+            if (value->as.i == 0) {
                 emit_instruction(ORSO_OP_PUSH_0, compiler, chunk, line);
-            } else if (value.as.i == 1) {
+            } else if (value->as.i == 1) {
                 emit_instruction(ORSO_OP_PUSH_1, compiler, chunk, line);
             } else {
 #ifdef DEBUG_TRACE_EXECUTION
-                value.type = value_type;
+                value->type = value_type;
 #endif
-                emit_constant(compiler, chunk, value, line, orso_is_gc_type(value_type));
+                emit_constant(compiler, chunk, *value, line, orso_is_gc_type(value_type));
             }
             break;
         }
         case ORSO_TYPE_STRING: {
         case ORSO_TYPE_SYMBOL:
-            emit_constant(compiler, chunk, value, line, true);
+            emit_constant(compiler, chunk, *value, line, true);
             break;
         }
         case ORSO_TYPE_UNION: {
-            UNREACHABLE();
+            emit_constant(compiler, chunk, *value, line, false);
+            emit_constant(compiler, chunk, *(value + 1), line, true);
+
+            i32 object_stack_position = compiler->current_object_stack_size - 1;
+            emit_instruction3(ORSO_OP_UPDATE_STACK_GC_TYPE, compiler, object_stack_position, chunk, line);
             break;
         }
         default: UNREACHABLE();
