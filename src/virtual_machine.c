@@ -522,7 +522,7 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
                 POP_TOP_OBJECT();
 
                 if (is_return_gc_type) {
-                    PUSH_TOP_OBJECT();
+                    PUSH_TOP_OBJECT_NULL();
                 }
 
                 if (vm->frame_count == 0) {

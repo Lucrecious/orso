@@ -711,10 +711,10 @@ static void gen_primary(Compiler* compiler, Chunk* chunk, OrsoAST* ast, OrsoType
         }
         case ORSO_TYPE_UNION: {
             emit_constant(compiler, chunk, *value, line, false);
-            emit_constant(compiler, chunk, *(value + 1), line, true);
+            emit_constant(compiler, chunk, *(value + 1), line, orso_is_gc_type(value_type));
 
-            i32 object_stack_position = compiler->current_object_stack_size - 1;
-            emit_instruction3(ORSO_OP_UPDATE_STACK_GC_TYPE, compiler, object_stack_position, chunk, line);
+            // i32 object_stack_position = compiler->current_object_stack_size - 1;
+            // emit_instruction3(ORSO_OP_UPDATE_STACK_GC_TYPE, compiler, object_stack_position, chunk, line);
             break;
         }
         default: UNREACHABLE();
