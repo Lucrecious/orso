@@ -76,7 +76,7 @@ INTERPRETER_TEST(assign_assumed_union_from_block,
 
 INTERPRETER_ERROR_TEST(undefined_variable,
     "x = 0;",
-    ORSO_ERROR_COMPILE, 0, "Variable does not exist.")
+    ORSO_ERROR_COMPILE, 0, "Entity does not exist.")
 
 INTERPRETER_ERROR_TEST(assign_type_mismatch,
     "x := 0; x = 'foo';",

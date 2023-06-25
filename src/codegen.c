@@ -709,6 +709,10 @@ static void gen_primary(Compiler* compiler, Chunk* chunk, OrsoAST* ast, OrsoType
             emit_constant(compiler, chunk, value, line, true);
             break;
         }
+        case ORSO_TYPE_UNION: {
+            UNREACHABLE();
+            break;
+        }
         default: UNREACHABLE();
     }
 }
