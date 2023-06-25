@@ -52,33 +52,7 @@ typedef struct OrsoFunctionType {
 
 #define ORSO_TYPE_IS_UNION(TYPE) (TYPE->kind == ORSO_TYPE_UNION)
 
-typedef struct OrsoSlot {
-#ifdef DEBUG_TRACE_EXECUTION
-    OrsoType* type;
-#endif
-    union {
-        i64 i;
-        f64 f;
-        ptr p;
-        u64 u;
-    } as;
-} OrsoSlot;
-
 struct OrsoTypeSet;
-
-#define ORSO_SLOT_IS_FALSE(SLOT) (SLOT.as.i == 0)
-
-#ifdef DEBUG_TRACE_EXECUTION
-#define ORSO_SLOT_I(VALUE, TYPE) (OrsoSlot){ .as.i = VALUE, .type = TYPE }
-#define ORSO_SLOT_U(VALUE, TYPE) (OrsoSlot){ .as.u = VALUE, .type = TYPE }
-#define ORSO_SLOT_F(VALUE, TYPE) (OrsoSlot){ .as.f = VALUE, .type = TYPE }
-#define ORSO_SLOT_P(VALUE, TYPE) (OrsoSlot){ .as.p = VALUE, .type = TYPE }
-#else
-#define ORSO_SLOT_I(VALUE, TYPE) (OrsoSlot){ .as.i = VALUE }
-#define ORSO_SLOT_U(VALUE, TYPE) (OrsoSlot){ .as.u = VALUE }
-#define ORSO_SLOT_F(VALUE, TYPE) (OrsoSlot){ .as.f = VALUE }
-#define ORSO_SLOT_P(VALUE, TYPE) (OrsoSlot){ .as.p = VALUE }
-#endif
 
 bool orso_union_type_has_type(OrsoUnionType const * type, OrsoType* subtype);
 
@@ -107,10 +81,6 @@ bool orso_type_is_or_has_float(OrsoType* type);
 bool orso_union_has_integer(OrsoUnionType* type, bool include_bool);
 
 bool orso_type_is_or_has_integer(OrsoType* type, bool include_bool);
-
-bool FORCE_INLINE orso_slot_is_falsey(OrsoSlot slot) {
-    return slot.as.u == 0;
-}
 
 i32 orso_type_bits(OrsoType* type_kind);
 

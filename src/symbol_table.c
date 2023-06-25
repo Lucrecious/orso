@@ -1,5 +1,7 @@
 #include "symbol_table.h"
+
 #include "type_set.h"
+#include "object.h"
 
 #define GROW_CAPACITY(capacity) capacity == 0 ? 8 : capacity * 2
 

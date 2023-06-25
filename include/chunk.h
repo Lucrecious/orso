@@ -3,6 +3,7 @@
 
 #include "def.h"
 #include "type.h"
+#include "slot.h"
 
 typedef struct Chunk {
     OrsoSlot* constants;

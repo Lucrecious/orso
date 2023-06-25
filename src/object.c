@@ -1,7 +1,9 @@
 #include "object.h"
 
-#include "sb.h"
 #include <stdio.h>
+
+#include "sb.h"
+#include "symbol_table.h"
 #include "type_set.h"
 
 void* orso_object_reallocate(OrsoGarbageCollector* gc, OrsoGCHeader* pointer, OrsoType* type, size_t old_size, size_t new_size) {
@@ -240,4 +242,44 @@ f64 cstrn_to_f64(const char* text, i32 length) {
     }
 
     return value * fact;
+}
+
+OrsoSymbol* orso_unmanaged_symbol_from_cstrn(const char* start, i32 length, OrsoSymbolTable* symbol_table) {
+    u32 hash = orso_hash_cstrn(start, length);
+    OrsoSymbol* symbol = orso_symbol_table_find_cstrn(symbol_table, start, length, hash);
+    if (symbol != NULL) {
+        return symbol;
+    }
+
+    symbol = ORSO_ALLOCATE_FLEX(OrsoSymbol, length + 1);
+    symbol->object.type = &OrsoTypeSymbol;
+    symbol->hash = hash;
+    symbol->length = length;
+    memcpy(symbol->text, start, length);
+    symbol->text[length] = '\0';
+    symbol->object.gc_header.next = symbol->object.gc_header.previous = NULL;
+
+    OrsoSlot slot = ORSO_SLOT_I(0, &OrsoTypeVoid);
+    orso_symbol_table_set(symbol_table, symbol, slot);
+
+    return symbol;
+}
+
+OrsoSymbol* orso_new_symbol_from_cstrn(OrsoGarbageCollector* gc, const char* start, i32 length, OrsoSymbolTable* symbol_table) {
+    u32 hash = orso_hash_cstrn(start, length);
+    OrsoSymbol* symbol = orso_symbol_table_find_cstrn(symbol_table, start, length, hash);
+    if (symbol != NULL) {
+        return symbol;
+    }
+
+    symbol = ORSO_OBJECT_ALLOCATE_FLEX(gc, OrsoSymbol, &OrsoTypeSymbol, length + 1);
+    symbol->hash = hash;
+    symbol->length = length;
+    memcpy(symbol->text, start, length);
+    symbol->text[length] = '\0';
+
+    OrsoSlot slot = ORSO_SLOT_I(0, &OrsoTypeVoid);
+    orso_symbol_table_set(symbol_table, symbol, slot);
+
+    return symbol;
 }

@@ -1,4 +1,6 @@
 #include "type.h"
+
+#include "symbol_table.h"
 #include "type_set.h"
 
 bool orso_union_type_has_type(const OrsoUnionType* type, OrsoType* subtype) {

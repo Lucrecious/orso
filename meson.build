@@ -15,6 +15,7 @@ src = [
   'src/lexer.c',
   'src/object.c',
   'src/parser.c',
+  'src/slot.c',
   'src/static_analyzer.c',
   'src/symbol_table.c',
   'src/type.c',
@@ -80,11 +81,6 @@ test_loops = executable('test_loops', [src, 'test/loops.c'],
   include_directories : inc,
   c_args : test_c_args)
 
-test_tmp = executable('test_tmp', [src, 'test/tmp.c'],
-  install : false,
-  include_directories : inc,
-  c_args : test_c_args)
-
 test_file_runner = executable('test_file_runner', [src, 'test/test_file_runner.c'],
   install : false,
   include_directories : inc,
@@ -100,9 +96,9 @@ test('test_arithmetic', test_arithmetic)
 test('test_control_flow', test_control_flow)
 test('test_logical_operators', test_logical_operators)
 test('test_loops', test_loops)
-test('test_tmp', test_tmp)
 
 test('test_functions', test_file_runner, args: files('test/functions.orso'))
 test('test_compile_time_evaluation', test_file_runner, args: files('test/compile_time_evaluation.orso'))
+test('test_tmp', test_file_runner, args: files('test/tmp.orso'))
 
 

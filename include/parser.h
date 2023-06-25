@@ -132,6 +132,7 @@ typedef struct OrsoEntityDeclarationNode {
     Token name;
     OrsoTypeNode* type_node;
     OrsoExpressionNode* expression;
+    i32 implicit_default_value_index;
 
 } OrsoEntityDeclarationNode;
 
@@ -196,13 +197,14 @@ typedef struct OrsoAST {
     OrsoTypeSet type_set;
     OrsoDeclarationNode** declarations;
     OrsoSlot* folded_constants;
+    OrsoSymbolTable* symbols;
 } OrsoAST;
 
 void orso_ast_print(OrsoAST* ast, const char* name);
 
 bool orso_parse(OrsoAST* ast, const char* source, OrsoErrorFunction error_fn);
 
-void orso_ast_init(OrsoAST* ast);
+void orso_ast_init(OrsoAST* ast, OrsoSymbolTable* symbols);
 void orso_ast_free(OrsoAST* ast);
 
 #endif

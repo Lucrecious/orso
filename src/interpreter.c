@@ -30,7 +30,7 @@ void orso_run_source(OrsoVM* vm, const char* source, OrsoErrorFunction error_fn)
     orso_static_analyzer_init(&analyzer, vm->write_fn, error_fn);
 
     OrsoAST ast;
-    orso_ast_init(&ast);
+    orso_ast_init(&ast, &vm->symbols);
 
     if (!orso_parse(&ast, source, error_fn)) {
         orso_ast_free(&ast);
@@ -54,7 +54,7 @@ void orso_run_source(OrsoVM* vm, const char* source, OrsoErrorFunction error_fn)
 
     OrsoFunction* main_function = orso_compile_ast(vm, &ast);
 
-    orso_ast_free(&ast);
+    //orso_ast_free(&ast);
 
     if (!main_function) {
         analyzer.had_error = false;

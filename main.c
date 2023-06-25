@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "interpreter.h"
 
@@ -20,11 +21,16 @@ void write(const char* chars) {
 
 int main(int argc, char **argv) {
     if (argc < 2) {
-        argv[1] = "/Users/lucrecious/dev/project_orso_lang/script.orso";
+        printf("You must provide a file.");
+        exit(1);
     }
 
+    char* path = realpath(argv[1], NULL);
+    printf("---- %s", path);
+
     FILE* file;
-    file = fopen(argv[1], "r");
+    file = fopen(path, "r");
+    free(path);
 
     if (file == NULL) {
         printf("Error opening file: %s\n", argv[1]);

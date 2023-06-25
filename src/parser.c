@@ -47,7 +47,6 @@ function_definition      -> `(` parameters? `)` (`->` union_type)? block
 typedef struct Parser {
     OrsoErrorFunction error_fn;
     OrsoAST* ast; // TODO: Consider moving this outside parser and instead passed through arguments
-    OrsoSymbolTable* symbols; // TODO: Consider moving this outside of parser iand instead passing through arguments
     Lexer lexer;
     Token previous;
     Token current;
@@ -77,10 +76,12 @@ typedef struct {
     Precedence precedence;
 } ParseRule;
 
-void orso_ast_init(OrsoAST* ast) {
+void orso_ast_init(OrsoAST* ast, OrsoSymbolTable* symbols) {
+    ASSERT(symbols, "cannot be null");
     ast->resolved = false;
     ast->declarations = NULL;
     ast->folded_constants = NULL;
+    ast->symbols = symbols;
     orso_type_set_init(&ast->type_set);
 }
 
@@ -237,8 +238,9 @@ void orso_ast_free(OrsoAST* ast) {
     sb_free(ast->declarations);
     ast->declarations = NULL;
 
-    sb_free(ast->folded_constants);
-    ast->folded_constants = NULL;
+    // TODO: Remember to free folded constants
+    //sb_free(ast->folded_constants);
+    //ast->folded_constants = NULL;
 
     orso_type_set_free(&ast->type_set);
 }
@@ -434,7 +436,7 @@ static OrsoExpressionNode* literal(Parser* parser) {
 
         case TOKEN_SYMBOL: {
             expression_node->value_type = &OrsoTypeSymbol;
-            OrsoSymbol* value = orso_new_symbol_from_cstrn(NULL, expression_node->start.start + 1, expression_node->start.length - 1, parser->symbols);
+            OrsoSymbol* value = orso_new_symbol_from_cstrn(NULL, expression_node->start.start + 1, expression_node->start.length - 1, parser->ast->symbols);
             expression_node->expr.primary.value_index = add_constant_value(parser, ORSO_SLOT_P(value, &OrsoTypeSymbol));
             break;
         }
@@ -905,6 +907,7 @@ static OrsoEntityDeclarationNode* entity_declaration(Parser* parser, bool as_par
 
     entity_declaration_node->type_node = NULL;
     entity_declaration_node->expression = NULL;
+    entity_declaration_node->implicit_default_value_index = -1;
     entity_declaration_node->is_mutable = false;
 
     entity_declaration_node->name = parse_variable(parser);

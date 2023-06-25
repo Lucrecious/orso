@@ -3,7 +3,9 @@
 
 #include "chunk.h"
 #include "def.h"
-#include "type.h"
+#include "type_set.h"
+#include "slot.h"
+#include "symbol_table.h"
 #include "garbage_collector.h"
 
 typedef struct OrsoObject {
@@ -69,5 +71,12 @@ OrsoFunction* orso_new_function(OrsoGarbageCollector* gc);
 i64 cstrn_to_i64(const char* text, i32 length);
 f64 cstrn_to_f64(const char* text, i32 length);
 
+OrsoSymbol* orso_unmanaged_symbol_from_cstrn(const char* start, i32 length, OrsoSymbolTable* symbol_table);
+
+FORCE_INLINE void orso_unmanaged_symbol_free(OrsoSymbol* symbol) {
+    free(symbol);
+}
+
+OrsoSymbol* orso_new_symbol_from_cstrn(OrsoGarbageCollector* gc, const char* start, i32 length, OrsoSymbolTable* symbol_table);
 
 #endif
