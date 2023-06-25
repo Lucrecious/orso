@@ -15,8 +15,6 @@ typedef struct OrsoScope {
 struct OrsoInterpreter;
 
 typedef struct OrsoStaticAnalyzer {
-    OrsoVM evaluator;
-
     OrsoErrorFunction error_fn;
     OrsoSymbolTable symbols;
 

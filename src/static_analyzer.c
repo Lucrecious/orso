@@ -292,14 +292,27 @@ static i32 add_value_to_ast_constant_stack(OrsoAST* ast, OrsoSlot* value, OrsoTy
 
 static i32 evaluate_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, OrsoExpressionNode* expression) {
     (void)scope; // TODO: remove this if unnecessary
+
+    OrsoVM vm;
+    // TODO: Make sure this uses the same writing function as the vm that runs the code at the end.
+    orso_vm_init(&vm, NULL);
+
+    OrsoSlot stack[512];
+    OrsoGCValueIndex object_stack[512];
+    vm.stack = stack;
+    vm.stack_top = stack;
+    vm.object_stack = object_stack;
+    vm.object_stack_top = object_stack;
+
+
     OrsoCodeBuilder builder;
-    orso_code_builder_init(&builder, &analyzer->evaluator, ast);
+    orso_code_builder_init(&builder, &vm, ast);
 
     OrsoFunction* function = orso_generate_expression_function(&builder, expression, true);
 
     orso_code_builder_free(&builder);
 
-    OrsoSlot* value = orso_call_function(&analyzer->evaluator, function, analyzer->error_fn);
+    OrsoSlot* value = orso_call_function(&vm, function, analyzer->error_fn);
 
     i32 value_index = add_value_to_ast_constant_stack(ast, value, expression->value_type);
 
@@ -638,15 +651,15 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
         }
 
         case EXPRESSION_BLOCK: {
-            OrsoScope block_state;
-            scope_init(&block_state, scope, expression);
+            OrsoScope block_scope;
+            scope_init(&block_scope, scope, expression);
 
-            forward_declare_entities(analyzer, scope, expression->expr.block.declarations);
+            forward_declare_entities(analyzer, &block_scope, expression->expr.block.declarations);
 
             i32 declarations_count = sb_count(expression->expr.block.declarations);
             for (i32 i = 0; i < declarations_count; i++) {
                 OrsoDeclarationNode* declaration = expression->expr.block.declarations[i];
-                resolve_declaration(analyzer, ast, &block_state, declaration);
+                resolve_declaration(analyzer, ast, &block_scope, declaration);
             }
 
             OrsoDeclarationNode* last_expression_statement = NULL;
@@ -666,7 +679,7 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
                 expression->narrowed_value_type = last_expression_statement->decl.statement->stmt.expression->narrowed_value_type;
             }
 
-            scope_free(&block_state);
+            scope_free(&block_scope);
 
             fold_constants(analyzer, ast, scope, expression);
             break;
@@ -1196,9 +1209,10 @@ void orso_static_analyzer_init(OrsoStaticAnalyzer* analyzer, OrsoWriteFunction w
     analyzer->had_error = false;
     analyzer->panic_mode = false;
 
-    orso_symbol_table_init(&analyzer->symbols);
+    // TODO: fix
+    (void)write_fn;
 
-    orso_vm_init(&analyzer->evaluator, write_fn);
+    orso_symbol_table_init(&analyzer->symbols);
 }
 
 void orso_static_analyzer_free(OrsoStaticAnalyzer* analyzer) {
@@ -1212,8 +1226,6 @@ void orso_static_analyzer_free(OrsoStaticAnalyzer* analyzer) {
     }
 
     orso_symbol_table_free(&analyzer->symbols);
-
-    orso_vm_free(&analyzer->evaluator);
 
     analyzer->error_fn = NULL;
     analyzer->had_error = false;
