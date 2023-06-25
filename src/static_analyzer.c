@@ -394,16 +394,8 @@ static void resolve_foldable(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
 
                 ASSERT(folded_index >= 0, "since the entity is a constant, it should have a folded value already");
             } else {
-                resolve_type(analyzer, ast, entity_scope, entity->declaration_node->type_node);
-
-                OrsoSlot value = orso_zero_value(entity->declaration_node->type, &analyzer->symbols);
-
-                // TODO: Optimize default values since they are always the same. Probably can use the same index for them. somehjow
-                i32 value_index = add_value_to_ast_constant_stack(ast, &value, entity->declaration_node->type);
-                entity->declaration_node->implicit_default_value_index = value_index;
-
                 foldable = true;
-                folded_index = value_index;
+                folded_index = entity->declaration_node->implicit_default_value_index;
             }
             break;
         }
@@ -922,6 +914,9 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
         }
     }
 
+    if (analyzer->had_error) {
+        return;
+    }
 
     OrsoSymbol* name = orso_unmanaged_symbol_from_cstrn(entity_declaration->name.start, entity_declaration->name.length, &analyzer->symbols);
     OrsoSlot entity_slot;
@@ -939,6 +934,12 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
         if (ORSO_TYPE_IS_UNION(entity_declaration->type)) {
             entity->narrowed_type = &OrsoTypeVoid;
         } 
+
+        OrsoSlot value = orso_zero_value(entity->declaration_node->type, &analyzer->symbols);
+
+        // TODO: Optimize default values since they are always the same. Probably can use the same index for them. somehjow
+        i32 value_index = add_value_to_ast_constant_stack(ast, &value, entity->declaration_node->type);
+        entity->declaration_node->implicit_default_value_index = value_index;
     } else {
         entity->narrowed_type = entity_declaration->expression->narrowed_value_type;
     }
