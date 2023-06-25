@@ -1,6 +1,0 @@
-## test
-x: i64;
-print_expr x;
-# ---
-10
-# ---
