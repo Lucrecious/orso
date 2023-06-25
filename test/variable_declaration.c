@@ -345,7 +345,7 @@ INTERPRETER_ERROR_TEST(default_value_required_for_non_void_unions,
 
 INTERPRETER_ERROR_TEST(undefined_type,
     "x: str;",
-    ORSO_ERROR_COMPILE, 0, "Type str does not exist.")
+    ORSO_ERROR_COMPILE, 0, "Type str has not been declared.")
 
 INTERPRETER_ERROR_TEST(too_many_types,
     "x: string|symbol|i64|f64|void = null;",
@@ -353,15 +353,15 @@ INTERPRETER_ERROR_TEST(too_many_types,
 
 INTERPRETER_ERROR_TEST(duplicate_definitions,
     "x: string; x: void;",
-    ORSO_ERROR_COMPILE, 0, "Duplicate variable definition of 'x'.")
+    ORSO_ERROR_COMPILE, 0, "Duplicate entity definition of 'x'.")
 
 INTERPRETER_ERROR_TEST(local_variables_dont_exist_after_block,
     "{ x := 10; }; print_expr x;",
-    ORSO_ERROR_COMPILE, 0, "Variable does not exist.")
+    ORSO_ERROR_COMPILE, 0, "Entity does not exist.")
 
 INTERPRETER_ERROR_TEST(local_variables_dont_exist_after_block2,
     "{ { x := 10; }; print_expr x; };",
-    ORSO_ERROR_COMPILE, 0, "Variable does not exist.")
+    ORSO_ERROR_COMPILE, 0, "Entity does not exist.")
 
 
 MU_TEST_SUITE(tests) {
