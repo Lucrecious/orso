@@ -746,6 +746,8 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoExpress
         gen_primary(compiler, chunk, ast,
                 expression_node->value_type,
                 expression_node->folded_value_index, expression_node->start.line);
+
+        //emit_storage_type_convert(compiler, chunk, expression_node->narrowed_value_type, expression_node->value_type, expression_node->start.line);
         return;
     }
 

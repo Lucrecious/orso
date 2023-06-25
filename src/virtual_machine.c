@@ -510,20 +510,24 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
 
                 byte result_size = READ_BYTE();
                 for (i32 i = 0; i < result_size; i++) {
-                    frame->slots[result_size - i - 1] = POP();
+                    frame->slots[i] = *PEEK(result_size - i - 1);
+                }
+
+                for (i32 i = 0; i < result_size; i++) {
+                    POP();
                 }
 
                 vm->frame_count--;
 
-                if (vm->frame_count == 0) {
-                    POP_PTR();
-                    return;
-                } else {
-                    POP_TOP_OBJECT();
-                }
+                POP_TOP_OBJECT();
 
                 if (is_return_gc_type) {
                     PUSH_TOP_OBJECT();
+                }
+
+                if (vm->frame_count == 0) {
+                    //POP_PTR();
+                    return;
                 }
 
                 vm->stack_top = frame->slots + result_size;

@@ -14,7 +14,7 @@ OrsoSlot* orso_call_function(OrsoVM* vm, OrsoFunction* function, OrsoErrorFuncti
 
     // skip the function local and land on the return type
     // caller is responsible for knowing the type of the return value
-    return vm->stack + 1;
+    return vm->stack;
 }
 
 OrsoFunction* orso_compile_ast(OrsoVM* vm, OrsoAST* ast) {
