@@ -719,6 +719,8 @@ static OrsoExpressionNode** parse_arguments(Parser* parser) {
 static OrsoExpressionNode* call(Parser* parser) {
     OrsoExpressionNode* expression_node = expression_new(parser->previous);
     expression_node->type = EXPRESSION_CALL;
+    expression_node->expr.call.callee_type = NULL;
+    expression_node->expr.call.callee_function_type = NULL;
 
     expression_node->expr.call.arguments = parse_arguments(parser);
     expression_node->end = parser->previous;

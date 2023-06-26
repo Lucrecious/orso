@@ -758,7 +758,6 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
                 if (can_call((OrsoFunctionType*)entity->narrowed_type, expression->expr.call.arguments)) {
                     callee_type = entity->declared_type;
                     function_type = (OrsoFunctionType*)entity->narrowed_type;
-                    break;
                 }
             }
 
@@ -1129,7 +1128,7 @@ static OrsoScope* get_closest_outer_function_scope(OrsoScope* scope) {
         scope = scope->outer;
     }
 
-    return NULL;
+    return scope;
 }
 
 static void resolve_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, OrsoDeclarationNode* declaration_node) {
