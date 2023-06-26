@@ -682,6 +682,12 @@ static OrsoExpressionNode* grouping_or_function_definition(Parser* parser) {
 
         expression_node->value_type = &OrsoTypeUnresolved;
         expression_node->narrowed_value_type = &OrsoTypeUnresolved;
+
+        OrsoFunction* function = orso_new_function(NULL);
+
+        expression_node->foldable = true;
+        expression_node->folded_value_index = add_constant_value(parser, ORSO_SLOT_P(function, &OrsoTypeUnresolved));
+
     } else {
         expression_node->type = EXPRESSION_GROUPING;
         expression_node->expr.grouping.expression = expression(parser);

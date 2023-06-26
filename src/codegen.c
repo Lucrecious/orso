@@ -199,7 +199,13 @@ static i32 get_object_stack_effect(OrsoOPCode op_code) {
 static i32 add_local(Compiler* compiler, Token name, i32 slot_count, bool is_gc_type);
 
 // A Token* is passed in instead of OrsoSymbol* because Token* cant be garbage collected and OrsoSymbol* can and would be.
-static void compiler_init(Compiler* compiler, OrsoCompilerFunctionType function_type, OrsoVM* vm, OrsoType* creator_type) {
+static void compiler_init(Compiler* compiler, OrsoCompilerFunctionType function_type, OrsoVM* vm, OrsoFunction* function, OrsoType* creator_type) {
+    ASSERT(function, "must be not null");
+
+    // TODO: remove if possible, previously this was used to get the garbage collector but thats being
+    //   removed if possible, previously this was used to get the garbage collector but thats being removed
+    (void)vm; 
+
     compiler->literals_only = false;
     compiler->function = NULL;
     compiler->function_type = function_type;
@@ -212,7 +218,7 @@ static void compiler_init(Compiler* compiler, OrsoCompilerFunctionType function_
     compiler->current_object_stack_size = 0;
     compiler->max_stack_size = 0;
 
-    compiler->function = orso_new_function(&vm->gc);
+    compiler->function = function;
     compiler->function->type = (OrsoFunctionType*)creator_type;
 }
 
@@ -641,7 +647,8 @@ static void function_expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, Or
     ASSERT(function_defintion_expression->value_type->kind == ORSO_TYPE_FUNCTION, "must be function if calling this");
 
     Compiler function_compiler;
-    compiler_init(&function_compiler, ORSO_FUNCTION_TYPE_FUNCTION, vm, function_defintion_expression->value_type);
+    OrsoFunction* stored_function = (OrsoFunction*)ast->folded_constants[function_defintion_expression->folded_value_index].as.p;
+    compiler_init(&function_compiler, ORSO_FUNCTION_TYPE_FUNCTION, vm, stored_function, function_defintion_expression->value_type);
 
     // this is placed down by the caller
     function_compiler.max_stack_size = function_compiler.current_stack_size = function_compiler.current_object_stack_size = 1;
@@ -1252,7 +1259,9 @@ OrsoFunction* orso_generate_expression_function(OrsoCodeBuilder* builder, OrsoEx
     Compiler compiler;
     OrsoFunctionType* function_type = (OrsoFunctionType*)orso_type_set_fetch_function(&builder->ast->type_set, expression_node->value_type, NULL, 0);
 
-    compiler_init(&compiler, ORSO_FUNCTION_TYPE_SCRIPT, builder->vm, (OrsoType*)function_type);
+    OrsoFunction* run_function = orso_new_function(NULL);
+
+    compiler_init(&compiler, ORSO_FUNCTION_TYPE_SCRIPT, builder->vm, run_function, (OrsoType*)function_type);
     compiler.literals_only = literals_only;
 
     // The vm will put this guy on the guy.
@@ -1280,7 +1289,8 @@ OrsoFunction* orso_generate_expression_function(OrsoCodeBuilder* builder, OrsoEx
 OrsoFunction* orso_generate_code(OrsoVM* vm, OrsoAST* ast) {
     Compiler compiler;
     OrsoFunctionType* function_type = (OrsoFunctionType*)orso_type_set_fetch_function(&ast->type_set, &OrsoTypeVoid, NULL, 0);
-    compiler_init(&compiler, ORSO_FUNCTION_TYPE_SCRIPT, vm, (OrsoType*)function_type);
+    OrsoFunction* main_function = orso_new_function(NULL);
+    compiler_init(&compiler, ORSO_FUNCTION_TYPE_SCRIPT, vm, main_function, (OrsoType*)function_type);
 
     // when a function is called it is placed on the stack. The caller does this... In this case,
     // the caller is the virtual machine. So we start at stack size 1 since it should be there when
