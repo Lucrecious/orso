@@ -339,16 +339,6 @@ static void resolve_foldable(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
             break;
         }
 
-        case EXPRESSION_BLOCK: {
-            foldable = false;
-            break;
-        }
-
-        case EXPRESSION_CALL: {
-            foldable = false;
-            break;
-        }
-
         case EXPRESSION_IFELSE: {
             bool condition_is_foldable = expression->expr.ifelse.condition->foldable;
             bool then_is_foldable = expression->expr.ifelse.then->foldable;
@@ -394,7 +384,13 @@ static void resolve_foldable(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
             break;
         }
 
+        case EXPRESSION_FUNCTION_DEFINITION: {
+            foldable = true;
+            break;
+        }
 
+        case EXPRESSION_BLOCK:
+        case EXPRESSION_CALL:
         case EXPRESSION_IMPLICIT_CAST:
         case EXPRESSION_ASSIGNMENT: {
             break;
@@ -402,11 +398,6 @@ static void resolve_foldable(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
 
         case EXPRESSION_PRIMARY: {
             UNREACHABLE();
-            break;
-        }
-
-        case EXPRESSION_FUNCTION_DEFINITION: {
-            foldable = true;
             break;
         }
 
