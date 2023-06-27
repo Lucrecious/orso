@@ -309,7 +309,7 @@ static i32 evaluate_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoS
     OrsoCodeBuilder builder;
     orso_code_builder_init(&builder, &vm, ast);
 
-    OrsoFunction* function = orso_generate_expression_function(&builder, expression, true);
+    OrsoFunction* function = orso_generate_expression_function(&builder, expression);
 
     orso_code_builder_free(&builder);
 
@@ -403,8 +403,8 @@ static void resolve_foldable(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
         case EXPRESSION_ASSIGNMENT: {
             //fold_constants(analyzer, ast, scope, expression->expr.assignment.right_side);
 
-            foldable = expression->expr.assignment.right_side->foldable;
-            folded_index = expression->expr.assignment.right_side->folded_value_index;
+            // foldable = false; //expression->expr.assignment.right_side->foldable;
+            // folded_index = expression->expr.assignment.right_side->folded_value_index;
             break;
         }
 
@@ -845,19 +845,6 @@ static OrsoType* resolve_type(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSc
 }
 
 static void declare_entity(OrsoStaticAnalyzer* analyzer, OrsoScope* scope, OrsoEntityDeclarationNode* entity) {
-    //ASSERT(entity->type != &OrsoTypeInvalid, "Variable being declared must have valid type.");
-    //ASSERT(entity->type != &OrsoTypeUnresolved, "Variable being declared must have resolved type.");
-
-    // OrsoType* narrowed_type = entity->type;
-    // if (ORSO_TYPE_IS_UNION(entity->type)) {
-    //     if (entity->expression) {
-    //         narrowed_type = entity->expression->narrowed_value_type;
-    //     } else {
-    //         ASSERT(orso_type_fits(entity->type, &OrsoTypeVoid), "must contain void type here.");
-    //         narrowed_type = &OrsoTypeVoid;
-    //     }
-    // }
-
     OrsoSymbol* identifier = orso_unmanaged_symbol_from_cstrn(entity->name.start, entity->name.length, &analyzer->symbols);
     OrsoSlot slot_type_pair;
     if (orso_symbol_table_get(&scope->named_entities, identifier, &slot_type_pair)) {
@@ -868,7 +855,6 @@ static void declare_entity(OrsoStaticAnalyzer* analyzer, OrsoScope* scope, OrsoE
     }
 
     add_entity(scope, identifier, entity);
-    // add_entity(scope, identifier, entity->type, &OrsoTypeUnresolved/*narrowed_type*/, entity);
 }
 
 static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, OrsoEntityDeclarationNode* entity_declaration) {
@@ -1032,12 +1018,6 @@ static Entity* get_entity_by_identifier(OrsoStaticAnalyzer* analyzer, OrsoAST* a
 
         resolve_entity_declaration(analyzer, ast, *search_scope, entity->declaration_node);
 
-        // entity->declared_type = entity->declaration_node->type;
-        // entity->narrowed_type = entity->declaration_node->type;
-        // if (entity->declaration_node->expression != NULL) {
-        //     entity->narrowed_type = entity->declaration_node->expression->narrowed_value_type;
-        // }
-
         if (!type_hint) {
             return entity;
         }
@@ -1107,18 +1087,6 @@ static void resolve_function_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* a
     ASSERT(definition->block_expression->type == EXPRESSION_BLOCK, "must be block expression");
 
     orso_resolve_expression(analyzer, ast, &function_scope, definition->block_expression);
-    // OrsoScope function_block_scope;
-    // scope_init(&function_block_scope, &function_scope, definition->block_expression);
-
-    // // forward declare the block declarations
-    // forward_declare_entities(analyzer, &function_block_scope, ->block);
-
-    // // resolve the block declarations
-    // for (i32 i = 0; i < sb_count(function_definition->block.declarations); i++) {
-    //     resolve_declaration(analyzer, ast, &function_block_scope, function_definition->block.declarations[i]);
-    // }
-
-    // scope_free(&function_block_scope);
 
     scope_free(&function_scope);
 }
@@ -1192,25 +1160,6 @@ void resolve_ast(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* global_s
     }
 }
 
-// static void add_builtin_types(OrsoStaticAnalyzer* analyzer, OrsoScope* scope) {
-// #define ADD_TYPE(CTYPE, N, ORSO_TYPE) do { \
-//     OrsoSymbol* symbol_##CTYPE = orso_unmanaged_symbol_from_cstrn(#CTYPE, N, &analyzer->symbols); \
-//     OrsoSlot slot = ORSO_SLOT_P((Entity){ . }, &OrsoTypeType); \
-//     orso_symbol_table_set(&scope->named_entities, symbol_##CTYPE, slot); \
-//     } while (false)
-
-//     ADD_TYPE(void, 4, &OrsoTypeVoid);
-//     ADD_TYPE(bool, 4, &OrsoTypeBool);
-//     ADD_TYPE(i32, 3, &OrsoTypeInteger32);
-//     ADD_TYPE(i64, 3, &OrsoTypeInteger64);
-//     ADD_TYPE(f32, 3, &OrsoTypeFloat32);
-//     ADD_TYPE(f64, 3, &OrsoTypeFloat64);
-//     ADD_TYPE(string, 6, &OrsoTypeString);
-//     ADD_TYPE(symbol, 6, &OrsoTypeSymbol);
-
-// #undef ADD_TYPE
-// }
-
 bool orso_resolve_ast(OrsoStaticAnalyzer* analyzer, OrsoAST* ast) {
     if (ast->declarations == NULL) {
         return true;
@@ -1218,8 +1167,6 @@ bool orso_resolve_ast(OrsoStaticAnalyzer* analyzer, OrsoAST* ast) {
 
     OrsoScope global_scope;
     scope_init(&global_scope, NULL, NULL);
-
-    //add_builtin_types(analyzer, &global_scope);
 
     resolve_ast(analyzer, ast, &global_scope);
 

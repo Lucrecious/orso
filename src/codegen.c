@@ -24,7 +24,6 @@ typedef enum {
 } OrsoCompilerFunctionType;
 
 typedef struct Compiler {
-    bool literals_only;
     OrsoFunction* function;
     OrsoCompilerFunctionType function_type;
 
@@ -206,7 +205,6 @@ static void compiler_init(Compiler* compiler, OrsoCompilerFunctionType function_
     //   removed if possible, previously this was used to get the garbage collector but thats being removed
     (void)vm; 
 
-    compiler->literals_only = false;
     compiler->function = NULL;
     compiler->function_type = function_type;
 
@@ -714,8 +712,9 @@ static void gen_primary(Compiler* compiler, Chunk* chunk, OrsoAST* ast, OrsoType
             }
             break;
         }
-        case ORSO_TYPE_STRING: {
+        case ORSO_TYPE_FUNCTION:
         case ORSO_TYPE_SYMBOL:
+        case ORSO_TYPE_STRING: {
             emit_constant(compiler, chunk, *value, line, true);
             break;
         }
@@ -747,12 +746,12 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoExpress
     emit_instruction(ORSO_OP_NEGATE_##TYPE, compiler, chunk, operator.line); \
 } while (false)
 
-#ifdef DEBUG
-    bool requires_entity = expression_node->type == EXPRESSION_ASSIGNMENT || expression_node->type == EXPRESSION_ENTITY;
-    ASSERT(!compiler->literals_only || (expression_node->folded_value_index >= 0 || !requires_entity), "compiler is assuming folded values only for ALL expressions");
-#endif
+// #ifdef DEBUG
+//     bool requires_entity = expression_node->type == EXPRESSION_ASSIGNMENT || expression_node->type == EXPRESSION_ENTITY;
+//     ASSERT(!compiler->literals_only || (expression_node->folded_value_index >= 0 || !requires_entity), "compiler is assuming folded values only for ALL expressions");
+// #endif
 
-    if (compiler->literals_only && expression_node->folded_value_index >= 0) {
+    if (expression_node->folded_value_index >= 0) {
         gen_primary(compiler, chunk, ast,
                 expression_node->value_type,
                 expression_node->folded_value_index, expression_node->start.line);
@@ -1255,14 +1254,13 @@ void orso_code_builder_free(OrsoCodeBuilder* builder) {
     (void)builder;
 }
 
-OrsoFunction* orso_generate_expression_function(OrsoCodeBuilder* builder, OrsoExpressionNode* expression_node, bool literals_only) {
+OrsoFunction* orso_generate_expression_function(OrsoCodeBuilder* builder, OrsoExpressionNode* expression_node) {
     Compiler compiler;
     OrsoFunctionType* function_type = (OrsoFunctionType*)orso_type_set_fetch_function(&builder->ast->type_set, expression_node->value_type, NULL, 0);
 
     OrsoFunction* run_function = orso_new_function(NULL);
 
     compiler_init(&compiler, ORSO_FUNCTION_TYPE_SCRIPT, builder->vm, run_function, (OrsoType*)function_type);
-    compiler.literals_only = literals_only;
 
     // The vm will put this guy on the guy.
     compiler.max_stack_size = compiler.current_stack_size = compiler.current_object_stack_size = 1;
