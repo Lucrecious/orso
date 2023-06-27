@@ -184,8 +184,8 @@ static OrsoExpressionNode* implicit_cast(OrsoExpressionNode* operand, OrsoType* 
     implicit_cast->value_type = value_type;
     implicit_cast->narrowed_value_type = value_type;
     implicit_cast->expr.cast.operand = operand;
-    implicit_cast->foldable = operand->foldable;
-    implicit_cast->folded_value_index = operand->folded_value_index;
+    implicit_cast->foldable = true;
+    implicit_cast->folded_value_index = -1;
 
     return implicit_cast;
 }
@@ -358,12 +358,6 @@ static void resolve_foldable(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
             break;
         }
 
-        case EXPRESSION_IMPLICIT_CAST: {
-            foldable = expression->expr.cast.operand->foldable;
-            folded_index = expression->expr.cast.operand->folded_value_index;
-            break;
-        }
-
         case EXPRESSION_UNARY: {
             foldable = expression->expr.unary.operand->foldable;
             break;
@@ -400,11 +394,9 @@ static void resolve_foldable(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
             break;
         }
 
-        case EXPRESSION_ASSIGNMENT: {
-            //fold_constants(analyzer, ast, scope, expression->expr.assignment.right_side);
 
-            // foldable = false; //expression->expr.assignment.right_side->foldable;
-            // folded_index = expression->expr.assignment.right_side->folded_value_index;
+        case EXPRESSION_IMPLICIT_CAST:
+        case EXPRESSION_ASSIGNMENT: {
             break;
         }
 
