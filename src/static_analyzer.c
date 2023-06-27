@@ -459,8 +459,6 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
             orso_resolve_expression(analyzer, ast, scope, expression->expr.grouping.expression);
             expression->value_type = expression->expr.grouping.expression->narrowed_value_type;
             expression->narrowed_value_type = expression->expr.grouping.expression->narrowed_value_type;
-
-            fold_constants(analyzer, ast, scope, expression);
             break;
         }
         case EXPRESSION_PRIMARY: {
@@ -540,7 +538,7 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
             if (cast_left == &OrsoTypeInvalid || cast_right == &OrsoTypeInvalid) {
                 expression->value_type = &OrsoTypeInvalid;
                 error_incompatible_binary_types(analyzer, expression->expr.binary.operator, left->narrowed_value_type, right->narrowed_value_type, expression->expr.binary.operator.line);
-                break;
+                return;
             }
 
             if (!is_logical_operator) {
@@ -555,8 +553,6 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
                     fold_constants(analyzer, ast, scope, expression->expr.binary.right);
                 }
             }
-
-            fold_constants(analyzer, ast, scope, expression);
             break;
         }
         case EXPRESSION_UNARY: {
@@ -571,10 +567,8 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
 
             if (expression->narrowed_value_type == &OrsoTypeInvalid) {
                 error_incompatible_unary_type(analyzer, unary_op->operator, unary_op->operand->narrowed_value_type, unary_op->operator.line);
-                break;
+                return;
             }
-
-            fold_constants(analyzer, ast, scope, expression);
             break;
         }
         case EXPRESSION_ENTITY: {
@@ -584,13 +578,11 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
 
             if (entity == NULL) {
                 error(analyzer, expression->expr.entity.name.line, "Entity does not exist.");
-                break;
+                return;
             }
 
             expression->value_type = entity->declared_type;
             expression->narrowed_value_type = entity->narrowed_type;
-
-            fold_constants(analyzer, ast, scope, expression);
             break;
         }
 
@@ -601,7 +593,7 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
 
             if (entity == NULL) {
                 error(analyzer, expression->start.line, "Entity does not exist.");
-                break;
+                return;
             }
 
             orso_resolve_expression(analyzer, ast, scope, expression->expr.assignment.right_side);
@@ -613,7 +605,7 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
             
             if (!orso_type_fits(entity->declared_type, right_side_narrowed_type)) {
                 error(analyzer, expression->start.line, "Expression needs explicit cast to store in variable.");
-                break;
+                return;
             }
 
             expression->narrowed_value_type = right_side_narrowed_type;
@@ -621,8 +613,6 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
             if (ORSO_TYPE_IS_UNION(entity->declared_type)) {
                 entity->narrowed_type = expression->narrowed_value_type;
             }
-
-            fold_constants(analyzer, ast, scope, expression);
             break;
         }
 
@@ -656,8 +646,6 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
             }
 
             scope_free(&block_scope);
-
-            fold_constants(analyzer, ast, scope, expression);
             break;
         }
 
@@ -704,13 +692,12 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
 
             if (expression->value_type == &OrsoTypeInvalid) {
                 error(analyzer, expression->end.line, "if expression union type is too large.");
+                return;
             }
 
             expression->narrowed_value_type = orso_type_merge(&ast->type_set,
                 expression->expr.ifelse.then->narrowed_value_type, else_block_narrowed_type
             );
-
-            fold_constants(analyzer, ast, scope, expression);
             break;
         }
         case EXPRESSION_CALL: {
@@ -754,19 +741,18 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
             expression->narrowed_value_type = expression->value_type;
             expression->expr.call.callee_type = callee_type;
             expression->expr.call.callee_function_type = function_type;
-
-            fold_constants(analyzer, ast, scope, expression);
             break;
         }
         case EXPRESSION_FUNCTION_DEFINITION: {
             resolve_function_expression(analyzer, ast, scope, expression);
-            fold_constants(analyzer, ast, scope, expression);
             break;
         }
         case EXPRESSION_FOR:
         case EXPRESSION_IMPLICIT_CAST:
         case EXPRESSION_NONE: UNREACHABLE();
     }
+
+    fold_constants(analyzer, ast, scope, expression);
 }
 
 static OrsoType* resolve_type(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, OrsoTypeNode* type_node) {
