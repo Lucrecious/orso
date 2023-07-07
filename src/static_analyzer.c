@@ -909,6 +909,29 @@ static bool is_declaration_resolved(OrsoEntityDeclarationNode* entity) {
     return (entity->implicit_default_value_index >= 0 || entity->expression->value_type != &OrsoTypeUnresolved) && entity->type != &OrsoTypeUnresolved;
 }
 
+static bool is_circular_dependency(OrsoStaticAnalyzer* analyzer, OrsoEntityDeclarationNode* entity) {
+    for (i32 i = analyzer->dependencies.count - 1; i >= 0; i--) {
+        OrsoEntityDeclarationNode* dependency = analyzer->dependencies.chain[i];
+        if (dependency == entity) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static void push_dependency(OrsoStaticAnalyzer* analyzer, OrsoEntityDeclarationNode* entity) {
+    if (sb_count(analyzer->dependencies.chain) <= analyzer->dependencies.count) {
+        sb_push(analyzer->dependencies.chain, entity);
+    } else {
+        analyzer->dependencies.chain[analyzer->dependencies.count++] = entity;
+    }
+}
+
+static void pop_dependency(OrsoStaticAnalyzer* analyzer) {
+    analyzer->dependencies.count--;
+}
+
 /*
  * This is the big boy function. The meat of compile time expression evaluation. This language has a couple of rules it must
  * follow for this to work correctly.
@@ -991,6 +1014,11 @@ static Entity* get_resolved_entity_by_identifier(OrsoStaticAnalyzer* analyzer, O
 
         Entity* entity = (Entity*)entity_slot.as.p;
 
+        if (is_circular_dependency(analyzer, entity->declaration_node)) {
+            error(analyzer, entity->declaration_node->start.line, "Circular dependency");
+            return NULL;
+        }
+
         if (query && query->skip_mutable && entity->declaration_node->is_mutable) {
             NEXT_SCOPE();
             continue;
@@ -1014,7 +1042,11 @@ static Entity* get_resolved_entity_by_identifier(OrsoStaticAnalyzer* analyzer, O
                 entity->declared_type = entity->declaration_node->expression->value_type;
                 entity->narrowed_type = entity->declaration_node->expression->narrowed_value_type;
             } else {
+                push_dependency(analyzer, entity->declaration_node);
+
                 resolve_entity_declaration(analyzer, ast, *search_scope, entity->declaration_node);
+
+                pop_dependency(analyzer);
             }
         }
 
@@ -1204,6 +1236,9 @@ void orso_static_analyzer_init(OrsoStaticAnalyzer* analyzer, OrsoWriteFunction w
     analyzer->had_error = false;
     analyzer->panic_mode = false;
 
+    analyzer->dependencies.count = 0;
+    analyzer->dependencies.chain = NULL;
+
     // TODO: fix
     (void)write_fn;
 
@@ -1221,6 +1256,10 @@ void orso_static_analyzer_free(OrsoStaticAnalyzer* analyzer) {
     }
 
     orso_symbol_table_free(&analyzer->symbols);
+
+    sb_free(analyzer->dependencies.chain);
+    analyzer->dependencies.chain = NULL;
+    analyzer->dependencies.count = 0;
 
     analyzer->error_fn = NULL;
     analyzer->had_error = false;

@@ -18,6 +18,11 @@ typedef struct OrsoStaticAnalyzer {
     OrsoErrorFunction error_fn;
     OrsoSymbolTable symbols;
 
+    struct {
+        i32 count;
+        OrsoEntityDeclarationNode** chain;
+    } dependencies;
+
     bool had_error;
     bool panic_mode;
 } OrsoStaticAnalyzer;
