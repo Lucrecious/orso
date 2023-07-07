@@ -751,7 +751,7 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
 
             OrsoType* narrowed_callee_type = expression->expr.call.callee->narrowed_value_type;
             if (narrowed_callee_type->kind != ORSO_TYPE_FUNCTION ||
-                can_call((OrsoFunctionType*)narrowed_callee_type, expression->expr.call.arguments)) {
+                !can_call((OrsoFunctionType*)narrowed_callee_type, expression->expr.call.arguments)) {
                 error(analyzer, expression->expr.call.callee->start.line, "Function does not exist.");
                 return;
             }
