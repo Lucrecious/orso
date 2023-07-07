@@ -731,23 +731,6 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
                 return;
             }
 
-            // Entity* entity = get_resolved_entity_by_identifier(analyzer, ast, scope, *callee, &type_hint, &entity_scope, &is_cyclic);
-            // if (entity) {
-            //     if (ORSO_TYPE_IS_UNION(entity->narrowed_type)) {
-            //         error(analyzer, expression->expr.call.callee.line, "Cannot call unnarrowed union type.");
-            //         return;
-            //     }
-
-            //     if (entity->narrowed_type->kind != ORSO_TYPE_FUNCTION) {
-            //         error(analyzer, expression->expr.call.callee.line, "Cannot call non-function type.");
-            //         return;
-            //     }
-
-            //     if (can_call((OrsoFunctionType*)entity->narrowed_type, expression->expr.call.arguments)) {
-            //         callee_type = entity->declared_type;
-            //         function_type = (OrsoFunctionType*)entity->narrowed_type;
-            //     }
-            // }
 
             OrsoType* narrowed_callee_type = expression->expr.call.callee->narrowed_value_type;
             if (narrowed_callee_type->kind != ORSO_TYPE_FUNCTION ||
@@ -755,12 +738,6 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
                 error(analyzer, expression->expr.call.callee->start.line, "Function does not exist.");
                 return;
             }
-
-
-            // if (!callee_type) {
-            //     error(analyzer, expression->expr.call.callee.line, "Function does not exist.");
-            //     return;
-            // }
 
             OrsoFunctionType* function_type = (OrsoFunctionType*)narrowed_callee_type;
 
