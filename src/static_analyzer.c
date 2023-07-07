@@ -367,7 +367,7 @@ static void resolve_foldable(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
 
             if (!entity) {
                 char message[512];
-                sprintf(message, "Entity %*.s undefined.", expression->expr.entity.name.length, expression->expr.entity.name.start);
+                sprintf(message, "Entity %.*s undefined.", expression->expr.entity.name.length, expression->expr.entity.name.start);
                 error(analyzer, expression->expr.entity.name.line, message);
                 break;
             }
@@ -905,6 +905,10 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
     }
 }
 
+static bool is_declaration_resolved(OrsoEntityDeclarationNode* entity) {
+    return (entity->implicit_default_value_index >= 0 || entity->expression->value_type != &OrsoTypeUnresolved) && entity->type != &OrsoTypeUnresolved;
+}
+
 /*
  * This is the big boy function. The meat of compile time expression evaluation. This language has a couple of rules it must
  * follow for this to work correctly.
@@ -997,6 +1001,12 @@ static Entity* get_resolved_entity_by_identifier(OrsoStaticAnalyzer* analyzer, O
         }
 
         if (passed_local_mutable_access_barrier && (*search_scope)->creator != NULL && entity->declaration_node->is_mutable) {
+            NEXT_SCOPE();
+            continue;
+        }
+
+        if (entity->declaration_node->is_mutable && !is_declaration_resolved(entity->declaration_node)) {
+            ASSERT(entity->declaration_node->name.start > identifier_token.start, "cannot think of a case when the declaration wont happen PRIOR to using it with mutables");
             NEXT_SCOPE();
             continue;
         }

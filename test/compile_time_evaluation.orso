@@ -65,6 +65,8 @@ Cannot resolve B. A constant A is not declared in the scope or higher scope.
             print B;
         };
     };
+
+    foo();
 };
 # ---
 5
@@ -151,4 +153,24 @@ Bar :: struct {
 print A.X;
 # ---
 42
+# ---
+
+## global mutables must be ordered
+x := y;
+y := 10;
+
+print x;
+# ---
+y is not defined.
+# ---
+
+## local mutables must be ordered
+{
+    x := y;
+    y := 10;
+
+    print x;
+};
+# ---
+y is not defined.
 # ---
