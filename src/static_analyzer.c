@@ -989,10 +989,6 @@ static Entity* get_resolved_entity_by_identifier(OrsoStaticAnalyzer* analyzer, O
             continue;
         }
 
-        // no-commit: Here I need to check the order of things... x := 10; y := x; isn't valid since x and y are mutable
-        // and are bound to the order they are written to make sense of them. Therefore, this needs to check that
-        // if we are still within the function barrier and referring to a mutable variable, it must have been created before
-        // the current entity -
         Entity* entity = (Entity*)entity_slot.as.p;
 
         if (query && query->skip_mutable && entity->declaration_node->is_mutable) {
