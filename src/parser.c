@@ -481,9 +481,8 @@ static OrsoExpressionNode* convert_call_expression(Parser* parser, OrsoExpressio
     }
 
     call->start = left_operand->start;
-    call->expr.call.callee = left_operand->expr.entity.name;
-    orso_free_expression(left_operand);
-    free(left_operand);
+
+    call->expr.call.callee = left_operand;
 
     return call;
 }
@@ -719,9 +718,8 @@ static OrsoExpressionNode** parse_arguments(Parser* parser) {
 static OrsoExpressionNode* call(Parser* parser) {
     OrsoExpressionNode* expression_node = expression_new(parser->previous);
     expression_node->type = EXPRESSION_CALL;
-    expression_node->expr.call.callee_type = NULL;
-    expression_node->expr.call.callee_function_type = NULL;
 
+    expression_node->expr.call.callee = NULL;
     expression_node->expr.call.arguments = parse_arguments(parser);
     expression_node->end = parser->previous;
 
@@ -1057,8 +1055,7 @@ void ast_print_expression(OrsoExpressionNode* expression, i32 initial) {
             break;
         }
         case EXPRESSION_CALL: {
-            Token* callee = &expression->expr.call.callee;
-            printf("CALL - %.*s(", callee->length, callee->start);
+            printf("CALL - (");
 
             OrsoExpressionNode** arguments = expression->expr.call.arguments;
             for (i32 i = 0; i < sb_count(arguments); i++) {

@@ -356,7 +356,8 @@ static void resolve_foldable(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
         case EXPRESSION_ENTITY: {
             bool is_cyclic;
             OrsoScope* entity_scope;
-            Entity* entity = get_resolved_entity_by_identifier(analyzer, ast, scope, expression->expr.entity.name, NULL, &entity_scope, &is_cyclic);
+            Token name = expression->expr.entity.name;
+            Entity* entity = get_resolved_entity_by_identifier(analyzer, ast, scope, name, NULL, &entity_scope, &is_cyclic);
 
             if (!entity) {
                 char message[512];
@@ -387,8 +388,8 @@ static void resolve_foldable(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
             break;
         }
 
-        case EXPRESSION_BLOCK:
         case EXPRESSION_CALL:
+        case EXPRESSION_BLOCK:
         case EXPRESSION_IMPLICIT_CAST:
         case EXPRESSION_ASSIGNMENT: {
             break;
@@ -713,46 +714,58 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
             break;
         }
         case EXPRESSION_CALL: {
-            Token* callee = &expression->expr.call.callee;
-            OrsoType* callee_type = NULL;
-            OrsoFunctionType* function_type = NULL;
-
             for (i32 i = 0; i < sb_count(expression->expr.call.arguments); i++) {
                 OrsoExpressionNode* argument = expression->expr.call.arguments[i];
                 orso_resolve_expression(analyzer, ast, scope, argument);
-            }
+                fold_constants(analyzer, ast, scope, argument);
 
-            bool is_cyclic;
-            TypeHint type_hint = (TypeHint) { .is_type = false, .by.kind = ORSO_TYPE_FUNCTION };
-            OrsoScope* entity_scope;
-            Entity* entity = get_resolved_entity_by_identifier(analyzer, ast, scope, *callee, &type_hint, &entity_scope, &is_cyclic);
-            if (entity) {
-                if (ORSO_TYPE_IS_UNION(entity->narrowed_type)) {
-                    error(analyzer, expression->expr.call.callee.line, "Cannot call unnarrowed union type.");
+                if (analyzer->panic_mode) {
                     return;
-                }
-
-                if (entity->narrowed_type->kind != ORSO_TYPE_FUNCTION) {
-                    error(analyzer, expression->expr.call.callee.line, "Cannot call non-function type.");
-                    return;
-                }
-
-                if (can_call((OrsoFunctionType*)entity->narrowed_type, expression->expr.call.arguments)) {
-                    callee_type = entity->declared_type;
-                    function_type = (OrsoFunctionType*)entity->narrowed_type;
                 }
             }
 
+            orso_resolve_expression(analyzer, ast, scope, expression->expr.call.callee);
+            fold_constants(analyzer, ast, scope, expression->expr.call.callee);
 
-            if (!callee_type) {
-                error(analyzer, expression->expr.call.callee.line, "Function does not exist.");
+            if (analyzer->panic_mode) {
                 return;
             }
 
+            // Entity* entity = get_resolved_entity_by_identifier(analyzer, ast, scope, *callee, &type_hint, &entity_scope, &is_cyclic);
+            // if (entity) {
+            //     if (ORSO_TYPE_IS_UNION(entity->narrowed_type)) {
+            //         error(analyzer, expression->expr.call.callee.line, "Cannot call unnarrowed union type.");
+            //         return;
+            //     }
+
+            //     if (entity->narrowed_type->kind != ORSO_TYPE_FUNCTION) {
+            //         error(analyzer, expression->expr.call.callee.line, "Cannot call non-function type.");
+            //         return;
+            //     }
+
+            //     if (can_call((OrsoFunctionType*)entity->narrowed_type, expression->expr.call.arguments)) {
+            //         callee_type = entity->declared_type;
+            //         function_type = (OrsoFunctionType*)entity->narrowed_type;
+            //     }
+            // }
+
+            OrsoType* narrowed_callee_type = expression->expr.call.callee->narrowed_value_type;
+            if (narrowed_callee_type->kind != ORSO_TYPE_FUNCTION ||
+                can_call((OrsoFunctionType*)narrowed_callee_type, expression->expr.call.arguments)) {
+                error(analyzer, expression->expr.call.callee->start.line, "Function does not exist.");
+                return;
+            }
+
+
+            // if (!callee_type) {
+            //     error(analyzer, expression->expr.call.callee.line, "Function does not exist.");
+            //     return;
+            // }
+
+            OrsoFunctionType* function_type = (OrsoFunctionType*)narrowed_callee_type;
+
             expression->value_type = function_type->return_type;
-            expression->narrowed_value_type = expression->value_type;
-            expression->expr.call.callee_type = callee_type;
-            expression->expr.call.callee_function_type = function_type;
+            expression->narrowed_value_type = function_type->return_type;
             break;
         }
         case EXPRESSION_FUNCTION_DEFINITION: {
@@ -1003,8 +1016,15 @@ static Entity* get_resolved_entity_by_identifier(OrsoStaticAnalyzer* analyzer, O
             continue;
         }
 
-        if (entity->declaration_node->expression && !IS_FOLDED(entity->declaration_node->expression)) {
-            resolve_entity_declaration(analyzer, ast, *search_scope, entity->declaration_node);
+        if (entity->declaration_node->expression) {
+            if (entity->declared_type == &OrsoTypeUnresolved && IS_FOLDED(entity->declaration_node->expression)) {
+                entity->declaration_node->type = entity->declaration_node->expression->value_type;
+
+                entity->declared_type = entity->declaration_node->expression->value_type;
+                entity->narrowed_type = entity->declaration_node->expression->narrowed_value_type;
+            } else {
+                resolve_entity_declaration(analyzer, ast, *search_scope, entity->declaration_node);
+            }
         }
 
         if (analyzer->panic_mode) {
@@ -1015,11 +1035,13 @@ static Entity* get_resolved_entity_by_identifier(OrsoStaticAnalyzer* analyzer, O
             return entity;
         }
 
-        if (type_hint->is_type && type_hint->by.type == entity->declaration_node->type) {
+        OrsoType* type = entity->declaration_node->type;
+
+        if (type_hint->is_type && type_hint->by.type == type) {
             return entity;
         }
 
-        if (!type_hint->is_type && type_hint->by.kind == entity->declaration_node->type->kind) {
+        if (!type_hint->is_type && type_hint->by.kind == type->kind) {
             return entity;
         }
 

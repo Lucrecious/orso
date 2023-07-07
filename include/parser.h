@@ -89,9 +89,7 @@ typedef struct OrsoGrouping {
 } OrsoGrouping;
 
 typedef struct OrsoCall {
-    OrsoType* callee_type;
-    OrsoFunctionType* callee_function_type;
-    Token callee;
+    OrsoExpressionNode* callee;
     OrsoExpressionNode** arguments;
 } OrsoCall;
 

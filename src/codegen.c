@@ -751,7 +751,7 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoExpress
 //     ASSERT(!compiler->literals_only || (expression_node->folded_value_index >= 0 || !requires_entity), "compiler is assuming folded values only for ALL expressions");
 // #endif
 
-    if (expression_node->folded_value_index >= 0) {
+    if (expression_node->type != EXPRESSION_FUNCTION_DEFINITION && expression_node->folded_value_index >= 0) {
         gen_primary(compiler, chunk, ast,
                 expression_node->value_type,
                 expression_node->folded_value_index, expression_node->start.line);
@@ -1089,40 +1089,44 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoExpress
             break;
         }
         case EXPRESSION_CALL: {
-            Token* callee = &expression_node->expr.call.callee;
-            bool is_local;
-            i32 index = retrieve_variable(vm, compiler, callee, &is_local);
-            bool is_callee_union = ORSO_TYPE_IS_UNION(expression_node->expr.call.callee_type);
+            // Token* callee = &expression_node->expr.call.callee;
+            // bool is_local;
+            // i32 index = retrieve_variable(vm, compiler, callee, &is_local);
+            // bool is_callee_union = ORSO_TYPE_IS_UNION(expression_node->expr.call.callee->value_type);
 
-            if (is_local) {
-                emit_instruction3(is_callee_union ? ORSO_OP_GET_LOCAL_UNION : ORSO_OP_GET_LOCAL,
-                        compiler, index, chunk, callee->line);
-            } else {
-                emit_instruction3(is_callee_union ? ORSO_OP_GET_GLOBAL_UNION : ORSO_OP_GET_GLOBAL,
-                        compiler, index, chunk, callee->line);
-            }
+            // if (is_local) {
+            //     emit_instruction3(is_callee_union ? ORSO_OP_GET_LOCAL_UNION : ORSO_OP_GET_LOCAL,
+            //             compiler, index, chunk, callee->line);
+            // } else {
+            //     emit_instruction3(is_callee_union ? ORSO_OP_GET_GLOBAL_UNION : ORSO_OP_GET_GLOBAL,
+            //             compiler, index, chunk, callee->line);
+            // }
 
-            emit_instruction(ORSO_OP_PUSH_TOP_OBJECT, compiler, chunk, expression_node->start.line);
+            // emit_instruction(ORSO_OP_PUSH_TOP_OBJECT, compiler, chunk, expression_node->start.line);
 
-            if (is_callee_union) {
-                emit_instruction(ORSO_OP_NARROW_UNION, compiler, chunk, expression_node->start.line);
-            }
+            // if (is_callee_union) {
+            //     emit_instruction(ORSO_OP_NARROW_UNION, compiler, chunk, expression_node->start.line);
+            // }
 
             // if (ORSO_TYPE_IS_UNION(expression_node->value_type)) {
             //     emit_instruction3(ORSO_OP_UPDATE_STACK_GC_TYPE, compiler, compiler->current_object_stack_size - 1, chunk, expression_node->end.line);
             // }
 
+            expression(vm, compiler, ast, expression_node->expr.call.callee, chunk);
+            emit_storage_type_convert(compiler, chunk, expression_node->value_type, expression_node->narrowed_value_type, expression_node->end.line);
+
+            OrsoFunctionType* function_type = (OrsoFunctionType*)expression_node->expr.call.callee->narrowed_value_type;
+
             for (i32 i = 0; i < sb_count(expression_node->expr.call.arguments); i++) {
                 OrsoExpressionNode* argument = expression_node->expr.call.arguments[i];
                 expression(vm, compiler, ast, argument, chunk);
 
-                OrsoType* parameter_type = expression_node->expr.call.callee_function_type->argument_types[i];
+                OrsoType* parameter_type = function_type->argument_types[i];
                 emit_storage_type_convert(compiler, chunk, argument->value_type, parameter_type, expression_node->end.line);
-
             }
 
-            OrsoFunctionType* overload_type = expression_node->expr.call.callee_function_type;
-            emit_call(compiler, chunk, overload_type, expression_node->expr.call.callee.line);
+            OrsoFunctionType* overload_type = function_type;
+            emit_call(compiler, chunk, overload_type, expression_node->expr.call.callee->start.line);
             break;
         }
 
