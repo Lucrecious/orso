@@ -26,7 +26,7 @@ int main(int argc, char **argv) {
     }
 
     char* path = realpath(argv[1], NULL);
-    printf("---- %s", path);
+    printf("---- %s\n", path);
 
     FILE* file;
     file = fopen(path, "r");

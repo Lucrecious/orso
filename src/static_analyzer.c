@@ -200,15 +200,19 @@ static OrsoType* get_folded_type(OrsoAST* ast, i32 index) {
     return type;
 }
 
-typedef struct TypeHint  {
-    bool is_type;
-    union {
-        OrsoType* type;
-        OrsoTypeKind kind;
-    } by;
-} TypeHint;
+typedef enum {
+    ENTITY_QUERY_ANY,
+    ENTITY_QUERY_TYPE,
+    ENTITY_QUERY_FUNCTION,
+} QueryType;
 
-static Entity* get_resolved_entity_by_identifier(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, Token identifier_token, TypeHint* type_hint, OrsoScope** found_scope, bool* is_cyclic);
+typedef struct EntityQuery  {
+    QueryType type;
+    OrsoType* search_type;
+    bool skip_mutable;
+} EntityQuery;
+
+static Entity* get_resolved_entity_by_identifier(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, Token identifier_token, EntityQuery* query, OrsoScope** found_scope, bool* is_cyclic);
 
 static bool is_builtin_type(Token identifier, OrsoType** type) {
 #define RETURN_IF_TYPE(TOKEN, TYPE_STRING, TYPE_ID) \
@@ -240,9 +244,9 @@ static OrsoType* resolve_identifier_type(OrsoStaticAnalyzer* analyzer, OrsoAST* 
     }
 
     bool is_cyclic;
-    TypeHint type_hint = (TypeHint){ .is_type = true, .by.type = &OrsoTypeType };
+    EntityQuery query = (EntityQuery) { .type = ENTITY_QUERY_TYPE };
     OrsoScope* entity_scope;
-    Entity* value = get_resolved_entity_by_identifier(analyzer, ast, scope, identifier_type, &type_hint, &entity_scope, &is_cyclic);
+    Entity* value = get_resolved_entity_by_identifier(analyzer, ast, scope, identifier_type, &query, &entity_scope, &is_cyclic);
 
     if (!value) {
         char message[512];
@@ -320,10 +324,10 @@ static i32 evaluate_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoS
     return value_index;
 }
 
-static void fold_constants(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, OrsoExpressionNode* expression);
+static void fold_constants(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, OrsoExpressionNode* expression, bool constants_only);
 static OrsoType* resolve_type(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, OrsoTypeNode* type_node);
 
-static void resolve_foldable(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, OrsoExpressionNode* expression) {
+static void resolve_foldable(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, OrsoExpressionNode* expression, bool constants_only) {
     bool foldable = false;
     i32 folded_index = -1;
 
@@ -357,11 +361,13 @@ static void resolve_foldable(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
             bool is_cyclic;
             OrsoScope* entity_scope;
             Token name = expression->expr.entity.name;
-            Entity* entity = get_resolved_entity_by_identifier(analyzer, ast, scope, name, NULL, &entity_scope, &is_cyclic);
+
+            EntityQuery query = (EntityQuery){ .skip_mutable = constants_only };
+            Entity* entity = get_resolved_entity_by_identifier(analyzer, ast, scope, name, &query, &entity_scope, &is_cyclic);
 
             if (!entity) {
                 char message[512];
-                sprintf(message, "Constant %*.s undefined.", expression->expr.entity.name.length, expression->expr.entity.name.start);
+                sprintf(message, "Entity %*.s undefined.", expression->expr.entity.name.length, expression->expr.entity.name.start);
                 error(analyzer, expression->expr.entity.name.line, message);
                 break;
             }
@@ -410,13 +416,13 @@ static void resolve_foldable(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
     expression->folded_value_index = folded_index;
 }
 
-static void fold_constants(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, OrsoExpressionNode* expression) {
+static void fold_constants(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, OrsoExpressionNode* expression, bool only_constants) {
     // already folded nothing to do
     if (IS_FOLDED(expression)) {
         return;
     }
 
-    resolve_foldable(analyzer, ast, scope, expression);
+    resolve_foldable(analyzer, ast, scope, expression, only_constants);
 
     if (IS_FOLDED(expression)) {
         return;
@@ -433,7 +439,7 @@ static void fold_constants(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope
 
 static void resolve_declaration_types(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, OrsoDeclarationNode** declarations, i32 count);
 static void resolve_declaration_type(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, OrsoDeclarationNode* declaration_node);
-static void resolve_function_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, OrsoExpressionNode* function_definition_expression);
+static void resolve_function_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, OrsoExpressionNode* function_definition_expression, bool only_constants);
 static void declare_entity(OrsoStaticAnalyzer* analyzer, OrsoScope* scope, OrsoEntityDeclarationNode* entity);
 
 static void forward_scan_declaration_names(OrsoStaticAnalyzer* analyzer, OrsoScope* scope, OrsoDeclarationNode** declarations, i32 count) {
@@ -449,14 +455,14 @@ static void forward_scan_declaration_names(OrsoStaticAnalyzer* analyzer, OrsoSco
     }
 }
 
-void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, OrsoExpressionNode* expression) {
+void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, OrsoExpressionNode* expression, bool only_constants) {
     if (expression->value_type != &OrsoTypeUnresolved) {
         return;
     }
 
     switch (expression->type) {
         case EXPRESSION_GROUPING: {
-            orso_resolve_expression(analyzer, ast, scope, expression->expr.grouping.expression);
+            orso_resolve_expression(analyzer, ast, scope, expression->expr.grouping.expression, only_constants);
             expression->value_type = expression->expr.grouping.expression->narrowed_value_type;
             expression->narrowed_value_type = expression->expr.grouping.expression->narrowed_value_type;
             break;
@@ -468,8 +474,8 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
         case EXPRESSION_BINARY: {
             OrsoExpressionNode* left = expression->expr.binary.left;
             OrsoExpressionNode* right = expression->expr.binary.right;
-            orso_resolve_expression(analyzer, ast, scope, left);
-            orso_resolve_expression(analyzer, ast, scope, right);
+            orso_resolve_expression(analyzer, ast, scope, left, only_constants);
+            orso_resolve_expression(analyzer, ast, scope, right, only_constants);
 
             // TODO: Remember to do different things depending on operation
             //   if it's arthimetic, or comparisons, then let them merge at the end
@@ -544,20 +550,20 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
             if (!is_logical_operator) {
                 if (cast_left != left->narrowed_value_type) {
                     expression->expr.binary.left = implicit_cast(left, cast_left);
-                    fold_constants(analyzer, ast, scope, expression->expr.binary.left);
+                    fold_constants(analyzer, ast, scope, expression->expr.binary.left, only_constants);
                 }
 
 
                 if (cast_right != right->narrowed_value_type) {
                     expression->expr.binary.right = implicit_cast(right, cast_right);
-                    fold_constants(analyzer, ast, scope, expression->expr.binary.right);
+                    fold_constants(analyzer, ast, scope, expression->expr.binary.right, only_constants);
                 }
             }
             break;
         }
         case EXPRESSION_UNARY: {
             OrsoUnaryOp* unary_op = &expression->expr.unary;
-            orso_resolve_expression(analyzer, ast, scope, unary_op->operand);
+            orso_resolve_expression(analyzer, ast, scope, unary_op->operand, only_constants);
 
             OrsoType* new_type = resolve_unary_type(unary_op->operator.type, unary_op->operand->narrowed_value_type);
             expression->value_type = new_type;
@@ -596,8 +602,7 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
                 return;
             }
 
-            orso_resolve_expression(analyzer, ast, scope, expression->expr.assignment.right_side);
-            fold_constants(analyzer, ast, scope, expression->expr.assignment.right_side);
+            orso_resolve_expression(analyzer, ast, scope, expression->expr.assignment.right_side, only_constants);
             if (analyzer->panic_mode) {
                 return;
             }
@@ -663,15 +668,15 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
         }
 
         case EXPRESSION_IFELSE: {
-            orso_resolve_expression(analyzer, ast, scope, expression->expr.ifelse.condition);
+            orso_resolve_expression(analyzer, ast, scope, expression->expr.ifelse.condition, only_constants);
 
             OrsoScope* then_state = scope_copy_new(scope);
 
-            orso_resolve_expression(analyzer, ast, then_state, expression->expr.ifelse.then);
+            orso_resolve_expression(analyzer, ast, then_state, expression->expr.ifelse.then, only_constants);
 
             OrsoScope* else_state = scope_copy_new(scope);
             if (expression->expr.ifelse.else_) {
-                orso_resolve_expression(analyzer, ast, else_state, expression->expr.ifelse.else_);
+                orso_resolve_expression(analyzer, ast, else_state, expression->expr.ifelse.else_, only_constants);
             }
 
             scope_merge(&ast->type_set, scope, then_state, else_state);
@@ -716,16 +721,14 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
         case EXPRESSION_CALL: {
             for (i32 i = 0; i < sb_count(expression->expr.call.arguments); i++) {
                 OrsoExpressionNode* argument = expression->expr.call.arguments[i];
-                orso_resolve_expression(analyzer, ast, scope, argument);
-                fold_constants(analyzer, ast, scope, argument);
+                orso_resolve_expression(analyzer, ast, scope, argument, only_constants);
 
                 if (analyzer->panic_mode) {
                     return;
                 }
             }
 
-            orso_resolve_expression(analyzer, ast, scope, expression->expr.call.callee);
-            fold_constants(analyzer, ast, scope, expression->expr.call.callee);
+            orso_resolve_expression(analyzer, ast, scope, expression->expr.call.callee, only_constants);
 
             if (analyzer->panic_mode) {
                 return;
@@ -733,8 +736,7 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
 
 
             OrsoType* narrowed_callee_type = expression->expr.call.callee->narrowed_value_type;
-            if (narrowed_callee_type->kind != ORSO_TYPE_FUNCTION ||
-                !can_call((OrsoFunctionType*)narrowed_callee_type, expression->expr.call.arguments)) {
+            if (narrowed_callee_type->kind != ORSO_TYPE_FUNCTION || !can_call((OrsoFunctionType*)narrowed_callee_type, expression->expr.call.arguments)) {
                 error(analyzer, expression->expr.call.callee->start.line, "Function does not exist.");
                 return;
             }
@@ -746,7 +748,7 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
             break;
         }
         case EXPRESSION_FUNCTION_DEFINITION: {
-            resolve_function_expression(analyzer, ast, scope, expression);
+            resolve_function_expression(analyzer, ast, scope, expression, only_constants);
             break;
         }
         case EXPRESSION_FOR:
@@ -754,7 +756,7 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
         case EXPRESSION_NONE: UNREACHABLE();
     }
 
-    fold_constants(analyzer, ast, scope, expression);
+    fold_constants(analyzer, ast, scope, expression, only_constants);
 }
 
 static OrsoType* resolve_type(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, OrsoTypeNode* type_node) {
@@ -843,8 +845,8 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
     entity_declaration->type = type;
 
     if (entity_declaration->expression != NULL) {
-        orso_resolve_expression(analyzer, ast, scope, entity_declaration->expression);
-        fold_constants(analyzer, ast, scope, entity_declaration->expression);
+        bool only_constants = !entity_declaration->is_mutable;
+        orso_resolve_expression(analyzer, ast, scope, entity_declaration->expression, only_constants);
     }
 
     // TODO: Outer if should be if the expression is null or not
@@ -962,7 +964,7 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
  * This function below is what does this recursive dependency thing.
 */
 
-static Entity* get_resolved_entity_by_identifier(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, Token identifier_token, TypeHint* type_hint, OrsoScope** search_scope, bool* is_cyclic) {
+static Entity* get_resolved_entity_by_identifier(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, Token identifier_token, EntityQuery* query, OrsoScope** search_scope, bool* is_cyclic) {
     (void)is_cyclic; // TODO: Make sure to report cyclic errors
 
     bool passed_local_mutable_access_barrier = false;
@@ -988,6 +990,12 @@ static Entity* get_resolved_entity_by_identifier(OrsoStaticAnalyzer* analyzer, O
         // if we are still within the function barrier and referring to a mutable variable, it must have been created before
         // the current entity -
         Entity* entity = (Entity*)entity_slot.as.p;
+
+        if (query && query->skip_mutable && entity->declaration_node->is_mutable) {
+            NEXT_SCOPE();
+            continue;
+        }
+
         if (passed_local_mutable_access_barrier && (*search_scope)->creator != NULL && entity->declaration_node->is_mutable) {
             NEXT_SCOPE();
             continue;
@@ -1008,17 +1016,21 @@ static Entity* get_resolved_entity_by_identifier(OrsoStaticAnalyzer* analyzer, O
             return NULL;
         }
 
-        if (!type_hint) {
+        if (!query) {
+            return entity;
+        }
+
+        if (query->type == ENTITY_QUERY_ANY) {
             return entity;
         }
 
         OrsoType* type = entity->declaration_node->type;
 
-        if (type_hint->is_type && type_hint->by.type == type) {
+        if (query->type == ENTITY_QUERY_TYPE && query->search_type == type) {
             return entity;
         }
 
-        if (!type_hint->is_type && type_hint->by.kind == type->kind) {
+        if (query->type == ENTITY_QUERY_FUNCTION && type->kind == ORSO_TYPE_FUNCTION) {
             return entity;
         }
 
@@ -1030,7 +1042,7 @@ static Entity* get_resolved_entity_by_identifier(OrsoStaticAnalyzer* analyzer, O
     return NULL;
 }
 
-static void resolve_function_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, OrsoExpressionNode* function_definition_expression) {
+static void resolve_function_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, OrsoExpressionNode* function_definition_expression, bool only_constants) {
     ASSERT(function_definition_expression->type == EXPRESSION_FUNCTION_DEFINITION, "must be function declaration at this point");
 
     OrsoFunctionDefinition* definition = &function_definition_expression->expr.function_definition;
@@ -1086,7 +1098,7 @@ static void resolve_function_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* a
 
     ASSERT(definition->block_expression->type == EXPRESSION_BLOCK, "must be block expression");
 
-    orso_resolve_expression(analyzer, ast, &function_scope, definition->block_expression);
+    orso_resolve_expression(analyzer, ast, &function_scope, definition->block_expression, only_constants);
 
     scope_free(&function_scope);
 }
@@ -1113,18 +1125,15 @@ static void resolve_declaration_type(OrsoStaticAnalyzer* analyzer, OrsoAST* ast,
                     case ORSO_STATEMENT_PRINT_EXPR:
                     case ORSO_STATEMENT_PRINT:
                     case ORSO_STATEMENT_EXPRESSION: {
-                        orso_resolve_expression(analyzer, ast, scope, declaration_node->decl.statement->stmt.expression);
-                        fold_constants(analyzer, ast, scope, declaration_node->decl.statement->stmt.expression);
+                        orso_resolve_expression(analyzer, ast, scope, declaration_node->decl.statement->stmt.expression, false);
                         break;
                     }
                     case ORSO_STATEMENT_RETURN: {
                         OrsoType* return_expression_type = &OrsoTypeVoid;
 
                         if (declaration_node->decl.statement->stmt.expression) {
-                            orso_resolve_expression(analyzer, ast, scope, declaration_node->decl.statement->stmt.expression);
+                            orso_resolve_expression(analyzer, ast, scope, declaration_node->decl.statement->stmt.expression, false);
                             return_expression_type = declaration_node->decl.statement->stmt.expression->value_type;
-
-                            fold_constants(analyzer, ast, scope, declaration_node->decl.statement->stmt.expression);
                         }
 
                         OrsoScope* function_scope = get_closest_outer_function_scope(scope);
@@ -1154,59 +1163,6 @@ static void resolve_declaration_type(OrsoStaticAnalyzer* analyzer, OrsoAST* ast,
 
     resolve_entity_declaration(analyzer, ast, scope, entity_declaration);
 }
-
-// static void __resolve_declaration_type(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, OrsoDeclarationNode* declaration_node) {
-//     analyzer->panic_mode = false;
-
-//     switch (declaration_node->type) {
-//         case ORSO_DECLARATION_STATEMENT: {
-//             OrsoStatementNode* statement_node = declaration_node->decl.statement;
-//             switch (statement_node->type) {
-//                 case ORSO_STATEMENT_PRINT_EXPR:
-//                 case ORSO_STATEMENT_PRINT:
-//                 case ORSO_STATEMENT_EXPRESSION: {
-//                     orso_resolve_expression(analyzer, ast, scope, declaration_node->decl.statement->stmt.expression);
-//                     fold_constants(analyzer, ast, scope, declaration_node->decl.statement->stmt.expression);
-//                     break;
-//                 }
-//                 case ORSO_STATEMENT_RETURN: {
-//                     OrsoType* return_expression_type = &OrsoTypeVoid;
-
-//                     if (declaration_node->decl.statement->stmt.expression) {
-//                         orso_resolve_expression(analyzer, ast, scope, declaration_node->decl.statement->stmt.expression);
-//                         return_expression_type = declaration_node->decl.statement->stmt.expression->value_type;
-
-//                         fold_constants(analyzer, ast, scope, declaration_node->decl.statement->stmt.expression);
-//                     }
-
-//                     OrsoScope* function_scope = get_closest_outer_function_scope(scope);
-//                     ASSERT(function_scope, "right now all scopes should be under a function scope");
-
-//                     OrsoFunctionType* function_type = (OrsoFunctionType*)function_scope->creator->value_type;
-//                     OrsoType* function_return_type = function_scope ? function_type->return_type : &OrsoTypeVoid;
-//                     if (!orso_type_fits(function_return_type, return_expression_type)) {
-//                         error(analyzer, declaration_node->start.line, "Return expression must be compatible with function return type.");
-//                     }
-//                     break;
-//                 }
-//                 case ORSO_STATEMENT_NONE: UNREACHABLE();
-//             }
-
-//             analyzer->panic_mode = false;
-//             break;
-//         }
-//         case ORSO_DECLARATION_ENTITY: {
-//             resolve_entity_declaration(analyzer, ast, scope, declaration_node->decl.entity);
-//             if (analyzer->panic_mode) {
-//                 break;
-//             }
-
-//             //declare_entity(analyzer, scope, declaration_node->decl.entity);
-//             break;
-//         }
-//         case ORSO_DECLARATION_NONE: UNREACHABLE();
-//     }
-// }
 
 void resolve_declaration_types(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, OrsoDeclarationNode** declarations, i32 count) {
     for (i32 i = 0; i < count; i++) {
