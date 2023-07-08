@@ -21,8 +21,9 @@ typedef enum OrsoTypeKind {
     ORSO_TYPE_SYMBOL = 9,
     ORSO_TYPE_TYPE = 10,
     ORSO_TYPE_FUNCTION = 11,
-    ORSO_TYPE_UNION = 12,
-    ORSO_TYPE_USER = 13,
+    ORSO_TYPE_NATIVE_FUNCTION = 12,
+    ORSO_TYPE_UNION = 13,
+    ORSO_TYPE_USER = 14,
     // Aiming to allow for 65k custom types. This number must be less than 0xFFFF (largest u16)
     ORSO_TYPE_MAX = 65012,
 } OrsoTypeKind;

@@ -40,9 +40,9 @@ OrsoUnionType* union_type_new(OrsoTypeSet* set, OrsoType** types, i32 count) {
     return union_type;
 }
 
-OrsoFunctionType* function_type_new(OrsoTypeSet* set, OrsoType** arguments, i32 argument_count, OrsoType* return_type) {
+OrsoFunctionType* function_type_new(OrsoTypeSet* set, OrsoType** arguments, i32 argument_count, OrsoType* return_type, bool is_native) {
     OrsoFunctionType* function_type = ORSO_ALLOCATE(OrsoFunctionType);
-    function_type->type.kind = ORSO_TYPE_FUNCTION;
+    function_type->type.kind = is_native ? ORSO_TYPE_NATIVE_FUNCTION : ORSO_TYPE_FUNCTION;
     function_type->argument_count = argument_count;
     function_type->argument_types = ORSO_ALLOCATE_N(OrsoType*, argument_count);
     for (i32 i = 0; i < argument_count; i++) {
@@ -62,9 +62,9 @@ OrsoType* type_copy_new(OrsoTypeSet* set, OrsoType* type) {
         return (OrsoType*)union_type_new(set, (OrsoType**)union_type->types, union_type->count);
     }
 
-    if (type->kind == ORSO_TYPE_FUNCTION) {
+    if (type->kind == ORSO_TYPE_FUNCTION || type->kind == ORSO_TYPE_NATIVE_FUNCTION) {
         OrsoFunctionType const * function_type = (OrsoFunctionType const *)type;
-        return (OrsoType*)function_type_new(set, function_type->argument_types, function_type->argument_count, function_type->return_type);
+        return (OrsoType*)function_type_new(set, function_type->argument_types, function_type->argument_count, function_type->return_type, type->kind == ORSO_TYPE_NATIVE_FUNCTION);
     }
 
     UNREACHABLE();
@@ -321,9 +321,9 @@ OrsoType* orso_type_set_fetch_union(OrsoTypeSet* set, OrsoType** types, i32 coun
     return type;
 }
 
-OrsoType* orso_type_set_fetch_function(OrsoTypeSet* set, OrsoType* return_type, OrsoType** arguments, i32 argument_count) {
+OrsoType* orso_type_set_fetch_function_(OrsoTypeSet* set, OrsoType* return_type, OrsoType** arguments, i32 argument_count, bool is_native) {
     OrsoFunctionType function_type = {
-        .type.kind = ORSO_TYPE_FUNCTION,
+        .type.kind = is_native ? ORSO_TYPE_NATIVE_FUNCTION : ORSO_TYPE_FUNCTION,
         .argument_types = arguments,
         .argument_count = argument_count,
         .return_type = return_type,
@@ -342,4 +342,12 @@ OrsoType* orso_type_set_fetch_function(OrsoTypeSet* set, OrsoType* return_type, 
     add_type(set, type);
 
     return type;
+}
+
+OrsoType* orso_type_set_fetch_function(OrsoTypeSet* set, OrsoType* return_type, OrsoType** arguments, i32 argument_count) {
+    return orso_type_set_fetch_function_(set, return_type, arguments, argument_count, false);
+}
+
+OrsoType* orso_type_set_fetch_native_function(OrsoTypeSet* set, OrsoType* return_type, OrsoType** arguments, i32 argument_count) {
+    return orso_type_set_fetch_function_(set, return_type, arguments, argument_count, true);
 }

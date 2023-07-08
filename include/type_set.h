@@ -30,5 +30,6 @@ void orso_type_set_free(OrsoTypeSet* set);
 
 OrsoType* orso_type_set_fetch_union(OrsoTypeSet* set, OrsoType** types, i32 count);
 OrsoType* orso_type_set_fetch_function(OrsoTypeSet* set, OrsoType* return_type, OrsoType** arguments, i32 argument_count);
+OrsoType* orso_type_set_fetch_native_function(OrsoTypeSet* set, OrsoType* return_type, OrsoType** arguments, i32 argument_count);
 
 #endif

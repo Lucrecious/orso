@@ -8,6 +8,8 @@
 
 #define FORCE_INLINE inline __attribute__((always_inline))
 
+#define MIN(a,b) ((a) < (b) ? (a) : (b))
+
 #define ORSO_ALLOCATE(T) (T*)malloc(sizeof(T))
 #define ORSO_ALLOCATE_N(T, N) (T*)malloc(sizeof(T) * N)
 #define ORSO_ALLOCATE_FLEX(T, N) (T*)malloc(sizeof(T) + N)

@@ -15,6 +15,8 @@
 #include "debug.h"
 #endif
 
+#include <time.h>
+
 void orso_vm_init(OrsoVM* vm, OrsoWriteFunction write_fn) {
     vm->frame_count = 0;
 
@@ -145,6 +147,19 @@ static void call_object(OrsoVM* vm, OrsoObject* callee, i32 argument_slots, i32 
     if (callee->type->kind == ORSO_TYPE_FUNCTION) {
         OrsoFunction* function = (OrsoFunction*)callee;
         call(vm, function, argument_slots, object_argument_count);
+        return;
+    } else if (callee->type->kind == ORSO_TYPE_NATIVE_FUNCTION) {
+        OrsoNativeFunction* function_obj = (OrsoNativeFunction*)callee;
+        NativeFunction function = function_obj->function;
+        function(vm->stack_top - argument_slots, vm->stack_top);
+
+        i32 return_slot_size = orso_type_slot_count(function_obj->type->return_type);
+        for (i32 i = 0; i < return_slot_size; i++) {
+            vm->stack_top[-(argument_slots + 1) + i] = vm->stack_top[i];
+        }
+
+        // arguments on the stack + function, but remove the amount used for the return items
+        vm->stack_top -= (argument_slots + 1) - return_slot_size;
         return;
     }
 

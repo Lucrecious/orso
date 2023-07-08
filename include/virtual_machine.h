@@ -64,7 +64,7 @@ void orso_vm_free(OrsoVM* vm);
 void orso_vm_call(OrsoVM* vm, OrsoFunction* function);
 void orso_vm_push_object(OrsoVM* vm, OrsoObject* object);
 
-i32 orso_vm_add_hook(OrsoVM* vm,  OrsoObject* object);
+i32 orso_vm_add_hook(OrsoVM* vm, OrsoObject* object);
 void orso_vm_remove_hook(OrsoVM* vm, i32 index);
 
 void orso_vm_interpret(OrsoVM* vm, OrsoErrorFunction error_fn);

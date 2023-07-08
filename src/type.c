@@ -308,7 +308,7 @@ i32 orso_type_to_cstrn(OrsoType* type, char* buffer, i32 n) {
             buffer += written;
         }
     // (arg1_type, arg2_type, ..., argn_type) -> return_type
-    } else if (type->kind == ORSO_TYPE_FUNCTION) {
+    } else if (type->kind == ORSO_TYPE_FUNCTION || type->kind == ORSO_TYPE_NATIVE_FUNCTION) {
         buffer[0] = '(';
         n -= 1;
         buffer += 1;

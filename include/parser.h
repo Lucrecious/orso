@@ -193,6 +193,9 @@ struct OrsoDeclarationNode {
 typedef struct OrsoAST {
     bool resolved;
     OrsoTypeSet type_set;
+
+    OrsoSymbolTable builtins;
+
     OrsoDeclarationNode** declarations;
     OrsoSlot* folded_constants;
     OrsoSymbolTable* symbols;

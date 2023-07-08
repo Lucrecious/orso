@@ -146,6 +146,10 @@ char* orso_slot_to_new_cstrn(OrsoSlot slot, OrsoType* type) {
             return cstrn_new(buffer, n);
         }
 
+        case ORSO_TYPE_NATIVE_FUNCTION: {
+            return cstrn_new("<native>", 8);
+        }
+
         case ORSO_TYPE_TYPE: {
             OrsoType* type = (OrsoType*)slot.as.p;
 
@@ -186,11 +190,19 @@ OrsoString* orso_string_concat(OrsoGarbageCollector* gc, OrsoString* a, OrsoStri
 }
 
 OrsoFunction* orso_new_function(OrsoGarbageCollector* gc) {
-    OrsoFunction* function = ORSO_OBJECT_ALLOCATE(gc, OrsoFunction, (OrsoType * const)&OrsoTypeEmptyFunction);
+    OrsoFunction* function = ORSO_OBJECT_ALLOCATE(gc, OrsoFunction, (OrsoType*)&OrsoTypeEmptyFunction);
     function->type = &OrsoTypeEmptyFunction;
     chunk_init(&function->chunk);
 
     return function;
+}
+
+OrsoNativeFunction* orso_new_native_function(NativeFunction function, OrsoType* type) {
+    OrsoNativeFunction* function_obj = ORSO_OBJECT_ALLOCATE(NULL, OrsoNativeFunction, type);
+    function_obj->function = function;
+    function_obj->type = (OrsoFunctionType*)type;
+
+    return function_obj;
 }
 
 i64 cstrn_to_i64(const char* text, i32 length) {

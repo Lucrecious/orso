@@ -7,12 +7,20 @@
 #include "mathutils.h"
 #include "type_set.h"
 
+#include <time.h>
+
+static void clock_native(OrsoSlot* arguments, OrsoSlot* result) {
+    (void)arguments;
+    result[0] = ORSO_SLOT_F((double)clock() / CLOCKS_PER_SEC, &OrsoTypeFloat64);
+}
+
 typedef OrsoSymbolTable SymbolTable;
 
 typedef struct Entity {
     // TODO: instead of using declarad type just use narrowed type and the type of the decalrtion node
     OrsoType* declared_type;
     OrsoType* narrowed_type;
+
     OrsoEntityDeclarationNode* declaration_node;
 } Entity;
 
@@ -324,6 +332,29 @@ static i32 evaluate_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoS
     return value_index;
 }
 
+static bool get_native_function(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, Token name, i32* index) {
+    if (strncmp(name.start, "clock", MIN(5, name.length)) == 0) {
+        OrsoSymbol* function_name = orso_new_symbol_from_cstrn(NULL, name.start, name.length, &analyzer->symbols);
+        OrsoSlot index_slot;
+        if (orso_symbol_table_get(&ast->builtins, function_name, &index_slot)) {
+            *index = index_slot.as.i;
+            return true;
+        }
+
+        OrsoType* function_type = orso_type_set_fetch_native_function(&ast->type_set, &OrsoTypeFloat64, NULL, 0);
+        OrsoNativeFunction* native_function = orso_new_native_function(clock_native, function_type);
+        OrsoSlot native_function_slot = ORSO_SLOT_P(native_function, function_type);
+        *index = add_value_to_ast_constant_stack(ast, &native_function_slot, function_type);
+
+        index_slot = ORSO_SLOT_I(*index, &OrsoTypeInteger32);
+        orso_symbol_table_set(&ast->builtins, function_name, index_slot);
+
+        return true;
+    }
+
+    return false;
+}
+
 static void fold_constants(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, OrsoExpressionNode* expression, bool constants_only);
 static OrsoType* resolve_type(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, OrsoTypeNode* type_node);
 
@@ -361,6 +392,14 @@ static void resolve_foldable(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
             bool is_cyclic;
             OrsoScope* entity_scope;
             Token name = expression->expr.entity.name;
+
+
+            i32 native_function_index;
+            if (get_native_function(analyzer, ast, name, &native_function_index)) {
+                foldable = true;
+                folded_index = native_function_index;
+                break;
+            }
 
             EntityQuery query = (EntityQuery){ .skip_mutable = constants_only };
             Entity* entity = get_resolved_entity_by_identifier(analyzer, ast, scope, name, &query, &entity_scope, &is_cyclic);
@@ -578,17 +617,24 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
             break;
         }
         case EXPRESSION_ENTITY: {
-            OrsoScope* entity_scope;
-            bool is_cyclic;
-            Entity* entity = get_resolved_entity_by_identifier(analyzer, ast, scope, expression->expr.entity.name, NULL, &entity_scope, &is_cyclic);
+            i32 native_call_index;
+            if (get_native_function(analyzer, ast, expression->expr.entity.name, &native_call_index)) {
+                OrsoNativeFunction* native_function_obj = (OrsoNativeFunction*)ast->folded_constants[native_call_index].as.p;
+                expression->value_type = (OrsoType*)native_function_obj->type;
+                expression->narrowed_value_type = (OrsoType*)native_function_obj->type;
+            } else {
+                OrsoScope* entity_scope;
+                bool is_cyclic;
+                Entity* entity = get_resolved_entity_by_identifier(analyzer, ast, scope, expression->expr.entity.name, NULL, &entity_scope, &is_cyclic);
 
-            if (entity == NULL) {
-                error(analyzer, expression->expr.entity.name.line, "Entity does not exist.");
-                return;
+                if (entity == NULL) {
+                    error(analyzer, expression->expr.entity.name.line, "Entity does not exist.");
+                    return;
+                }
+
+                expression->value_type = entity->declared_type;
+                expression->narrowed_value_type = entity->narrowed_type;
             }
-
-            expression->value_type = entity->declared_type;
-            expression->narrowed_value_type = entity->narrowed_type;
             break;
         }
 
@@ -736,7 +782,7 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
 
 
             OrsoType* narrowed_callee_type = expression->expr.call.callee->narrowed_value_type;
-            if (narrowed_callee_type->kind != ORSO_TYPE_FUNCTION || !can_call((OrsoFunctionType*)narrowed_callee_type, expression->expr.call.arguments)) {
+            if ((narrowed_callee_type->kind != ORSO_TYPE_FUNCTION && narrowed_callee_type->kind != ORSO_TYPE_NATIVE_FUNCTION) || !can_call((OrsoFunctionType*)narrowed_callee_type, expression->expr.call.arguments)) {
                 error(analyzer, expression->expr.call.callee->start.line, "Function does not exist.");
                 return;
             }

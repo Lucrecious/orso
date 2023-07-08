@@ -713,6 +713,7 @@ static void gen_primary(Compiler* compiler, Chunk* chunk, OrsoAST* ast, OrsoType
             break;
         }
         case ORSO_TYPE_FUNCTION:
+        case ORSO_TYPE_NATIVE_FUNCTION:
         case ORSO_TYPE_SYMBOL:
         case ORSO_TYPE_STRING: {
             emit_constant(compiler, chunk, *value, line, true);

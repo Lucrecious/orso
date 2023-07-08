@@ -32,6 +32,14 @@ typedef struct OrsoFunction {
     OrsoFunctionType* type;
 } OrsoFunction;
 
+typedef void (*NativeFunction)(OrsoSlot* arguments, OrsoSlot* result);
+
+typedef struct OrsoNativeFunction {
+    OrsoObject object;
+    OrsoFunctionType* type;
+    NativeFunction function;
+} OrsoNativeFunction;
+
 void* orso_object_reallocate(OrsoGarbageCollector* gc, OrsoGCHeader* pointer, OrsoType* type, size_t old_size, size_t new_size);
 void orso_object_free(OrsoGarbageCollector* gc, OrsoObject* pointer);
 
@@ -67,6 +75,8 @@ OrsoString* orso_slot_to_string(OrsoGarbageCollector* gc, OrsoSlot slot, OrsoTyp
 OrsoString* orso_new_string_from_cstrn(OrsoGarbageCollector* gc, const char* start, i32 length);
 
 OrsoFunction* orso_new_function(OrsoGarbageCollector* gc);
+
+OrsoNativeFunction* orso_new_native_function(NativeFunction function, OrsoType* type);
 
 i64 cstrn_to_i64(const char* text, i32 length);
 f64 cstrn_to_f64(const char* text, i32 length);
