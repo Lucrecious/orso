@@ -124,9 +124,7 @@ static void orso_free_expression(OrsoExpressionNode* expression) {
             expression->expr.assignment.right_side = NULL;
             break;
         case EXPRESSION_ENTITY:
-            // identifier symbol is freed by gc
         case EXPRESSION_PRIMARY:
-            // no need
             break;
         case EXPRESSION_BLOCK: {
             for (i32 i = 0; i < sb_count(expression->expr.block.declarations); i++) {
@@ -432,14 +430,14 @@ static OrsoExpressionNode* literal(Parser* parser) {
         }
         case TOKEN_STRING: {
             expression_node->value_type = &OrsoTypeString;
-            OrsoString* value = orso_new_string_from_cstrn(NULL, expression_node->start.start + 1, expression_node->start.length - 2);
+            OrsoString* value = orso_new_string_from_cstrn(expression_node->start.start + 1, expression_node->start.length - 2);
             expression_node->expr.primary.value_index = add_constant_value(parser, ORSO_SLOT_P(value, &OrsoTypeString));
             break;
         };
 
         case TOKEN_SYMBOL: {
             expression_node->value_type = &OrsoTypeSymbol;
-            OrsoSymbol* value = orso_new_symbol_from_cstrn(NULL, expression_node->start.start + 1, expression_node->start.length - 2, parser->ast->symbols);
+            OrsoSymbol* value = orso_new_symbol_from_cstrn(expression_node->start.start + 1, expression_node->start.length - 2, parser->ast->symbols);
             expression_node->expr.primary.value_index = add_constant_value(parser, ORSO_SLOT_P(value, &OrsoTypeSymbol));
             break;
         }

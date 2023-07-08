@@ -6,19 +6,14 @@
 #include "object.h"
 #include "sb.h"
 
-u32 chunk_add_constant(Chunk* chunk, OrsoSlot value, bool is_gc_type) {
+u32 chunk_add_constant(Chunk* chunk, OrsoSlot value) {
     u32 index = sb_count(chunk->constants);
     sb_push(chunk->constants, value);
-
-    if (is_gc_type) {
-        sb_push(chunk->constant_object_offsets, index);
-    }
     return index;
 }
 
 void chunk_init(Chunk* chunk) {
     chunk->constants = NULL;
-    chunk->constant_object_offsets = NULL;
     chunk->code = NULL;
     chunk->lines = NULL;
 }
@@ -27,7 +22,6 @@ void chunk_free(Chunk* chunk) {
     sb_free(chunk->code);
     sb_free(chunk->lines);
     sb_free(chunk->constants);
-    sb_free(chunk->constant_object_offsets);
     chunk_init(chunk);
 }
 

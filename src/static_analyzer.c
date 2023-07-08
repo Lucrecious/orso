@@ -311,12 +311,8 @@ static i32 evaluate_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoS
     orso_vm_init(&vm, NULL);
 
     OrsoSlot stack[512];
-    OrsoGCValueIndex object_stack[512];
     vm.stack = stack;
     vm.stack_top = stack;
-    vm.object_stack = object_stack;
-    vm.object_stack_top = object_stack;
-
 
     OrsoCodeBuilder builder;
     orso_code_builder_init(&builder, &vm, ast);
@@ -334,7 +330,7 @@ static i32 evaluate_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoS
 
 static bool get_native_function(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, Token name, i32* index) {
     if (strncmp(name.start, "clock", MIN(5, name.length)) == 0) {
-        OrsoSymbol* function_name = orso_new_symbol_from_cstrn(NULL, name.start, name.length, &analyzer->symbols);
+        OrsoSymbol* function_name = orso_new_symbol_from_cstrn(name.start, name.length, &analyzer->symbols);
         OrsoSlot index_slot;
         if (orso_symbol_table_get(&ast->builtins, function_name, &index_slot)) {
             *index = index_slot.as.i;
@@ -1167,7 +1163,7 @@ static void resolve_function_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* a
 
     OrsoFunctionType* function_type = (OrsoFunctionType*)orso_type_set_fetch_function(&ast->type_set, return_type, parameter_types, parameter_count);
 
-    OrsoFunction* function_address = orso_new_function(NULL);
+    OrsoFunction* function_address = orso_new_function();
     function_address->type = function_type;
 
     
@@ -1326,10 +1322,10 @@ OrsoSlot orso_zero_value(OrsoType* type, OrsoSymbolTable* symbol_table) {
             slot = ORSO_SLOT_F(0.0, type);
             break;
         case ORSO_TYPE_STRING:
-            slot = ORSO_SLOT_P(orso_new_string_from_cstrn(NULL, "", 0), type);
+            slot = ORSO_SLOT_P(orso_new_string_from_cstrn("", 0), type);
             break;
         case ORSO_TYPE_SYMBOL:
-            slot = ORSO_SLOT_P(orso_new_symbol_from_cstrn(NULL, "", 0, symbol_table), type);
+            slot = ORSO_SLOT_P(orso_new_symbol_from_cstrn("", 0, symbol_table), type);
             break;
         case ORSO_TYPE_UNION: {
             ASSERT(orso_union_type_has_type((OrsoUnionType*)type, &OrsoTypeVoid), "must include void type if looking for zero value");

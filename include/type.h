@@ -91,8 +91,6 @@ i32 orso_type_slot_count(OrsoType* type);
 
 bool orso_type_fits(OrsoType* storage_type, OrsoType* value_type);
 
-// orso_type_kind_to_cstr
-
 i32 orso_type_to_cstrn(OrsoType* type, char* buffer, i32 n);
 
 bool orso_is_gc_type(OrsoType* type);

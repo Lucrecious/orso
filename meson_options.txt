@@ -1,5 +1,3 @@
 option('debug_trace', type : 'boolean', value : false, description : 'Prints the bytecode for the vm as it runs.')
 option('debug_print', type : 'boolean', value : false, description : 'Prints generated code and ast.')
-option('debug_gc_stress', type : 'boolean', value : false, description : 'Calls the garbage collector on every reallocation call.')
-option('debug_gc_print', type : 'boolean', value : false, description : 'Prints debug gc information.')
 option('release', type : 'boolean', value : false, description : 'Prevents optimization and allows asserts.')

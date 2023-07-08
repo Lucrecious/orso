@@ -6,9 +6,8 @@
 #include "symbol_table.h"
 #include "type_set.h"
 
-void* orso_object_reallocate(OrsoGarbageCollector* gc, OrsoGCHeader* pointer, OrsoType* type, size_t old_size, size_t new_size) {
+void* orso_object_reallocate(OrsoObject* pointer, OrsoType* type, size_t old_size, size_t new_size) {
     (void)old_size;
-    (void)gc; // TODO: repalce gc with free/alloc and use ref counting for things I want to be considered "value" types
 
     if (new_size == 0) {
         // Should only be here when called by GC
@@ -16,28 +15,17 @@ void* orso_object_reallocate(OrsoGarbageCollector* gc, OrsoGCHeader* pointer, Or
         return NULL;
     }
 
-#ifdef DEBUG_GC_STRESS
-    //orso_gc_collect(gc);
-#endif
-
     OrsoObject* result = realloc(pointer, new_size);
     if (result == NULL) {
         exit(1);
     }
 
     result->type = type;
-#ifdef DEBUG_GC_PRINT
-    char tmp_buffer[256];
-    orso_type_to_cstrn(result->type, tmp_buffer, 256);
-    printf("%p allocate %zu for %s\n", (void*)result, new_size, tmp_buffer);
-#endif
-
-    //orso_gc_register(gc, (OrsoGCHeader*)result);
 
     return result;
 }
 
-void orso_object_free(OrsoGarbageCollector* gc, OrsoObject* object) {
+void orso_object_free(OrsoObject* object) {
 #ifdef DEBUG_GC_PRINT
     char type_buffer[256];
     orso_type_to_cstrn(object->type, type_buffer, 256);
@@ -46,26 +34,26 @@ void orso_object_free(OrsoGarbageCollector* gc, OrsoObject* object) {
     switch (object->type->kind) {
         case ORSO_TYPE_SYMBOL: {
             OrsoSymbol* symbol = (OrsoSymbol*)object;
-            orso_object_reallocate(gc, (OrsoGCHeader*)symbol, &OrsoTypeSymbol, sizeof(OrsoSymbol) + symbol->length, 0);
+            orso_object_reallocate((OrsoObject*)symbol, &OrsoTypeSymbol, sizeof(OrsoSymbol) + symbol->length, 0);
             break;
         }
         case ORSO_TYPE_STRING: {
             OrsoString* string = (OrsoString*)object;
-            orso_object_reallocate(gc, (OrsoGCHeader*)string, &OrsoTypeString, sizeof(OrsoString) + string->length, 0);
+            orso_object_reallocate((OrsoObject*)string, &OrsoTypeString, sizeof(OrsoString) + string->length, 0);
             break;
         }
         case ORSO_TYPE_FUNCTION: {
             OrsoFunction* function = (OrsoFunction*)object;
             chunk_free(&function->chunk);
-            orso_object_reallocate(gc, (OrsoGCHeader*)function, (OrsoType*)&OrsoTypeEmptyFunction, sizeof(OrsoFunction), 0);
+            orso_object_reallocate((OrsoObject*)function, (OrsoType*)&OrsoTypeEmptyFunction, sizeof(OrsoFunction), 0);
             break;
         }
         default: UNREACHABLE();
     }
 }
 
-OrsoString* orso_new_string_from_cstrn(OrsoGarbageCollector* gc, const char* start, i32 length) {
-    OrsoString* string = ORSO_OBJECT_ALLOCATE_FLEX(gc, OrsoString, &OrsoTypeString, length + 1);
+OrsoString* orso_new_string_from_cstrn(const char* start, i32 length) {
+    OrsoString* string = ORSO_OBJECT_ALLOCATE_FLEX(OrsoString, &OrsoTypeString, length + 1);
     string->length = length;
     memcpy(string->text, start, length);
     string->text[length] = '\0';
@@ -171,16 +159,16 @@ char* orso_slot_to_new_cstrn(OrsoSlot slot, OrsoType* type) {
     }
 }
 
-OrsoString* orso_slot_to_string(OrsoGarbageCollector* gc, OrsoSlot slot, OrsoType* type) {
+OrsoString* orso_slot_to_string(OrsoSlot slot, OrsoType* type) {
     char* cstr = orso_slot_to_new_cstrn(slot, type);
-    OrsoString* string = orso_new_string_from_cstrn(gc, cstr, strlen(cstr));
+    OrsoString* string = orso_new_string_from_cstrn(cstr, strlen(cstr));
     free(cstr);
 
     return string;
 }
 
-OrsoString* orso_string_concat(OrsoGarbageCollector* gc, OrsoString* a, OrsoString* b) {
-    OrsoString* string = ORSO_OBJECT_ALLOCATE_FLEX(gc, OrsoString, &OrsoTypeString, a->length + b->length + 1);
+OrsoString* orso_string_concat(OrsoString* a, OrsoString* b) {
+    OrsoString* string = ORSO_OBJECT_ALLOCATE_FLEX(OrsoString, &OrsoTypeString, a->length + b->length + 1);
     string->length = a->length + b->length;
     memcpy(string->text, a->text, a->length);
     memcpy(string->text + a->length, b->text, b->length);
@@ -189,8 +177,8 @@ OrsoString* orso_string_concat(OrsoGarbageCollector* gc, OrsoString* a, OrsoStri
     return string;
 }
 
-OrsoFunction* orso_new_function(OrsoGarbageCollector* gc) {
-    OrsoFunction* function = ORSO_OBJECT_ALLOCATE(gc, OrsoFunction, (OrsoType*)&OrsoTypeEmptyFunction);
+OrsoFunction* orso_new_function(void) {
+    OrsoFunction* function = ORSO_OBJECT_ALLOCATE(OrsoFunction, (OrsoType*)&OrsoTypeEmptyFunction);
     function->type = &OrsoTypeEmptyFunction;
     chunk_init(&function->chunk);
 
@@ -198,7 +186,7 @@ OrsoFunction* orso_new_function(OrsoGarbageCollector* gc) {
 }
 
 OrsoNativeFunction* orso_new_native_function(NativeFunction function, OrsoType* type) {
-    OrsoNativeFunction* function_obj = ORSO_OBJECT_ALLOCATE(NULL, OrsoNativeFunction, type);
+    OrsoNativeFunction* function_obj = ORSO_OBJECT_ALLOCATE(OrsoNativeFunction, type);
     function_obj->function = function;
     function_obj->type = (OrsoFunctionType*)type;
 
@@ -269,7 +257,6 @@ OrsoSymbol* orso_unmanaged_symbol_from_cstrn(const char* start, i32 length, Orso
     symbol->length = length;
     memcpy(symbol->text, start, length);
     symbol->text[length] = '\0';
-    symbol->object.gc_header.next = symbol->object.gc_header.previous = NULL;
 
     OrsoSlot slot = ORSO_SLOT_I(0, &OrsoTypeVoid);
     orso_symbol_table_set(symbol_table, symbol, slot);
@@ -277,14 +264,14 @@ OrsoSymbol* orso_unmanaged_symbol_from_cstrn(const char* start, i32 length, Orso
     return symbol;
 }
 
-OrsoSymbol* orso_new_symbol_from_cstrn(OrsoGarbageCollector* gc, const char* start, i32 length, OrsoSymbolTable* symbol_table) {
+OrsoSymbol* orso_new_symbol_from_cstrn(const char* start, i32 length, OrsoSymbolTable* symbol_table) {
     u32 hash = orso_hash_cstrn(start, length);
     OrsoSymbol* symbol = orso_symbol_table_find_cstrn(symbol_table, start, length, hash);
     if (symbol != NULL) {
         return symbol;
     }
 
-    symbol = ORSO_OBJECT_ALLOCATE_FLEX(gc, OrsoSymbol, &OrsoTypeSymbol, length + 1);
+    symbol = ORSO_OBJECT_ALLOCATE_FLEX(OrsoSymbol, &OrsoTypeSymbol, length + 1);
     symbol->hash = hash;
     symbol->length = length;
     memcpy(symbol->text, start, length);

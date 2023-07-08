@@ -65,9 +65,6 @@ i32 disassemble_instruction(Chunk* chunk, i32 offset) {
     switch(instruction) {
         case ORSO_OP_POP: return simple_instruction("OP_POP", offset);
         case ORSO_OP_POP_SCOPE: return pop_scope_instruction("OP_POP_SCOPE", chunk, offset);
-        case ORSO_OP_POP_TOP_OBJECT: return simple_instruction("OP_POP_TOP_OBJECT", offset);
-        case ORSO_OP_PUSH_TOP_OBJECT: return simple_instruction("OP_PUSH_TOP_OBJECT", offset);
-        case ORSO_OP_PUSH_TOP_OBJECT_NULL: return simple_instruction("OP_PUSH_TOP_OBJECT_NULL", offset);
         case ORSO_OP_PUSH_0: return simple_instruction("OP_PUSH_0", offset);
         case ORSO_OP_PUSH_1: return simple_instruction("OP_PUSH_1", offset);
         case ORSO_OP_PUSH_NULL_UNION: return simple_instruction("OP_PUSH_NULL_UNION", offset);
@@ -96,7 +93,6 @@ i32 disassemble_instruction(Chunk* chunk, i32 offset) {
         case ORSO_OP_DEFINE_GLOBAL: return instruction_3arg("OP_DEFINE_GLOBAL", chunk, offset);
         case ORSO_OP_GET_GLOBAL: return instruction_3arg("OP_GET_GLOBAL", chunk, offset);
         case ORSO_OP_SET_GLOBAL: return instruction_3arg("OP_SET_GLOBAL", chunk, offset);
-        case ORSO_OP_SET_GLOBAL_GC_TYPE: return instruction_3arg("OP_SET_GLOBAL_GC_TYPE", chunk, offset);
         case ORSO_OP_DEFINE_GLOBAL_UNION: return instruction_3arg("OP_DEFINE_GLOBAL_UNION", chunk, offset);
         case ORSO_OP_GET_GLOBAL_UNION: return instruction_3arg("OP_GET_GLOBAL_UNION", chunk, offset);
         case ORSO_OP_SET_GLOBAL_UNION: return instruction_3arg("OP_SET_GLOBAL_UNION", chunk, offset);
@@ -104,13 +100,11 @@ i32 disassemble_instruction(Chunk* chunk, i32 offset) {
         case ORSO_OP_GET_LOCAL_UNION: return instruction_3arg("OP_GET_LOCAL_UNION", chunk, offset);
         case ORSO_OP_SET_LOCAL: return instruction_3arg("OP_SET_LOCAL", chunk, offset);
         case ORSO_OP_SET_LOCAL_UNION: return instruction_3arg("OP_SET_LOCAL_UNION", chunk, offset);
-        case ORSO_OP_UPDATE_GLOBAL_UNION_GC_TYPE: return instruction_3arg("OP_UPDATE_GLOBAL_UNION_GC_TYPE", chunk, offset);
-        case ORSO_OP_UPDATE_STACK_GC_TYPE: return instruction_3arg("OP_UPDATE_STACK_UNION_GC_TYPE", chunk, offset);
         case ORSO_OP_JUMP_IF_FALSE: return jump_instruction("OP_JUMP_IF_FALSE", 1, chunk, offset);
         case ORSO_OP_JUMP_IF_TRUE: return jump_instruction("OP_JUMP_IF_TRUE", 1, chunk, offset);
         case ORSO_OP_JUMP: return jump_instruction("OP_JUMP", 1, chunk, offset);
         case ORSO_OP_LOOP: return jump_instruction("OP_LOOP", -1, chunk, offset);
-        case ORSO_OP_CALL: return simple_instruction("OP_CALL", offset + 2);
+        case ORSO_OP_CALL: return simple_instruction("OP_CALL", offset + 1);
         case ORSO_OP_PUT_IN_UNION: return simple_instruction("OP_PUT_IN_UNION", offset);
         case ORSO_OP_NARROW_UNION: return simple_instruction("OP_NARROW_UNION", offset);
         case ORSO_OP_CONCAT_STRING: return simple_instruction("OP_CONCAT_STRING", offset);

@@ -65,15 +65,8 @@ void orso_run_source(OrsoVM* vm, const char* source, OrsoErrorFunction error_fn)
     vm->stack = stack_slots;
     vm->stack_top = vm->stack;
 
-    OrsoGCValueIndex value_indices[256];
-    vm->object_stack = value_indices;
-    vm->object_stack_top = vm->object_stack;
-
     orso_call_function(vm, main_function, error_fn);
 
     vm->stack = NULL;
-    vm->object_stack = NULL;
-    
     vm->stack_top = NULL;
-    vm->object_stack_top = NULL;
 }
