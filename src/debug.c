@@ -104,11 +104,11 @@ i32 disassemble_instruction(Chunk* chunk, i32 offset) {
         case ORSO_OP_JUMP_IF_TRUE: return jump_instruction("OP_JUMP_IF_TRUE", 1, chunk, offset);
         case ORSO_OP_JUMP: return jump_instruction("OP_JUMP", 1, chunk, offset);
         case ORSO_OP_LOOP: return jump_instruction("OP_LOOP", -1, chunk, offset);
-        case ORSO_OP_CALL: return simple_instruction("OP_CALL", offset + 1);
+        case ORSO_OP_CALL: return simple_instruction("OP_CALL", offset + 2);
         case ORSO_OP_PUT_IN_UNION: return simple_instruction("OP_PUT_IN_UNION", offset);
         case ORSO_OP_NARROW_UNION: return simple_instruction("OP_NARROW_UNION", offset);
         case ORSO_OP_CONCAT_STRING: return simple_instruction("OP_CONCAT_STRING", offset);
-        case ORSO_OP_RETURN: return simple_instruction("OP_RETURN", offset);
+        case ORSO_OP_RETURN: return simple_instruction("OP_RETURN", offset + 1);
         case ORSO_OP_PRINT_EXPR: return simple_instruction("OP_PRINT_EXPR", offset);
         case ORSO_OP_PRINT: return simple_instruction("OP_PRINT", offset);
     }
