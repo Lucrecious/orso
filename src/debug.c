@@ -8,8 +8,14 @@
 #include "sb.h"
 #include "type_set.h"
 
-static i32 constant_instruction(const char* name, Chunk* chunk, i32 offset) {
-    u32 index = ORSO_u8s_to_u24(chunk->code[offset + 1], chunk->code[offset + 2], chunk->code[offset + 3]);
+static i32 constant_instruction(const char* name, Chunk* chunk, i32 offset, bool is_short) {
+    u32 index;
+
+    if (is_short) {
+        index = chunk->code[offset + 1];
+    } else {
+        index = ORSO_u8s_to_u24(chunk->code[offset + 1], chunk->code[offset + 2], chunk->code[offset + 3]);
+    }
     printf("%-16s %4d => ", name, index);
     orso_print_slot(chunk->constants[index],
 #ifdef DEBUG_TRACE_EXECUTION
@@ -20,7 +26,7 @@ static i32 constant_instruction(const char* name, Chunk* chunk, i32 offset) {
     );
     printf("\n");
 
-    return offset + 4;
+    return is_short ? offset + 2 : offset + 4;
 }
 
 static i32 pop_scope_instruction(const char* name, Chunk* chunk, i32 offset) {
@@ -89,7 +95,8 @@ i32 disassemble_instruction(Chunk* chunk, i32 offset) {
         case ORSO_OP_GREATER_F64: return simple_instruction("OP_GREATER_F64", offset);
         case ORSO_OP_EQUAL_STRING: return simple_instruction("OP_EQUAL_STRING", offset);
         case ORSO_OP_EQUAL_SYMBOL: return simple_instruction("OP_EQUAL_SYMBOL", offset);
-        case ORSO_OP_CONSTANT: return constant_instruction("OP_CONSTANT", chunk, offset);
+        case ORSO_OP_CONSTANT: return constant_instruction("OP_CONSTANT", chunk, offset, false);
+        case ORSO_OP_CONSTANT_SHORT: return constant_instruction("OP_CONSTANT_SHORT", chunk, offset, true);
         case ORSO_OP_DEFINE_GLOBAL: return instruction_3arg("OP_DEFINE_GLOBAL", chunk, offset);
         case ORSO_OP_GET_GLOBAL: return instruction_3arg("OP_GET_GLOBAL", chunk, offset);
         case ORSO_OP_SET_GLOBAL: return instruction_3arg("OP_SET_GLOBAL", chunk, offset);

@@ -229,6 +229,12 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
                 break;
             }
 
+            case ORSO_OP_CONSTANT_SHORT: {
+                byte index = READ_BYTE();
+                PUSH(frame->function->chunk.constants[index]);
+                break;
+            }
+
             case ORSO_OP_DEFINE_GLOBAL: {
                 u32 index = READ_U24();
                 vm->globals.values[index] = *PEEK(0);

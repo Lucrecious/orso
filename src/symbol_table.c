@@ -17,7 +17,7 @@ void orso_symbol_table_free(OrsoSymbolTable* table) {
 }
 
 static OrsoSymbolTableEntry* find_entry(OrsoSymbolTableEntry* entries, i32 capacity, OrsoSymbol* key) {
-    u32 index = key->hash % capacity;
+    u32 index = key->hash & (capacity - 1);
     OrsoSymbolTableEntry* tombstone = NULL;
 
     for (;;) {
@@ -35,7 +35,7 @@ static OrsoSymbolTableEntry* find_entry(OrsoSymbolTableEntry* entries, i32 capac
             return entry;
         }
 
-        index = (index + 1) % capacity;
+        index = (index + 1) & (capacity - 1);
     }
 }
 
@@ -129,7 +129,7 @@ OrsoSymbol* orso_symbol_table_find_cstrn(OrsoSymbolTable* table, const char* sta
         return NULL;
     }
 
-    u32 index = hash % table->capacity;
+    u32 index = hash & (table->capacity - 1);
     for (;;) {
         OrsoSymbolTableEntry* entry = &table->entries[index++];
 
@@ -142,7 +142,7 @@ OrsoSymbol* orso_symbol_table_find_cstrn(OrsoSymbolTable* table, const char* sta
             return entry->key;
         }
 
-        index = index % table->capacity;
+        index = index & (table->capacity - 1);
     }
 }
 

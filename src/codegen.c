@@ -72,6 +72,7 @@ static i32 get_stack_effect(OrsoOPCode op_code) {
         case ORSO_OP_PUSH_0: return 1;
         case ORSO_OP_PUSH_NULL_UNION: return 2;
 
+        case ORSO_OP_CONSTANT_SHORT: return 1;
         case ORSO_OP_CONSTANT: return 1;
 
         case ORSO_OP_SET_LOCAL: return 0;
@@ -152,14 +153,22 @@ static void emit_instruction(const OrsoOPCode op_code, Compiler* compiler, Chunk
 // TODO: Remove compiler from the parameters... instead try to bubble up the stack effect somehow
 static void emit_constant(Compiler* compiler, Chunk* chunk, OrsoSlot slot, i32 line) {
     u32 index = chunk_add_constant(chunk, slot);
-    emit_instruction(ORSO_OP_CONSTANT, compiler, chunk, line);
 
-    ASSERT(index < 0xFFFFFF, "index must be less than the largest 24 bit unsigned int.");
-    byte b1, b2, b3;
-    ORSO_u24_to_u8s(index, b1, b2, b3);
-    chunk_write(chunk, b1, line);
-    chunk_write(chunk, b2, line);
-    chunk_write(chunk, b3, line);
+    if (index < UINT8_MAX) {
+        emit_instruction(ORSO_OP_CONSTANT_SHORT, compiler, chunk, line);
+        byte index_byte = (byte)index;
+
+        chunk_write(chunk, index_byte, line);
+    } else {
+        emit_instruction(ORSO_OP_CONSTANT, compiler, chunk, line);
+
+        ASSERT(index < 0xFFFFFF, "index must be less than the largest 24 bit unsigned int.");
+        byte b1, b2, b3;
+        ORSO_u24_to_u8s(index, b1, b2, b3);
+        chunk_write(chunk, b1, line);
+        chunk_write(chunk, b2, line);
+        chunk_write(chunk, b3, line);
+    }
 }
 
 static i32 emit_jump(OrsoOPCode op_code, Compiler* compiler, Chunk* chunk, i32 line) {

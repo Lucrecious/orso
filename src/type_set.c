@@ -151,7 +151,7 @@ static u32 hash_type(OrsoType* type) {
 
 static OrsoType** fetch_type(OrsoType** types, i32 capacity, OrsoType* type) {
     u32 hash = hash_type(type);
-    u32 index = hash % capacity;
+    u32 index = hash & (capacity - 1);
 
     for (;;) {
         OrsoType** entry = &types[index];
@@ -163,7 +163,7 @@ static OrsoType** fetch_type(OrsoType** types, i32 capacity, OrsoType* type) {
             return entry;
         }
 
-        index = (index + 1) % capacity;
+        index = (index + 1) & (capacity - 1);
     }
 
     return &types[index];

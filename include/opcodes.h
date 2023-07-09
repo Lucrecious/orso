@@ -27,6 +27,7 @@ typedef enum OrsoOPCode {
     ORSO_OP_PUSH_0,
     ORSO_OP_PUSH_NULL_UNION,
 
+    ORSO_OP_CONSTANT_SHORT,
     ORSO_OP_CONSTANT,
 
     ORSO_OP_SET_LOCAL,
