@@ -88,6 +88,7 @@ test('test_control_flow', test_control_flow)
 test('test_logical_operators', test_logical_operators)
 test('test_loops', test_loops)
 
+test('test_comments', test_file_runner, args: files('test/comments.orso'))
 test('test_functions', test_file_runner, args: files('test/functions.orso'))
 test('test_compile_time_evaluation', test_file_runner, args: files('test/compile_time_evaluation.orso'))
 

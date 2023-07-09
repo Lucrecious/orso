@@ -77,6 +77,21 @@ static bool match(Lexer* lexer, char expected) {
     return true;
 }
 
+static bool match2(Lexer* lexer, const char* expected) {
+    ASSERT(strlen(expected) == 2, "the size of expected must be 2");
+
+    if (is_at_end(lexer)) {
+        return false;
+    }
+
+    if (peek(lexer) != expected[0] || peek_next(lexer) != expected[1]) {
+        return false;
+    }
+
+    lexer->current += 2;
+    return true;
+}
+
 static void skip_whitespace(Lexer* lexer) {
     for (;;) {
         char c = peek(lexer);
@@ -93,6 +108,41 @@ static void skip_whitespace(Lexer* lexer) {
             default:
                 return;
         }
+    }
+}
+
+static void skip_comments(Lexer* lexer) {
+    if (match2(lexer, "//")) {
+        while (!is_at_end(lexer)) {
+            char c = advance(lexer);
+            if (c == '\n') {
+                lexer->line++;
+                return;
+            }
+        }
+    } else if (match2(lexer, "/*")) {
+        i32 rings = 1;
+
+        while (!is_at_end(lexer)) {
+            if (match2(lexer, "*/")) {
+                rings--;
+                continue;
+            }
+
+            if (rings == 0) {
+                return;
+            }
+
+            if (match2(lexer, "/*")) {
+                rings++;
+                continue;
+            }
+
+            char c = advance(lexer);
+            lexer->line += (c == '\n');
+        }
+
+        error_token(lexer, "Expected closing comment */ before file end");
     }
 }
 
@@ -219,6 +269,10 @@ static Token identifier(Lexer* lexer) {
 }
 
 Token lexer_next_token(Lexer* lexer) {
+    skip_whitespace(lexer);
+
+    skip_comments(lexer);
+
     skip_whitespace(lexer);
 
     lexer->start = lexer->current;
