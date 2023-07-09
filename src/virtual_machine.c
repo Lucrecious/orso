@@ -260,8 +260,22 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
                 break;
             }
 
+            case ORSO_OP_GET_GLOBAL_SHORT: {
+                byte index = READ_BYTE();
+                OrsoSlot slot = vm->globals.values[index];
+                PUSH(slot);
+                break;
+            }
+
             case ORSO_OP_GET_LOCAL: {
                 u32 index = READ_U24();
+                OrsoSlot slot = frame->slots[index];
+                PUSH(slot);
+                break;
+            }
+
+            case ORSO_OP_GET_LOCAL_SHORT: {
+                byte index = READ_BYTE();
                 OrsoSlot slot = frame->slots[index];
                 PUSH(slot);
                 break;

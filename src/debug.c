@@ -46,6 +46,14 @@ static i32 instruction_3arg(const char* name, Chunk* chunk, i32 offset) {
     return offset + 4;
 }
 
+static i32 instruction_arg(const char* name, Chunk* chunk, i32 offset) {
+    byte index = chunk->code[offset + 1];
+    printf("%-16s %d", name, index);
+    printf("\n");
+
+    return offset + 4;
+}
+
 static int jump_instruction(const char* name, int sign, Chunk* chunk, int offset) {
     u16 jump = ORSO_u8s_to_u16(chunk->code[offset + 1], chunk->code[offset + 2]);
     printf("%-16s %4d -> %d\n", name, offset, offset + 3 + sign * jump);
@@ -98,12 +106,14 @@ i32 disassemble_instruction(Chunk* chunk, i32 offset) {
         case ORSO_OP_CONSTANT: return constant_instruction("OP_CONSTANT", chunk, offset, false);
         case ORSO_OP_CONSTANT_SHORT: return constant_instruction("OP_CONSTANT_SHORT", chunk, offset, true);
         case ORSO_OP_DEFINE_GLOBAL: return instruction_3arg("OP_DEFINE_GLOBAL", chunk, offset);
-        case ORSO_OP_GET_GLOBAL: return instruction_3arg("OP_GET_GLOBAL", chunk, offset);
         case ORSO_OP_SET_GLOBAL: return instruction_3arg("OP_SET_GLOBAL", chunk, offset);
+        case ORSO_OP_GET_GLOBAL: return instruction_3arg("OP_GET_GLOBAL", chunk, offset);
+        case ORSO_OP_GET_GLOBAL_SHORT: return instruction_arg("OP_GET_GLOBAL_SHORT", chunk, offset);
         case ORSO_OP_DEFINE_GLOBAL_UNION: return instruction_3arg("OP_DEFINE_GLOBAL_UNION", chunk, offset);
         case ORSO_OP_GET_GLOBAL_UNION: return instruction_3arg("OP_GET_GLOBAL_UNION", chunk, offset);
         case ORSO_OP_SET_GLOBAL_UNION: return instruction_3arg("OP_SET_GLOBAL_UNION", chunk, offset);
         case ORSO_OP_GET_LOCAL: return instruction_3arg("OP_GET_LOCAL", chunk, offset);
+        case ORSO_OP_GET_LOCAL_SHORT: return instruction_arg("OP_GET_LOCAL_SHORT", chunk, offset); 
         case ORSO_OP_GET_LOCAL_UNION: return instruction_3arg("OP_GET_LOCAL_UNION", chunk, offset);
         case ORSO_OP_SET_LOCAL: return instruction_3arg("OP_SET_LOCAL", chunk, offset);
         case ORSO_OP_SET_LOCAL_UNION: return instruction_3arg("OP_SET_LOCAL_UNION", chunk, offset);

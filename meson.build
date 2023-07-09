@@ -33,7 +33,7 @@ endif
 
 executable('debug-orso', [src, 'main.c'], install : false, include_directories : inc, c_args : c_args)
 
-executable('orso', [src, 'main.c'], install : false, include_directories: inc)
+executable('orso', [src, 'main.c'], install : false, include_directories: inc, c_args : ['-O3'])
 
 test_c_args = ['-DDEBUG_GC_STRESS', '-DDEBUG']
 

@@ -77,13 +77,15 @@ static i32 get_stack_effect(OrsoOPCode op_code) {
 
         case ORSO_OP_SET_LOCAL: return 0;
         case ORSO_OP_GET_LOCAL: return 1;
+        case ORSO_OP_GET_LOCAL_SHORT: return 1;
 
         case ORSO_OP_SET_LOCAL_UNION: return 0;
         case ORSO_OP_GET_LOCAL_UNION: return 2;
         
         case ORSO_OP_DEFINE_GLOBAL: return -1;
-        case ORSO_OP_GET_GLOBAL: return 1;
         case ORSO_OP_SET_GLOBAL: return 0;
+        case ORSO_OP_GET_GLOBAL: return 1;
+        case ORSO_OP_GET_GLOBAL_SHORT: return 1;
 
         case ORSO_OP_DEFINE_GLOBAL_UNION: return -2;
         case ORSO_OP_GET_GLOBAL_UNION: return 2;
@@ -203,16 +205,37 @@ static void patch_jump(Chunk* chunk, i32 offset) {
     chunk->code[offset + 1] = b2;
 }
 
-static void emit_instruction3(OrsoOPCode op_code, Compiler* compiler, u32 index, Chunk* chunk, i32 line) {
+static void emit_instruction3(OrsoOPCode op_code, Compiler* compiler, u32 value, Chunk* chunk, i32 line) {
     emit_instruction(op_code, compiler, chunk, line);
 
-    ASSERT(index < 0xFFFFFF, "index must be less than the largest 24 bit unsigned int.");
+    ASSERT(value < 0xFFFFFF, "index must be less than the largest 24 bit unsigned int.");
 
     byte b1, b2, b3;
-    ORSO_u24_to_u8s(index, b1, b2, b3);
+    ORSO_u24_to_u8s(value, b1, b2, b3);
     chunk_write(chunk, b1, line);
     chunk_write(chunk, b2, line);
     chunk_write(chunk, b3, line);
+}
+
+static void emit_instruction1(OrsoOPCode op_code, Compiler* compiler, byte value, Chunk* chunk, i32 line) {
+    emit_instruction(op_code, compiler, chunk, line);
+    chunk_write(chunk, value, line);
+}
+
+static void emit_entity_get(Compiler* compiler, u32 index, Chunk* chunk, i32 line, bool is_local) {
+    if (is_local) {
+        if (index < UINT8_MAX) {
+            emit_instruction1(ORSO_OP_GET_LOCAL_SHORT, compiler, (byte)index, chunk, line);
+        } else {
+            emit_instruction3(ORSO_OP_GET_LOCAL, compiler, index, chunk, line);
+        }
+    } else {
+        if (index < UINT8_MAX) {
+            emit_instruction1(ORSO_OP_GET_GLOBAL_SHORT, compiler, (byte)index, chunk, line);
+        } else {
+            emit_instruction3(ORSO_OP_GET_GLOBAL, compiler, index, chunk, line);
+        }
+    }
 }
 
 static void emit_put_in_union(Compiler* compiler, OrsoType* type, Chunk* chunk, i32 line) {
@@ -728,18 +751,15 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoExpress
             bool is_local;
             i32 index = retrieve_variable(vm, compiler, &identifier_token, &is_local);
 
-            OrsoOPCode get_op;
             OrsoOPCode get_union_op;
             if (is_local) {
-                get_op = ORSO_OP_GET_LOCAL;
                 get_union_op = ORSO_OP_GET_LOCAL_UNION;
             } else {
-                get_op = ORSO_OP_GET_GLOBAL;
                 get_union_op = ORSO_OP_GET_GLOBAL_UNION;
             }
 
             if (!ORSO_TYPE_IS_UNION(expression_node->value_type)) {
-                emit_instruction3(get_op, compiler, index, chunk, expression_node->start.line);
+                emit_entity_get(compiler, index, chunk, expression_node->start.line, is_local);
             } else {
                 emit_instruction3(get_union_op, compiler, index, chunk, expression_node->start.line);
             }
