@@ -299,6 +299,8 @@ static void emit_return(Compiler* compiler, Chunk* chunk, OrsoType* type, i32 li
 
     // TODO: Figure out more robust way of doing this instead of casting to byte
     chunk_write(chunk, (byte)orso_type_slot_count(type), line);
+
+    _apply_stack_effects(compiler, -orso_type_slot_count(type));
 }
 
 static OrsoFunction* compiler_end(Compiler* compiler, Chunk* chunk, i32 line) {

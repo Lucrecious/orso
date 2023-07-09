@@ -51,7 +51,7 @@ static i32 instruction_arg(const char* name, Chunk* chunk, i32 offset) {
     printf("%-16s %d", name, index);
     printf("\n");
 
-    return offset + 4;
+    return offset + 2;
 }
 
 static int jump_instruction(const char* name, int sign, Chunk* chunk, int offset) {
