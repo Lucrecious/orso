@@ -148,6 +148,9 @@ struct OrsoExpressionNode {
     OrsoType* narrowed_value_type; // only set for union types
     OrsoExpressionType type;
 
+    bool has_directive;
+    Token directive;
+
     // the expression is foldable but is not necessarily folded
     bool foldable; 
 

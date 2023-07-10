@@ -268,6 +268,35 @@ static Token identifier(Lexer* lexer) {
     return create_token(lexer, identifier_type(lexer));
 }
 
+static bool is_directive_character(char c) {
+    if (is_alpha(c)) {
+        return true;
+    }
+
+    if (is_digit(c)) {
+        return true;
+    }
+
+    switch (c) {
+        case ',':
+        case '?':
+        case '!':
+            return true;
+        default:
+            return false;
+    }
+
+    return false;
+}
+
+static Token directive(Lexer* lexer) {
+    while (is_directive_character(peek(lexer))) {
+        advance(lexer);
+    }
+
+    return create_token(lexer, TOKEN_DIRECTIVE);
+}
+
 Token lexer_next_token(Lexer* lexer) {
     skip_whitespace(lexer);
 
@@ -282,6 +311,10 @@ Token lexer_next_token(Lexer* lexer) {
     }
 
     char c = advance(lexer);
+
+    if (c == '#') {
+        return directive(lexer);
+    }
 
     if (is_alpha(c)) {
         return identifier(lexer);

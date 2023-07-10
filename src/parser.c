@@ -13,7 +13,6 @@
 program                  -> declaration* EOF
 declaration              -> entity_declaration | function_declaration | statement
 entity_declaration       -> IDENTIFIER `:` union_type? (`=` expression)? `;`
-//function_declaration     -> IDENTIFIER `::` `(` parameters? `)` (`->` union_type)? block
 parameters               -> parameter (`,` parameter)*
 parameter                -> IDENTIFIER `:` ((union_type (`=` expression)?) | (`=` expression))
 statement                -> expression_statement
@@ -23,7 +22,8 @@ union_type               -> type (`|` type)*
 function_type            -> `(` (union_type (`,` union_type)*)? `)` `->` union_type
 type                     -> IDENTIFIER | function_type
 
-expression               -> assignment | block | ifthen
+directive                -> `#` ~(\s)*
+expression               -> directive? (assignment | block | ifthen)
 block                    -> `{` declaration* `}`
 ifthen                   -> (`if` | `unless` | `while` | `until` ) expression block (`else` (ifthen | block))?
 assignment               -> (call `.`)? IDENTIFIER `=` expression
@@ -368,6 +368,8 @@ static OrsoExpressionNode* expression_new(Token start) {
     expression_node->start = start;
     expression_node->end = start;
     expression_node->type = EXPRESSION_NONE;
+
+    expression_node->has_directive = false;
 
     expression_node->foldable = false;
     expression_node->folded_value_index = -1;
@@ -853,7 +855,19 @@ static ParseRule* get_rule(TokenType type) {
 }
 
 static OrsoExpressionNode* expression(Parser* parser) {
-    return parse_precedence(parser, PREC_ASSIGNMENT);
+    Token directive = (Token) { .length = 0 };
+    if (match(parser, TOKEN_DIRECTIVE)) {
+        directive = parser->previous;
+    }
+
+    OrsoExpressionNode* expression_node = parse_precedence(parser, PREC_ASSIGNMENT);
+
+    expression_node->has_directive = (directive.length > 0);
+    if (expression_node->has_directive) {
+        expression_node->directive = directive;
+    }
+
+    return expression_node;
 }
 
 static OrsoStatementNode* statement(Parser* parser) {

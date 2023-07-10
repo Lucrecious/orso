@@ -186,6 +186,7 @@ static OrsoType* resolve_unary_type(TokenType operator, OrsoType* operand) {
 static OrsoExpressionNode* implicit_cast(OrsoExpressionNode* operand, OrsoType* value_type) {
     OrsoExpressionNode* implicit_cast = ORSO_ALLOCATE(OrsoExpressionNode);
 
+    implicit_cast->has_directive = false;
     implicit_cast->start = operand->start;
     implicit_cast->end = operand->end;
     implicit_cast->type = EXPRESSION_IMPLICIT_CAST;
