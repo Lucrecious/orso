@@ -976,7 +976,7 @@ static void declare_entity(OrsoStaticAnalyzer* analyzer, OrsoScope* scope, OrsoE
 }
 
 static bool is_declaration_resolved(OrsoEntityDeclarationNode* entity) {
-    return (entity->implicit_default_value_index >= 0 || entity->expression->value_type != &OrsoTypeUnresolved) && entity->type != &OrsoTypeUnresolved;
+    return (entity->implicit_default_value_index >= 0 || (entity->expression && entity->expression->value_type != &OrsoTypeUnresolved)) && entity->type != &OrsoTypeUnresolved;
 }
 
 /* 
@@ -1095,6 +1095,7 @@ static void push_dependency(OrsoStaticAnalyzer* analyzer, void* thing, bool is_t
 
     if (sb_count(analyzer->dependencies.chain) <= analyzer->dependencies.count) {
         sb_push(analyzer->dependencies.chain, dependency);
+        analyzer->dependencies.count = sb_count(analyzer->dependencies.chain);
     } else {
         analyzer->dependencies.chain[analyzer->dependencies.count++] = dependency;
     }
@@ -1105,10 +1106,10 @@ static void pop_dependency(OrsoStaticAnalyzer* analyzer) {
 }
 
 static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, i32 fold_level, OrsoEntityDeclarationNode* entity_declaration) {
+    OrsoType* declaration_type = &OrsoTypeUnresolved;
     if (entity_declaration->type == &OrsoTypeUnresolved && entity_declaration->type_node) {
-
         push_dependency(analyzer, entity_declaration->type_node, true, fold_level);
-        entity_declaration->type = resolve_type(analyzer, ast, scope, fold_level, entity_declaration->type_node);
+        declaration_type = resolve_type(analyzer, ast, scope, fold_level, entity_declaration->type_node);
         pop_dependency(analyzer);
 
         if (analyzer->panic_mode) {
@@ -1129,15 +1130,25 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
         return;
     }
 
+    // Could be resolved could be unresolved at this point.
+    entity_declaration->type = declaration_type;
+
+    entity_declaration->fold_level_resolved_at = fold_level;
+
     // TODO: Outer if should be if the expression is null or not
     if (!ORSO_TYPE_IS_UNION(entity_declaration->type)) {
         if (entity_declaration->type == &OrsoTypeUnresolved) {
             ASSERT(entity_declaration->expression != NULL, "this should be a parsing error.");
+
+            OrsoType* expression_type = entity_declaration->is_mutable ?
+                    entity_declaration->expression->value_type :
+                    entity_declaration->expression->narrowed_value_type;
+
             if (entity_declaration->expression->value_type != &OrsoTypeBool
-                    && orso_type_fits(&OrsoTypeInteger32, entity_declaration->expression->value_type)) {
+                    && orso_type_fits(&OrsoTypeInteger32, expression_type)) {
                 entity_declaration->type = &OrsoTypeInteger32;
             } else {
-                entity_declaration->type = entity_declaration->expression->value_type;
+                entity_declaration->type = expression_type;
             }
         } else {
             if (entity_declaration->expression != NULL && !orso_type_fits(entity_declaration->type, entity_declaration->expression->narrowed_value_type)) {
@@ -1284,7 +1295,7 @@ static Entity* get_resolved_entity_by_identifier(
         }
 
         if (entity->declaration_node->is_mutable && !is_declaration_resolved(entity->declaration_node)) {
-            ASSERT(entity->declaration_node->name.start > identifier_token.start, "cannot think of a case when the declaration wont happen PRIOR to using it with mutables");
+            ASSERT(entity->declaration_node->name.start <= identifier_token.start, "cannot think of a case when the declaration wont happen PRIOR to using it with mutables");
             NEXT_SCOPE();
             continue;
         }
@@ -1298,8 +1309,7 @@ static Entity* get_resolved_entity_by_identifier(
             continue;
         }
 
-        // TODO: constants should be the narrowed type of their declaration expression
-        if (entity->declaration_node->expression->narrowed_value_type->kind == ORSO_TYPE_FUNCTION) {
+        if (entity->declaration_node->type->kind == ORSO_TYPE_FUNCTION) {
             /*
             * Okay... Time to do some explaining. This is a complicated one. Let's begin with the context.
             *
