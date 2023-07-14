@@ -55,12 +55,12 @@ static OrsoScope* scope_copy_new(OrsoScope* scope) {
         return NULL;
     }
 
-    OrsoScope* state_copy = ORSO_ALLOCATE(OrsoScope);
-    scope_init(state_copy, NULL, scope->creator);
-    orso_symbol_table_add_all(&scope->named_entities, &state_copy->named_entities);
+    OrsoScope* scope_copy = ORSO_ALLOCATE(OrsoScope);
+    scope_init(scope_copy, NULL, scope->creator);
+    orso_symbol_table_add_all(&scope->named_entities, &scope_copy->named_entities);
 
-    for (i32 i = 0; i < scope->named_entities.capacity; i++) {
-        OrsoSymbolTableEntry* entry = &scope->named_entities.entries[i];
+    for (i32 i = 0; i < scope_copy->named_entities.capacity; i++) {
+        OrsoSymbolTableEntry* entry = &scope_copy->named_entities.entries[i];
         if (entry->key == NULL) {
             continue;
         }
@@ -70,9 +70,9 @@ static OrsoScope* scope_copy_new(OrsoScope* scope) {
         entry->value = ORSO_SLOT_P(entity_copy, &OrsoTypeType);
     }
 
-    state_copy->outer = scope_copy_new(scope->outer);
+    scope_copy->outer = scope_copy_new(scope->outer);
 
-    return state_copy;
+    return scope_copy;
 }
 
 static void scope_merge(OrsoTypeSet* set, OrsoScope* scope, OrsoScope* a, OrsoScope* b) {
@@ -97,10 +97,31 @@ static void scope_merge(OrsoTypeSet* set, OrsoScope* scope, OrsoScope* a, OrsoSc
         Entity* entity_a = (Entity*)entity_a_slot.as.p;
         Entity* entity_b = (Entity*)entity_b_slot.as.p;
 
-        OrsoType* anded_narrowed = orso_type_merge(set, entity_a->narrowed_type, entity_b->narrowed_type);
+        OrsoType* anded_type;
+        OrsoType* anded_narrowed;
+        if (entity_a->declared_type == &OrsoTypeUnresolved || entity_b->declared_type == &OrsoTypeUnresolved) {
+            if (entity_a->declared_type == entity_b->declared_type) {
+                continue;
+            }
+
+            // since one of the entities was not narrowed, we should use the declared type
+            // instead of the narrowed type. (since the other side wasn't narrowed to anything)
+            if (entity_a->declared_type != &OrsoTypeUnresolved) {
+                anded_type = entity_a->declared_type;
+                anded_narrowed = entity_a->declared_type;
+            } else {
+                anded_type = entity_b->declared_type;
+                anded_narrowed = entity_b->declared_type;
+            }
+        } else {
+            ASSERT(entity_a->declared_type == entity_b->declared_type, "declared type should be stable. TODO: No need for declared type to be in here... should be in the declaration instead.");
+            anded_type = entity_a->declared_type;
+            anded_narrowed = orso_type_merge(set, entity_a->narrowed_type, entity_b->narrowed_type);
+        }
 
         Entity* scope_entity = (Entity*)entry->value.as.p;
 
+        scope_entity->declared_type = anded_type;
         scope_entity->narrowed_type = anded_narrowed;
     }
 
@@ -1496,7 +1517,7 @@ static void resolve_function_expression(
 
     ASSERT(definition->block_expression->type == EXPRESSION_BLOCK, "must be block expression");
 
-    push_dependency(analyzer, definition->block_expression, false, fold_level);
+    push_dependency(analyzer, function_definition_expression, false, fold_level);
     orso_resolve_expression(analyzer, ast, &function_scope, fold_level, definition->block_expression, mode);
     pop_dependency(analyzer);
 

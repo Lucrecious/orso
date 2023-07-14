@@ -25,6 +25,8 @@ typedef struct Compiler {
     OrsoFunction* function;
     OrsoCompilerFunctionType function_type;
 
+    bool skip_function_definitions;
+
     Local* locals;
     i32 locals_count;
     i32 scope_depth;
@@ -130,6 +132,7 @@ static void compiler_init(Compiler* compiler, OrsoCompilerFunctionType function_
 
     compiler->function = function;
     compiler->function->type = (OrsoFunctionType*)creator_type;
+    compiler->skip_function_definitions = false;
 }
 
 static void compiler_free(Compiler* compiler) {
@@ -507,7 +510,9 @@ static void function_expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, Or
     ASSERT(function_defintion_expression->value_type->kind == ORSO_TYPE_FUNCTION, "must be function if calling this");
 
     OrsoFunction* stored_function = (OrsoFunction*)ast->folded_constants[function_defintion_expression->folded_value_index].as.p;
-    orso_compile_function(vm, ast, stored_function, function_defintion_expression);
+    if (!compiler->skip_function_definitions && stored_function->chunk.code == NULL /*is not compiled yet*/) {
+        orso_compile_function(vm, ast, stored_function, function_defintion_expression);
+    }
     emit_constant(compiler, chunk, ORSO_SLOT_P(stored_function, (OrsoType*)stored_function->type), function_defintion_expression->start.line);
 }
 
@@ -1009,6 +1014,7 @@ OrsoFunction* orso_generate_expression_function(OrsoCodeBuilder* builder, OrsoEx
     OrsoFunction* run_function = orso_new_function();
 
     compiler_init(&compiler, ORSO_FUNCTION_TYPE_SCRIPT, builder->vm, run_function, (OrsoType*)function_type);
+    compiler.skip_function_definitions = expression_node->fold ? false : true;
 
     // The vm will put this guy on the guy.
     compiler.max_stack_size = compiler.current_stack_size = 1;
