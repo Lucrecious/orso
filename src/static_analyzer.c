@@ -16,6 +16,12 @@ static void clock_native(OrsoSlot* arguments, OrsoSlot* result) {
 
 typedef OrsoSymbolTable SymbolTable;
 
+typedef enum ExpressionFoldingMode {
+    MODE_RUNTIME,
+    MODE_CONSTANT_TIME,
+    MODE_FOLDING_TIME,
+} ExpressionFoldingMode;
+
 typedef struct Entity {
     // TODO: instead of using declarad type just use narrowed type and the type of the decalrtion node
     OrsoType* declared_type;
@@ -186,13 +192,13 @@ static OrsoType* resolve_unary_type(TokenType operator, OrsoType* operand) {
 static OrsoExpressionNode* implicit_cast(OrsoExpressionNode* operand, OrsoType* value_type) {
     OrsoExpressionNode* implicit_cast = ORSO_ALLOCATE(OrsoExpressionNode);
 
-    implicit_cast->has_directive = false;
     implicit_cast->start = operand->start;
     implicit_cast->end = operand->end;
     implicit_cast->type = EXPRESSION_IMPLICIT_CAST;
     implicit_cast->value_type = value_type;
     implicit_cast->narrowed_value_type = value_type;
     implicit_cast->expr.cast.operand = operand;
+    implicit_cast->fold = false;
     implicit_cast->foldable = true;
     implicit_cast->folded_value_index = -1;
 
@@ -221,7 +227,14 @@ typedef struct EntityQuery  {
     bool skip_mutable;
 } EntityQuery;
 
-static Entity* get_resolved_entity_by_identifier(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, Token identifier_token, EntityQuery* query, OrsoScope** found_scope, bool* is_cyclic);
+static Entity* get_resolved_entity_by_identifier(
+        OrsoStaticAnalyzer* analyzer,
+        OrsoAST* ast,
+        OrsoScope* scope,
+        i32 fold_level,
+        Token identifier_token,
+        EntityQuery* query,
+        OrsoScope** found_scope);
 
 static bool is_builtin_type(Token identifier, OrsoType** type) {
 #define RETURN_IF_TYPE(TOKEN, TYPE_STRING, TYPE_ID) \
@@ -246,34 +259,29 @@ if (memcmp(identifier.start, #TYPE_STRING, (sizeof(#TYPE_STRING) - 1)/sizeof(cha
 #undef RETURN_IF_TYPE
 }
 
-static OrsoType* resolve_identifier_type(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, Token identifier_type) {
+static OrsoType* resolve_identifier_type(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, i32 fold_level, Token identifier_type) {
     OrsoType* type;
     if (is_builtin_type(identifier_type, &type)) {
         return type;
     }
 
-    bool is_cyclic;
-    EntityQuery query = (EntityQuery) { .type = ENTITY_QUERY_TYPE };
+    EntityQuery query = (EntityQuery) { .type = ENTITY_QUERY_TYPE, .skip_mutable = true };
     OrsoScope* entity_scope;
-    Entity* value = get_resolved_entity_by_identifier(analyzer, ast, scope, identifier_type, &query, &entity_scope, &is_cyclic);
+    Entity* value = get_resolved_entity_by_identifier(analyzer, ast, scope, fold_level, identifier_type, &query, &entity_scope);
 
     if (!value) {
         char message[512];
-        if (is_cyclic) {
-            sprintf(message, "Type %.*s has a cyclic dependency: TODO print dependency cycle.", identifier_type.length, identifier_type.start);
-        } else {
-            sprintf(message, "Type %.*s has not been declared.", identifier_type.length, identifier_type.start);
-        }
+        sprintf(message, "Type %.*s has not been declared.", identifier_type.length, identifier_type.start);
         error(analyzer, identifier_type.line, message);
         return &OrsoTypeInvalid;
     }
 
-    if (value->declaration_node->is_mutable) {
-        char message[512];
-        sprintf(message, "Declaration for %.*s is mutable and cannot be resolved at compile time.", identifier_type.length, identifier_type.start);
-        error(analyzer, identifier_type.line, message);
-        return &OrsoTypeInvalid;
-    }
+    // if (value->declaration_node->is_mutable) {
+    //     char message[512];
+    //     sprintf(message, "Declaration for %.*s is mutable and cannot be resolved at compile time.", identifier_type.length, identifier_type.start);
+    //     error(analyzer, identifier_type.line, message);
+    //     return &OrsoTypeInvalid;
+    // }
 
     type = (OrsoType*)get_folded_type(ast, value->declaration_node->expression->folded_value_index);
     return type;
@@ -303,6 +311,20 @@ static i32 add_value_to_ast_constant_stack(OrsoAST* ast, OrsoSlot* value, OrsoTy
     
     return sb_count(ast->folded_constants) - slot_count;
 }
+
+// static void compile_function(OrsoAST* ast, OrsoFunction* function, OrsoExpressionNode* function_definition_expression) {
+//     OrsoVM* vm;
+
+//     orso_vm_init(&vm, NULL);
+
+//     OrsoSlot stack[512];
+//     vm->stack = stack;
+//     vm->stack_top = stack;
+
+//     orso_compile_function(vm, ast, function, function_definition_expression);
+
+//     orso_vm_free(&vm);
+// }
 
 static i32 evaluate_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, OrsoExpressionNode* expression) {
     (void)scope; // TODO: remove this if unnecessary
@@ -352,10 +374,28 @@ static bool get_native_function(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, Toke
     return false;
 }
 
-static void fold_constants(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, OrsoExpressionNode* expression, bool constants_only);
-static OrsoType* resolve_type(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, OrsoTypeNode* type_node);
+static void fold_constants(
+        OrsoStaticAnalyzer* analyzer,
+        OrsoAST* ast,
+        OrsoScope* scope,
+        i32 fold_level,
+        OrsoExpressionNode* expression,
+        ExpressionFoldingMode mode);
 
-static void resolve_foldable(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, OrsoExpressionNode* expression, bool constants_only) {
+static OrsoType* resolve_type(
+        OrsoStaticAnalyzer* analyzer,
+        OrsoAST* ast,
+        OrsoScope* scope,
+        i32 fold_level,
+        OrsoTypeNode* type_node);
+
+static void resolve_foldable(
+        OrsoStaticAnalyzer* analyzer,
+        OrsoAST* ast, OrsoScope* scope,
+        i32 fold_level,
+        OrsoExpressionNode* expression,
+        ExpressionFoldingMode mode) {
+
     bool foldable = false;
     i32 folded_index = -1;
 
@@ -386,7 +426,6 @@ static void resolve_foldable(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
         }
 
         case EXPRESSION_ENTITY: {
-            bool is_cyclic;
             OrsoScope* entity_scope;
             Token name = expression->expr.entity.name;
 
@@ -398,8 +437,8 @@ static void resolve_foldable(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
                 break;
             }
 
-            EntityQuery query = (EntityQuery){ .skip_mutable = constants_only };
-            Entity* entity = get_resolved_entity_by_identifier(analyzer, ast, scope, name, &query, &entity_scope, &is_cyclic);
+            EntityQuery query = (EntityQuery){ .skip_mutable = (mode == MODE_CONSTANT_TIME) || (mode == MODE_FOLDING_TIME) };
+            Entity* entity = get_resolved_entity_by_identifier(analyzer, ast, scope, fold_level, name, &query, &entity_scope);
 
             if (!entity) {
                 char message[512];
@@ -430,9 +469,37 @@ static void resolve_foldable(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
             break;
         }
 
-        case EXPRESSION_CALL:
-        case EXPRESSION_BLOCK:
-        case EXPRESSION_IMPLICIT_CAST:
+        case EXPRESSION_IMPLICIT_CAST: {
+            foldable = true;
+            break;
+        }
+
+        case EXPRESSION_CALL: {
+            if (mode != MODE_FOLDING_TIME) {
+                break;
+            }
+
+            foldable = expression->expr.call.callee->foldable;
+            if (!foldable) {
+                break;
+            }
+
+            for (i32 i = 0; i < sb_count(expression->expr.call.arguments); i++) {
+                foldable &= expression->expr.call.arguments[i]->foldable;
+                if (!foldable) {
+                    break;
+                }
+            }
+            break;
+        }
+        case EXPRESSION_BLOCK: {
+            if (mode != MODE_FOLDING_TIME) {
+                break;
+            }
+
+            foldable = true;
+            break;
+        }
         case EXPRESSION_ASSIGNMENT: {
             break;
         }
@@ -452,13 +519,20 @@ static void resolve_foldable(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
     expression->folded_value_index = folded_index;
 }
 
-static void fold_constants(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, OrsoExpressionNode* expression, bool only_constants) {
+static void fold_constants(
+        OrsoStaticAnalyzer* analyzer,
+        OrsoAST* ast,
+        OrsoScope* scope,
+        i32 fold_level,
+        OrsoExpressionNode* expression,
+        ExpressionFoldingMode mode) {
+
     // already folded nothing to do
     if (IS_FOLDED(expression)) {
         return;
     }
 
-    resolve_foldable(analyzer, ast, scope, expression, only_constants);
+    resolve_foldable(analyzer, ast, scope, fold_level, expression, mode);
 
     if (IS_FOLDED(expression)) {
         return;
@@ -473,9 +547,29 @@ static void fold_constants(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope
     expression->folded_value_index = value_index;
 }
 
-static void resolve_declaration_types(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, OrsoDeclarationNode** declarations, i32 count);
-static void resolve_declaration_type(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, OrsoDeclarationNode* declaration_node);
-static void resolve_function_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, OrsoExpressionNode* function_definition_expression, bool only_constants);
+static void resolve_declarations(
+        OrsoStaticAnalyzer* analyzer,
+        OrsoAST* ast,
+        OrsoScope* scope,
+        i32 fold_level,
+        OrsoDeclarationNode** declarations,
+        i32 count);
+
+static void resolve_declaration(
+        OrsoStaticAnalyzer* analyzer,
+        OrsoAST* ast,
+        OrsoScope* scope,
+        i32 fold_level,
+        OrsoDeclarationNode* declaration_node);
+
+static void resolve_function_expression(
+        OrsoStaticAnalyzer* analyzer,
+        OrsoAST* ast,
+        OrsoScope* scope,
+        i32 fold_level,
+        OrsoExpressionNode* function_definition_expression,
+        ExpressionFoldingMode mode);
+
 static void declare_entity(OrsoStaticAnalyzer* analyzer, OrsoScope* scope, OrsoEntityDeclarationNode* entity);
 
 static void forward_scan_declaration_names(OrsoStaticAnalyzer* analyzer, OrsoScope* scope, OrsoDeclarationNode** declarations, i32 count) {
@@ -491,14 +585,26 @@ static void forward_scan_declaration_names(OrsoStaticAnalyzer* analyzer, OrsoSco
     }
 }
 
-void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, OrsoExpressionNode* expression, bool only_constants) {
+void orso_resolve_expression(
+        OrsoStaticAnalyzer* analyzer,
+        OrsoAST* ast,
+        OrsoScope* scope,
+        i32 fold_level,
+        OrsoExpressionNode* expression,
+        ExpressionFoldingMode mode) {
+
     if (expression->value_type != &OrsoTypeUnresolved) {
         return;
     }
 
+    if (expression->fold) {
+        fold_level++;
+        mode = MODE_FOLDING_TIME;
+    }
+
     switch (expression->type) {
         case EXPRESSION_GROUPING: {
-            orso_resolve_expression(analyzer, ast, scope, expression->expr.grouping.expression, only_constants);
+            orso_resolve_expression(analyzer, ast, scope, fold_level, expression->expr.grouping.expression, mode);
             expression->value_type = expression->expr.grouping.expression->narrowed_value_type;
             expression->narrowed_value_type = expression->expr.grouping.expression->narrowed_value_type;
             break;
@@ -510,8 +616,8 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
         case EXPRESSION_BINARY: {
             OrsoExpressionNode* left = expression->expr.binary.left;
             OrsoExpressionNode* right = expression->expr.binary.right;
-            orso_resolve_expression(analyzer, ast, scope, left, only_constants);
-            orso_resolve_expression(analyzer, ast, scope, right, only_constants);
+            orso_resolve_expression(analyzer, ast, scope, fold_level, left, mode);
+            orso_resolve_expression(analyzer, ast, scope, fold_level, right, mode);
 
             // TODO: Remember to do different things depending on operation
             //   if it's arthimetic, or comparisons, then let them merge at the end
@@ -586,20 +692,20 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
             if (!is_logical_operator) {
                 if (cast_left != left->narrowed_value_type) {
                     expression->expr.binary.left = implicit_cast(left, cast_left);
-                    fold_constants(analyzer, ast, scope, expression->expr.binary.left, only_constants);
+                    fold_constants(analyzer, ast, scope, fold_level, expression->expr.binary.left, mode);
                 }
 
 
                 if (cast_right != right->narrowed_value_type) {
                     expression->expr.binary.right = implicit_cast(right, cast_right);
-                    fold_constants(analyzer, ast, scope, expression->expr.binary.right, only_constants);
+                    fold_constants(analyzer, ast, scope, fold_level, expression->expr.binary.right, mode);
                 }
             }
             break;
         }
         case EXPRESSION_UNARY: {
             OrsoUnaryOp* unary_op = &expression->expr.unary;
-            orso_resolve_expression(analyzer, ast, scope, unary_op->operand, only_constants);
+            orso_resolve_expression(analyzer, ast, scope, fold_level, unary_op->operand, mode);
 
             OrsoType* new_type = resolve_unary_type(unary_op->operator.type, unary_op->operand->narrowed_value_type);
             expression->value_type = new_type;
@@ -621,8 +727,7 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
                 expression->narrowed_value_type = (OrsoType*)native_function_obj->type;
             } else {
                 OrsoScope* entity_scope;
-                bool is_cyclic;
-                Entity* entity = get_resolved_entity_by_identifier(analyzer, ast, scope, expression->expr.entity.name, NULL, &entity_scope, &is_cyclic);
+                Entity* entity = get_resolved_entity_by_identifier(analyzer, ast, scope, fold_level, expression->expr.entity.name, NULL, &entity_scope);
 
                 if (entity == NULL) {
                     error(analyzer, expression->expr.entity.name.line, "Entity does not exist.");
@@ -637,15 +742,14 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
 
         case EXPRESSION_ASSIGNMENT: {
             OrsoScope* entity_scope;
-            bool is_cyclic;
-            Entity* entity = get_resolved_entity_by_identifier(analyzer, ast, scope, expression->expr.assignment.name, NULL, &entity_scope, &is_cyclic);
+            Entity* entity = get_resolved_entity_by_identifier(analyzer, ast, scope, fold_level, expression->expr.assignment.name, NULL, &entity_scope);
 
             if (entity == NULL) {
                 error(analyzer, expression->start.line, "Entity does not exist.");
                 return;
             }
 
-            orso_resolve_expression(analyzer, ast, scope, expression->expr.assignment.right_side, only_constants);
+            orso_resolve_expression(analyzer, ast, scope, fold_level, expression->expr.assignment.right_side, mode);
             if (analyzer->panic_mode) {
                 return;
             }
@@ -677,7 +781,7 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
             i32 declarations_count = sb_count(expression->expr.block.declarations);
             forward_scan_declaration_names(analyzer, &block_scope, expression->expr.block.declarations, declarations_count);
 
-            resolve_declaration_types(analyzer, ast, &block_scope, expression->expr.block.declarations, declarations_count);
+            resolve_declarations(analyzer, ast, &block_scope, fold_level, expression->expr.block.declarations, declarations_count);
 
             if (analyzer->panic_mode) {
                 return;
@@ -711,15 +815,15 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
         }
 
         case EXPRESSION_IFELSE: {
-            orso_resolve_expression(analyzer, ast, scope, expression->expr.ifelse.condition, only_constants);
+            orso_resolve_expression(analyzer, ast, scope, fold_level, expression->expr.ifelse.condition, mode);
 
             OrsoScope* then_state = scope_copy_new(scope);
 
-            orso_resolve_expression(analyzer, ast, then_state, expression->expr.ifelse.then, only_constants);
+            orso_resolve_expression(analyzer, ast, then_state, fold_level, expression->expr.ifelse.then, mode);
 
             OrsoScope* else_state = scope_copy_new(scope);
             if (expression->expr.ifelse.else_) {
-                orso_resolve_expression(analyzer, ast, else_state, expression->expr.ifelse.else_, only_constants);
+                orso_resolve_expression(analyzer, ast, else_state, fold_level, expression->expr.ifelse.else_, mode);
             }
 
             scope_merge(&ast->type_set, scope, then_state, else_state);
@@ -764,14 +868,14 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
         case EXPRESSION_CALL: {
             for (i32 i = 0; i < sb_count(expression->expr.call.arguments); i++) {
                 OrsoExpressionNode* argument = expression->expr.call.arguments[i];
-                orso_resolve_expression(analyzer, ast, scope, argument, only_constants);
+                orso_resolve_expression(analyzer, ast, scope, fold_level, argument, mode);
 
                 if (analyzer->panic_mode) {
                     return;
                 }
             }
 
-            orso_resolve_expression(analyzer, ast, scope, expression->expr.call.callee, only_constants);
+            orso_resolve_expression(analyzer, ast, scope, fold_level, expression->expr.call.callee, mode);
 
             if (analyzer->panic_mode) {
                 return;
@@ -791,7 +895,7 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
             break;
         }
         case EXPRESSION_FUNCTION_DEFINITION: {
-            resolve_function_expression(analyzer, ast, scope, expression, only_constants);
+            resolve_function_expression(analyzer, ast, scope, fold_level, expression, mode);
             break;
         }
         case EXPRESSION_FOR:
@@ -799,15 +903,15 @@ void orso_resolve_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSco
         case EXPRESSION_NONE: UNREACHABLE();
     }
 
-    fold_constants(analyzer, ast, scope, expression, only_constants);
+    fold_constants(analyzer, ast, scope, fold_level, expression, mode);
 }
 
-static OrsoType* resolve_type(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, OrsoTypeNode* type_node) {
+static OrsoType* resolve_type(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, i32 fold_level, OrsoTypeNode* type_node) {
     ASSERT(type_node, "cannot be null");
 
     switch (type_node->type) {
         case ORSO_TYPE_NODE_TYPE_IDENTIFIER: {
-            OrsoType* type = resolve_identifier_type(analyzer, ast, scope, type_node->items.primitive);
+            OrsoType* type = resolve_identifier_type(analyzer, ast, scope, fold_level, type_node->items.primitive);
             return type;
         }
 
@@ -820,7 +924,7 @@ static OrsoType* resolve_type(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSc
             i32 type_count = 0;
             OrsoType* types[ORSO_UNION_NUM_MAX];
             for (i32 i = 0; i < sb_count(type_node->items.union_); i++) {
-                OrsoType* single_type = resolve_type(analyzer, ast, scope, type_node->items.union_[i]);
+                OrsoType* single_type = resolve_type(analyzer, ast, scope, fold_level, type_node->items.union_[i]);
                 if (single_type == &OrsoTypeInvalid) {
                     return &OrsoTypeInvalid;
                 }
@@ -833,7 +937,7 @@ static OrsoType* resolve_type(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSc
         }
 
         case ORSO_TYPE_NODE_TYPE_FUNCTION: {
-            OrsoType* return_type = resolve_type(analyzer, ast, scope, type_node->items.function.return_type);
+            OrsoType* return_type = resolve_type(analyzer, ast, scope, fold_level, type_node->items.function.return_type);
             if (return_type == &OrsoTypeInvalid) {
                 error(analyzer, type_node->items.function.return_type->start.line, "Return type does not exist.");
                 return &OrsoTypeInvalid;
@@ -843,7 +947,7 @@ static OrsoType* resolve_type(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoSc
             OrsoType* arguments[argument_count];
 
             for (i32 i = 0; i < argument_count; i++) {
-                OrsoType* argument = resolve_type(analyzer, ast, scope, type_node->items.function.argument_types[i]);
+                OrsoType* argument = resolve_type(analyzer, ast, scope, fold_level, type_node->items.function.argument_types[i]);
                 if (argument == &OrsoTypeInvalid) {
                     error(analyzer, type_node->items.function.argument_types[i]->start.line, "TODO: Make better error for this, argument type errors are handled in the resolve_type function");
                     return &OrsoTypeInvalid;
@@ -871,25 +975,158 @@ static void declare_entity(OrsoStaticAnalyzer* analyzer, OrsoScope* scope, OrsoE
     add_entity(scope, identifier, entity);
 }
 
-static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, OrsoEntityDeclarationNode* entity_declaration) {
-    if (entity_declaration->type != &OrsoTypeUnresolved)  {
+static bool is_declaration_resolved(OrsoEntityDeclarationNode* entity) {
+    return (entity->implicit_default_value_index >= 0 || entity->expression->value_type != &OrsoTypeUnresolved) && entity->type != &OrsoTypeUnresolved;
+}
+
+/* 
+ * We stop looking for circular dependencies at function boundaries. This took me a while to reason but this
+ * is okay to do even with constant folding. We can think about compiling a progarm with a language like in two different ways.
+ * Right now, the way the compiler works is through a principle I call "eager resolution". Which means that when a problem
+ * comes up during static analysis (i.e. an unresolved expression) we immediately go to resolve it. For example, a problem
+ * that may occur is that while trying to resolve the type of an entity, you need to resolve an expression, but to resolve
+ * that expression, you might need to perform a folding operation. My compiler walks down the line of dependencies and resolves
+ * all the problems that come along the way.
+ * 
+ * Circular dependencies are easily to avoid with non-functions but recursion makes things a little weird. Since a function
+ * can dependent on itself. We can have a weird situation like this:
+ *          
+ *          foo();
+ * 
+ *          foo :: null or (n: i32) -> void {
+ *              if n < 0 {
+ *                  return 0;
+ *              };
+ *              
+ *              return foo(n - 1);
+ *          };
+ * 
+ * Technically... this should run just fine right? null or function literal, and foo being a constant, means foo 
+ * should hold the address to the function expression on the right side of the OR. This is allowed and my language
+ * and should be handled.
+ * 
+ * The way my dependency system works is through expressions. Expressions always, always, always rely on other expressions.
+ * In the case above, when foo(n - 1) is about to be analyzed this is how the dependency chain looks like.
+ * 
+ *          NOTE: so far only the following things create dependencies.
+ *              - The top level type of a declaration
+ *              - The top level expression of a declaration
+ *              - Function definitons
+ *            this is why the dependency chain is not foo() -> foo, even though foo() technically depends on foo.
+ *            I could make dependencies from each and all dependencies but that's way too much and I'm pretty sure
+ *            is unnecessary since a lot of dependencies would be redundant. These are supposed to skip redundant
+ *            dependencies.
+ * 
+ *          foo() => // this would not be in the chain, but it's here because it's what kicks off the chain
+ *              (null or (n: i32) -> void { ... }) => // foo declaration expression
+ *                  (n: i32) -> void { ... } => // function definition
+ *                      foo(n - 1) // this would not be in the chain, but again, it kicks off the above since foo is not resolved.
+ * 
+ * At this point, foo does not have the function address yet during the anaysis! It's still in the process of being resolved...
+ * BUT once its expression is resolved, it will be good go! At this point, we STILL don't really know what foo is!
+ * 
+ * 
+ * If I were to naively check of dependencies the chain would contain to look like this (starting from foo(n - 1))
+ * 
+ *          foo(n - 1) => 
+ *              (null or (n: i32) -> void { ... }) => // foo declaration expression
+ * 
+ * Then we've come back and hit an expression we haven't resolved yet (remember the or wasn't resolved
+ * because we were in the middle of resolving (n: i32) -> void { ... } due to the principle of eager resolution)
+ * and therefore have a circular dependency, right? However, I found a different to do things that could work.
+ * 
+ * Imagine if instead of resolving the function block right away, I actually waited until the declaration resolved
+ * before trying to analysis the function body! Well, then I can use the address of the function, and as long as I
+ * store the scope and body, I can put it in a queue to analysis later. After I am sure I can safely resolve the
+ * function body, then I will. This wouldn't have to deal with circular dependencies.
+ * 
+ * This truth is that the above *should* work (although I haven't tested it) because of part of the proof reasoning below
+ * but this is, in truth, a little annoying to implement. It means I need to sort of break the recursion scheme and
+ * eager resolution princple. I have to allocate more memory on the heap. It's just not an ideal soluton and makes
+ * things much messier...
+ * 
+ * However, the other reasoning of the proof below suggests that the order in which I resolve expressions shouldn't matter.
+ * So I can't naively just walk up the dependency chain and check for duplicates, I need to be a tiny bit smarter. Since the
+ * order in which I resolve things doesn't matter as long as I have the data there (the scope chains basically).
+ * 
+ * I noticed that if I analyse a function body's when I know it's safe, the circular dependencies *must* be either
+ * be localized inside the function OR will hit a circular dependency of constants on the outer layer - but in either
+ * case - these circular dependencies will be a result of unused entities trying to be resolved from *inside* the function.
+ * 
+ * Therefore instead of a simply looking for duplicate expression pointers in the entire dependency chain, I start
+ * backwards and when I see a dependency to a function definition, I stop looking. This mimics the behavior of the
+ * unideal solution but allows me not break any recursion.
+ * 
+ */
+static bool is_circular_dependency(OrsoStaticAnalyzer* analyzer, void* new_dependency) {
+    for (i32 i = analyzer->dependencies.count - 1; i >= 0; i--) {
+        OrsoAnalysisDependency* dependency = &analyzer->dependencies.chain[i];
+
+        if (!dependency->is_type && ((OrsoExpressionNode*)dependency->ptr)->type == EXPRESSION_FUNCTION_DEFINITION) {
+            return false;
+        }
+
+        if (dependency->ptr == new_dependency) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static void push_dependency(OrsoStaticAnalyzer* analyzer, void* thing, bool is_type, int fold_level) {
+    if (is_circular_dependency(analyzer, thing)) {
+        i32 line;
+        if (is_type) {
+            line = ((OrsoTypeNode*)thing)->start.line;
+        } else {
+            line = ((OrsoExpressionNode*)thing)->start.line;
+        }
+
+        error(analyzer, line, "Circular dependency");
         return;
     }
 
-    OrsoType* type = &OrsoTypeUnresolved;
-    if (entity_declaration->type_node) {
-        type = resolve_type(analyzer, ast, scope, entity_declaration->type_node);
+    OrsoAnalysisDependency dependency = {
+        .fold_level = fold_level,
+        .is_type = is_type,
+        .ptr = thing,
+    };
+
+    if (sb_count(analyzer->dependencies.chain) <= analyzer->dependencies.count) {
+        sb_push(analyzer->dependencies.chain, dependency);
+    } else {
+        analyzer->dependencies.chain[analyzer->dependencies.count++] = dependency;
+    }
+}
+
+static void pop_dependency(OrsoStaticAnalyzer* analyzer) {
+    analyzer->dependencies.count--;
+}
+
+static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, i32 fold_level, OrsoEntityDeclarationNode* entity_declaration) {
+    if (entity_declaration->type == &OrsoTypeUnresolved && entity_declaration->type_node) {
+
+        push_dependency(analyzer, entity_declaration->type_node, true, fold_level);
+        entity_declaration->type = resolve_type(analyzer, ast, scope, fold_level, entity_declaration->type_node);
+        pop_dependency(analyzer);
+
+        if (analyzer->panic_mode) {
+            return;
+        }
     }
 
-    if (analyzer->panic_mode) {
+    if (entity_declaration->expression != NULL && entity_declaration->expression->value_type == &OrsoTypeUnresolved) {
+        ExpressionFoldingMode mode = entity_declaration->is_mutable ? MODE_RUNTIME : MODE_CONSTANT_TIME;
+
+        push_dependency(analyzer, entity_declaration->expression, false, fold_level);
+        orso_resolve_expression(analyzer, ast, scope, fold_level, entity_declaration->expression, mode);
+        pop_dependency(analyzer);
+    }
+
+    // we are resolved
+    if (is_declaration_resolved(entity_declaration)) {
         return;
-    }
-
-    entity_declaration->type = type;
-
-    if (entity_declaration->expression != NULL) {
-        bool only_constants = !entity_declaration->is_mutable;
-        orso_resolve_expression(analyzer, ast, scope, entity_declaration->expression, only_constants);
     }
 
     // TODO: Outer if should be if the expression is null or not
@@ -946,33 +1183,6 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
     } else {
         entity->narrowed_type = entity_declaration->expression->narrowed_value_type;
     }
-}
-
-static bool is_declaration_resolved(OrsoEntityDeclarationNode* entity) {
-    return (entity->implicit_default_value_index >= 0 || entity->expression->value_type != &OrsoTypeUnresolved) && entity->type != &OrsoTypeUnresolved;
-}
-
-static bool is_circular_dependency(OrsoStaticAnalyzer* analyzer, OrsoEntityDeclarationNode* entity) {
-    for (i32 i = analyzer->dependencies.count - 1; i >= 0; i--) {
-        OrsoEntityDeclarationNode* dependency = analyzer->dependencies.chain[i];
-        if (dependency == entity) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-static void push_dependency(OrsoStaticAnalyzer* analyzer, OrsoEntityDeclarationNode* entity) {
-    if (sb_count(analyzer->dependencies.chain) <= analyzer->dependencies.count) {
-        sb_push(analyzer->dependencies.chain, entity);
-    } else {
-        analyzer->dependencies.chain[analyzer->dependencies.count++] = entity;
-    }
-}
-
-static void pop_dependency(OrsoStaticAnalyzer* analyzer) {
-    analyzer->dependencies.count--;
 }
 
 /*
@@ -1034,8 +1244,14 @@ static void pop_dependency(OrsoStaticAnalyzer* analyzer) {
  * This function below is what does this recursive dependency thing.
 */
 
-static Entity* get_resolved_entity_by_identifier(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, Token identifier_token, EntityQuery* query, OrsoScope** search_scope, bool* is_cyclic) {
-    (void)is_cyclic; // TODO: Make sure to report cyclic errors
+static Entity* get_resolved_entity_by_identifier(
+        OrsoStaticAnalyzer* analyzer,
+        OrsoAST* ast,
+        OrsoScope* scope,
+        i32 fold_level,
+        Token identifier_token,
+        EntityQuery* query,
+        OrsoScope** search_scope) {
 
     bool passed_local_mutable_access_barrier = false;
 
@@ -1057,11 +1273,6 @@ static Entity* get_resolved_entity_by_identifier(OrsoStaticAnalyzer* analyzer, O
 
         Entity* entity = (Entity*)entity_slot.as.p;
 
-        if (is_circular_dependency(analyzer, entity->declaration_node)) {
-            error(analyzer, entity->declaration_node->start.line, "Circular dependency");
-            return NULL;
-        }
-
         if (query && query->skip_mutable && entity->declaration_node->is_mutable) {
             NEXT_SCOPE();
             continue;
@@ -1079,17 +1290,100 @@ static Entity* get_resolved_entity_by_identifier(OrsoStaticAnalyzer* analyzer, O
         }
 
         if (entity->declaration_node->expression) {
-            if (entity->declared_type == &OrsoTypeUnresolved && IS_FOLDED(entity->declaration_node->expression)) {
-                entity->declaration_node->type = entity->declaration_node->expression->value_type;
+            resolve_entity_declaration(analyzer, ast, *search_scope, fold_level, entity->declaration_node);
+        }
 
-                entity->declared_type = entity->declaration_node->expression->value_type;
-                entity->narrowed_type = entity->declaration_node->expression->narrowed_value_type;
-            } else {
-                push_dependency(analyzer, entity->declaration_node);
+        if (entity->declaration_node->is_mutable && entity->declaration_node->fold_level_resolved_at != fold_level) {
+            NEXT_SCOPE();
+            continue;
+        }
 
-                resolve_entity_declaration(analyzer, ast, *search_scope, entity->declaration_node);
+        // TODO: constants should be the narrowed type of their declaration expression
+        if (entity->declaration_node->expression->narrowed_value_type->kind == ORSO_TYPE_FUNCTION) {
+            /*
+            * Okay... Time to do some explaining. This is a complicated one. Let's begin with the context.
+            *
+            * In a regular compiler that does not care about compile time evaluation of arbitrary expressions,
+            * they need not worry about *when* a function's body has been analyzed[1], only that it needs to be
+            * analyzed *eventually*. This is because in a regular compile, the assumption is that all functions
+            * run *after* everything already has been analyzed *and* compiled. This means that once we know a
+            * function's address in memory, every time we need to reference the function we can safely use its address.
+            * This is true even if we haven't fully compiled a function's body too. This is useful for recursion because
+            * while analyzing (mainly constant folding) a function's body, the body might call a function that references
+            * the current function's body that you're analyzing. You can simply place a function's address where ever it's
+            * references, and continue analyzing. This is an example of not having to care *when* a function's body gets analyzed
+            * since it doesn't interfere with the rest of the compilation. 
+            * 
+            * When a language cares about compile time expression evaluation (CTEE) things get a little more complicated... Despite 
+            * only needing to solve *when* it is possible to do CTEE this one problem is very complex to solve.
+            * 
+            * While solving recursion was straight forward with a regular compiler, it's not as clear with a CTEE compiler. Any
+            * expression composed of only constant values can be CTEEed. This is different from constant folding which reduces
+            * but doesn't run functions (even if its parameters are constants). This means functions can be ran while certain
+            * portions of the program are still compiling. Again, this is in contrast while a regular compiler where *all* analysis
+            * is done before *any* function is called ever.
+            * 
+            * So *when* can we perform CTEE? First, all entities of the expression being folded must
+            *      1. be constant
+            *      2. a mutable variable that was declared in the same fold level as the expression
+            * 
+            * The first requirement is trivial. You cannot fold an expression if the entities do not hold a concrete value.
+            * The second is less obvious. In Orso, entities can be defined inside blocks, and blocks are expressions. This means
+            * that the declarations in the block get run in order, inlined. Unlike a function that can be called at any time.
+            * This means blocks undergoing constant folding can still access variables that were created during the fold level
+            * since everything in the same fold level must be able to run on its own (assuming all constants are resolved)
+            * 
+            * The constant rule (1) only applies outside function boundaries. When resolving the inside of a function
+            * all declarations are localized to that function, and the function cannot access local variables at higher
+            * scope. So while the (2) rule must still apply, functions already restrict access to mutable variables outside
+            * the their body. That said, the second rule still comes into play when a resolving a function under any folding level
+            * and trying to access the global state. The global state starts at fold level 0, and so if a function is being folded it
+            * will never be able to access the global state (i.e. must be a pure function). 
+            * 
+            * Rule A: Remember that when folding happens, the expression *must* be able to run on its own aside from constants.
+            * i.e. the expression can be put into a compiler with the given folded constants and compile perfect.
+            * 
+            * Another issues arises when you can nest folds. i.e. in the following case
+            * 
+            *      T :: #fold foo();
+            *       
+            *      foo :: () -> i32 {
+            *          return T;
+            *      };
+            * 
+            * Even though T is a constant, because T requires the body of foo to fold, this creates a circular dependency.
+            * However, how do you know when there is a circualr dependency like this or we are just recursioning and only
+            * need the function address? If we are currently resolving the body of the function and we increase the fold level
+            * this implies that whatever is being folded must be able to run on its own (as per Rule A). If we need to call
+            * a function we need to check if its currently being resolved at a different fold level - because if it is, then
+            * we cannot call the function during compile time.
+            * 
+            * Anyways, that's what the we are doing below. If the function definition was processed during
+            * the same fold level that we are currenty on, then we are good. We are doing a regular function call.
+            * 
+            * However, if we are on a different fold level, we need to check if the definition is in the process of
+            * being resolved because it needs to be compiled before running, and since it's in the middle of being resolved
+            * it cannot be compiled won't ever be due to the circular dependency.
+            * 
+            *     [1] by analyzed I mean type checked, type flowed, constants folded, etc. i.e. getting the ast ready for codegen.
+            */
 
-                pop_dependency(analyzer);
+            OrsoFunction* function = (OrsoFunction*)ast->folded_constants[entity->declaration_node->expression->folded_value_index].as.p;
+            for (i32 i = 0; i < analyzer->dependencies.count; i++) {
+                i32 i_ = analyzer->dependencies.count - 1 - i;
+                OrsoAnalysisDependency* dependency = &analyzer->dependencies.chain[i_];
+                if (dependency->is_type) {
+                    continue;
+                }
+
+                OrsoExpressionNode* expression = (OrsoExpressionNode*)dependency->ptr;
+                if (expression->type == EXPRESSION_FUNCTION_DEFINITION) {
+                    OrsoFunction* folded_function = (OrsoFunction*)ast->folded_constants[expression->folded_value_index].as.p;
+                    if (folded_function == function && dependency->fold_level != fold_level) {
+                        error(analyzer, expression->start.line, "Fold level circular dependency. TODO: show dependency chain.");
+                        return NULL;
+                    }
+                }
             }
         }
 
@@ -1123,10 +1417,23 @@ static Entity* get_resolved_entity_by_identifier(OrsoStaticAnalyzer* analyzer, O
     return NULL;
 }
 
-static void resolve_function_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, OrsoExpressionNode* function_definition_expression, bool only_constants) {
+static void resolve_function_expression(
+        OrsoStaticAnalyzer* analyzer,
+        OrsoAST* ast,
+        OrsoScope* scope,
+        i32 fold_level,
+        OrsoExpressionNode* function_definition_expression,
+        ExpressionFoldingMode mode) {
     ASSERT(function_definition_expression->type == EXPRESSION_FUNCTION_DEFINITION, "must be function declaration at this point");
 
+    mode = MODE_RUNTIME;
+
     OrsoFunctionDefinition* definition = &function_definition_expression->expr.function_definition;
+
+    if (IS_FOLDED(function_definition_expression)) {
+        return;
+    }
+
     i32 parameter_count = sb_count(definition->parameters);
     // TODO: instead of hardcoding the number of parameters, instead use the numbers of bytes the params take up
     if (parameter_count > MAX_PARAMETERS - 1) {
@@ -1137,7 +1444,6 @@ static void resolve_function_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* a
     scope_init(&function_scope, scope, function_definition_expression);
     OrsoType* parameter_types[parameter_count];
 
-
     // forward declare parameters
     for (i32 i = 0; i < sb_count(definition->parameters); i++) {
         declare_entity(analyzer, &function_scope, definition->parameters[i]);
@@ -1145,31 +1451,32 @@ static void resolve_function_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* a
 
     // Resolves parameters for function type
     for (i32 i = 0; i < parameter_count; i++) {
-        resolve_entity_declaration(analyzer, ast, &function_scope, definition->parameters[i]);
+        resolve_entity_declaration(analyzer, ast, &function_scope, fold_level, definition->parameters[i]);
         parameter_types[i] = definition->parameters[i]->type;
     }
 
     OrsoType* return_type = &OrsoTypeVoid;
-    if (definition->return_type) {
-        return_type = resolve_type(analyzer, ast, scope, definition->return_type);
+    if (/*function_definition_expression->value_type == &OrsoTypeUnresolved && */definition->return_type) {
+        push_dependency(analyzer, definition->return_type, true, fold_level);
+        return_type = resolve_type(analyzer, ast, scope, fold_level, definition->return_type);
+        pop_dependency(analyzer);
+    } else {
+        if (function_definition_expression->value_type != &OrsoTypeUnresolved) {
+            return_type = ((OrsoFunctionType*)function_definition_expression->value_type)->return_type;
+        }
     }
 
     if (analyzer->panic_mode) {
         return;
     }
 
-    if (return_type == &OrsoTypeUnresolved) {
-        return_type = &OrsoTypeVoid;
-    }
-
     OrsoFunctionType* function_type = (OrsoFunctionType*)orso_type_set_fetch_function(&ast->type_set, return_type, parameter_types, parameter_count);
 
-    OrsoFunction* function_address = orso_new_function();
-    function_address->type = function_type;
-
+    OrsoFunction* function = orso_new_function();
+    function->type = function_type;
     
     function_definition_expression->foldable = true;
-    OrsoSlot function_slot_value = ORSO_SLOT_P(function_address, (OrsoType*)function_type);
+    OrsoSlot function_slot_value = ORSO_SLOT_P(function, (OrsoType*)function_type);
     i32 function_constant_index = add_value_to_ast_constant_stack(ast, &function_slot_value, (OrsoType*)function_type);
     function_definition_expression->folded_value_index = function_constant_index;
 
@@ -1179,7 +1486,9 @@ static void resolve_function_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* a
 
     ASSERT(definition->block_expression->type == EXPRESSION_BLOCK, "must be block expression");
 
-    orso_resolve_expression(analyzer, ast, &function_scope, definition->block_expression, only_constants);
+    push_dependency(analyzer, definition->block_expression, false, fold_level);
+    orso_resolve_expression(analyzer, ast, &function_scope, fold_level, definition->block_expression, mode);
+    pop_dependency(analyzer);
 
     scope_free(&function_scope);
 }
@@ -1192,7 +1501,12 @@ static OrsoScope* get_closest_outer_function_scope(OrsoScope* scope) {
     return scope;
 }
 
-static void resolve_declaration_type(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, OrsoDeclarationNode* declaration_node) {
+static void resolve_declaration(
+        OrsoStaticAnalyzer* analyzer,
+        OrsoAST* ast,
+        OrsoScope* scope,
+        i32 fold_level,
+        OrsoDeclarationNode* declaration_node) {
     analyzer->panic_mode = false;
 
     // TODO: eventually this will be resolved, everything will be a declaration entity
@@ -1206,14 +1520,14 @@ static void resolve_declaration_type(OrsoStaticAnalyzer* analyzer, OrsoAST* ast,
                     case ORSO_STATEMENT_PRINT_EXPR:
                     case ORSO_STATEMENT_PRINT:
                     case ORSO_STATEMENT_EXPRESSION: {
-                        orso_resolve_expression(analyzer, ast, scope, declaration_node->decl.statement->stmt.expression, false);
+                        orso_resolve_expression(analyzer, ast, scope, fold_level, declaration_node->decl.statement->stmt.expression, false);
                         break;
                     }
                     case ORSO_STATEMENT_RETURN: {
                         OrsoType* return_expression_type = &OrsoTypeVoid;
 
                         if (declaration_node->decl.statement->stmt.expression) {
-                            orso_resolve_expression(analyzer, ast, scope, declaration_node->decl.statement->stmt.expression, false);
+                            orso_resolve_expression(analyzer, ast, scope, fold_level, declaration_node->decl.statement->stmt.expression, false);
                             return_expression_type = declaration_node->decl.statement->stmt.expression->value_type;
                         }
 
@@ -1242,19 +1556,39 @@ static void resolve_declaration_type(OrsoStaticAnalyzer* analyzer, OrsoAST* ast,
 
     OrsoEntityDeclarationNode* entity_declaration = declaration_node->decl.entity;
 
-    resolve_entity_declaration(analyzer, ast, scope, entity_declaration);
+    resolve_entity_declaration(analyzer, ast, scope, fold_level, entity_declaration);
 }
 
-void resolve_declaration_types(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, OrsoDeclarationNode** declarations, i32 count) {
+void resolve_declarations(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, i32 fold_level, OrsoDeclarationNode** declarations, i32 count) {
     for (i32 i = 0; i < count; i++) {
-        resolve_declaration_type(analyzer, ast, scope, declarations[i]);
+        OrsoDeclarationNode* declaration = declarations[i];
+        // Constants are meant to be solved at compile time, which means they do not run during a particular state
+        // of the program. Constants are only useful during runtime when things need to happen and they are accessed.
+        // If they are never accessed they don't even need to be compiled into the running program.
+        // By skipping them, I have a really convenient way telling which constants are being used or not.
+        // That being said, I still might want to compile them if I'm making a library of some sort.
+        // I can always go through them after... Like for example, right after this loop, I can just check
+        // which constants in this scope are not being used and make a warning (for local constants), and
+        // I can simple compile them if its a constant in the global scope (so they can be accessed).
+        //
+        // This is also to remove the possibility of false circular dependencies. For example, a function like this:
+        //
+        //         foo :: () -> i32 {
+        //             FOO :: #fold foo();
+        //             return 42;
+        //         };
+        //
+        // should still be able to compile since nothing in the function scope or below it is accessing `FOO`. While this may
+        // seem useless to check for since I shouldn't allow constant expressions to fold a function call that is inside
+        // the body of its own function regardless, it's something that I need to check for anyways to make sure they are no
+        // circular dependencies.
+        // Anyways, that's why constants are skipped and resolved on the fly. 
+        if (declaration->type == ORSO_DECLARATION_ENTITY && !declaration->decl.entity->is_mutable) {
+            continue;
+        }
+
+        resolve_declaration(analyzer, ast, scope, fold_level, declarations[i]);
     }
-}
-
-void resolve_declarations(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* global_scope, OrsoDeclarationNode** declarations, i32 count) {
-    forward_scan_declaration_names(analyzer, global_scope, declarations, count);
-
-    resolve_declaration_types(analyzer, ast, global_scope, declarations, count);
 }
 
 bool orso_resolve_ast(OrsoStaticAnalyzer* analyzer, OrsoAST* ast) {
@@ -1265,7 +1599,9 @@ bool orso_resolve_ast(OrsoStaticAnalyzer* analyzer, OrsoAST* ast) {
     OrsoScope global_scope;
     scope_init(&global_scope, NULL, NULL);
 
-    resolve_declarations(analyzer, ast, &global_scope, ast->declarations, sb_count(ast->declarations));
+    i32 declaration_count = sb_count(ast->declarations);
+    forward_scan_declaration_names(analyzer, &global_scope, ast->declarations, declaration_count);
+    resolve_declarations(analyzer, ast, &global_scope, 0, ast->declarations, declaration_count);
 
     scope_free(&global_scope);
 

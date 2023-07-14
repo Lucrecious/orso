@@ -6,13 +6,13 @@
 #include "type_set.h"
 #include "virtual_machine.h"
 
-typedef struct OrsoScope {
-    OrsoExpressionNode* creator;
-    OrsoSymbolTable named_entities;
-    struct OrsoScope* outer;
-} OrsoScope;
-
 struct OrsoInterpreter;
+
+typedef struct OrsoAnalysisDependency {
+    i32 fold_level;
+    bool is_type;
+    void* ptr; 
+} OrsoAnalysisDependency;
 
 typedef struct OrsoStaticAnalyzer {
     OrsoErrorFunction error_fn;
@@ -20,7 +20,7 @@ typedef struct OrsoStaticAnalyzer {
 
     struct {
         i32 count;
-        OrsoEntityDeclarationNode** chain;
+        OrsoAnalysisDependency* chain;
     } dependencies;
 
     bool had_error;

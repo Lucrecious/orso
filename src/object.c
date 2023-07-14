@@ -138,6 +138,10 @@ char* orso_slot_to_new_cstrn(OrsoSlot slot, OrsoType* type) {
             return cstrn_new("<native>", 8);
         }
 
+        case ORSO_TYPE_PTR_OPAQUE: {
+            return cstrn_new("&<unknown>", 10);
+        }
+
         case ORSO_TYPE_TYPE: {
             OrsoType* type = (OrsoType*)slot.as.p;
 
@@ -183,6 +187,10 @@ OrsoFunction* orso_new_function(void) {
     chunk_init(&function->chunk);
 
     return function;
+}
+
+bool is_function_compiled(OrsoFunction* function) {
+    return function->chunk.code != NULL;
 }
 
 OrsoNativeFunction* orso_new_native_function(NativeFunction function, OrsoType* type) {

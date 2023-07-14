@@ -345,6 +345,7 @@ i32 orso_type_to_cstrn(OrsoType* type, char* buffer, i32 n) {
             case ORSO_TYPE_STRING: type_name = "string"; break;
             case ORSO_TYPE_SYMBOL: type_name = "symbol"; break;
             case ORSO_TYPE_VOID: type_name = "void"; break;
+            case ORSO_TYPE_PTR_OPAQUE: type_name = "&<unknown>"; break;
             case ORSO_TYPE_INVALID: type_name = "<invalid>"; break;
             case ORSO_TYPE_UNRESOLVED: type_name = "<unresolved>"; break;
             default: type_name = "<?>"; UNREACHABLE(); break;

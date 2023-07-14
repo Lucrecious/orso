@@ -506,34 +506,9 @@ static void declare_local_function_definition(Compiler* compiler, OrsoFunction* 
 static void function_expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoExpressionNode* function_defintion_expression, Chunk* chunk) {
     ASSERT(function_defintion_expression->value_type->kind == ORSO_TYPE_FUNCTION, "must be function if calling this");
 
-    Compiler function_compiler;
     OrsoFunction* stored_function = (OrsoFunction*)ast->folded_constants[function_defintion_expression->folded_value_index].as.p;
-    compiler_init(&function_compiler, ORSO_FUNCTION_TYPE_FUNCTION, vm, stored_function, function_defintion_expression->value_type);
-
-    // this is placed down by the caller
-    function_compiler.max_stack_size = function_compiler.current_stack_size = 1;
-    declare_local_function_definition(&function_compiler, function_compiler.function);
-    
-    begin_scope(&function_compiler);
-
-    function_compiler.function->type = (OrsoFunctionType*)function_defintion_expression->value_type; //function_declaration->type;
-    Chunk* function_chunk = &function_compiler.function->chunk;
-
-    OrsoFunctionDefinition* function_definition = &function_defintion_expression->expr.function_definition;
-
-    for (i32 i = 0; i < sb_count(function_definition->parameters); i++) {
-        OrsoEntityDeclarationNode* parameter = function_definition->parameters[i];
-        _apply_stack_effects(&function_compiler, orso_type_slot_count(parameter->type));
-        define_entity(vm, &function_compiler, function_chunk,
-                parameter->type, &parameter->name, parameter->start.line);
-    }
-
-    expression(vm, &function_compiler, ast, function_definition->block_expression, function_chunk);
-    //gen_block(vm, &function_compiler, ast, function_chunk, &function_definition->block_expression->expr.block, true, function_defintion_expression->end.line);
-
-    compiler_end(&function_compiler, function_chunk, function_defintion_expression->end.line);
-
-    emit_constant(compiler, chunk, ORSO_SLOT_P(function_compiler.function, (OrsoType*)function_compiler.function->type), function_defintion_expression->start.line);
+    orso_compile_function(vm, ast, stored_function, function_defintion_expression);
+    emit_constant(compiler, chunk, ORSO_SLOT_P(stored_function, (OrsoType*)stored_function->type), function_defintion_expression->start.line);
 }
 
 static void gen_primary(Compiler* compiler, Chunk* chunk, OrsoAST* ast, OrsoType* value_type, i32 value_index, i32 line) {
@@ -559,6 +534,7 @@ static void gen_primary(Compiler* compiler, Chunk* chunk, OrsoAST* ast, OrsoType
             }
             break;
         }
+        case ORSO_TYPE_PTR_OPAQUE:
         case ORSO_TYPE_FUNCTION:
         case ORSO_TYPE_NATIVE_FUNCTION:
         case ORSO_TYPE_SYMBOL:
@@ -1049,6 +1025,33 @@ OrsoFunction* orso_generate_expression_function(OrsoCodeBuilder* builder, OrsoEx
     compiler_free(&compiler);
 
     return function;
+}
+
+void orso_compile_function(OrsoVM* vm, OrsoAST* ast, OrsoFunction* function, OrsoExpressionNode* function_definition_expression) {
+    Compiler function_compiler;
+    compiler_init(&function_compiler, ORSO_FUNCTION_TYPE_FUNCTION, vm, function, function_definition_expression->value_type);
+
+    // this is placed down by the caller
+    function_compiler.max_stack_size = function_compiler.current_stack_size = 1;
+    declare_local_function_definition(&function_compiler, function_compiler.function);
+
+    begin_scope(&function_compiler);
+
+    function_compiler.function->type = (OrsoFunctionType*)function_definition_expression->value_type;
+    Chunk* function_chunk = &function_compiler.function->chunk;
+
+    OrsoFunctionDefinition* function_definition = &function_definition_expression->expr.function_definition;
+
+    for (i32 i = 0; i < sb_count(function_definition->parameters); i++) {
+        OrsoEntityDeclarationNode* parameter = function_definition->parameters[i];
+        _apply_stack_effects(&function_compiler, orso_type_slot_count(parameter->type));
+        define_entity(vm, &function_compiler, function_chunk,
+                parameter->type, &parameter->name, parameter->start.line);
+    }
+
+    expression(vm, &function_compiler, ast, function_definition->block_expression, function_chunk);
+
+    compiler_end(&function_compiler, function_chunk, function_definition_expression->end.line);
 }
 
 OrsoFunction* orso_generate_code(OrsoVM* vm, OrsoAST* ast) {

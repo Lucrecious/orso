@@ -50,6 +50,7 @@ typedef struct Parser {
     Lexer lexer;
     Token previous;
     Token current;
+
     bool had_error;
     bool panic_mode;
 } Parser;
@@ -369,8 +370,7 @@ static OrsoExpressionNode* expression_new(Token start) {
     expression_node->end = start;
     expression_node->type = EXPRESSION_NONE;
 
-    expression_node->has_directive = false;
-
+    expression_node->fold = false;
     expression_node->foldable = false;
     expression_node->folded_value_index = -1;
     
@@ -855,17 +855,14 @@ static ParseRule* get_rule(TokenType type) {
 }
 
 static OrsoExpressionNode* expression(Parser* parser) {
-    Token directive = (Token) { .length = 0 };
+    bool fold = false;
     if (match(parser, TOKEN_DIRECTIVE)) {
-        directive = parser->previous;
+        Token directive = parser->previous;
+        fold = (directive.length - 1 == strlen("fold") && strncmp(directive.start + 1, "fold", 4));
     }
 
     OrsoExpressionNode* expression_node = parse_precedence(parser, PREC_ASSIGNMENT);
-
-    expression_node->has_directive = (directive.length > 0);
-    if (expression_node->has_directive) {
-        expression_node->directive = directive;
-    }
+    expression_node->fold = fold;
 
     return expression_node;
 }
@@ -910,6 +907,7 @@ static OrsoEntityDeclarationNode* entity_declaration(Parser* parser, bool as_par
     entity_declaration_node->type_node = NULL;
     entity_declaration_node->expression = NULL;
     entity_declaration_node->implicit_default_value_index = -1;
+    entity_declaration_node->fold_level_resolved_at = -1;
     entity_declaration_node->is_mutable = false;
 
     entity_declaration_node->name = parse_variable(parser);

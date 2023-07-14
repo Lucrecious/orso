@@ -46,14 +46,15 @@ typedef enum OrsoStatementType {
     ORSO_STATEMENT_RETURN,
 } OrsoStatementType;
 
-typedef struct OrsoFunctionSignature {
-    OrsoType* return_type;
-    OrsoType** parameter_types;
-} OrsoFunctionSignature;
-
 typedef struct OrsoExpressionNode OrsoExpressionNode;
 typedef struct OrsoDeclarationNode OrsoDeclarationNode;
 typedef struct OrsoTypeNode OrsoTypeNode;
+
+typedef struct OrsoScope {
+    OrsoExpressionNode* creator;
+    OrsoSymbolTable named_entities;
+    struct OrsoScope* outer;
+} OrsoScope;
 
 struct OrsoTypeNode {
     Token start;
@@ -124,14 +125,15 @@ typedef struct OrsoEntityDeclarationNode {
     Token start;
     Token end;
 
-    // Unresolved means inferred
     bool is_mutable;
+    i32 fold_level_resolved_at;
+
+    // Unresolved means inferred
     OrsoType* type;
     Token name;
     OrsoTypeNode* type_node;
     OrsoExpressionNode* expression;
     i32 implicit_default_value_index;
-
 } OrsoEntityDeclarationNode;
 
 typedef struct OrsoFunctionDefinition {
@@ -148,8 +150,7 @@ struct OrsoExpressionNode {
     OrsoType* narrowed_value_type; // only set for union types
     OrsoExpressionType type;
 
-    bool has_directive;
-    Token directive;
+    bool fold;
 
     // the expression is foldable but is not necessarily folded
     bool foldable; 

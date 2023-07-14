@@ -73,6 +73,7 @@ OrsoString* orso_slot_to_string(OrsoSlot slot, OrsoType* type);
 OrsoString* orso_new_string_from_cstrn(const char* start, i32 length);
 
 OrsoFunction* orso_new_function(void);
+bool is_function_compiled(OrsoFunction* function);
 
 OrsoNativeFunction* orso_new_native_function(NativeFunction function, OrsoType* type);
 

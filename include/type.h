@@ -10,28 +10,24 @@
 
 typedef enum OrsoTypeKind {
     ORSO_TYPE_INVALID = 0,
-    ORSO_TYPE_UNRESOLVED = 1,
-    ORSO_TYPE_VOID = 2,
-    ORSO_TYPE_BOOL = 3,
-    ORSO_TYPE_INT32 = 4,
-    ORSO_TYPE_INT64 = 5,
-    ORSO_TYPE_FLOAT32 = 6,
-    ORSO_TYPE_FLOAT64 = 7,
-    ORSO_TYPE_STRING = 8,
-    ORSO_TYPE_SYMBOL = 9,
-    ORSO_TYPE_TYPE = 10,
-    ORSO_TYPE_FUNCTION = 11,
-    ORSO_TYPE_NATIVE_FUNCTION = 12,
-    ORSO_TYPE_UNION = 13,
-    ORSO_TYPE_USER = 14,
-    // Aiming to allow for 65k custom types. This number must be less than 0xFFFF (largest u16)
-    ORSO_TYPE_MAX = 65012,
+    ORSO_TYPE_UNRESOLVED,
+    ORSO_TYPE_VOID,
+    ORSO_TYPE_BOOL,
+    ORSO_TYPE_INT32,
+    ORSO_TYPE_INT64,
+    ORSO_TYPE_FLOAT32,
+    ORSO_TYPE_FLOAT64,
+    ORSO_TYPE_STRING,
+    ORSO_TYPE_SYMBOL,
+    ORSO_TYPE_TYPE,
+    ORSO_TYPE_FUNCTION,
+    ORSO_TYPE_NATIVE_FUNCTION,
+    ORSO_TYPE_PTR_OPAQUE,
+    ORSO_TYPE_UNION,
+    ORSO_TYPE_USER = 5000,
+    // Aiming to allow for 60k custom types. This number must be less than 0xFFFF (largest u16)
+    ORSO_TYPE_MAX = 65000,
 } OrsoTypeKind;
-
-// typedef union OrsoType {
-//     u64 one;
-//     u16 union_[ORSO_UNION_NUM_MAX];
-// } OrsoType;
 
 typedef struct OrsoType {
     OrsoTypeKind kind;
