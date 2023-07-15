@@ -1067,6 +1067,8 @@ OrsoFunction* orso_generate_expression_function(OrsoCodeBuilder* builder, OrsoEx
 
     emit_return(&compiler, top_chunk, expression_node->value_type, expression_node->start.line);
 
+    compiler_end(builder->vm, &compiler, builder->ast, top_chunk, expression_node->end.line);
+
     OrsoFunction* function = compiler.function;
 
     compiler_free(&compiler);

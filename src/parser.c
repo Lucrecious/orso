@@ -860,7 +860,7 @@ static OrsoExpressionNode* expression(Parser* parser) {
     bool fold = false;
     if (match(parser, TOKEN_DIRECTIVE)) {
         Token directive = parser->previous;
-        fold = (directive.length - 1 == strlen("fold") && strncmp(directive.start + 1, "fold", 4));
+        fold = (directive.length - 1 == strlen("fold") && strncmp(directive.start + 1, "fold", 4) == 0);
     }
 
     OrsoExpressionNode* expression_node = parse_precedence(parser, PREC_ASSIGNMENT);
