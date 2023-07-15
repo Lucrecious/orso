@@ -27,6 +27,8 @@ typedef struct Compiler {
 
     bool skip_function_definitions;
 
+    OrsoFunction** functions_to_compile;
+
     Local* locals;
     i32 locals_count;
     i32 scope_depth;
@@ -120,6 +122,7 @@ static void compiler_init(Compiler* compiler, OrsoCompilerFunctionType function_
     //   removed if possible, previously this was used to get the garbage collector but thats being removed
     (void)vm; 
 
+    compiler->functions_to_compile = NULL;
     compiler->function = NULL;
     compiler->function_type = function_type;
 
@@ -142,6 +145,8 @@ static void compiler_free(Compiler* compiler) {
 
     compiler->current_stack_size = 0;
     compiler->max_stack_size = 0;
+
+    sb_free(compiler->functions_to_compile);
 }
 
 static void _apply_stack_effects(Compiler* compiler, i32 stack_effects) {
@@ -306,9 +311,38 @@ static void emit_return(Compiler* compiler, Chunk* chunk, OrsoType* type, i32 li
     _apply_stack_effects(compiler, -orso_type_slot_count(type));
 }
 
-static OrsoFunction* compiler_end(Compiler* compiler, Chunk* chunk, i32 line) {
+static OrsoFunction* compiler_end(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, Chunk* chunk, i32 line) {
     emit_instruction(ORSO_OP_PUSH_0, compiler, chunk, line);
     emit_return(compiler, chunk, &OrsoTypeVoid, line);
+
+    // compile left over functions
+    // TODO: make this faster. this is super slow because i need a hashmap to look up the functions
+    // faster. Or I need to figure out a way to decide whether or not i should compile a function
+    // on the fly.
+    {
+        OrsoFunction** functions_to_compile = NULL;
+        for (i32 i = 0; i < sb_count(compiler->functions_to_compile); i++) {
+            sb_push(functions_to_compile, compiler->functions_to_compile[i]);
+        }
+
+        sb_free(compiler->functions_to_compile);
+        compiler->functions_to_compile = NULL;
+
+        for (i32 i = 0; i < sb_count(functions_to_compile); i++) {
+            OrsoFunction* function = functions_to_compile[i];
+            if (function->chunk.code != NULL) {
+                continue;
+            }
+
+            for (i32 j = 0; j < sb_count(ast->function_definition_pairs); j++) {
+                if (ast->function_definition_pairs[j].function != function) {
+                    continue;
+                }
+
+                orso_compile_function(vm, ast, function, ast->function_definition_pairs[j].ast_defintion);
+            }
+        }
+    }
 
 #ifdef DEBUG_PRINT
     chunk_disassemble(chunk, "<TODO: put function name here somehow>");
@@ -577,7 +611,14 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoExpress
 //     ASSERT(!compiler->literals_only || (expression_node->folded_value_index >= 0 || !requires_entity), "compiler is assuming folded values only for ALL expressions");
 // #endif
 
-    if (expression_node->type != EXPRESSION_FUNCTION_DEFINITION && expression_node->folded_value_index >= 0) {
+    if (expression_node->folded_value_index >= 0) {
+        // TODO: for now going to do this super naively until I get a better hash table that is more generic that I can
+        // use for more things. This is will be super slow but I just want to get it to work.
+        if (!compiler->skip_function_definitions && expression_node->value_type->kind == ORSO_TYPE_FUNCTION) {
+            OrsoFunction* function = (OrsoFunction*)ast->folded_constants[expression_node->folded_value_index].as.p;
+            sb_push(compiler->functions_to_compile, function);
+        }
+
         gen_primary(compiler, chunk, ast,
                 expression_node->value_type,
                 expression_node->folded_value_index, expression_node->start.line);
@@ -1057,7 +1098,7 @@ void orso_compile_function(OrsoVM* vm, OrsoAST* ast, OrsoFunction* function, Ors
 
     expression(vm, &function_compiler, ast, function_definition->block_expression, function_chunk);
 
-    compiler_end(&function_compiler, function_chunk, function_definition_expression->end.line);
+    compiler_end(vm, &function_compiler, ast, function_chunk, function_definition_expression->end.line);
 }
 
 OrsoFunction* orso_generate_code(OrsoVM* vm, OrsoAST* ast) {
@@ -1078,7 +1119,7 @@ OrsoFunction* orso_generate_code(OrsoVM* vm, OrsoAST* ast) {
         declaration(vm, &compiler, ast, ast->declarations[i], top_chunk);
     }
 
-    OrsoFunction* function = compiler_end(&compiler, top_chunk, ast->declarations[sb_count(ast->declarations) - 1]->end.line);
+    OrsoFunction* function = compiler_end(vm, &compiler, ast, top_chunk, ast->declarations[sb_count(ast->declarations) - 1]->end.line);
 
     compiler_free(&compiler);
 

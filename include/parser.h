@@ -194,11 +194,18 @@ struct OrsoDeclarationNode {
     } decl;
 };
 
+typedef struct FunctionDefinitionPair {
+    OrsoFunction* function;
+    OrsoExpressionNode* ast_defintion;
+} FunctionDefinitionPair;
+
 typedef struct OrsoAST {
     bool resolved;
     OrsoTypeSet type_set;
 
     OrsoSymbolTable builtins;
+
+    FunctionDefinitionPair* function_definition_pairs;
 
     OrsoDeclarationNode** declarations;
     OrsoSlot* folded_constants;

@@ -9,6 +9,8 @@
 
 #include <time.h>
 
+#define EXPRESSION_RESOLVED(expression) (expression->value_type != &OrsoTypeUnresolved)
+
 static void clock_native(OrsoSlot* arguments, OrsoSlot* result) {
     (void)arguments;
     result[0] = ORSO_SLOT_F((double)clock() / CLOCKS_PER_SEC, &OrsoTypeFloat64);
@@ -333,20 +335,6 @@ static i32 add_value_to_ast_constant_stack(OrsoAST* ast, OrsoSlot* value, OrsoTy
     return sb_count(ast->folded_constants) - slot_count;
 }
 
-// static void compile_function(OrsoAST* ast, OrsoFunction* function, OrsoExpressionNode* function_definition_expression) {
-//     OrsoVM* vm;
-
-//     orso_vm_init(&vm, NULL);
-
-//     OrsoSlot stack[512];
-//     vm->stack = stack;
-//     vm->stack_top = stack;
-
-//     orso_compile_function(vm, ast, function, function_definition_expression);
-
-//     orso_vm_free(&vm);
-// }
-
 static i32 evaluate_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, OrsoExpressionNode* expression) {
     (void)scope; // TODO: remove this if unnecessary
 
@@ -565,6 +553,40 @@ static void fold_constants(
     }
 
     i32 value_index = evaluate_expression(analyzer, ast, scope, expression);
+
+    /*
+    * During constant time mode or folding mode, expressions types themselves will narrow down
+    * since they will be either be a standalone statement, or put into a constant value. Either way
+    * they should contain the the type of their actual folded value rather than the analyzed one.
+    * 
+    * I don't do this during runtime mode because I still want stuff like this to work:
+    * 
+    *           x := "hello world" or null;
+    * I still want x's type to be string|null
+    * 
+    * 
+    *           x :: "hello world" or null;
+    * because x is a constant, I want x's type to be just string
+    * 
+    * 
+    *           "hello world" or null;
+    * in this case the type of expression doesn't matter. So if it's narrowed value is known an rune time or not
+    * it doesn't matter.
+    */
+    if ((mode == MODE_CONSTANT_TIME || mode == MODE_FOLDING_TIME) && ORSO_TYPE_IS_UNION(expression->value_type)) {
+        OrsoType* narrowed_type = (OrsoType*)ast->folded_constants[value_index].as.p;
+
+        value_index++; // the type makes up the first slot value, and rest is the actual value
+
+        expression->value_type = narrowed_type;
+        expression->narrowed_value_type = narrowed_type;
+
+        // TODO: Maybe do this in a more robust way? Like maybe during compilation somehow?
+        #ifdef DEBUG_TRACE_EXECUTION
+        ast->folded_constants[value_index].type = narrowed_type;
+        #endif
+    }
+
     expression->folded_value_index = value_index;
 }
 
@@ -626,6 +648,10 @@ void orso_resolve_expression(
     switch (expression->type) {
         case EXPRESSION_GROUPING: {
             orso_resolve_expression(analyzer, ast, scope, fold_level, expression->expr.grouping.expression, mode);
+            if (EXPRESSION_RESOLVED(expression)) {
+                return;
+            }
+
             expression->value_type = expression->expr.grouping.expression->narrowed_value_type;
             expression->narrowed_value_type = expression->expr.grouping.expression->narrowed_value_type;
             break;
@@ -638,7 +664,14 @@ void orso_resolve_expression(
             OrsoExpressionNode* left = expression->expr.binary.left;
             OrsoExpressionNode* right = expression->expr.binary.right;
             orso_resolve_expression(analyzer, ast, scope, fold_level, left, mode);
+            if (EXPRESSION_RESOLVED(expression)) {
+                return;
+            }
+
             orso_resolve_expression(analyzer, ast, scope, fold_level, right, mode);
+            if (EXPRESSION_RESOLVED(expression)) {
+                return;
+            }
 
             // TODO: Remember to do different things depending on operation
             //   if it's arthimetic, or comparisons, then let them merge at the end
@@ -727,6 +760,9 @@ void orso_resolve_expression(
         case EXPRESSION_UNARY: {
             OrsoUnaryOp* unary_op = &expression->expr.unary;
             orso_resolve_expression(analyzer, ast, scope, fold_level, unary_op->operand, mode);
+            if (EXPRESSION_RESOLVED(expression)) {
+                return;
+            }
 
             OrsoType* new_type = resolve_unary_type(unary_op->operator.type, unary_op->operand->narrowed_value_type);
             expression->value_type = new_type;
@@ -771,6 +807,9 @@ void orso_resolve_expression(
             }
 
             orso_resolve_expression(analyzer, ast, scope, fold_level, expression->expr.assignment.right_side, mode);
+            if (EXPRESSION_RESOLVED(expression)) {
+                return;
+            }
             if (analyzer->panic_mode) {
                 return;
             }
@@ -837,14 +876,23 @@ void orso_resolve_expression(
 
         case EXPRESSION_IFELSE: {
             orso_resolve_expression(analyzer, ast, scope, fold_level, expression->expr.ifelse.condition, mode);
+            if (EXPRESSION_RESOLVED(expression)) {
+                return;
+            }
 
             OrsoScope* then_state = scope_copy_new(scope);
 
             orso_resolve_expression(analyzer, ast, then_state, fold_level, expression->expr.ifelse.then, mode);
+            if (EXPRESSION_RESOLVED(expression)) {
+                return;
+            }
 
             OrsoScope* else_state = scope_copy_new(scope);
             if (expression->expr.ifelse.else_) {
                 orso_resolve_expression(analyzer, ast, else_state, fold_level, expression->expr.ifelse.else_, mode);
+                if (EXPRESSION_RESOLVED(expression)) {
+                    return;
+                }
             }
 
             scope_merge(&ast->type_set, scope, then_state, else_state);
@@ -890,6 +938,9 @@ void orso_resolve_expression(
             for (i32 i = 0; i < sb_count(expression->expr.call.arguments); i++) {
                 OrsoExpressionNode* argument = expression->expr.call.arguments[i];
                 orso_resolve_expression(analyzer, ast, scope, fold_level, argument, mode);
+                if (EXPRESSION_RESOLVED(expression)) {
+                    return;
+                }
 
                 if (analyzer->panic_mode) {
                     return;
@@ -897,6 +948,9 @@ void orso_resolve_expression(
             }
 
             orso_resolve_expression(analyzer, ast, scope, fold_level, expression->expr.call.callee, mode);
+            if (EXPRESSION_RESOLVED(expression)) {
+                return;
+            }
 
             if (analyzer->panic_mode) {
                 return;
@@ -1505,6 +1559,12 @@ static void resolve_function_expression(
 
     OrsoFunction* function = orso_new_function();
     function->type = function_type;
+
+    sb_push(ast->function_definition_pairs, ((FunctionDefinitionPair){
+        .ast_defintion = function_definition_expression,
+        .function = function
+    }));
+
     
     function_definition_expression->foldable = true;
     OrsoSlot function_slot_value = ORSO_SLOT_P(function, (OrsoType*)function_type);

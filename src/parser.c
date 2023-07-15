@@ -83,6 +83,7 @@ void orso_ast_init(OrsoAST* ast, OrsoSymbolTable* symbols) {
     ast->declarations = NULL;
     ast->folded_constants = NULL;
     ast->symbols = symbols;
+    ast->function_definition_pairs = NULL;
     orso_type_set_init(&ast->type_set);
 
     orso_symbol_table_init(&ast->builtins);
@@ -237,6 +238,7 @@ void orso_ast_free(OrsoAST* ast) {
         ast->declarations[i] = NULL;
     }
     sb_free(ast->declarations);
+    sb_free(ast->function_definition_pairs);
     ast->declarations = NULL;
 
     // TODO: Remember to free folded constants
