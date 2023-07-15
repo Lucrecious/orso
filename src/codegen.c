@@ -541,6 +541,11 @@ static void declare_local_function_definition(Compiler* compiler, OrsoFunction* 
 }
 
 static void function_expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoExpressionNode* function_defintion_expression, Chunk* chunk) {
+    if (function_defintion_expression->value_type == &OrsoTypeUnresolved) {
+        printf("Warning: function definition at: %d is unused.\n", function_defintion_expression->start.line);
+        return;
+    }
+
     ASSERT(function_defintion_expression->value_type->kind == ORSO_TYPE_FUNCTION, "must be function if calling this");
 
     OrsoFunction* stored_function = (OrsoFunction*)ast->folded_constants[function_defintion_expression->folded_value_index].as.p;

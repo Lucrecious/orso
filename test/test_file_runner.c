@@ -16,7 +16,7 @@ void clear_test_buffer(void) {
 }
 
 void write_to_test_buffer(const char* chars) {
-    buffer_length += sprintf(test_buffer + buffer_length, "%s", chars);
+    buffer_length += snprintf(test_buffer + buffer_length, 1024 - buffer_length, "%s", chars);
 }
 
 void write_to_test_error_buffer(OrsoErrorType type, i32 line, const char* message) {
@@ -32,7 +32,7 @@ void write_to_test_error_buffer(OrsoErrorType type, i32 line, const char* messag
         }
     }
 
-    buffer_length += sprintf(test_buffer + buffer_length, "%s, %d: %s\n", error_type, line, message);
+    buffer_length += snprintf(test_buffer + buffer_length, 1024 - buffer_length, "%s, %d: %s\n", error_type, line, message);
 }
 
 typedef struct Test {

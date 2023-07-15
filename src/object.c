@@ -83,7 +83,7 @@ char* orso_slot_to_new_cstrn(OrsoSlot slot, OrsoType* type) {
         case ORSO_TYPE_INT64: {
             // Max characters for i64 is 19 + sign and \0
             char buffer[21];
-            i32 length = sprintf(buffer, "%lld", slot.as.i);
+            i32 length = snprintf(buffer, 21, "%lld", slot.as.i);
             return cstrn_new(buffer, length);
         }
 
@@ -93,9 +93,9 @@ char* orso_slot_to_new_cstrn(OrsoSlot slot, OrsoType* type) {
             char buffer[24];
             i32 length;
             if (slot.as.f == (i64)slot.as.f) {
-                length = sprintf(buffer, "%.1f", slot.as.f);
+                length = snprintf(buffer, 24, "%.1f", slot.as.f);
             } else {
-                length = sprintf(buffer, "%.14g", slot.as.f);
+                length = snprintf(buffer, 24, "%.14g", slot.as.f);
             }
             return cstrn_new(buffer, length);
         }
@@ -109,25 +109,26 @@ char* orso_slot_to_new_cstrn(OrsoSlot slot, OrsoType* type) {
             // 2 single quotes
             // 1 \0
             char buffer[symbol->length + 3];
-            sprintf(buffer, "'%s'", symbol->text);
+            snprintf(buffer, symbol->length + 3, "'%s'", symbol->text);
             return cstrn_new(buffer, symbol->length + 3);
         }
 
         case ORSO_TYPE_FUNCTION: {
             OrsoFunction* function = (OrsoFunction*)slot.as.p;
-            char buffer[500];
-            i32 n = sprintf(buffer, "<(");
+            const i32 BUFFER_SIZE = 500;
+            char buffer[BUFFER_SIZE];
+            i32 n = snprintf(buffer, BUFFER_SIZE, "<(");
 
             char tmp_buffer[128];
             for (i32 i = 0; i < function->type->argument_count; i++) {
                 orso_type_to_cstrn(function->type->argument_types[i], tmp_buffer, 128);
 
-                n += sprintf(buffer + n, "%s%s", tmp_buffer,
+                n += snprintf(buffer + n, BUFFER_SIZE - n, "%s%s", tmp_buffer,
                         i == function->type->argument_count - 1 ? "" : ", ");
             }
 
             orso_type_to_cstrn(function->type->return_type, tmp_buffer, 128);
-            n += sprintf(buffer + n, ") -> %s>", tmp_buffer);
+            n += snprintf(buffer + n, BUFFER_SIZE - n, ") -> %s>", tmp_buffer);
             
             buffer[n] = '\0';
 
@@ -150,7 +151,7 @@ char* orso_slot_to_new_cstrn(OrsoSlot slot, OrsoType* type) {
             char tmp_buffer[128];
             orso_type_to_cstrn(type, tmp_buffer, 128);
 
-            sprintf(buffer, "<%s>", tmp_buffer);
+            snprintf(buffer, 128, "<%s>", tmp_buffer);
 
             return cstrn_new(buffer, strlen(buffer));
         }

@@ -4,6 +4,9 @@ project('orso', 'c',
 
 add_global_arguments(['-Wunused-function'], language: 'c')
 
+# add_project_arguments('-fsanitize=address', language : 'c')
+# add_project_link_arguments('-fsanitize=address', language : 'c')
+
 inc = include_directories('include')
 
 src = [

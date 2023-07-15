@@ -164,7 +164,7 @@ static void error_incompatible_binary_types(OrsoStaticAnalyzer* analyzer, Token 
     orso_type_to_cstrn(left, (char*)left_type_str, 128);
     orso_type_to_cstrn(right, (char*)right_type_str, 128);
 
-    msg += sprintf(msg, "Incompatible Types: '%s' %.*s '%s'",
+    snprintf(msg, 256, "Incompatible Types: '%s' %.*s '%s'",
         left_type_str, operation.length, operation.start, right_type_str);
 
     error(analyzer, line, message);
@@ -177,7 +177,7 @@ static void error_incompatible_unary_type(OrsoStaticAnalyzer* analyzer, Token op
     const char operand_type_str[128];
     orso_type_to_cstrn(operand, (char*)operand_type_str, 128);
 
-    msg += sprintf(msg, "Incompatible Type: unary(%.*s) and type '%s'",
+    snprintf(msg, 256, "Incompatible Type: unary(%.*s) and type '%s'",
         operation.length, operation.start, operand_type_str);
 
     error(analyzer, line, message);
@@ -294,17 +294,10 @@ static OrsoType* resolve_identifier_type(OrsoStaticAnalyzer* analyzer, OrsoAST* 
 
     if (!value) {
         char message[512];
-        sprintf(message, "Type %.*s has not been declared.", identifier_type.length, identifier_type.start);
+        snprintf(message, 512, "Type %.*s has not been declared.", identifier_type.length, identifier_type.start);
         error(analyzer, identifier_type.line, message);
         return &OrsoTypeInvalid;
     }
-
-    // if (value->declaration_node->is_mutable) {
-    //     char message[512];
-    //     sprintf(message, "Declaration for %.*s is mutable and cannot be resolved at compile time.", identifier_type.length, identifier_type.start);
-    //     error(analyzer, identifier_type.line, message);
-    //     return &OrsoTypeInvalid;
-    // }
 
     type = (OrsoType*)get_folded_type(ast, value->declaration_node->expression->folded_value_index);
     return type;
@@ -451,7 +444,7 @@ static void resolve_foldable(
 
             if (!entity) {
                 char message[512];
-                sprintf(message, "Entity %.*s undefined.", expression->expr.entity.name.length, expression->expr.entity.name.start);
+                snprintf(message, 512, "Entity %.*s undefined.", expression->expr.entity.name.length, expression->expr.entity.name.start);
                 error(analyzer, expression->expr.entity.name.line, message);
                 break;
             }
@@ -1042,7 +1035,7 @@ static void declare_entity(OrsoStaticAnalyzer* analyzer, OrsoScope* scope, OrsoE
     OrsoSlot slot_type_pair;
     if (orso_symbol_table_get(&scope->named_entities, identifier, &slot_type_pair)) {
         const char message[126];
-        sprintf((char*)message, "Duplicate entity definition of '%.*s'.", entity->name.length, entity->name.start);
+        snprintf((char*)message, 126, "Duplicate entity definition of '%.*s'.", entity->name.length, entity->name.start);
         error(analyzer, entity->name.line, (char*)message);
         return;
     }

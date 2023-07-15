@@ -268,19 +268,21 @@ static void error_at(Parser* parser, Token* token, const char* specific) {
         return;
     }
 
-    char message[100];
+    const i32 MESSAGE_SIZE = 100;
+    char message[MESSAGE_SIZE];
     char* msg = message;
-    msg += sprintf(msg, "Error");
+    i32 n = 0;
+    n += snprintf(msg, MESSAGE_SIZE, "Error");
 
     if (token->type == TOKEN_EOF) {
-        msg += sprintf(msg, " at end");
+        n += snprintf(msg + n, MESSAGE_SIZE - n, " at end");
     } else if (token->type == TOKEN_ERROR) {
         // nothing
     } else {
-        msg += sprintf(msg, " at '%.*s'", token->length, token->start);
+        n += snprintf(msg + n, MESSAGE_SIZE - n, " at '%.*s'", token->length, token->start);
     }
 
-    msg += sprintf(msg, ": %s", specific);
+    n += snprintf(msg + n, MESSAGE_SIZE - n, ": %s", specific);
 
     parser->error_fn(ORSO_ERROR_COMPILE, token->line, message);
 }
