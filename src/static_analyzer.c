@@ -481,7 +481,31 @@ static void resolve_foldable(
                 break;
             }
 
+            // TODO: Again find a better and faster way to do this
+            // At this point, we are in folding time, and if a function cannot be compiled
+            // we should probably let the user know and also not allow them to fold something
+            // that has an invalid thing.
+            if (expression->expr.call.callee->value_type->kind == ORSO_TYPE_FUNCTION) {
+                OrsoFunction* function = (OrsoFunction*)ast->folded_constants[expression->expr.call.callee->folded_value_index].as.p;
+                OrsoExpressionNode* function_definition = NULL;
+                for (i32 i = 0; i < sb_count(ast->function_definition_pairs); i++) {
+                    if (function == ast->function_definition_pairs[i].function) {
+                        function_definition = ast->function_definition_pairs[i].ast_defintion;
+                        break;
+                    }
+                }
+
+                ASSERT(function_definition, "this has to exist in the pair list");
+
+                if (function_definition->expr.function_definition.cannot_compile) {
+                    foldable = false;
+                    error(analyzer, expression->expr.call.callee->start.line, "cannot fold because function definition cannot be compiled");
+                    break;
+                }
+            }
+
             foldable = expression->expr.call.callee->foldable;
+
             if (!foldable) {
                 break;
             }
@@ -1458,6 +1482,9 @@ static Entity* get_resolved_entity_by_identifier(
                 if (expression->type == EXPRESSION_FUNCTION_DEFINITION) {
                     OrsoFunction* folded_function = (OrsoFunction*)ast->folded_constants[expression->folded_value_index].as.p;
                     if (folded_function == function && dependency->fold_level != fold_level) {
+                        // TODO: Use better system to figure out whether function definition can be compiled or not
+                        // In this case, it cannot because of the fold level circular dependency.
+                        expression->expr.function_definition.cannot_compile = true;
                         error(analyzer, expression->start.line, "Fold level circular dependency. TODO: show dependency chain.");
                         return NULL;
                     }

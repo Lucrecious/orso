@@ -339,6 +339,10 @@ static OrsoFunction* compiler_end(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, 
                     continue;
                 }
 
+                if (ast->function_definition_pairs[j].ast_defintion->expr.function_definition.cannot_compile) {
+                    break;
+                }
+
                 orso_compile_function(vm, ast, function, ast->function_definition_pairs[j].ast_defintion);
             }
         }
@@ -541,10 +545,10 @@ static void declare_local_function_definition(Compiler* compiler, OrsoFunction* 
 }
 
 static void function_expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoExpressionNode* function_defintion_expression, Chunk* chunk) {
-    if (function_defintion_expression->value_type == &OrsoTypeUnresolved) {
-        printf("Warning: function definition at: %d is unused.\n", function_defintion_expression->start.line);
-        return;
-    }
+    // if (function_defintion_expression->value_type == &OrsoTypeUnresolved) {
+    //     printf("Warning: function definition at: %d is unused.\n", function_defintion_expression->start.line);
+    //     return;
+    // }
 
     ASSERT(function_defintion_expression->value_type->kind == ORSO_TYPE_FUNCTION, "must be function if calling this");
 
@@ -1029,6 +1033,11 @@ static void default_value(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, Chunk* c
 }
 
 static void entity_declaration(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoEntityDeclarationNode* variable_declaration, Chunk* chunk) {
+    if (variable_declaration->type == &OrsoTypeUnresolved) {
+        printf("Unused entity declared at at line: %d\n", variable_declaration->start.line);
+        return;
+    }
+
     default_value(vm, compiler, ast, chunk, variable_declaration);
     
     define_entity(vm, compiler, chunk,

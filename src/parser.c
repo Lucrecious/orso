@@ -665,6 +665,7 @@ static OrsoTypeNode* parse_type(Parser* parser, bool parse_union) {
 static void parse_function_definition(Parser* parser, OrsoFunctionDefinition* function_definition) {
     function_definition->parameters = NULL;
     function_definition->return_type = NULL;
+    function_definition->cannot_compile = false;
 
     function_definition->parameters = parse_parameters(parser);
 

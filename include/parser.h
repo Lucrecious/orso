@@ -141,6 +141,8 @@ typedef struct OrsoFunctionDefinition {
 
     OrsoTypeNode* return_type;
     OrsoExpressionNode* block_expression;
+
+    bool cannot_compile;
 } OrsoFunctionDefinition;
 
 struct OrsoExpressionNode {
