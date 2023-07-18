@@ -585,7 +585,7 @@ static bool is_incoming_expression_function_definition(Parser* parser) {
     i32 parenthesis_level = 1;
     Token next = parser->current;
     // get matching close parenthesis
-    while (parenthesis_level > 0) {
+    while (true) {
         if (next.type == TOKEN_EOF) {
             error(parser, "File ended before closing the parenthesis.");
             return false;
@@ -593,11 +593,12 @@ static bool is_incoming_expression_function_definition(Parser* parser) {
 
         if (next.type == TOKEN_PARENTHESIS_CLOSE) {
             parenthesis_level--;
-            continue;
+        } else if (next.type == TOKEN_PARENTHESIS_OPEN) {
+            parenthesis_level++;
         }
 
-        if (next.type == TOKEN_PARENTHESIS_OPEN) {
-            parenthesis_level++;
+        if (parenthesis_level <= 0) {
+            break;
         }
 
         next = lexer_next_token(&look_ahead_lexer);

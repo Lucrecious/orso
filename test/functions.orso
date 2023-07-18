@@ -180,3 +180,33 @@ foo(null);
 hello world
 null
 # ---
+
+## binded function name despite not immediately after constant declaration
+foo :: null or () { };
+print foo;
+# ---
+<foo :: () -> void>
+# ---
+
+## no binded function because assigning to mutable
+foo := () { };
+print foo;
+# ---
+<<anonymous> :: () -> void>
+# ---
+
+## still able to call after or set
+foo := null or () -> i32 { return 42; };
+print foo;
+print foo();
+# ---
+<<anonymous> :: () -> void>
+42
+# ---
+
+## groups surrounding function definition
+foo :: null or ((( () {} )));
+print foo;
+# ---
+<foo :: () -> void>
+# ---
