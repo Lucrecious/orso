@@ -135,7 +135,7 @@ print fib(10);
 55
 # ---
 
-## call unnarrowed union
+## call constand folded narrowed union
 foo::() -> i32 {
     return 1;
 };
@@ -144,7 +144,7 @@ bar := foo or null;
 
 print bar();
 # ---
-compile error, 6: Cannot call unnarrowed union type.
+1
 # ---
 
 ## call nonfunction
@@ -200,7 +200,7 @@ foo := null or () -> i32 { return 42; };
 print foo;
 print foo();
 # ---
-<<anonymous> :: () -> void>
+<<anonymous> :: () -> i32>
 42
 # ---
 

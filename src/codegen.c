@@ -1138,6 +1138,14 @@ OrsoFunction* orso_generate_code(OrsoVM* vm, OrsoAST* ast) {
 
     OrsoFunction* function = compiler_end(vm, &compiler, ast, top_chunk, ast->declarations[sb_count(ast->declarations) - 1]->end.line);
 
+    // TODO: Am I somehow missing an opertunity to warn for unused functions by doing this?
+    for (i32 i = 0; i < sb_count(ast->function_definition_pairs); i++) {
+        OrsoFunction* function = ast->function_definition_pairs[i].function;
+        if (function->chunk.code == NULL) {
+            orso_compile_function(vm, ast, function, ast->function_definition_pairs[i].ast_defintion);
+        }
+    }
+
     compiler_free(&compiler);
 
     return function;

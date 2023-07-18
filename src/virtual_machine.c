@@ -418,7 +418,6 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
             }
             
             case ORSO_OP_RETURN: {
-
                 byte result_size = READ_BYTE();
                 for (i32 i = 0; i < result_size; i++) {
                     frame->slots[i] = *PEEK(result_size - i - 1);
