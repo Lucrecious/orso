@@ -210,3 +210,109 @@ print foo;
 # ---
 <foo :: () -> void>
 # ---
+
+## filled in if and else
+foo :: (n: i32) -> i32 {
+    if n == 10 {
+        // return within multiple blocks tests analyzer
+        //   for hardcoded expression type checks
+        { { return 1; }; };
+    } else {
+        { { return 2; }; };
+    };
+};
+print foo;
+# ---
+<foo :: (i32) -> i32>
+# ---
+
+## deep return is okay
+foo :: () -> i32 {
+    {
+        {
+            return 42;
+        };
+    };
+};
+print foo;
+# ---
+<foo :: () -> i32>
+# ---
+
+## returning only within ifs is an error
+foo :: (n: i32) -> i32 {
+    if n == 1 {
+        return 1;
+    } else if n == 2 {
+        { return 2; };
+    } else if n == 3 or n == 4 {
+        if n == 3 {
+            { return 3; };
+        } else {
+            { return 4; };
+        };
+    };
+};
+print foo;
+# ---
+compile error, 1: function 'foo' does not return on all branches
+# ---
+
+## returning outside and inside if works
+foo :: (n: i32) -> i32 {
+    if n == 1 {
+        return 1;
+    } else if n == 2 {
+        return 2;
+    };
+
+    { return 3; };
+};
+print foo;
+# ---
+<foo :: (i32) -> i32>
+# ---
+
+## returning on all branches is okay (more scoping for testing)
+foo :: (n: i32) -> i32 {
+    if n == 1 {
+        return 1;
+    } else if n == 2 {
+        { return 2; };
+    } else if n == 3 or n == 4 {
+        if n == 3 {
+            { return 3; };
+        } else {
+            { return 4; };
+        };
+    } else {
+        if n > 0 {
+            { return n; };
+        } else {
+            { return -n; };
+        };
+    };
+};
+print foo;
+# ---
+<foo :: (i32) -> i32>
+# ---
+
+## cannot return within a declaration (gaurenteed)
+foo :: () {
+    x := { return; };
+};
+print foo;
+# ---
+compile error, 2: cannot return within an expression being set to a declaration
+# ---
+
+## cannot return within a declaration (not gaurenteed)
+foo :: (n: bool) {
+    x := if n { return; };
+};
+print foo;
+# ---
+compile error 2: cannot return within an expression being set to a declaration
+# ---
+
