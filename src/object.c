@@ -117,7 +117,8 @@ char* orso_slot_to_new_cstrn(OrsoSlot slot, OrsoType* type) {
             OrsoFunction* function = (OrsoFunction*)slot.as.p;
             const i32 BUFFER_SIZE = 500;
             char buffer[BUFFER_SIZE];
-            i32 n = snprintf(buffer, BUFFER_SIZE, "<(");
+            i32 n = snprintf(buffer, BUFFER_SIZE, "<%s :: (",
+                    function->binded_name ? function->binded_name->text : "<anonymous>");
 
             char tmp_buffer[128];
             for (i32 i = 0; i < function->type->argument_count; i++) {
@@ -186,6 +187,7 @@ OrsoFunction* orso_new_function(void) {
     OrsoFunction* function = ORSO_OBJECT_ALLOCATE(OrsoFunction, (OrsoType*)&OrsoTypeEmptyFunction);
     function->type = &OrsoTypeEmptyFunction;
     chunk_init(&function->chunk);
+    function->binded_name = NULL;
 
     return function;
 }

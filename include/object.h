@@ -28,6 +28,7 @@ typedef struct OrsoFunction {
     OrsoObject object;
     Chunk chunk;
     OrsoFunctionType* type;
+    OrsoSymbol* binded_name;
 } OrsoFunction;
 
 typedef void (*NativeFunction)(OrsoSlot* arguments, OrsoSlot* result);

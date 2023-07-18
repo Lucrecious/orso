@@ -1222,6 +1222,15 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
         return;
     }
 
+    OrsoSymbol* name = orso_unmanaged_symbol_from_cstrn(entity_declaration->name.start, entity_declaration->name.length, &analyzer->symbols);
+
+    if (!entity_declaration->is_mutable && entity_declaration->expression != NULL && entity_declaration->expression->value_type->kind == ORSO_TYPE_FUNCTION) {
+        OrsoFunction* function = (OrsoFunction*)ast->folded_constants[entity_declaration->expression->folded_value_index].as.p;
+        if (function->binded_name == NULL) {
+            function->binded_name = name;
+        }
+    }
+
     // Could be resolved could be unresolved at this point.
     entity_declaration->type = declaration_type;
 
@@ -1261,7 +1270,6 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
         return;
     }
 
-    OrsoSymbol* name = orso_unmanaged_symbol_from_cstrn(entity_declaration->name.start, entity_declaration->name.length, &analyzer->symbols);
     OrsoSlot entity_slot;
 
     ASSERT(orso_symbol_table_get(&scope->named_entities, name, &entity_slot), "should be forward_declared already");
