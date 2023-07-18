@@ -996,10 +996,15 @@ static void statement(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoStatemen
             break;
         }
         case ORSO_STATEMENT_RETURN: {
-            expression(vm, compiler, ast, statement->stmt.expression, chunk);
-            emit_storage_type_convert(compiler, chunk, 
-                    statement->stmt.expression->value_type,
-                    compiler->function->type->return_type, statement->stmt.expression->end.line);
+            if (statement->stmt.expression) {
+                expression(vm, compiler, ast, statement->stmt.expression, chunk);
+                emit_storage_type_convert(compiler, chunk, 
+                        statement->stmt.expression->value_type,
+                        compiler->function->type->return_type, statement->stmt.expression->end.line);
+            } else {
+                emit_instruction(ORSO_OP_PUSH_0, compiler, chunk, statement->start.line);
+                emit_storage_type_convert(compiler, chunk, &OrsoTypeVoid, compiler->function->type->return_type, statement->start.line);
+            }
             
             emit_return(compiler, chunk, compiler->function->type->return_type, statement->end.line);
             break;

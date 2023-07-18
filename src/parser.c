@@ -878,8 +878,10 @@ static OrsoStatementNode* statement(Parser* parser) {
 
     statement_node->start = parser->current;
 
+    bool is_return = false;
     if (match(parser, TOKEN_RETURN)) {
         statement_node->type = ORSO_STATEMENT_RETURN;
+        is_return = true;
     } else if (match(parser, TOKEN_PRINT_EXPR) || match(parser, TOKEN_PRINT)) {
         statement_node->type = ORSO_STATEMENT_PRINT_EXPR;
         if (parser->previous.type == TOKEN_PRINT) {
@@ -889,9 +891,10 @@ static OrsoStatementNode* statement(Parser* parser) {
         statement_node->type = ORSO_STATEMENT_EXPRESSION;
     }
 
-    statement_node->stmt.expression = expression(parser);
-
-    consume(parser, TOKEN_SEMICOLON, "Expect end of statement semicolon.");
+    if (!is_return || !match(parser, TOKEN_SEMICOLON)) {
+        statement_node->stmt.expression = expression(parser);
+        consume(parser, TOKEN_SEMICOLON, "Expect end of statement semicolon.");
+    }
 
     statement_node->end = parser->previous;
 
