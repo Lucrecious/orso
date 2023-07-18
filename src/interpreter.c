@@ -26,11 +26,11 @@ OrsoFunction* orso_compile_ast(OrsoVM* vm, OrsoAST* ast) {
 }
 
 void orso_run_source(OrsoVM* vm, const char* source, OrsoErrorFunction error_fn) {
-    OrsoStaticAnalyzer analyzer;
-    orso_static_analyzer_init(&analyzer, vm->write_fn, error_fn);
-
     OrsoAST ast;
     orso_ast_init(&ast, &vm->symbols);
+
+    OrsoStaticAnalyzer analyzer;
+    orso_static_analyzer_init(&analyzer, vm->write_fn, error_fn);
 
     if (!orso_parse(&ast, source, error_fn)) {
         orso_ast_free(&ast);
