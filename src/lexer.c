@@ -111,13 +111,13 @@ static void skip_whitespace(Lexer* lexer) {
     }
 }
 
-static void skip_comments(Lexer* lexer) {
+static bool skip_comments(Lexer* lexer) {
     if (match2(lexer, "//")) {
         while (!is_at_end(lexer)) {
             char c = advance(lexer);
             if (c == '\n') {
                 lexer->line++;
-                return;
+                return true;
             }
         }
     } else if (match2(lexer, "/*")) {
@@ -130,7 +130,7 @@ static void skip_comments(Lexer* lexer) {
             }
 
             if (rings == 0) {
-                return;
+                return true;
             }
 
             if (match2(lexer, "/*")) {
@@ -144,6 +144,8 @@ static void skip_comments(Lexer* lexer) {
 
         error_token(lexer, "Expected closing comment */ before file end");
     }
+
+    return false;
 }
 
 static FORCE_INLINE Token _string_symbol(Lexer* lexer, char terminator, TokenType type) {
@@ -298,11 +300,17 @@ static Token directive(Lexer* lexer) {
 }
 
 Token lexer_next_token(Lexer* lexer) {
-    skip_whitespace(lexer);
+    // skip preceeding comments and whitespace
+    while (true) {
+        skip_whitespace(lexer);
 
-    skip_comments(lexer);
+        bool comments_skipped = skip_comments(lexer);
 
-    skip_whitespace(lexer);
+        if (comments_skipped) {
+            continue;
+        }
+        break;
+    }
 
     lexer->start = lexer->current;
 

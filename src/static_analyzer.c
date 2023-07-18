@@ -1704,7 +1704,9 @@ void resolve_declarations(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope*
 
 bool orso_resolve_ast(OrsoStaticAnalyzer* analyzer, OrsoAST* ast) {
     if (ast->declarations == NULL) {
-        return true;
+        ast->resolved = false;
+        error(analyzer, 0, "No code to run. Akin to having no main functions.");
+        return false;
     }
 
     OrsoScope global_scope;
