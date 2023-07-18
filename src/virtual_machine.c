@@ -413,7 +413,7 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
                     }
                 }
 
-                POP(); // pop union type
+                POPN(3);
                 break;
             }
             

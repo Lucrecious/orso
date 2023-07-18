@@ -590,18 +590,23 @@ static void fold_constants(
     * in this case the type of expression doesn't matter. So if it's narrowed value is known an rune time or not
     * it doesn't matter.
     */
-    if ((mode == MODE_CONSTANT_TIME || mode == MODE_FOLDING_TIME) && ORSO_TYPE_IS_UNION(expression->value_type)) {
+    if (ORSO_TYPE_IS_UNION(expression->value_type)) {
         OrsoType* narrowed_type = (OrsoType*)ast->folded_constants[value_index].as.p;
 
-        value_index++; // the type makes up the first slot value, and rest is the actual value
+        if (mode == MODE_CONSTANT_TIME || mode == MODE_FOLDING_TIME) {
 
-        expression->value_type = narrowed_type;
-        expression->narrowed_value_type = narrowed_type;
+            value_index++; // the type makes up the first slot value, and rest is the actual value
 
-        // TODO: Maybe do this in a more robust way? Like maybe during compilation somehow?
-        #ifdef DEBUG_TRACE_EXECUTION
-        ast->folded_constants[value_index].type = narrowed_type;
-        #endif
+            expression->value_type = narrowed_type;
+            expression->narrowed_value_type = narrowed_type;
+
+            // TODO: Maybe do this in a more robust way? Like maybe during compilation somehow?
+            #ifdef DEBUG_TRACE_EXECUTION
+            ast->folded_constants[value_index].type = narrowed_type;
+            #endif
+        }
+
+        // TODO: might have an else here to do something for when this is RUNTIME mode
     }
 
     expression->folded_value_index = value_index;
@@ -1245,8 +1250,7 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
                     entity_declaration->expression->value_type :
                     entity_declaration->expression->narrowed_value_type;
 
-            if (entity_declaration->expression->value_type != &OrsoTypeBool
-                    && orso_type_fits(&OrsoTypeInteger32, expression_type)) {
+            if (expression_type != &OrsoTypeBool && orso_type_fits(&OrsoTypeInteger32, expression_type)) {
                 entity_declaration->type = &OrsoTypeInteger32;
             } else {
                 entity_declaration->type = expression_type;
@@ -1293,6 +1297,10 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
         entity->declaration_node->implicit_default_value_index = value_index;
     } else {
         entity->narrowed_type = entity_declaration->expression->narrowed_value_type;
+        if (IS_FOLDED(entity_declaration->expression) && ORSO_TYPE_IS_UNION(entity_declaration->expression->value_type)) {
+            OrsoType* folded_value_type = (OrsoType*)ast->folded_constants[entity_declaration->expression->folded_value_index].as.p;
+            entity->narrowed_type = folded_value_type;
+        }
     }
 }
 

@@ -349,7 +349,8 @@ static OrsoFunction* compiler_end(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, 
     }
 
 #ifdef DEBUG_PRINT
-    chunk_disassemble(chunk, "<TODO: put function name here somehow>");
+    chunk_disassemble(chunk, compiler->function->binded_name ?
+            compiler->function->binded_name->text : "<anonymous at TODO: line and column>");
 #endif
 
     return compiler->function;
