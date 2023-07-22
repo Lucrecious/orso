@@ -17,6 +17,7 @@ OrsoType OrsoTypeSymbol = (OrsoType) { .kind = ORSO_TYPE_SYMBOL };
 OrsoType OrsoTypeType = (OrsoType) { .kind = ORSO_TYPE_TYPE };
 OrsoType OrsoTypeInvalid = (OrsoType){ .kind = ORSO_TYPE_INVALID  };
 OrsoType OrsoTypeUnresolved = (OrsoType) { .kind = ORSO_TYPE_UNRESOLVED };
+OrsoType OrsoTypeUndefined = (OrsoType) { .kind = ORSO_TYPE_UNDEFINED };
 
 OrsoFunctionType OrsoTypeEmptyFunction = (OrsoFunctionType) {
     .type.kind = ORSO_TYPE_FUNCTION,

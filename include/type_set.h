@@ -22,6 +22,7 @@ extern OrsoType OrsoTypeSymbol;
 extern OrsoType OrsoTypeType;
 extern OrsoType OrsoTypeInvalid;
 extern OrsoType OrsoTypeUnresolved;
+extern OrsoType OrsoTypeUndefined;
 
 extern OrsoFunctionType OrsoTypeEmptyFunction;
 

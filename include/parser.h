@@ -46,6 +46,12 @@ typedef enum OrsoStatementType {
     ORSO_STATEMENT_RETURN,
 } OrsoStatementType;
 
+typedef enum OrsoReturnGuarentee {
+    ORSO_NO_RETURN_GUARENTEED,
+    ORSO_MAYBE_RETURNS,
+    ORSO_RETURN_GUARENTEED,
+} OrsoReturnGuarentee;
+
 typedef struct OrsoExpressionNode OrsoExpressionNode;
 typedef struct OrsoDeclarationNode OrsoDeclarationNode;
 typedef struct OrsoTypeNode OrsoTypeNode;
@@ -111,6 +117,8 @@ typedef struct OrsoAssignment {
 typedef struct OrsoBlock {
     OrsoDeclarationNode** declarations;
     OrsoDeclarationNode* final_expression_statement;
+
+    OrsoReturnGuarentee return_guarentee; 
 } OrsoBlock;
 
 typedef struct OrsoIfElse {
@@ -119,6 +127,8 @@ typedef struct OrsoIfElse {
     OrsoExpressionNode* condition;
     OrsoExpressionNode* then;
     OrsoExpressionNode* else_;
+
+    OrsoReturnGuarentee return_guarentee;
 } OrsoIfElse;
 
 typedef struct OrsoEntityDeclarationNode {

@@ -10,6 +10,7 @@
 
 typedef enum OrsoTypeKind {
     ORSO_TYPE_INVALID = 0,
+    ORSO_TYPE_UNDEFINED, // used for blocks with returns
     ORSO_TYPE_UNRESOLVED,
     ORSO_TYPE_VOID,
     ORSO_TYPE_BOOL,

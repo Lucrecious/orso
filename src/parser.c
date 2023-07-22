@@ -518,6 +518,7 @@ static OrsoExpressionNode* variable(Parser* parser) {
 }
 
 static void parse_block(Parser* parser, OrsoBlock* block) {
+    block->return_guarentee = ORSO_NO_RETURN_GUARENTEED;
     block->declarations = NULL;
     block->final_expression_statement = NULL;
 
@@ -554,6 +555,8 @@ static OrsoExpressionNode* ifelse(Parser* parser) {
         expression_node->expr.ifelse.loop_block = true;
     }
 
+    expression_node->expr.ifelse.return_guarentee = ORSO_NO_RETURN_GUARENTEED;
+
     expression_node->expr.ifelse.condition = expression(parser);
 
     consume(parser, TOKEN_BRACE_OPEN, "Expect '{' after condition.");
@@ -574,6 +577,8 @@ static OrsoExpressionNode* ifelse(Parser* parser) {
     consume(parser, TOKEN_BRACE_OPEN, "Expect '{' after else.");
 
     expression_node->expr.ifelse.else_ = block(parser);
+
+    expression_node->end = parser->previous;
 
     return expression_node;
 }

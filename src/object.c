@@ -156,6 +156,7 @@ char* orso_slot_to_new_cstrn(OrsoSlot slot, OrsoType* type) {
 
             return cstrn_new(buffer, strlen(buffer));
         }
+        case ORSO_TYPE_UNDEFINED: return cstrn_new("<undefined>", 11);
         case ORSO_TYPE_UNRESOLVED: return cstrn_new("<unresolved>", 12);
         case ORSO_TYPE_INVALID: return cstrn_new("<invalid>", 9);
 

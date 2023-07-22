@@ -864,27 +864,46 @@ void orso_resolve_expression(
                 return;
             }
 
-            // for (i32 i = 0; i < declarations_count; i++) {
-            //     OrsoDeclarationNode* declaration = expression->expr.block.declarations[i];
-            //     // What am I lookinig for here? type, name or subexpression
-            //     ___resolve_declaration(analyzer, ast, &block_scope, declaration);
-            // }
+            OrsoReturnGuarentee block_return_guarentee = ORSO_NO_RETURN_GUARENTEED;
+            for (i32 i = 0; i < declarations_count; i++) {
+                OrsoDeclarationNode* declaration = expression->expr.block.declarations[i];
+                if (declaration->type == ORSO_DECLARATION_STATEMENT && declaration->decl.statement->type == ORSO_STATEMENT_RETURN) {
+                    block_return_guarentee = ORSO_RETURN_GUARENTEED;
+                } else if (declaration->type == ORSO_DECLARATION_STATEMENT && declaration->decl.statement->type == ORSO_STATEMENT_EXPRESSION) {
+                    OrsoExpressionNode* statement = declaration->decl.statement->stmt.expression;
+                    if (statement->type == EXPRESSION_BLOCK && statement->expr.block.return_guarentee != ORSO_NO_RETURN_GUARENTEED) {
+                        block_return_guarentee = statement->expr.block.return_guarentee;
+                    } else if (statement->type == EXPRESSION_IFELSE && statement->expr.ifelse.return_guarentee != ORSO_NO_RETURN_GUARENTEED) {
+                        block_return_guarentee = statement->expr.ifelse.return_guarentee;
+                    }
+                }
 
-            OrsoDeclarationNode* last_expression_statement = NULL;
-            if (declarations_count > 0) {
-                OrsoDeclarationNode* last_declaration = expression->expr.block.declarations[declarations_count - 1];
-                if (last_declaration->type == ORSO_DECLARATION_STATEMENT && last_declaration->decl.statement->type == ORSO_STATEMENT_EXPRESSION) {
-                    last_expression_statement = last_declaration;
+                if (block_return_guarentee == ORSO_RETURN_GUARENTEED) {
+                    break;
                 }
             }
 
-            if (last_expression_statement == NULL) {
-                expression->value_type = &OrsoTypeVoid;
-                expression->narrowed_value_type = &OrsoTypeVoid;
+            if (block_return_guarentee != ORSO_NO_RETURN_GUARENTEED) {
+                expression->expr.block.return_guarentee = block_return_guarentee;
+                expression->value_type = &OrsoTypeUndefined;
+                expression->narrowed_value_type = &OrsoTypeUndefined;
             } else {
-                expression->expr.block.final_expression_statement = last_expression_statement;
-                expression->value_type = last_expression_statement->decl.statement->stmt.expression->value_type;
-                expression->narrowed_value_type = last_expression_statement->decl.statement->stmt.expression->narrowed_value_type;
+                OrsoDeclarationNode* last_expression_statement = NULL;
+                if (declarations_count > 0) {
+                    OrsoDeclarationNode* last_declaration = expression->expr.block.declarations[declarations_count - 1];
+                    if (last_declaration->type == ORSO_DECLARATION_STATEMENT && last_declaration->decl.statement->type == ORSO_STATEMENT_EXPRESSION) {
+                        last_expression_statement = last_declaration;
+                    }
+                }
+
+                if (last_expression_statement == NULL) {
+                    expression->value_type = &OrsoTypeVoid;
+                    expression->narrowed_value_type = &OrsoTypeVoid;
+                } else {
+                    expression->expr.block.final_expression_statement = last_expression_statement;
+                    expression->value_type = last_expression_statement->decl.statement->stmt.expression->value_type;
+                    expression->narrowed_value_type = last_expression_statement->decl.statement->stmt.expression->narrowed_value_type;
+                }
             }
 
             scope_free(&block_scope);
@@ -900,7 +919,6 @@ void orso_resolve_expression(
             OrsoScope* then_scope = scope_copy_new(state.scope);
             AnalysisState then_state = state;
             then_state.scope = then_scope;
-
             orso_resolve_expression(analyzer, ast, then_state, expression->expr.ifelse.then);
             if (EXPRESSION_RESOLVED(expression)) {
                 return;
@@ -913,6 +931,32 @@ void orso_resolve_expression(
                 orso_resolve_expression(analyzer, ast, else_state, expression->expr.ifelse.else_);
                 if (EXPRESSION_RESOLVED(expression)) {
                     return;
+                }
+            }
+
+            OrsoReturnGuarentee ifelse_return_guarentee;
+            // resolve return guarentee first
+            {
+                ASSERT(expression->expr.ifelse.then->type == EXPRESSION_BLOCK, "then expression must be a block fro now");
+                OrsoReturnGuarentee then_return_guarentee = expression->expr.ifelse.then->expr.block.return_guarentee;
+
+                OrsoReturnGuarentee else_return_guarentee = ORSO_NO_RETURN_GUARENTEED;
+                if (expression->expr.ifelse.else_) {
+                    if (expression->expr.ifelse.else_->type == EXPRESSION_BLOCK) {
+                        else_return_guarentee = expression->expr.ifelse.else_->expr.block.return_guarentee;
+                    } else if (expression->expr.ifelse.else_->type == EXPRESSION_IFELSE) {
+                        else_return_guarentee = expression->expr.ifelse.else_->expr.ifelse.return_guarentee;
+                    } else {
+                        ASSERT(false, "only blocks and ifs allowed during elses for now");
+                    }
+                }
+
+                if (then_return_guarentee == ORSO_RETURN_GUARENTEED && else_return_guarentee == ORSO_RETURN_GUARENTEED) {
+                    ifelse_return_guarentee = ORSO_RETURN_GUARENTEED;
+                } else if (then_return_guarentee == ORSO_NO_RETURN_GUARENTEED && else_return_guarentee == ORSO_NO_RETURN_GUARENTEED) {
+                    ifelse_return_guarentee = ORSO_NO_RETURN_GUARENTEED;
+                } else {
+                    ifelse_return_guarentee = ORSO_MAYBE_RETURNS;
                 }
             }
 
@@ -934,25 +978,31 @@ void orso_resolve_expression(
                 else_scope = outer_scope;
             }
 
-            OrsoType* else_block_type = &OrsoTypeVoid;
-            OrsoType* else_block_narrowed_type = else_block_type;
-            if (expression->expr.ifelse.else_) {
-                else_block_type = expression->expr.ifelse.else_->value_type;
-                else_block_narrowed_type = expression->expr.ifelse.else_->narrowed_value_type;
+            if (ifelse_return_guarentee == ORSO_NO_RETURN_GUARENTEED) {
+                OrsoType* else_block_type = &OrsoTypeVoid;
+                OrsoType* else_block_narrowed_type = else_block_type;
+                if (expression->expr.ifelse.else_) {
+                    else_block_type = expression->expr.ifelse.else_->value_type;
+                    else_block_narrowed_type = expression->expr.ifelse.else_->narrowed_value_type;
+                }
+
+                expression->value_type = orso_type_merge(&ast->type_set,
+                    expression->expr.ifelse.then->value_type, else_block_type
+                );
+
+                if (expression->value_type == &OrsoTypeInvalid) {
+                    error(analyzer, expression->end.line, "if expression union type is too large.");
+                    return;
+                }
+
+                expression->narrowed_value_type = orso_type_merge(&ast->type_set,
+                    expression->expr.ifelse.then->narrowed_value_type, else_block_narrowed_type
+                );
+            } else {
+                expression->expr.ifelse.return_guarentee = ifelse_return_guarentee;
+                expression->value_type = &OrsoTypeUndefined;
+                expression->narrowed_value_type = &OrsoTypeUndefined;
             }
-
-            expression->value_type = orso_type_merge(&ast->type_set,
-                expression->expr.ifelse.then->value_type, else_block_type
-            );
-
-            if (expression->value_type == &OrsoTypeInvalid) {
-                error(analyzer, expression->end.line, "if expression union type is too large.");
-                return;
-            }
-
-            expression->narrowed_value_type = orso_type_merge(&ast->type_set,
-                expression->expr.ifelse.then->narrowed_value_type, else_block_narrowed_type
-            );
             break;
         }
         case EXPRESSION_CALL: {
@@ -997,6 +1047,11 @@ void orso_resolve_expression(
         case EXPRESSION_FOR:
         case EXPRESSION_IMPLICIT_CAST:
         case EXPRESSION_NONE: UNREACHABLE();
+    }
+
+    // we shouldn't fold expressions that are undefined (blocks or ifelses that return)
+    if (expression->value_type == &OrsoTypeUndefined) {
+        return;
     }
 
     fold_constants(analyzer, ast, state, expression);
@@ -1227,6 +1282,11 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
 
     // we are resolved
     if (is_declaration_resolved(entity_declaration)) {
+        return;
+    }
+
+    if (entity_declaration->expression && entity_declaration->expression->value_type == &OrsoTypeUndefined) {
+        error(analyzer, entity_declaration->expression->start.line, "Cannot set entity to an undefined type.");
         return;
     }
 
@@ -1625,6 +1685,10 @@ static void resolve_function_expression(
     pop_dependency(analyzer);
 
     scope_free(&function_scope);
+
+    if (return_type != &OrsoTypeVoid && definition->block_expression->expr.block.return_guarentee != ORSO_RETURN_GUARENTEED) {
+        error(analyzer, function_definition_expression->start.line, "Function definition on this line does not return on all branches.");
+    }
 }
 
 static OrsoScope* get_closest_outer_function_scope(OrsoScope* scope) {
