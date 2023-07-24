@@ -60,6 +60,7 @@ typedef enum {
     PREC_ASSIGNMENT,  // =
     PREC_OR,          // or
     PREC_AND,         // and
+    PREC_BITWISE_OR,  // | and type separator
     PREC_EQUALITY,    // == !=
     PREC_COMPARISON,  // < > <= >=
     PREC_TERM,        // + -
@@ -69,7 +70,7 @@ typedef enum {
     PREC_PRIMARY
 } Precedence;
 
-typedef OrsoExpressionNode* (*ParseFn)(Parser*);
+typedef OrsoASTNode* (*ParseFn)(Parser*);
 
 typedef struct {
     ParseFn prefix;
@@ -80,7 +81,8 @@ typedef struct {
 void orso_ast_init(OrsoAST* ast, OrsoSymbolTable* symbols) {
     ASSERT(symbols, "cannot be null");
     ast->resolved = false;
-    ast->declarations = NULL;
+    ast->root = NULL;
+    ast->nodes = NULL;
     ast->folded_constants = NULL;
     ast->symbols = symbols;
     ast->function_definition_pairs = NULL;
@@ -89,164 +91,84 @@ void orso_ast_init(OrsoAST* ast, OrsoSymbolTable* symbols) {
     orso_symbol_table_init(&ast->builtins);
 }
 
-static void free_declaration(OrsoDeclarationNode* declaration_node);
-
-static void orso_free_expression(OrsoExpressionNode* expression) {
-    if (!expression) {
-        return;
-    }
-
-    switch (expression->type) {
-        case EXPRESSION_BINARY:
-            orso_free_expression(expression->expr.binary.left);
-            orso_free_expression(expression->expr.binary.right);
-            free(expression->expr.binary.left);
-            free(expression->expr.binary.right);
-            expression->expr.binary.left = NULL;
-            expression->expr.binary.right = NULL;
-            break;
-        case EXPRESSION_GROUPING:
-            orso_free_expression(expression->expr.grouping.expression);
-            free(expression->expr.grouping.expression);
-            expression->expr.grouping.expression = NULL;
-            break;
-        case EXPRESSION_IMPLICIT_CAST:
-            orso_free_expression(expression->expr.cast.operand);
-            free(expression->expr.cast.operand);
-            expression->expr.cast.operand = NULL;
-            break;
-        case EXPRESSION_UNARY:
-            orso_free_expression(expression->expr.unary.operand);
-            free(expression->expr.unary.operand);
-            expression->expr.unary.operand = NULL;
-            break;
-        case EXPRESSION_ASSIGNMENT:
-            orso_free_expression(expression->expr.assignment.right_side);
-            free(expression->expr.assignment.right_side);
-            expression->expr.assignment.right_side = NULL;
-            break;
-        case EXPRESSION_ENTITY:
-        case EXPRESSION_PRIMARY:
-            break;
-        case EXPRESSION_BLOCK: {
-            for (i32 i = 0; i < sb_count(expression->expr.block.declarations); i++) {
-                free_declaration(expression->expr.block.declarations[i]);
-                free(expression->expr.block.declarations[i]);
-                expression->expr.block.declarations[i] = NULL;
-            }
-
-            sb_free(expression->expr.block.declarations);
-            expression->expr.block.declarations = NULL;
-            break;
-        }
-        case EXPRESSION_IFELSE: {
-            orso_free_expression(expression->expr.ifelse.condition);
-            free(expression->expr.ifelse.condition);
-            expression->expr.ifelse.condition = NULL;
-            
-            orso_free_expression(expression->expr.ifelse.then);
-            free(expression->expr.ifelse.then);
-            expression->expr.ifelse.then = NULL;
-
-            orso_free_expression(expression->expr.ifelse.else_);
-            free(expression->expr.ifelse.else_);
-            expression->expr.ifelse.else_ = NULL;
-            break;
-        }
-
-        case EXPRESSION_FUNCTION_DEFINITION: {
-            // TODO: Gonna use regions for this shit.
-            break;
-        }
-        case EXPRESSION_CALL: {
-            break;
-        }
-        case EXPRESSION_FOR: UNREACHABLE();
-
-        case EXPRESSION_NONE: {
-            break;
-        }
-
-    }
-}
-
-static void orso_type_node_free(OrsoTypeNode* type_node) {
-    if (type_node == NULL) {
-        return;
-    }
-
-    switch (type_node->type) {
-        case ORSO_TYPE_NODE_TYPE_IDENTIFIER:
-            break;
-        case ORSO_TYPE_NODE_TYPE_UNION: {
-            for (i32 i = 0; i < sb_count(type_node->items.union_); i++) {
-                orso_type_node_free(type_node->items.union_[i]);
-                free(type_node->items.union_[i]);
-            }
-
-            sb_free(type_node->items.union_);
-            type_node->items.union_ = NULL;
-            break;
-        }
-        case ORSO_TYPE_NODE_TYPE_FUNCTION: {
-            orso_type_node_free(type_node->items.function.return_type);
-            free(type_node->items.function.return_type);
-            type_node->items.function.return_type = NULL;
-
-            for (i32 i = 0; i < sb_count(type_node->items.function.argument_types); i++) {
-                orso_type_node_free(type_node->items.function.argument_types[i]);
-                free(type_node->items.function.argument_types[i]);
-            }
-
-            sb_free(type_node->items.function.argument_types);
-            type_node->items.function.argument_types = NULL;
-            break;
-        }
-    }
-}
-
-static void free_declaration(OrsoDeclarationNode* declaration_node) {
-    switch (declaration_node->type) {
-        case ORSO_DECLARATION_STATEMENT: {
-            orso_free_expression(declaration_node->decl.statement->stmt.expression);
-            free(declaration_node->decl.statement->stmt.expression);
-            free(declaration_node->decl.statement);
-            declaration_node->decl.statement = NULL;
-            break;
-        }
-        case ORSO_DECLARATION_ENTITY: {
-            orso_free_expression(declaration_node->decl.entity->expression);
-            free(declaration_node->decl.entity->expression);
-            declaration_node->decl.entity->expression = NULL;
-
-            orso_type_node_free(declaration_node->decl.entity->type_node);
-            free(declaration_node->decl.entity->type_node);
-            declaration_node->decl.entity->type_node = NULL;
-
-            free(declaration_node->decl.entity);
-            declaration_node->decl.entity = NULL;
-            break;
-        }
-        case ORSO_DECLARATION_NONE: UNREACHABLE();
-    }
-}
-
 void orso_ast_free(OrsoAST* ast) {
-    for (i32 i = 0; i < sb_count(ast->declarations); i++) {
-        free_declaration(ast->declarations[i]);
-        free(ast->declarations[i]);
-        ast->declarations[i] = NULL;
+    for (i32 i = 0; i < sb_count(ast->nodes); i++) {
+        free(ast->nodes[i]);
+        ast->nodes[i] = NULL;
     }
-    sb_free(ast->declarations);
-    sb_free(ast->function_definition_pairs);
-    ast->declarations = NULL;
-
-    // TODO: Remember to free folded constants
-    //sb_free(ast->folded_constants);
-    //ast->folded_constants = NULL;
 
     orso_symbol_table_free(&ast->builtins);
     orso_type_set_free(&ast->type_set);
+}
+
+OrsoASTNode* orso_ast_node_new(OrsoAST* ast, OrsoASTNodeType node_type, Token start) {
+    OrsoASTNode* node = ORSO_ALLOCATE(OrsoASTNode);
+    
+    sb_push(ast->nodes, node);
+
+    node->node_type = node_type;
+    node->start = start;
+    node->end = start;
+    node->operator = start;
+    node->return_guarentee = ORSO_NO_RETURN_GUARENTEED;
+    node->type = &OrsoTypeUnresolved;
+    node->narrowed_type = &OrsoTypeUnresolved;
+
+    node->value_index = -1;
+
+    switch (node_type) {
+        case ORSO_AST_NODE_TYPE_DECLARATION:
+            node->data.declaration.initial_value_expression = NULL;
+            node->data.declaration.fold_level_resolved_at = -1;
+            node->data.declaration.identifier = NULL;
+            node->data.declaration.is_mutable = false;
+            node->data.declaration.type_expression = NULL;
+            break;
+
+        case ORSO_AST_NODE_TYPE_EXPRESSION_ASSIGNMENT:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_BINARY:
+            node->data.binary.lhs = NULL;
+            node->data.binary.rhs = NULL;
+            break;
+        
+        case ORSO_AST_NODE_TYPE_EXPRESSION_BLOCK:
+            node->data.block = NULL;
+            break;
+        
+        case ORSO_AST_NODE_TYPE_EXPRESSION_BRANCHING:
+            node->data.branch.condition = NULL;
+            node->data.branch.condition_negated = false;
+            node->data.branch.then_expression = NULL;
+            node->data.branch.else_expression = NULL;
+            node->data.branch.looping = false;
+            break;
+        
+        case ORSO_AST_NODE_TYPE_EXPRESSION_CALL:
+            node->data.call.callee = NULL;
+            node->data.call.arguments = NULL;
+            break;
+        
+        case ORSO_AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT:
+        case ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION:
+        case ORSO_AST_NODE_TYPE_STATEMENT_PRINT:
+        case ORSO_AST_NODE_TYPE_STATEMENT_PRINT_EXPR:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_GROUPING:
+            node->data.expression = NULL;
+            break;
+        
+        case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION:
+            node->data.function_definition.block = NULL;
+            node->data.function_definition.compilable = false;
+            node->data.function_definition.parameters = NULL;
+            node->data.function_definition.return_type_expression = NULL;
+            break;
+        
+        case ORSO_AST_NODE_TYPE_EXPRESSION_PRIMARY:
+            break;
+    }
+
+    return node;
 }
 
 static void parser_init(Parser* parser, OrsoAST* ast, const char* source, OrsoErrorFunction error_fn) {
@@ -349,10 +271,10 @@ static void synchronize(Parser* parser) {
     }
 }
 
-static OrsoDeclarationNode* declaration(Parser* parser);
-static OrsoExpressionNode* expression(Parser* parser);
+static OrsoASTNode* declaration(Parser* parser);
+static OrsoASTNode* expression(Parser* parser);
 static ParseRule* get_rule(TokenType type);
-static OrsoExpressionNode* parse_precedence(Parser* parser, Precedence precedence);
+static OrsoASTNode* parse_precedence(Parser* parser, Precedence precedence);
 
 static OrsoType* value_to_integer_type(i64 value) {
     if (value >= INT32_MIN && value <= INT32_MAX) {
@@ -367,149 +289,163 @@ static i32 add_constant_value(Parser* parser, OrsoSlot value) {
     return index;
 }
 
-static OrsoExpressionNode* expression_new(Token start) {
-    OrsoExpressionNode* expression_node = ORSO_ALLOCATE(OrsoExpressionNode);
-
-    expression_node->start = start;
-    expression_node->end = start;
-    expression_node->type = EXPRESSION_NONE;
-
-    expression_node->fold = false;
-    expression_node->foldable = false;
-    expression_node->folded_value_index = -1;
-    
-    expression_node->value_type = &OrsoTypeUnresolved;
-    expression_node->narrowed_value_type = &OrsoTypeUnresolved;
-
-    return expression_node;
+bool orso_ast_node_type_is_decl_or_stmt(OrsoASTNodeType node_type) {
+    switch (node_type) {
+        case ORSO_AST_NODE_TYPE_EXPRESSION_ASSIGNMENT:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_BINARY:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_BLOCK:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_BRANCHING:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_CALL:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_GROUPING:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_PRIMARY:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_UNARY:
+            return false;
+        
+        case ORSO_AST_NODE_TYPE_DECLARATION:
+        case ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION:
+        case ORSO_AST_NODE_TYPE_STATEMENT_PRINT:
+        case ORSO_AST_NODE_TYPE_STATEMENT_PRINT_EXPR:
+        case ORSO_AST_NODE_TYPE_STATEMENT_RETURN:
+            return true;
+    }
 }
 
-static OrsoExpressionNode* number(Parser* parser) {
-    OrsoExpressionNode* expression_node = expression_new(parser->previous);
-    expression_node->type = EXPRESSION_PRIMARY;
+bool orso_ast_node_type_is_expression(OrsoASTNodeType node_type) {
+    switch (node_type) {
+        case ORSO_AST_NODE_TYPE_EXPRESSION_ASSIGNMENT:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_BINARY:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_BLOCK:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_BRANCHING:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_CALL:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_GROUPING:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_PRIMARY:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_UNARY:
+            return true;
+        
+        case ORSO_AST_NODE_TYPE_DECLARATION:
+        case ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION:
+        case ORSO_AST_NODE_TYPE_STATEMENT_PRINT:
+        case ORSO_AST_NODE_TYPE_STATEMENT_PRINT_EXPR:
+        case ORSO_AST_NODE_TYPE_STATEMENT_RETURN:
+            return false;
+    }
+}
 
-    expression_node->expr.primary.token = parser->previous;
+static OrsoASTNode* number(Parser* parser) {
+    OrsoASTNode* expression_node = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_EXPRESSION_PRIMARY, parser->previous);
 
     switch (parser->previous.type)  {
         case TOKEN_INTEGER: {
             i64 value = cstrn_to_i64(parser->previous.start, parser->previous.length);
-            expression_node->value_type = value_to_integer_type(value);
-            expression_node->expr.primary.value_index = add_constant_value(parser, ORSO_SLOT_I(value, expression_node->value_type));
+            expression_node->type = value_to_integer_type(value);
+            expression_node->value_index = add_constant_value(parser, ORSO_SLOT_I(value, expression_node->type));
             break;
         }
         case TOKEN_FLOAT: {
             f64 value = cstrn_to_f64(parser->previous.start, parser->previous.length);
-            expression_node->value_type = &OrsoTypeFloat64;
-            expression_node->expr.primary.value_index = add_constant_value(parser, ORSO_SLOT_F(value, &OrsoTypeFloat64));
+            expression_node->type = &OrsoTypeFloat64;
+            expression_node->value_index = add_constant_value(parser, ORSO_SLOT_F(value, &OrsoTypeFloat64));
             break;
         }
         default: UNREACHABLE();
     }
 
-    expression_node->narrowed_value_type = expression_node->value_type;
+    expression_node->narrowed_type = expression_node->type;
 
     expression_node->foldable = true;
-    expression_node->folded_value_index = expression_node->expr.primary.value_index;
 
     return expression_node;
 }
 
 static OrsoExpressionNode* literal(Parser* parser) {
-    OrsoExpressionNode* expression_node = expression_new(parser->previous);
-    expression_node->type = EXPRESSION_PRIMARY;
-
-    expression_node->expr.primary.token = parser->previous;
+    OrsoASTNode* expression_node = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_EXPRESSION_PRIMARY, parser->previous);
 
     switch (parser->previous.type) {
         case TOKEN_FALSE:
         case TOKEN_TRUE: {
-            expression_node->value_type = &OrsoTypeBool;
+            expression_node->type = &OrsoTypeBool;
 
             i64 is_true = (i64)(parser->previous.type == TOKEN_TRUE);
-            expression_node->expr.primary.value_index = add_constant_value(parser, ORSO_SLOT_I(is_true, &OrsoTypeBool));
+            expression_node->value_index = add_constant_value(parser, ORSO_SLOT_I(is_true, &OrsoTypeBool));
             break;
         }
         case TOKEN_NULL: {
-            expression_node->value_type = &OrsoTypeVoid;
-            expression_node->expr.primary.value_index = add_constant_value(parser, ORSO_SLOT_I(0, &OrsoTypeVoid));
+            expression_node->type = &OrsoTypeVoid;
+            expression_node->value_index = add_constant_value(parser, ORSO_SLOT_I(0, &OrsoTypeVoid));
             break;
         }
         case TOKEN_STRING: {
-            expression_node->value_type = &OrsoTypeString;
+            expression_node->type = &OrsoTypeString;
             OrsoString* value = orso_new_string_from_cstrn(expression_node->start.start + 1, expression_node->start.length - 2);
-            expression_node->expr.primary.value_index = add_constant_value(parser, ORSO_SLOT_P(value, &OrsoTypeString));
+            expression_node->value_index = add_constant_value(parser, ORSO_SLOT_P(value, &OrsoTypeString));
             break;
         };
 
         case TOKEN_SYMBOL: {
-            expression_node->value_type = &OrsoTypeSymbol;
+            expression_node->type = &OrsoTypeSymbol;
             OrsoSymbol* value = orso_new_symbol_from_cstrn(expression_node->start.start + 1, expression_node->start.length - 2, parser->ast->symbols);
-            expression_node->expr.primary.value_index = add_constant_value(parser, ORSO_SLOT_P(value, &OrsoTypeSymbol));
+            expression_node->value_index = add_constant_value(parser, ORSO_SLOT_P(value, &OrsoTypeSymbol));
             break;
         }
         default:
             UNREACHABLE();
     }
 
-    expression_node->narrowed_value_type = expression_node->value_type;
+    expression_node->narrowed_type = expression_node->type;
 
     expression_node->foldable = true;
-    expression_node->folded_value_index = expression_node->expr.primary.value_index;
 
     return expression_node;
 }
 
-static OrsoExpressionNode* convert_assignment_expression(Parser* parser, OrsoExpressionNode* left_operand, OrsoExpressionNode* assignment) {
-    if (left_operand->type != EXPRESSION_ENTITY) {
+static OrsoExpressionNode* convert_assignment_expression(Parser* parser, OrsoASTNode* left_operand, OrsoASTNode* assignment) {
+    if (left_operand->node_type != ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY) {
         error_at(parser, &left_operand->start, "Expect entity name.");
-        orso_free_expression(left_operand);
-        orso_free_expression(assignment);
+        free(left_operand);
         free(assignment);
-        left_operand->type = EXPRESSION_NONE;
+        left_operand->node_type = ORSO_AST_NODE_TYPE_UNDEFINED;
         return left_operand;
     }
 
     assignment->start = left_operand->start;
-    assignment->expr.assignment.name = left_operand->expr.entity.name;
-    orso_free_expression(left_operand);
-    free(left_operand);
+    assignment->data.binary.lhs = left_operand;
 
     return assignment;
 }
 
-static OrsoExpressionNode* convert_call_expression(Parser* parser, OrsoExpressionNode* left_operand, OrsoExpressionNode* call) {
-    if (left_operand->type != EXPRESSION_ENTITY) {
+static OrsoExpressionNode* convert_call_expression(Parser* parser, OrsoASTNode* left_operand, OrsoASTNode* call) {
+    if (left_operand->node_type != ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY) {
         error_at(parser, &left_operand->start, "Expect function name.");
-        orso_free_expression(left_operand);
-        orso_free_expression(call);
+        free(left_operand);
         free(call);
-        left_operand->type = EXPRESSION_NONE;
+        left_operand->node_type = ORSO_AST_NODE_TYPE_UNDEFINED;
         return left_operand;
     }
 
     call->start = left_operand->start;
 
-    call->expr.call.callee = left_operand;
+    call->data.call.callee = left_operand;
 
     return call;
 }
 
-static OrsoExpressionNode* assignment(Parser* parser) {
-    OrsoExpressionNode* expression_node = expression_new(parser->previous);
-    expression_node->type = EXPRESSION_ASSIGNMENT;
+static OrsoASTNode* assignment(Parser* parser) {
+    OrsoASTNode* expression_node = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_EXPRESSION_ASSIGNMENT, parser->previous);
 
-    expression_node->expr.assignment.right_side = expression(parser);
+    expression_node->data.binary.rhs = expression(parser);
     expression_node->end = parser->previous;
 
     return expression_node;
 }
 
-static OrsoExpressionNode* named_variable(Parser* parser) {
-    OrsoExpressionNode* expression_node = expression_new(parser->previous);
-    expression_node->type = EXPRESSION_ENTITY;
-
-    expression_node->expr.entity.name = parser->previous;
-
+static OrsoASTNode* named_variable(Parser* parser) {
+    OrsoExpressionNode* expression_node = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY, parser->previous);
     return expression_node;
 }
 
@@ -517,66 +453,62 @@ static OrsoExpressionNode* variable(Parser* parser) {
     return named_variable(parser);
 }
 
-static void parse_block(Parser* parser, OrsoBlock* block) {
+static void parse_block(Parser* parser, OrsoASTNode* block) {
     block->return_guarentee = ORSO_NO_RETURN_GUARENTEED;
-    block->declarations = NULL;
-    block->final_expression_statement = NULL;
+    block->data.block = NULL;
 
     while (!check(parser, TOKEN_BRACE_CLOSE) && !check(parser, TOKEN_EOF)) {
-        OrsoDeclarationNode* declaration_node = declaration(parser);
-        sb_push(block->declarations, declaration_node);
+        OrsoASTNode* declaration_node = declaration(parser);
+        sb_push(block->data.block, declaration_node);
     }
 
     consume(parser, TOKEN_BRACE_CLOSE, "Expect '}' after block.");
 }
 
 static OrsoExpressionNode* block(Parser* parser) {
-    OrsoExpressionNode* expression_node = expression_new(parser->previous);
-    expression_node->type = EXPRESSION_BLOCK;
+    OrsoASTNode* expression_node = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_EXPRESSION_BLOCK, parser->previous);
 
-    parse_block(parser, &expression_node->expr.block);
+    parse_block(parser, expression_node);
     expression_node->end = parser->previous;
 
     return expression_node;
 }
 
-static OrsoExpressionNode* ifelse(Parser* parser) {
-    OrsoExpressionNode* expression_node = expression_new(parser->previous);
+static OrsoASTNode* ifelse(Parser* parser) {
+    OrsoASTNode* expression_node = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_EXPRESSION_BRANCHING, parser->previous);
 
-    expression_node->type = EXPRESSION_IFELSE;
-
-    expression_node->expr.ifelse.is_negated = false;
+    expression_node->data.branch.condition_negated = false;
     if (parser->previous.type == TOKEN_UNLESS || parser->previous.type == TOKEN_UNTIL) {
-        expression_node->expr.ifelse.is_negated = true;
+        expression_node->data.branch.condition_negated = true;
     }
 
-    expression_node->expr.ifelse.loop_block = false;
+    expression_node->data.branch.looping = false;
     if (parser->previous.type == TOKEN_WHILE || parser->previous.type == TOKEN_UNTIL) {
-        expression_node->expr.ifelse.loop_block = true;
+        expression_node->data.branch.looping = true;
     }
 
-    expression_node->expr.ifelse.return_guarentee = ORSO_NO_RETURN_GUARENTEED;
+    expression_node->return_guarentee = ORSO_NO_RETURN_GUARENTEED;
 
-    expression_node->expr.ifelse.condition = expression(parser);
+    expression_node->data.branch.condition = expression(parser);
 
     consume(parser, TOKEN_BRACE_OPEN, "Expect '{' after condition.");
 
-    expression_node->expr.ifelse.then = block(parser);
+    expression_node->data.branch.then_expression = block(parser);
 
     if (!match(parser, TOKEN_ELSE)) {
-        expression_node->expr.ifelse.else_ = NULL;
+        expression_node->data.branch.else_expression = NULL;
         return expression_node;
     }
 
     if (match(parser, TOKEN_IF) || match(parser, TOKEN_UNLESS) ||
         match(parser, TOKEN_WHILE) || match(parser, TOKEN_UNTIL)) {
-        expression_node->expr.ifelse.else_ = ifelse(parser);
+        expression_node->data.branch.else_expression = ifelse(parser);
         return expression_node;
     }
 
     consume(parser, TOKEN_BRACE_OPEN, "Expect '{' after else.");
 
-    expression_node->expr.ifelse.else_ = block(parser);
+    expression_node->data.branch.else_expression = block(parser);
 
     expression_node->end = parser->previous;
 
@@ -614,14 +546,14 @@ static bool is_incoming_expression_function_definition(Parser* parser) {
     return next.type == TOKEN_ARROW_RIGHT || next.type == TOKEN_BRACE_OPEN;
 }
 
-static OrsoEntityDeclarationNode* entity_declaration(Parser* parser, bool as_parameter);
+static OrsoASTNode* entity_declaration(Parser* parser, bool as_parameter);
 
-static OrsoEntityDeclarationNode** parse_parameters(Parser* parser) {
+static OrsoASTNode** parse_parameters(Parser* parser) {
     if (!check(parser, TOKEN_IDENTIFIER)) {
         return NULL;
     }
 
-    OrsoEntityDeclarationNode** parameters = NULL;
+    OrsoASTNode** parameters = NULL;
     while (check(parser, TOKEN_IDENTIFIER)) {
         sb_push(parameters, entity_declaration(parser, true));
         if (match(parser, TOKEN_COMMA)) {
@@ -632,77 +564,47 @@ static OrsoEntityDeclarationNode** parse_parameters(Parser* parser) {
     return parameters;
 }
 
-static OrsoTypeNode* parse_type(Parser* parser, bool parse_union) {
-    OrsoTypeNode* type_node = NULL;
-    if (match(parser, TOKEN_IDENTIFIER)) {
-        type_node = ORSO_ALLOCATE(OrsoTypeNode);
-        type_node->type = ORSO_TYPE_NODE_TYPE_IDENTIFIER;
-        type_node->items.primitive = parser->previous;
-        type_node->start = type_node->end = parser->previous;
-    } else if (match(parser, TOKEN_BRACE_OPEN)) {
-        ASSERT(false, "not implemented");
-    }
+static void parse_function_definition(Parser* parser, OrsoASTNode* function_definition) {
+    ASSERT(function_definition->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION, "must be a function defintion");
+    function_definition->data.function_definition.parameters = NULL;
+    function_definition->data.function_definition.return_type_expression = NULL;
+    function_definition->data.function_definition.compilable = true;
 
-    if (parse_union && type_node && check(parser, TOKEN_BAR)) {
-        OrsoTypeNode* union_type = ORSO_ALLOCATE(OrsoTypeNode);
-        union_type->type = ORSO_TYPE_NODE_TYPE_UNION;
-        union_type->items.union_ = NULL;
-        sb_push(union_type->items.union_, type_node);
-
-        union_type->start = type_node->start;
-
-        while (match(parser, TOKEN_BAR)) {
-            OrsoTypeNode* single_type = parse_type(parser, false);
-            if (single_type) {
-                sb_push(union_type->items.union_, single_type);
-                union_type->end = single_type->end;
-            } else {
-                error(parser, "Expect type for union.");
-                break;
-            }
-        }
-
-        return union_type;
-    }
-
-    return type_node;
-}
-
-static void parse_function_definition(Parser* parser, OrsoFunctionDefinition* function_definition) {
-    function_definition->parameters = NULL;
-    function_definition->return_type = NULL;
-    function_definition->cannot_compile = false;
-
-    function_definition->parameters = parse_parameters(parser);
+    function_definition->data.function_definition.parameters = parse_parameters(parser);
 
     consume(parser, TOKEN_PARENTHESIS_CLOSE, "Expect close parenthesis for end of arguments.");
 
     if (match(parser, TOKEN_ARROW_RIGHT)) {
-        function_definition->return_type = parse_type(parser, true);
+        function_definition->data.function_definition.return_type_expression = expression(parser);
     }
 
     consume(parser, TOKEN_BRACE_OPEN, "Expect open brace for function body.");
 
-    function_definition->block_expression = block(parser);
+    function_definition->data.function_definition.block = block(parser);
 }
 
 static OrsoExpressionNode* grouping_or_function_definition(Parser* parser) {
-    OrsoExpressionNode* expression_node = expression_new(parser->previous);
-
+    OrsoASTNodeType node_type;
     if (is_incoming_expression_function_definition(parser)) {
-        expression_node->type = EXPRESSION_FUNCTION_DEFINITION;
-        parse_function_definition(parser, &expression_node->expr.function_definition);
-
-        expression_node->value_type = &OrsoTypeUnresolved;
-        expression_node->narrowed_value_type = &OrsoTypeUnresolved;
+        node_type = ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION;
     } else {
-        expression_node->type = EXPRESSION_GROUPING;
-        expression_node->expr.grouping.expression = expression(parser);
+        node_type = ORSO_AST_NODE_TYPE_EXPRESSION_GROUPING;
+    }
+
+    OrsoASTNode* expression_node = orso_ast_node_new(parser->ast, node_type, parser->previous);
+
+    if (node_type == ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION) {
+        parse_function_definition(parser, expression_node);
+
+        expression_node->type = &OrsoTypeUnresolved;
+        expression_node->narrowed_type = &OrsoTypeUnresolved;
+    } else {
+        expression_node->data.expression = expression(parser);
 
         consume(parser, TOKEN_PARENTHESIS_CLOSE, "Expect ')' after expression.");
 
-        expression_node->value_type = expression_node->expr.grouping.expression->value_type;
-        expression_node->narrowed_value_type = expression_node->expr.grouping.expression->value_type;
+        expression_node->type = expression_node->data.expression->type;
+        expression_node->narrowed_type = expression_node->type;
     }
 
     expression_node->end = parser->previous;
@@ -710,12 +612,12 @@ static OrsoExpressionNode* grouping_or_function_definition(Parser* parser) {
     return expression_node;
 }
 
-static OrsoExpressionNode** parse_arguments(Parser* parser) {
-    OrsoExpressionNode** arguments = NULL;
+static OrsoASTNode** parse_arguments(Parser* parser) {
+    OrsoASTNode** arguments = NULL;
 
     if (!check(parser, TOKEN_PARENTHESIS_CLOSE)) {
         do {
-            OrsoExpressionNode* argument = expression(parser);
+            OrsoASTNode* argument = expression(parser);
             sb_push(arguments, argument);
         } while (match(parser, TOKEN_COMMA));
     }
@@ -730,39 +632,37 @@ static OrsoExpressionNode** parse_arguments(Parser* parser) {
 }
 
 static OrsoExpressionNode* call(Parser* parser) {
-    OrsoExpressionNode* expression_node = expression_new(parser->previous);
-    expression_node->type = EXPRESSION_CALL;
+    OrsoASTNode* expression_node = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_EXPRESSION_CALL, parser->previous);
 
-    expression_node->expr.call.callee = NULL;
-    expression_node->expr.call.arguments = parse_arguments(parser);
+    expression_node->data.call.callee = NULL;
+    expression_node->data.call.arguments = parse_arguments(parser);
     expression_node->end = parser->previous;
 
     return expression_node;
 }
 
 static OrsoExpressionNode* unary(Parser* parser) {
-    OrsoExpressionNode* expression_node = expression_new(parser->previous);
-    expression_node->type = EXPRESSION_UNARY;
+    OrsoASTNode* expression_node = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_EXPRESSION_UNARY, parser->previous);
+    expression_node->operator = parser->previous;
 
-    expression_node->expr.unary.operator = parser->previous;
-    expression_node->expr.unary.operand = parse_precedence(parser, PREC_UNARY);
+    expression_node->data.expression = parse_precedence(parser, PREC_UNARY);
     expression_node->end = parser->previous;
 
     return expression_node;
 }
 
 static OrsoExpressionNode* binary(Parser* parser) {
-    OrsoExpressionNode* expression_node = expression_new(parser->previous);
-    expression_node->type = EXPRESSION_BINARY;
+    OrsoASTNode* expression_node = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_EXPRESSION_BINARY, parser->previous);
 
-    expression_node->expr.binary.operator = parser->previous;
-    expression_node->expr.binary.left = NULL;
-    expression_node->expr.binary.right = NULL;
+    Token operator = parser->previous;
+    expression_node->operator = operator;
+    expression_node->data.binary.lhs = NULL;
+    expression_node->data.binary.rhs = NULL;
 
-    ParseRule* rule = get_rule(expression_node->expr.binary.operator.type);
+    ParseRule* rule = get_rule(operator.type);
 
     expression_node->start = parser->previous;
-    expression_node->expr.binary.right = parse_precedence(parser, (Precedence)(rule->precedence + 1));
+    expression_node->data.binary.rhs = parse_precedence(parser, (Precedence)(rule->precedence + 1));
     expression_node->end = parser->previous;
 
     return expression_node;
@@ -771,7 +671,7 @@ static OrsoExpressionNode* binary(Parser* parser) {
 ParseRule rules[] = {
     [TOKEN_PARENTHESIS_OPEN]        = { grouping_or_function_definition,   call,       PREC_CALL },
     [TOKEN_PARENTHESIS_CLOSE]       = { NULL,       NULL,       PREC_NONE },
-    [TOKEN_BRACE_OPEN]              = { block,      NULL,       PREC_NONE },
+    [TOKEN_BRACE_OPEN]              = { block,      NULL,       PREC_CALL },
     [TOKEN_BRACE_CLOSE]             = { NULL,       NULL,       PREC_NONE },
     [TOKEN_BRACKET_OPEN]            = { NULL,       NULL,       PREC_NONE },
     [TOKEN_BRACKET_CLOSE]           = { NULL,       NULL,       PREC_NONE },
@@ -787,7 +687,7 @@ ParseRule rules[] = {
     [TOKEN_LESS]                    = { NULL,       binary,     PREC_COMPARISON },
     [TOKEN_GREATER]                 = { NULL,       binary,     PREC_COMPARISON },
     [TOKEN_SEMICOLON]               = { NULL,       NULL,       PREC_NONE },
-    [TOKEN_BAR]                     = { NULL,       NULL,       PREC_NONE },
+    [TOKEN_BAR]                     = { NULL,       binary,     PREC_BITWISE_OR },
     [TOKEN_PLUS_PLUS]               = { NULL,       NULL,       PREC_NONE },
     [TOKEN_MINUS_MINUS]             = { NULL,       NULL,       PREC_NONE },
     [TOKEN_EQUAL_EQUAL]             = { NULL,       binary,     PREC_EQUALITY },
@@ -823,17 +723,15 @@ ParseRule rules[] = {
     [TOKEN_SIZE]                    = { NULL,       NULL,       PREC_NONE },
 };
 
-static OrsoExpressionNode* parse_precedence(Parser* parser, Precedence precedence) {
+static OrsoASTNode* parse_precedence(Parser* parser, Precedence precedence) {
     advance(parser);
 
     ParseFn prefix_rule = get_rule(parser->previous.type)->prefix;
-    OrsoExpressionNode* left_operand;
+    OrsoASTNode* left_operand;
 
     if (prefix_rule == NULL) {
         error(parser, "Expect expression.");
-        left_operand = ORSO_ALLOCATE(OrsoExpressionNode);
-
-        left_operand->type = EXPRESSION_NONE;
+        left_operand = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_UNDEFINED, parser->previous);
     } else {
         left_operand = prefix_rule(parser);
     }
@@ -841,17 +739,17 @@ static OrsoExpressionNode* parse_precedence(Parser* parser, Precedence precedenc
     while (precedence <= get_rule(parser->current.type)->precedence) {
         advance(parser);
         ParseFn infix_rule = get_rule(parser->previous.type)->infix;
-        OrsoExpressionNode* right_operand = infix_rule(parser);
-        switch (right_operand->type) {
-            case EXPRESSION_BINARY:
-                right_operand->expr.binary.left = left_operand;
+        OrsoASTNode* right_operand = infix_rule(parser);
+        switch (right_operand->node_type) {
+            case ORSO_AST_NODE_TYPE_EXPRESSION_BINARY:
+                right_operand->data.binary.lhs = left_operand;
                 right_operand->start = left_operand->start;
                 left_operand = right_operand;
                 break;
-            case EXPRESSION_CALL:
+            case ORSO_AST_NODE_TYPE_EXPRESSION_CALL:
                 left_operand = convert_call_expression(parser, left_operand, right_operand);
                 break;
-            case EXPRESSION_ASSIGNMENT:
+            case ORSO_AST_NODE_TYPE_EXPRESSION_ASSIGNMENT:
                 left_operand = convert_assignment_expression(parser, left_operand, right_operand);
                 break;
             default: UNREACHABLE();
@@ -865,39 +763,37 @@ static ParseRule* get_rule(TokenType type) {
     return &rules[type];
 }
 
-static OrsoExpressionNode* expression(Parser* parser) {
+static OrsoASTNode* expression(Parser* parser) {
     bool fold = false;
     if (match(parser, TOKEN_DIRECTIVE)) {
         Token directive = parser->previous;
         fold = (directive.length - 1 == strlen("fold") && strncmp(directive.start + 1, "fold", 4) == 0);
     }
 
-    OrsoExpressionNode* expression_node = parse_precedence(parser, PREC_ASSIGNMENT);
+    OrsoASTNode* expression_node = parse_precedence(parser, PREC_ASSIGNMENT);
     expression_node->fold = fold;
 
     return expression_node;
 }
 
-static OrsoStatementNode* statement(Parser* parser) {
-    OrsoStatementNode* statement_node = ORSO_ALLOCATE(OrsoStatementNode);
-
-    statement_node->start = parser->current;
-
+static OrsoASTNode* statement(Parser* parser) {
     bool is_return = false;
+    OrsoASTNodeType node_type;
     if (match(parser, TOKEN_RETURN)) {
-        statement_node->type = ORSO_STATEMENT_RETURN;
+        node_type = ORSO_AST_NODE_TYPE_STATEMENT_RETURN;
         is_return = true;
-    } else if (match(parser, TOKEN_PRINT_EXPR) || match(parser, TOKEN_PRINT)) {
-        statement_node->type = ORSO_STATEMENT_PRINT_EXPR;
-        if (parser->previous.type == TOKEN_PRINT) {
-            statement_node->type = ORSO_STATEMENT_PRINT;
-        }
+    } else if (match(parser, TOKEN_PRINT_EXPR)) { 
+        node_type = ORSO_AST_NODE_TYPE_STATEMENT_PRINT_EXPR;
+    } if (match(parser, TOKEN_PRINT)) {
+        node_type = ORSO_AST_NODE_TYPE_STATEMENT_PRINT;
     } else {
-        statement_node->type = ORSO_STATEMENT_EXPRESSION;
+        node_type = ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION;
     }
 
+    OrsoASTNode* statement_node = orso_ast_node_new(parser->ast, node_type, parser->previous);
+
     if (!is_return || !match(parser, TOKEN_SEMICOLON)) {
-        statement_node->stmt.expression = expression(parser);
+        statement_node->data.expression = expression(parser);
         consume(parser, TOKEN_SEMICOLON, "Expect end of statement semicolon.");
     }
 
@@ -906,41 +802,32 @@ static OrsoStatementNode* statement(Parser* parser) {
     return statement_node;
 }
 
-static Token parse_variable(Parser* parser) {
-    Token identifier = parser->current;
-    advance(parser);
-    return identifier;
-}
-
-static OrsoEntityDeclarationNode* entity_declaration(Parser* parser, bool as_parameter) {
-    OrsoEntityDeclarationNode* entity_declaration_node = ORSO_ALLOCATE(OrsoEntityDeclarationNode);
-    entity_declaration_node->start = parser->current;
+static OrsoASTNode* entity_declaration(Parser* parser, bool as_parameter) {
+    OrsoASTNode* entity_declaration_node = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_DECLARATION, parser->current);
 
     entity_declaration_node->type = &OrsoTypeUnresolved;
 
-    entity_declaration_node->type_node = NULL;
-    entity_declaration_node->expression = NULL;
-    entity_declaration_node->implicit_default_value_index = -1;
-    entity_declaration_node->fold_level_resolved_at = -1;
-    entity_declaration_node->is_mutable = false;
-
-    entity_declaration_node->name = parse_variable(parser);
+    entity_declaration_node->data.declaration.type_expression = NULL;
+    entity_declaration_node->data.declaration.initial_value_expression = NULL;
+    entity_declaration_node->value_index = -1;
+    entity_declaration_node->data.declaration.fold_level_resolved_at = -1;
+    entity_declaration_node->data.declaration.is_mutable = false;
 
     consume(parser, TOKEN_COLON, "Expect explicit type.");
-    entity_declaration_node->type_node = parse_type(parser, true);
+    entity_declaration_node->data.declaration.type_expression = expression(parser);
 
     // TODO: try to do constant vs variable detection a little more clever...
     bool requires_expression = false;
-    if (entity_declaration_node->type_node) {
+    if (entity_declaration_node->data.declaration.type_expression) {
         if (match(parser, TOKEN_EQUAL)) {
             requires_expression = true;
-            entity_declaration_node->is_mutable = true;
+            entity_declaration_node->data.declaration.is_mutable = true;
         } else if (match(parser, TOKEN_COLON)) {
             requires_expression = true;
         }
     } else {
         if (match(parser, TOKEN_EQUAL)) {
-            entity_declaration_node->is_mutable = true;
+            entity_declaration_node->data.declaration.is_mutable = true;
         } else {
             consume(parser, TOKEN_COLON, "Expect define assignment.");
         }
@@ -948,11 +835,11 @@ static OrsoEntityDeclarationNode* entity_declaration(Parser* parser, bool as_par
     }
 
     if (requires_expression) {
-        entity_declaration_node->expression = expression(parser);
+        entity_declaration_node->data.declaration.initial_value_expression = expression(parser);
     }
 
-    if (entity_declaration_node->expression == NULL) {
-        entity_declaration_node->is_mutable = true;
+    if (entity_declaration_node->data.declaration.initial_value_expression == NULL) {
+        entity_declaration_node->data.declaration.is_mutable = true;
     }
 
     if (!as_parameter) {
@@ -975,27 +862,19 @@ static bool is_incoming_declaration_declaration(Parser* parser) {
     return token.type == TOKEN_COLON;
 }
 
-static OrsoDeclarationNode* declaration(Parser* parser) {
-    Token start = parser->current;
-
-    OrsoDeclarationNode* declaration_node = ORSO_ALLOCATE(OrsoDeclarationNode);
-    declaration_node->type = ORSO_DECLARATION_NONE;
+static OrsoASTNode* declaration(Parser* parser) {
+    OrsoASTNode* node;
     if (is_incoming_declaration_declaration(parser)) {
-        declaration_node->type = ORSO_DECLARATION_ENTITY;
-        declaration_node->decl.entity = entity_declaration(parser, false);
+        node = entity_declaration(parser, false);
     } else {
-        declaration_node->type = ORSO_DECLARATION_STATEMENT;
-        declaration_node->decl.statement = statement(parser);
+        node = statement(parser);
     }
-
-    declaration_node->start = start;
-    declaration_node->end = parser->previous;
 
     if (parser->panic_mode) {
         synchronize(parser);
     }
 
-    return declaration_node;
+    return node;
 }
 
 bool orso_parse(OrsoAST* ast, const char* source, OrsoErrorFunction error_fn) {
@@ -1004,9 +883,11 @@ bool orso_parse(OrsoAST* ast, const char* source, OrsoErrorFunction error_fn) {
 
     advance(&parser);
 
+    ast->root = orso_ast_node_new(parser.ast, ORSO_AST_NODE_TYPE_EXPRESSION_BLOCK, parser.previous);
+
     while (!match(&parser, TOKEN_EOF)) {
-        OrsoDeclarationNode* declaration_node = declaration(&parser);
-        sb_push(ast->declarations, declaration_node);
+        OrsoASTNode* declaration_node = declaration(&parser);
+        sb_push(ast->root->data.block, declaration_node);
     }
 
     consume(&parser, TOKEN_EOF, "Expect end of expression.");
@@ -1014,158 +895,122 @@ bool orso_parse(OrsoAST* ast, const char* source, OrsoErrorFunction error_fn) {
     return !parser.had_error;
 }
 
-void ast_print_declaration(OrsoDeclarationNode* declaration, i32 initial_indent);
-
-void ast_print_expression(OrsoExpressionNode* expression, i32 initial) {
+void ast_print_ast_node(OrsoASTNode* node, i32 initial) {
     const char type_str[128];
-    orso_type_to_cstrn(expression->value_type, (char*)type_str, 128);
+    orso_type_to_cstrn(node->type, (char*)type_str, 128);
 
     const char narrow_type_str[128];
-    orso_type_to_cstrn(expression->narrowed_value_type, (char*)narrow_type_str, 128);
+    orso_type_to_cstrn(node->narrowed_type, (char*)narrow_type_str, 128);
 
     printf("%*s [%s][%s] ", initial, "", (char*)type_str, narrow_type_str);
 
-    switch (expression->type) {
-        case EXPRESSION_BINARY: {
-            printf("BINARY %.*s\n", expression->expr.binary.operator.length, expression->expr.binary.operator.start);
+    switch (node->node_type) {
+        case ORSO_AST_NODE_TYPE_EXPRESSION_BINARY: {
+            Token operator = node->operator;
+            printf("BINARY %.*s\n", operator.length, operator.start);
 
-            ast_print_expression(expression->expr.binary.left, initial + 1);
-            ast_print_expression(expression->expr.binary.right, initial + 1);
+            ast_print_ast_node(node->data.binary.lhs, initial + 1);
+            ast_print_ast_node(node->data.binary.rhs, initial + 1);
             break;
         }
-        case EXPRESSION_GROUPING: {
+        case ORSO_AST_NODE_TYPE_EXPRESSION_GROUPING: {
             printf("GROUPING\n");
 
-            ast_print_expression(expression->expr.grouping.expression, initial + 1);
+            ast_print_ast_node(node->data.expression, initial + 1);
             break;
         }
 
-        case EXPRESSION_IMPLICIT_CAST: {
+        case ORSO_AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT: {
             printf("IMPLICIT CAST \n");
 
-            ast_print_expression(expression->expr.cast.operand, initial + 1);
+            ast_print_ast_node(node->data.expression, initial + 1);
             break;
         }
-        case EXPRESSION_UNARY: {
-            printf("UNARY %.*s\n", expression->expr.unary.operator.length, expression->expr.unary.operator.start);
+        case ORSO_AST_NODE_TYPE_EXPRESSION_UNARY: {
+            printf("UNARY %.*s\n", node->operator.length, node->operator.start);
 
-            ast_print_expression(expression->expr.unary.operand, initial + 1);
+            ast_print_ast_node(node->data.expression, initial + 1);
             break;
         }
-        case EXPRESSION_PRIMARY: {
-            printf("PRIMARY %.*s\n", expression->expr.primary.token.length, expression->expr.primary.token.start);
+        case ORSO_AST_NODE_TYPE_EXPRESSION_PRIMARY: {
+            printf("PRIMARY %.*s\n", node->start.length, node->start.start);
             break;
         }
-        case EXPRESSION_ENTITY: {
-            printf("VARIABLE - %.*s\n", expression->expr.entity.name.length, expression->expr.entity.name.start);
+        case ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY: {
+            printf("ENTITY - %.*s\n", node->start.length, node->start.start);
             break;
         }
-        case EXPRESSION_ASSIGNMENT: {
-            printf("ASSIGNMENT - %.*s\n", expression->expr.assignment.name.length, expression->expr.assignment.name.start);
-            ast_print_expression(expression->expr.assignment.right_side, initial + 1);
+        case ORSO_AST_NODE_TYPE_EXPRESSION_ASSIGNMENT: {
+            printf("ASSIGNMENT\n");
+            ast_print_ast_node(node->data.binary.lhs, initial + 1);
+            ast_print_ast_node(node->data.binary.rhs, initial + 1);
             break;
         }
-        case EXPRESSION_BLOCK: {
+        case ORSO_AST_NODE_TYPE_EXPRESSION_BLOCK: {
             printf("BLOCK\n");
-            for (i32 i = 0; i < sb_count(expression->expr.block.declarations); i++) {
-                ast_print_declaration(expression->expr.block.declarations[i], initial + 1);
+            for (i32 i = 0; i < sb_count(node->data.block); i++) {
+                ast_print_ast_node(node->data.block[i], initial + 1);
             }
             break;
         }
-        case EXPRESSION_IFELSE: {
-            OrsoExpressionNode* condition = expression->expr.ifelse.condition;
-            printf("IFWHILEELSE - %.*s\n", (i32)(condition->end.start + condition->end.length - condition->start.start), condition->start.start);
-            ast_print_expression(expression->expr.ifelse.then, initial + 1);
-            if (expression->expr.ifelse.else_) {
-                ast_print_expression(expression->expr.ifelse.else_, initial + 1);
+        case ORSO_AST_NODE_TYPE_EXPRESSION_BRANCHING: {
+            OrsoASTNode* condition = node->data.branch.condition;
+            printf("BRANCH - %.*s\n", (i32)(condition->end.start + condition->end.length - condition->start.start), condition->start.start);
+            ast_print_ast_node(node->data.branch.then_expression, initial + 1);
+            if (node->data.branch.else_expression) {
+                ast_print_ast_node(node->data.branch.else_expression, initial + 1);
             }
             break;
         }
-        case EXPRESSION_CALL: {
-            printf("CALL - (");
+        case ORSO_AST_NODE_TYPE_EXPRESSION_CALL: {
+            printf("CALL\n");
 
-            OrsoExpressionNode** arguments = expression->expr.call.arguments;
-            for (i32 i = 0; i < sb_count(arguments); i++) {
-                OrsoExpressionNode* e = arguments[i];
-                printf("%.*s%s", (i32)(e->end.start + e->end.length - e->start.start), e->start.start,
-                        i == sb_count(arguments) - 1 ? "" : ", ");
+            for (i32 i = 0; i < sb_count(node->data.call.arguments); i++) {
+                ast_print_ast_node(node->data.call.arguments[i], initial + 1);
             }
-
-            printf(")\n");
             break;
         }
-        case EXPRESSION_FUNCTION_DEFINITION: {
+        case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION: {
             printf("FUNCTION_DEFINITION - TODO: better print for this\n");
             break;
         }
-        case EXPRESSION_FOR:
-        case EXPRESSION_NONE: UNREACHABLE();
-    }
-}
-
-void ast_print_statement(OrsoStatementNode* statement, i32 indent) {
-    printf("%*s", indent, "");
-    printf("STATEMENT - ");
-    switch(statement->type) {
-        case ORSO_STATEMENT_NONE: return;
-        case ORSO_STATEMENT_PRINT_EXPR:
+        case ORSO_AST_NODE_TYPE_STATEMENT_PRINT_EXPR:
             printf("print_expr\n");
-            ast_print_expression(statement->stmt.expression, indent + 1);
+            ast_print_ast_node(node->data.expression, initial + 1);
             break;
-        case ORSO_STATEMENT_PRINT:
+        case ORSO_AST_NODE_TYPE_STATEMENT_PRINT:
             printf("print\n");
-            ast_print_expression(statement->stmt.expression, indent + 1);
+            ast_print_ast_node(node->data.expression, initial + 1);
             break;
-        case ORSO_STATEMENT_EXPRESSION:
+        case ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION:
             printf("expression\n");
-            ast_print_expression(statement->stmt.expression, indent + 1);
+            ast_print_ast_node(node->data.expression, initial + 1);
             break;
-        case ORSO_STATEMENT_RETURN:
+        case ORSO_AST_NODE_TYPE_STATEMENT_RETURN:
             printf("return\n");
-            ast_print_expression(statement->stmt.expression, indent + 1);
+            ast_print_ast_node(node->data.expression, initial + 1);
             break;
-    }
-}
+        case ORSO_AST_NODE_TYPE_DECLARATION: {
+            printf("%*s", initial, "");
+            printf("ENTITY DECLARATION - identifier: %.*s, type: ", node->start.length, node->start.start);
 
-void ast_print_entity_declaration(OrsoEntityDeclarationNode* entity_declaration_node, i32 indent) {
-    printf("%*s", indent, "");
-    printf("ENTITY DECLARATION - identifier: %.*s, type: ", entity_declaration_node->name.length, entity_declaration_node->name.start);
+            const char type_str[128];
+            orso_type_to_cstrn(node->type, (char*)type_str, 128);
+            printf("%s", (char*)type_str);
+            printf("\n");
 
-    const char type_str[128];
-    orso_type_to_cstrn(entity_declaration_node->type, (char*)type_str, 128);
-    printf("%s", (char*)type_str);
-    printf("\n");
-
-    if (entity_declaration_node->expression != NULL) {
-        ast_print_expression(entity_declaration_node->expression, indent + 1);
-    }
-}
-
-void ast_print_declaration(OrsoDeclarationNode* declaration, i32 initial_indent) {
-    if (declaration->type == ORSO_DECLARATION_NONE) {
-        return;
-    }
-
-    Token start = declaration->start;
-    Token end = declaration->end;
-    printf("%*s DECLARATION %.*s\n", initial_indent, "", (u32)((end.start + end.length) - start.start), start.start);
-
-    switch (declaration->type) {
-        case ORSO_DECLARATION_NONE: return;
-        case ORSO_DECLARATION_STATEMENT: {
-            ast_print_statement(declaration->decl.statement, initial_indent + 1);
+            if (node->data.declaration.initial_value_expression != NULL) {
+                ast_print_ast_node(node->data.declaration.initial_value_expression, initial + 1);
+            }
             break;
         }
-        case ORSO_DECLARATION_ENTITY: {
-            ast_print_entity_declaration(declaration->decl.entity, initial_indent + 2);
+        case ORSO_AST_NODE_TYPE_UNDEFINED:
+            printf("undefined\n");
             break;
-        }
     }
 }
 
 void orso_ast_print(OrsoAST* ast, const char* name) {
     printf("=== %s ===\n", name);
-    for (i32 i = 0; i < sb_count(ast->declarations); i++) {
-        ast_print_declaration(ast->declarations[i], 0);
-    }
+    ast_print_ast_node(ast->root, 0);
 }

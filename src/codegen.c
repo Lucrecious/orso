@@ -54,6 +54,8 @@ static i32 get_stack_effect(OrsoOPCode op_code) {
         case ORSO_OP_MULTIPLY_F64: return -1;
         case ORSO_OP_DIVIDE_F64: return -1;
 
+        case ORSO_OP_UNION_TYPES: return -1;
+
         case ORSO_OP_NEGATE_I64: return 0;
         case ORSO_OP_NEGATE_F64: return 0;
 
@@ -339,7 +341,7 @@ static OrsoFunction* compiler_end(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, 
                     continue;
                 }
 
-                if (ast->function_definition_pairs[j].ast_defintion->expr.function_definition.cannot_compile) {
+                if (!ast->function_definition_pairs[j].ast_defintion->data.function_definition.compilable) {
                     break;
                 }
 
@@ -483,35 +485,29 @@ static void end_scope(Compiler* compiler, Chunk* chunk, OrsoType* block_value_ty
     emit_pop_scope(compiler, chunk, total_local_slot_count, block_value_slots, line);
 }
 
-static void declaration(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoDeclarationNode* declaration, Chunk* chunk);
-static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoExpressionNode* expression_node, Chunk* chunk);
+static void declaration(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode* declaration, Chunk* chunk);
+static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode* expression_node, Chunk* chunk);
 
-static OrsoType* gen_block(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, Chunk* chunk, OrsoBlock* block, bool is_function_body, i32 end_line) {
-    OrsoDeclarationNode* final_expression_statement = block->final_expression_statement;
+static OrsoType* gen_block(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, Chunk* chunk, OrsoASTNode* block, bool is_function_body, i32 end_line) {
+    OrsoASTNode* final_expression_statement = block->data.block[sb_count(block->data.block) - 1];
+    final_expression_statement = final_expression_statement->node_type != ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION ?
+            NULL : final_expression_statement;
 
-    if (!is_function_body) {
-        for (i32 i = 0; i < sb_count(block->declarations) - (final_expression_statement != NULL); i++) {
-            declaration(vm, compiler, ast, block->declarations[i], chunk);
-        }
-
-        OrsoType* return_value_type = &OrsoTypeInvalid;
-        if (final_expression_statement) {
-            OrsoExpressionNode* final_expression = final_expression_statement->decl.statement->stmt.expression;
-            return_value_type = final_expression->value_type;
-            expression(vm, compiler, ast, final_expression, chunk);
-        } else {
-            return_value_type = &OrsoTypeVoid;
-            emit_instruction(ORSO_OP_PUSH_0, compiler, chunk, end_line);
-        }
-    
-        return return_value_type;
-    } else {
-        for (i32 i = 0; i < sb_count(block->declarations); i++) {
-            declaration(vm, compiler, ast, block->declarations[i], chunk);
-        }
-
-        return &OrsoTypeVoid;
+    for (i32 i = 0; i < sb_count(block->data.block) - (final_expression_statement != NULL); i++) {
+        declaration(vm, compiler, ast, block->data.block[i], chunk);
     }
+
+    OrsoType* return_value_type = &OrsoTypeInvalid;
+    if (final_expression_statement) {
+        OrsoASTNode* final_expression = final_expression_statement->data.expression;
+        return_value_type = final_expression->type;
+        expression(vm, compiler, ast, final_expression, chunk);
+    } else {
+        return_value_type = &OrsoTypeVoid;
+        emit_instruction(ORSO_OP_PUSH_0, compiler, chunk, end_line);
+    }
+
+    return return_value_type;
 }
 
 static void define_entity(OrsoVM* vm, Compiler* compiler, Chunk* chunk, OrsoType* type, Token* name, i32 line) {
@@ -545,15 +541,10 @@ static void declare_local_function_definition(Compiler* compiler, OrsoFunction* 
     declare_local_entity(compiler, &empty, 1);
 }
 
-static void function_expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoExpressionNode* function_defintion_expression, Chunk* chunk) {
-    // if (function_defintion_expression->value_type == &OrsoTypeUnresolved) {
-    //     printf("Warning: function definition at: %d is unused.\n", function_defintion_expression->start.line);
-    //     return;
-    // }
+static void function_expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode* function_defintion_expression, Chunk* chunk) {
+    ASSERT(function_defintion_expression->type->kind == ORSO_TYPE_FUNCTION, "must be function if calling this");
 
-    ASSERT(function_defintion_expression->value_type->kind == ORSO_TYPE_FUNCTION, "must be function if calling this");
-
-    OrsoFunction* stored_function = (OrsoFunction*)ast->folded_constants[function_defintion_expression->folded_value_index].as.p;
+    OrsoFunction* stored_function = (OrsoFunction*)ast->folded_constants[function_defintion_expression->value_index].as.p;
     if (!compiler->skip_function_definitions && stored_function->chunk.code == NULL /*is not compiled yet*/) {
         orso_compile_function(vm, ast, stored_function, function_defintion_expression);
     }
@@ -600,7 +591,7 @@ static void gen_primary(Compiler* compiler, Chunk* chunk, OrsoAST* ast, OrsoType
     }
 }
 
-static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoExpressionNode* expression_node, Chunk* chunk) {
+static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode* expression_node, Chunk* chunk) {
 #define EMIT_BINARY_OP(OP, TYPE) do { \
     emit_instruction(ORSO_OP_##OP##_##TYPE, compiler, chunk, operator.line); \
      } while(false)
@@ -621,34 +612,34 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoExpress
 //     ASSERT(!compiler->literals_only || (expression_node->folded_value_index >= 0 || !requires_entity), "compiler is assuming folded values only for ALL expressions");
 // #endif
 
-    if (expression_node->folded_value_index >= 0) {
+    if (expression_node->value_index >= 0) {
         // TODO: for now going to do this super naively until I get a better hash table that is more generic that I can
         // use for more things. This is will be super slow but I just want to get it to work.
-        if (!compiler->skip_function_definitions && expression_node->value_type->kind == ORSO_TYPE_FUNCTION) {
-            OrsoFunction* function = (OrsoFunction*)ast->folded_constants[expression_node->folded_value_index].as.p;
+        if (!compiler->skip_function_definitions && expression_node->type->kind == ORSO_TYPE_FUNCTION) {
+            OrsoFunction* function = (OrsoFunction*)ast->folded_constants[expression_node->value_index].as.p;
             sb_push(compiler->functions_to_compile, function);
         }
 
         gen_primary(compiler, chunk, ast,
-                expression_node->value_type,
-                expression_node->folded_value_index, expression_node->start.line);
+                expression_node->type,
+                expression_node->value_index, expression_node->start.line);
 
         //emit_storage_type_convert(compiler, chunk, expression_node->narrowed_value_type, expression_node->value_type, expression_node->start.line);
         return;
     }
 
-    switch(expression_node->type) {
-        case EXPRESSION_BINARY: {
-            Token operator = expression_node->expr.binary.operator;
-            OrsoExpressionNode* left = expression_node->expr.binary.left;
-            OrsoExpressionNode* right = expression_node->expr.binary.right;
+    switch(expression_node->node_type) {
+        case ORSO_AST_NODE_TYPE_EXPRESSION_BINARY: {
+            Token operator = expression_node->operator;
+            OrsoASTNode* left = expression_node->data.binary.lhs;
+            OrsoASTNode* right = expression_node->data.binary.rhs;
 
             switch (operator.type) {
                 case TOKEN_OR:
                 case TOKEN_AND: {
                     expression(vm, compiler, ast, left, chunk);
 
-                    emit_storage_type_convert(compiler, chunk, left->value_type, expression_node->value_type, left->end.line);
+                    emit_storage_type_convert(compiler, chunk, left->type, expression_node->type, left->end.line);
 
                     OrsoOPCode jump_instruction = operator.type == TOKEN_AND ? ORSO_OP_JUMP_IF_FALSE : ORSO_OP_JUMP_IF_TRUE;
                     i32 jump_rest = emit_jump(jump_instruction, compiler, chunk, operator.line);
@@ -656,11 +647,11 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoExpress
                     i32 previous_stack_count = compiler->current_stack_size;
                     (void)previous_stack_count;
 
-                    emit_pop(compiler, chunk, expression_node->value_type, right->start.line);
+                    emit_pop(compiler, chunk, expression_node->type, right->start.line);
 
                     expression(vm, compiler, ast, right, chunk);
 
-                    emit_storage_type_convert(compiler, chunk, right->value_type, expression_node->value_type, right->end.line);
+                    emit_storage_type_convert(compiler, chunk, right->type, expression_node->type, right->end.line);
 
                     patch_jump(chunk, jump_rest);
 
@@ -671,17 +662,17 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoExpress
                 default: {
                     expression(vm, compiler, ast, left, chunk);
 
-                    if (ORSO_TYPE_IS_UNION(left->value_type)) {
+                    if (ORSO_TYPE_IS_UNION(left->type)) {
                         emit_instruction(ORSO_OP_NARROW_UNION, compiler, chunk, left->start.line);
                     }
 
                     expression(vm, compiler, ast, right, chunk);
 
-                    if (ORSO_TYPE_IS_UNION(right->value_type)) {
+                    if (ORSO_TYPE_IS_UNION(right->type)) {
                         emit_instruction(ORSO_OP_NARROW_UNION, compiler, chunk, right->start.line);
                     }
 
-                    if (orso_type_is_integer(left->narrowed_value_type, true)) {
+                    if (orso_type_is_integer(left->narrowed_type, true)) {
                         switch (operator.type) {
                             case TOKEN_PLUS: EMIT_BINARY_OP_I64(ADD); break;
                             case TOKEN_MINUS: EMIT_BINARY_OP_I64(SUBTRACT); break;
@@ -696,7 +687,7 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoExpress
                             default: UNREACHABLE();
                         }
 
-                    } else if (orso_type_is_float(left->narrowed_value_type)) {
+                    } else if (orso_type_is_float(left->narrowed_type)) {
                         switch (operator.type) {
                             case TOKEN_PLUS: EMIT_BINARY_OP_F64(ADD); break;
                             case TOKEN_MINUS: EMIT_BINARY_OP_F64(SUBTRACT); break;
@@ -711,7 +702,7 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoExpress
                             default: UNREACHABLE();
                         }
 
-                    } else if (left->narrowed_value_type == &OrsoTypeString) {
+                    } else if (left->narrowed_type == &OrsoTypeString) {
                         switch (operator.type) {
                             case TOKEN_PLUS: EMIT_BINARY_OP(CONCAT, STRING); break;
                             case TOKEN_BANG_EQUAL: EMIT_BINARY_OP(EQUAL, STRING); EMIT_NOT(); break;
@@ -719,7 +710,7 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoExpress
                             default: UNREACHABLE();
                         }
 
-                    } else if (left->narrowed_value_type == &OrsoTypeSymbol) {
+                    } else if (left->narrowed_type == &OrsoTypeSymbol) {
                         switch (operator.type) {
                             case TOKEN_EQUAL_EQUAL: EMIT_BINARY_OP(EQUAL, SYMBOL); break;
                             case TOKEN_BANG_EQUAL: EMIT_BINARY_OP(EQUAL, SYMBOL); EMIT_NOT(); break;
@@ -732,21 +723,21 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoExpress
             break;
         }
 
-        case EXPRESSION_UNARY: {
-            expression(vm, compiler, ast, expression_node->expr.unary.operand, chunk);
-            if (!ORSO_TYPE_IS_UNION(expression_node->value_type)
-                && ORSO_TYPE_IS_UNION(expression_node->expr.unary.operand->value_type)) {
+        case ORSO_AST_NODE_TYPE_EXPRESSION_UNARY: {
+            expression(vm, compiler, ast, expression_node->data.expression, chunk);
+            if (!ORSO_TYPE_IS_UNION(expression_node->type)
+                && ORSO_TYPE_IS_UNION(expression_node->data.expression->type)) {
                 emit_instruction(ORSO_OP_NARROW_UNION, compiler, chunk, expression_node->start.line);
             }
 
-            OrsoExpressionNode* unary = expression_node->expr.unary.operand;
-            Token operator = expression_node->expr.unary.operator;
+            OrsoASTNode* unary = expression_node->data.expression;
+            Token operator = expression_node->operator;
 
             switch (operator.type) {
                 case TOKEN_MINUS: {
-                    if (orso_type_is_or_has_integer(unary->value_type, true)) {
+                    if (orso_type_is_or_has_integer(unary->type, true)) {
                         EMIT_NEGATE(I64);
-                    } else if (orso_type_is_or_has_float(unary->value_type)) {
+                    } else if (orso_type_is_or_has_float(unary->type)) {
                         EMIT_NEGATE(F64);
                     } else {
                         UNREACHABLE();
@@ -764,24 +755,24 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoExpress
             break;
         }
 
-        case EXPRESSION_GROUPING: {
-            expression(vm, compiler, ast, expression_node->expr.grouping.expression, chunk);
-            if (ORSO_TYPE_IS_UNION(expression_node->expr.grouping.expression->value_type)
-                && !ORSO_TYPE_IS_UNION(expression_node->value_type)) {
+        case ORSO_AST_NODE_TYPE_EXPRESSION_GROUPING: {
+            expression(vm, compiler, ast, expression_node->data.expression, chunk);
+            if (ORSO_TYPE_IS_UNION(expression_node->data.expression->type)
+                && !ORSO_TYPE_IS_UNION(expression_node->type)) {
                 emit_instruction(ORSO_OP_NARROW_UNION, compiler, chunk, expression_node->end.line);
             }
             break;
         }
         
-        case EXPRESSION_PRIMARY: {
+        case ORSO_AST_NODE_TYPE_EXPRESSION_PRIMARY: {
             gen_primary(compiler, chunk, ast,
-                    expression_node->value_type,
-                    expression_node->expr.primary.value_index, expression_node->expr.primary.token.line);
+                    expression_node->type,
+                    expression_node->value_index, expression_node->start.line);
             break;
         }
 
-        case EXPRESSION_ENTITY: {
-            Token identifier_token = expression_node->expr.entity.name;
+        case ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY: {
+            Token identifier_token = expression_node->start;
             bool is_local;
             i32 index = retrieve_variable(vm, compiler, &identifier_token, &is_local);
 
@@ -792,7 +783,7 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoExpress
                 get_union_op = ORSO_OP_GET_GLOBAL_UNION;
             }
 
-            if (!ORSO_TYPE_IS_UNION(expression_node->value_type)) {
+            if (!ORSO_TYPE_IS_UNION(expression_node->type)) {
                 emit_entity_get(compiler, index, chunk, expression_node->start.line, is_local);
             } else {
                 emit_instruction3(get_union_op, compiler, index, chunk, expression_node->start.line);
@@ -800,14 +791,15 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoExpress
             break;
         }
 
-        case EXPRESSION_ASSIGNMENT: {
-            Token identifier_token = expression_node->expr.assignment.name;
+        case ORSO_AST_NODE_TYPE_EXPRESSION_ASSIGNMENT: {
+            ASSERT(expression_node->data.binary.lhs->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY, "left side must be an entity");
+            Token identifier_token = expression_node->data.binary.lhs->start;
             
-            expression(vm, compiler, ast, expression_node->expr.assignment.right_side, chunk);
-            OrsoType* right_side_type = expression_node->expr.assignment.right_side->value_type;
-            if (ORSO_TYPE_IS_UNION(expression_node->value_type) && !ORSO_TYPE_IS_UNION(right_side_type)) {
+            expression(vm, compiler, ast, expression_node->data.binary.rhs, chunk);
+            OrsoType* right_side_type = expression_node->data.binary.rhs->type;
+            if (ORSO_TYPE_IS_UNION(expression_node->type) && !ORSO_TYPE_IS_UNION(right_side_type)) {
                 emit_put_in_union(compiler, right_side_type, chunk, expression_node->start.line);
-            } else if (!ORSO_TYPE_IS_UNION(expression_node->value_type) && ORSO_TYPE_IS_UNION(right_side_type)) {
+            } else if (!ORSO_TYPE_IS_UNION(expression_node->type) && ORSO_TYPE_IS_UNION(right_side_type)) {
                 emit_instruction(ORSO_OP_NARROW_UNION, compiler, chunk, expression_node->start.line);
             }
 
@@ -825,7 +817,7 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoExpress
                 set_union_op = ORSO_OP_SET_GLOBAL_UNION;
             }
 
-            if (!ORSO_TYPE_IS_UNION(expression_node->value_type)) {
+            if (!ORSO_TYPE_IS_UNION(expression_node->type)) {
                 emit_instruction3(set_op, compiler, index, chunk, expression_node->start.line);
             } else {
                 emit_instruction3(set_union_op, compiler, index, chunk, expression_node->start.line);
@@ -833,36 +825,35 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoExpress
             break;
         }
 
-        case EXPRESSION_IMPLICIT_CAST: {
-            OrsoExpressionNode* operand = expression_node->expr.cast.operand;
+        case ORSO_AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT: {
+            OrsoASTNode* operand = expression_node->data.expression;
             expression(vm, compiler, ast, operand, chunk);
-            emit_type_convert(compiler, operand->value_type, expression_node->value_type, chunk, operand->start.line);
+            emit_type_convert(compiler, operand->type, expression_node->type, chunk, operand->start.line);
             break;
         }
 
-        case EXPRESSION_BLOCK: {
+        case ORSO_AST_NODE_TYPE_EXPRESSION_BLOCK: {
             begin_scope(compiler);
 
-            OrsoBlock* block = &expression_node->expr.block;
-            OrsoType* return_value_type = gen_block(vm, compiler, ast, chunk, block, false, expression_node->end.line);
+            OrsoType* return_value_type = gen_block(vm, compiler, ast, chunk, expression, false, expression_node->end.line);
 
             end_scope(compiler, chunk, return_value_type, expression_node->end.line);
             break;
         }
         
-        case EXPRESSION_IFELSE: {
-            if (expression_node->expr.ifelse.loop_block) {
+        case ORSO_AST_NODE_TYPE_EXPRESSION_BRANCHING: {
+            if (expression_node->data.branch.looping) {
                 emit_instruction(ORSO_OP_PUSH_0, compiler, chunk, expression_node->start.line);
-                emit_storage_type_convert(compiler, chunk, &OrsoTypeVoid, expression_node->value_type, expression_node->start.line);
+                emit_storage_type_convert(compiler, chunk, &OrsoTypeVoid, expression_node->type, expression_node->start.line);
             }
 
             u32 position_before_condition_evaluation = sb_count(chunk->code);
 
-            OrsoExpressionNode* condition = expression_node->expr.ifelse.condition;
+            OrsoASTNode* condition = expression_node->data.branch.condition;
             expression(vm, compiler, ast, condition, chunk);
 
             OrsoOPCode jump_instruction = ORSO_OP_JUMP_IF_FALSE;
-            if (expression_node->expr.ifelse.is_negated) {
+            if (expression_node->data.branch.condition_negated) {
                 jump_instruction = ORSO_OP_JUMP_IF_TRUE;
             }
 
@@ -874,21 +865,21 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoExpress
             */
             i32 stack_count = compiler->current_stack_size;
 
-            emit_pop(compiler, chunk, condition->value_type, condition->end.line);
-            if (expression_node->expr.ifelse.loop_block) {
-                emit_pop(compiler, chunk, expression_node->value_type, condition->start.line);
+            emit_pop(compiler, chunk, condition->type, condition->end.line);
+            if (expression_node->data.branch.looping) {
+                emit_pop(compiler, chunk, expression_node->type, condition->start.line);
             }
 
-            expression(vm, compiler, ast, expression_node->expr.ifelse.then, chunk);
+            expression(vm, compiler, ast, expression_node->data.branch.then_expression, chunk);
             emit_storage_type_convert(compiler, chunk,
-                    expression_node->expr.ifelse.then->value_type, expression_node->value_type,
-                    expression_node->expr.ifelse.then->end.line);
+                    expression_node->data.branch.then_expression->type, expression_node->type,
+                    expression_node->data.branch.then_expression->end.line);
 
-            if (expression_node->expr.ifelse.loop_block) {
-                emit_loop(compiler, chunk, expression_node->expr.ifelse.then->end.line, position_before_condition_evaluation);
+            if (expression_node->data.branch.looping) {
+                emit_loop(compiler, chunk, expression_node->data.branch.then_expression->end.line, position_before_condition_evaluation);
             }
 
-            i32 else_jump = emit_jump(ORSO_OP_JUMP, compiler, chunk, expression_node->expr.ifelse.then->end.line);
+            i32 else_jump = emit_jump(ORSO_OP_JUMP, compiler, chunk, expression_node->data.branch.then_expression->end.line);
 
             patch_jump(chunk, then_jump);
 
@@ -901,22 +892,22 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoExpress
             */
             compiler->current_stack_size = stack_count;
 
-            emit_pop(compiler, chunk, condition->value_type, condition->end.line);
-            if (expression_node->expr.ifelse.loop_block) {
-                emit_pop(compiler, chunk, expression_node->value_type, expression_node->expr.ifelse.then->end.line);
+            emit_pop(compiler, chunk, condition->type, condition->end.line);
+            if (expression_node->data.branch.looping) {
+                emit_pop(compiler, chunk, expression_node->type, expression_node->data.branch.then_expression->end.line);
             }
 
-            if (expression_node->expr.ifelse.else_) {
-                expression(vm, compiler, ast, expression_node->expr.ifelse.else_, chunk);
+            if (expression_node->data.branch.else_expression) {
+                expression(vm, compiler, ast, expression_node->data.branch.else_expression, chunk);
 
                 emit_storage_type_convert(compiler, chunk,
-                        expression_node->expr.ifelse.else_->value_type, expression_node->value_type,
-                        expression_node->expr.ifelse.else_->end.line);
+                        expression_node->data.branch.else_expression->type, expression_node->type,
+                        expression_node->data.branch.else_expression->end.line);
             } else {
                 emit_instruction(ORSO_OP_PUSH_0, compiler, chunk, expression_node->end.line);
 
                 emit_storage_type_convert(compiler, chunk,
-                        &OrsoTypeVoid, expression_node->value_type,
+                        &OrsoTypeVoid, expression_node->type,
                         expression_node->end.line);
             }
 
@@ -925,31 +916,35 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoExpress
             ASSERT(then_stack_count == compiler->current_stack_size, "then and else branch should end up with the same stack size");
             break;
         }
-        case EXPRESSION_CALL: {
-            expression(vm, compiler, ast, expression_node->expr.call.callee, chunk);
-            emit_storage_type_convert(compiler, chunk, expression_node->value_type, expression_node->narrowed_value_type, expression_node->end.line);
+        case ORSO_AST_NODE_TYPE_EXPRESSION_CALL: {
+            expression(vm, compiler, ast, expression_node->data.call.callee, chunk);
+            emit_storage_type_convert(compiler, chunk, expression_node->type, expression_node->narrowed_type, expression_node->end.line);
 
-            OrsoFunctionType* function_type = (OrsoFunctionType*)expression_node->expr.call.callee->narrowed_value_type;
+            OrsoFunctionType* function_type = (OrsoFunctionType*)expression_node->data.call.callee->narrowed_type;
 
-            for (i32 i = 0; i < sb_count(expression_node->expr.call.arguments); i++) {
-                OrsoExpressionNode* argument = expression_node->expr.call.arguments[i];
+            for (i32 i = 0; i < sb_count(expression_node->data.call.arguments); i++) {
+                OrsoASTNode* argument = expression_node->data.call.arguments[i];
                 expression(vm, compiler, ast, argument, chunk);
 
                 OrsoType* parameter_type = function_type->argument_types[i];
-                emit_storage_type_convert(compiler, chunk, argument->value_type, parameter_type, expression_node->end.line);
+                emit_storage_type_convert(compiler, chunk, argument->type, parameter_type, expression_node->end.line);
             }
 
             OrsoFunctionType* overload_type = function_type;
-            emit_call(compiler, chunk, overload_type, expression_node->expr.call.callee->start.line);
+            emit_call(compiler, chunk, overload_type, expression_node->data.call.callee->start.line);
             break;
         }
 
-        case EXPRESSION_FUNCTION_DEFINITION: {
+        case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION: {
             function_expression(vm, compiler, ast, expression_node, chunk);
             break;
         }
-        case EXPRESSION_FOR:
-        case EXPRESSION_NONE: UNREACHABLE();
+        case ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION:
+        case ORSO_AST_NODE_TYPE_STATEMENT_PRINT:
+        case ORSO_AST_NODE_TYPE_STATEMENT_PRINT_EXPR:
+        case ORSO_AST_NODE_TYPE_STATEMENT_RETURN:
+        case ORSO_AST_NODE_TYPE_UNDEFINED:
+        case ORSO_AST_NODE_TYPE_DECLARATION: UNREACHABLE();
     }
 
 #undef EMIT_NEGATE
@@ -959,70 +954,19 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoExpress
 #undef EMIT_BINARY_OP
 }
 
-static void statement(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoStatementNode* statement, Chunk* chunk) {
-    switch (statement->type) {
-        case ORSO_STATEMENT_EXPRESSION: {
-            OrsoExpressionNode* expression_ = statement->stmt.expression;
-            expression(vm, compiler, ast, expression_, chunk);
-
-            emit_pop(compiler, chunk, expression_->value_type, statement->end.line);
-            break;
-        }
-        
-        case ORSO_STATEMENT_PRINT:
-        case ORSO_STATEMENT_PRINT_EXPR: {
-                expression(vm, compiler, ast, statement->stmt.expression, chunk);
-
-                if (!ORSO_TYPE_IS_UNION(statement->stmt.expression->value_type)) {
-                    emit_put_in_union(compiler, statement->stmt.expression->value_type, chunk, statement->start.line);
-                }
-
-                Token start = statement->stmt.expression->start;
-                Token end = statement->stmt.expression->end;
-
-                OrsoString* expression_string = orso_new_string_from_cstrn(start.start, (end.start + end.length) - start.start);
-
-                OrsoSlot slot = ORSO_SLOT_P(expression_string, &OrsoTypeString);
-                emit_constant(compiler, chunk, slot, start.line);
-
-                OrsoSlot value_type = ORSO_SLOT_P(statement->stmt.expression->value_type, &OrsoTypeType);
-                emit_constant(compiler, chunk, value_type, start.line);
-
-                if (statement->type == ORSO_STATEMENT_PRINT_EXPR) {
-                    emit_instruction(ORSO_OP_PRINT_EXPR, compiler, chunk, start.line);
-                } else {
-                    emit_instruction(ORSO_OP_PRINT, compiler, chunk, start.line);
-                }
-            break;
-        }
-        case ORSO_STATEMENT_RETURN: {
-            if (statement->stmt.expression) {
-                expression(vm, compiler, ast, statement->stmt.expression, chunk);
-                emit_storage_type_convert(compiler, chunk, 
-                        statement->stmt.expression->value_type,
-                        compiler->function->type->return_type, statement->stmt.expression->end.line);
-            } else {
-                emit_instruction(ORSO_OP_PUSH_0, compiler, chunk, statement->start.line);
-                emit_storage_type_convert(compiler, chunk, &OrsoTypeVoid, compiler->function->type->return_type, statement->start.line);
-            }
-            
-            emit_return(compiler, chunk, compiler->function->type->return_type, statement->end.line);
-            break;
-        }
-        case ORSO_STATEMENT_NONE: UNREACHABLE();
-    }
+static void statement(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode* statement, Chunk* chunk) {
 }
 
-static void default_value(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, Chunk* chunk, OrsoEntityDeclarationNode* entity_declaration) {
+static void default_value(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, Chunk* chunk, OrsoASTNode* entity_declaration) {
     OrsoType* conform_type = entity_declaration->type;
 
-    if (entity_declaration->expression != NULL) {
-        OrsoExpressionNode* default_expression = entity_declaration->expression;
+    if (entity_declaration->data.declaration.initial_value_expression != NULL) {
+        OrsoASTNode* default_expression = entity_declaration->data.declaration.initial_value_expression;
         expression(vm, compiler, ast, default_expression, chunk);
 
-        if (ORSO_TYPE_IS_UNION(conform_type) && !ORSO_TYPE_IS_UNION(default_expression->value_type)) {
-            emit_put_in_union(compiler, entity_declaration->expression->value_type, chunk, default_expression->start.line);
-        } else if (!ORSO_TYPE_IS_UNION(conform_type) && ORSO_TYPE_IS_UNION(default_expression->value_type)) {
+        if (ORSO_TYPE_IS_UNION(conform_type) && !ORSO_TYPE_IS_UNION(default_expression->type)) {
+            emit_put_in_union(compiler, default_expression->type, chunk, default_expression->start.line);
+        } else if (!ORSO_TYPE_IS_UNION(conform_type) && ORSO_TYPE_IS_UNION(default_expression->type)) {
             emit_instruction(ORSO_OP_NARROW_UNION, compiler, chunk, default_expression->start.line);
         }
 
@@ -1031,14 +975,14 @@ static void default_value(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, Chunk* c
             ASSERT(orso_type_fits(conform_type, &OrsoTypeVoid), "default type only allowed for void type unions.");
             emit_instruction(ORSO_OP_PUSH_NULL_UNION, compiler, chunk, entity_declaration->end.line);
         } else {
-            ASSERT(entity_declaration->implicit_default_value_index >= 0, "if no expression, there must be an implicit value");
-            OrsoSlot* default_value = &ast->folded_constants[entity_declaration->implicit_default_value_index];
+            ASSERT(entity_declaration->value_index >= 0, "if no expression, there must be an implicit value");
+            OrsoSlot* default_value = &ast->folded_constants[entity_declaration->value_index];
             emit_constant(compiler, chunk, *default_value, entity_declaration->end.line);
         }
     }
 }
 
-static void entity_declaration(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoEntityDeclarationNode* variable_declaration, Chunk* chunk) {
+static void entity_declaration(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode* variable_declaration, Chunk* chunk) {
     if (variable_declaration->type == &OrsoTypeUnresolved) {
         printf("Unused entity declared at at line: %d\n", variable_declaration->start.line);
         return;
@@ -1047,15 +991,80 @@ static void entity_declaration(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, Ors
     default_value(vm, compiler, ast, chunk, variable_declaration);
     
     define_entity(vm, compiler, chunk,
-            variable_declaration->type, &variable_declaration->name,
+            variable_declaration->type, &variable_declaration->start,
             variable_declaration->start.line);
 }
 
-static void declaration(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoDeclarationNode* declaration, Chunk* chunk) {
-    switch (declaration->type) {
-        case ORSO_DECLARATION_STATEMENT: statement(vm, compiler, ast, declaration->decl.statement, chunk); break;
-        case ORSO_DECLARATION_ENTITY: entity_declaration(vm, compiler, ast, declaration->decl.entity, chunk); break;
-        case ORSO_DECLARATION_NONE: UNREACHABLE(); break;
+static void declaration(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode* declaration, Chunk* chunk) {
+    switch (declaration->node_type) {
+        case ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION: {
+            OrsoASTNode* expression_ = declaration->data.expression;
+            expression(vm, compiler, ast, expression_, chunk);
+
+            emit_pop(compiler, chunk, expression_->type, declaration->end.line);
+            break;
+        }
+        
+        case ORSO_AST_NODE_TYPE_STATEMENT_PRINT:
+        case ORSO_AST_NODE_TYPE_STATEMENT_PRINT_EXPR: {
+                expression(vm, compiler, ast, declaration->data.expression, chunk);
+
+                if (!ORSO_TYPE_IS_UNION(declaration->data.expression->type)) {
+                    emit_put_in_union(compiler, declaration->data.expression->type, chunk, declaration->start.line);
+                }
+
+                Token start = declaration->data.expression->start;
+                Token end = declaration->data.expression->end;
+
+                OrsoString* expression_string = orso_new_string_from_cstrn(start.start, (end.start + end.length) - start.start);
+
+                OrsoSlot slot = ORSO_SLOT_P(expression_string, &OrsoTypeString);
+                emit_constant(compiler, chunk, slot, start.line);
+
+                OrsoSlot value_type = ORSO_SLOT_P(declaration->data.expression->type, &OrsoTypeType);
+                emit_constant(compiler, chunk, value_type, start.line);
+
+                if (declaration->type == ORSO_AST_NODE_TYPE_STATEMENT_PRINT_EXPR) {
+                    emit_instruction(ORSO_OP_PRINT_EXPR, compiler, chunk, start.line);
+                } else {
+                    emit_instruction(ORSO_OP_PRINT, compiler, chunk, start.line);
+                }
+            break;
+        }
+
+        case ORSO_AST_NODE_TYPE_STATEMENT_RETURN: {
+            if (declaration->data.expression) {
+                expression(vm, compiler, ast, declaration->data.expression, chunk);
+                emit_storage_type_convert(compiler, chunk, 
+                        declaration->data.expression->type,
+                        compiler->function->type->return_type, declaration->data.expression->end.line);
+            } else {
+                emit_instruction(ORSO_OP_PUSH_0, compiler, chunk, declaration->start.line);
+                emit_storage_type_convert(compiler, chunk, &OrsoTypeVoid, compiler->function->type->return_type, declaration->start.line);
+            }
+            
+            emit_return(compiler, chunk, compiler->function->type->return_type, declaration->end.line);
+            break;
+        }
+
+        case ORSO_AST_NODE_TYPE_DECLARATION: {
+            entity_declaration(vm, compiler, ast, declaration, chunk);
+            break;
+        }
+
+        case ORSO_AST_NODE_TYPE_UNDEFINED:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_ASSIGNMENT:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_BINARY:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_BLOCK:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_BRANCHING:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_CALL:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_GROUPING:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_PRIMARY:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_UNARY:
+            UNREACHABLE();
     }
 }
 
@@ -1068,9 +1077,9 @@ void orso_code_builder_free(OrsoCodeBuilder* builder) {
     (void)builder;
 }
 
-OrsoFunction* orso_generate_expression_function(OrsoCodeBuilder* builder, OrsoExpressionNode* expression_node) {
+OrsoFunction* orso_generate_expression_function(OrsoCodeBuilder* builder, OrsoASTNode* expression_node) {
     Compiler compiler;
-    OrsoFunctionType* function_type = (OrsoFunctionType*)orso_type_set_fetch_function(&builder->ast->type_set, expression_node->value_type, NULL, 0);
+    OrsoFunctionType* function_type = (OrsoFunctionType*)orso_type_set_fetch_function(&builder->ast->type_set, expression_node->type, NULL, 0);
 
     OrsoFunction* run_function = orso_new_function();
 
@@ -1085,7 +1094,7 @@ OrsoFunction* orso_generate_expression_function(OrsoCodeBuilder* builder, OrsoEx
 
     expression(builder->vm, &compiler, builder->ast, expression_node, top_chunk);
 
-    emit_return(&compiler, top_chunk, expression_node->value_type, expression_node->start.line);
+    emit_return(&compiler, top_chunk, expression_node->type, expression_node->start.line);
 
     compiler_end(builder->vm, &compiler, builder->ast, top_chunk, expression_node->end.line);
 
@@ -1096,9 +1105,9 @@ OrsoFunction* orso_generate_expression_function(OrsoCodeBuilder* builder, OrsoEx
     return function;
 }
 
-void orso_compile_function(OrsoVM* vm, OrsoAST* ast, OrsoFunction* function, OrsoExpressionNode* function_definition_expression) {
+void orso_compile_function(OrsoVM* vm, OrsoAST* ast, OrsoFunction* function, OrsoASTNode* function_definition_expression) {
     Compiler function_compiler;
-    compiler_init(&function_compiler, ORSO_FUNCTION_TYPE_FUNCTION, vm, function, function_definition_expression->value_type);
+    compiler_init(&function_compiler, ORSO_FUNCTION_TYPE_FUNCTION, vm, function, function_definition_expression->type);
 
     // this is placed down by the caller
     function_compiler.max_stack_size = function_compiler.current_stack_size = 1;
@@ -1106,19 +1115,19 @@ void orso_compile_function(OrsoVM* vm, OrsoAST* ast, OrsoFunction* function, Ors
 
     begin_scope(&function_compiler);
 
-    function_compiler.function->type = (OrsoFunctionType*)function_definition_expression->value_type;
+    function_compiler.function->type = (OrsoFunctionType*)function_definition_expression->type;
     Chunk* function_chunk = &function_compiler.function->chunk;
 
-    OrsoFunctionDefinition* function_definition = &function_definition_expression->expr.function_definition;
+    OrsoASTFunctionDefinition* function_definition = &function_definition_expression->data.function_definition;
 
     for (i32 i = 0; i < sb_count(function_definition->parameters); i++) {
-        OrsoEntityDeclarationNode* parameter = function_definition->parameters[i];
+        OrsoASTNode* parameter = function_definition->parameters[i];
         _apply_stack_effects(&function_compiler, orso_type_slot_count(parameter->type));
         define_entity(vm, &function_compiler, function_chunk,
-                parameter->type, &parameter->name, parameter->start.line);
+                parameter->type, &parameter->start, parameter->start.line);
     }
 
-    expression(vm, &function_compiler, ast, function_definition->block_expression, function_chunk);
+    expression(vm, &function_compiler, ast, function_definition->block, function_chunk);
 
     compiler_end(vm, &function_compiler, ast, function_chunk, function_definition_expression->end.line);
 }
@@ -1137,11 +1146,11 @@ OrsoFunction* orso_generate_code(OrsoVM* vm, OrsoAST* ast) {
 
     Chunk* top_chunk = &compiler.function->chunk;
 
-    for (i32 i = 0; i < sb_count(ast->declarations); i++) {
-        declaration(vm, &compiler, ast, ast->declarations[i], top_chunk);
+    for (i32 i = 0; i < sb_count(ast->root->data.block); i++) {
+        declaration(vm, &compiler, ast, ast->root->data.block[i], top_chunk);
     }
 
-    OrsoFunction* function = compiler_end(vm, &compiler, ast, top_chunk, ast->declarations[sb_count(ast->declarations) - 1]->end.line);
+    OrsoFunction* function = compiler_end(vm, &compiler, ast, top_chunk, ast->root->end.line);
 
     // TODO: Am I somehow missing an opertunity to warn for unused functions by doing this?
     for (i32 i = 0; i < sb_count(ast->function_definition_pairs); i++) {

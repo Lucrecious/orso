@@ -14,8 +14,8 @@ typedef struct OrsoCodeBuilder {
 void orso_code_builder_init(OrsoCodeBuilder* builder, OrsoVM* vm, OrsoAST* ast);
 void orso_code_builder_free(OrsoCodeBuilder* builder);
 
-void orso_compile_function(OrsoVM* vm, OrsoAST* ast, OrsoFunction* function, OrsoExpressionNode* function_definition_expression);
-OrsoFunction* orso_generate_expression_function(OrsoCodeBuilder* builder, OrsoExpressionNode* expression);
+void orso_compile_function(OrsoVM* vm, OrsoAST* ast, OrsoFunction* function, OrsoASTNode* function_definition_expression);
+OrsoFunction* orso_generate_expression_function(OrsoCodeBuilder* builder, OrsoASTNode* expression);
 OrsoFunction* orso_generate_code(OrsoVM* vm, OrsoAST* ast);
 
 #endif

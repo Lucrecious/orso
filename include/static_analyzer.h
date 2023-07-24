@@ -10,8 +10,7 @@ struct OrsoInterpreter;
 
 typedef struct OrsoAnalysisDependency {
     i32 fold_level;
-    bool is_type;
-    void* ptr; 
+    OrsoASTNode* ast_node; 
 } OrsoAnalysisDependency;
 
 typedef struct OrsoStaticAnalyzer {

@@ -20,6 +20,8 @@
 void orso_vm_init(OrsoVM* vm, OrsoWriteFunction write_fn) {
     vm->frame_count = 0;
 
+    vm->type_set = NULL;
+
     vm->stack = NULL;
     vm->stack_top = NULL;
 
@@ -172,6 +174,15 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
             case ORSO_OP_SUBTRACT_F64: { f64 b = POP().as.f; PEEK(0)->as.f = PEEK(0)->as.f - b; break; }
             case ORSO_OP_MULTIPLY_F64: { f64 b = POP().as.f; PEEK(0)->as.f = PEEK(0)->as.f * b; break; }
             case ORSO_OP_DIVIDE_F64: { f64 b = POP().as.f; PEEK(0)->as.f = PEEK(0)->as.f / b; break; }
+
+            case ORSO_OP_UNION_TYPES: {
+                OrsoType* b = (OrsoType*)POP().as.p;
+                OrsoType* a = (OrsoType*)POP().as.p;
+
+                OrsoType* a_or_b = orso_type_merge(vm->type_set, a, b);
+                PUSH(ORSO_SLOT_P(a_or_b, &OrsoTypeType));
+                break;
+            }
 
             case ORSO_OP_NEGATE_I64: PEEK(0)->as.i = -PEEK(0)->as.i; break;
             case ORSO_OP_NEGATE_F64: PEEK(0)->as.f = -PEEK(0)->as.f; break;

@@ -65,6 +65,9 @@ void orso_run_source(OrsoVM* vm, const char* source, OrsoErrorFunction error_fn)
     vm->stack = stack_slots;
     vm->stack_top = vm->stack;
 
+    // TODO: find a better way to set this
+    vm->type_set = &ast.type_set;
+
     orso_call_function(vm, main_function, error_fn);
 
     vm->stack = NULL;

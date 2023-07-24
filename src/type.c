@@ -66,6 +66,7 @@ bool type_in_list(OrsoType** list, i32 count, OrsoType* find) {
     return false;
 }
 
+// TODO: make this faster... Preferably type_in_list should be O(1)
 OrsoType* orso_type_merge(OrsoTypeSet* set, OrsoType* a, OrsoType* b) {
     if (a == b) {
         return a;
@@ -84,7 +85,7 @@ OrsoType* orso_type_merge(OrsoTypeSet* set, OrsoType* a, OrsoType* b) {
     }
 
     if (ORSO_TYPE_IS_UNION(b)) {
-        OrsoUnionType const * b_union = (OrsoUnionType const *)b;
+        OrsoUnionType* b_union = (OrsoUnionType*)b;
         for (i32 i = 0; i < b_union->count; i++) {
             if (type_in_list(types, count, b_union->types[i])) {
                 continue;

@@ -18,6 +18,8 @@ typedef struct {
 typedef struct OrsoVM {
     OrsoWriteFunction write_fn;
 
+    OrsoTypeSet* type_set;
+
     CallFrame frames[FRAMES_MAX];
     i32 frame_count;
 

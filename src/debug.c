@@ -94,6 +94,7 @@ i32 disassemble_instruction(Chunk* chunk, i32 offset) {
         case ORSO_OP_DIVIDE_F64: return simple_instruction("OP_DIVIDE_F64", offset);
         case ORSO_OP_I64_TO_F64: return simple_instruction("OP_I64_TO_F64", offset);
         case ORSO_OP_F64_TO_I64: return simple_instruction("OP_F64_TO_I64", offset);
+        case ORSO_OP_UNION_TYPES: return simple_instruction("OP_UNION_TYPES", offset);
         case ORSO_OP_LOGICAL_NOT: return simple_instruction("OP_LOGICAL_NOT", offset);
         case ORSO_OP_EQUAL_I64: return simple_instruction("OP_EQUAL_I64", offset);
         case ORSO_OP_EQUAL_F64: return simple_instruction("OP_EQUAL_F64", offset);
