@@ -488,7 +488,7 @@ static void end_scope(Compiler* compiler, Chunk* chunk, OrsoType* block_value_ty
 static void declaration(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode* declaration, Chunk* chunk);
 static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode* expression_node, Chunk* chunk);
 
-static OrsoType* gen_block(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, Chunk* chunk, OrsoASTNode* block, bool is_function_body, i32 end_line) {
+static OrsoType* gen_block(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, Chunk* chunk, OrsoASTNode* block, i32 end_line) {
     OrsoASTNode* final_expression_statement = block->data.block[sb_count(block->data.block) - 1];
     final_expression_statement = final_expression_statement->node_type != ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION ?
             NULL : final_expression_statement;
@@ -835,7 +835,7 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode
         case ORSO_AST_NODE_TYPE_EXPRESSION_BLOCK: {
             begin_scope(compiler);
 
-            OrsoType* return_value_type = gen_block(vm, compiler, ast, chunk, expression, false, expression_node->end.line);
+            OrsoType* return_value_type = gen_block(vm, compiler, ast, chunk, expression_node, expression_node->end.line);
 
             end_scope(compiler, chunk, return_value_type, expression_node->end.line);
             break;
@@ -954,9 +954,6 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode
 #undef EMIT_BINARY_OP
 }
 
-static void statement(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode* statement, Chunk* chunk) {
-}
-
 static void default_value(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, Chunk* chunk, OrsoASTNode* entity_declaration) {
     OrsoType* conform_type = entity_declaration->type;
 
@@ -1024,7 +1021,7 @@ static void declaration(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNod
                 OrsoSlot value_type = ORSO_SLOT_P(declaration->data.expression->type, &OrsoTypeType);
                 emit_constant(compiler, chunk, value_type, start.line);
 
-                if (declaration->type == ORSO_AST_NODE_TYPE_STATEMENT_PRINT_EXPR) {
+                if (declaration->node_type == ORSO_AST_NODE_TYPE_STATEMENT_PRINT_EXPR) {
                     emit_instruction(ORSO_OP_PRINT_EXPR, compiler, chunk, start.line);
                 } else {
                     emit_instruction(ORSO_OP_PRINT, compiler, chunk, start.line);
