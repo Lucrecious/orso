@@ -1641,7 +1641,7 @@ static void resolve_function_expression(
 
     // TODO: Maybe use a marco defined for this file for setting both the value and type, maybe an inlined function
     function_definition_expression->type = (OrsoType*)function_type;
-    function_definition_expression->type = (OrsoType*)function_type;
+    function_definition_expression->narrowed_type = (OrsoType*)function_type;
 
     ASSERT(definition->block->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_BLOCK, "must be block expression");
 
