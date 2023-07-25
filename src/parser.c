@@ -61,11 +61,11 @@ typedef enum {
     PREC_ASSIGNMENT,  // =
     PREC_OR,          // or
     PREC_AND,         // and
-    PREC_BITWISE_OR,  // | and type separator
     PREC_EQUALITY,    // == !=
     PREC_COMPARISON,  // < > <= >=
     PREC_TERM,        // + -
     PREC_FACTOR,      // * /
+    PREC_BITWISE_OR,  // | and type separator
     PREC_UNARY,       // - not
     PREC_CALL,        // . ()
     PREC_PRIMARY

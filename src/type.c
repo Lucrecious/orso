@@ -490,7 +490,8 @@ void orso_binary_equality_casts(OrsoType* a, OrsoType* b, OrsoType** a_cast, Ors
 
     if ((a->kind == ORSO_TYPE_BOOL && b->kind == ORSO_TYPE_BOOL)
     || (a->kind == ORSO_TYPE_STRING && b->kind == ORSO_TYPE_STRING)
-    || (a->kind == ORSO_TYPE_SYMBOL && b->kind == ORSO_TYPE_SYMBOL)) {
+    || (a->kind == ORSO_TYPE_SYMBOL && b->kind == ORSO_TYPE_SYMBOL)
+    || (a->kind == ORSO_TYPE_TYPE && b->kind == ORSO_TYPE_TYPE)) {
         *a_cast = a;
         *b_cast = b;
         return;

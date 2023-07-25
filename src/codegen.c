@@ -721,6 +721,8 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode
                         }
                     } else if (left->narrowed_type == &OrsoTypeType) {
                         switch (operator.type) {
+                            case TOKEN_EQUAL_EQUAL: EMIT_BINARY_OP_I64(EQUAL); break;
+                            case TOKEN_BANG_EQUAL: EMIT_BINARY_OP_I64(EQUAL); EMIT_NOT(); break;
                             case TOKEN_BAR: emit_instruction(ORSO_OP_UNION_TYPES, compiler, chunk, operator.line); break;
                             default: UNREACHABLE();
                         }
