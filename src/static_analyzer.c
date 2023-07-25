@@ -365,40 +365,11 @@ static i32 evaluate_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoS
     return value_index;
 }
 
-// static bool get_native_function(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, Token name, i32* index) {
-//     if (strncmp(name.start, "clock", MIN(5, name.length)) == 0) {
-//         OrsoSymbol* function_name = orso_new_symbol_from_cstrn(name.start, name.length, &analyzer->symbols);
-//         OrsoSlot index_slot;
-//         if (orso_symbol_table_get(&ast->builtins, function_name, &index_slot)) {
-//             *index = index_slot.as.i;
-//             return true;
-//         }
-
-//         OrsoType* function_type = orso_type_set_fetch_native_function(&ast->type_set, &OrsoTypeFloat64, NULL, 0);
-//         OrsoNativeFunction* native_function = orso_new_native_function(clock_native, function_type);
-//         OrsoSlot native_function_slot = ORSO_SLOT_P(native_function, function_type);
-//         *index = add_value_to_ast_constant_stack(ast, &native_function_slot, function_type);
-
-//         index_slot = ORSO_SLOT_I(*index, &OrsoTypeInteger32);
-//         orso_symbol_table_set(&ast->builtins, function_name, index_slot);
-
-//         return true;
-//     }
-
-//     return false;
-// }
-
 static void fold_constants(
         OrsoStaticAnalyzer* analyzer,
         OrsoAST* ast,
         AnalysisState state,
         OrsoASTNode* expression);
-
-// static OrsoType* resolve_type(
-//         OrsoStaticAnalyzer* analyzer,
-//         OrsoAST* ast,
-//         AnalysisState state,
-//         OrsoTypeNode* type_node);
 
 static void resolve_foldable(
         OrsoStaticAnalyzer* analyzer,
@@ -1068,63 +1039,6 @@ void orso_resolve_expression(
 
     fold_constants(analyzer, ast, state, expression);
 }
-
-// static OrsoType* resolve_type(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, AnalysisState state, OrsoASTNode* type_node) {
-//     ASSERT(type_node, "cannot be null");
-//     ASSERT(type_node->type == &OrsoTypeType, "must be of a type type");
-
-//     switch (type_node->node_type) {
-//         case ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY: {
-//             OrsoType* type = resolve_identifier_type(analyzer, ast, state, type_node->start);
-//             return type;
-//         }
-
-//         case ORSO_AST_NODE_TYPE_EXPRESSION_BINARY: {
-//             if (sb_count(type_node->items.union_) > ORSO_UNION_NUM_MAX) {
-//                 error(analyzer, type_node->start.line, "Orso only allows for a maximum of 4 types in a union.");
-//                 return &OrsoTypeInvalid;
-//             }
-
-//             i32 type_count = 0;
-//             OrsoType* types[ORSO_UNION_NUM_MAX];
-//             for (i32 i = 0; i < sb_count(type_node->items.union_); i++) {
-//                 OrsoType* single_type = resolve_type(analyzer, ast, state, type_node->items.union_[i]);
-//                 if (single_type == &OrsoTypeInvalid) {
-//                     return &OrsoTypeInvalid;
-//                 }
-
-//                 types[type_count++] = single_type;
-//             }
-
-//             OrsoType* type = orso_type_set_fetch_union(&ast->type_set, types, type_count);
-//             return type;
-//         }
-
-//         case ORSO_TYPE_NODE_TYPE_FUNCTION: {
-//             OrsoType* return_type = resolve_type(analyzer, ast, state, type_node->items.function.return_type);
-//             if (return_type == &OrsoTypeInvalid) {
-//                 error(analyzer, type_node->items.function.return_type->start.line, "Return type does not exist.");
-//                 return &OrsoTypeInvalid;
-//             }
-
-//             i32 argument_count = sb_count(type_node->items.function.argument_types);
-//             OrsoType* arguments[argument_count];
-
-//             for (i32 i = 0; i < argument_count; i++) {
-//                 OrsoType* argument = resolve_type(analyzer, ast, state, type_node->items.function.argument_types[i]);
-//                 if (argument == &OrsoTypeInvalid) {
-//                     error(analyzer, type_node->items.function.argument_types[i]->start.line, "TODO: Make better error for this, argument type errors are handled in the resolve_type function");
-//                     return &OrsoTypeInvalid;
-//                 }
-//             }
-
-//             OrsoType* type = orso_type_set_fetch_function(&ast->type_set, return_type, arguments, argument_count);
-//             return type;
-//         }
-//     }
-
-//     return &OrsoTypeInvalid;
-// }
 
 static void declare_entity(OrsoStaticAnalyzer* analyzer, OrsoScope* scope, OrsoASTNode* entity) {
     OrsoSymbol* identifier = orso_unmanaged_symbol_from_cstrn(entity->start.start, entity->start.length, &analyzer->symbols);

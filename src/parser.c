@@ -98,6 +98,8 @@ void orso_ast_free(OrsoAST* ast) {
         ast->nodes[i] = NULL;
     }
 
+    sb_free(ast->nodes);
+
     orso_symbol_table_free(&ast->builtins);
     orso_type_set_free(&ast->type_set);
 }
@@ -436,8 +438,6 @@ static OrsoASTNode* convert_assignment_expression(Parser* parser, OrsoASTNode* l
 static OrsoASTNode* convert_call_expression(Parser* parser, OrsoASTNode* left_operand, OrsoASTNode* call) {
     if (left_operand->node_type != ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY) {
         error_at(parser, &left_operand->start, "Expect function name.");
-        free(left_operand);
-        free(call);
         left_operand->node_type = ORSO_AST_NODE_TYPE_UNDEFINED;
         return left_operand;
     }
@@ -831,7 +831,7 @@ static OrsoASTNode* entity_declaration(Parser* parser, bool as_parameter) {
 
     consume(parser, TOKEN_COLON, "Expect explicit type.");
 
-    if (!check(parser, TOKEN_EQUAL)) {
+    if (!check(parser, TOKEN_EQUAL) && !check(parser, TOKEN_COLON)) {
         entity_declaration_node->data.declaration.type_expression = expression(parser, true);
     }
 
