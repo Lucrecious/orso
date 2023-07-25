@@ -32,13 +32,12 @@ typedef enum OrsoTypeKind {
 
 typedef struct OrsoType {
     OrsoTypeKind kind;
-    byte _space[4 + 8 * ORSO_UNION_NUM_MAX];
 } OrsoType;
 
 typedef struct OrsoUnionType {
     OrsoType type;
     i32 count;
-    OrsoType* types[ORSO_UNION_NUM_MAX];
+    OrsoType** types;
 } OrsoUnionType;
 
 typedef struct OrsoFunctionType {

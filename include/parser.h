@@ -275,7 +275,7 @@ struct OrsoASTNode {
 
     Token start, end, operator;
 
-    // expressions
+    // expressions TODO: Fill this in for *everything*, declarations, statements included
     OrsoType *type, *narrowed_type;
 
     // branching, blocks

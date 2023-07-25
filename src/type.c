@@ -3,6 +3,8 @@
 #include "symbol_table.h"
 #include "type_set.h"
 
+#include "sb.h"
+
 bool orso_union_type_has_type(const OrsoUnionType* type, OrsoType* subtype) {
     for (i32 i = 0; i < type->count; i++) {
         if (type->types[i] == subtype) {
@@ -72,34 +74,36 @@ OrsoType* orso_type_merge(OrsoTypeSet* set, OrsoType* a, OrsoType* b) {
         return a;
     }
 
-    i32 count = 0;
-    OrsoType* types[ORSO_UNION_NUM_MAX];
+    OrsoType** types = NULL;
 
     if (ORSO_TYPE_IS_UNION(a)) {
-        OrsoUnionType const * a_union = (OrsoUnionType const *)a;
+        OrsoUnionType* a_union = (OrsoUnionType*)a;
         for (i32 i = 0; i < a_union->count; i++) {
-            types[count++] = a_union->types[i];
+            sb_push(types, a_union->types[i]);
         }
     } else {
-        types[count++] = a;
+        sb_push(types, a);
     }
 
     if (ORSO_TYPE_IS_UNION(b)) {
         OrsoUnionType* b_union = (OrsoUnionType*)b;
         for (i32 i = 0; i < b_union->count; i++) {
-            if (type_in_list(types, count, b_union->types[i])) {
+            if (type_in_list(types, sb_count(types), b_union->types[i])) {
                 continue;
             }
 
-            types[count++] = b_union->types[i];
+            sb_push(types, b_union->types[i]);
         }
     } else {
-        if (!type_in_list(types, count, b)) {
-            types[count++] = b;
+        if (!type_in_list(types, sb_count(types), b)) {
+            sb_push(types, b);
         }
     }
 
-    OrsoType* merged = orso_type_set_fetch_union(set, types, count);
+    OrsoType* merged = orso_type_set_fetch_union(set, types, sb_count(types));
+
+    sb_free(types);
+
     return merged;
 }
 
@@ -346,6 +350,7 @@ i32 orso_type_to_cstrn(OrsoType* type, char* buffer, i32 n) {
             case ORSO_TYPE_STRING: type_name = "string"; break;
             case ORSO_TYPE_SYMBOL: type_name = "symbol"; break;
             case ORSO_TYPE_VOID: type_name = "void"; break;
+            case ORSO_TYPE_TYPE: type_name = "type"; break;
             case ORSO_TYPE_PTR_OPAQUE: type_name = "&<unknown>"; break;
             case ORSO_TYPE_INVALID: type_name = "<invalid>"; break;
             case ORSO_TYPE_UNRESOLVED: type_name = "<unresolved>"; break;

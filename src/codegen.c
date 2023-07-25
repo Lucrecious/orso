@@ -489,8 +489,9 @@ static void declaration(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNod
 static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode* expression_node, Chunk* chunk);
 
 static OrsoType* gen_block(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, Chunk* chunk, OrsoASTNode* block, i32 end_line) {
-    OrsoASTNode* final_expression_statement = block->data.block[sb_count(block->data.block) - 1];
-    final_expression_statement = final_expression_statement->node_type != ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION ?
+    OrsoASTNode* final_expression_statement = sb_count(block->data.block) > 0 ? block->data.block[sb_count(block->data.block) - 1] : NULL;
+
+    final_expression_statement = final_expression_statement && final_expression_statement->node_type != ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION ?
             NULL : final_expression_statement;
 
     for (i32 i = 0; i < sb_count(block->data.block) - (final_expression_statement != NULL); i++) {
@@ -574,6 +575,8 @@ static void gen_primary(Compiler* compiler, Chunk* chunk, OrsoAST* ast, OrsoType
             }
             break;
         }
+        
+        case ORSO_TYPE_TYPE:
         case ORSO_TYPE_PTR_OPAQUE:
         case ORSO_TYPE_FUNCTION:
         case ORSO_TYPE_NATIVE_FUNCTION:
@@ -716,6 +719,13 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode
                             case TOKEN_BANG_EQUAL: EMIT_BINARY_OP(EQUAL, SYMBOL); EMIT_NOT(); break;
                             default: UNREACHABLE();
                         }
+                    } else if (left->narrowed_type == &OrsoTypeType) {
+                        switch (operator.type) {
+                            case TOKEN_BAR: emit_instruction(ORSO_OP_UNION_TYPES, compiler, chunk, operator.line); break;
+                            default: UNREACHABLE();
+                        }
+                    } else {
+                        UNREACHABLE();
                     }
                     break;
                 }

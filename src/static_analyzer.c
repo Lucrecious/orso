@@ -250,7 +250,9 @@ static OrsoASTNode* implicit_cast(OrsoAST* ast, OrsoASTNode* operand, OrsoType* 
 #define IS_FOLDED(EXPRESSION_PTR) (EXPRESSION_PTR->value_index >= 0)
 
 static OrsoType* get_folded_type(OrsoAST* ast, i32 index) {
-    ASSERT(index >= 0, "must be foldable and folded");
+    if (index < 0) {
+        return &OrsoTypeInvalid;
+    }
 
     OrsoSlot* type_slot = &ast->folded_constants[index];
     OrsoType* type = (OrsoType*)type_slot->as.p;
@@ -309,27 +311,6 @@ static bool is_builtin_function(OrsoAST* ast, OrsoSymbol* identifier, OrsoNative
 
     return false;
 }
-
-// static OrsoType* resolve_identifier_type(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, AnalysisState state, Token identifier_type) {
-//     OrsoType* type;
-//     if (is_builtin_type(identifier_type, &type)) {
-//         return type;
-//     }
-
-//     EntityQuery query = (EntityQuery) { .type = ENTITY_QUERY_TYPE, .skip_mutable = true };
-//     OrsoScope* entity_scope;
-//     Entity* value = get_resolved_entity_by_identifier(analyzer, ast, state, identifier_type, &query, &entity_scope);
-
-//     if (!value) {
-//         char message[512];
-//         snprintf(message, 512, "Type %.*s has not been declared.", identifier_type.length, identifier_type.start);
-//         error(analyzer, identifier_type.line, message);
-//         return &OrsoTypeInvalid;
-//     }
-
-//     type = (OrsoType*)get_folded_type(ast, value->declaration_node->data.declaration.initial_value_expression->value_index);
-//     return type;
-// }
 
 static bool can_call(OrsoFunctionType* type, OrsoASTNode** arguments) {
     if (type->argument_count != sb_count(arguments)) {
@@ -450,7 +431,7 @@ static void resolve_foldable(
         }
 
         case ORSO_AST_NODE_TYPE_EXPRESSION_UNARY: {
-            foldable = expression->data.expression;
+            foldable = expression->data.expression->foldable;
             break;
         }
 
@@ -933,8 +914,8 @@ void orso_resolve_expression(
                     expression->type = &OrsoTypeVoid;
                     expression->narrowed_type = &OrsoTypeVoid;
                 } else {
-                    expression->type = last_expression_statement->type;
-                    expression->narrowed_type = last_expression_statement->narrowed_type;
+                    expression->type = last_expression_statement->data.expression->type;
+                    expression->narrowed_type = last_expression_statement->data.expression->narrowed_type;
                 }
             }
 

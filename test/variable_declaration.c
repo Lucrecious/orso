@@ -348,7 +348,7 @@ INTERPRETER_ERROR_TEST(undefined_type,
     ORSO_ERROR_COMPILE, 0, "Type str has not been declared.")
 
 INTERPRETER_ERROR_TEST(too_many_types,
-    "x: string|symbol|i64|f64|void = null;",
+    "x: string|symbol|i64|f64|void = null; print_expr x;",
     ORSO_ERROR_COMPILE, 0, "Orso only allows for a maximum of 4 types in a union.")
 
 INTERPRETER_ERROR_TEST(duplicate_definitions,

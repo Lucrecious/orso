@@ -27,11 +27,12 @@ OrsoFunctionType OrsoTypeEmptyFunction = (OrsoFunctionType) {
 };
 
 OrsoUnionType* union_type_new(OrsoTypeSet* set, OrsoType** types, i32 count) {
-    ASSERT(count <= ORSO_UNION_NUM_MAX, "cannot create union type with more than 4 types");
+    //ASSERT(count <= ORSO_UNION_NUM_MAX, "cannot create union type with more than 4 types"); // TODO: Add this in later, need codegen and runtime errors first
 
     OrsoUnionType* union_type = ORSO_ALLOCATE(OrsoUnionType);
     union_type->type.kind = ORSO_TYPE_UNION;
     union_type->count = count;
+    union_type->types = ORSO_ALLOCATE_N(OrsoType*, count);
     for (i32 i = 0; i < union_type->count; i++) {
         union_type->types[i] = types[i];
     }
@@ -74,6 +75,8 @@ OrsoType* type_copy_new(OrsoTypeSet* set, OrsoType* type) {
 
 void type_free(OrsoType* type) {
     if (type->kind == ORSO_TYPE_UNION) {
+        OrsoUnionType* union_type = (OrsoUnionType*)type;
+        free(union_type->types);
     } else if (type->kind == ORSO_TYPE_FUNCTION) {
         OrsoFunctionType* function_type = (OrsoFunctionType*)type;
         for (i32 i = 0; i < function_type->argument_count; i++) {
@@ -296,9 +299,10 @@ OrsoType* orso_type_set_fetch_union(OrsoTypeSet* set, OrsoType** types, i32 coun
     OrsoUnionType union_type = {
         .type.kind = ORSO_TYPE_UNION,
         .count = count,
+        .types = ORSO_ALLOCATE_N(OrsoType*, count)
     };
 
-    for (i32 i = 0; i < ORSO_UNION_NUM_MAX; i++) {
+    for (i32 i = 0; i < count; i++) {
         if (i < count) {
             union_type.types[i] = types[i];
         } else {

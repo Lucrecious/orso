@@ -176,7 +176,7 @@ OrsoASTNode* orso_ast_node_new(OrsoAST* ast, OrsoASTNodeType node_type, Token st
         case ORSO_AST_NODE_TYPE_EXPRESSION_PRIMARY:
             break;
 
-        case ORSO_AST_NODE_TYPE_UNDEFINED: UNREACHABLE();
+        case ORSO_AST_NODE_TYPE_UNDEFINED: break;// UNREACHABLE();
     }
 
     return node;
@@ -283,7 +283,7 @@ static void synchronize(Parser* parser) {
 }
 
 static OrsoASTNode* declaration(Parser* parser);
-static OrsoASTNode* expression(Parser* parser);
+static OrsoASTNode* expression(Parser* parser, bool type_context);
 static ParseRule* get_rule(TokenType type);
 static OrsoASTNode* parse_precedence(Parser* parser, Precedence precedence);
 
@@ -451,7 +451,7 @@ static OrsoASTNode* convert_call_expression(Parser* parser, OrsoASTNode* left_op
 static OrsoASTNode* assignment(Parser* parser) {
     OrsoASTNode* expression_node = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_EXPRESSION_ASSIGNMENT, parser->previous);
 
-    expression_node->data.binary.rhs = expression(parser);
+    expression_node->data.binary.rhs = expression(parser, false);
     expression_node->end = parser->previous;
 
     return expression_node;
@@ -502,7 +502,7 @@ static OrsoASTNode* ifelse(Parser* parser) {
 
     expression_node->return_guarentee = ORSO_NO_RETURN_GUARENTEED;
 
-    expression_node->data.branch.condition = expression(parser);
+    expression_node->data.branch.condition = expression(parser, false);
 
     consume(parser, TOKEN_BRACE_OPEN, "Expect '{' after condition.");
 
@@ -588,7 +588,7 @@ static void parse_function_definition(Parser* parser, OrsoASTNode* function_defi
     consume(parser, TOKEN_PARENTHESIS_CLOSE, "Expect close parenthesis for end of arguments.");
 
     if (match(parser, TOKEN_ARROW_RIGHT)) {
-        function_definition->data.function_definition.return_type_expression = expression(parser);
+        function_definition->data.function_definition.return_type_expression = expression(parser, true);
     }
 
     consume(parser, TOKEN_BRACE_OPEN, "Expect open brace for function body.");
@@ -612,7 +612,7 @@ static OrsoASTNode* grouping_or_function_definition(Parser* parser) {
         expression_node->type = &OrsoTypeUnresolved;
         expression_node->narrowed_type = &OrsoTypeUnresolved;
     } else {
-        expression_node->data.expression = expression(parser);
+        expression_node->data.expression = expression(parser, false);
 
         consume(parser, TOKEN_PARENTHESIS_CLOSE, "Expect ')' after expression.");
 
@@ -630,7 +630,7 @@ static OrsoASTNode** parse_arguments(Parser* parser) {
 
     if (!check(parser, TOKEN_PARENTHESIS_CLOSE)) {
         do {
-            OrsoASTNode* argument = expression(parser);
+            OrsoASTNode* argument = expression(parser, false);
             sb_push(arguments, argument);
         } while (match(parser, TOKEN_COMMA));
     }
@@ -776,14 +776,14 @@ static ParseRule* get_rule(TokenType type) {
     return &rules[type];
 }
 
-static OrsoASTNode* expression(Parser* parser) {
+static OrsoASTNode* expression(Parser* parser, bool type_context) {
     bool fold = false;
     if (match(parser, TOKEN_DIRECTIVE)) {
         Token directive = parser->previous;
         fold = (directive.length - 1 == strlen("fold") && strncmp(directive.start + 1, "fold", 4) == 0);
     }
 
-    OrsoASTNode* expression_node = parse_precedence(parser, PREC_ASSIGNMENT);
+    OrsoASTNode* expression_node = parse_precedence(parser, type_context ? PREC_OR : PREC_ASSIGNMENT);
     expression_node->fold = fold;
 
     return expression_node;
@@ -797,16 +797,16 @@ static OrsoASTNode* statement(Parser* parser) {
         is_return = true;
     } else if (match(parser, TOKEN_PRINT_EXPR)) { 
         node_type = ORSO_AST_NODE_TYPE_STATEMENT_PRINT_EXPR;
-    } if (match(parser, TOKEN_PRINT)) {
+    } else if (match(parser, TOKEN_PRINT)) {
         node_type = ORSO_AST_NODE_TYPE_STATEMENT_PRINT;
     } else {
         node_type = ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION;
     }
 
-    OrsoASTNode* statement_node = orso_ast_node_new(parser->ast, node_type, parser->previous);
+    OrsoASTNode* statement_node = orso_ast_node_new(parser->ast, node_type, parser->current);
 
     if (!is_return || !match(parser, TOKEN_SEMICOLON)) {
-        statement_node->data.expression = expression(parser);
+        statement_node->data.expression = expression(parser, false);
         consume(parser, TOKEN_SEMICOLON, "Expect end of statement semicolon.");
     }
 
@@ -818,6 +818,8 @@ static OrsoASTNode* statement(Parser* parser) {
 static OrsoASTNode* entity_declaration(Parser* parser, bool as_parameter) {
     OrsoASTNode* entity_declaration_node = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_DECLARATION, parser->current);
 
+    advance(parser);
+
     entity_declaration_node->type = &OrsoTypeUnresolved;
 
     entity_declaration_node->data.declaration.type_expression = NULL;
@@ -827,7 +829,10 @@ static OrsoASTNode* entity_declaration(Parser* parser, bool as_parameter) {
     entity_declaration_node->data.declaration.is_mutable = false;
 
     consume(parser, TOKEN_COLON, "Expect explicit type.");
-    entity_declaration_node->data.declaration.type_expression = expression(parser);
+
+    if (!check(parser, TOKEN_EQUAL)) {
+        entity_declaration_node->data.declaration.type_expression = expression(parser, true);
+    }
 
     // TODO: try to do constant vs variable detection a little more clever...
     bool requires_expression = false;
@@ -848,7 +853,7 @@ static OrsoASTNode* entity_declaration(Parser* parser, bool as_parameter) {
     }
 
     if (requires_expression) {
-        entity_declaration_node->data.declaration.initial_value_expression = expression(parser);
+        entity_declaration_node->data.declaration.initial_value_expression = expression(parser, false);
     }
 
     if (entity_declaration_node->data.declaration.initial_value_expression == NULL) {
