@@ -57,6 +57,7 @@ typedef struct Parser {
 
 typedef enum {
     PREC_NONE,
+    PREC_BLOCK,       // {}, branch expressions (if/unless/while/until else)
     PREC_ASSIGNMENT,  // =
     PREC_OR,          // or
     PREC_AND,         // and
@@ -684,7 +685,7 @@ static OrsoASTNode* binary(Parser* parser) {
 ParseRule rules[] = {
     [TOKEN_PARENTHESIS_OPEN]        = { grouping_or_function_definition,   call,       PREC_CALL },
     [TOKEN_PARENTHESIS_CLOSE]       = { NULL,       NULL,       PREC_NONE },
-    [TOKEN_BRACE_OPEN]              = { block,      NULL,       PREC_CALL },
+    [TOKEN_BRACE_OPEN]              = { block,      NULL,       PREC_BLOCK },
     [TOKEN_BRACE_CLOSE]             = { NULL,       NULL,       PREC_NONE },
     [TOKEN_BRACKET_OPEN]            = { NULL,       NULL,       PREC_NONE },
     [TOKEN_BRACKET_CLOSE]           = { NULL,       NULL,       PREC_NONE },
@@ -719,10 +720,10 @@ ParseRule rules[] = {
     [TOKEN_NOT]                     = { unary,      NULL,       PREC_NONE },
     [TOKEN_AND]                     = { NULL,       binary,     PREC_AND },
     [TOKEN_OR]                      = { NULL,       binary,     PREC_OR },
-    [TOKEN_IF]                      = { ifelse,     NULL,       PREC_NONE },
-    [TOKEN_UNLESS]                  = { ifelse,     NULL,       PREC_NONE },
-    [TOKEN_WHILE]                   = { ifelse,     NULL,       PREC_NONE },
-    [TOKEN_UNTIL]                   = { ifelse,     NULL,       PREC_NONE },
+    [TOKEN_IF]                      = { ifelse,     NULL,       PREC_BLOCK },
+    [TOKEN_UNLESS]                  = { ifelse,     NULL,       PREC_BLOCK },
+    [TOKEN_WHILE]                   = { ifelse,     NULL,       PREC_BLOCK },
+    [TOKEN_UNTIL]                   = { ifelse,     NULL,       PREC_BLOCK },
     [TOKEN_FOR]                     = { NULL,       NULL,       PREC_NONE },
     [TOKEN_ELSE]                    = { NULL,       NULL,       PREC_NONE },
     [TOKEN_TRUE]                    = { literal,    NULL,       PREC_NONE },
