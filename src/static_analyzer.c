@@ -1137,7 +1137,7 @@ static bool is_declaration_resolved(OrsoASTNode* entity) {
  * unideal solution but allows me not break any recursion.
  * 
  */
-static bool is_circular_dependency(OrsoStaticAnalyzer* analyzer, void* new_dependency) {
+static bool is_circular_dependency(OrsoStaticAnalyzer* analyzer, OrsoASTNode* new_dependency) {
     for (i32 i = analyzer->dependencies.count - 1; i >= 0; i--) {
         OrsoAnalysisDependency* dependency = &analyzer->dependencies.chain[i];
 
@@ -1153,10 +1153,10 @@ static bool is_circular_dependency(OrsoStaticAnalyzer* analyzer, void* new_depen
     return false;
 }
 
-static void push_dependency(OrsoStaticAnalyzer* analyzer, OrsoASTNode* node, int fold_level) {
+static bool push_dependency(OrsoStaticAnalyzer* analyzer, OrsoASTNode* node, int fold_level) {
     if (is_circular_dependency(analyzer, node)) {
         error(analyzer, node->start.line, "Circular dependency");
-        return;
+        return false;
     }
 
     OrsoAnalysisDependency dependency = {
@@ -1170,6 +1170,8 @@ static void push_dependency(OrsoStaticAnalyzer* analyzer, OrsoASTNode* node, int
     } else {
         analyzer->dependencies.chain[analyzer->dependencies.count++] = dependency;
     }
+
+    return true;
 }
 
 static void pop_dependency(OrsoStaticAnalyzer* analyzer) {
@@ -1179,14 +1181,14 @@ static void pop_dependency(OrsoStaticAnalyzer* analyzer) {
 static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, AnalysisState state, OrsoASTNode* entity_declaration) {
     OrsoType* declaration_type = &OrsoTypeUnresolved;
     if (entity_declaration->type == &OrsoTypeUnresolved && entity_declaration->data.declaration.type_expression) {
-        push_dependency(analyzer, entity_declaration->data.declaration.type_expression, state.fold_level);
-        AnalysisState new_state = state;
-        state.mode = MODE_CONSTANT_TIME;
-        orso_resolve_expression(analyzer, ast, new_state, entity_declaration->data.declaration.type_expression);
-        declaration_type = get_folded_type(ast, entity_declaration->data.declaration.type_expression->value_index);
-        pop_dependency(analyzer);
-
-        if (analyzer->panic_mode) {
+        bool pushed = push_dependency(analyzer, entity_declaration->data.declaration.type_expression, state.fold_level);
+        if (pushed) {
+            AnalysisState new_state = state;
+            state.mode = MODE_CONSTANT_TIME;
+            orso_resolve_expression(analyzer, ast, new_state, entity_declaration->data.declaration.type_expression);
+            declaration_type = get_folded_type(ast, entity_declaration->data.declaration.type_expression->value_index);
+            pop_dependency(analyzer);
+        } else {
             return;
         }
     }
@@ -1196,9 +1198,13 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
         AnalysisState new_state = state;
         new_state.mode = mode;
 
-        push_dependency(analyzer, entity_declaration->data.declaration.initial_value_expression, new_state.fold_level);
-        orso_resolve_expression(analyzer, ast, new_state, entity_declaration->data.declaration.initial_value_expression);
-        pop_dependency(analyzer);
+        bool pushed = push_dependency(analyzer, entity_declaration->data.declaration.initial_value_expression, new_state.fold_level);
+        if (pushed) {
+            orso_resolve_expression(analyzer, ast, new_state, entity_declaration->data.declaration.initial_value_expression);
+            pop_dependency(analyzer);
+        } else {
+            return;
+        }
     }
 
     // we are resolved
@@ -1604,9 +1610,11 @@ static void resolve_function_expression(
 
     OrsoType* return_type = &OrsoTypeVoid;
     if (/*function_definition_expression->value_type == &OrsoTypeUnresolved && */definition->return_type_expression) {
-        push_dependency(analyzer, definition->return_type_expression, state.fold_level);
-        orso_resolve_expression(analyzer, ast, state, definition->return_type_expression);
-        pop_dependency(analyzer);
+        bool pushed = push_dependency(analyzer, definition->return_type_expression, state.fold_level);
+        if (pushed) {
+            orso_resolve_expression(analyzer, ast, state, definition->return_type_expression);
+            pop_dependency(analyzer);
+        }
 
         if (definition->return_type_expression->type != &OrsoTypeType) {
             error(analyzer, definition->return_type_expression->start.line, "return expression must be of a type type");
@@ -1645,12 +1653,13 @@ static void resolve_function_expression(
 
     ASSERT(definition->block->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_BLOCK, "must be block expression");
 
-    push_dependency(analyzer, function_definition_expression, state.fold_level);
-
-    AnalysisState new_state = state;
-    new_state.scope = &function_scope;
-    orso_resolve_expression(analyzer, ast, new_state, definition->block);
-    pop_dependency(analyzer);
+    bool pushed = push_dependency(analyzer, function_definition_expression, state.fold_level);
+    if (pushed) {
+        AnalysisState new_state = state;
+        new_state.scope = &function_scope;
+        orso_resolve_expression(analyzer, ast, new_state, definition->block);
+        pop_dependency(analyzer);
+    }
 
     scope_free(&function_scope);
 
