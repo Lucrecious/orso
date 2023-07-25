@@ -302,6 +302,15 @@ if (memcmp(SYMBOL->text, #TYPE_STRING, (sizeof(#TYPE_STRING) - 1)/sizeof(char)) 
 #undef RETURN_IF_TYPE
 }
 
+static i32 add_value_to_ast_constant_stack(OrsoAST* ast, OrsoSlot* value, OrsoType* type) {
+    i32 slot_count = orso_type_slot_count(type);
+    for (i32 i = 0; i < slot_count; i ++) {
+        sb_push(ast->folded_constants, value[i]);
+    }
+    
+    return sb_count(ast->folded_constants) - slot_count;
+}
+
 static bool is_builtin_function(OrsoAST* ast, OrsoSymbol* identifier, OrsoNativeFunction** function) {
     if (strncmp(identifier->text, "clock", MIN(5, identifier->length)) == 0) {
         OrsoType* function_type = orso_type_set_fetch_native_function(&ast->type_set, &OrsoTypeFloat64, NULL, 0);
@@ -326,15 +335,6 @@ static bool can_call(OrsoFunctionType* type, OrsoASTNode** arguments) {
     }
 
     return true;
-}
-
-static i32 add_value_to_ast_constant_stack(OrsoAST* ast, OrsoSlot* value, OrsoType* type) {
-    i32 slot_count = orso_type_slot_count(type);
-    for (i32 i = 0; i < slot_count; i ++) {
-        sb_push(ast->folded_constants, value[i]);
-    }
-    
-    return sb_count(ast->folded_constants) - slot_count;
 }
 
 static i32 evaluate_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoScope* scope, OrsoASTNode* expression) {
@@ -1316,7 +1316,7 @@ static Entity* get_builtin_entity(OrsoAST* ast, OrsoSymbol* identifier) {
 
         if (value_type) {
             i32 index = add_value_to_ast_constant_stack(ast, &value_slot, value_type);
-            Entity* entity = add_builtin_entity(ast, identifier, &OrsoTypeType, index);
+            Entity* entity = add_builtin_entity(ast, identifier, value_type, index);
             return entity;
         }
 

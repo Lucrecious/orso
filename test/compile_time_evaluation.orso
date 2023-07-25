@@ -75,7 +75,7 @@ Cannot resolve B. A constant A is not declared in the scope or higher scope.
 
 ## Cannot access local mutables outside function
 {
-    A := 5;
+    A := 5; // TODO: Fix issue where errors are not thrown because functions are not compiled because they are not used
     foo :: () {
         {
             B := A;
@@ -84,7 +84,7 @@ Cannot resolve B. A constant A is not declared in the scope or higher scope.
     };
 };
 # ---
-Error undeclared entity A.
+Error undeclared entity A. 
 # ---
 
 
