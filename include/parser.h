@@ -46,30 +46,31 @@ typedef enum OrsoASTNodeType {
     ORSO_AST_NODE_TYPE_EXPRESSION_BLOCK,
     ORSO_AST_NODE_TYPE_EXPRESSION_BRANCHING,
     ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION,
+    ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE,
 } OrsoASTNodeType;
 
-typedef struct OrsoASTFuncionDefinition {
-    OrsoASTNode** parameters;
+typedef struct OrsoASTFuncion {
+    OrsoASTNode** parameter_nodes;
     OrsoASTNode* return_type_expression;
 
     OrsoASTNode* block;
 
     bool compilable;
-} OrsoASTFunctionDefinition;
+} OrsoASTFunction;
 
 typedef struct OrsoASTCall {
     OrsoASTNode* callee;
     OrsoASTNode** arguments;
 } OrsoASTCall;
 
-typedef struct OrsoASTBranching {
+typedef struct OrsoASTBranch {
     OrsoASTNode* condition;
     OrsoASTNode* then_expression;
     OrsoASTNode* else_expression;
 
     bool looping;
     bool condition_negated;
-} OrsoASTBranching;
+} OrsoASTBranch;
 
 typedef struct OrsoASTBinary {
     OrsoASTNode* lhs;
@@ -119,9 +120,10 @@ struct OrsoASTNode {
         OrsoASTNode** block;
 
         // branching (if, unless, while, until)
-        OrsoASTBranching branch;
+        OrsoASTBranch branch;
 
-        OrsoASTFunctionDefinition function_definition;
+        // function signatures and defintions
+        OrsoASTFunction function;
     } data;
 };
 

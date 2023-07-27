@@ -307,10 +307,22 @@ i32 orso_type_to_cstrn(OrsoType* type, char* buffer, i32 n) {
                 buffer += 1;
             }
 
+            if (union_type->types[i]->kind == ORSO_TYPE_FUNCTION || union_type->types[i]->kind == ORSO_TYPE_NATIVE_FUNCTION) {
+                buffer[0] = '(';
+                n -= 1;
+                buffer += 1;
+            }
+
             // -1 removes the \0
             i32 written = orso_type_to_cstrn(union_type->types[i], buffer, n) - 1;
             n -= written;
             buffer += written;
+
+            if (union_type->types[i]->kind == ORSO_TYPE_FUNCTION || union_type->types[i]->kind == ORSO_TYPE_NATIVE_FUNCTION) {
+                buffer[0] = ')';
+                n -= 1;
+                buffer += 1;
+            }
         }
     // (arg1_type, arg2_type, ..., argn_type) -> return_type
     } else if (type->kind == ORSO_TYPE_FUNCTION || type->kind == ORSO_TYPE_NATIVE_FUNCTION) {

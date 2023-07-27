@@ -473,7 +473,7 @@ static void resolve_foldable(
 
                 ASSERT(function_definition, "this has to exist in the pair list");
 
-                if (!function_definition->data.function_definition.compilable) {
+                if (!function_definition->data.function.compilable) {
                     foldable = false;
                     error(analyzer, expression->data.call.callee->start.line, "cannot fold because function definition cannot be compiled");
                     break;
@@ -506,6 +506,7 @@ static void resolve_foldable(
             break;
         }
 
+        case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE:
         case ORSO_AST_NODE_TYPE_DECLARATION:
         case ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION:
         case ORSO_AST_NODE_TYPE_STATEMENT_PRINT:
@@ -583,6 +584,65 @@ static void fold_constants(
     }
 
     expression->value_index = value_index;
+}
+
+static void fold_function_signature(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, OrsoASTNode* expression) {
+    ASSERT(expression->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE, "must be a function signature");
+
+    if (!IS_FOLDED(expression->data.function.return_type_expression)) {
+        error(analyzer, expression->data.function.return_type_expression->start.line, "Return type for signature must be resolved at compile time.");
+        return;
+    }
+
+    bool hit_error = false;
+    OrsoType** parameter_types = NULL;
+
+    for (i32 i = 0; i < sb_count(expression->data.function.parameter_nodes); i++) {
+        OrsoASTNode* parameter = expression->data.function.parameter_nodes[i];
+        if (!IS_FOLDED(parameter)) {
+            hit_error = true;
+            error(analyzer, parameter->start.line, "Parameter type for signature must be resolved at compile time.");
+            break;
+        }
+
+        if (parameter->narrowed_type != &OrsoTypeType) {
+            hit_error = true;
+            error(analyzer, parameter->start.line, "Parameter expression must be a type.");
+            break;
+        }
+
+        i32 index = parameter->value_index + ORSO_TYPE_IS_UNION(parameter->type);
+
+        OrsoType* type = (OrsoType*)ast->folded_constants[index].as.p;
+        sb_push(parameter_types, type);
+    }
+
+    if (hit_error) {
+        sb_free(parameter_types);
+        return;
+    }
+
+    OrsoASTNode* return_type_expression = expression->data.function.return_type_expression;
+    if (return_type_expression->narrowed_type != &OrsoTypeType) {
+        error(analyzer, return_type_expression->start.line, "Return type expression must be a type.");
+        sb_free(parameter_types);
+        return;
+    }
+
+    OrsoType* return_type;
+    {
+        i32 index = return_type_expression->value_index + ORSO_TYPE_IS_UNION(return_type_expression->type);
+        return_type = (OrsoType*)ast->folded_constants[index].as.p;
+    }
+
+    OrsoType* function_type = orso_type_set_fetch_function(&ast->type_set, return_type, parameter_types, sb_count(parameter_types));
+    sb_free(parameter_types);
+
+    OrsoSlot function_type_slot = ORSO_SLOT_P(function_type, &OrsoTypeType);
+    i32 index = add_value_to_ast_constant_stack(ast, &function_type_slot, &OrsoTypeType);
+
+    expression->foldable = true;
+    expression->value_index = index;
 }
 
 static void resolve_declarations(
@@ -1028,6 +1088,30 @@ void orso_resolve_expression(
             resolve_function_expression(analyzer, ast, state, expression);
             break;
         }
+        
+         case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE: {
+            orso_resolve_expression(analyzer, ast, state, expression->data.function.return_type_expression);
+            if (EXPRESSION_RESOLVED(expression)) {
+                return;
+            }
+
+            for (i32 i = 0; i < sb_count(expression->data.function.parameter_nodes); i++) {
+                OrsoASTNode* parameter = expression->data.function.parameter_nodes[i];
+                orso_resolve_expression(analyzer, ast, state, parameter);
+                if (EXPRESSION_RESOLVED(expression)) {
+                    return;
+                }
+            }
+
+            fold_function_signature(analyzer, ast, expression);
+            if (analyzer->panic_mode) {
+                expression->type = &OrsoTypeUndefined;
+            }
+
+            expression->type = &OrsoTypeType;
+            expression->narrowed_type = &OrsoTypeType;
+            break;
+         }
 
         default: UNREACHABLE();
     }
@@ -1532,7 +1616,7 @@ static Entity* get_resolved_entity_by_identifier(
                     if (folded_function == function && dependency->fold_level != state.fold_level) {
                         // TODO: Use better system to figure out whether function definition can be compiled or not
                         // In this case, it cannot because of the fold level circular dependency.
-                        expression->data.function_definition.compilable = false;
+                        expression->data.function.compilable = false;
                         error(analyzer, expression->start.line, "Fold level circular dependency. TODO: show dependency chain.");
                         return NULL;
                     }
@@ -1579,16 +1663,16 @@ static void resolve_function_expression(
 
     state.mode = MODE_RUNTIME;
 
-    OrsoASTFunctionDefinition* definition = &function_definition_expression->data.function_definition;
+    OrsoASTFunction* definition = &function_definition_expression->data.function;
 
     if (IS_FOLDED(function_definition_expression)) {
         return;
     }
 
-    i32 parameter_count = sb_count(definition->parameters);
+    i32 parameter_count = sb_count(definition->parameter_nodes);
     // TODO: instead of hardcoding the number of parameters, instead use the numbers of bytes the params take up
     if (parameter_count > MAX_PARAMETERS - 1) {
-        error(analyzer, definition->parameters[0]->start.line, "Orso only allows a maximum of 100 parameters");
+        error(analyzer, definition->parameter_nodes[0]->start.line, "Orso only allows a maximum of 100 parameters");
     }
 
     OrsoScope function_scope;
@@ -1596,16 +1680,16 @@ static void resolve_function_expression(
     OrsoType* parameter_types[parameter_count];
 
     // forward declare parameters
-    for (i32 i = 0; i < sb_count(definition->parameters); i++) {
-        declare_entity(analyzer, &function_scope, definition->parameters[i]);
+    for (i32 i = 0; i < sb_count(definition->parameter_nodes); i++) {
+        declare_entity(analyzer, &function_scope, definition->parameter_nodes[i]);
     }
 
     // Resolves parameters for function type
     for (i32 i = 0; i < parameter_count; i++) {
         AnalysisState new_state = state;
         new_state.scope = &function_scope;
-        resolve_entity_declaration(analyzer, ast, new_state, definition->parameters[i]);
-        parameter_types[i] = definition->parameters[i]->type;
+        resolve_entity_declaration(analyzer, ast, new_state, definition->parameter_nodes[i]);
+        parameter_types[i] = definition->parameter_nodes[i]->type;
     }
 
     OrsoType* return_type = &OrsoTypeVoid;
@@ -1725,6 +1809,7 @@ static void resolve_declaration(
         case ORSO_AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT:
         case ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY:
         case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE:
         case ORSO_AST_NODE_TYPE_EXPRESSION_GROUPING:
         case ORSO_AST_NODE_TYPE_EXPRESSION_PRIMARY:
         case ORSO_AST_NODE_TYPE_EXPRESSION_UNARY:

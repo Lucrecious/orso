@@ -341,7 +341,7 @@ static OrsoFunction* compiler_end(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, 
                     continue;
                 }
 
-                if (!ast->function_definition_pairs[j].ast_defintion->data.function_definition.compilable) {
+                if (!ast->function_definition_pairs[j].ast_defintion->data.function.compilable) {
                     break;
                 }
 
@@ -951,6 +951,10 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode
             function_expression(vm, compiler, ast, expression_node, chunk);
             break;
         }
+
+        // function signatures MUST be resolved at compile time ALWAYS
+        case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE: UNREACHABLE();
+
         case ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION:
         case ORSO_AST_NODE_TYPE_STATEMENT_PRINT:
         case ORSO_AST_NODE_TYPE_STATEMENT_PRINT_EXPR:
@@ -1070,6 +1074,7 @@ static void declaration(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNod
         case ORSO_AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT:
         case ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY:
         case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE:
         case ORSO_AST_NODE_TYPE_EXPRESSION_GROUPING:
         case ORSO_AST_NODE_TYPE_EXPRESSION_PRIMARY:
         case ORSO_AST_NODE_TYPE_EXPRESSION_UNARY:
@@ -1127,10 +1132,10 @@ void orso_compile_function(OrsoVM* vm, OrsoAST* ast, OrsoFunction* function, Ors
     function_compiler.function->type = (OrsoFunctionType*)function_definition_expression->type;
     Chunk* function_chunk = &function_compiler.function->chunk;
 
-    OrsoASTFunctionDefinition* function_definition = &function_definition_expression->data.function_definition;
+    OrsoASTFunction* function_definition = &function_definition_expression->data.function;
 
-    for (i32 i = 0; i < sb_count(function_definition->parameters); i++) {
-        OrsoASTNode* parameter = function_definition->parameters[i];
+    for (i32 i = 0; i < sb_count(function_definition->parameter_nodes); i++) {
+        OrsoASTNode* parameter = function_definition->parameter_nodes[i];
         _apply_stack_effects(&function_compiler, orso_type_slot_count(parameter->type));
         define_entity(vm, &function_compiler, function_chunk,
                 parameter->type, &parameter->start, parameter->start.line);

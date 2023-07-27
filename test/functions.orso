@@ -1,5 +1,5 @@
 ## empty
-foo :: () {
+foo :: () -> void {
 };
 
 print_expr foo;
@@ -8,7 +8,7 @@ foo (() -> void) => <foo :: () -> void>
 # ---
 
 ## stack-arg
-foo :: (arg: i32) {
+foo :: (arg: i32) -> void {
 };
 
 print_expr foo;
@@ -17,7 +17,7 @@ foo ((i32) -> void) => <foo :: (i32) -> void>
 # ---
 
 ## stack-args
-foo :: (arg1: i32, arg2: bool, arg3: void) {
+foo :: (arg1: i32, arg2: bool, arg3: void) -> void {
 };
 
 print_expr foo;
@@ -170,7 +170,7 @@ print bar();
 # ---
 
 ## union parameters
-foo :: (a: string|void) {
+foo :: (a: string|void) -> void {
     print a;
 };
 
@@ -182,7 +182,7 @@ null
 # ---
 
 ## binded function name despite not immediately after constant declaration
-foo :: null or () { };
+foo :: null or () -> void { };
 print foo;
 # ---
 <foo :: () -> void>
@@ -205,7 +205,7 @@ print foo();
 # ---
 
 ## groups surrounding function definition
-foo :: null or ((( () {} )));
+foo :: null or ((( () -> void {} )));
 print foo;
 # ---
 <foo :: () -> void>
@@ -299,7 +299,7 @@ print foo;
 # ---
 
 ## cannot return within a declaration (gaurenteed)
-foo :: () {
+foo :: () -> void {
     x := { return; };
 };
 print foo;
@@ -308,7 +308,7 @@ compile error, 2: cannot return within an expression being set to a declaration
 # ---
 
 ## cannot return within a declaration (not gaurenteed)
-foo :: (n: bool) {
+foo :: (n: bool) -> void {
     x := if n { return; };
 };
 print foo;

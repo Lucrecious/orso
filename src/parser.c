@@ -11,21 +11,18 @@
 
 /*
 program                  -> declaration* EOF
-declaration              -> entity_declaration | function_declaration | statement
-entity_declaration       -> IDENTIFIER `:` union_type? (`=` expression)? `;`
+declaration              -> entity_declaration | statement
+entity_declaration       -> IDENTIFIER `:` ((logic_or ((`=` | `:`) expression)?) | ((`=` | `:`) expression) `;`
 parameters               -> parameter (`,` parameter)*
-parameter                -> IDENTIFIER `:` ((union_type (`=` expression)?) | (`=` expression))
+parameter                -> IDENTIFIER `:` ((logic_or (`=` expression)?)
 statement                -> expression_statement
 expression_statement     -> expression `;`
 
-union_type               -> type (`|` type)*
-function_type            -> `(` (union_type (`,` union_type)*)? `)` `->` union_type
-type                     -> IDENTIFIER | function_type
-
 directive                -> `#` ~(\s)*
-expression               -> directive? (assignment | block | ifthen)
+expression               -> directive? (assignment | block | branch)
 block                    -> `{` declaration* `}`
-ifthen                   -> (`if` | `unless` | `while` | `until` ) expression block (`else` (ifthen | block))?
+branch                   -> (`if` | `unless` | `while` | `until` ) expression (block | (`then` | `do`) expression) (`else` expression)?
+
 assignment               -> (call `.`)? IDENTIFIER `=` expression
                           | logic_or
 logic_or                 -> logic_and (`or` logic_and)*
@@ -33,15 +30,17 @@ logic_and                -> equality (`and` equality)*
 equality                 -> comparison ((`!=` | `==`) comparison)*
 comparison               -> term ((`<` | `>` | `<=` | `>=`) term)*
 term                     -> factor ((`+` | `-`) factor)*
-factor                   -> unary ((`/` | `*`) unary)*
+factor                   -> logical_operations ((`/` | `*`) logical_operations)*
+logical_operations       -> unary ((`|` |`&`) unary)*
 unary                    -> (`not` | `-`) unary | call
 call                     -> primary ( `(` arguments? `)` ) | `.` IDENTIFIER )*
 arguments                -> argument (`,` argument)*
 argument                 -> (IDENTIFIER `=`)? expression
 
 primary                  -> `true` | `false` | `null` | IDENTIFIER | INTEGER | DECIMAL
-                          | STRING | SYMBOL | `(` expression `)` | function_definition
-function_definition      -> `(` parameters? `)` (`->` union_type)? block
+                          | STRING | SYMBOL | `(` expression `)` | function_definition | function_type
+function_definition      -> `(` parameters? `)` `->` logic_or block
+function_type            -> `(` (logic_or (`,` logic_or)*)? `)` `->` logic_or
 */
 
 typedef struct Parser {
@@ -57,7 +56,7 @@ typedef struct Parser {
 
 typedef enum {
     PREC_NONE,
-    PREC_BLOCK,       // {}, branch expressions (if/unless/while/until else)
+    PREC_BLOCK,       // {}, branch expressions (if/unless/while/until else) // TODO: use CALL precedence. Find a way to not parse until an assignment for entity declaration types
     PREC_ASSIGNMENT,  // =
     PREC_OR,          // or
     PREC_AND,         // and
@@ -168,11 +167,12 @@ OrsoASTNode* orso_ast_node_new(OrsoAST* ast, OrsoASTNodeType node_type, Token st
             break;
         }
         
+        case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE:
         case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION: {
-            node->data.function_definition.block = NULL;
-            node->data.function_definition.compilable = false;
-            node->data.function_definition.parameters = NULL;
-            node->data.function_definition.return_type_expression = NULL;
+            node->data.function.block = NULL;
+            node->data.function.compilable = false;
+            node->data.function.parameter_nodes = NULL;
+            node->data.function.return_type_expression = NULL;
             break;
         }
         
@@ -313,6 +313,7 @@ bool orso_ast_node_type_is_decl_or_stmt(OrsoASTNodeType node_type) {
         case ORSO_AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT:
         case ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY:
         case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE:
         case ORSO_AST_NODE_TYPE_EXPRESSION_GROUPING:
         case ORSO_AST_NODE_TYPE_EXPRESSION_PRIMARY:
         case ORSO_AST_NODE_TYPE_EXPRESSION_UNARY:
@@ -338,6 +339,7 @@ bool orso_ast_node_type_is_expression(OrsoASTNodeType node_type) {
         case ORSO_AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT:
         case ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY:
         case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE:
         case ORSO_AST_NODE_TYPE_EXPRESSION_GROUPING:
         case ORSO_AST_NODE_TYPE_EXPRESSION_PRIMARY:
         case ORSO_AST_NODE_TYPE_EXPRESSION_UNARY:
@@ -449,6 +451,31 @@ static OrsoASTNode* convert_call_expression(Parser* parser, OrsoASTNode* left_op
     return call;
 }
 
+static OrsoASTNode* convert_function_definition(Parser* parser, OrsoASTNode* left_operand, OrsoASTNode* function_definition) {
+    if (left_operand->node_type != ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE) {
+        error_at(parser, &left_operand->start, "Expect a function signature.");
+        left_operand->node_type = ORSO_AST_NODE_TYPE_UNDEFINED;
+        return left_operand;
+    }
+
+    for (i32 i = 0; i < sb_count(left_operand->data.function.parameter_nodes); i++) {
+        OrsoASTNode* parameter = left_operand->data.function.parameter_nodes[i];
+        if (parameter->node_type != ORSO_AST_NODE_TYPE_DECLARATION) {
+            error_at(parser, &parameter->start, "Expect an entity declaration.");
+            left_operand->node_type = ORSO_AST_NODE_TYPE_UNDEFINED;
+            return left_operand;
+        }
+    }
+
+    function_definition->data.function.parameter_nodes = left_operand->data.function.parameter_nodes;
+    function_definition->data.function.return_type_expression = left_operand->data.function.return_type_expression;
+
+    // prevents freeing the node  parameter and return expressions
+    left_operand->node_type = ORSO_AST_NODE_TYPE_UNDEFINED;
+
+    return function_definition;
+}
+
 static OrsoASTNode* assignment(Parser* parser) {
     OrsoASTNode* expression_node = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_EXPRESSION_ASSIGNMENT, parser->previous);
 
@@ -529,7 +556,7 @@ static OrsoASTNode* ifelse(Parser* parser) {
     return expression_node;
 }
 
-static bool is_incoming_expression_function_definition(Parser* parser) {
+static bool is_incoming_function_signature(Parser* parser) {
     ASSERT(parser->previous.type == TOKEN_PARENTHESIS_OPEN, "must be starting to open a parenthesis");
 
     Lexer look_ahead_lexer = parser->lexer;
@@ -557,7 +584,19 @@ static bool is_incoming_expression_function_definition(Parser* parser) {
 
     next = lexer_next_token(&look_ahead_lexer);
     
-    return next.type == TOKEN_ARROW_RIGHT || next.type == TOKEN_BRACE_OPEN;
+    return next.type == TOKEN_ARROW_RIGHT;
+}
+
+static bool is_incoming_declaration_declaration(Parser* parser) {
+    if (parser->current.type != TOKEN_IDENTIFIER) {
+        return false;
+    }
+
+    Lexer lookahead_lexer = parser->lexer;
+
+    Token token = lexer_next_token(&lookahead_lexer);
+
+    return token.type == TOKEN_COLON;
 }
 
 static OrsoASTNode* entity_declaration(Parser* parser, bool as_parameter);
@@ -569,7 +608,11 @@ static OrsoASTNode** parse_parameters(Parser* parser) {
 
     OrsoASTNode** parameters = NULL;
     while (check(parser, TOKEN_IDENTIFIER)) {
-        sb_push(parameters, entity_declaration(parser, true));
+        if (is_incoming_declaration_declaration(parser)) {
+            sb_push(parameters, entity_declaration(parser, true));
+        } else {
+            sb_push(parameters, expression(parser, true));
+        }
         if (match(parser, TOKEN_COMMA)) {
             continue;
         }
@@ -578,37 +621,38 @@ static OrsoASTNode** parse_parameters(Parser* parser) {
     return parameters;
 }
 
-static void parse_function_definition(Parser* parser, OrsoASTNode* function_definition) {
-    ASSERT(function_definition->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION, "must be a function defintion");
-    function_definition->data.function_definition.parameters = NULL;
-    function_definition->data.function_definition.return_type_expression = NULL;
-    function_definition->data.function_definition.compilable = true;
+static void parse_function_signature(Parser* parser, OrsoASTNode* function_definition) {
+    ASSERT(function_definition->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE, "must be a function signature");
+    function_definition->data.function.parameter_nodes = NULL;
+    function_definition->data.function.return_type_expression = NULL;
 
-    function_definition->data.function_definition.parameters = parse_parameters(parser);
+    function_definition->data.function.parameter_nodes = parse_parameters(parser);
 
     consume(parser, TOKEN_PARENTHESIS_CLOSE, "Expect close parenthesis for end of arguments.");
 
-    if (match(parser, TOKEN_ARROW_RIGHT)) {
-        function_definition->data.function_definition.return_type_expression = expression(parser, true);
-    }
+    consume(parser, TOKEN_ARROW_RIGHT, "Expect -> for return type.");
 
-    consume(parser, TOKEN_BRACE_OPEN, "Expect open brace for function body.");
+    //if (match(parser, TOKEN_ARROW_RIGHT)) {
+        function_definition->data.function.return_type_expression = expression(parser, true);
+    //}
 
-    function_definition->data.function_definition.block = block(parser);
+    // consume(parser, TOKEN_BRACE_OPEN, "Expect open brace for function body.");
+
+    // function_definition->data.function_definition.block = block(parser);
 }
 
-static OrsoASTNode* grouping_or_function_definition(Parser* parser) {
+static OrsoASTNode* grouping_or_function_signature(Parser* parser) {
     OrsoASTNodeType node_type;
-    if (is_incoming_expression_function_definition(parser)) {
-        node_type = ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION;
+    if (is_incoming_function_signature(parser)) {
+        node_type = ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE;
     } else {
         node_type = ORSO_AST_NODE_TYPE_EXPRESSION_GROUPING;
     }
 
     OrsoASTNode* expression_node = orso_ast_node_new(parser->ast, node_type, parser->previous);
 
-    if (node_type == ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION) {
-        parse_function_definition(parser, expression_node);
+    if (node_type == ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE) {
+        parse_function_signature(parser, expression_node);
 
         expression_node->type = &OrsoTypeUnresolved;
         expression_node->narrowed_type = &OrsoTypeUnresolved;
@@ -682,10 +726,19 @@ static OrsoASTNode* binary(Parser* parser) {
     return expression_node;
 }
 
+static OrsoASTNode* function_definition(Parser* parser) {
+    OrsoASTNode* function_definition_expression = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION, parser->previous);
+    function_definition_expression->data.function.compilable = true;
+    function_definition_expression->data.function.block = block(parser);
+    function_definition_expression->end = parser->previous;
+
+    return function_definition_expression;
+}
+
 ParseRule rules[] = {
-    [TOKEN_PARENTHESIS_OPEN]        = { grouping_or_function_definition,   call,       PREC_CALL },
+    [TOKEN_PARENTHESIS_OPEN]        = { grouping_or_function_signature,   call,       PREC_CALL },
     [TOKEN_PARENTHESIS_CLOSE]       = { NULL,       NULL,       PREC_NONE },
-    [TOKEN_BRACE_OPEN]              = { block,      NULL,       PREC_BLOCK },
+    [TOKEN_BRACE_OPEN]              = { block,      function_definition,     PREC_BLOCK },
     [TOKEN_BRACE_CLOSE]             = { NULL,       NULL,       PREC_NONE },
     [TOKEN_BRACKET_OPEN]            = { NULL,       NULL,       PREC_NONE },
     [TOKEN_BRACKET_CLOSE]           = { NULL,       NULL,       PREC_NONE },
@@ -750,7 +803,11 @@ static OrsoASTNode* parse_precedence(Parser* parser, Precedence precedence) {
         left_operand = prefix_rule(parser);
     }
 
-    while (precedence <= get_rule(parser->current.type)->precedence) {
+    // we make an exception here for open brace after a function signature. 
+    // TODO: Look at the note at the precedence enum, this if statement could possibly be removed
+    // bool is_function_definition_exception = left_operand->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE && parser->current.type == TOKEN_BRACE_OPEN;
+
+    while (precedence <= get_rule(parser->current.type)->precedence || (left_operand->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE && parser->current.type == TOKEN_BRACE_OPEN)) {
         advance(parser);
         ParseFn infix_rule = get_rule(parser->previous.type)->infix;
         OrsoASTNode* right_operand = infix_rule(parser);
@@ -766,7 +823,34 @@ static OrsoASTNode* parse_precedence(Parser* parser, Precedence precedence) {
             case ORSO_AST_NODE_TYPE_EXPRESSION_ASSIGNMENT:
                 left_operand = convert_assignment_expression(parser, left_operand, right_operand);
                 break;
+            case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION:
+                left_operand = convert_function_definition(parser, left_operand, right_operand);
+                break;
             default: UNREACHABLE();
+        }
+    }
+
+    /*
+     * I was a little liberal with the parsing of the function signature because I wanted it 
+     * to capture both entity declarations and expressions for the parameters. This allows me
+     * to combine a block and a signature to make a definition and then check if all the
+     * parameters and entity declarations. That case is handled already.
+     * 
+     * Now here, I need to verify that all the parameters are expressions because
+     * this is the signature case. I only want the parameters to be expressions of types.
+     * 
+     * On a special note, this is a good example on why implementing your own parser is
+     * good. It allows you to easily make special cases for your grammar. Unless you're,
+     * for some reason, focused on making an LL1 parser, don't worry about writing a
+     * restrictive grammar.
+     */
+    if (left_operand->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE) {
+        for (i32 i = 0; i < sb_count(left_operand->data.function.parameter_nodes); i++) {
+            OrsoASTNode* parameter = left_operand->data.function.parameter_nodes[i];
+            if (!orso_ast_node_type_is_expression(parameter->node_type)) {
+                error_at(parser, &parameter->start, "Expect a type expression here.");
+                break;
+            }
         }
     }
 
@@ -867,18 +951,6 @@ static OrsoASTNode* entity_declaration(Parser* parser, bool as_parameter) {
 
     entity_declaration_node->end = parser->previous;
     return entity_declaration_node;
-}
-
-static bool is_incoming_declaration_declaration(Parser* parser) {
-    if (parser->current.type != TOKEN_IDENTIFIER) {
-        return false;
-    }
-
-    Lexer lookahead_lexer = parser->lexer;
-
-    Token token = lexer_next_token(&lookahead_lexer);
-
-    return token.type == TOKEN_COLON;
 }
 
 static OrsoASTNode* declaration(Parser* parser) {
@@ -991,6 +1063,10 @@ void ast_print_ast_node(OrsoASTNode* node, i32 initial) {
         }
         case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION: {
             printf("FUNCTION_DEFINITION - TODO: better print for this\n");
+            break;
+        }
+        case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE: {
+            printf("FUNCTION_SIGNATURE - TODO: better print for this\n");
             break;
         }
         case ORSO_AST_NODE_TYPE_STATEMENT_PRINT_EXPR:
