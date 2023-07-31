@@ -1091,14 +1091,14 @@ void orso_code_builder_free(OrsoCodeBuilder* builder) {
     (void)builder;
 }
 
-OrsoFunction* orso_generate_expression_function(OrsoCodeBuilder* builder, OrsoASTNode* expression_node) {
+OrsoFunction* orso_generate_expression_function(OrsoCodeBuilder* builder, OrsoASTNode* expression_node, bool is_folding_time) {
     Compiler compiler;
     OrsoFunctionType* function_type = (OrsoFunctionType*)orso_type_set_fetch_function(&builder->ast->type_set, expression_node->type, NULL, 0);
 
     OrsoFunction* run_function = orso_new_function();
 
     compiler_init(&compiler, ORSO_FUNCTION_TYPE_SCRIPT, builder->vm, run_function, (OrsoType*)function_type);
-    compiler.skip_function_definitions = expression_node->fold ? false : true;
+    compiler.skip_function_definitions = is_folding_time ? false : true;
 
     // The vm will put this guy on the guy.
     compiler.max_stack_size = compiler.current_stack_size = 1;
