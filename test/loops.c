@@ -40,6 +40,26 @@ INTERPRETER_TEST(until_with_else_type,
 	"x := until true { 42; } else { 'hello world'; }; print_expr x;",
 	"x (symbol|i32) => 'hello world'\n")
 
+INTERPRETER_TEST(no_braces_no_else,
+	"y := 2; while y = y - 1 do print 1;",
+	"1\n")
+
+INTERPRETER_TEST(no_braces_else,
+	"y := 2; while y = y - 1 do print 1 else print 2;",
+	"1\n2\n")
+
+INTERPRETER_TEST(no_braces_more_branches,
+	"y := -2; until not (y = y + 1) do print 1 else if true then print 2 else print 3;",
+	"1\n2\n")
+
+INTERPRETER_TEST(no_braces_mix_branches,
+	"y := -2; until not (y = y + 1) do print 1 else unless false { print 2; } else print 3;",
+	"1\n2\n")
+
+INTERPRETER_TEST(cannot_use_then_instead_of_do,
+	"y := -2; until not (y = y + 1) then print 1 else unless false { print 2; } else print 3;",
+	"1\n2\n")
+
 // INTERPRETER_TEST(for_in_integer,
 // 	"for i in 3 { print i; }",
 // 	"0\n1\n2\n")

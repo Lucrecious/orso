@@ -47,6 +47,12 @@ typedef enum OrsoASTNodeType {
     ORSO_AST_NODE_TYPE_EXPRESSION_BRANCHING,
     ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION,
     ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE,
+
+    /*
+    * This is a special case expression. It's simply an expression with a statement inside.
+    * This is used for branching.
+    */
+    ORSO_AST_NODE_TYPE_EXPRESSION_STATEMENT,
 } OrsoASTNodeType;
 
 #define ORSO_AST_NODE_TYPE_EXPRESSION_CASE \
@@ -61,7 +67,8 @@ case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION: \
 case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE: \
 case ORSO_AST_NODE_TYPE_EXPRESSION_GROUPING: \
 case ORSO_AST_NODE_TYPE_EXPRESSION_PRIMARY: \
-case ORSO_AST_NODE_TYPE_EXPRESSION_UNARY \
+case ORSO_AST_NODE_TYPE_EXPRESSION_UNARY: \
+case ORSO_AST_NODE_TYPE_EXPRESSION_STATEMENT
 
 typedef struct OrsoASTFuncion {
     OrsoASTNode** parameter_nodes;
@@ -124,6 +131,7 @@ struct OrsoASTNode {
 
         // statement, print, print_expr, cast, grouping, entity
         OrsoASTNode* expression;
+        OrsoASTNode* statement; // for readability
 
         OrsoASTCall call;
 

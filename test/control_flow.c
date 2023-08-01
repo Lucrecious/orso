@@ -64,6 +64,26 @@ INTERPRETER_TEST(else_ifset,
 	"x := 2;\ny := 1;\nz := if x < y { x - y; } else { y - x; };\nprint z;",
 	"-1\n")
 
+INTERPRETER_TEST(no_braces_no_else,
+	"y := 10; x := if y < 20 then print 1;",
+	"1\n")
+
+INTERPRETER_TEST(no_braces_else,
+	"y := 10; x := if y < 20 then print 1 else print 2;",
+	"1\n")
+
+INTERPRETER_TEST(no_braces_more_branches,
+	"y := 10; x := unless y < 5 then print 1 else if x < 20 then print 2 else print 3; print x;",
+	"1\nnull\n")
+
+INTERPRETER_TEST(no_braces_mix_branches,
+	"y := 10; x := if y < 5 then print 1 else unless x < 20 { print 2; } else print 3; print x;",
+	"3\nnull\n")
+
+INTERPRETER_TEST(cannot_use_do_instead_of_then,
+	"y := 10; x := if y < 5 do print 1 else unless x < 20 { print 2; } else print 3; print x;",
+	"3\nnull\n")
+
 MU_TEST_SUITE(tests) {
     MU_RUN_TEST(then_branch_print);
     MU_RUN_TEST(else_branch_print);

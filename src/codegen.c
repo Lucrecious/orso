@@ -488,14 +488,14 @@ static void end_scope(Compiler* compiler, Chunk* chunk, OrsoType* block_value_ty
 static void declaration(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode* declaration, Chunk* chunk);
 static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode* expression_node, Chunk* chunk);
 
-static OrsoType* gen_block(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, Chunk* chunk, OrsoASTNode* block, i32 end_line) {
-    OrsoASTNode* final_expression_statement = sb_count(block->data.block) > 0 ? block->data.block[sb_count(block->data.block) - 1] : NULL;
+static OrsoType* gen_block(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, Chunk* chunk, OrsoASTNode** block, i32 node_count, i32 end_line) {
+    OrsoASTNode* final_expression_statement = node_count > 0 ? block[node_count - 1] : NULL;
 
     final_expression_statement = final_expression_statement && final_expression_statement->node_type != ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION ?
             NULL : final_expression_statement;
 
-    for (i32 i = 0; i < sb_count(block->data.block) - (final_expression_statement != NULL); i++) {
-        declaration(vm, compiler, ast, block->data.block[i], chunk);
+    for (i32 i = 0; i < node_count - (final_expression_statement != NULL); i++) {
+        declaration(vm, compiler, ast, block[i], chunk);
     }
 
     OrsoType* return_value_type = &OrsoTypeInvalid;
@@ -847,9 +847,17 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode
         case ORSO_AST_NODE_TYPE_EXPRESSION_BLOCK: {
             begin_scope(compiler);
 
-            OrsoType* return_value_type = gen_block(vm, compiler, ast, chunk, expression_node, expression_node->end.line);
+            OrsoASTNode** block = expression_node->data.block;
+            i32 node_count = sb_count(block);
+            OrsoType* return_value_type = gen_block(vm, compiler, ast, chunk, block, node_count, expression_node->end.line);
 
             end_scope(compiler, chunk, return_value_type, expression_node->end.line);
+            break;
+        }
+
+        case ORSO_AST_NODE_TYPE_EXPRESSION_STATEMENT: {
+            OrsoASTNode* block[1] = { expression_node->data.statement };
+            gen_block(vm, compiler, ast, chunk, block, 1, expression_node->start.line);
             break;
         }
         
@@ -1078,6 +1086,7 @@ static void declaration(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNod
         case ORSO_AST_NODE_TYPE_EXPRESSION_GROUPING:
         case ORSO_AST_NODE_TYPE_EXPRESSION_PRIMARY:
         case ORSO_AST_NODE_TYPE_EXPRESSION_UNARY:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_STATEMENT:
             UNREACHABLE();
     }
 }

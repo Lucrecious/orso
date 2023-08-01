@@ -533,6 +533,25 @@ static void resolve_foldable(
             break;
         }
 
+        case ORSO_AST_NODE_TYPE_EXPRESSION_STATEMENT: {
+            switch (expression->data.statement->node_type) {
+                case ORSO_AST_NODE_TYPE_STATEMENT_RETURN: foldable = false; break;
+
+                case ORSO_AST_NODE_TYPE_STATEMENT_PRINT:
+                case ORSO_AST_NODE_TYPE_STATEMENT_PRINT_EXPR:
+                case ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION: {
+                    foldable = expression->data.statement->data.expression->foldable;
+                    break;
+                }
+
+                case ORSO_AST_NODE_TYPE_UNDEFINED: break;
+
+                case ORSO_AST_NODE_TYPE_DECLARATION:
+                case ORSO_AST_NODE_TYPE_EXPRESSION_CASE: UNREACHABLE(); 
+            }
+            break;
+        }
+
         case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE:
         case ORSO_AST_NODE_TYPE_DECLARATION:
         case ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION:
@@ -684,6 +703,12 @@ static void resolve_declaration(
         OrsoAST* ast,
         AnalysisState state,
         OrsoASTNode* declaration_node);
+
+static void resolve_statement(
+    OrsoStaticAnalyzer* analyzer,
+    OrsoAST* ast,
+    AnalysisState state,
+    OrsoASTNode* statement);
 
 static void resolve_function_expression(
         OrsoStaticAnalyzer* analyzer,
@@ -981,6 +1006,33 @@ void orso_resolve_expression(
             break;
         }
 
+        case ORSO_AST_NODE_TYPE_EXPRESSION_STATEMENT: {
+            resolve_statement(analyzer, ast, state, expression->data.statement);
+            if (EXPRESSION_RESOLVED(expression)) {
+                return;
+            }
+
+            expression->return_guarentee = expression->data.statement->data.expression ? 
+                    expression->data.statement->data.expression->return_guarentee : ORSO_NO_RETURN_GUARENTEED;
+
+            if (expression->data.statement->node_type == ORSO_AST_NODE_TYPE_STATEMENT_RETURN) {
+                if (expression->return_guarentee != ORSO_NO_RETURN_GUARENTEED) {
+                    error(analyzer, expression->start.line, "Cannot return within a return expression.");
+                } else {
+                    expression->return_guarentee = ORSO_RETURN_GUARENTEED;
+                }
+            }
+
+            if (expression->return_guarentee != ORSO_NO_RETURN_GUARENTEED) {
+                expression->type = &OrsoTypeUndefined;
+                expression->narrowed_type = &OrsoTypeUndefined;
+            } else {
+                expression->type = expression->data.statement->data.expression->type;
+                expression->narrowed_type = expression->data.statement->data.expression->narrowed_type;
+            }
+            break;
+        }
+
         case ORSO_AST_NODE_TYPE_EXPRESSION_BRANCHING: {
             orso_resolve_expression(analyzer, ast, state, expression->data.branch.condition);
             if (EXPRESSION_RESOLVED(expression)) {
@@ -1008,14 +1060,14 @@ void orso_resolve_expression(
             OrsoReturnGuarentee branch_return_guarentee;
             // resolve return guarentee first
             {
-                ASSERT(expression->data.branch.then_expression->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_BLOCK, "then expression must be a block fro now");
+                ASSERT(expression->data.branch.then_expression->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_BLOCK || expression->data.branch.then_expression->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_STATEMENT, "must be expression statement or block, not other choices");
                 OrsoReturnGuarentee then_return_guarentee = expression->data.branch.then_expression->return_guarentee;
 
                 OrsoReturnGuarentee else_return_guarentee = ORSO_NO_RETURN_GUARENTEED;
                 if (expression->data.branch.else_expression) {
-                    if (expression->data.branch.else_expression->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_BLOCK) {
-                        else_return_guarentee = expression->data.branch.else_expression->return_guarentee;
-                    } else if (expression->data.branch.else_expression->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_BRANCHING) {
+                    if (expression->data.branch.else_expression->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_BLOCK
+                    || expression->data.branch.else_expression->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_BRANCHING
+                    || expression->data.branch.else_expression->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_STATEMENT) {
                         else_return_guarentee = expression->data.branch.else_expression->return_guarentee;
                     } else {
                         ASSERT(false, "only blocks and ifs allowed during elses for now");
@@ -1319,8 +1371,24 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
         }
     }
 
+    OrsoSlot entity_slot;
+    OrsoSymbol* name = orso_unmanaged_symbol_from_cstrn(entity_declaration->start.start, entity_declaration->start.length, &analyzer->symbols);
+
+    ASSERT(orso_symbol_table_get(&state.scope->named_entities, name, &entity_slot), "should be forward_declared already");
+
+    orso_symbol_table_get(&state.scope->named_entities, name, &entity_slot);
+
+    Entity* entity = (Entity*)entity_slot.as.p;
+
     // we are resolved
     if (is_declaration_resolved(entity_declaration)) {
+        // this is possible if we are in a branch (i.e. function is defined at the top level, copy scopes are created for branching, it's resolved in one branch but not the other)
+        if (entity->declared_type == &OrsoTypeUnresolved) {
+            ASSERT(entity->narrowed_type == &OrsoTypeUnresolved, "both should always be set at the same time");
+
+            entity->declared_type = entity_declaration->type;
+            entity->narrowed_type = entity_declaration->data.declaration.initial_value_expression->narrowed_type;
+        }
         return;
     }
 
@@ -1328,8 +1396,6 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
         error(analyzer, entity_declaration->data.declaration.initial_value_expression->start.line, "Cannot set entity to an undefined type.");
         return;
     }
-
-    OrsoSymbol* name = orso_unmanaged_symbol_from_cstrn(entity_declaration->start.start, entity_declaration->start.length, &analyzer->symbols);
 
     if (!entity_declaration->data.declaration.is_mutable
     && entity_declaration->data.declaration.initial_value_expression != NULL
@@ -1378,14 +1444,6 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
     if (analyzer->panic_mode) {
         return;
     }
-
-    OrsoSlot entity_slot;
-
-    ASSERT(orso_symbol_table_get(&state.scope->named_entities, name, &entity_slot), "should be forward_declared already");
-
-    orso_symbol_table_get(&state.scope->named_entities, name, &entity_slot);
-
-    Entity* entity = (Entity*)entity_slot.as.p;
 
     entity->declared_type = entity_declaration->type;
     entity->narrowed_type = entity_declaration->type;
@@ -1789,6 +1847,43 @@ static OrsoScope* get_closest_outer_function_scope(OrsoScope* scope) {
     return scope;
 }
 
+static void resolve_statement(
+        OrsoStaticAnalyzer* analyzer,
+        OrsoAST* ast,
+        AnalysisState state,
+        OrsoASTNode* statement) {
+    switch (statement->node_type) {
+        case ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION:
+        case ORSO_AST_NODE_TYPE_STATEMENT_PRINT:
+        case ORSO_AST_NODE_TYPE_STATEMENT_PRINT_EXPR:
+            orso_resolve_expression(analyzer, ast, state, statement->data.expression);
+            break;
+
+        case ORSO_AST_NODE_TYPE_STATEMENT_RETURN: {
+            OrsoType* return_expression_type = &OrsoTypeVoid;
+
+            if (statement->data.expression) {
+                orso_resolve_expression(analyzer, ast, state, statement->data.expression);
+                return_expression_type = statement->data.expression->type;
+            }
+
+            OrsoScope* function_scope = get_closest_outer_function_scope(state.scope);
+            ASSERT(function_scope, "right now all scopes should be under a function scope");
+
+            OrsoFunctionType* function_type = (OrsoFunctionType*)function_scope->creator->type;
+            OrsoType* function_return_type = function_scope ? function_type->return_type : &OrsoTypeVoid;
+            if (!orso_type_fits(function_return_type, return_expression_type)) {
+                error(analyzer, statement->start.line, "Return expression must be compatible with function return type.");
+            }
+            break;
+        }
+
+        case ORSO_AST_NODE_TYPE_UNDEFINED: break;
+        case ORSO_AST_NODE_TYPE_DECLARATION:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_CASE: UNREACHABLE();
+    }
+}
+
 static void resolve_declaration(
         OrsoStaticAnalyzer* analyzer,
         OrsoAST* ast,
@@ -1799,38 +1894,11 @@ static void resolve_declaration(
     // TODO: eventually this will be resolved, everything will be a declaration entity
     // there will only be two types: anonymous declarations and named declarations
     // print_expr, print and statement expressions will be all me anonymous declarations
-    switch (declaration_node->node_type) {
-        case ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION:
-        case ORSO_AST_NODE_TYPE_STATEMENT_PRINT:
-        case ORSO_AST_NODE_TYPE_STATEMENT_PRINT_EXPR:
-            orso_resolve_expression(analyzer, ast, state, declaration_node->data.expression);
-            break;
+    if (declaration_node->node_type == ORSO_AST_NODE_TYPE_DECLARATION) {
+        resolve_entity_declaration(analyzer, ast, state, declaration_node);
+    } else {
+        resolve_statement(analyzer,ast, state, declaration_node);
 
-        case ORSO_AST_NODE_TYPE_STATEMENT_RETURN: {
-            OrsoType* return_expression_type = &OrsoTypeVoid;
-
-            if (declaration_node->data.expression) {
-                orso_resolve_expression(analyzer, ast, state, declaration_node->data.expression);
-                return_expression_type = declaration_node->data.expression->type;
-            }
-
-            OrsoScope* function_scope = get_closest_outer_function_scope(state.scope);
-            ASSERT(function_scope, "right now all scopes should be under a function scope");
-
-            OrsoFunctionType* function_type = (OrsoFunctionType*)function_scope->creator->type;
-            OrsoType* function_return_type = function_scope ? function_type->return_type : &OrsoTypeVoid;
-            if (!orso_type_fits(function_return_type, return_expression_type)) {
-                error(analyzer, declaration_node->start.line, "Return expression must be compatible with function return type.");
-            }
-            break;
-        }
-
-        case ORSO_AST_NODE_TYPE_DECLARATION: {
-            resolve_entity_declaration(analyzer, ast, state, declaration_node);
-            break;
-        }
-        case ORSO_AST_NODE_TYPE_UNDEFINED: break;
-        case ORSO_AST_NODE_TYPE_EXPRESSION_CASE: UNREACHABLE();
     }
 
     analyzer->panic_mode = false;

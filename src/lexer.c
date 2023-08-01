@@ -212,6 +212,7 @@ static TokenType check_keyword(Lexer* lexer, i32 start, i32 length,
 static TokenType identifier_type(Lexer* lexer) {
     switch (lexer->start[0]) {
         case 'a': return check_keyword(lexer, 1, 2, "nd", TOKEN_AND);
+        case 'd': return check_keyword(lexer, 1, 1, "o", TOKEN_DO);
         case 'e': return check_keyword(lexer, 1, 3, "lse", TOKEN_ELSE);
         case 'f': {
             if (lexer->current - lexer->start > 1) {
@@ -245,7 +246,15 @@ static TokenType identifier_type(Lexer* lexer) {
             break;
         case 'r': return check_keyword(lexer, 1, 5, "eturn", TOKEN_RETURN);
         case 's': return check_keyword(lexer, 1, 5, "truct", TOKEN_STRUCT);
-        case 't': return check_keyword(lexer, 1, 3, "rue", TOKEN_TRUE);
+        case 't':
+            if (lexer->current - lexer->start > 1) {
+                switch(lexer->start[1]) {
+                    case 'h': return check_keyword(lexer, 2, 2, "en", TOKEN_THEN);
+                    case 'r': return check_keyword(lexer, 2, 2, "ue", TOKEN_TRUE);
+                }
+            }
+            break;
+            
         case 'u': {
             if (lexer->current - lexer->start > 2 && lexer->start[1] == 'n') {
                 switch (lexer->start[2]) {
