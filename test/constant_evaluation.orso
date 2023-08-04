@@ -120,41 +120,6 @@ Cannot use global mutable A to resolve local constant B.
 # ---
 
 
-## partial struct required
-
-A :: struct {
-    x := #compile B().a;
-    y := "foo";
-};
-
-B :: struct {
-    a := 42;
-    b := #compile A().y;
-};
-
-print A().x;
-# ---
-42
-# ---
-
-
-## partial struct required 2
-
-Foo :: struct {
-    X :: Bar.A;
-    Y :: "foo";
-};
-
-Bar :: struct {
-    A :: 42;
-    B :: A.Y;
-};
-
-print A.X;
-# ---
-42
-# ---
-
 ## global mutables must be ordered
 x := y;
 y := 10;
@@ -163,6 +128,7 @@ print x;
 # ---
 y is not defined.
 # ---
+
 
 ## local mutables must be ordered
 {
@@ -174,3 +140,37 @@ y is not defined.
 # ---
 y is not defined.
 # ---
+
+
+# typedefs are just regular declarations
+int :: i32;
+x: int = 10;
+print x;
+# ---
+10
+# ---
+
+
+# function calls are not evaluated at constant time
+foo :: () -> i32 { return 42; }
+x :: foo();
+y :: 42; 
+print x == y;
+# ---
+compile error 1, expression is not constant
+# ---
+
+
+# blocks expressions cannot be evaluated at constant time
+foo :: {
+    x := 5;
+    y := 2;
+    x * y;
+};
+print foo;
+# ---
+compile error 1, expression cannot be evaluated at constant time
+# ---
+
+
+# 

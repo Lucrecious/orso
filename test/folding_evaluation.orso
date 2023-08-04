@@ -1,0 +1,124 @@
+## basic
+x :: #fold 10;
+y :: 10;
+
+print x == y;
+# ---
+true
+# ---
+
+## function call
+foo :: () -> i32 { return 42; };
+x :: #fold foo()
+y :: 42;
+print x == y;
+# ---
+true
+# ---
+
+
+## folding over an if
+foo :: () -> bool { return true; };
+print #fold if foo() then "hello" else "world";
+# ---
+hello
+# ---
+
+## mutual recursion fold
+is_odd :: (n: i32) -> bool {
+    if n == 0 then
+        return false
+    else
+        return is_even(n - 1);
+};
+
+is_even :: (n: i32) -> bool {
+    if n == 0 then
+        return true
+    else
+        return is_odd(n - 1);
+};
+
+IS_ODD :: #fold is_odd(7);
+print IS_ODD;
+# ---
+true
+# ---
+
+## self recursion
+fib :: (n: i32) -> i32 {
+    return if n < 2 then n else fib(n - 1) + fib(n -2);
+};
+
+print #fold fib(2);
+# ---
+1
+# ---
+
+
+## impossible self recursion cyclic
+fib :: (n: i32) -> i32 {
+    FIB10 :: #fold fib(10);
+
+    if n == 10 then return FIB10;
+
+    return if n < 2 then n else fib(n - 1) + fib(n -2);
+};
+
+print fib(2);
+# ---
+compile error 1, cyclic dependency while folding
+# ---
+
+
+## block folding
+foo :: #fold {
+    x := 5;
+    y := 2;
+    x * 2;
+};
+print foo;
+# ---
+10
+# ---
+
+
+## cannot access local variables resolved at a different fold level
+{
+    x := 10;
+    print #fold {
+        foo := x;
+        foo;
+    };
+};
+# ---
+compile error 3, x was declared on a different fold level
+# ---
+
+
+## can access local variables resolved at the same fold level
+{
+    print #fold {
+        x := 10;
+        foo := x;
+        foo;
+    };
+};
+# ---
+10
+# ---
+
+
+## calling functions from inside blocks is okay
+{
+    fib :: (n: i32) -> i32 {
+        return unless n < 2 then fib(n - 1) + fib(n - 2) else n;
+    };
+    print #fold { fib3 := fib(3); fib3; };
+};
+# ---
+3
+# ---
+
+
+## 
