@@ -529,16 +529,6 @@ static OrsoASTNode* ifelse(Parser* parser) {
         return expression_node;
     }
 
-    // if (match(parser, TOKEN_IF) || match(parser, TOKEN_UNLESS) ||
-    //     match(parser, TOKEN_WHILE) || match(parser, TOKEN_UNTIL)) {
-    //     expression_node->data.branch.else_expression = ifelse(parser);
-    //     return expression_node;
-    // }
-
-    // consume(parser, TOKEN_BRACE_OPEN, "Expect '{' after else.");
-
-    // expression_node->data.branch.else_expression = block(parser);
-
     expression_node->data.branch.else_expression = statement(parser, true);
 
     expression_node->end = parser->previous;
@@ -622,13 +612,7 @@ static void parse_function_signature(Parser* parser, OrsoASTNode* function_defin
 
     consume(parser, TOKEN_ARROW_RIGHT, "Expect -> for return type.");
 
-    //if (match(parser, TOKEN_ARROW_RIGHT)) {
-        function_definition->data.function.return_type_expression = expression(parser, true);
-    //}
-
-    // consume(parser, TOKEN_BRACE_OPEN, "Expect open brace for function body.");
-
-    // function_definition->data.function_definition.block = block(parser);
+    function_definition->data.function.return_type_expression = expression(parser, true);
 }
 
 static OrsoASTNode* grouping_or_function_signature(Parser* parser) {
@@ -998,108 +982,124 @@ bool orso_parse(OrsoAST* ast, const char* source, OrsoErrorFunction error_fn) {
     return !parser.had_error;
 }
 
-void ast_print_ast_node(OrsoASTNode* node, i32 initial) {
+void ast_print_ast_node(OrsoASTNode* node, i32 initial, const char* prefix) {
+    printf("%*s%s", initial, "", prefix);
+
     const char type_str[128];
-    orso_type_to_cstrn(node->type, (char*)type_str, 128);
-
     const char narrow_type_str[128];
-    orso_type_to_cstrn(node->narrowed_type, (char*)narrow_type_str, 128);
+    
+    orso_type_to_cstrn(node->type, (char*)type_str, 128);
+    const char type_info[128];
 
-    printf("%*s [%s][%s] ", initial, "", (char*)type_str, narrow_type_str);
+    if (node->type != node->narrowed_type) {
+        orso_type_to_cstrn(node->narrowed_type, (char*)narrow_type_str, 128);
+        snprintf((char*)type_info, 128, "%s (%s)", type_str, narrow_type_str);
+    } else {
+        snprintf((char*)type_info, 128, "%s", type_str);
+    }
 
     switch (node->node_type) {
         case ORSO_AST_NODE_TYPE_EXPRESSION_BINARY: {
             Token operator = node->operator;
-            printf("BINARY %.*s\n", operator.length, operator.start);
+            printf("binary(%.*s): %s\n", operator.length, operator.start, type_info);
 
-            ast_print_ast_node(node->data.binary.lhs, initial + 1);
-            ast_print_ast_node(node->data.binary.rhs, initial + 1);
+            ast_print_ast_node(node->data.binary.lhs, initial + 1, "left: ");
+            ast_print_ast_node(node->data.binary.rhs, initial + 1, "right: ");
             break;
         }
         case ORSO_AST_NODE_TYPE_EXPRESSION_GROUPING: {
-            printf("GROUPING\n");
+            printf("grouping: %s\n", type_info);
 
-            ast_print_ast_node(node->data.expression, initial + 1);
+            ast_print_ast_node(node->data.expression, initial + 1, "");
             break;
         }
 
         case ORSO_AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT: {
-            printf("IMPLICIT CAST \n");
+            printf("implicit cast: %s\n", type_info);
 
-            ast_print_ast_node(node->data.expression, initial + 1);
+            ast_print_ast_node(node->data.expression, initial + 1, "to: ");
             break;
         }
         case ORSO_AST_NODE_TYPE_EXPRESSION_UNARY: {
-            printf("UNARY %.*s\n", node->operator.length, node->operator.start);
+            printf("unary(%.*s): %s\n", node->operator.length, node->operator.start, type_info);
 
-            ast_print_ast_node(node->data.expression, initial + 1);
+            ast_print_ast_node(node->data.expression, initial + 1, "");
             break;
         }
         case ORSO_AST_NODE_TYPE_EXPRESSION_PRIMARY: {
-            printf("PRIMARY %.*s\n", node->start.length, node->start.start);
+            printf("primary(%.*s): %s\n", node->start.length, node->start.start, type_info);
             break;
         }
         case ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY: {
-            printf("ENTITY - %.*s\n", node->start.length, node->start.start);
+            printf("entity(%.*s): %s\n", node->start.length, node->start.start, type_info);
             break;
         }
         case ORSO_AST_NODE_TYPE_EXPRESSION_ASSIGNMENT: {
-            printf("ASSIGNMENT\n");
-            ast_print_ast_node(node->data.binary.lhs, initial + 1);
-            ast_print_ast_node(node->data.binary.rhs, initial + 1);
+            printf("assignment: %s\n", type_info);
+            ast_print_ast_node(node->data.binary.lhs, initial + 1, "lvalue: ");
+            ast_print_ast_node(node->data.binary.rhs, initial + 2, "rvalue: ");
             break;
         }
         case ORSO_AST_NODE_TYPE_EXPRESSION_BLOCK: {
-            printf("BLOCK\n");
+            printf("block: %s\n", type_info);
             for (i32 i = 0; i < sb_count(node->data.block); i++) {
-                ast_print_ast_node(node->data.block[i], initial + 1);
+                ast_print_ast_node(node->data.block[i], initial + 1, "");
             }
             break;
         }
         case ORSO_AST_NODE_TYPE_EXPRESSION_BRANCHING: {
-            OrsoASTNode* condition = node->data.branch.condition;
-            printf("BRANCH - %.*s\n", (i32)(condition->end.start + condition->end.length - condition->start.start), condition->start.start);
-            ast_print_ast_node(node->data.branch.then_expression, initial + 1);
+            printf("branch: %s\n", type_info);
+            ast_print_ast_node(node->data.branch.condition, initial + 1, "condition: ");
+            ast_print_ast_node(node->data.branch.then_expression, initial + 2, "then: ");
             if (node->data.branch.else_expression) {
-                ast_print_ast_node(node->data.branch.else_expression, initial + 1);
+                ast_print_ast_node(node->data.branch.else_expression, initial + 2, "else: ");
             }
             break;
         }
         case ORSO_AST_NODE_TYPE_EXPRESSION_CALL: {
-            printf("CALL\n");
+            printf("call: %s\n", type_info);
+            ast_print_ast_node(node->data.call.callee, initial + 1, "callee: ");
 
             for (i32 i = 0; i < sb_count(node->data.call.arguments); i++) {
-                ast_print_ast_node(node->data.call.arguments[i], initial + 1);
+                ast_print_ast_node(node->data.call.arguments[i], initial + 2, "arg: ");
             }
             break;
         }
         case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION: {
-            printf("FUNCTION_DEFINITION - TODO: better print for this\n");
+            printf("function: %s\n", type_info);
+            for (i32 i = 0; i < sb_count(node->data.function.parameter_nodes); i++) {
+                ast_print_ast_node(node->data.function.parameter_nodes[i], initial + 1, "param: ");
+            }
+            ast_print_ast_node(node->data.function.block, initial + 2, "");
+            ast_print_ast_node(node->data.function.return_type_expression, initial + 1, "returns: ");
             break;
         }
         case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE: {
-            printf("FUNCTION_SIGNATURE - TODO: better print for this\n");
+            printf("function signature: %s\n", type_info);
             break;
         }
+        case ORSO_AST_NODE_TYPE_EXPRESSION_STATEMENT:
+            printf("expression: %s\n", type_info);
+            ast_print_ast_node(node->data.statement, initial + 1, "statement: ");
+            break;
         case ORSO_AST_NODE_TYPE_STATEMENT_PRINT_EXPR:
             printf("print_expr\n");
-            ast_print_ast_node(node->data.expression, initial + 1);
+            ast_print_ast_node(node->data.expression, initial + 1, "");
             break;
         case ORSO_AST_NODE_TYPE_STATEMENT_PRINT:
             printf("print\n");
-            ast_print_ast_node(node->data.expression, initial + 1);
+            ast_print_ast_node(node->data.expression, initial + 1, "");
             break;
         case ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION:
-            printf("expression\n");
-            ast_print_ast_node(node->data.expression, initial + 1);
+            printf("statement\n");
+            ast_print_ast_node(node->data.expression, initial + 1, "expression: ");
             break;
         case ORSO_AST_NODE_TYPE_STATEMENT_RETURN:
             printf("return\n");
-            ast_print_ast_node(node->data.expression, initial + 1);
+            ast_print_ast_node(node->data.expression, initial + 1, "value: ");
             break;
         case ORSO_AST_NODE_TYPE_DECLARATION: {
-            printf("%*s", initial, "");
-            printf("ENTITY DECLARATION - identifier: %.*s, type: ", node->start.length, node->start.start);
+            printf("declaration(%.*s): ", node->start.length, node->start.start);
 
             const char type_str[128];
             orso_type_to_cstrn(node->type, (char*)type_str, 128);
@@ -1107,14 +1107,10 @@ void ast_print_ast_node(OrsoASTNode* node, i32 initial) {
             printf("\n");
 
             if (node->data.declaration.initial_value_expression != NULL) {
-                ast_print_ast_node(node->data.declaration.initial_value_expression, initial + 1);
+                ast_print_ast_node(node->data.declaration.initial_value_expression, initial + 1, "initial: ");
             }
             break;
         }
-        case ORSO_AST_NODE_TYPE_EXPRESSION_STATEMENT:
-            printf("expression statement TODO: MAKE BETTER\n ");
-            ast_print_ast_node(node->data.statement, initial + 1);
-            break;
         case ORSO_AST_NODE_TYPE_UNDEFINED:
             printf("undefined\n");
             break;
@@ -1123,5 +1119,5 @@ void ast_print_ast_node(OrsoASTNode* node, i32 initial) {
 
 void orso_ast_print(OrsoAST* ast, const char* name) {
     printf("=== %s ===\n", name);
-    ast_print_ast_node(ast->root, 0);
+    ast_print_ast_node(ast->root, 0, "");
 }
