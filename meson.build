@@ -93,6 +93,7 @@ test('test_loops', test_loops)
 
 test('test_comments', test_file_runner, args: files('test/comments.orso'))
 test('test_functions', test_file_runner, args: files('test/functions.orso'))
-test('test_compile_time_evaluation', test_file_runner, args: files('test/compile_time_evaluation.orso'))
+test('test_constant_evaluation', test_file_runner, args: files('test/constant_evaluation.orso'))
+test('test_folding_evaluation', test_file_runner, args: files('test/folding_evaluation.orso'))
 
 

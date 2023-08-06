@@ -1,0 +1,6 @@
+## lack of return value should not crash compiler
+foo := () -> { };
+print foo;
+# ---
+<<anonymous> :: () -> void>
+# ---

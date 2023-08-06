@@ -38,7 +38,7 @@ foo (() -> i32) => <foo :: () -> i32>
 # ---
 
 ## object-arg
-foo :: (arg: string) {
+foo :: (arg: string) -> void {
 };
 
 print_expr foo;
@@ -47,7 +47,7 @@ foo ((string) -> void) => <foo :: (string) -> void>
 # ---
 
 ## object-args
-foo :: (arg1: string, arg2: symbol, arg3: string) {
+foo :: (arg1: string, arg2: symbol, arg3: string) -> void {
 };
 
 print_expr foo;
@@ -189,7 +189,7 @@ print foo;
 # ---
 
 ## no binded function because assigning to mutable
-foo := () { };
+foo := () -> void { };
 print foo;
 # ---
 <<anonymous> :: () -> void>

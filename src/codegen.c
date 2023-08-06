@@ -1004,11 +1004,7 @@ static void default_value(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, Chunk* c
 }
 
 static void entity_declaration(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode* variable_declaration, Chunk* chunk) {
-    if (variable_declaration->type == &OrsoTypeUnresolved) {
-        printf("Unused entity declared at at line: %d\n", variable_declaration->start.line);
-        return;
-    }
-
+    ASSERT(variable_declaration->type != &OrsoTypeUnresolved, "all declarations must be resolved");
     default_value(vm, compiler, ast, chunk, variable_declaration);
     
     define_entity(vm, compiler, chunk,
