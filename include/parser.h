@@ -113,7 +113,7 @@ struct OrsoASTNode {
     Token start, end, operator;
 
     // expressions TODO: Fill this in for *everything*, declarations, statements included
-    OrsoType *type, *narrowed_type;
+    OrsoType *value_type, *value_type_narrowed;
 
     // branching, blocks
     OrsoReturnGuarentee return_guarentee;

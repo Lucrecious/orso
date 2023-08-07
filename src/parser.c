@@ -113,8 +113,8 @@ OrsoASTNode* orso_ast_node_new(OrsoAST* ast, OrsoASTNodeType node_type, Token st
     node->end = start;
     node->operator = start;
     node->return_guarentee = ORSO_NO_RETURN_GUARENTEED;
-    node->type = &OrsoTypeUnresolved;
-    node->narrowed_type = &OrsoTypeUnresolved;
+    node->value_type = &OrsoTypeUnresolved;
+    node->value_type_narrowed = &OrsoTypeUnresolved;
 
     node->value_index = -1;
 
@@ -342,20 +342,20 @@ static OrsoASTNode* number(Parser* parser) {
     switch (parser->previous.type)  {
         case TOKEN_INTEGER: {
             i64 value = cstrn_to_i64(parser->previous.start, parser->previous.length);
-            expression_node->type = value_to_integer_type(value);
-            expression_node->value_index = add_constant_value(parser, ORSO_SLOT_I(value, expression_node->type));
+            expression_node->value_type = value_to_integer_type(value);
+            expression_node->value_index = add_constant_value(parser, ORSO_SLOT_I(value, expression_node->value_type));
             break;
         }
         case TOKEN_FLOAT: {
             f64 value = cstrn_to_f64(parser->previous.start, parser->previous.length);
-            expression_node->type = &OrsoTypeFloat64;
+            expression_node->value_type = &OrsoTypeFloat64;
             expression_node->value_index = add_constant_value(parser, ORSO_SLOT_F(value, &OrsoTypeFloat64));
             break;
         }
         default: UNREACHABLE();
     }
 
-    expression_node->narrowed_type = expression_node->type;
+    expression_node->value_type_narrowed = expression_node->value_type;
 
     expression_node->foldable = true;
 
@@ -368,26 +368,26 @@ static OrsoASTNode* literal(Parser* parser) {
     switch (parser->previous.type) {
         case TOKEN_FALSE:
         case TOKEN_TRUE: {
-            expression_node->type = &OrsoTypeBool;
+            expression_node->value_type = &OrsoTypeBool;
 
             i64 is_true = (i64)(parser->previous.type == TOKEN_TRUE);
             expression_node->value_index = add_constant_value(parser, ORSO_SLOT_I(is_true, &OrsoTypeBool));
             break;
         }
         case TOKEN_NULL: {
-            expression_node->type = &OrsoTypeVoid;
+            expression_node->value_type = &OrsoTypeVoid;
             expression_node->value_index = add_constant_value(parser, ORSO_SLOT_I(0, &OrsoTypeVoid));
             break;
         }
         case TOKEN_STRING: {
-            expression_node->type = &OrsoTypeString;
+            expression_node->value_type = &OrsoTypeString;
             OrsoString* value = orso_new_string_from_cstrn(expression_node->start.start + 1, expression_node->start.length - 2);
             expression_node->value_index = add_constant_value(parser, ORSO_SLOT_P(value, &OrsoTypeString));
             break;
         };
 
         case TOKEN_SYMBOL: {
-            expression_node->type = &OrsoTypeSymbol;
+            expression_node->value_type = &OrsoTypeSymbol;
             OrsoSymbol* value = orso_new_symbol_from_cstrn(expression_node->start.start + 1, expression_node->start.length - 2, parser->ast->symbols);
             expression_node->value_index = add_constant_value(parser, ORSO_SLOT_P(value, &OrsoTypeSymbol));
             break;
@@ -396,7 +396,7 @@ static OrsoASTNode* literal(Parser* parser) {
             UNREACHABLE();
     }
 
-    expression_node->narrowed_type = expression_node->type;
+    expression_node->value_type_narrowed = expression_node->value_type;
 
     expression_node->foldable = true;
 
@@ -628,15 +628,15 @@ static OrsoASTNode* grouping_or_function_signature(Parser* parser) {
     if (node_type == ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE) {
         parse_function_signature(parser, expression_node);
 
-        expression_node->type = &OrsoTypeUnresolved;
-        expression_node->narrowed_type = &OrsoTypeUnresolved;
+        expression_node->value_type = &OrsoTypeUnresolved;
+        expression_node->value_type_narrowed = &OrsoTypeUnresolved;
     } else {
         expression_node->data.expression = expression(parser, false);
 
         consume(parser, TOKEN_PARENTHESIS_CLOSE, "Expect ')' after expression.");
 
-        expression_node->type = expression_node->data.expression->type;
-        expression_node->narrowed_type = expression_node->type;
+        expression_node->value_type = expression_node->data.expression->value_type;
+        expression_node->value_type_narrowed = expression_node->value_type;
     }
 
     expression_node->end = parser->previous;
@@ -901,7 +901,7 @@ static OrsoASTNode* entity_declaration(Parser* parser, bool as_parameter) {
 
     advance(parser);
 
-    entity_declaration_node->type = &OrsoTypeUnresolved;
+    entity_declaration_node->value_type = &OrsoTypeUnresolved;
 
     entity_declaration_node->data.declaration.type_expression = NULL;
     entity_declaration_node->data.declaration.initial_value_expression = NULL;
@@ -988,11 +988,11 @@ void ast_print_ast_node(OrsoASTNode* node, i32 initial, const char* prefix) {
     const char type_str[128];
     const char narrow_type_str[128];
     
-    orso_type_to_cstrn(node->type, (char*)type_str, 128);
+    orso_type_to_cstrn(node->value_type, (char*)type_str, 128);
     const char type_info[128];
 
-    if (node->type != node->narrowed_type) {
-        orso_type_to_cstrn(node->narrowed_type, (char*)narrow_type_str, 128);
+    if (node->value_type != node->value_type_narrowed) {
+        orso_type_to_cstrn(node->value_type_narrowed, (char*)narrow_type_str, 128);
         snprintf((char*)type_info, 128, "%s (%s)", type_str, narrow_type_str);
     } else {
         snprintf((char*)type_info, 128, "%s", type_str);
@@ -1102,7 +1102,7 @@ void ast_print_ast_node(OrsoASTNode* node, i32 initial, const char* prefix) {
             printf("declaration(%.*s): ", node->start.length, node->start.start);
 
             const char type_str[128];
-            orso_type_to_cstrn(node->type, (char*)type_str, 128);
+            orso_type_to_cstrn(node->value_type, (char*)type_str, 128);
             printf("%s", (char*)type_str);
             printf("\n");
 
