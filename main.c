@@ -5,7 +5,7 @@
 
 #define PROJECT_NAME "orso"
 
-void error(OrsoErrorType error, i32 line, const char* message) {
+void myerror(OrsoErrorType error, i32 line, const char* message) {
     switch (error) {
         case ORSO_ERROR_COMPILE: {
             fprintf(stderr, "[line %d] %s\n", line, message);
@@ -15,8 +15,13 @@ void error(OrsoErrorType error, i32 line, const char* message) {
     }
 }
 
-void write(const char* chars) {
+void mywrite(const char* chars) {
     printf("%s", chars);
+}
+
+void error_func(void * user, const char * msg) {
+    printf("TCC Error: %s\n", msg);
+    exit(1);
 }
 
 int main(int argc, char **argv) {
@@ -50,8 +55,8 @@ int main(int argc, char **argv) {
     source[size] = '\0';
 
     OrsoVM vm;
-    orso_vm_init(&vm, write);
-    orso_run_source(&vm, source, error);
+    orso_vm_init(&vm, mywrite);
+    orso_run_source(&vm, source, myerror);
     orso_vm_free(&vm);
 
     return 0;
