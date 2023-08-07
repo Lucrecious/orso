@@ -101,6 +101,11 @@ MU_TEST_SUITE(tests) {
     MU_RUN_TEST(if_else_nested_unless);
     MU_RUN_TEST(if_condition_is_string);
     MU_RUN_TEST(else_ifset);
+    MU_RUN_TEST(no_braces_no_else);
+    MU_RUN_TEST(no_braces_else);
+    MU_RUN_TEST(no_braces_more_branches);
+    MU_RUN_TEST(no_braces_mix_branches);
+    MU_RUN_TEST(cannot_use_do_instead_of_then);
 }
 
 int main(int argc, char** argv) {

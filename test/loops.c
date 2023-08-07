@@ -75,6 +75,11 @@ MU_TEST_SUITE(tests) {
     MU_RUN_TEST(while_with_else_type);
     MU_RUN_TEST(until_no_else_type);
     MU_RUN_TEST(until_with_else_type);
+    MU_RUN_TEST(no_braces_no_else);
+    MU_RUN_TEST(no_braces_else);
+    MU_RUN_TEST(no_braces_more_branches);
+    MU_RUN_TEST(no_braces_mix_branches);
+    MU_RUN_TEST(cannot_use_then_instead_of_do);
     //MU_RUN_TEST(for_in_integer);
 }
 int main(int argc, char** argv) {

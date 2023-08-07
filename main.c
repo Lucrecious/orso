@@ -19,11 +19,6 @@ void mywrite(const char* chars) {
     printf("%s", chars);
 }
 
-void error_func(void * user, const char * msg) {
-    printf("TCC Error: %s\n", msg);
-    exit(1);
-}
-
 int main(int argc, char **argv) {
     if (argc < 2) {
         printf("You must provide a file.");
