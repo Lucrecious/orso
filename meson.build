@@ -34,28 +34,28 @@ if get_option('debug_print')
   c_args += '-DDEBUG_PRINT'
 endif
 
-# tcc_build = custom_target('libtcc',
-#   command : ['sh', '-c', 'cd ../tinycc && ./configure && make CONFIG_debug=yes && cp libtcc.a ../debug'],
-#   output : 'libtcc.a'
-# )
+tcc_build = custom_target('libtcc',
+  command : ['sh', '-c', 'cd ../tinycc && ./configure && make CONFIG_debug=yes && cp libtcc.a ../debug'],
+  output : 'libtcc.a'
+)
 
-# libtcc_dep = declare_dependency(
-#   include_directories : 'tinycc',
-#   link_with : tcc_build,
-# )
+libtcc_dep = declare_dependency(
+  include_directories : 'tinycc',
+  link_with : tcc_build,
+)
 
 executable('debug-orso',
   [src, 'main.c'],
   install : false,
   include_directories : inc,
-  # dependencies : libtcc_dep,
+  dependencies : libtcc_dep,
   c_args : c_args)
 
 executable('orso',
   [src, 'main.c'],
   install : false,
   include_directories: inc,
-  # dependencies : libtcc_dep,
+  dependencies : libtcc_dep,
   c_args : ['-O3'])
 
 test_c_args = ['-DDEBUG_GC_STRESS', '-DDEBUG']
