@@ -136,7 +136,7 @@ static void compiler_init(Compiler* compiler, OrsoCompilerFunctionType function_
     compiler->max_stack_size = 0;
 
     compiler->function = function;
-    compiler->function->type = (OrsoFunctionType*)creator_type;
+    compiler->function->type = creator_type;
     compiler->skip_function_definitions = false;
 }
 
@@ -287,12 +287,14 @@ static void emit_pop_scope(Compiler* compiler, Chunk* chunk, byte scope_size_slo
     _apply_stack_effects(compiler, -scope_size_slots);
 }
 
-static void emit_call(Compiler* compiler, Chunk* chunk, OrsoFunctionType* function_type, i32 line) {
+static void emit_call(Compiler* compiler, Chunk* chunk, OrsoType* function_type, i32 line) {
+    ASSERT(function_type->kind == ORSO_TYPE_FUNCTION, "must be function");
+
     emit_instruction(ORSO_OP_CALL, compiler, chunk, line);
 
     i32 argument_slots = 0;
-    for (i32 i = 0; i < function_type->argument_count; i++) {
-        argument_slots += orso_type_slot_count(function_type->argument_types[i]);
+    for (i32 i = 0; i < function_type->type.function.argument_count; i++) {
+        argument_slots += orso_type_slot_count(function_type->type.function.argument_types[i]);
     }
     byte a;
     byte b;
@@ -300,7 +302,7 @@ static void emit_call(Compiler* compiler, Chunk* chunk, OrsoFunctionType* functi
     chunk_write(chunk, a, line);
     chunk_write(chunk, b, line);
 
-    i32 call_stack_effect = -argument_slots - 1 + orso_type_slot_count(function_type->return_type);
+    i32 call_stack_effect = -argument_slots - 1 + orso_type_slot_count(function_type->type.function.return_type);
     _apply_stack_effects(compiler, call_stack_effect);
 }
 
@@ -940,17 +942,17 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode
             expression(vm, compiler, ast, expression_node->data.call.callee, chunk);
             emit_storage_type_convert(compiler, chunk, expression_node->value_type, expression_node->value_type_narrowed, expression_node->end.line);
 
-            OrsoFunctionType* function_type = (OrsoFunctionType*)expression_node->data.call.callee->value_type_narrowed;
+            OrsoType* function_type = expression_node->data.call.callee->value_type_narrowed;
 
             for (i32 i = 0; i < sb_count(expression_node->data.call.arguments); i++) {
                 OrsoASTNode* argument = expression_node->data.call.arguments[i];
                 expression(vm, compiler, ast, argument, chunk);
 
-                OrsoType* parameter_type = function_type->argument_types[i];
+                OrsoType* parameter_type = function_type->type.function.argument_types[i];
                 emit_storage_type_convert(compiler, chunk, argument->value_type, parameter_type, expression_node->end.line);
             }
 
-            OrsoFunctionType* overload_type = function_type;
+            OrsoType* overload_type = function_type;
             emit_call(compiler, chunk, overload_type, expression_node->data.call.callee->start.line);
             break;
         }
@@ -1054,13 +1056,13 @@ static void declaration(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNod
                 expression(vm, compiler, ast, declaration->data.expression, chunk);
                 emit_storage_type_convert(compiler, chunk, 
                         declaration->data.expression->value_type,
-                        compiler->function->type->return_type, declaration->data.expression->end.line);
+                        compiler->function->type->type.function.return_type, declaration->data.expression->end.line);
             } else {
                 emit_instruction(ORSO_OP_PUSH_0, compiler, chunk, declaration->start.line);
-                emit_storage_type_convert(compiler, chunk, &OrsoTypeVoid, compiler->function->type->return_type, declaration->start.line);
+                emit_storage_type_convert(compiler, chunk, &OrsoTypeVoid, compiler->function->type->type.function.return_type, declaration->start.line);
             }
             
-            emit_return(compiler, chunk, compiler->function->type->return_type, declaration->end.line);
+            emit_return(compiler, chunk, compiler->function->type->type.function.return_type, declaration->end.line);
             break;
         }
 
@@ -1098,7 +1100,7 @@ void orso_code_builder_free(OrsoCodeBuilder* builder) {
 
 OrsoFunction* orso_generate_expression_function(OrsoCodeBuilder* builder, OrsoASTNode* expression_node, bool is_folding_time) {
     Compiler compiler;
-    OrsoFunctionType* function_type = (OrsoFunctionType*)orso_type_set_fetch_function(&builder->ast->type_set, expression_node->value_type, NULL, 0);
+    OrsoType* function_type = orso_type_set_fetch_function(&builder->ast->type_set, expression_node->value_type, NULL, 0);
 
     OrsoFunction* run_function = orso_new_function();
 
@@ -1134,7 +1136,7 @@ void orso_compile_function(OrsoVM* vm, OrsoAST* ast, OrsoFunction* function, Ors
 
     begin_scope(&function_compiler);
 
-    function_compiler.function->type = (OrsoFunctionType*)function_definition_expression->value_type;
+    function_compiler.function->type = function_definition_expression->value_type;
     Chunk* function_chunk = &function_compiler.function->chunk;
 
     OrsoASTFunction* function_definition = &function_definition_expression->data.function;
@@ -1153,7 +1155,7 @@ void orso_compile_function(OrsoVM* vm, OrsoAST* ast, OrsoFunction* function, Ors
 
 OrsoFunction* orso_generate_code(OrsoVM* vm, OrsoAST* ast) {
     Compiler compiler;
-    OrsoFunctionType* function_type = (OrsoFunctionType*)orso_type_set_fetch_function(&ast->type_set, &OrsoTypeVoid, NULL, 0);
+    OrsoType* function_type = orso_type_set_fetch_function(&ast->type_set, &OrsoTypeVoid, NULL, 0);
     OrsoFunction* main_function = orso_new_function();
     compiler_init(&compiler, ORSO_FUNCTION_TYPE_SCRIPT, vm, main_function, (OrsoType*)function_type);
 

@@ -321,13 +321,15 @@ static bool is_builtin_function(OrsoAST* ast, OrsoSymbol* identifier, OrsoNative
     return false;
 }
 
-static bool can_call(OrsoFunctionType* type, OrsoASTNode** arguments) {
-    if (type->argument_count != sb_count(arguments)) {
+static bool can_call(OrsoType* type, OrsoASTNode** arguments) {
+    ASSERT(type->kind == ORSO_TYPE_FUNCTION, "must be a function type");
+
+    if (type->type.function.argument_count != sb_count(arguments)) {
         return false;
     }
 
-    for (i32 i = 0; i < type->argument_count; i++) {
-        OrsoType* parameter_type = type->argument_types[i];
+    for (i32 i = 0; i < type->type.function.argument_count; i++) {
+        OrsoType* parameter_type = type->type.function.argument_types[i];
         OrsoType* argument_type = arguments[i]->value_type_narrowed;
         if (!orso_type_fits(parameter_type, argument_type)) {
             return false;
@@ -1162,15 +1164,13 @@ void orso_resolve_expression(
 
 
             OrsoType* narrowed_callee_type = expression->data.call.callee->value_type_narrowed;
-            if ((narrowed_callee_type->kind != ORSO_TYPE_FUNCTION && narrowed_callee_type->kind != ORSO_TYPE_NATIVE_FUNCTION) || !can_call((OrsoFunctionType*)narrowed_callee_type, expression->data.call.arguments)) {
+            if ((narrowed_callee_type->kind != ORSO_TYPE_FUNCTION && narrowed_callee_type->kind != ORSO_TYPE_NATIVE_FUNCTION) || !can_call(narrowed_callee_type, expression->data.call.arguments)) {
                 error(analyzer, expression->data.call.callee->start.line, "Function does not exist.");
                 return;
             }
 
-            OrsoFunctionType* function_type = (OrsoFunctionType*)narrowed_callee_type;
-
-            expression->value_type = function_type->return_type;
-            expression->value_type_narrowed = function_type->return_type;
+            expression->value_type = narrowed_callee_type->type.function.return_type;
+            expression->value_type_narrowed = narrowed_callee_type->type.function.return_type;
             break;
         }
         case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION: {
@@ -1799,7 +1799,7 @@ static void resolve_function_expression(
         }
     } else {
         if (function_definition_expression->value_type != &OrsoTypeUnresolved) {
-            return_type = ((OrsoFunctionType*)function_definition_expression->value_type)->return_type;
+            return_type = (function_definition_expression->value_type)->type.function.return_type;
         }
     }
 
@@ -1807,7 +1807,7 @@ static void resolve_function_expression(
         return;
     }
 
-    OrsoFunctionType* function_type = (OrsoFunctionType*)orso_type_set_fetch_function(&ast->type_set, return_type, parameter_types, parameter_count);
+    OrsoType* function_type = orso_type_set_fetch_function(&ast->type_set, return_type, parameter_types, parameter_count);
 
     OrsoFunction* function = orso_new_function();
     function->type = function_type;
@@ -1876,8 +1876,8 @@ static void resolve_statement(
             OrsoScope* function_scope = get_closest_outer_function_scope(state.scope);
             ASSERT(function_scope, "right now all scopes should be under a function scope");
 
-            OrsoFunctionType* function_type = (OrsoFunctionType*)function_scope->creator->value_type;
-            OrsoType* function_return_type = function_scope ? function_type->return_type : &OrsoTypeVoid;
+            OrsoType* function_type = function_scope->creator->value_type;
+            OrsoType* function_return_type = function_scope ? function_type->type.function.return_type : &OrsoTypeVoid;
             if (!orso_type_fits(function_return_type, return_expression_type)) {
                 error(analyzer, statement->start.line, "Return expression must be compatible with function return type.");
             }
@@ -2043,7 +2043,7 @@ OrsoSlot orso_zero_value(OrsoType* type, OrsoSymbolTable* symbol_table) {
             slot = ORSO_SLOT_P(orso_new_symbol_from_cstrn("", 0, symbol_table), type);
             break;
         case ORSO_TYPE_UNION: {
-            ASSERT(orso_union_type_has_type((OrsoUnionType*)type, &OrsoTypeVoid), "must include void type if looking for zero value");
+            ASSERT(orso_union_type_has_type(type, &OrsoTypeVoid), "must include void type if looking for zero value");
             slot = ORSO_SLOT_I(0, type);
             break;
         }

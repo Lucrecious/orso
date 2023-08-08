@@ -121,14 +121,14 @@ char* orso_slot_to_new_cstrn(OrsoSlot slot, OrsoType* type) {
                     function->binded_name ? function->binded_name->text : "<anonymous>");
 
             char tmp_buffer[128];
-            for (i32 i = 0; i < function->type->argument_count; i++) {
-                orso_type_to_cstrn(function->type->argument_types[i], tmp_buffer, 128);
+            for (i32 i = 0; i < function->type->type.function.argument_count; i++) {
+                orso_type_to_cstrn(function->type->type.function.argument_types[i], tmp_buffer, 128);
 
                 n += snprintf(buffer + n, BUFFER_SIZE - n, "%s%s", tmp_buffer,
-                        i == function->type->argument_count - 1 ? "" : ", ");
+                        i == function->type->type.function.argument_count - 1 ? "" : ", ");
             }
 
-            orso_type_to_cstrn(function->type->return_type, tmp_buffer, 128);
+            orso_type_to_cstrn(function->type->type.function.return_type, tmp_buffer, 128);
             n += snprintf(buffer + n, BUFFER_SIZE - n, ") -> %s>", tmp_buffer);
             
             buffer[n] = '\0';
@@ -200,7 +200,7 @@ bool is_function_compiled(OrsoFunction* function) {
 OrsoNativeFunction* orso_new_native_function(NativeFunction function, OrsoType* type) {
     OrsoNativeFunction* function_obj = ORSO_OBJECT_ALLOCATE(OrsoNativeFunction, type);
     function_obj->function = function;
-    function_obj->type = (OrsoFunctionType*)type;
+    function_obj->type = type;
 
     return function_obj;
 }

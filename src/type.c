@@ -5,9 +5,11 @@
 
 #include "sb.h"
 
-bool orso_union_type_has_type(const OrsoUnionType* type, OrsoType* subtype) {
-    for (i32 i = 0; i < type->count; i++) {
-        if (type->types[i] == subtype) {
+bool orso_union_type_has_type(OrsoType* type, OrsoType* subtype) {
+    ASSERT(type->kind == ORSO_TYPE_UNION, "must be a union type");
+
+    for (i32 i = 0; i < type->type.union_.count; i++) {
+        if (type->type.union_.types[i] == subtype) {
             return true;
         }
     }
@@ -21,35 +23,30 @@ bool orso_type_equal(OrsoType* a, OrsoType* b) {
     }
 
     if (ORSO_TYPE_IS_UNION(a)) {
-        OrsoUnionType* a_union = (OrsoUnionType*)a;
-        OrsoUnionType* b_union = (OrsoUnionType*)b;
-        if (a_union->count != b_union->count) {
+        if (a->type.union_.count != b->type.union_.count) {
             return false;
         }
 
-        for (i32 i = 0; i < a_union->count; i++) {
-            if (!orso_union_type_has_type(a_union, b_union->types[i])) {
+        for (i32 i = 0; i < a->type.union_.count; i++) {
+            if (!orso_union_type_has_type(a, b->type.union_.types[i])) {
                 return false;
             }
 
-            if (!orso_union_type_has_type(b_union, a_union->types[i])) {
+            if (!orso_union_type_has_type(b, a->type.union_.types[i])) {
                 return false;
             }
         }
     } else if (a->kind == ORSO_TYPE_FUNCTION) {
-        OrsoFunctionType* a_function = (OrsoFunctionType*)a;
-        OrsoFunctionType* b_function = (OrsoFunctionType*)b;
-
-        if (a_function->argument_count != b_function->argument_count) {
+        if (a->type.function.argument_count != b->type.function.argument_count) {
             return false;
         }
 
-        if (!orso_type_equal(a_function->return_type, b_function->return_type)) {
+        if (!orso_type_equal(a->type.function.return_type, b->type.function.return_type)) {
             return false;
         }
 
-        for (i32 i = 0; i < a_function->argument_count; i++) {
-            if (!orso_type_equal(a_function->argument_types[i], b_function->argument_types[i])) {
+        for (i32 i = 0; i < a->type.function.argument_count; i++) {
+            if (!orso_type_equal(a->type.function.argument_types[i], b->type.function.argument_types[i])) {
                 return false;
             }
         }
@@ -77,22 +74,20 @@ OrsoType* orso_type_merge(OrsoTypeSet* set, OrsoType* a, OrsoType* b) {
     OrsoType** types = NULL;
 
     if (ORSO_TYPE_IS_UNION(a)) {
-        OrsoUnionType* a_union = (OrsoUnionType*)a;
-        for (i32 i = 0; i < a_union->count; i++) {
-            sb_push(types, a_union->types[i]);
+        for (i32 i = 0; i < a->type.union_.count; i++) {
+            sb_push(types, a->type.union_.types[i]);
         }
     } else {
         sb_push(types, a);
     }
 
     if (ORSO_TYPE_IS_UNION(b)) {
-        OrsoUnionType* b_union = (OrsoUnionType*)b;
-        for (i32 i = 0; i < b_union->count; i++) {
-            if (type_in_list(types, sb_count(types), b_union->types[i])) {
+        for (i32 i = 0; i < b->type.union_.count; i++) {
+            if (type_in_list(types, sb_count(types), b->type.union_.types[i])) {
                 continue;
             }
 
-            sb_push(types, b_union->types[i]);
+            sb_push(types, b->type.union_.types[i]);
         }
     } else {
         if (!type_in_list(types, sb_count(types), b)) {
@@ -134,9 +129,11 @@ bool orso_type_is_number(OrsoType* type, bool include_bool) {
 }
 
 
-bool orso_union_has_float(OrsoUnionType* type) {
-    for (i32 i = 0; i < type->count; i++) {
-        if (!orso_type_is_float(type->types[i])) {
+bool orso_union_has_float(OrsoType* type) {
+    ASSERT(ORSO_TYPE_IS_UNION(type), "must be union type");
+
+    for (i32 i = 0; i < type->type.union_.count; i++) {
+        if (!orso_type_is_float(type->type.union_.types[i])) {
             continue;
         }
 
@@ -148,15 +145,17 @@ bool orso_union_has_float(OrsoUnionType* type) {
 
 bool orso_type_is_or_has_float(OrsoType* type) {
     if (ORSO_TYPE_IS_UNION(type)) {
-        return orso_union_has_float((OrsoUnionType*)type);
+        return orso_union_has_float(type);
     } else {
         return orso_type_is_float(type);
     }
 }
 
-bool orso_union_has_integer(OrsoUnionType* type, bool include_bool) {
-    for (i32 i = 0; i < type->count; i++) {
-        if (!orso_type_is_integer(type->types[i], include_bool)) {
+bool orso_union_has_integer(OrsoType* type, bool include_bool) {
+    ASSERT(ORSO_TYPE_IS_UNION(type), "must be union type");
+
+    for (i32 i = 0; i < type->type.union_.count; i++) {
+        if (!orso_type_is_integer(type->type.union_.types[i], include_bool)) {
             continue;
         }
 
@@ -168,7 +167,7 @@ bool orso_union_has_integer(OrsoUnionType* type, bool include_bool) {
 
 bool orso_type_is_or_has_integer(OrsoType* type, bool include_bool) {
     if (ORSO_TYPE_IS_UNION(type)) {
-        return orso_union_has_integer((OrsoUnionType*)type, include_bool);
+        return orso_union_has_integer(type, include_bool);
     } else {
         return orso_type_is_integer(type, include_bool);
     }
@@ -176,10 +175,9 @@ bool orso_type_is_or_has_integer(OrsoType* type, bool include_bool) {
 
 i32 orso_type_bits(OrsoType* type) {
     if (ORSO_TYPE_IS_UNION(type)) {
-        OrsoUnionType* union_type = (OrsoUnionType*)type;
         i32 total = 0;
-        for (i32 i = 0; i < union_type->count; i++) {
-            total += orso_type_bits(union_type->types[i]);
+        for (i32 i = 0; i < type->type.union_.count; i++) {
+            total += orso_type_bits(type->type.union_.types[i]);
         }
 
         return total;
@@ -257,19 +255,17 @@ bool orso_type_fits(OrsoType* storage_type, OrsoType* value_type) {
     }
 
     if (ORSO_TYPE_IS_UNION(storage_type)) {
-        OrsoUnionType const * storage_union = (OrsoUnionType*)storage_type;
         if (ORSO_TYPE_IS_UNION(value_type)) {
-            OrsoUnionType const * value_union = (OrsoUnionType*)value_type;
-            for (i32 i = 0; i < value_union->count; i++) {
-                if (!orso_type_fits((OrsoType*)storage_union, value_union->types[i])) {
+            for (i32 i = 0; i < value_type->type.union_.count; i++) {
+                if (!orso_type_fits(storage_type, value_type->type.union_.types[i])) {
                     return false;
                 }
             }
 
             return true;
         } else {
-            for (i32 i = 0; i < storage_union->count; i++) {
-                if (orso_type_fits(storage_union->types[i], value_type)) {
+            for (i32 i = 0; i < storage_type->type.union_.count; i++) {
+                if (orso_type_fits(storage_type->type.union_.types[i], value_type)) {
                     return true;
                 }
             }
@@ -298,27 +294,25 @@ i32 orso_type_to_cstrn(OrsoType* type, char* buffer, i32 n) {
 
     // type1|type2|type3|type4
     if (ORSO_TYPE_IS_UNION(type)) {
-        OrsoUnionType* union_type = (OrsoUnionType*)type;
-
-        for (i32 i = 0; i < union_type->count; i++) {
+        for (i32 i = 0; i < type->type.union_.count; i++) {
             if (i != 0) {
                 buffer[0] = '|';
                 n -= 1;
                 buffer += 1;
             }
 
-            if (union_type->types[i]->kind == ORSO_TYPE_FUNCTION || union_type->types[i]->kind == ORSO_TYPE_NATIVE_FUNCTION) {
+            if (type->type.union_.types[i]->kind == ORSO_TYPE_FUNCTION || type->type.union_.types[i]->kind == ORSO_TYPE_NATIVE_FUNCTION) {
                 buffer[0] = '(';
                 n -= 1;
                 buffer += 1;
             }
 
             // -1 removes the \0
-            i32 written = orso_type_to_cstrn(union_type->types[i], buffer, n) - 1;
+            i32 written = orso_type_to_cstrn(type->type.union_.types[i], buffer, n) - 1;
             n -= written;
             buffer += written;
 
-            if (union_type->types[i]->kind == ORSO_TYPE_FUNCTION || union_type->types[i]->kind == ORSO_TYPE_NATIVE_FUNCTION) {
+            if (type->type.union_.types[i]->kind == ORSO_TYPE_FUNCTION || type->type.union_.types[i]->kind == ORSO_TYPE_NATIVE_FUNCTION) {
                 buffer[0] = ')';
                 n -= 1;
                 buffer += 1;
@@ -330,15 +324,14 @@ i32 orso_type_to_cstrn(OrsoType* type, char* buffer, i32 n) {
         n -= 1;
         buffer += 1;
 
-        OrsoFunctionType* function_type = (OrsoFunctionType*)type;
-        for (i32 i = 0; i < function_type->argument_count; i++) {
+        for (i32 i = 0; i < type->type.function.argument_count; i++) {
             if (i != 0) {
                 buffer[0] = ',';
                 n -= 1;
                 buffer += 1;
             }
 
-            i32 written = orso_type_to_cstrn(function_type->argument_types[i], buffer, n);
+            i32 written = orso_type_to_cstrn(type->type.function.argument_types[i], buffer, n);
             n -= (written - 1);
             buffer += (written - 1);
         }
@@ -347,7 +340,7 @@ i32 orso_type_to_cstrn(OrsoType* type, char* buffer, i32 n) {
         n -= written;
         buffer += written;
 
-        written = orso_type_to_cstrn(function_type->return_type, buffer, n);
+        written = orso_type_to_cstrn(type->type.function.return_type, buffer, n);
         n -= (written - 1);
         buffer += (written - 1);
 
@@ -395,9 +388,8 @@ bool orso_is_gc_type(OrsoType* type) {
     }
 
     if (ORSO_TYPE_IS_UNION(type)) {
-        OrsoUnionType* union_type = (OrsoUnionType*)type;
-        for (i32 i = 0; i < union_type->count; i++) {
-            if (orso_is_gc_type(union_type->types[i])) {
+        for (i32 i = 0; i < type->type.union_.count; i++) {
+            if (orso_is_gc_type(type->type.union_.types[i])) {
                 return true;
             }
         }

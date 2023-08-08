@@ -24,7 +24,7 @@ extern OrsoType OrsoTypeInvalid;
 extern OrsoType OrsoTypeUnresolved;
 extern OrsoType OrsoTypeUndefined;
 
-extern OrsoFunctionType OrsoTypeEmptyFunction;
+extern OrsoType OrsoTypeEmptyFunction;
 
 void orso_type_set_init(OrsoTypeSet* set);
 void orso_type_set_free(OrsoTypeSet* set);

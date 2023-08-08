@@ -30,33 +30,35 @@ typedef enum OrsoTypeKind {
     ORSO_TYPE_MAX = 65000,
 } OrsoTypeKind;
 
-typedef struct OrsoType {
+struct OrsoType;
+typedef struct OrsoType OrsoType;
+
+struct OrsoType {
     OrsoTypeKind kind;
-} OrsoType;
+    union {
+        struct {
+            i32 count;
+            OrsoType** types;
+        } union_;
 
-typedef struct OrsoUnionType {
-    OrsoType type;
-    i32 count;
-    OrsoType** types;
-} OrsoUnionType;
-
-typedef struct OrsoFunctionType {
-    OrsoType type;
-    OrsoType* return_type;
-    i32 argument_count;
-    OrsoType** argument_types;
-} OrsoFunctionType;
+        struct {
+            OrsoType* return_type;
+            i32 argument_count;
+            OrsoType** argument_types;
+        } function;
+    } type;
+};
 
 #define ORSO_TYPE_IS_UNION(TYPE) (TYPE->kind == ORSO_TYPE_UNION)
 
 struct OrsoTypeSet;
 
-bool orso_union_type_has_type(OrsoUnionType const * type, OrsoType* subtype);
+bool orso_union_type_has_type(OrsoType* type, OrsoType* subtype);
 
 bool orso_type_equal(OrsoType* a, OrsoType* b);
 
 // orso_type_has_type_kind
-bool orso_union_type_has_type(OrsoUnionType const * type, OrsoType* subtype);
+bool orso_union_type_has_type(OrsoType* type, OrsoType* subtype);
 
 OrsoType* orso_type_merge(struct OrsoTypeSet* set, OrsoType* a, OrsoType* b);
 
@@ -70,12 +72,12 @@ FORCE_INLINE bool orso_type_is_unsigned_integer_type(OrsoType* type, bool includ
 }
 
 // orso_has_float_type
-bool orso_union_has_float(OrsoUnionType* type);
+bool orso_union_has_float(OrsoType* type);
 
 bool orso_type_is_or_has_float(OrsoType* type);
 
 // orso_has_integer_type
-bool orso_union_has_integer(OrsoUnionType* type, bool include_bool);
+bool orso_union_has_integer(OrsoType* type, bool include_bool);
 
 bool orso_type_is_or_has_integer(OrsoType* type, bool include_bool);
 

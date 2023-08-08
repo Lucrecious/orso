@@ -77,8 +77,8 @@ static void call(OrsoVM* vm, OrsoFunction* function, i32 argument_slots) {
 
 void orso_vm_call(OrsoVM* vm, OrsoFunction* function) {
     i32 argument_slots = 0;
-    for (i32 i = 0; i < function->type->argument_count; i++) {
-        argument_slots += orso_type_slot_count(function->type->argument_types[i]);
+    for (i32 i = 0; i < function->type->type.function.argument_count; i++) {
+        argument_slots += orso_type_slot_count(function->type->type.function.argument_types[i]);
     }
     call(vm, function, argument_slots);
 }
@@ -93,7 +93,7 @@ static void call_object(OrsoVM* vm, OrsoObject* callee, i32 argument_slots) {
         NativeFunction function = function_obj->function;
         function(vm->stack_top - argument_slots, vm->stack_top);
 
-        i32 return_slot_size = orso_type_slot_count(function_obj->type->return_type);
+        i32 return_slot_size = orso_type_slot_count(function_obj->type->type.function.return_type);
         for (i32 i = 0; i < return_slot_size; i++) {
             vm->stack_top[-(argument_slots + 1) + i] = vm->stack_top[i];
         }

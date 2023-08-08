@@ -19,22 +19,22 @@ OrsoType OrsoTypeInvalid = (OrsoType){ .kind = ORSO_TYPE_INVALID  };
 OrsoType OrsoTypeUnresolved = (OrsoType) { .kind = ORSO_TYPE_UNRESOLVED };
 OrsoType OrsoTypeUndefined = (OrsoType) { .kind = ORSO_TYPE_UNDEFINED };
 
-OrsoFunctionType OrsoTypeEmptyFunction = (OrsoFunctionType) {
-    .type.kind = ORSO_TYPE_FUNCTION,
-    .argument_count = 0,
-    .argument_types = NULL,
-    .return_type = &OrsoTypeVoid,
+OrsoType OrsoTypeEmptyFunction = (OrsoType) {
+    .kind = ORSO_TYPE_FUNCTION,
+    .type.function.argument_count = 0,
+    .type.function.argument_types = NULL,
+    .type.function.return_type = &OrsoTypeVoid,
 };
 
-OrsoUnionType* union_type_new(OrsoTypeSet* set, OrsoType** types, i32 count) {
+OrsoType* union_type_new(OrsoTypeSet* set, OrsoType** types, i32 count) {
     //ASSERT(count <= ORSO_UNION_NUM_MAX, "cannot create union type with more than 4 types"); // TODO: Add this in later, need codegen and runtime errors first
 
-    OrsoUnionType* union_type = ORSO_ALLOCATE(OrsoUnionType);
-    union_type->type.kind = ORSO_TYPE_UNION;
-    union_type->count = count;
-    union_type->types = ORSO_ALLOCATE_N(OrsoType*, count);
-    for (i32 i = 0; i < union_type->count; i++) {
-        union_type->types[i] = types[i];
+    OrsoType* union_type = ORSO_ALLOCATE(OrsoType);
+    union_type->kind = ORSO_TYPE_UNION;
+    union_type->type.union_.count = count;
+    union_type->type.union_.types = ORSO_ALLOCATE_N(OrsoType*, count);
+    for (i32 i = 0; i < union_type->type.union_.count; i++) {
+        union_type->type.union_.types[i] = types[i];
     }
 
     sb_push(set->heap, (OrsoType*)union_type);
@@ -42,16 +42,16 @@ OrsoUnionType* union_type_new(OrsoTypeSet* set, OrsoType** types, i32 count) {
     return union_type;
 }
 
-OrsoFunctionType* function_type_new(OrsoTypeSet* set, OrsoType** arguments, i32 argument_count, OrsoType* return_type, bool is_native) {
-    OrsoFunctionType* function_type = ORSO_ALLOCATE(OrsoFunctionType);
-    function_type->type.kind = is_native ? ORSO_TYPE_NATIVE_FUNCTION : ORSO_TYPE_FUNCTION;
-    function_type->argument_count = argument_count;
-    function_type->argument_types = ORSO_ALLOCATE_N(OrsoType*, argument_count);
+OrsoType* function_type_new(OrsoTypeSet* set, OrsoType** arguments, i32 argument_count, OrsoType* return_type, bool is_native) {
+    OrsoType* function_type = ORSO_ALLOCATE(OrsoType);
+    function_type->kind = is_native ? ORSO_TYPE_NATIVE_FUNCTION : ORSO_TYPE_FUNCTION;
+    function_type->type.function.argument_count = argument_count;
+    function_type->type.function.argument_types = ORSO_ALLOCATE_N(OrsoType*, argument_count);
     for (i32 i = 0; i < argument_count; i++) {
-        function_type->argument_types[i] = arguments[i];
+        function_type->type.function.argument_types[i] = arguments[i];
     }
 
-    function_type->return_type = return_type;
+    function_type->type.function.return_type = return_type;
 
     sb_push(set->heap, (OrsoType*)function_type);
 
@@ -60,13 +60,11 @@ OrsoFunctionType* function_type_new(OrsoTypeSet* set, OrsoType** arguments, i32 
 
 OrsoType* type_copy_new(OrsoTypeSet* set, OrsoType* type) {
     if (ORSO_TYPE_IS_UNION(type)) {
-        OrsoUnionType const * union_type = (OrsoUnionType const *)type;
-        return (OrsoType*)union_type_new(set, (OrsoType**)union_type->types, union_type->count);
+        return (OrsoType*)union_type_new(set, (OrsoType**)type->type.union_.types, type->type.union_.count);
     }
 
     if (type->kind == ORSO_TYPE_FUNCTION || type->kind == ORSO_TYPE_NATIVE_FUNCTION) {
-        OrsoFunctionType const * function_type = (OrsoFunctionType const *)type;
-        return (OrsoType*)function_type_new(set, function_type->argument_types, function_type->argument_count, function_type->return_type, type->kind == ORSO_TYPE_NATIVE_FUNCTION);
+        return (OrsoType*)function_type_new(set, type->type.function.argument_types, type->type.function.argument_count, type->type.function.return_type, type->kind == ORSO_TYPE_NATIVE_FUNCTION);
     }
 
     UNREACHABLE();
@@ -75,15 +73,13 @@ OrsoType* type_copy_new(OrsoTypeSet* set, OrsoType* type) {
 
 void type_free(OrsoType* type) {
     if (type->kind == ORSO_TYPE_UNION) {
-        OrsoUnionType* union_type = (OrsoUnionType*)type;
-        free(union_type->types);
+        free(type->type.union_.types);
     } else if (type->kind == ORSO_TYPE_FUNCTION) {
-        OrsoFunctionType* function_type = (OrsoFunctionType*)type;
-        for (i32 i = 0; i < function_type->argument_count; i++) {
-            function_type->argument_types[i] = NULL;
+        for (i32 i = 0; i < type->type.function.argument_count; i++) {
+            type->type.function.argument_types[i] = NULL;
         }
 
-        free((void**)function_type->argument_types);
+        free((void**)type->type.function.argument_types);
     }
 }
 
@@ -135,17 +131,15 @@ static u32 hash_type(OrsoType* type) {
     ADD_HASH(hash, type->kind);
 
     if (ORSO_TYPE_IS_UNION(type)) {
-        OrsoUnionType* union_type = (OrsoUnionType*)type;
-        for (i32 i = 0; i < union_type->count; i++) {
-            ADD_HASH(hash, hash_type(union_type->types[i]));
+        for (i32 i = 0; i < type->type.union_.count; i++) {
+            ADD_HASH(hash, hash_type(type->type.union_.types[i]));
         }
     } else if (type->kind == ORSO_TYPE_FUNCTION) {
-        OrsoFunctionType* function_type = (OrsoFunctionType*)type;
-        for (i32 i = 0; i < function_type->argument_count; i++) {
-            ADD_HASH(hash, hash_type(function_type->argument_types[i]));
+        for (i32 i = 0; i < type->type.function.argument_count; i++) {
+            ADD_HASH(hash, hash_type(type->type.function.argument_types[i]));
         }
 
-        ADD_HASH(hash, hash_type(function_type->return_type));
+        ADD_HASH(hash, hash_type(type->type.function.return_type));
     }
 
     return hash;
@@ -235,16 +229,13 @@ static i32 type_compare(const void* a, const void* b) {
             return -1;
         }
 
-        OrsoUnionType* union_type_a = (OrsoUnionType*)type_a;
-        OrsoUnionType* union_type_b = (OrsoUnionType*)type_b;
-
-        if (union_type_a->count != union_type_b->count) {
-            return union_type_b->count - union_type_a->count;
+        if (type_a->type.union_.count != type_b->type.union_.count) {
+            return type_b->type.union_.count - type_a->type.union_.count;
         }
 
-        for (i32 i = 0; i < union_type_a->count; i++) {
-            OrsoType* single_a = union_type_a->types[i];
-            OrsoType* single_b = union_type_b->types[i];
+        for (i32 i = 0; i < type_a->type.union_.count; i++) {
+            OrsoType* single_a = type_a->type.union_.types[i];
+            OrsoType* single_b = type_b->type.union_.types[i];
 
             i32 result = type_compare(single_a, single_b);
             if (result == 0) {
@@ -267,20 +258,17 @@ static i32 type_compare(const void* a, const void* b) {
             return -1;
         }
 
-        OrsoFunctionType* function_type_a = (OrsoFunctionType*)type_a;
-        OrsoFunctionType* function_type_b = (OrsoFunctionType*)type_b;
-
-        if (function_type_a->return_type != function_type_b->return_type) {
-            return type_compare(function_type_a->return_type, function_type_b->return_type);
+        if (type_a->type.function.return_type != type_b->type.function.return_type) {
+            return type_compare(type_a->type.function.return_type, type_b->type.function.return_type);
         }
 
-        if (function_type_a->argument_count != function_type_b->argument_count) {
-            return function_type_b->argument_count - function_type_a->argument_count;
+        if (type_a->type.function.argument_count != type_b->type.function.argument_count) {
+            return type_b->type.function.argument_count - type_a->type.function.argument_count;
         }
 
-        for (i32 i = 0; i < function_type_a->argument_count; i++) {
-            OrsoType* argument_type_a = function_type_a->argument_types[i];
-            OrsoType* argument_type_b = function_type_b->argument_types[i];
+        for (i32 i = 0; i < type_a->type.function.argument_count; i++) {
+            OrsoType* argument_type_a = type_a->type.function.argument_types[i];
+            OrsoType* argument_type_b = type_b->type.function.argument_types[i];
             i32 result = type_compare(argument_type_a, argument_type_b);
             if (result == 0) {
                 continue;
@@ -296,21 +284,21 @@ static i32 type_compare(const void* a, const void* b) {
 }
 
 OrsoType* orso_type_set_fetch_union(OrsoTypeSet* set, OrsoType** types, i32 count) {
-    OrsoUnionType union_type = {
-        .type.kind = ORSO_TYPE_UNION,
-        .count = count,
-        .types = ORSO_ALLOCATE_N(OrsoType*, count)
+    OrsoType union_type = {
+        .kind = ORSO_TYPE_UNION,
+        .type.union_.count = count,
+        .type.union_.types = ORSO_ALLOCATE_N(OrsoType*, count)
     };
 
     for (i32 i = 0; i < count; i++) {
         if (i < count) {
-            union_type.types[i] = types[i];
+            union_type.type.union_.types[i] = types[i];
         } else {
-            union_type.types[i] = NULL;
+            union_type.type.union_.types[i] = NULL;
         }
     }
 
-    qsort(union_type.types, count, sizeof(OrsoType*), type_compare);
+    qsort(union_type.type.union_.types, count, sizeof(OrsoType*), type_compare);
 
     if (set->capacity > 0) {
         OrsoType** entry = fetch_type(set->entries, set->capacity, (OrsoType*)&union_type);
@@ -327,11 +315,11 @@ OrsoType* orso_type_set_fetch_union(OrsoTypeSet* set, OrsoType** types, i32 coun
 }
 
 OrsoType* orso_type_set_fetch_function_(OrsoTypeSet* set, OrsoType* return_type, OrsoType** arguments, i32 argument_count, bool is_native) {
-    OrsoFunctionType function_type = {
-        .type.kind = is_native ? ORSO_TYPE_NATIVE_FUNCTION : ORSO_TYPE_FUNCTION,
-        .argument_types = arguments,
-        .argument_count = argument_count,
-        .return_type = return_type,
+    OrsoType function_type = {
+        .kind = is_native ? ORSO_TYPE_NATIVE_FUNCTION : ORSO_TYPE_FUNCTION,
+        .type.function.argument_types = arguments,
+        .type.function.argument_count = argument_count,
+        .type.function.return_type = return_type,
     };
 
     if (set->capacity > 0) {
