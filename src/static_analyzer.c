@@ -1485,8 +1485,8 @@ static Entity* get_builtin_entity(OrsoAST* ast, OrsoSymbol* identifier) {
             value_slot = ORSO_SLOT_P(type, &OrsoTypeType);
             value_type = &OrsoTypeType;
         } else if (is_builtin_function(ast, identifier, &function)) {
-            value_slot = ORSO_SLOT_P(function, (OrsoType*)function->type);
-            value_type = (OrsoType*)function->type;
+            value_slot = ORSO_SLOT_P(function, (OrsoType*)function->signature);
+            value_type = (OrsoType*)function->signature;
         }
 
         if (value_type) {
@@ -1810,7 +1810,7 @@ static void resolve_function_expression(
     OrsoType* function_type = orso_type_set_fetch_function(&ast->type_set, return_type, parameter_types, parameter_count);
 
     OrsoFunction* function = orso_new_function();
-    function->type = function_type;
+    function->signature = function_type;
 
     sb_push(ast->function_definition_pairs, ((FunctionDefinitionPair){
         .ast_defintion = function_definition_expression,

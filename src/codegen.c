@@ -136,7 +136,7 @@ static void compiler_init(Compiler* compiler, OrsoCompilerFunctionType function_
     compiler->max_stack_size = 0;
 
     compiler->function = function;
-    compiler->function->type = creator_type;
+    compiler->function->signature = creator_type;
     compiler->skip_function_definitions = false;
 }
 
@@ -538,7 +538,7 @@ static void declare_local_function_definition(Compiler* compiler, OrsoFunction* 
     // used in assert
     (void)function;
     // TODO: fix this assert, why does function->type need to be converted to type? Will it never be unresolved?
-    ASSERT((OrsoType*)function->type != &OrsoTypeUnresolved, "Must have resolved type");
+    ASSERT((OrsoType*)function->signature != &OrsoTypeUnresolved, "Must have resolved type");
 
     Token empty = { .start = "", .length = 0 };
     declare_local_entity(compiler, &empty, 1);
@@ -551,7 +551,7 @@ static void function_expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, Or
     if (!compiler->skip_function_definitions && stored_function->chunk.code == NULL /*is not compiled yet*/) {
         orso_compile_function(vm, ast, stored_function, function_defintion_expression);
     }
-    emit_constant(compiler, chunk, ORSO_SLOT_P(stored_function, (OrsoType*)stored_function->type), function_defintion_expression->start.line);
+    emit_constant(compiler, chunk, ORSO_SLOT_P(stored_function, (OrsoType*)stored_function->signature), function_defintion_expression->start.line);
 }
 
 static void gen_primary(Compiler* compiler, Chunk* chunk, OrsoAST* ast, OrsoType* value_type, i32 value_index, i32 line) {
@@ -1056,13 +1056,13 @@ static void declaration(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNod
                 expression(vm, compiler, ast, declaration->data.expression, chunk);
                 emit_storage_type_convert(compiler, chunk, 
                         declaration->data.expression->value_type,
-                        compiler->function->type->type.function.return_type, declaration->data.expression->end.line);
+                        compiler->function->signature->type.function.return_type, declaration->data.expression->end.line);
             } else {
                 emit_instruction(ORSO_OP_PUSH_0, compiler, chunk, declaration->start.line);
-                emit_storage_type_convert(compiler, chunk, &OrsoTypeVoid, compiler->function->type->type.function.return_type, declaration->start.line);
+                emit_storage_type_convert(compiler, chunk, &OrsoTypeVoid, compiler->function->signature->type.function.return_type, declaration->start.line);
             }
             
-            emit_return(compiler, chunk, compiler->function->type->type.function.return_type, declaration->end.line);
+            emit_return(compiler, chunk, compiler->function->signature->type.function.return_type, declaration->end.line);
             break;
         }
 
@@ -1136,7 +1136,7 @@ void orso_compile_function(OrsoVM* vm, OrsoAST* ast, OrsoFunction* function, Ors
 
     begin_scope(&function_compiler);
 
-    function_compiler.function->type = function_definition_expression->value_type;
+    function_compiler.function->signature = function_definition_expression->value_type;
     Chunk* function_chunk = &function_compiler.function->chunk;
 
     OrsoASTFunction* function_definition = &function_definition_expression->data.function;

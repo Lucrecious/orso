@@ -121,14 +121,14 @@ char* orso_slot_to_new_cstrn(OrsoSlot slot, OrsoType* type) {
                     function->binded_name ? function->binded_name->text : "<anonymous>");
 
             char tmp_buffer[128];
-            for (i32 i = 0; i < function->type->type.function.argument_count; i++) {
-                orso_type_to_cstrn(function->type->type.function.argument_types[i], tmp_buffer, 128);
+            for (i32 i = 0; i < function->signature->type.function.argument_count; i++) {
+                orso_type_to_cstrn(function->signature->type.function.argument_types[i], tmp_buffer, 128);
 
                 n += snprintf(buffer + n, BUFFER_SIZE - n, "%s%s", tmp_buffer,
-                        i == function->type->type.function.argument_count - 1 ? "" : ", ");
+                        i == function->signature->type.function.argument_count - 1 ? "" : ", ");
             }
 
-            orso_type_to_cstrn(function->type->type.function.return_type, tmp_buffer, 128);
+            orso_type_to_cstrn(function->signature->type.function.return_type, tmp_buffer, 128);
             n += snprintf(buffer + n, BUFFER_SIZE - n, ") -> %s>", tmp_buffer);
             
             buffer[n] = '\0';
@@ -186,7 +186,7 @@ OrsoString* orso_string_concat(OrsoString* a, OrsoString* b) {
 
 OrsoFunction* orso_new_function(void) {
     OrsoFunction* function = ORSO_OBJECT_ALLOCATE(OrsoFunction, (OrsoType*)&OrsoTypeEmptyFunction);
-    function->type = &OrsoTypeEmptyFunction;
+    function->signature = &OrsoTypeEmptyFunction;
     chunk_init(&function->chunk);
     function->binded_name = NULL;
 
@@ -200,7 +200,7 @@ bool is_function_compiled(OrsoFunction* function) {
 OrsoNativeFunction* orso_new_native_function(NativeFunction function, OrsoType* type) {
     OrsoNativeFunction* function_obj = ORSO_OBJECT_ALLOCATE(OrsoNativeFunction, type);
     function_obj->function = function;
-    function_obj->type = type;
+    function_obj->signature = type;
 
     return function_obj;
 }
