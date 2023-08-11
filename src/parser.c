@@ -5,6 +5,7 @@
 #include <stdlib.h>
 
 #include "common.h"
+#include "error.h"
 #include "type.h"
 #include "type_set.h"
 #include "sb.h"
@@ -221,7 +222,13 @@ static void error_at(Parser* parser, Token* token, const char* specific) {
 
     n += snprintf(msg + n, MESSAGE_SIZE - n, ": %s", specific);
 
-    parser->error_fn(ORSO_ERROR_COMPILE, token->line, message);
+    OrsoError error = {
+        .type = ORSO_ERROR_COMPILE,
+        .region_type = ORSO_ERROR_REGION_TYPE_TOKEN,
+        .message = message,
+        .region.token = *token,
+    };
+    parser->error_fn(error);
 }
 
 static void error_at_current(Parser* parser, const char* message) {

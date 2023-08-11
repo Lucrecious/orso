@@ -5,7 +5,7 @@
 #include "def.h"
 #include "virtual_machine.h"
 #include "interpreter.h"
-#include "error_codes.h"
+#include "error.h"
 
 char test_buffer[1024];
 i32 buffer_length;
@@ -19,9 +19,9 @@ void write_to_test_buffer(const char* chars) {
     buffer_length += snprintf(test_buffer + buffer_length, 1024 - buffer_length, "%s", chars);
 }
 
-void write_to_test_error_buffer(OrsoErrorType type, i32 line, const char* message) {
+void write_to_test_error_buffer(OrsoError error) {
     char* error_type;
-    switch (type) {
+    switch (error.type) {
         case ORSO_ERROR_COMPILE: {
             error_type = "compile error";
             break;
@@ -32,7 +32,7 @@ void write_to_test_error_buffer(OrsoErrorType type, i32 line, const char* messag
         }
     }
 
-    buffer_length += snprintf(test_buffer + buffer_length, 1024 - buffer_length, "%s, %d: %s\n", error_type, line, message);
+    buffer_length += snprintf(test_buffer + buffer_length, 1024 - buffer_length, "%s, %d: %s\n", error_type, error.region.token.line, error.message);
 }
 
 typedef struct Test {

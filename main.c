@@ -2,15 +2,16 @@
 #include <stdlib.h>
 
 #include "interpreter.h"
+#include "error.h"
 
 #include <libtcc.h>
 
 #define PROJECT_NAME "orso"
 
-void myerror(OrsoErrorType error, i32 line, const char* message) {
-    switch (error) {
+void myerror(OrsoError error) {
+    switch (error.type) {
         case ORSO_ERROR_COMPILE: {
-            fprintf(stderr, "[line %d] %s\n", line, message);
+            fprintf(stderr, "[line %d] %s\n", error.region.token.length, error.message);
             break;
         }
         default: break;

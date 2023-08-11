@@ -3,15 +3,12 @@
 
 #include "def.h"
 
+struct OrsoError;
+
 #define UINT8_COUNT (UINT8_MAX + 1)
 #define MAX_PARAMETERS 100
 
-typedef enum OrsoErrorType {
-    ORSO_ERROR_COMPILE,
-    ORSO_ERROR_RUNTIME,
-} OrsoErrorType;
-
-typedef void (*OrsoErrorFunction)(OrsoErrorType error, i32 line, const char* message);
+typedef void (*OrsoErrorFunction)(struct OrsoError error);
 typedef void (*OrsoWriteFunction)(const char* chars);
 
 #endif

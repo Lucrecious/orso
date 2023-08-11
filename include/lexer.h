@@ -3,7 +3,6 @@
 
 #include "common.h"
 #include "def.h"
-#include "error_codes.h"
 
 typedef enum TokenType {
     // single character

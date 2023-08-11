@@ -6,6 +6,7 @@
 #include "sb.h"
 #include "mathutils.h"
 #include "type_set.h"
+#include "error.h"
 
 #include <time.h>
 
@@ -160,49 +161,98 @@ static Entity* add_builtin_entity(OrsoAST* ast, OrsoSymbol* identifier, OrsoType
     return entity;
 }
 
-static void error(OrsoStaticAnalyzer* analyzer, i32 line, const char* message) {
+static bool should_push_error(OrsoStaticAnalyzer* analyzer) {
     if (analyzer->panic_mode) {
-        return;
+        return false;
     }
 
     analyzer->panic_mode = true;
     analyzer->had_error = true;
 
     if (!analyzer->error_fn) {
+        return false;
+    }
+
+    return true;
+}
+
+static void error_token(OrsoStaticAnalyzer* analyzer, Token token, const char* message) {
+    if (!should_push_error(analyzer)) {
         return;
     }
 
-    analyzer->error_fn(ORSO_ERROR_COMPILE, line, message);
+    OrsoError error = {
+        .type = ORSO_ERROR_COMPILE,
+        .region_type = ORSO_ERROR_REGION_TYPE_TOKEN,
+        .region.token = token,
+        .message = (char*)message
+    };
+
+    analyzer->error_fn(error);
 }
 
-static void error_incompatible_binary_types(OrsoStaticAnalyzer* analyzer, Token operation, OrsoType* left, OrsoType* right, i32 line) {
+static void error_range(OrsoStaticAnalyzer* analyzer, Token start, Token end, const char* message) {
+    if (!should_push_error(analyzer)) {
+        return;
+    }
 
-    const char message[256];
-    char* msg = (char*)message;
+    OrsoError error = {
+        .type = ORSO_ERROR_COMPILE,
+        .region_type = ORSO_ERROR_REGION_TYPE_RANGE,
+        .region.range.start = start,
+        .region.range.end = end,
+        .message = (char*)message,
+    };
 
-    const char left_type_str[128];
-    const char right_type_str[128];
-    orso_type_to_cstrn(left, (char*)left_type_str, 128);
-    orso_type_to_cstrn(right, (char*)right_type_str, 128);
-
-    snprintf(msg, 256, "Incompatible Types: '%s' %.*s '%s'",
-        left_type_str, operation.length, operation.start, right_type_str);
-
-    error(analyzer, line, message);
+    analyzer->error_fn(error);
 }
 
-static void error_incompatible_unary_type(OrsoStaticAnalyzer* analyzer, Token operation, OrsoType* operand, i32 line) {
-    const char message[256];
-    char* msg = (char*)message;
+static void error_range2(OrsoStaticAnalyzer* analyzer, Token start1, Token end1, Token start2, Token end2, const char* message) {
+    if (!should_push_error(analyzer)) {
+        return;
+    }
 
-    const char operand_type_str[128];
-    orso_type_to_cstrn(operand, (char*)operand_type_str, 128);
-
-    snprintf(msg, 256, "Incompatible Type: unary(%.*s) and type '%s'",
-        operation.length, operation.start, operand_type_str);
-
-    error(analyzer, line, message);
+    OrsoError error = {
+        .type = ORSO_ERROR_COMPILE,
+        .region_type = ORSO_ERROR_REGION_TYPE_RANGE2,
+        .region.range2.start1 = start1,
+        .region.range2.end1 = end1,
+        .region.range2.start2 = start2,
+        .region.range2.end2 = end2,
+        .message = (char*)message
+    };
+    
+    analyzer->error_fn(error);
 }
+
+// static void error_incompatible_binary_types(OrsoStaticAnalyzer* analyzer, Token operation, OrsoType* left, OrsoType* right, i32 line, void s) {
+
+//     const char message[256];
+//     char* msg = (char*)message;
+
+//     const char left_type_str[128];
+//     const char right_type_str[128];
+//     orso_type_to_cstrn(left, (char*)left_type_str, 128);
+//     orso_type_to_cstrn(right, (char*)right_type_str, 128);
+
+//     snprintf(msg, 256, "Incompatible Types: '%s' %.*s '%s'",
+//         left_type_str, operation.length, operation.start, right_type_str);
+
+//     error(analyzer, line, message);
+// }
+
+// static void error_incompatible_unary_type(OrsoStaticAnalyzer* analyzer, Token operation, OrsoType* operand, i32 line, void s) {
+//     const char message[256];
+//     char* msg = (char*)message;
+
+//     const char operand_type_str[128];
+//     orso_type_to_cstrn(operand, (char*)operand_type_str, 128);
+
+//     snprintf(msg, 256, "Incompatible Type: unary(%.*s) and type '%s'",
+//         operation.length, operation.start, operand_type_str);
+
+//     error(analyzer, line, message);
+// }
 
 static OrsoType* resolve_unary_type(TokenType operator, OrsoType* operand) {
     if (operand == &OrsoTypeInvalid) {
@@ -452,9 +502,6 @@ static void resolve_foldable(
             Entity* entity = get_resolved_entity_by_identifier(analyzer, ast, state, name, &query, &entity_scope);
 
             if (!entity) {
-                char message[512];
-                snprintf(message, 512, "Entity %.*s undefined.", expression->start.length, expression->start.start);
-                error(analyzer, expression->start.line, message);
                 break;
             }
 
@@ -513,7 +560,8 @@ static void resolve_foldable(
 
                 if (!function_definition->data.function.compilable) {
                     foldable = false;
-                    error(analyzer, expression->data.call.callee->start.line, "cannot fold because function definition cannot be compiled");
+                    error_range(analyzer, function_definition->start, function_definition->end, "Cannot fold due to error within function definition.");
+                    // error(analyzer, expression->data.call.callee->start.line, "cannot fold because function definition cannot be compiled");
                     break;
                 }
             }
@@ -647,7 +695,11 @@ static void fold_function_signature(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, 
     ASSERT(expression->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE, "must be a function signature");
 
     if (!IS_FOLDED(expression->data.function.return_type_expression)) {
-        error(analyzer, expression->data.function.return_type_expression->start.line, "Return type for signature must be resolved at compile time.");
+        error_range(analyzer,
+            expression->data.function.return_type_expression->start,
+            expression->data.function.return_type_expression->end,
+            "Return type must be resolved at compile time.");
+        //error(analyzer, expression->data.function.return_type_expression->start.line, "Return type for signature must be resolved at compile time.");
         return;
     }
 
@@ -658,13 +710,15 @@ static void fold_function_signature(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, 
         OrsoASTNode* parameter = expression->data.function.parameter_nodes[i];
         if (!IS_FOLDED(parameter)) {
             hit_error = true;
-            error(analyzer, parameter->start.line, "Parameter type for signature must be resolved at compile time.");
+            error_range(analyzer, parameter->start, parameter->end, "Parameter type must be resolved at compile time.");
+            // error(analyzer, parameter->start.line, "Parameter type for signature must be resolved at compile time.");
             break;
         }
 
         if (parameter->value_type_narrowed != &OrsoTypeType) {
             hit_error = true;
-            error(analyzer, parameter->start.line, "Parameter expression must be a type.");
+            error_range(analyzer, parameter->start, parameter->end, "Invalid valid type.");
+            // error(analyzer, parameter->start.line, "Parameter expression must be a type.");
             break;
         }
 
@@ -681,7 +735,8 @@ static void fold_function_signature(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, 
 
     OrsoASTNode* return_type_expression = expression->data.function.return_type_expression;
     if (return_type_expression->value_type_narrowed != &OrsoTypeType) {
-        error(analyzer, return_type_expression->start.line, "Return type expression must be a type.");
+        //error(analyzer, return_type_expression->start.line, "Return type expression must be a type.");
+        error_range(analyzer, return_type_expression->start, return_type_expression->end, "Invalid return type.");
         sb_free(parameter_types);
         return;
     }
@@ -850,11 +905,11 @@ void orso_resolve_expression(
                     cast_right = right->value_type;
 
                     OrsoType* merged_type = orso_type_merge(&ast->type_set, left->value_type, right->value_type);
-                    if (merged_type == &OrsoTypeInvalid) {
-                        error(analyzer, expression->operator.line, "too many types in union for logical operations.");
-                    } else {
+                    // if (merged_type == &OrsoTypeInvalid) {
+                    //     error(analyzer, expression->operator.line, "too many types in union for logical operations.");
+                    // } else {
                         expression->value_type_narrowed = orso_type_merge(&ast->type_set, left->value_type_narrowed, right->value_type_narrowed);
-                    }
+                    // }
 
                     expression->value_type = merged_type;
                     break;
@@ -868,7 +923,8 @@ void orso_resolve_expression(
 
             if (cast_left == &OrsoTypeInvalid || cast_right == &OrsoTypeInvalid) {
                 expression->value_type = &OrsoTypeInvalid;
-                error_incompatible_binary_types(analyzer, expression->operator, left->value_type_narrowed, right->value_type_narrowed, expression->operator.line);
+                error_range2(analyzer, left->start, left->end, right->start, right->end, "Incompatible types for binary operation.");
+                // error_incompatible_binary_types(analyzer, expression->operator, left->value_type_narrowed, right->value_type_narrowed, expression->operator.line);
                 return;
             }
 
@@ -900,7 +956,8 @@ void orso_resolve_expression(
             // TODO: Must negate the new type implications if the unary operation is NOT
 
             if (expression->value_type_narrowed == &OrsoTypeInvalid) {
-                error_incompatible_unary_type(analyzer, expression->operator, expression->data.expression->value_type_narrowed, expression->operator.line);
+                error_range(analyzer, expression->start, expression->end, "Incompatible type for unary operation");
+                // error_incompatible_unary_type(analyzer, expression->operator, expression->data.expression->value_type_narrowed, expression->operator.line);
                 return;
             }
             break;
@@ -911,7 +968,6 @@ void orso_resolve_expression(
             Entity* entity = get_resolved_entity_by_identifier(analyzer, ast, state, expression->start, NULL, &entity_scope);
 
             if (entity == NULL) {
-                error(analyzer, expression->start.line, "Entity does not exist.");
                 return;
             }
 
@@ -925,7 +981,6 @@ void orso_resolve_expression(
             Entity* entity = get_resolved_entity_by_identifier(analyzer, ast, state, expression->start, NULL, &entity_scope);
 
             if (entity == NULL) {
-                error(analyzer, expression->start.line, "Entity does not exist.");
                 return;
             }
 
@@ -945,7 +1000,8 @@ void orso_resolve_expression(
             expression->value_type = entity->declared_type;
             
             if (!orso_type_fits(entity->declared_type, right_side_narrowed_type)) {
-                error(analyzer, expression->start.line, "Expression needs explicit cast to store in variable.");
+                error_range(analyzer, expression->start, expression->end, "Explicit cast required.");
+                // error(analyzer, expression->start.line, "Expression needs explicit cast to store in variable.");
                 return;
             }
 
@@ -1029,7 +1085,8 @@ void orso_resolve_expression(
 
             if (expression->data.statement->node_type == ORSO_AST_NODE_TYPE_STATEMENT_RETURN) {
                 if (expression->return_guarentee != ORSO_NO_RETURN_GUARENTEED) {
-                    error(analyzer, expression->start.line, "Cannot return within a return expression.");
+                    error_range(analyzer, expression->start, expression->end, "Cannot return within a return expression.");
+                    // error(analyzer, expression->start.line, "Cannot return within a return expression.");
                 } else {
                     expression->return_guarentee = ORSO_RETURN_GUARENTEED;
                 }
@@ -1125,10 +1182,10 @@ void orso_resolve_expression(
                     expression->data.branch.then_expression->value_type, else_block_type
                 );
 
-                if (expression->value_type == &OrsoTypeInvalid) {
-                    error(analyzer, expression->end.line, "if expression union type is too large.");
-                    return;
-                }
+                // if (expression->value_type == &OrsoTypeInvalid) {
+                //     error(analyzer, expression->end.line, "if expression union type is too large.");
+                //     return;
+                // }
 
                 expression->value_type_narrowed = orso_type_merge(&ast->type_set,
                     expression->data.branch.then_expression->value_type_narrowed, else_block_narrowed_type
@@ -1165,7 +1222,8 @@ void orso_resolve_expression(
 
             OrsoType* narrowed_callee_type = expression->data.call.callee->value_type_narrowed;
             if ((narrowed_callee_type->kind != ORSO_TYPE_FUNCTION && narrowed_callee_type->kind != ORSO_TYPE_NATIVE_FUNCTION) || !can_call(narrowed_callee_type, expression->data.call.arguments)) {
-                error(analyzer, expression->data.call.callee->start.line, "Function does not exist.");
+                error_range(analyzer, expression->data.call.callee->start, expression->data.call.callee->end, "Cannot call this value.");
+                // error(analyzer, expression->data.call.callee->start.line, "Function does not exist.");
                 return;
             }
 
@@ -1219,7 +1277,8 @@ static void declare_entity(OrsoStaticAnalyzer* analyzer, OrsoScope* scope, OrsoA
     if (orso_symbol_table_get(&scope->named_entities, identifier, &slot_type_pair)) {
         const char message[126];
         snprintf((char*)message, 126, "Duplicate entity definition of '%.*s'.", entity->start.length, entity->start.start);
-        error(analyzer, entity->start.line, (char*)message);
+        error_token(analyzer, entity->start, "Cannot overload this entity definition");
+        // error(analyzer, entity->start.line, (char*)message);
         return;
     }
 
@@ -1323,7 +1382,8 @@ static bool is_circular_dependency(OrsoStaticAnalyzer* analyzer, OrsoASTNode* ne
 
 static bool push_dependency(OrsoStaticAnalyzer* analyzer, OrsoASTNode* node, int fold_level) {
     if (is_circular_dependency(analyzer, node)) {
-        error(analyzer, node->start.line, "Circular dependency");
+        error_range(analyzer, node->start, node->end, "Start of a circular dependency.");
+        // error(analyzer, node->start.line, "Circular dependency");
         return false;
     }
 
@@ -1361,7 +1421,9 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
         }
     }
 
-    if (entity_declaration->data.declaration.initial_value_expression != NULL && entity_declaration->data.declaration.initial_value_expression->value_type == &OrsoTypeUnresolved) {
+    OrsoASTNode* initial_expression = entity_declaration->data.declaration.initial_value_expression;
+
+    if (initial_expression != NULL && initial_expression->value_type == &OrsoTypeUnresolved) {
         ExpressionFoldingMode mode = entity_declaration->data.declaration.is_mutable ? MODE_RUNTIME : MODE_CONSTANT_TIME;
         mode = mode | (state.mode & MODE_FOLDING_TIME);
         AnalysisState new_state = state;
@@ -1397,14 +1459,17 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
         return;
     }
 
-    if (entity_declaration->data.declaration.initial_value_expression && entity_declaration->data.declaration.initial_value_expression->value_type == &OrsoTypeUndefined) {
-        error(analyzer, entity_declaration->data.declaration.initial_value_expression->start.line, "Cannot set entity to an undefined type.");
+    if (initial_expression && initial_expression->value_type == &OrsoTypeUndefined) {
+        error_range(analyzer,
+            initial_expression->start,
+            initial_expression->end,
+            "Initial declaration expression has an undefined type.");
+        // error(analyzer, entity_declaration->data.declaration.initial_value_expression->start.line, "Cannot set entity to an undefined type.");
         return;
     }
 
     if (!entity_declaration->data.declaration.is_mutable
-    && entity_declaration->data.declaration.initial_value_expression != NULL
-    && entity_declaration->data.declaration.initial_value_expression->value_type->kind == ORSO_TYPE_FUNCTION) {
+        && initial_expression != NULL && initial_expression->value_type->kind == ORSO_TYPE_FUNCTION) {
         OrsoFunction* function = (OrsoFunction*)ast->folded_constants[entity_declaration->data.declaration.initial_value_expression->value_index].as.p;
         if (function->binded_name == NULL) {
             function->binded_name = name;
@@ -1419,11 +1484,11 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
     // TODO: Outer if should be if the expression is null or not
     if (!ORSO_TYPE_IS_UNION(entity_declaration->value_type)) {
         if (entity_declaration->value_type == &OrsoTypeUnresolved) {
-            ASSERT(entity_declaration->data.declaration.initial_value_expression != NULL, "this should be a parsing error.");
+            ASSERT(initial_expression != NULL, "this should be a parsing error.");
 
             OrsoType* expression_type = entity_declaration->data.declaration.is_mutable ?
-                    entity_declaration->data.declaration.initial_value_expression->value_type :
-                    entity_declaration->data.declaration.initial_value_expression->value_type_narrowed;
+                    initial_expression->value_type :
+                    initial_expression->value_type_narrowed;
 
             if (expression_type != &OrsoTypeBool && orso_type_fits(&OrsoTypeInteger32, expression_type)) {
                 entity_declaration->value_type = &OrsoTypeInteger32;
@@ -1431,18 +1496,22 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
                 entity_declaration->value_type = expression_type;
             }
         } else {
-            if (entity_declaration->data.declaration.initial_value_expression != NULL
-            && !orso_type_fits(entity_declaration->value_type, entity_declaration->data.declaration.initial_value_expression->value_type_narrowed)) {
-                error(analyzer, entity_declaration->start.line, "Must cast expression explicitly to match var type.");
+            if (initial_expression != NULL && !orso_type_fits(entity_declaration->value_type, initial_expression->value_type_narrowed)) {
+                error_range(analyzer, initial_expression->start, initial_expression->end, "Explicit cast required to set define entity.");
+                // error(analyzer, entity_declaration->start.line, "Must cast expression explicitly to match var type.");
             }
         }
     } else {
-        if (entity_declaration->data.declaration.initial_value_expression == NULL) {
+        if (initial_expression == NULL) {
             if (!orso_type_fits(entity_declaration->value_type, &OrsoTypeVoid)) {
-                error(analyzer, entity_declaration->start.line, "Non-void union types must have a default value.");
+                error_range(analyzer, entity_declaration->end, entity_declaration->end, "Non-void union types must have a default value.");
+                // error(analyzer, entity_declaration->start.line, "Non-void union types must have a default value.");
             } 
-        } else if (!orso_type_fits(entity_declaration->value_type, entity_declaration->data.declaration.initial_value_expression->value_type)) {
-            error(analyzer, entity_declaration->start.line, "Type mismatch between expression and declaration.");
+        } else if (!orso_type_fits(entity_declaration->value_type, initial_expression->value_type)) {
+            error_range2(analyzer,
+                    entity_declaration->data.declaration.type_expression->start, entity_declaration->data.declaration.type_expression->end,
+                    initial_expression->start, initial_expression->end, "Type mismatch between expression type and declaration type.");
+            // error(analyzer, entity_declaration->start.line, "Type mismatch between expression and declaration.");
         }
     }
 
@@ -1453,7 +1522,7 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
     entity->declared_type = entity_declaration->value_type;
     entity->narrowed_type = entity_declaration->value_type;
 
-    if (entity_declaration->data.declaration.initial_value_expression == NULL) {
+    if (initial_expression == NULL) {
         if (ORSO_TYPE_IS_UNION(entity_declaration->value_type)) {
             entity->narrowed_type = &OrsoTypeVoid;
         } 
@@ -1464,8 +1533,7 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
         i32 value_index = add_value_to_ast_constant_stack(ast, &value, entity->node->value_type);
         entity->node->value_index = value_index;
     } else {
-        entity->narrowed_type = entity_declaration->data.declaration.initial_value_expression->value_type_narrowed;
-        OrsoASTNode* initial_expression = entity_declaration->data.declaration.initial_value_expression;
+        entity->narrowed_type = initial_expression->value_type_narrowed;
         if (IS_FOLDED(initial_expression)
         && ORSO_TYPE_IS_UNION(initial_expression->value_type)) {
             OrsoType* folded_value_type = get_folded_type(ast, initial_expression->value_index);
@@ -1619,8 +1687,17 @@ static Entity* get_resolved_entity_by_identifier(
             resolve_entity_declaration(analyzer, ast, new_state, entity->node);
         }
 
+        if (analyzer->panic_mode) {
+            return NULL;
+        }
+
         if (entity->node->data.declaration.is_mutable && entity->node->data.declaration.fold_level_resolved_at != state.fold_level) {
-            error(analyzer, identifier_token.line, "Cannot access mutable variables declared on different fold level");
+            error_range2(analyzer,
+                    entity->node->start, entity->node->start,
+                    identifier_token, identifier_token,
+                    "Cannot access mutable entity declared on a different fold level.");
+
+            // error(analyzer, identifier_token.line, "Cannot access mutable variables declared on different fold level");
             return NULL;
             //NEXT_SCOPE();
         }
@@ -1705,15 +1782,13 @@ static Entity* get_resolved_entity_by_identifier(
                         // TODO: Use better system to figure out whether function definition can be compiled or not
                         // In this case, it cannot because of the fold level circular dependency.
                         node->data.function.compilable = false;
-                        error(analyzer, node->start.line, "Fold level circular dependency. TODO: show dependency chain.");
+
+                        error_range(analyzer, node->start, node->end, "Function definition circular dependency.");
+                        // error(analyzer, node->start.line, "Fold level circular dependency. TODO: show dependency chain.");
                         return NULL;
                     }
                 }
             }
-        }
-
-        if (analyzer->panic_mode) {
-            return NULL;
         }
 
         if (!query) {
@@ -1739,6 +1814,8 @@ static Entity* get_resolved_entity_by_identifier(
 #undef NEXT_SCOPE
     }
 
+    error_token(analyzer, identifier_token, "Undefined entity.");
+
     return NULL;
 }
 
@@ -1758,10 +1835,11 @@ static void resolve_function_expression(
     }
 
     i32 parameter_count = sb_count(definition->parameter_nodes);
-    // TODO: instead of hardcoding the number of parameters, instead use the numbers of bytes the params take up
-    if (parameter_count > MAX_PARAMETERS - 1) {
-        error(analyzer, definition->parameter_nodes[0]->start.line, "Orso only allows a maximum of 100 parameters");
-    }
+    // TODO: use a code gen error instead for parameter limit
+    // // TODO: instead of hardcoding the number of parameters, instead use the numbers of bytes the params take up
+    // if (parameter_count > MAX_PARAMETERS - 1) {
+    //     error(analyzer, definition->parameter_nodes[0]->start.line, "Orso only allows a maximum of 100 parameters");
+    // }
 
     OrsoScope function_scope;
     scope_init(&function_scope, state.scope, function_definition_expression);
@@ -1793,7 +1871,8 @@ static void resolve_function_expression(
         }
 
         if (definition->return_type_expression->value_type != &OrsoTypeType) {
-            error(analyzer, definition->return_type_expression->start.line, "return expression must be of a type type");
+            error_range(analyzer, definition->return_type_expression->start, definition->return_type_expression->end, "Invalid return type.");
+            // error(analyzer, definition->return_type_expression->start.line, "return expression must be of a type type");
         } else {
             return_type = get_folded_type(ast, definition->return_type_expression->value_index);
         }
@@ -1841,7 +1920,8 @@ static void resolve_function_expression(
     scope_free(&function_scope);
 
     if (return_type != &OrsoTypeVoid && definition->block->return_guarentee != ORSO_RETURN_GUARENTEED) {
-        error(analyzer, function_definition_expression->start.line, "Function definition on this line does not return on all branches.");
+        error_range(analyzer, function_definition_expression->start, function_definition_expression->end, "Function definition does not return on all branches.");
+        // error(analyzer, function_definition_expression->start.line, "Function definition on this line does not return on all branches.");
     }
 }
 
@@ -1879,7 +1959,8 @@ static void resolve_statement(
             OrsoType* function_type = function_scope->creator->value_type;
             OrsoType* function_return_type = function_scope ? function_type->type.function.return_type : &OrsoTypeVoid;
             if (!orso_type_fits(function_return_type, return_expression_type)) {
-                error(analyzer, statement->start.line, "Return expression must be compatible with function return type.");
+                error_range(analyzer, statement->data.expression->start, statement->data.expression->end, "Requires explict cast to return.");
+                // error(analyzer, statement->start.line, "Return expression must be compatible with function return type.");
             }
             break;
         }
@@ -1962,7 +2043,7 @@ void resolve_declarations(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, AnalysisSt
 bool orso_resolve_ast(OrsoStaticAnalyzer* analyzer, OrsoAST* ast) {
     if (ast->root->data.block == NULL) {
         ast->resolved = false;
-        error(analyzer, 0, "No code to run. Akin to having no main function.");
+        // error(analyzer, 0, "No code to run. Akin to having no main function.");
         return false;
     }
 
