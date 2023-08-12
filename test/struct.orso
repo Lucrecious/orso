@@ -1,0 +1,6 @@
+## anonymous struct signature, only typed
+
+// the brackets *must* be empty or omitted if an anonymous struct
+xypair := struct() { x: i32; y: i32; };
+
+type_of(xypair) == struct { x: i32; y: i32; };
