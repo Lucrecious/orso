@@ -1,0 +1,24 @@
+print "doing work on globals:";
+start := clock();
+
+x := 0;
+
+while x < 1000000000 {
+    x = x + 1;
+};
+
+print clock() - start;
+
+print "";
+print "doing work on locals:";
+
+{
+    start := clock();
+    x := 0;
+
+    while x < 1000000000 {
+        x = x + 1;
+    };
+
+    print clock() - start;
+};

@@ -1,0 +1,15 @@
+import "std.um"
+
+fn fib(n: int): int {
+        if n < 2 {
+                 return n
+        }
+
+        return fib(n-1) + fib(n - 2)
+}
+
+fn main() {
+        start := std.clock()
+        fib(35)
+        printf("%f\n", std.clock() - start)
+}
