@@ -3,6 +3,7 @@
 
 #include "def.h"
 #include "type.h"
+#include "khash.h"
 
 typedef struct OrsoTypeSet {
     i32 count;

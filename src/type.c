@@ -51,8 +51,8 @@ bool orso_type_equal(OrsoType* a, OrsoType* b) {
             }
         }
     } else if (ORSO_TYPE_IS_STRUCT(a)) {
-        i32 a_name_length = strlen(a->type.struct_.name);
-        i32 b_name_length = strlen(b->type.struct_.name);
+        i32 a_name_length = a->type.struct_.name ? strlen(a->type.struct_.name) : 0;
+        i32 b_name_length = b->type.struct_.name ? strlen(b->type.struct_.name) : 0;
         if (a_name_length != b_name_length) {
             return false;
         }
@@ -205,17 +205,20 @@ bool orso_type_is_or_has_integer(OrsoType* type, bool include_bool) {
     }
 }
 
-i32 orso_type_bits(OrsoType* type) {
+i32 orso_bytes_to_slots(i32 byte_count) {
+    return byte_count / ORSO_SLOT_SIZE_BYTES + (byte_count % ORSO_SLOT_SIZE_BYTES != 0);
+}
+
+i32 orso_type_size_bytes(OrsoType* type) {
     switch (type->kind) {
         case ORSO_TYPE_UNION: {
             // take the max amount of bytes that value can take up
             i32 total = 0;
             for (i32 i = 0; i < type->type.union_.count; i++) {
-                total = i32max(orso_type_bits(type->type.union_.types[i]), total);
+                total = i32max(orso_type_size_bytes(type->type.union_.types[i]), total);
             }
 
-            // Add 64 for the type
-            return total + 64;
+            return total + sizeof(OrsoType*);
         }
 
         case ORSO_TYPE_VOID:
@@ -226,29 +229,23 @@ i32 orso_type_bits(OrsoType* type) {
 
         case ORSO_TYPE_INT64:
         case ORSO_TYPE_FLOAT64:
-            return 64;
+            return 8;
 
         case ORSO_TYPE_FLOAT32:
         case ORSO_TYPE_INT32:
-            return 32;
+            return 4;
 
         case ORSO_TYPE_STRING:
         case ORSO_TYPE_SYMBOL:
         case ORSO_TYPE_TYPE:
         case ORSO_TYPE_FUNCTION:
         case ORSO_TYPE_NATIVE_FUNCTION:
-            return 64;
+        case ORSO_TYPE_POINTER:
+            return 8;
         
         case ORSO_TYPE_STRUCT: {
             ASSERT(type != &OrsoTypeIncompleteStruct, "not allowed incomplete structs in here");
-
-            i32 bit_size = 0;
-            for (i32 i = 0; i < type->type.struct_.field_count; i++) {
-                i32 field_size = orso_type_bits(type->type.struct_.field_types[i]);
-                bit_size += (field_size / 64 + (field_size % 64 != 0)) * 64;
-            }
-
-            return bit_size;
+            return type->type.struct_.total_size;
         }
 
         case ORSO_TYPE_INVALID:
@@ -277,7 +274,7 @@ bool orso_integer_fit(OrsoType* storage_type, OrsoType* value_type, bool include
         return false;
     }
 
-    return orso_type_bits(storage_type) >= orso_type_bits(value_type);
+    return orso_type_size_bytes(storage_type) >= orso_type_size_bytes(value_type);
 }
 
 i32 orso_type_slot_count(OrsoType* type) {
@@ -509,8 +506,8 @@ OrsoType* orso_binary_arithmetic_cast(OrsoType* a, OrsoType* b, TokenType operat
         return &OrsoTypeInvalid;
     }
 
-    i32 a_count = orso_type_bits(a);
-    i32 b_count = orso_type_bits(b);
+    i32 a_count = orso_type_size_bytes(a);
+    i32 b_count = orso_type_size_bytes(b);
 
     if (a_count == 0 || b_count == 0) {
         return &OrsoTypeInvalid;
@@ -552,8 +549,8 @@ void orso_binary_comparison_casts(OrsoType* a, OrsoType* b, OrsoType** a_cast, O
             return;
         }
 
-        i32 a_count = orso_type_bits(a);
-        i32 b_count = orso_type_bits(b);
+        i32 a_count = orso_type_size_bytes(a);
+        i32 b_count = orso_type_size_bytes(b);
 
         if (a_count <= 32 && b_count <= 32) {
             *a_cast = &OrsoTypeFloat32;

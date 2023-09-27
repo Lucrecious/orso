@@ -18,6 +18,8 @@ typedef struct OrsoSlot {
 
 #define ORSO_SLOT_IS_FALSE(SLOT) (SLOT.as.i == 0)
 
+#define ORSO_SLOT_SIZE_BYTES 8
+
 #ifdef DEBUG_TRACE_EXECUTION
 #define ORSO_SLOT_I(VALUE, TYPE) (OrsoSlot){ .as.i = VALUE, .type = TYPE }
 #define ORSO_SLOT_U(VALUE, TYPE) (OrsoSlot){ .as.u = VALUE, .type = TYPE }

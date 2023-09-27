@@ -140,6 +140,10 @@ char* orso_slot_to_new_cstrn(OrsoSlot slot, OrsoType* type) {
             return cstrn_new("<native>", 8);
         }
 
+        case ORSO_TYPE_POINTER: {
+            return cstrn_new("<ptr>", 5);
+        }
+
         case ORSO_TYPE_STRUCT: {
             return cstrn_new("<struct TODO proper print>", 27);
         }

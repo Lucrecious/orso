@@ -54,6 +54,10 @@ struct OrsoType {
             i32 field_count;
             char** field_names;
             OrsoType** field_types;
+
+            // not relevant for hashing
+            i32 total_size;
+            i32* field_byte_offsets;
         } struct_;
     } type;
 };
@@ -94,7 +98,9 @@ bool orso_union_has_integer(OrsoType* type, bool include_bool);
 
 bool orso_type_is_or_has_integer(OrsoType* type, bool include_bool);
 
-i32 orso_type_bits(OrsoType* type_kind);
+i32 orso_bytes_to_slots(i32 byte_count);
+
+i32 orso_type_size_bytes(OrsoType* type);
 
 bool orso_integer_fit(OrsoType* storage_type, OrsoType* value_type, bool include_bool);
 

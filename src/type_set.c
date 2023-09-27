@@ -2,6 +2,7 @@
 
 #include "sb.h"
 #include <stdlib.h>
+#include "slot.h"
 
 #define ORSO_TYPE_SET_MAX_LOAD 0.75
 #define GROW_CAPACITY(capacity) capacity == 0 ? 8 : capacity * 2
@@ -67,7 +68,7 @@ OrsoType* function_type_new(OrsoTypeSet* set, OrsoType** arguments, i32 argument
 }
 
 // only anonymous structs can be looked up in the type set
-OrsoType* struct_type_new(OrsoTypeSet* set, char** field_names, OrsoType** field_types, i32 field_count) {
+OrsoType* struct_type_new(OrsoTypeSet* set, char** field_names, OrsoType** field_types, i32 field_count, i32* field_offsets, i32 total_size) {
     ASSERT(field_names != NULL && field_types != NULL && field_count > 0, "cannot create a anonymous struct with no fields");
 
     OrsoType* struct_type = ORSO_ALLOCATE(OrsoType);
@@ -78,6 +79,9 @@ OrsoType* struct_type_new(OrsoTypeSet* set, char** field_names, OrsoType** field
     struct_type->type.struct_.field_count = field_count;
     struct_type->type.struct_.field_names = ORSO_ALLOCATE_N(char*, field_count);
     struct_type->type.struct_.field_types = ORSO_ALLOCATE_N(OrsoType*, field_count);
+
+    struct_type->type.struct_.field_byte_offsets = NULL;
+    struct_type->type.struct_.total_size = total_size;
 
     for (i32 i = 0; i < field_count; i++) {
         struct_type->type.struct_.field_types[i] = field_types[i];
@@ -90,6 +94,13 @@ OrsoType* struct_type_new(OrsoTypeSet* set, char** field_names, OrsoType** field
         name[length] = '\0';
 
         struct_type->type.struct_.field_names[i] = name;
+    }
+
+    if (field_offsets) {
+        struct_type->type.struct_.field_byte_offsets = ORSO_ALLOCATE_N(i32, field_count);
+        for (i32 i = 0; i < field_count; i++) {
+            struct_type->type.struct_.field_byte_offsets[i] = field_offsets[i];
+        }
     }
 
     sb_push(set->heap, struct_type);
@@ -117,15 +128,13 @@ OrsoType* type_copy_new(OrsoTypeSet* set, OrsoType* type) {
     }
 
     if (ORSO_TYPE_IS_STRUCT(type)) {
-        i32 field_count = type->type.struct_.field_count;
-        char* names[field_count];
-        OrsoType* types [field_count];
-        for (i32 i = 0; i < field_count; i++) {
-            names[i] = type->type.struct_.field_names[i];
-            types[i] = type->type.struct_.field_types[i];
-        }
-
-        return struct_type_new(set, names, types, field_count);
+        return struct_type_new(
+            set,
+            type->type.struct_.field_names,
+            type->type.struct_.field_types,
+            type->type.struct_.field_count,
+            type->type.struct_.field_byte_offsets,
+            type->type.struct_.total_size);
     }
 
     UNREACHABLE();
@@ -154,6 +163,11 @@ void type_free(OrsoType* type) {
 
         free(type->type.struct_.name);
         type->type.struct_.name = NULL;
+
+        free(type->type.struct_.field_byte_offsets);
+        type->type.struct_.field_byte_offsets = NULL;
+
+        type->type.struct_.total_size = 0;
     }
 }
 
@@ -164,18 +178,6 @@ void orso_type_set_init(OrsoTypeSet* set) {
     set->count = 0;
     set->entries = NULL;
     set->heap = NULL;
-
-    // add_type(set, &OrsoTypeVoid);
-    // add_type(set, &OrsoTypeBool);
-    // add_type(set, &OrsoTypeInteger32);
-    // add_type(set, &OrsoTypeInteger64);
-    // add_type(set, &OrsoTypeFloat32);
-    // add_type(set, &OrsoTypeFloat64);
-    // add_type(set, &OrsoTypeString);
-    // add_type(set, &OrsoTypeSymbol);
-    // add_type(set, &OrsoTypeType);
-    // add_type(set, &OrsoTypeInvalid);
-    // add_type(set, &OrsoTypeUnresolved);
 
     add_type(set, (OrsoType*)&OrsoTypeEmptyFunction);
 }
@@ -501,6 +503,9 @@ OrsoType* orso_type_set_fetch_anonymous_struct(OrsoTypeSet* set, i32 field_count
         .type.struct_.field_count = field_count,
         .type.struct_.field_names = names,
         .type.struct_.field_types = types,
+
+        .type.struct_.field_byte_offsets = NULL,
+        .type.struct_.total_size = 0,
     };
 
     if (set->capacity > 0) {
@@ -514,6 +519,27 @@ OrsoType* orso_type_set_fetch_anonymous_struct(OrsoTypeSet* set, i32 field_count
     OrsoType* type = type_copy_new(set, &struct_type);
     add_type(set, type);
 
+    // put the layout in a hash table separate from type
+    // it should be impossible for sizing to be infinitely recursive because the types should have resolved
+    // properly for this struct type to be created
+    {
+        i32* offsets = ORSO_ALLOCATE_N(i32, field_count);
+        offsets[0] = 0;
+        for (i32 i = 1; i < field_count; i++) {
+            i32 previous_offset = offsets[i - 1];
+            OrsoType* previous_type = types[i - 1];
+
+            i32 bytes = orso_bytes_to_slots(orso_type_size_bytes(previous_type)) * ORSO_SLOT_SIZE_BYTES;
+            offsets[i] = previous_offset + bytes;
+        }
+
+        i32 size_of_final = orso_bytes_to_slots(orso_type_size_bytes(types[field_count - 1])) * ORSO_SLOT_SIZE_BYTES;
+        i32 total_size = offsets[field_count - 1] + size_of_final;
+
+        type->type.struct_.field_byte_offsets = offsets;
+        type->type.struct_.total_size = total_size;
+    }
+
     return type;
 }
 
@@ -521,8 +547,9 @@ OrsoType* orso_type_create_struct(OrsoTypeSet* set, char* name, i32 name_length,
     ASSERT(ORSO_TYPE_IS_STRUCT(anonymous_struct) && anonymous_struct->type.struct_.name == NULL, "can only create struct from anonymous struct");
 
     OrsoType* new_type = type_copy_new(set, anonymous_struct);
-    new_type->type.struct_.name = ORSO_ALLOCATE_N(char, name_length);
+    new_type->type.struct_.name = ORSO_ALLOCATE_N(char, name_length + 1);
     memcpy(new_type->type.struct_.name, name, name_length);
+    new_type->type.struct_.name[name_length] = '\0';
 
     return new_type;
 }

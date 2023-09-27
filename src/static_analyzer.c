@@ -1551,10 +1551,11 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
             entity->narrowed_type = &OrsoTypeVoid;
         } 
 
-        OrsoSlot value = orso_zero_value(entity->node->value_type, &analyzer->symbols);
+        OrsoSlot value[orso_bytes_to_slots(orso_type_size_bytes(entity->node->value_type))];
+        orso_zero_value(entity->node->value_type, &analyzer->symbols, value);
 
         // TODO: Optimize default values since they are always the same. Probably can use the same index for them. somehjow
-        i32 value_index = add_value_to_ast_constant_stack(ast, &value, entity->node->value_type);
+        i32 value_index = add_value_to_ast_constant_stack(ast, value, entity->node->value_type);
         entity->node->value_index = value_index;
     } else {
         entity->narrowed_type = initial_expression->value_type_narrowed;
@@ -2149,9 +2150,12 @@ static void resolve_struct_definition(OrsoStaticAnalyzer* analyzer, OrsoAST* ast
     struct_definition->value_type = complete_struct_type;
     struct_definition->value_type_narrowed = complete_struct_type;
 
-    i32 struct_size = orso_type_bits(complete_struct_type);
-    i32 size_in_slots = struct_size / 64 + (struct_size % 64 != 0);
+    i32 size_in_slots = orso_bytes_to_slots(complete_struct_type->type.struct_.total_size);
     OrsoSlot struct_data[size_in_slots];
+    for (i32 i = 0; i < size_in_slots; i++) {
+        struct_data[i] = ORSO_SLOT_I(0, &OrsoTypeVoid);
+    }
+
     struct_definition->value_index = add_value_to_ast_constant_stack(ast, struct_data, complete_struct_type);
 
     scope_free(&struct_scope);
@@ -2336,43 +2340,48 @@ void orso_static_analyzer_free(OrsoStaticAnalyzer* analyzer) {
     analyzer->panic_mode = false;
 }
 
-OrsoSlot orso_zero_value(OrsoType* type, OrsoSymbolTable* symbol_table) {
-    OrsoSlot slot;
+void orso_zero_value(OrsoType* type, OrsoSymbolTable* symbol_table, OrsoSlot* return_slots) {
     switch (type->kind) {
+        case ORSO_TYPE_POINTER:
         case ORSO_TYPE_VOID:
         case ORSO_TYPE_BOOL:
         case ORSO_TYPE_INT32:
         case ORSO_TYPE_INT64:
-            slot = ORSO_SLOT_I(0, type);
-            break;
+            return_slots[0] = ORSO_SLOT_I(0, type);
+            return;
         case ORSO_TYPE_FLOAT32:
         case ORSO_TYPE_FLOAT64:
-            slot = ORSO_SLOT_F(0.0, type);
-            break;
+            return_slots[0] = ORSO_SLOT_F(0.0, type);
+            return;
         case ORSO_TYPE_STRING:
-            slot = ORSO_SLOT_P(orso_new_string_from_cstrn("", 0), type);
-            break;
+            return_slots[0] = ORSO_SLOT_P(orso_new_string_from_cstrn("", 0), type);
+            return;
         case ORSO_TYPE_SYMBOL:
-            slot = ORSO_SLOT_P(orso_new_symbol_from_cstrn("", 0, symbol_table), type);
-            break;
+            return_slots[0] = ORSO_SLOT_P(orso_new_symbol_from_cstrn("", 0, symbol_table), type);
+            return;
+        
         // This should return 2 OrsoSlots, one for null type one for null value
         case ORSO_TYPE_UNION: {
             ASSERT(orso_union_type_has_type(type, &OrsoTypeVoid), "must include void type if looking for zero value");
-            slot = ORSO_SLOT_I(0, type);
-            break;
+            return_slots[0] = ORSO_SLOT_P(&OrsoTypeVoid, &OrsoTypeType);
+            return_slots[1] = ORSO_SLOT_I(0, type);
+            return;
         }
         case ORSO_TYPE_STRUCT: {
-            slot = ORSO_SLOT_I(0, type);
-            break;
+            for (i32 i = 0; i < orso_bytes_to_slots(type->type.struct_.total_size); i++) {
+                return_slots[i] = ORSO_SLOT_I(0, &OrsoTypeVoid);
+            }
+            return;
         }
 
         case ORSO_TYPE_FUNCTION:
+        case ORSO_TYPE_NATIVE_FUNCTION:
         case ORSO_TYPE_TYPE:
-        default:
+        case ORSO_TYPE_INVALID:
+        case ORSO_TYPE_UNDEFINED:
+        case ORSO_TYPE_UNRESOLVED:
             UNREACHABLE();
-            slot = ORSO_SLOT_I(0, &OrsoTypeInvalid);
-            break;
+            return_slots[0] = ORSO_SLOT_I(0, &OrsoTypeInvalid);
+            return;
     }
-
-    return slot;
 }

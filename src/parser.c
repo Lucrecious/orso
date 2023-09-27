@@ -33,7 +33,7 @@ comparison               -> term ((`<` | `>` | `<=` | `>=`) term)*
 term                     -> factor ((`+` | `-`) factor)*
 factor                   -> logical_operations ((`/` | `*`) logical_operations)*
 logical_operations       -> unary ((`|` |`&`) unary)*
-unary                    -> (`not` | `-`) unary | call
+unary                    -> (`not` | `-` | `&`) unary | call
 call                     -> primary ( `(` arguments? `)` ) | `.` IDENTIFIER )*
 arguments                -> argument (`,` argument)*
 argument                 -> (IDENTIFIER `=`)? expression
@@ -67,7 +67,7 @@ typedef enum {
     PREC_TERM,        // + -
     PREC_FACTOR,      // * /
     PREC_BITWISE_OR,  // | and type separator
-    PREC_UNARY,       // - not
+    PREC_UNARY,       // - not &
     PREC_CALL,        // . ()
     PREC_PRIMARY
 } Precedence;
@@ -757,6 +757,7 @@ ParseRule rules[] = {
     [TOKEN_GREATER]                 = { NULL,       binary,     PREC_COMPARISON },
     [TOKEN_SEMICOLON]               = { NULL,       NULL,       PREC_NONE },
     [TOKEN_BAR]                     = { NULL,       binary,     PREC_BITWISE_OR },
+    [TOKEN_AMPERSAND]               = { unary,      NULL,       PREC_UNARY },
     [TOKEN_PLUS_PLUS]               = { NULL,       NULL,       PREC_NONE },
     [TOKEN_MINUS_MINUS]             = { NULL,       NULL,       PREC_NONE },
     [TOKEN_EQUAL_EQUAL]             = { NULL,       binary,     PREC_EQUALITY },
