@@ -39,9 +39,10 @@ arguments                -> argument (`,` argument)*
 argument                 -> (IDENTIFIER `=`)? expression
 
 primary                  -> `true` | `false` | `null` | IDENTIFIER | INTEGER | DECIMAL
-                          | STRING | SYMBOL | `(` expression `)` | function_definition | function_type
+                          | STRING | SYMBOL | `(` expression `)` | function_definition | function_type | struct_definition
 function_definition      -> `(` parameters? `)` `->` logic_or block
 function_type            -> `(` (logic_or (`,` logic_or)*)? `)` `->` logic_or
+struct_definition        -> `struct` `{` declaration* `}`
 */
 
 typedef struct Parser {
@@ -175,6 +176,11 @@ OrsoASTNode* orso_ast_node_new(OrsoAST* ast, OrsoASTNodeType node_type, Token st
             node->data.function.compilable = false;
             node->data.function.parameter_nodes = NULL;
             node->data.function.return_type_expression = NULL;
+            break;
+        }
+
+        case ORSO_AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION: {
+            node->data.struct_.declarations = NULL;
             break;
         }
         
@@ -716,6 +722,21 @@ static OrsoASTNode* function_definition(Parser* parser) {
     return function_definition_expression;
 }
 
+static OrsoASTNode* struct_(Parser* parser) {
+    OrsoASTNode* struct_definition = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION, parser->previous);
+
+    consume(parser, TOKEN_BRACE_OPEN, "Expect open brace.");
+
+    while (!check(parser, TOKEN_BRACE_CLOSE) && !check(parser, TOKEN_EOF)) {
+        OrsoASTNode* declaration_node = declaration(parser);
+        sb_push(struct_definition->data.block, declaration_node);
+    }
+
+    consume(parser, TOKEN_BRACE_CLOSE, "Expect close brace.");
+
+    return struct_definition;
+}
+
 ParseRule rules[] = {
     [TOKEN_PARENTHESIS_OPEN]        = { grouping_or_function_signature,   call,       PREC_CALL },
     [TOKEN_PARENTHESIS_CLOSE]       = { NULL,       NULL,       PREC_NONE },
@@ -749,7 +770,7 @@ ParseRule rules[] = {
     [TOKEN_INTEGER]                 = { number,     NULL,       PREC_NONE },
     [TOKEN_FLOAT]                   = { number,     NULL,       PREC_NONE },
     [TOKEN_ANNOTATION]              = { NULL,       NULL,       PREC_NONE },
-    [TOKEN_STRUCT]                  = { NULL,       NULL,       PREC_NONE },
+    [TOKEN_STRUCT]                  = { struct_,    NULL,       PREC_NONE },
     [TOKEN_FUNCTION]                = { NULL,       NULL,       PREC_NONE },
     [TOKEN_NOT]                     = { unary,      NULL,       PREC_NONE },
     [TOKEN_AND]                     = { NULL,       binary,     PREC_AND },
@@ -1079,6 +1100,13 @@ void ast_print_ast_node(OrsoASTNode* node, i32 initial, const char* prefix) {
             }
             ast_print_ast_node(node->data.function.block, initial + 2, "");
             ast_print_ast_node(node->data.function.return_type_expression, initial + 1, "returns: ");
+            break;
+        }
+        case ORSO_AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION: {
+            printf("struct: %s\n", type_info);
+            for (i32 i = 0; i < sb_count(node->data.struct_.declarations); i++) {
+                ast_print_ast_node(node->data.struct_.declarations[i], initial + 1, "field: ");
+            }
             break;
         }
         case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE: {

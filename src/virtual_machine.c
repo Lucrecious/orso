@@ -84,7 +84,7 @@ void orso_vm_call(OrsoVM* vm, OrsoFunction* function) {
 }
 
 static void call_object(OrsoVM* vm, OrsoObject* callee, i32 argument_slots) {
-    if (callee->type->kind == ORSO_TYPE_FUNCTION) {
+    if (ORSO_TYPE_IS_FUNCTION(callee->type)) {
         OrsoFunction* function = (OrsoFunction*)callee;
         call(vm, function, argument_slots);
         return;

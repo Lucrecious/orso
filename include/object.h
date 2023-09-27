@@ -31,6 +31,10 @@ typedef struct OrsoFunction {
     OrsoSymbol* binded_name;
 } OrsoFunction;
 
+typedef struct OrsoStruct {
+    OrsoSlot* slots;
+} OrsoStruct;
+
 typedef void (*NativeFunction)(OrsoSlot* arguments, OrsoSlot* result);
 
 typedef struct OrsoNativeFunction {
@@ -77,6 +81,8 @@ OrsoFunction* orso_new_function(void);
 bool is_function_compiled(OrsoFunction* function);
 
 OrsoNativeFunction* orso_new_native_function(NativeFunction function, OrsoType* type);
+
+OrsoStruct* orso_new_struct(void);
 
 i64 cstrn_to_i64(const char* text, i32 length);
 f64 cstrn_to_f64(const char* text, i32 length);

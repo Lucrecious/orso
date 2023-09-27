@@ -9,26 +9,27 @@
 #define ORSO_UNION_NUM_MAX 4
 
 typedef enum OrsoTypeKind {
-    ORSO_TYPE_INVALID = 0,
-    ORSO_TYPE_UNDEFINED, // used for blocks with returns
-    ORSO_TYPE_UNRESOLVED,
-    ORSO_TYPE_VOID,
-    ORSO_TYPE_BOOL,
-    ORSO_TYPE_INT32,
-    ORSO_TYPE_INT64,
-    ORSO_TYPE_FLOAT32,
-    ORSO_TYPE_FLOAT64,
-    ORSO_TYPE_STRING,
-    ORSO_TYPE_SYMBOL,
-    ORSO_TYPE_TYPE,
-    ORSO_TYPE_FUNCTION,
-    ORSO_TYPE_NATIVE_FUNCTION,
-    ORSO_TYPE_PTR_OPAQUE,
-    ORSO_TYPE_UNION,
-    ORSO_TYPE_USER = 5000,
-    // Aiming to allow for 60k custom types. This number must be less than 0xFFFF (largest u16)
-    ORSO_TYPE_MAX = 65000,
+    ORSO_TYPE_INVALID = 0,      // error type
+    ORSO_TYPE_UNDEFINED,        // used for blocks with returns
+    ORSO_TYPE_UNRESOLVED,       // unresolved (not undefined, not error, not defined)
+    ORSO_TYPE_VOID,             // null
+    ORSO_TYPE_BOOL,             // true false
+    ORSO_TYPE_INT32,            // [-2^32, 2^32 - 1]
+    ORSO_TYPE_INT64,            // [-2^64, 2^64 - 1]
+    ORSO_TYPE_FLOAT32,          // single precision IEEE 754 float
+    ORSO_TYPE_FLOAT64,          // double precision IEEE 754 float
+    ORSO_TYPE_STRING,           // "anything in here"
+    ORSO_TYPE_SYMBOL,           // 'anything in here'
+    ORSO_TYPE_TYPE,             // i32, void, type, () -> void, etc
+    ORSO_TYPE_FUNCTION,         // (type1, type2, ..., typen) -> return_type OR (foo := 0, bar := "") -> return_type
+    ORSO_TYPE_NATIVE_FUNCTION,  // (type1, type2, ..., typen) -> return_type
+    ORSO_TYPE_POINTER,          // &type
+    ORSO_TYPE_UNION,            // type1|type2|...|typen
+    ORSO_TYPE_STRUCT,           // used for both anonymous and named
 } OrsoTypeKind;
+
+// struct OrsoSymbol;
+// typedef struct OrsoSymbol OrsoSymbol;
 
 struct OrsoType;
 typedef struct OrsoType OrsoType;
@@ -46,10 +47,22 @@ struct OrsoType {
             i32 argument_count;
             OrsoType** argument_types;
         } function;
+
+        struct {
+            char* name; // null if anonymous
+
+            i32 field_count;
+            char** field_names;
+            OrsoType** field_types;
+        } struct_;
     } type;
 };
 
 #define ORSO_TYPE_IS_UNION(TYPE) (TYPE->kind == ORSO_TYPE_UNION)
+#define ORSO_TYPE_IS_FUNCTION(TYPE) (TYPE->kind == ORSO_TYPE_FUNCTION)
+#define ORSO_TYPE_IS_STRUCT(TYPE) (TYPE->kind == ORSO_TYPE_STRUCT)
+#define ORSO_TYPE_IS_INVALID(TYPE) (TYPE->kind == ORSO_TYPE_INVALID)
+#define ORSO_TYPE_IS_UNRESOLVED(TYPE) (TYPE->kind == ORSO_TYPE_UNRESOLVED)
 
 struct OrsoTypeSet;
 

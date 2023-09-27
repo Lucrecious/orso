@@ -17,9 +17,18 @@ typedef enum OrsoReturnGuarentee {
 struct OrsoASTNode;
 typedef struct OrsoASTNode OrsoASTNode;
 
+typedef enum OrsoScopeType {
+    SCOPE_TYPE_MODULE,
+    SCOPE_TYPE_FUNCTION_PARAMETERS,
+    SCOPE_TYPE_FUNCTION_BODY,
+    SCOPE_TYPE_BLOCK,
+    SCOPE_TYPE_STRUCT,
+} OrsoScopeType;
+
 typedef struct OrsoScope {
     OrsoASTNode* creator;
     OrsoSymbolTable named_entities;
+    OrsoScopeType type;
     struct OrsoScope* outer;
 } OrsoScope;
 
@@ -46,8 +55,8 @@ typedef enum OrsoASTNodeType {
     ORSO_AST_NODE_TYPE_EXPRESSION_BLOCK,
     ORSO_AST_NODE_TYPE_EXPRESSION_BRANCHING,
     ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION,
+    ORSO_AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION,
     ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE,
-
     /*
     * This is a special case expression. It's simply an expression with a statement inside.
     * This is used for branching.
@@ -64,6 +73,7 @@ case ORSO_AST_NODE_TYPE_EXPRESSION_CALL: \
 case ORSO_AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT: \
 case ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY: \
 case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION: \
+case ORSO_AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION: \
 case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE: \
 case ORSO_AST_NODE_TYPE_EXPRESSION_GROUPING: \
 case ORSO_AST_NODE_TYPE_EXPRESSION_PRIMARY: \
@@ -78,6 +88,10 @@ typedef struct OrsoASTFuncion {
 
     bool compilable;
 } OrsoASTFunction;
+
+typedef struct OrsoASTStruct {
+    OrsoASTNode** declarations;
+} OrsoASTStruct;
 
 typedef struct OrsoASTCall {
     OrsoASTNode* callee;
@@ -114,6 +128,7 @@ struct OrsoASTNode {
 
     // expressions TODO: Fill this in for *everything*, declarations, statements included
     OrsoType *value_type, *value_type_narrowed;
+    //AccessIdentifiers *value_type_identifiers, *value_type_narrowed_identifiers;
 
     // branching, blocks
     OrsoReturnGuarentee return_guarentee;
@@ -124,7 +139,6 @@ struct OrsoASTNode {
 
     // primary, folding value
     i32 value_index;
-
 
     union {
         OrsoASTDeclaration declaration;
@@ -146,6 +160,9 @@ struct OrsoASTNode {
 
         // function signatures and defintions
         OrsoASTFunction function;
+
+        // structs
+        OrsoASTStruct struct_;
     } data;
 };
 

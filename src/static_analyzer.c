@@ -41,9 +41,10 @@ typedef struct Entity {
 
 } Entity;
 
-static void scope_init(OrsoScope* scope, OrsoScope* outer, OrsoASTNode* creator_expression) {
+static void scope_init(OrsoScope* scope, OrsoScopeType type, OrsoScope* outer, OrsoASTNode* creator_expression) {
     scope->outer = outer;
     scope->creator = creator_expression;
+    scope->type = type;
     orso_symbol_table_init(&scope->named_entities);
 }
 
@@ -67,7 +68,7 @@ static OrsoScope* scope_copy_new(OrsoScope* scope) {
     }
 
     OrsoScope* scope_copy = ORSO_ALLOCATE(OrsoScope);
-    scope_init(scope_copy, NULL, scope->creator);
+    scope_init(scope_copy, scope->type, NULL, scope->creator);
     orso_symbol_table_add_all(&scope->named_entities, &scope_copy->named_entities);
 
     for (i32 i = 0; i < scope_copy->named_entities.capacity; i++) {
@@ -225,35 +226,6 @@ static void error_range2(OrsoStaticAnalyzer* analyzer, Token start1, Token end1,
     analyzer->error_fn(error);
 }
 
-// static void error_incompatible_binary_types(OrsoStaticAnalyzer* analyzer, Token operation, OrsoType* left, OrsoType* right, i32 line, void s) {
-
-//     const char message[256];
-//     char* msg = (char*)message;
-
-//     const char left_type_str[128];
-//     const char right_type_str[128];
-//     orso_type_to_cstrn(left, (char*)left_type_str, 128);
-//     orso_type_to_cstrn(right, (char*)right_type_str, 128);
-
-//     snprintf(msg, 256, "Incompatible Types: '%s' %.*s '%s'",
-//         left_type_str, operation.length, operation.start, right_type_str);
-
-//     error(analyzer, line, message);
-// }
-
-// static void error_incompatible_unary_type(OrsoStaticAnalyzer* analyzer, Token operation, OrsoType* operand, i32 line, void s) {
-//     const char message[256];
-//     char* msg = (char*)message;
-
-//     const char operand_type_str[128];
-//     orso_type_to_cstrn(operand, (char*)operand_type_str, 128);
-
-//     snprintf(msg, 256, "Incompatible Type: unary(%.*s) and type '%s'",
-//         operation.length, operation.start, operand_type_str);
-
-//     error(analyzer, line, message);
-// }
-
 static OrsoType* resolve_unary_type(TokenType operator, OrsoType* operand) {
     if (operand == &OrsoTypeInvalid) {
         return &OrsoTypeInvalid;
@@ -362,7 +334,7 @@ static i32 add_value_to_ast_constant_stack(OrsoAST* ast, OrsoSlot* value, OrsoTy
 }
 
 static bool is_builtin_function(OrsoAST* ast, OrsoSymbol* identifier, OrsoNativeFunction** function) {
-    if (strncmp(identifier->text, "clock", MIN(5, identifier->length)) == 0) {
+    if (strncmp(identifier->text, "clock", i32min(5, identifier->length)) == 0) {
         OrsoType* function_type = orso_type_set_fetch_native_function(&ast->type_set, &OrsoTypeFloat64, NULL, 0);
         *function = orso_new_native_function(clock_native, function_type);
         return true;
@@ -372,7 +344,7 @@ static bool is_builtin_function(OrsoAST* ast, OrsoSymbol* identifier, OrsoNative
 }
 
 static bool can_call(OrsoType* type, OrsoASTNode** arguments) {
-    ASSERT(type->kind == ORSO_TYPE_FUNCTION, "must be a function type");
+    ASSERT(ORSO_TYPE_IS_FUNCTION(type), "must be a function type");
 
     if (type->type.function.argument_count != sb_count(arguments)) {
         return false;
@@ -532,6 +504,12 @@ static void resolve_foldable(
             break;
         }
 
+        case ORSO_AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION: {
+            foldable = true;
+            folded_index = expression->value_index;
+            break;
+        }
+
         case ORSO_AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT: {
             foldable = true;
             break;
@@ -546,7 +524,7 @@ static void resolve_foldable(
             // At this point, we are in folding time, and if a function cannot be compiled
             // we should probably let the user know and also not allow them to fold something
             // that has an invalid thing.
-            if (expression->data.call.callee->value_type->kind == ORSO_TYPE_FUNCTION) {
+            if (ORSO_TYPE_IS_FUNCTION(expression->data.call.callee->value_type)) {
                 OrsoFunction* function = (OrsoFunction*)ast->folded_constants[expression->data.call.callee->value_index].as.p;
                 OrsoASTNode* function_definition = NULL;
                 for (i32 i = 0; i < sb_count(ast->function_definition_pairs); i++) {
@@ -632,10 +610,11 @@ static void fold_constants(
         AnalysisState state,
         OrsoASTNode* expression) {
 
+    // commented out because possible that this needs to be redone  
     // already folded nothing to do
-    if (IS_FOLDED(expression)) {
-        return;
-    }
+    // if (IS_FOLDED(expression)) {
+    //     return;
+    // }
 
     resolve_foldable(analyzer, ast, state, expression);
 
@@ -782,6 +761,12 @@ static void resolve_function_expression(
         AnalysisState state,
         OrsoASTNode* function_definition_expression);
 
+static void resolve_struct_definition(
+    OrsoStaticAnalyzer* analyzer,
+    OrsoAST* ast,
+    AnalysisState state,
+    OrsoASTNode* struct_definition);
+
 static void declare_entity(OrsoStaticAnalyzer* analyzer, OrsoScope* scope, OrsoASTNode* entity);
 
 static void forward_scan_declaration_names(OrsoStaticAnalyzer* analyzer, OrsoScope* scope, OrsoASTNode** declarations, i32 count) {
@@ -815,9 +800,9 @@ void orso_resolve_expression(
     switch (expression->node_type) {
         case ORSO_AST_NODE_TYPE_EXPRESSION_GROUPING: {
             orso_resolve_expression(analyzer, ast, state, expression->data.expression);
-            if (EXPRESSION_RESOLVED(expression)) {
-                return;
-            }
+            // if (EXPRESSION_RESOLVED(expression)) {
+            //     return;
+            // }
 
             expression->value_type = expression->data.expression->value_type_narrowed;
             expression->value_type_narrowed = expression->data.expression->value_type_narrowed;
@@ -833,14 +818,14 @@ void orso_resolve_expression(
             OrsoASTNode* left = expression->data.binary.lhs;
             OrsoASTNode* right = expression->data.binary.rhs;
             orso_resolve_expression(analyzer, ast, state, left);
-            if (EXPRESSION_RESOLVED(expression)) {
-                return;
-            }
+            // if (EXPRESSION_RESOLVED(expression)) {
+            //     return;
+            // }
 
             orso_resolve_expression(analyzer, ast, state, right);
-            if (EXPRESSION_RESOLVED(expression)) {
-                return;
-            }
+            // if (EXPRESSION_RESOLVED(expression)) {
+            //     return;
+            // }
 
             // TODO: Remember to do different things depending on operation
             //   if it's arthimetic, or comparisons, then let them merge at the end
@@ -945,9 +930,9 @@ void orso_resolve_expression(
 
         case ORSO_AST_NODE_TYPE_EXPRESSION_UNARY: {
             orso_resolve_expression(analyzer, ast, state, expression->data.expression);
-            if (EXPRESSION_RESOLVED(expression)) {
-                return;
-            }
+            // if (EXPRESSION_RESOLVED(expression)) {
+            //     return;
+            // }
 
             OrsoType* new_type = resolve_unary_type(expression->operator.type, expression->data.expression->value_type_narrowed);
             expression->value_type = new_type;
@@ -985,9 +970,10 @@ void orso_resolve_expression(
             }
 
             orso_resolve_expression(analyzer, ast, state, expression->data.binary.rhs);
-            if (EXPRESSION_RESOLVED(expression)) {
-                return;
-            }
+            // if (EXPRESSION_RESOLVED(expression)) {
+            //     return;
+            // }
+
             if (analyzer->panic_mode) {
                 return;
             }
@@ -1015,7 +1001,7 @@ void orso_resolve_expression(
 
         case ORSO_AST_NODE_TYPE_EXPRESSION_BLOCK: {
             OrsoScope block_scope;
-            scope_init(&block_scope, state.scope, expression);
+            scope_init(&block_scope, SCOPE_TYPE_BLOCK, state.scope, expression);
 
             i32 declarations_count = sb_count(expression->data.block);
             forward_scan_declaration_names(analyzer, &block_scope, expression->data.block, declarations_count);
@@ -1076,9 +1062,9 @@ void orso_resolve_expression(
 
         case ORSO_AST_NODE_TYPE_EXPRESSION_STATEMENT: {
             resolve_statement(analyzer, ast, state, expression->data.statement);
-            if (EXPRESSION_RESOLVED(expression)) {
-                return;
-            }
+            // if (EXPRESSION_RESOLVED(expression)) {
+            //     return;
+            // }
 
             expression->return_guarentee = expression->data.statement->data.expression ? 
                     expression->data.statement->data.expression->return_guarentee : ORSO_NO_RETURN_GUARENTEED;
@@ -1104,26 +1090,26 @@ void orso_resolve_expression(
 
         case ORSO_AST_NODE_TYPE_EXPRESSION_BRANCHING: {
             orso_resolve_expression(analyzer, ast, state, expression->data.branch.condition);
-            if (EXPRESSION_RESOLVED(expression)) {
-                return;
-            }
+            // if (EXPRESSION_RESOLVED(expression)) {
+            //     return;
+            // }
 
             OrsoScope* then_scope = scope_copy_new(state.scope);
             AnalysisState then_state = state;
             then_state.scope = then_scope;
             orso_resolve_expression(analyzer, ast, then_state, expression->data.branch.then_expression);
-            if (EXPRESSION_RESOLVED(expression)) {
-                return;
-            }
+            // if (EXPRESSION_RESOLVED(expression)) {
+            //     return;
+            // }
 
             OrsoScope* else_scope = scope_copy_new(state.scope);
             AnalysisState else_state = state;
             else_state.scope = else_scope;
             if (expression->data.branch.else_expression) {
                 orso_resolve_expression(analyzer, ast, else_state, expression->data.branch.else_expression);
-                if (EXPRESSION_RESOLVED(expression)) {
-                    return;
-                }
+                // if (EXPRESSION_RESOLVED(expression)) {
+                //     return;
+                // }
             }
 
             OrsoReturnGuarentee branch_return_guarentee;
@@ -1201,9 +1187,9 @@ void orso_resolve_expression(
             for (i32 i = 0; i < sb_count(expression->data.call.arguments); i++) {
                 OrsoASTNode* argument = expression->data.call.arguments[i];
                 orso_resolve_expression(analyzer, ast, state, argument);
-                if (EXPRESSION_RESOLVED(expression)) {
-                    return;
-                }
+                // if (EXPRESSION_RESOLVED(expression)) {
+                //     return;
+                // }
 
                 if (analyzer->panic_mode) {
                     return;
@@ -1211,9 +1197,9 @@ void orso_resolve_expression(
             }
 
             orso_resolve_expression(analyzer, ast, state, expression->data.call.callee);
-            if (EXPRESSION_RESOLVED(expression)) {
-                return;
-            }
+            // if (EXPRESSION_RESOLVED(expression)) {
+            //     return;
+            // }
 
             if (analyzer->panic_mode) {
                 return;
@@ -1221,7 +1207,7 @@ void orso_resolve_expression(
 
 
             OrsoType* narrowed_callee_type = expression->data.call.callee->value_type_narrowed;
-            if ((narrowed_callee_type->kind != ORSO_TYPE_FUNCTION && narrowed_callee_type->kind != ORSO_TYPE_NATIVE_FUNCTION) || !can_call(narrowed_callee_type, expression->data.call.arguments)) {
+            if ((!ORSO_TYPE_IS_FUNCTION(narrowed_callee_type) && narrowed_callee_type->kind != ORSO_TYPE_NATIVE_FUNCTION) || !can_call(narrowed_callee_type, expression->data.call.arguments)) {
                 error_range(analyzer, expression->data.call.callee->start, expression->data.call.callee->end, "Cannot call this value.");
                 // error(analyzer, expression->data.call.callee->start.line, "Function does not exist.");
                 return;
@@ -1235,19 +1221,24 @@ void orso_resolve_expression(
             resolve_function_expression(analyzer, ast, state, expression);
             break;
         }
+
+        case ORSO_AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION: {
+            resolve_struct_definition(analyzer, ast, state, expression);
+            break;
+        }
         
          case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE: {
             orso_resolve_expression(analyzer, ast, state, expression->data.function.return_type_expression);
-            if (EXPRESSION_RESOLVED(expression)) {
-                return;
-            }
+            // if (EXPRESSION_RESOLVED(expression)) {
+            //     return;
+            // }
 
             for (i32 i = 0; i < sb_count(expression->data.function.parameter_nodes); i++) {
                 OrsoASTNode* parameter = expression->data.function.parameter_nodes[i];
                 orso_resolve_expression(analyzer, ast, state, parameter);
-                if (EXPRESSION_RESOLVED(expression)) {
-                    return;
-                }
+                // if (EXPRESSION_RESOLVED(expression)) {
+                //     return;
+                // }
             }
 
             fold_function_signature(analyzer, ast, expression);
@@ -1361,7 +1352,7 @@ static void declare_entity(OrsoStaticAnalyzer* analyzer, OrsoScope* scope, OrsoA
  * 
  * Therefore instead of a simply looking for duplicate expression pointers in the entire dependency chain, I start
  * backwards and when I see a dependency to a function definition, I stop looking. This mimics the behavior of the
- * unideal solution but allows me not break any recursion.
+ * ideal solution but allows me not break any recursion.
  * 
  */
 static bool is_circular_dependency(OrsoStaticAnalyzer* analyzer, OrsoASTNode* new_dependency) {
@@ -1412,7 +1403,7 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
         bool pushed = push_dependency(analyzer, entity_declaration->data.declaration.type_expression, state.fold_level);
         if (pushed) {
             AnalysisState new_state = state;
-            state.mode = MODE_CONSTANT_TIME | (state.mode & MODE_FOLDING_TIME);
+            new_state.mode = MODE_CONSTANT_TIME | (state.mode & MODE_FOLDING_TIME);
             orso_resolve_expression(analyzer, ast, new_state, entity_declaration->data.declaration.type_expression);
             declaration_type = get_folded_type(ast, entity_declaration->data.declaration.type_expression->value_index);
             pop_dependency(analyzer);
@@ -1424,10 +1415,23 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
     OrsoASTNode* initial_expression = entity_declaration->data.declaration.initial_value_expression;
 
     if (initial_expression != NULL && initial_expression->value_type == &OrsoTypeUnresolved) {
-        ExpressionFoldingMode mode = entity_declaration->data.declaration.is_mutable ? MODE_RUNTIME : MODE_CONSTANT_TIME;
-        mode = mode | (state.mode & MODE_FOLDING_TIME);
         AnalysisState new_state = state;
-        new_state.mode = mode;
+        switch (state.scope->type) {
+            case SCOPE_TYPE_FUNCTION_BODY:
+            case SCOPE_TYPE_BLOCK:
+            case SCOPE_TYPE_MODULE: {
+                ExpressionFoldingMode mode = entity_declaration->data.declaration.is_mutable ? MODE_RUNTIME : MODE_CONSTANT_TIME;
+                mode = mode | (state.mode & MODE_FOLDING_TIME);
+                new_state.mode = mode;
+                break;
+            }
+
+            case SCOPE_TYPE_STRUCT:
+            case SCOPE_TYPE_FUNCTION_PARAMETERS: {
+                new_state.mode = MODE_CONSTANT_TIME | (state.mode & MODE_FOLDING_TIME);
+                break;
+            }
+        }
 
         bool pushed = push_dependency(analyzer, entity_declaration->data.declaration.initial_value_expression, new_state.fold_level);
         if (pushed) {
@@ -1468,11 +1472,31 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
         return;
     }
 
-    if (!entity_declaration->data.declaration.is_mutable
-        && initial_expression != NULL && initial_expression->value_type->kind == ORSO_TYPE_FUNCTION) {
-        OrsoFunction* function = (OrsoFunction*)ast->folded_constants[entity_declaration->data.declaration.initial_value_expression->value_index].as.p;
-        if (function->binded_name == NULL) {
-            function->binded_name = name;
+    if (!entity_declaration->data.declaration.is_mutable) {
+        if (initial_expression != NULL && ORSO_TYPE_IS_FUNCTION(initial_expression->value_type_narrowed)) {
+            OrsoFunction* function = (OrsoFunction*)ast->folded_constants[initial_expression->value_index].as.p;
+            if (function->binded_name == NULL) {
+                function->binded_name = name;
+            }
+        }
+
+        if (initial_expression != NULL
+        && ORSO_TYPE_IS_STRUCT(initial_expression->value_type_narrowed)
+        && (ORSO_TYPE_IS_UNRESOLVED(declaration_type) || declaration_type->kind == ORSO_TYPE_TYPE)) {
+            OrsoASTNode* to_struct_type = orso_ast_node_new(ast, ORSO_AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT, initial_expression->start);
+            to_struct_type->value_type = &OrsoTypeType;
+            to_struct_type->value_type_narrowed = &OrsoTypeType;
+            to_struct_type->data.expression = initial_expression;
+
+            to_struct_type->fold = false;
+            to_struct_type->foldable = true;
+            OrsoType* named_struct = orso_type_create_struct(&ast->type_set, entity_declaration->start.start, entity_declaration->start.length, initial_expression->value_type_narrowed);
+            OrsoSlot struct_type_slot = ORSO_SLOT_P(named_struct, &OrsoTypeType);
+            to_struct_type->value_index = add_value_to_ast_constant_stack(ast, &struct_type_slot, &OrsoTypeType);
+
+            initial_expression = to_struct_type;
+
+            entity_declaration->data.declaration.initial_value_expression = initial_expression;
         }
     }
 
@@ -1653,8 +1677,7 @@ static Entity* get_resolved_entity_by_identifier(
     *search_scope = state.scope;
 
     while (*search_scope) {
-        // TODO: search_scope->creator should never be null but right now it represents the global scope
-        bool is_function_scope = (*search_scope)->creator && (*search_scope)->creator->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION;
+        bool is_function_scope = (*search_scope)->type == SCOPE_TYPE_FUNCTION_BODY;
 
     #define NEXT_SCOPE() if (is_function_scope) { passed_local_mutable_access_barrier = true; } *search_scope = (*search_scope)->outer
 
@@ -1676,7 +1699,6 @@ static Entity* get_resolved_entity_by_identifier(
         }
 
         if (entity->node->data.declaration.is_mutable && !is_declaration_resolved(entity->node)) {
-            //ASSERT(entity->node->start.start <= identifier_token.start, "cannot think of a case when the declaration wont happen PRIOR to using it with mutables");
             NEXT_SCOPE();
             continue;
         }
@@ -1702,7 +1724,7 @@ static Entity* get_resolved_entity_by_identifier(
             //NEXT_SCOPE();
         }
 
-        if (entity->node->value_type->kind == ORSO_TYPE_FUNCTION) {
+        if (ORSO_TYPE_IS_FUNCTION(entity->node->value_type)) {
             /*
             * Okay... Time to do some explaining. This is a complicated one. Let's begin with the context.
             *
@@ -1805,7 +1827,7 @@ static Entity* get_resolved_entity_by_identifier(
             return entity;
         }
 
-        if (query->type == ENTITY_QUERY_FUNCTION && type->kind == ORSO_TYPE_FUNCTION) {
+        if (query->type == ENTITY_QUERY_FUNCTION && ORSO_TYPE_IS_FUNCTION(type)) {
             return entity;
         }
 
@@ -1826,13 +1848,11 @@ static void resolve_function_expression(
         OrsoASTNode* function_definition_expression) {
     ASSERT(function_definition_expression->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION, "must be function declaration at this point");
 
-    //state.mode = MODE_RUNTIME;
-
-    OrsoASTFunction* definition = &function_definition_expression->data.function;
-
     if (IS_FOLDED(function_definition_expression)) {
         return;
     }
+
+    OrsoASTFunction* definition = &function_definition_expression->data.function;
 
     i32 parameter_count = sb_count(definition->parameter_nodes);
     // TODO: use a code gen error instead for parameter limit
@@ -1841,13 +1861,13 @@ static void resolve_function_expression(
     //     error(analyzer, definition->parameter_nodes[0]->start.line, "Orso only allows a maximum of 100 parameters");
     // }
 
-    OrsoScope function_scope;
-    scope_init(&function_scope, state.scope, function_definition_expression);
+    OrsoScope function_parameter_scope;
+    scope_init(&function_parameter_scope, SCOPE_TYPE_FUNCTION_PARAMETERS, state.scope, function_definition_expression);
     OrsoType* parameter_types[parameter_count];
 
     // forward declare parameters
     for (i32 i = 0; i < sb_count(definition->parameter_nodes); i++) {
-        declare_entity(analyzer, &function_scope, definition->parameter_nodes[i]);
+        declare_entity(analyzer, &function_parameter_scope, definition->parameter_nodes[i]);
     }
 
     // Resolves parameters for function type
@@ -1855,7 +1875,7 @@ static void resolve_function_expression(
         AnalysisState new_state = state;
         // parameters look syntacticly like mutables, but they their initial expressions should be constants
         new_state.mode = MODE_CONSTANT_TIME | (state.mode & MODE_FOLDING_TIME);
-        new_state.scope = &function_scope;
+        new_state.scope = &function_parameter_scope;
         resolve_entity_declaration(analyzer, ast, new_state, definition->parameter_nodes[i]);
         parameter_types[i] = definition->parameter_nodes[i]->value_type;
     }
@@ -1912,12 +1932,16 @@ static void resolve_function_expression(
     if (pushed) {
         AnalysisState new_state = state;
         new_state.mode = MODE_RUNTIME;
+
+        OrsoScope function_scope;
+        scope_init(&function_scope, SCOPE_TYPE_FUNCTION_BODY, &function_parameter_scope, function_definition_expression);
         new_state.scope = &function_scope;
         orso_resolve_expression(analyzer, ast, new_state, definition->block);
         pop_dependency(analyzer);
+        scope_free(&function_scope);
     }
 
-    scope_free(&function_scope);
+    scope_free(&function_parameter_scope);
 
     if (return_type != &OrsoTypeVoid && definition->block->return_guarentee != ORSO_RETURN_GUARENTEED) {
         error_range(analyzer, function_definition_expression->start, function_definition_expression->end, "Function definition does not return on all branches.");
@@ -1925,8 +1949,216 @@ static void resolve_function_expression(
     }
 }
 
+/*
+* At this point in the analysis, we know the type for this struct definition is unknown. Otherwise
+* we wouldn't be here trying to resolve it (expression calls this only if the ast is unresolved)
+* It's possible for a struct to be defined like this:
+* 
+*          Foo :: struct {
+*              i: i32;
+*              foo: Foo;
+*          };
+* 
+* Despite this being an invalid type (since this creates an infinitely sized struct) I can only find out
+* after I figure out *what* Foo is. The first time Foo's assigned value is being analyzed is also the first
+* time the analyzer enters the struct and encounters Foo. At this point, it is not obvious what Foo is because
+* we are actively in the process of figuring that out! Also, this is a simple example, but since this language
+* allows for this type of syntax (where ors and ands can resolve to any value) we cannot just consider the rhs
+* to be a single ast node, like a function definition or structure.
+* 
+*          Foo :: null or struct {
+*              i: i32;
+*              foo: Foo;
+*          };
+* 
+* This looks dumb, and it is, but it's also valid. And it means we cannot know what Foo is until *after* we have
+* analyzed the `or` expression. And for that, we need to loop around and figure out the type for Foo.
+* 
+*          Foo :: #fold generate_foo();
+* 
+*          generate_foo :: (n: i32) -> struct { x: i32; Foo: foo; } { ... }
+*          // this fails because of this dependency chain
+*          // #fold generate_foo() => (n: i32) -> struct { x: i32, foo: Foo; } => struct { x: i32, foo: Foo; }
+*          //      => Foo -> #fold generate_foo() <== this generates a cycle error
+* 
+* Here's another weird example
+* 
+*          Foo :: #fold generate_foo();
+* 
+*          generate_foo :: (n: i32) -> struct { x: i32; } {
+*              return struct {
+*                  x := Foo.x;
+*              };
+*          };
+* 
+*          This creates a circular dependency like this:
+*          #fold generate_foo() [fold level: 1] => (n: i32) -> struct { x: i32; } { ... }
+*              => struct { x := Foo.x } => Foo.x => Foo => #fold generate_foo() [fold level: 2]
+*                  => (n: i32) -> struct { x: i32 } { ... } <=== ...
+*                      // circular dependency since generate_foo's body is in the dependency list still
+*                      // because constructed but on a different fold level
+* 
+* Important to note that if the dependency chain started with generate_foo instead of Foo, the circular
+* dependency would be resolved a little earlier. 
+*                               
+* Here's another *working* example however
+* 
+*          Foo :: #fold generate_foo(10);
+* 
+*          generate_foo() :: (n: i32) -> struct { x: i32; } {
+*              return struct {
+*                  x := n * 10;
+*              };
+*          };
+* 
+* In the above example, Foo = *should* be a struct like this: struct { x := 100; }, I think that
+* makes sense.
+* 
+* Later on, it will be possible to do this based on compile type parameters
+* 
+*          Vector2i :: #fold generate_vector2(i32, 0);
+*          Vector2f :: #fold generate_vector2(f32, 0.0);
+*          
+*          // for now the `!` means the parameter in the function call must be a compile time constnat
+*          generate_foo(t!: type, default_value: t) -> struct { x: t; y: t; } {
+*              return struct {
+*                  x := default_value;
+*                  y := default_value;
+*              };
+*          };
+* 
+* This is an interesting one because this means that generic structs already exist in a similar way they do
+* in C++ with templates or C with macros. Howver, there will be actual generic structs.
+* 
+* Here's another complicated one I guess
+* 
+*          Foo :: struct {
+*              MyValue :: 10;
+*              value := #fold generate_value();
+*          };
+* 
+*          generate_value :: () -> i32 {
+*              return Foo.MyValue;
+*          };
+* 
+* This *should* work I guess?
+* struct { MyValue:: 10; value := #fold generate_value(); }; 
+*      => #fold generate_value()
+*          => () -> i32 { return Foo.MyValue; }
+*              => Foo.MyValue => Foo // At this point, get_resolved_entity_by_identifier will find
+*                                    // Foo points to the "resolved" struct. But at this point, its still
+*                                    // potentially incomplete (in this case it is because while we are figuring out
+*                                    // what `value` is we are figuring out what is `Foo.MyValue`).
+*                                    // However, this should still work because MyValue is a constant that does
+*                                    // does not have a ciruclar dependency.
+* 
+* This gets more complicated when accessing a non-constant value:
+* 
+*          Foo :: struct {
+*              value1 := 10;
+*              value2 := #fold generate_value();
+*          };
+* 
+*          (1)
+*          generate_value :: () -> i32 {
+*              foo := Foo();
+*              return foo.value1;
+*          };
+* 
+*          (2)
+*          generate_value :: () -> i32 {
+*              foo := Foo();
+*              return foo.value2;
+*          };
+*
+* For (1) this can be "designed" to work since its only accessing resolved fields. In the interpreter, 
+* we can easily create an "incomplete" type just for the vm run. And since there were no causes for 
+* circular dependencies, the codegen should be fine and the resulting runtime should be as well. This is 
+* because the analyzer is so pathological. We know if we resolve a branch of the ast, all the dependencies
+* under it are ready.
+* 
+* For (2) this needs to cause a circular dependency. When `foo` is found to be `Foo` type, then we try to figure
+* out what `value2` is, and when we try to resolve that, we should be able to detect a circular depedency as we
+* would normally. If we start the dependency chain at the function, when we resolve `foo.value2`,
+* `generate_value` is being resolved at fold level 0. When we try to resolve foo.value2, we find that it
+* folds to a function, but at that point we at fold level 1, meaning we have a circular dependency while folding.
+* The same thing would happen if we start the dependency chain at the struct, except we'd find the circular
+* dependency at fold level 2 (since we'd start at fold level 1 instead).
+* 
+* 
+*/
+static void resolve_struct_definition(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, AnalysisState state, OrsoASTNode* struct_definition) {
+    OrsoScope struct_scope;
+    scope_init(&struct_scope, SCOPE_TYPE_STRUCT, state.scope, struct_definition);
+
+    state.fold_level = MODE_CONSTANT_TIME;
+    state.scope = &struct_scope;
+
+    forward_scan_declaration_names(analyzer, state.scope, struct_definition->data.struct_.declarations, sb_count(struct_definition->data.struct_.declarations));
+
+    i32 declarations_count = sb_count(struct_definition->data.struct_.declarations);
+
+    struct_definition->value_type = &OrsoTypeIncompleteStruct;
+    struct_definition->value_type_narrowed = &OrsoTypeIncompleteStruct;
+
+    bool invalid_struct = false;
+    for (i32 i = 0; i < declarations_count; i++) {
+        OrsoASTNode* declaration = struct_definition->data.struct_.declarations[i];
+        if (declaration->node_type != ORSO_AST_NODE_TYPE_DECLARATION) {
+            error_range(analyzer, declaration->start, declaration->end, "Only declarations allowed within a struct context.");
+            continue;
+        }
+
+        resolve_declaration(analyzer, ast, state, declaration);
+
+        if (ORSO_TYPE_IS_INVALID(declaration->value_type) || ORSO_TYPE_IS_UNRESOLVED(declaration->value_type)) {
+            invalid_struct = true;
+            break;
+        }
+    }
+
+    if (declarations_count == 0) {
+        invalid_struct = true;
+        error_range(analyzer, struct_definition->start, struct_definition->end, "Structs are not allowed to be empty.");
+    }
+
+    if (invalid_struct) {
+        scope_free(&struct_scope);
+        return;
+    }
+
+    OrsoType* types[declarations_count];
+    for (i32 i = 0; i < declarations_count; i++) {
+        types[i] = struct_definition->data.struct_.declarations[i]->value_type;
+    }
+
+    char* field_names[declarations_count];
+    for (i32 i = 0; i < declarations_count; i++) {
+        char* name = ORSO_ALLOCATE_N(char, struct_definition->data.struct_.declarations[i]->start.length);
+        strncpy(name, struct_definition->data.struct_.declarations[i]->start.start,
+                struct_definition->data.struct_.declarations[i]->start.length);
+
+        field_names[i] = name;
+    }
+
+    OrsoType* complete_struct_type = orso_type_set_fetch_anonymous_struct(&ast->type_set, declarations_count, (char**)field_names, (OrsoType**)types);
+    for (i32 i = 0; i < declarations_count; i++) {
+        free(field_names[i]);
+    }
+
+    struct_definition->value_type = complete_struct_type;
+    struct_definition->value_type_narrowed = complete_struct_type;
+
+    i32 struct_size = orso_type_bits(complete_struct_type);
+    i32 size_in_slots = struct_size / 64 + (struct_size % 64 != 0);
+    OrsoSlot struct_data[size_in_slots];
+    struct_definition->value_index = add_value_to_ast_constant_stack(ast, struct_data, complete_struct_type);
+
+    scope_free(&struct_scope);
+}
+
 static OrsoScope* get_closest_outer_function_scope(OrsoScope* scope) {
-    while (scope && scope->creator && scope->creator->value_type->kind != ORSO_TYPE_FUNCTION) {
+    while (scope && scope->creator && !ORSO_TYPE_IS_FUNCTION(scope->creator->value_type)) {
         scope = scope->outer;
     }
 
@@ -2048,7 +2280,7 @@ bool orso_resolve_ast(OrsoStaticAnalyzer* analyzer, OrsoAST* ast) {
     }
 
     OrsoScope global_scope;
-    scope_init(&global_scope, NULL, NULL);
+    scope_init(&global_scope, SCOPE_TYPE_MODULE, NULL, NULL);
 
     AnalysisState analysis_state = (AnalysisState) {
         .mode = MODE_RUNTIME,
@@ -2123,11 +2355,17 @@ OrsoSlot orso_zero_value(OrsoType* type, OrsoSymbolTable* symbol_table) {
         case ORSO_TYPE_SYMBOL:
             slot = ORSO_SLOT_P(orso_new_symbol_from_cstrn("", 0, symbol_table), type);
             break;
+        // This should return 2 OrsoSlots, one for null type one for null value
         case ORSO_TYPE_UNION: {
             ASSERT(orso_union_type_has_type(type, &OrsoTypeVoid), "must include void type if looking for zero value");
             slot = ORSO_SLOT_I(0, type);
             break;
         }
+        case ORSO_TYPE_STRUCT: {
+            slot = ORSO_SLOT_I(0, type);
+            break;
+        }
+
         case ORSO_TYPE_FUNCTION:
         case ORSO_TYPE_TYPE:
         default:

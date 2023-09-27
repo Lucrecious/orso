@@ -1,20 +1,9 @@
-main :: () -> void {
-    rounds := 100000000;
+Baz :: struct {
+    baz := false;
+};
 
-    x := 1;
-    pi := 1.0;
-
-    i := 2;
-    while i < rounds + 2 {
-        x = -x;
-        pi = pi + (x / (2.0 * i - 1));
-
-        i = i + 1;
-    };
-
-    pi = pi * 4.0;
-
-    print pi;
-}
-
-main();
+FooBar :: struct {
+    foo := 0;
+    bar := "hello world";
+    baz: Baz;
+};

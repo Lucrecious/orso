@@ -24,6 +24,8 @@ extern OrsoType OrsoTypeInvalid;
 extern OrsoType OrsoTypeUnresolved;
 extern OrsoType OrsoTypeUndefined;
 
+extern OrsoType OrsoTypeIncompleteStruct;
+
 extern OrsoType OrsoTypeEmptyFunction;
 
 void orso_type_set_init(OrsoTypeSet* set);
@@ -32,5 +34,9 @@ void orso_type_set_free(OrsoTypeSet* set);
 OrsoType* orso_type_set_fetch_union(OrsoTypeSet* set, OrsoType** types, i32 count);
 OrsoType* orso_type_set_fetch_function(OrsoTypeSet* set, OrsoType* return_type, OrsoType** arguments, i32 argument_count);
 OrsoType* orso_type_set_fetch_native_function(OrsoTypeSet* set, OrsoType* return_type, OrsoType** arguments, i32 argument_count);
+OrsoType* orso_type_set_fetch_anonymous_struct(OrsoTypeSet* set, i32 field_count, char** names, OrsoType** types);
+OrsoType* orso_type_create_struct(OrsoTypeSet* set, char* name, i32 name_length, OrsoType* anonymous_struct);
+
+bool is_struct_incomplete(OrsoType* struct_);
 
 #endif

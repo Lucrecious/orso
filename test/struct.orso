@@ -1,6 +1,106 @@
-## anonymous struct signature, only typed
+## simple
+vector2 :: struct {
+    x := 0;
+    y := 0;
+};
 
-// the brackets *must* be empty or omitted if an anonymous struct
-xypair := struct() { x: i32; y: i32; };
+print vector2;
 
-type_of(xypair) == struct { x: i32; y: i32; };
+v := vector2.{ x: 42; y: 69; };
+print v;
+
+# ---
+vector2 { x: i32; y: i32; }
+vector2 { x = 42; y = 69; }
+# ---
+
+## struct inside struct
+vector2 :: struct {
+    x := 0;
+    y := 0;
+};
+
+vector3 :: struct {
+    v2 := vector2.{};
+    z := 0;
+};
+
+print vector3;
+
+v := vector3.{};
+v.v2.x = 42;
+v.v2.y = 69;
+v.z = 4269;
+print v;
+# ---
+vector3 { v2: vector2 { x: i32; y: i32}; z: i32; }
+vector3 { v2 = vector2 { x = 42; y = 69; }; z = 4269; }
+# ---
+
+## struct recursive
+foo :: {
+    f: &foo|void;
+};
+
+print foo;
+
+f := foo.{};
+b := foo.{ f: &foo }
+print b;
+print f;
+# ---
+foo { foo: &foo|void; }
+bar { foo = <&foo>; }
+foo { foo = null; }
+# ---
+
+# struct recursive error
+foo :: {
+    f: foo;
+};
+
+print foo;
+# ---
+compile error, 1, recursive definition causes undefined struct size
+# ---
+
+## struct mutual recursive 
+bar :: {
+    f: &foo|void;
+};
+
+foo :: {
+    b: &bar|void;
+};
+
+f := foo.{};
+b := bar.{};
+f.b = b;
+b.f = f;
+
+print f;
+print b;
+# ---
+foo { b = <&bar>; }
+bar { f = <&foo>; }
+# ---
+
+## strange recursive
+bar :: struct { 
+    f: &foo|void;
+};
+
+baz :: struct {
+    f: &foo|void;
+};
+
+foo :: ((struct {
+    b: &bar|void;
+}) or (struct {
+    b: &bar|void;
+}));
+
+print foo;
+# ---
+foo { b: &bar|void; } // TODO: find a way to test that no new types are made, maybe will have to be found with a bug
+# ---

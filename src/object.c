@@ -140,8 +140,8 @@ char* orso_slot_to_new_cstrn(OrsoSlot slot, OrsoType* type) {
             return cstrn_new("<native>", 8);
         }
 
-        case ORSO_TYPE_PTR_OPAQUE: {
-            return cstrn_new("&<unknown>", 10);
+        case ORSO_TYPE_STRUCT: {
+            return cstrn_new("<struct TODO proper print>", 27);
         }
 
         case ORSO_TYPE_TYPE: {
@@ -160,9 +160,7 @@ char* orso_slot_to_new_cstrn(OrsoSlot slot, OrsoType* type) {
         case ORSO_TYPE_UNRESOLVED: return cstrn_new("<unresolved>", 12);
         case ORSO_TYPE_INVALID: return cstrn_new("<invalid>", 9);
 
-        case ORSO_TYPE_UNION:
-        case ORSO_TYPE_USER:
-        case ORSO_TYPE_MAX: UNREACHABLE(); return NULL;
+        case ORSO_TYPE_UNION: UNREACHABLE(); return NULL;
     }
 }
 
@@ -203,6 +201,16 @@ OrsoNativeFunction* orso_new_native_function(NativeFunction function, OrsoType* 
     function_obj->signature = type;
 
     return function_obj;
+}
+
+OrsoStruct* orso_new_struct(void) {
+    OrsoStruct* struct_ = ORSO_ALLOCATE(OrsoStruct);
+    struct_->slots = NULL;
+    return struct_;
+}
+
+void orso_free_struct(OrsoStruct* struct_) {
+    free(struct_->slots);
 }
 
 i64 cstrn_to_i64(const char* text, i32 length) {

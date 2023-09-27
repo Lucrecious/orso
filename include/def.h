@@ -8,8 +8,6 @@
 
 #define FORCE_INLINE inline __attribute__((always_inline))
 
-#define MIN(a,b) ((a) < (b) ? (a) : (b))
-
 #define ORSO_ALLOCATE(T) (T*)malloc(sizeof(T))
 #define ORSO_ALLOCATE_N(T, N) (T*)malloc(sizeof(T) * N)
 #define ORSO_ALLOCATE_FLEX(T, N) (T*)malloc(sizeof(T) + N)
@@ -24,6 +22,14 @@ typedef uint64_t u64;
 typedef float f32;
 typedef double f64;
 typedef void* ptr;
+
+FORCE_INLINE bool i32min(i32 a, i32 b) {
+  return a < b ? a : b;
+}
+
+FORCE_INLINE bool i32max(i32 a, i32 b) {
+  return a > b ? a : b;
+}
 
 // Copied from Wren 
 #ifdef DEBUG

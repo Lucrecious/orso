@@ -288,7 +288,7 @@ static void emit_pop_scope(Compiler* compiler, Chunk* chunk, byte scope_size_slo
 }
 
 static void emit_call(Compiler* compiler, Chunk* chunk, OrsoType* function_type, i32 line) {
-    ASSERT(function_type->kind == ORSO_TYPE_FUNCTION, "must be function");
+    ASSERT(ORSO_TYPE_IS_FUNCTION(function_type), "must be function");
 
     emit_instruction(ORSO_OP_CALL, compiler, chunk, line);
 
@@ -545,7 +545,7 @@ static void declare_local_function_definition(Compiler* compiler, OrsoFunction* 
 }
 
 static void function_expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode* function_defintion_expression, Chunk* chunk) {
-    ASSERT(function_defintion_expression->value_type->kind == ORSO_TYPE_FUNCTION, "must be function if calling this");
+    ASSERT(ORSO_TYPE_IS_FUNCTION(function_defintion_expression->value_type), "must be function if calling this");
 
     OrsoFunction* stored_function = (OrsoFunction*)ast->folded_constants[function_defintion_expression->value_index].as.p;
     if (!compiler->skip_function_definitions && stored_function->chunk.code == NULL /*is not compiled yet*/) {
@@ -579,7 +579,6 @@ static void gen_primary(Compiler* compiler, Chunk* chunk, OrsoAST* ast, OrsoType
         }
         
         case ORSO_TYPE_TYPE:
-        case ORSO_TYPE_PTR_OPAQUE:
         case ORSO_TYPE_FUNCTION:
         case ORSO_TYPE_NATIVE_FUNCTION:
         case ORSO_TYPE_SYMBOL:
@@ -592,6 +591,12 @@ static void gen_primary(Compiler* compiler, Chunk* chunk, OrsoAST* ast, OrsoType
             emit_constant(compiler, chunk, *(value + 1), line);
             break;
         }
+
+        case ORSO_TYPE_STRUCT: {
+            ASSERT(false, "not implemented");
+            break;
+        }
+
         default: UNREACHABLE();
     }
 }
@@ -620,7 +625,7 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode
     if (expression_node->value_index >= 0) {
         // TODO: for now going to do this super naively until I get a better hash table that is more generic that I can
         // use for more things. This is will be super slow but I just want to get it to work.
-        if (!compiler->skip_function_definitions && expression_node->value_type->kind == ORSO_TYPE_FUNCTION) {
+        if (!compiler->skip_function_definitions && ORSO_TYPE_IS_FUNCTION(expression_node->value_type)) {
             OrsoFunction* function = (OrsoFunction*)ast->folded_constants[expression_node->value_index].as.p;
             sb_push(compiler->functions_to_compile, function);
         }
@@ -962,6 +967,11 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode
             break;
         }
 
+        case ORSO_AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION: {
+            ASSERT(false, "not implemented");
+            break;
+        }
+
         // function signatures MUST be resolved at compile time ALWAYS
         case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE: UNREACHABLE();
 
@@ -1072,19 +1082,7 @@ static void declaration(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNod
         }
 
         case ORSO_AST_NODE_TYPE_UNDEFINED:
-        case ORSO_AST_NODE_TYPE_EXPRESSION_ASSIGNMENT:
-        case ORSO_AST_NODE_TYPE_EXPRESSION_BINARY:
-        case ORSO_AST_NODE_TYPE_EXPRESSION_BLOCK:
-        case ORSO_AST_NODE_TYPE_EXPRESSION_BRANCHING:
-        case ORSO_AST_NODE_TYPE_EXPRESSION_CALL:
-        case ORSO_AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT:
-        case ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY:
-        case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION:
-        case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE:
-        case ORSO_AST_NODE_TYPE_EXPRESSION_GROUPING:
-        case ORSO_AST_NODE_TYPE_EXPRESSION_PRIMARY:
-        case ORSO_AST_NODE_TYPE_EXPRESSION_UNARY:
-        case ORSO_AST_NODE_TYPE_EXPRESSION_STATEMENT:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_CASE:
             UNREACHABLE();
     }
 }
