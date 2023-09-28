@@ -63,7 +63,7 @@ struct OrsoType {
         struct {
             OrsoType* type;
         } pointer;
-    } type;
+    } data;
 };
 
 #define ORSO_TYPE_IS_UNION(TYPE) (TYPE->kind == ORSO_TYPE_UNION)

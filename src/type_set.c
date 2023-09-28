@@ -22,17 +22,17 @@ OrsoType OrsoTypeUndefined = (OrsoType) { .kind = ORSO_TYPE_UNDEFINED };
 
 OrsoType OrsoTypeIncompleteStruct = (OrsoType) {
     .kind = ORSO_TYPE_STRUCT,
-    .type.struct_.name = NULL,
-    .type.struct_.field_count = 0,
-    .type.struct_.field_names = NULL,
-    .type.struct_.field_types = NULL,
+    .data.struct_.name = NULL,
+    .data.struct_.field_count = 0,
+    .data.struct_.field_names = NULL,
+    .data.struct_.field_types = NULL,
 };
 
 OrsoType OrsoTypeEmptyFunction = (OrsoType) {
     .kind = ORSO_TYPE_FUNCTION,
-    .type.function.argument_count = 0,
-    .type.function.argument_types = NULL,
-    .type.function.return_type = &OrsoTypeVoid,
+    .data.function.argument_count = 0,
+    .data.function.argument_types = NULL,
+    .data.function.return_type = &OrsoTypeVoid,
 };
 
 OrsoType* union_type_new(OrsoTypeSet* set, OrsoType** types, i32 count) {
@@ -40,10 +40,10 @@ OrsoType* union_type_new(OrsoTypeSet* set, OrsoType** types, i32 count) {
 
     OrsoType* union_type = ORSO_ALLOCATE(OrsoType);
     union_type->kind = ORSO_TYPE_UNION;
-    union_type->type.union_.count = count;
-    union_type->type.union_.types = ORSO_ALLOCATE_N(OrsoType*, count);
-    for (i32 i = 0; i < union_type->type.union_.count; i++) {
-        union_type->type.union_.types[i] = types[i];
+    union_type->data.union_.count = count;
+    union_type->data.union_.types = ORSO_ALLOCATE_N(OrsoType*, count);
+    for (i32 i = 0; i < union_type->data.union_.count; i++) {
+        union_type->data.union_.types[i] = types[i];
     }
 
     sb_push(set->heap, (OrsoType*)union_type);
@@ -54,13 +54,13 @@ OrsoType* union_type_new(OrsoTypeSet* set, OrsoType** types, i32 count) {
 OrsoType* function_type_new(OrsoTypeSet* set, OrsoType** arguments, i32 argument_count, OrsoType* return_type, bool is_native) {
     OrsoType* function_type = ORSO_ALLOCATE(OrsoType);
     function_type->kind = is_native ? ORSO_TYPE_NATIVE_FUNCTION : ORSO_TYPE_FUNCTION;
-    function_type->type.function.argument_count = argument_count;
-    function_type->type.function.argument_types = ORSO_ALLOCATE_N(OrsoType*, argument_count);
+    function_type->data.function.argument_count = argument_count;
+    function_type->data.function.argument_types = ORSO_ALLOCATE_N(OrsoType*, argument_count);
     for (i32 i = 0; i < argument_count; i++) {
-        function_type->type.function.argument_types[i] = arguments[i];
+        function_type->data.function.argument_types[i] = arguments[i];
     }
 
-    function_type->type.function.return_type = return_type;
+    function_type->data.function.return_type = return_type;
 
     sb_push(set->heap, function_type);
 
@@ -74,17 +74,17 @@ OrsoType* struct_type_new(OrsoTypeSet* set, char** field_names, OrsoType** field
     OrsoType* struct_type = ORSO_ALLOCATE(OrsoType);
     struct_type->kind = ORSO_TYPE_STRUCT;
 
-    struct_type->type.struct_.name = NULL;
+    struct_type->data.struct_.name = NULL;
 
-    struct_type->type.struct_.field_count = field_count;
-    struct_type->type.struct_.field_names = ORSO_ALLOCATE_N(char*, field_count);
-    struct_type->type.struct_.field_types = ORSO_ALLOCATE_N(OrsoType*, field_count);
+    struct_type->data.struct_.field_count = field_count;
+    struct_type->data.struct_.field_names = ORSO_ALLOCATE_N(char*, field_count);
+    struct_type->data.struct_.field_types = ORSO_ALLOCATE_N(OrsoType*, field_count);
 
-    struct_type->type.struct_.field_byte_offsets = NULL;
-    struct_type->type.struct_.total_size = total_size;
+    struct_type->data.struct_.field_byte_offsets = NULL;
+    struct_type->data.struct_.total_size = total_size;
 
     for (i32 i = 0; i < field_count; i++) {
-        struct_type->type.struct_.field_types[i] = field_types[i];
+        struct_type->data.struct_.field_types[i] = field_types[i];
     }
 
     for (i32 i = 0; i < field_count; i++) {
@@ -93,13 +93,13 @@ OrsoType* struct_type_new(OrsoTypeSet* set, char** field_names, OrsoType** field
         memcpy(name, field_names[i], length);
         name[length] = '\0';
 
-        struct_type->type.struct_.field_names[i] = name;
+        struct_type->data.struct_.field_names[i] = name;
     }
 
     if (field_offsets) {
-        struct_type->type.struct_.field_byte_offsets = ORSO_ALLOCATE_N(i32, field_count);
+        struct_type->data.struct_.field_byte_offsets = ORSO_ALLOCATE_N(i32, field_count);
         for (i32 i = 0; i < field_count; i++) {
-            struct_type->type.struct_.field_byte_offsets[i] = field_offsets[i];
+            struct_type->data.struct_.field_byte_offsets[i] = field_offsets[i];
         }
     }
 
@@ -112,17 +112,17 @@ OrsoType* type_copy_new(OrsoTypeSet* set, OrsoType* type) {
     if (ORSO_TYPE_IS_UNION(type)) {
         return (OrsoType*)union_type_new(
             set,
-            (OrsoType**)type->type.union_.types,
-            type->type.union_.count
+            (OrsoType**)type->data.union_.types,
+            type->data.union_.count
         );
     }
 
     if (ORSO_TYPE_IS_FUNCTION(type) || type->kind == ORSO_TYPE_NATIVE_FUNCTION) {
         return (OrsoType*)function_type_new(
             set,
-            type->type.function.argument_types,
-            type->type.function.argument_count,
-            type->type.function.return_type,
+            type->data.function.argument_types,
+            type->data.function.argument_count,
+            type->data.function.return_type,
             type->kind == ORSO_TYPE_NATIVE_FUNCTION
         );
     }
@@ -130,11 +130,11 @@ OrsoType* type_copy_new(OrsoTypeSet* set, OrsoType* type) {
     if (ORSO_TYPE_IS_STRUCT(type)) {
         return struct_type_new(
             set,
-            type->type.struct_.field_names,
-            type->type.struct_.field_types,
-            type->type.struct_.field_count,
-            type->type.struct_.field_byte_offsets,
-            type->type.struct_.total_size);
+            type->data.struct_.field_names,
+            type->data.struct_.field_types,
+            type->data.struct_.field_count,
+            type->data.struct_.field_byte_offsets,
+            type->data.struct_.total_size);
     }
 
     UNREACHABLE();
@@ -143,31 +143,31 @@ OrsoType* type_copy_new(OrsoTypeSet* set, OrsoType* type) {
 
 void type_free(OrsoType* type) {
     if (ORSO_TYPE_IS_UNION(type)) {
-        free(type->type.union_.types);
+        free(type->data.union_.types);
     } else if (ORSO_TYPE_IS_FUNCTION(type)) {
-        for (i32 i = 0; i < type->type.function.argument_count; i++) {
-            type->type.function.argument_types[i] = NULL;
+        for (i32 i = 0; i < type->data.function.argument_count; i++) {
+            type->data.function.argument_types[i] = NULL;
         }
 
-        free((void**)type->type.function.argument_types);
+        free((void**)type->data.function.argument_types);
     } else if (ORSO_TYPE_IS_STRUCT(type)) {
-        for (i32 i = 0; i < type->type.struct_.field_count; i++) {
-            free(type->type.struct_.field_names[i]);
+        for (i32 i = 0; i < type->data.struct_.field_count; i++) {
+            free(type->data.struct_.field_names[i]);
         }
 
-        free(type->type.struct_.field_names);
-        type->type.struct_.field_names = NULL;
+        free(type->data.struct_.field_names);
+        type->data.struct_.field_names = NULL;
 
-        free(type->type.struct_.field_types);
-        type->type.struct_.field_types = NULL;
+        free(type->data.struct_.field_types);
+        type->data.struct_.field_types = NULL;
 
-        free(type->type.struct_.name);
-        type->type.struct_.name = NULL;
+        free(type->data.struct_.name);
+        type->data.struct_.name = NULL;
 
-        free(type->type.struct_.field_byte_offsets);
-        type->type.struct_.field_byte_offsets = NULL;
+        free(type->data.struct_.field_byte_offsets);
+        type->data.struct_.field_byte_offsets = NULL;
 
-        type->type.struct_.total_size = 0;
+        type->data.struct_.total_size = 0;
     }
 }
 
@@ -207,28 +207,28 @@ static u32 hash_type(OrsoType* type) {
     ADD_HASH(hash, type->kind);
 
     if (ORSO_TYPE_IS_UNION(type)) {
-        for (i32 i = 0; i < type->type.union_.count; i++) {
-            ADD_HASH(hash, hash_type(type->type.union_.types[i]));
+        for (i32 i = 0; i < type->data.union_.count; i++) {
+            ADD_HASH(hash, hash_type(type->data.union_.types[i]));
         }
     } else if (ORSO_TYPE_IS_FUNCTION(type)) {
-        ADD_HASH(hash, type->type.function.argument_count);
+        ADD_HASH(hash, type->data.function.argument_count);
 
-        for (i32 i = 0; i < type->type.function.argument_count; i++) {
-            ADD_HASH(hash, hash_type(type->type.function.argument_types[i]));
+        for (i32 i = 0; i < type->data.function.argument_count; i++) {
+            ADD_HASH(hash, hash_type(type->data.function.argument_types[i]));
         }
 
-        ADD_HASH(hash, hash_type(type->type.function.return_type));
+        ADD_HASH(hash, hash_type(type->data.function.return_type));
     } else if (ORSO_TYPE_IS_STRUCT(type)) {
-        ADD_HASH(hash, type->type.struct_.field_count);
+        ADD_HASH(hash, type->data.struct_.field_count);
 
-        for (i32 i = 0; i < type->type.struct_.field_count; i++) {
-            char* name = type->type.struct_.field_names[i];
+        for (i32 i = 0; i < type->data.struct_.field_count; i++) {
+            char* name = type->data.struct_.field_names[i];
             i32 length = strlen(name);
             for (i32 i = 0; i < length; i++) {
                 ADD_HASH(hash, name[i]);
             }
             
-            ADD_HASH(hash, hash_type(type->type.struct_.field_types[i]));
+            ADD_HASH(hash, hash_type(type->data.struct_.field_types[i]));
         }
     }
 
@@ -319,13 +319,13 @@ static i32 type_compare(const void* a, const void* b) {
             return -1;
         }
 
-        if (type_a->type.union_.count != type_b->type.union_.count) {
-            return type_b->type.union_.count - type_a->type.union_.count;
+        if (type_a->data.union_.count != type_b->data.union_.count) {
+            return type_b->data.union_.count - type_a->data.union_.count;
         }
 
-        for (i32 i = 0; i < type_a->type.union_.count; i++) {
-            OrsoType* single_a = type_a->type.union_.types[i];
-            OrsoType* single_b = type_b->type.union_.types[i];
+        for (i32 i = 0; i < type_a->data.union_.count; i++) {
+            OrsoType* single_a = type_a->data.union_.types[i];
+            OrsoType* single_b = type_b->data.union_.types[i];
 
             i32 result = type_compare(single_a, single_b);
             if (result == 0) {
@@ -348,17 +348,17 @@ static i32 type_compare(const void* a, const void* b) {
             return -1;
         }
 
-        if (type_a->type.function.return_type != type_b->type.function.return_type) {
-            return type_compare(type_a->type.function.return_type, type_b->type.function.return_type);
+        if (type_a->data.function.return_type != type_b->data.function.return_type) {
+            return type_compare(type_a->data.function.return_type, type_b->data.function.return_type);
         }
 
-        if (type_a->type.function.argument_count != type_b->type.function.argument_count) {
-            return type_b->type.function.argument_count - type_a->type.function.argument_count;
+        if (type_a->data.function.argument_count != type_b->data.function.argument_count) {
+            return type_b->data.function.argument_count - type_a->data.function.argument_count;
         }
 
-        for (i32 i = 0; i < type_a->type.function.argument_count; i++) {
-            OrsoType* argument_type_a = type_a->type.function.argument_types[i];
-            OrsoType* argument_type_b = type_b->type.function.argument_types[i];
+        for (i32 i = 0; i < type_a->data.function.argument_count; i++) {
+            OrsoType* argument_type_a = type_a->data.function.argument_types[i];
+            OrsoType* argument_type_b = type_b->data.function.argument_types[i];
             i32 result = type_compare(argument_type_a, argument_type_b);
             if (result == 0) {
                 continue;
@@ -380,25 +380,25 @@ static i32 type_compare(const void* a, const void* b) {
         }
 
         // we want the names in a certain order so its easier to compare
-        if (type_a->type.struct_.name == NULL && type_b->type.struct_.name != NULL) {
+        if (type_a->data.struct_.name == NULL && type_b->data.struct_.name != NULL) {
             return -type_compare(&type_b, &type_a);
         }
 
         // named structs go before anonymous ones
-        if (type_a->type.struct_.name != NULL && type_b->type.struct_.name == NULL) {
+        if (type_a->data.struct_.name != NULL && type_b->data.struct_.name == NULL) {
             return -1;
         }
 
         // if both are named, then its alphabetical order
-        if (type_a->type.struct_.name != NULL && type_b->type.struct_.name != NULL) {
-            return strcmp(type_a->type.struct_.name, type_b->type.struct_.name);
+        if (type_a->data.struct_.name != NULL && type_b->data.struct_.name != NULL) {
+            return strcmp(type_a->data.struct_.name, type_b->data.struct_.name);
         }
 
         // at this point we are comparing two different anonymous structs
 
         // smaller field counts before larger ones
-        i32 a_field_count = type_a->type.struct_.field_count;
-        i32 b_field_count = type_b->type.struct_.field_count;
+        i32 a_field_count = type_a->data.struct_.field_count;
+        i32 b_field_count = type_b->data.struct_.field_count;
         if (a_field_count != b_field_count) {
             return a_field_count < b_field_count ? -1 : 1;
         }
@@ -406,8 +406,8 @@ static i32 type_compare(const void* a, const void* b) {
 
         // use type comparison if the field count is the same
         for (i32 i = 0; i < a_field_count; i++) {
-            OrsoType* a_field_type = type_a->type.struct_.field_types[i];
-            OrsoType* b_field_type = type_b->type.struct_.field_types[i];
+            OrsoType* a_field_type = type_a->data.struct_.field_types[i];
+            OrsoType* b_field_type = type_b->data.struct_.field_types[i];
             if (a_field_type != b_field_type) {
                 return type_compare(a_field_type, b_field_type);
             }
@@ -415,8 +415,8 @@ static i32 type_compare(const void* a, const void* b) {
 
         // if the types are the same then the field names should be different
         for (i32 i = 0; i < a_field_count; i++) {
-            char* name_a = type_a->type.struct_.field_names[i];
-            char* name_b = type_b->type.struct_.field_names[i];
+            char* name_a = type_a->data.struct_.field_names[i];
+            char* name_b = type_b->data.struct_.field_names[i];
 
             i32 result = strcmp(name_a, name_b);
             if (result != 0) {
@@ -438,19 +438,19 @@ static i32 type_compare(const void* a, const void* b) {
 OrsoType* orso_type_set_fetch_union(OrsoTypeSet* set, OrsoType** types, i32 count) {
     OrsoType union_type = {
         .kind = ORSO_TYPE_UNION,
-        .type.union_.count = count,
-        .type.union_.types = ORSO_ALLOCATE_N(OrsoType*, count)
+        .data.union_.count = count,
+        .data.union_.types = ORSO_ALLOCATE_N(OrsoType*, count)
     };
 
     for (i32 i = 0; i < count; i++) {
         if (i < count) {
-            union_type.type.union_.types[i] = types[i];
+            union_type.data.union_.types[i] = types[i];
         } else {
-            union_type.type.union_.types[i] = NULL;
+            union_type.data.union_.types[i] = NULL;
         }
     }
 
-    qsort(union_type.type.union_.types, count, sizeof(OrsoType*), type_compare);
+    qsort(union_type.data.union_.types, count, sizeof(OrsoType*), type_compare);
 
     if (set->capacity > 0) {
         OrsoType** entry = fetch_type(set->entries, set->capacity, (OrsoType*)&union_type);
@@ -469,9 +469,9 @@ OrsoType* orso_type_set_fetch_union(OrsoTypeSet* set, OrsoType** types, i32 coun
 OrsoType* orso_type_set_fetch_function_(OrsoTypeSet* set, OrsoType* return_type, OrsoType** arguments, i32 argument_count, bool is_native) {
     OrsoType function_type = {
         .kind = is_native ? ORSO_TYPE_NATIVE_FUNCTION : ORSO_TYPE_FUNCTION,
-        .type.function.argument_types = arguments,
-        .type.function.argument_count = argument_count,
-        .type.function.return_type = return_type,
+        .data.function.argument_types = arguments,
+        .data.function.argument_count = argument_count,
+        .data.function.return_type = return_type,
     };
 
     if (set->capacity > 0) {
@@ -500,12 +500,12 @@ OrsoType* orso_type_set_fetch_native_function(OrsoTypeSet* set, OrsoType* return
 OrsoType* orso_type_set_fetch_anonymous_struct(OrsoTypeSet* set, i32 field_count, char** names, OrsoType** types) {
     OrsoType struct_type = {
         .kind = ORSO_TYPE_STRUCT,
-        .type.struct_.field_count = field_count,
-        .type.struct_.field_names = names,
-        .type.struct_.field_types = types,
+        .data.struct_.field_count = field_count,
+        .data.struct_.field_names = names,
+        .data.struct_.field_types = types,
 
-        .type.struct_.field_byte_offsets = NULL,
-        .type.struct_.total_size = 0,
+        .data.struct_.field_byte_offsets = NULL,
+        .data.struct_.total_size = 0,
     };
 
     if (set->capacity > 0) {
@@ -536,24 +536,24 @@ OrsoType* orso_type_set_fetch_anonymous_struct(OrsoTypeSet* set, i32 field_count
         i32 size_of_final = orso_bytes_to_slots(orso_type_size_bytes(types[field_count - 1])) * ORSO_SLOT_SIZE_BYTES;
         i32 total_size = offsets[field_count - 1] + size_of_final;
 
-        type->type.struct_.field_byte_offsets = offsets;
-        type->type.struct_.total_size = total_size;
+        type->data.struct_.field_byte_offsets = offsets;
+        type->data.struct_.total_size = total_size;
     }
 
     return type;
 }
 
 OrsoType* orso_type_create_struct(OrsoTypeSet* set, char* name, i32 name_length, OrsoType* anonymous_struct) {
-    ASSERT(ORSO_TYPE_IS_STRUCT(anonymous_struct) && anonymous_struct->type.struct_.name == NULL, "can only create struct from anonymous struct");
+    ASSERT(ORSO_TYPE_IS_STRUCT(anonymous_struct) && anonymous_struct->data.struct_.name == NULL, "can only create struct from anonymous struct");
 
     OrsoType* new_type = type_copy_new(set, anonymous_struct);
-    new_type->type.struct_.name = ORSO_ALLOCATE_N(char, name_length + 1);
-    memcpy(new_type->type.struct_.name, name, name_length);
-    new_type->type.struct_.name[name_length] = '\0';
+    new_type->data.struct_.name = ORSO_ALLOCATE_N(char, name_length + 1);
+    memcpy(new_type->data.struct_.name, name, name_length);
+    new_type->data.struct_.name[name_length] = '\0';
 
     return new_type;
 }
 
 bool is_struct_incomplete(OrsoType* struct_) {
-    return struct_->kind == ORSO_TYPE_STRUCT && struct_->type.struct_.field_count == 0;
+    return struct_->kind == ORSO_TYPE_STRUCT && struct_->data.struct_.field_count == 0;
 }

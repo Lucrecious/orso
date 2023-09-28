@@ -121,14 +121,14 @@ char* orso_slot_to_new_cstrn(OrsoSlot slot, OrsoType* type) {
                     function->binded_name ? function->binded_name->text : "<anonymous>");
 
             char tmp_buffer[128];
-            for (i32 i = 0; i < function->signature->type.function.argument_count; i++) {
-                orso_type_to_cstrn(function->signature->type.function.argument_types[i], tmp_buffer, 128);
+            for (i32 i = 0; i < function->signature->data.function.argument_count; i++) {
+                orso_type_to_cstrn(function->signature->data.function.argument_types[i], tmp_buffer, 128);
 
                 n += snprintf(buffer + n, BUFFER_SIZE - n, "%s%s", tmp_buffer,
-                        i == function->signature->type.function.argument_count - 1 ? "" : ", ");
+                        i == function->signature->data.function.argument_count - 1 ? "" : ", ");
             }
 
-            orso_type_to_cstrn(function->signature->type.function.return_type, tmp_buffer, 128);
+            orso_type_to_cstrn(function->signature->data.function.return_type, tmp_buffer, 128);
             n += snprintf(buffer + n, BUFFER_SIZE - n, ") -> %s>", tmp_buffer);
             
             buffer[n] = '\0';

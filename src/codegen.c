@@ -293,8 +293,8 @@ static void emit_call(Compiler* compiler, Chunk* chunk, OrsoType* function_type,
     emit_instruction(ORSO_OP_CALL, compiler, chunk, line);
 
     i32 argument_slots = 0;
-    for (i32 i = 0; i < function_type->type.function.argument_count; i++) {
-        argument_slots += orso_type_slot_count(function_type->type.function.argument_types[i]);
+    for (i32 i = 0; i < function_type->data.function.argument_count; i++) {
+        argument_slots += orso_type_slot_count(function_type->data.function.argument_types[i]);
     }
     byte a;
     byte b;
@@ -302,7 +302,7 @@ static void emit_call(Compiler* compiler, Chunk* chunk, OrsoType* function_type,
     chunk_write(chunk, a, line);
     chunk_write(chunk, b, line);
 
-    i32 call_stack_effect = -argument_slots - 1 + orso_type_slot_count(function_type->type.function.return_type);
+    i32 call_stack_effect = -argument_slots - 1 + orso_type_slot_count(function_type->data.function.return_type);
     _apply_stack_effects(compiler, call_stack_effect);
 }
 
@@ -953,7 +953,7 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode
                 OrsoASTNode* argument = expression_node->data.call.arguments[i];
                 expression(vm, compiler, ast, argument, chunk);
 
-                OrsoType* parameter_type = function_type->type.function.argument_types[i];
+                OrsoType* parameter_type = function_type->data.function.argument_types[i];
                 emit_storage_type_convert(compiler, chunk, argument->value_type, parameter_type, expression_node->end.line);
             }
 
@@ -1066,13 +1066,13 @@ static void declaration(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNod
                 expression(vm, compiler, ast, declaration->data.expression, chunk);
                 emit_storage_type_convert(compiler, chunk, 
                         declaration->data.expression->value_type,
-                        compiler->function->signature->type.function.return_type, declaration->data.expression->end.line);
+                        compiler->function->signature->data.function.return_type, declaration->data.expression->end.line);
             } else {
                 emit_instruction(ORSO_OP_PUSH_0, compiler, chunk, declaration->start.line);
-                emit_storage_type_convert(compiler, chunk, &OrsoTypeVoid, compiler->function->signature->type.function.return_type, declaration->start.line);
+                emit_storage_type_convert(compiler, chunk, &OrsoTypeVoid, compiler->function->signature->data.function.return_type, declaration->start.line);
             }
             
-            emit_return(compiler, chunk, compiler->function->signature->type.function.return_type, declaration->end.line);
+            emit_return(compiler, chunk, compiler->function->signature->data.function.return_type, declaration->end.line);
             break;
         }
 

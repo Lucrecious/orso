@@ -346,12 +346,12 @@ static bool is_builtin_function(OrsoAST* ast, OrsoSymbol* identifier, OrsoNative
 static bool can_call(OrsoType* type, OrsoASTNode** arguments) {
     ASSERT(ORSO_TYPE_IS_FUNCTION(type), "must be a function type");
 
-    if (type->type.function.argument_count != sb_count(arguments)) {
+    if (type->data.function.argument_count != sb_count(arguments)) {
         return false;
     }
 
-    for (i32 i = 0; i < type->type.function.argument_count; i++) {
-        OrsoType* parameter_type = type->type.function.argument_types[i];
+    for (i32 i = 0; i < type->data.function.argument_count; i++) {
+        OrsoType* parameter_type = type->data.function.argument_types[i];
         OrsoType* argument_type = arguments[i]->value_type_narrowed;
         if (!orso_type_fits(parameter_type, argument_type)) {
             return false;
@@ -1213,8 +1213,8 @@ void orso_resolve_expression(
                 return;
             }
 
-            expression->value_type = narrowed_callee_type->type.function.return_type;
-            expression->value_type_narrowed = narrowed_callee_type->type.function.return_type;
+            expression->value_type = narrowed_callee_type->data.function.return_type;
+            expression->value_type_narrowed = narrowed_callee_type->data.function.return_type;
             break;
         }
         case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION: {
@@ -1899,7 +1899,7 @@ static void resolve_function_expression(
         }
     } else {
         if (function_definition_expression->value_type != &OrsoTypeUnresolved) {
-            return_type = (function_definition_expression->value_type)->type.function.return_type;
+            return_type = (function_definition_expression->value_type)->data.function.return_type;
         }
     }
 
@@ -2150,7 +2150,7 @@ static void resolve_struct_definition(OrsoStaticAnalyzer* analyzer, OrsoAST* ast
     struct_definition->value_type = complete_struct_type;
     struct_definition->value_type_narrowed = complete_struct_type;
 
-    i32 size_in_slots = orso_bytes_to_slots(complete_struct_type->type.struct_.total_size);
+    i32 size_in_slots = orso_bytes_to_slots(complete_struct_type->data.struct_.total_size);
     OrsoSlot struct_data[size_in_slots];
     for (i32 i = 0; i < size_in_slots; i++) {
         struct_data[i] = ORSO_SLOT_I(0, &OrsoTypeVoid);
@@ -2193,7 +2193,7 @@ static void resolve_statement(
             ASSERT(function_scope, "right now all scopes should be under a function scope");
 
             OrsoType* function_type = function_scope->creator->value_type;
-            OrsoType* function_return_type = function_scope ? function_type->type.function.return_type : &OrsoTypeVoid;
+            OrsoType* function_return_type = function_scope ? function_type->data.function.return_type : &OrsoTypeVoid;
             if (!orso_type_fits(function_return_type, return_expression_type)) {
                 error_range(analyzer, statement->data.expression->start, statement->data.expression->end, "Requires explict cast to return.");
                 // error(analyzer, statement->start.line, "Return expression must be compatible with function return type.");
@@ -2368,7 +2368,7 @@ void orso_zero_value(OrsoType* type, OrsoSymbolTable* symbol_table, OrsoSlot* re
             return;
         }
         case ORSO_TYPE_STRUCT: {
-            for (i32 i = 0; i < orso_bytes_to_slots(type->type.struct_.total_size); i++) {
+            for (i32 i = 0; i < orso_bytes_to_slots(type->data.struct_.total_size); i++) {
                 return_slots[i] = ORSO_SLOT_I(0, &OrsoTypeVoid);
             }
             return;
