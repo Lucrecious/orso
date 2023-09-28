@@ -1,15 +1,6 @@
-/* Foo :: struct {
-    value := 0;
-    foo: Foo;
-};*/
-
-type3 :: i32;
+type3 :: (i32) -> void;
 type1 := (type3) -> void;
-type2 := (i32) -> void;
-// type2 := ((i32) -> void) -> void;
+type2 := ((i32) -> void) -> void;
 
-print type3;
-print type1;
-print type2;
-print type1 == type3;
-print type1 == type2;
+print type2 == type3;
+print type2 == type1;

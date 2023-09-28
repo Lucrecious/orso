@@ -16,6 +16,10 @@ bool orso_union_type_has_type(OrsoType* type, OrsoType* subtype) {
 
     return false;
 }
+bool orso_struct_type_is_incomplete(OrsoType* type) {
+    return ORSO_TYPE_IS_STRUCT(type) && type->data.struct_.field_count == 0;
+}
+
 
 bool orso_type_equal(OrsoType* a, OrsoType* b) {
     if (a->kind != b->kind) {

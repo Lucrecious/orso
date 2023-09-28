@@ -77,6 +77,8 @@ struct OrsoTypeSet;
 
 bool orso_union_type_has_type(OrsoType* type, OrsoType* subtype);
 
+bool orso_struct_type_is_incomplete(OrsoType* type);
+
 bool orso_type_equal(OrsoType* a, OrsoType* b);
 
 // orso_type_has_type_kind

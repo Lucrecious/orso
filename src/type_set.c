@@ -69,7 +69,6 @@ OrsoType* function_type_new(OrsoTypeSet* set, OrsoType** arguments, i32 argument
 
 // only anonymous structs can be looked up in the type set
 OrsoType* struct_type_new(OrsoTypeSet* set, char** field_names, OrsoType** field_types, i32 field_count, i32* field_offsets, i32 total_size) {
-    ASSERT(field_names != NULL && field_types != NULL && field_count > 0, "cannot create a anonymous struct with no fields");
 
     OrsoType* struct_type = ORSO_ALLOCATE(OrsoType);
     struct_type->kind = ORSO_TYPE_STRUCT;
@@ -103,7 +102,9 @@ OrsoType* struct_type_new(OrsoTypeSet* set, char** field_names, OrsoType** field
         }
     }
 
-    sb_push(set->heap, struct_type);
+    if (set) {
+        sb_push(set->heap, struct_type);
+    }
 
     return struct_type;
 }
@@ -604,6 +605,15 @@ OrsoType* orso_type_create_struct(OrsoTypeSet* set, char* name, i32 name_length,
     return new_type;
 }
 
-bool is_struct_incomplete(OrsoType* struct_) {
-    return struct_->kind == ORSO_TYPE_STRUCT && struct_->data.struct_.field_count == 0;
+void orso_named_struct_copy_data_from_completed_struct_type(OrsoType* incomplete_named_struct, OrsoType* complete_anonymous_struct) {
+    OrsoType* copied_type = type_copy_new(NULL, complete_anonymous_struct);
+
+    incomplete_named_struct->data.struct_.field_count = incomplete_named_struct->data.struct_.field_count;
+    incomplete_named_struct->data.struct_.field_names = incomplete_named_struct->data.struct_.field_names;
+    incomplete_named_struct->data.struct_.field_types = incomplete_named_struct->data.struct_.field_types;
+
+    incomplete_named_struct->data.struct_.total_size = incomplete_named_struct->data.struct_.total_size;
+    incomplete_named_struct->data.struct_.field_byte_offsets = incomplete_named_struct->data.struct_.field_byte_offsets;
+
+    free(copied_type);
 }

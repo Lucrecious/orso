@@ -1489,6 +1489,28 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
             entity->declared_type = entity_declaration->value_type;
             entity->narrowed_type = entity_declaration->data.declaration.initial_value_expression->value_type_narrowed;
         }
+
+        if (entity_declaration->value_type->kind != ORSO_TYPE_TYPE) {
+            return;
+        }
+
+        // This must be available at compile time
+        OrsoType* struct_type = get_folded_type(ast, entity_declaration->value_index);
+        unless (orso_struct_type_is_incomplete(struct_type) && struct_type->data.struct_.name) {
+            return;
+        }
+
+        OrsoASTNode* cast_node = entity_declaration->data.declaration.initial_value_expression;
+        ASSERT(cast_node->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT, "must be implicit casting node");
+        
+        OrsoType* completed_struct_type = cast_node->data.expression->value_type_narrowed;
+        ASSERT(ORSO_TYPE_IS_STRUCT(completed_struct_type), "casted expression must be a struct type");
+
+        if (orso_struct_type_is_incomplete(completed_struct_type)) {
+            return;
+        }
+
+        orso_named_struct_copy_data_from_completed_struct_type(struct_type, completed_struct_type);
         return;
     }
 

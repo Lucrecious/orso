@@ -595,12 +595,8 @@ static bool is_incoming_declaration_declaration(Parser* parser) {
 static OrsoASTNode* entity_declaration(Parser* parser, bool as_parameter);
 
 static OrsoASTNode** parse_parameters(Parser* parser) {
-    if (!check(parser, TOKEN_IDENTIFIER)) {
-        return NULL;
-    }
-
     OrsoASTNode** parameters = NULL;
-    while (check(parser, TOKEN_IDENTIFIER)) {
+    until (check(parser, TOKEN_PARENTHESIS_CLOSE)) {
         if (is_incoming_declaration_declaration(parser)) {
             sb_push(parameters, entity_declaration(parser, true));
         } else {

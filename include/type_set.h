@@ -39,6 +39,5 @@ OrsoType* orso_type_set_fetch_anonymous_struct(OrsoTypeSet* set, i32 field_count
 OrsoType* orso_type_set_fetch_pointer(OrsoTypeSet* set, OrsoType* type);
 OrsoType* orso_type_create_struct(OrsoTypeSet* set, char* name, i32 name_length, OrsoType* anonymous_struct);
 
-bool is_struct_incomplete(OrsoType* struct_);
-
+void orso_named_struct_copy_data_from_completed_struct_type(OrsoType* incomplete_named_struct, OrsoType* complete_anonymous_struct);
 #endif
