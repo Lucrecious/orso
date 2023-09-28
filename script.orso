@@ -1,9 +1,4 @@
-Baz :: struct {
-    baz := false;
-};
-
-FooBar :: struct {
-    foo := 0;
-    bar := "hello world";
-    baz: Baz;
+Foo :: struct {
+    value := 0;
+    foo: Foo;
 };
