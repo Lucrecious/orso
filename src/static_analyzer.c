@@ -25,6 +25,12 @@ typedef enum ExpressionFoldingMode {
     MODE_FOLDING_TIME = 0x4,
 } ExpressionFoldingMode;
 
+typedef enum ResolvePreference {
+    RESOLVE_PREFERENCE_NONE = 0x0,
+    RESOLVE_PREFERENCE_TYPE_ONLY = 0x1,
+    RESOLVE_PREFERENCE_PREFER_NON_TYPE_EXPRESSION = 0x2,
+} ResolvePreference;
+
 typedef struct AnalysisState {
     i32 fold_level;
     ExpressionFoldingMode mode;
@@ -303,7 +309,8 @@ static Entity* get_resolved_entity_by_identifier(
 
 static bool is_builtin_type(OrsoSymbol* identifier, OrsoType** type) {
 #define RETURN_IF_TYPE(SYMBOL, TYPE_STRING, TYPE_ID) \
-if (memcmp(SYMBOL->text, #TYPE_STRING, (sizeof(#TYPE_STRING) - 1)/sizeof(char)) == 0) { \
+if (strlen(SYMBOL->text) == (sizeof(#TYPE_STRING) - 1) && \
+    memcmp(SYMBOL->text, #TYPE_STRING, (sizeof(#TYPE_STRING) - 1)) == 0) { \
     *type = TYPE_ID; \
     return true; \
 }
@@ -504,12 +511,6 @@ static void resolve_foldable(
             break;
         }
 
-        case ORSO_AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION: {
-            foldable = true;
-            folded_index = expression->value_index;
-            break;
-        }
-
         case ORSO_AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT: {
             foldable = true;
             break;
@@ -589,6 +590,7 @@ static void resolve_foldable(
             break;
         }
 
+        case ORSO_AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION:
         case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE:
         case ORSO_AST_NODE_TYPE_DECLARATION:
         case ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION:
@@ -610,11 +612,10 @@ static void fold_constants(
         AnalysisState state,
         OrsoASTNode* expression) {
 
-    // commented out because possible that this needs to be redone  
-    // already folded nothing to do
-    // if (IS_FOLDED(expression)) {
-    //     return;
-    // }
+    // TODO: we need to figure how a better way to figure out if an expression needs to be refolded
+    if (IS_FOLDED(expression)) {
+        return;
+    }
 
     resolve_foldable(analyzer, ast, state, expression);
 
@@ -784,6 +785,7 @@ void orso_resolve_expression(
         OrsoStaticAnalyzer* analyzer,
         OrsoAST* ast,
         AnalysisState state,
+        ResolvePreference resolve_preference,
         OrsoASTNode* expression) {
 
     ASSERT(orso_ast_node_type_is_expression(expression->node_type), "should be only be expressions");
@@ -799,7 +801,7 @@ void orso_resolve_expression(
 
     switch (expression->node_type) {
         case ORSO_AST_NODE_TYPE_EXPRESSION_GROUPING: {
-            orso_resolve_expression(analyzer, ast, state, expression->data.expression);
+            orso_resolve_expression(analyzer, ast, state, resolve_preference, expression->data.expression);
             // if (EXPRESSION_RESOLVED(expression)) {
             //     return;
             // }
@@ -817,12 +819,12 @@ void orso_resolve_expression(
         case ORSO_AST_NODE_TYPE_EXPRESSION_BINARY: {
             OrsoASTNode* left = expression->data.binary.lhs;
             OrsoASTNode* right = expression->data.binary.rhs;
-            orso_resolve_expression(analyzer, ast, state, left);
+            orso_resolve_expression(analyzer, ast, state, resolve_preference, left);
             // if (EXPRESSION_RESOLVED(expression)) {
             //     return;
             // }
 
-            orso_resolve_expression(analyzer, ast, state, right);
+            orso_resolve_expression(analyzer, ast, state, resolve_preference, right);
             // if (EXPRESSION_RESOLVED(expression)) {
             //     return;
             // }
@@ -929,21 +931,48 @@ void orso_resolve_expression(
         }
 
         case ORSO_AST_NODE_TYPE_EXPRESSION_UNARY: {
-            orso_resolve_expression(analyzer, ast, state, expression->data.expression);
+            orso_resolve_expression(analyzer, ast, state, resolve_preference, expression->data.expression);
             // if (EXPRESSION_RESOLVED(expression)) {
             //     return;
             // }
 
-            OrsoType* new_type = resolve_unary_type(expression->operator.type, expression->data.expression->value_type_narrowed);
-            expression->value_type = new_type;
-            expression->value_type_narrowed = new_type;
-            
-            // TODO: Must negate the new type implications if the unary operation is NOT
+            if (expression->operator.type != TOKEN_AMPERSAND) {
+                OrsoType* new_type = resolve_unary_type(expression->operator.type, expression->data.expression->value_type_narrowed);
+                expression->value_type = new_type;
+                expression->value_type_narrowed = new_type;
+                
+                // TODO: Must negate the new type implications if the unary operation is NOT
 
-            if (expression->value_type_narrowed == &OrsoTypeInvalid) {
-                error_range(analyzer, expression->start, expression->end, "Incompatible type for unary operation");
-                // error_incompatible_unary_type(analyzer, expression->operator, expression->data.expression->value_type_narrowed, expression->operator.line);
-                return;
+                if (expression->value_type_narrowed == &OrsoTypeInvalid) {
+                    error_range(analyzer, expression->start, expression->end, "Incompatible type for unary operation");
+                    // error_incompatible_unary_type(analyzer, expression->operator, expression->data.expression->value_type_narrowed, expression->operator.line);
+                    return;
+                }
+            } else {
+                if (expression->data.expression->value_type_narrowed != &OrsoTypeType) {
+                    expression->value_type = &OrsoTypeInvalid;
+                    expression->value_type_narrowed = &OrsoTypeInvalid;
+                    error_range(analyzer, expression->start, expression->end, "Ampersand is only allowed on types.");
+                    return;
+                }
+
+                unless (IS_FOLDED(expression->data.expression)) {
+                    expression->value_type = &OrsoTypeInvalid;
+                    expression->value_type_narrowed = &OrsoTypeInvalid;
+                    error_range(analyzer, expression->data.expression->start, expression->data.expression->end, "Value of expression must be resolved at compile time.");
+                    return;
+                }
+
+                OrsoType* type = get_folded_type(ast, expression->data.expression->value_index);
+
+                OrsoType* pointer_type = orso_type_set_fetch_pointer(&ast->type_set, type);
+
+                expression->value_type = &OrsoTypeType;
+                expression->value_type_narrowed = &OrsoTypeType;
+
+                OrsoSlot type_slot = ORSO_SLOT_P(pointer_type, &OrsoTypeType);
+                
+                expression->value_index = add_value_to_ast_constant_stack(ast, &type_slot, &OrsoTypeType);
             }
             break;
         }
@@ -969,7 +998,7 @@ void orso_resolve_expression(
                 return;
             }
 
-            orso_resolve_expression(analyzer, ast, state, expression->data.binary.rhs);
+            orso_resolve_expression(analyzer, ast, state, resolve_preference, expression->data.binary.rhs);
             // if (EXPRESSION_RESOLVED(expression)) {
             //     return;
             // }
@@ -1089,7 +1118,7 @@ void orso_resolve_expression(
         }
 
         case ORSO_AST_NODE_TYPE_EXPRESSION_BRANCHING: {
-            orso_resolve_expression(analyzer, ast, state, expression->data.branch.condition);
+            orso_resolve_expression(analyzer, ast, state, resolve_preference, expression->data.branch.condition);
             // if (EXPRESSION_RESOLVED(expression)) {
             //     return;
             // }
@@ -1097,7 +1126,7 @@ void orso_resolve_expression(
             OrsoScope* then_scope = scope_copy_new(state.scope);
             AnalysisState then_state = state;
             then_state.scope = then_scope;
-            orso_resolve_expression(analyzer, ast, then_state, expression->data.branch.then_expression);
+            orso_resolve_expression(analyzer, ast, then_state, resolve_preference, expression->data.branch.then_expression);
             // if (EXPRESSION_RESOLVED(expression)) {
             //     return;
             // }
@@ -1106,7 +1135,7 @@ void orso_resolve_expression(
             AnalysisState else_state = state;
             else_state.scope = else_scope;
             if (expression->data.branch.else_expression) {
-                orso_resolve_expression(analyzer, ast, else_state, expression->data.branch.else_expression);
+                orso_resolve_expression(analyzer, ast, else_state, resolve_preference, expression->data.branch.else_expression);
                 // if (EXPRESSION_RESOLVED(expression)) {
                 //     return;
                 // }
@@ -1186,7 +1215,7 @@ void orso_resolve_expression(
         case ORSO_AST_NODE_TYPE_EXPRESSION_CALL: {
             for (i32 i = 0; i < sb_count(expression->data.call.arguments); i++) {
                 OrsoASTNode* argument = expression->data.call.arguments[i];
-                orso_resolve_expression(analyzer, ast, state, argument);
+                orso_resolve_expression(analyzer, ast, state, resolve_preference, argument);
                 // if (EXPRESSION_RESOLVED(expression)) {
                 //     return;
                 // }
@@ -1196,7 +1225,7 @@ void orso_resolve_expression(
                 }
             }
 
-            orso_resolve_expression(analyzer, ast, state, expression->data.call.callee);
+            orso_resolve_expression(analyzer, ast, state, resolve_preference, expression->data.call.callee);
             // if (EXPRESSION_RESOLVED(expression)) {
             //     return;
             // }
@@ -1228,14 +1257,14 @@ void orso_resolve_expression(
         }
         
          case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE: {
-            orso_resolve_expression(analyzer, ast, state, expression->data.function.return_type_expression);
+            orso_resolve_expression(analyzer, ast, state, RESOLVE_PREFERENCE_TYPE_ONLY, expression->data.function.return_type_expression);
             // if (EXPRESSION_RESOLVED(expression)) {
             //     return;
             // }
 
             for (i32 i = 0; i < sb_count(expression->data.function.parameter_nodes); i++) {
                 OrsoASTNode* parameter = expression->data.function.parameter_nodes[i];
-                orso_resolve_expression(analyzer, ast, state, parameter);
+                orso_resolve_expression(analyzer, ast, state, RESOLVE_PREFERENCE_TYPE_ONLY, parameter);
                 // if (EXPRESSION_RESOLVED(expression)) {
                 //     return;
                 // }
@@ -1404,7 +1433,7 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
         if (pushed) {
             AnalysisState new_state = state;
             new_state.mode = MODE_CONSTANT_TIME | (state.mode & MODE_FOLDING_TIME);
-            orso_resolve_expression(analyzer, ast, new_state, entity_declaration->data.declaration.type_expression);
+            orso_resolve_expression(analyzer, ast, new_state, RESOLVE_PREFERENCE_TYPE_ONLY, entity_declaration->data.declaration.type_expression);
             declaration_type = get_folded_type(ast, entity_declaration->data.declaration.type_expression->value_index);
             pop_dependency(analyzer);
         } else {
@@ -1435,7 +1464,7 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
 
         bool pushed = push_dependency(analyzer, entity_declaration->data.declaration.initial_value_expression, new_state.fold_level);
         if (pushed) {
-            orso_resolve_expression(analyzer, ast, new_state, entity_declaration->data.declaration.initial_value_expression);
+            orso_resolve_expression(analyzer, ast, new_state, RESOLVE_PREFERENCE_PREFER_NON_TYPE_EXPRESSION, entity_declaration->data.declaration.initial_value_expression);
             pop_dependency(analyzer);
         } else {
             return;
@@ -1887,7 +1916,7 @@ static void resolve_function_expression(
         if (pushed) {
             AnalysisState new_state = state;
             new_state.mode = MODE_CONSTANT_TIME | (state.mode & MODE_FOLDING_TIME);
-            orso_resolve_expression(analyzer, ast, state, definition->return_type_expression);
+            orso_resolve_expression(analyzer, ast, state, RESOLVE_PREFERENCE_TYPE_ONLY, definition->return_type_expression);
             pop_dependency(analyzer);
         }
 
@@ -1937,7 +1966,7 @@ static void resolve_function_expression(
         OrsoScope function_scope;
         scope_init(&function_scope, SCOPE_TYPE_FUNCTION_BODY, &function_parameter_scope, function_definition_expression);
         new_state.scope = &function_scope;
-        orso_resolve_expression(analyzer, ast, new_state, definition->block);
+        orso_resolve_expression(analyzer, ast, new_state, RESOLVE_PREFERENCE_NONE, definition->block);
         pop_dependency(analyzer);
         scope_free(&function_scope);
     }
@@ -2105,12 +2134,12 @@ static void resolve_struct_definition(OrsoStaticAnalyzer* analyzer, OrsoAST* ast
     bool invalid_struct = false;
     for (i32 i = 0; i < declarations_count; i++) {
         OrsoASTNode* declaration = struct_definition->data.struct_.declarations[i];
-        if (declaration->node_type != ORSO_AST_NODE_TYPE_DECLARATION) {
-            error_range(analyzer, declaration->start, declaration->end, "Only declarations allowed within a struct context.");
-            continue;
-        }
+        // if (declaration->node_type != ORSO_AST_NODE_TYPE_DECLARATION) {
+        //     error_range(analyzer, declaration->start, declaration->end, "Only declarations allowed within a struct context.");
+        //     continue;
+        // }
 
-        resolve_declaration(analyzer, ast, state, declaration);
+        resolve_entity_declaration(analyzer, ast, state, declaration);
 
         if (ORSO_TYPE_IS_INVALID(declaration->value_type) || ORSO_TYPE_IS_UNRESOLVED(declaration->value_type)) {
             invalid_struct = true;
@@ -2178,14 +2207,14 @@ static void resolve_statement(
         case ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION:
         case ORSO_AST_NODE_TYPE_STATEMENT_PRINT:
         case ORSO_AST_NODE_TYPE_STATEMENT_PRINT_EXPR:
-            orso_resolve_expression(analyzer, ast, state, statement->data.expression);
+            orso_resolve_expression(analyzer, ast, state, RESOLVE_PREFERENCE_PREFER_NON_TYPE_EXPRESSION, statement->data.expression);
             break;
 
         case ORSO_AST_NODE_TYPE_STATEMENT_RETURN: {
             OrsoType* return_expression_type = &OrsoTypeVoid;
 
             if (statement->data.expression) {
-                orso_resolve_expression(analyzer, ast, state, statement->data.expression);
+                orso_resolve_expression(analyzer, ast, state, RESOLVE_PREFERENCE_PREFER_NON_TYPE_EXPRESSION, statement->data.expression);
                 return_expression_type = statement->data.expression->value_type;
             }
 

@@ -42,7 +42,7 @@ primary                  -> `true` | `false` | `null` | IDENTIFIER | INTEGER | D
                           | STRING | SYMBOL | `(` expression `)` | function_definition | function_type | struct_definition
 function_definition      -> `(` parameters? `)` `->` logic_or block
 function_type            -> `(` (logic_or (`,` logic_or)*)? `)` `->` logic_or
-struct_definition        -> `struct` `{` declaration* `}`
+struct_definition        -> `struct` `{` entity_declaration* `}`
 */
 
 typedef struct Parser {
@@ -728,7 +728,7 @@ static OrsoASTNode* struct_(Parser* parser) {
     consume(parser, TOKEN_BRACE_OPEN, "Expect open brace.");
 
     while (!check(parser, TOKEN_BRACE_CLOSE) && !check(parser, TOKEN_EOF)) {
-        OrsoASTNode* declaration_node = declaration(parser);
+        OrsoASTNode* declaration_node = entity_declaration(parser, false);
         sb_push(struct_definition->data.block, declaration_node);
     }
 

@@ -108,6 +108,16 @@ OrsoType* struct_type_new(OrsoTypeSet* set, char** field_names, OrsoType** field
     return struct_type;
 }
 
+OrsoType* pointer_type_new(OrsoTypeSet* set, OrsoType* type) {
+    OrsoType* pointer = ORSO_ALLOCATE(OrsoType);
+    pointer->kind = ORSO_TYPE_POINTER;
+    pointer->data.pointer.type = type;
+    
+    sb_push(set->heap, pointer);
+
+    return pointer;
+}
+
 OrsoType* type_copy_new(OrsoTypeSet* set, OrsoType* type) {
     if (ORSO_TYPE_IS_UNION(type)) {
         return (OrsoType*)union_type_new(
@@ -135,6 +145,12 @@ OrsoType* type_copy_new(OrsoTypeSet* set, OrsoType* type) {
             type->data.struct_.field_count,
             type->data.struct_.field_byte_offsets,
             type->data.struct_.total_size);
+    }
+
+    if (ORSO_TYPE_IS_POINTER(type)) {
+        return pointer_type_new(
+            set,
+            type->data.pointer.type);
     }
 
     UNREACHABLE();
@@ -208,16 +224,16 @@ static u32 hash_type(OrsoType* type) {
 
     if (ORSO_TYPE_IS_UNION(type)) {
         for (i32 i = 0; i < type->data.union_.count; i++) {
-            ADD_HASH(hash, hash_type(type->data.union_.types[i]));
+            ADD_HASH(hash, (u64)(type->data.union_.types[i]));
         }
     } else if (ORSO_TYPE_IS_FUNCTION(type)) {
         ADD_HASH(hash, type->data.function.argument_count);
 
         for (i32 i = 0; i < type->data.function.argument_count; i++) {
-            ADD_HASH(hash, hash_type(type->data.function.argument_types[i]));
+            ADD_HASH(hash, (u64)(type->data.function.argument_types[i]));
         }
 
-        ADD_HASH(hash, hash_type(type->data.function.return_type));
+        ADD_HASH(hash, (u64)(type->data.function.return_type));
     } else if (ORSO_TYPE_IS_STRUCT(type)) {
         ADD_HASH(hash, type->data.struct_.field_count);
 
@@ -228,8 +244,10 @@ static u32 hash_type(OrsoType* type) {
                 ADD_HASH(hash, name[i]);
             }
             
-            ADD_HASH(hash, hash_type(type->data.struct_.field_types[i]));
+            ADD_HASH(hash, (u64)(type->data.struct_.field_types[i]));
         }
+    } else if (ORSO_TYPE_IS_POINTER(type)) {
+        ADD_HASH(hash, (u64)(type->data.pointer.type));
     }
 
     return hash;
@@ -336,6 +354,18 @@ static i32 type_compare(const void* a, const void* b) {
         }
 
         return 0;
+    }
+
+    if (ORSO_TYPE_IS_POINTER(type_a) || ORSO_TYPE_IS_POINTER(type_b)) {
+        unless (ORSO_TYPE_IS_POINTER(type_a)) {
+            return -type_compare(type_b, type_a);
+        }
+
+        unless (ORSO_TYPE_IS_POINTER(type_b)) {
+            return -1;
+        }
+        
+        return type_compare(type_a->data.pointer.type, type_b->data.pointer.type);
     }
 
     if (ORSO_TYPE_IS_FUNCTION(type_a) || ORSO_TYPE_IS_FUNCTION(type_b)) {
@@ -453,14 +483,34 @@ OrsoType* orso_type_set_fetch_union(OrsoTypeSet* set, OrsoType** types, i32 coun
     qsort(union_type.data.union_.types, count, sizeof(OrsoType*), type_compare);
 
     if (set->capacity > 0) {
-        OrsoType** entry = fetch_type(set->entries, set->capacity, (OrsoType*)&union_type);
+        OrsoType** entry = fetch_type(set->entries, set->capacity, &union_type);
 
         if (*entry != NULL) {
             return *entry;
         }
     }
 
-    OrsoType* type = type_copy_new(set, (OrsoType*)&union_type);
+    OrsoType* type = type_copy_new(set, &union_type);
+    add_type(set, type);
+
+    return type;
+}
+
+OrsoType* orso_type_set_fetch_pointer(OrsoTypeSet* set, OrsoType* inner_type) {
+    OrsoType pointer_type = {
+        .kind = ORSO_TYPE_POINTER,
+        .data.pointer.type = inner_type,
+    };
+
+    if (set->capacity > 0) {
+        OrsoType** entry = fetch_type(set->entries, set->capacity, &pointer_type);
+
+        if (*entry != NULL) {
+            return *entry;
+        }
+    }
+
+    OrsoType* type = type_copy_new(set, &pointer_type);
     add_type(set, type);
 
     return type;

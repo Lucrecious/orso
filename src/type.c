@@ -22,69 +22,96 @@ bool orso_type_equal(OrsoType* a, OrsoType* b) {
         return false;
     }
 
-    if (ORSO_TYPE_IS_UNION(a)) {
-        if (a->data.union_.count != b->data.union_.count) {
-            return false;
-        }
-
-        for (i32 i = 0; i < a->data.union_.count; i++) {
-            if (!orso_union_type_has_type(a, b->data.union_.types[i])) {
+    switch (a->kind) {
+        case ORSO_TYPE_UNION: {
+            if (a->data.union_.count != b->data.union_.count) {
                 return false;
             }
 
-            if (!orso_union_type_has_type(b, a->data.union_.types[i])) {
-                return false;
+            for (i32 i = 0; i < a->data.union_.count; i++) {
+                if (!orso_union_type_has_type(a, b->data.union_.types[i])) {
+                    return false;
+                }
+
+                if (!orso_union_type_has_type(b, a->data.union_.types[i])) {
+                    return false;
+                }
             }
-        }
-    } else if (ORSO_TYPE_IS_FUNCTION(a)) {
-        if (a->data.function.argument_count != b->data.function.argument_count) {
-            return false;
+
+            return true;
         }
 
-        if (!orso_type_equal(a->data.function.return_type, b->data.function.return_type)) {
-            return false;
-        }
-
-        for (i32 i = 0; i < a->data.function.argument_count; i++) {
-            if (!orso_type_equal(a->data.function.argument_types[i], b->data.function.argument_types[i])) {
-                return false;
-            }
-        }
-    } else if (ORSO_TYPE_IS_STRUCT(a)) {
-        i32 a_name_length = a->data.struct_.name ? strlen(a->data.struct_.name) : 0;
-        i32 b_name_length = b->data.struct_.name ? strlen(b->data.struct_.name) : 0;
-        if (a_name_length != b_name_length) {
-            return false;
-        }
-
-        if (memcmp(a->data.struct_.name, b->data.struct_.name, a_name_length) != 0) {
-            return false;
-        }
-
-        if (a->data.struct_.field_count != b->data.struct_.field_count) {
-            return false;
-        }
-
-        for (i32 i = 0; i < a->data.struct_.field_count; i++) {
-            if (!orso_type_equal(a->data.struct_.field_types[i], b->data.struct_.field_types[i])) {
+        case ORSO_TYPE_FUNCTION:
+        case ORSO_TYPE_NATIVE_FUNCTION: {
+            if (a->data.function.argument_count != b->data.function.argument_count) {
                 return false;
             }
 
-            i32 field_name_length_a = strlen(a->data.struct_.field_names[i]);
-            i32 field_name_length_b = strlen(b->data.struct_.field_names[i]);
-            if (field_name_length_a != field_name_length_b) {
+            if (!orso_type_equal(a->data.function.return_type, b->data.function.return_type)) {
                 return false;
             }
 
-            if (memcmp(a->data.struct_.field_names[i], b->data.struct_.field_names[i], field_name_length_a) != 0) {
+            for (i32 i = 0; i < a->data.function.argument_count; i++) {
+                if (!orso_type_equal(a->data.function.argument_types[i], b->data.function.argument_types[i])) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+        case ORSO_TYPE_STRUCT: {
+            i32 a_name_length = a->data.struct_.name ? strlen(a->data.struct_.name) : 0;
+            i32 b_name_length = b->data.struct_.name ? strlen(b->data.struct_.name) : 0;
+            if (a_name_length != b_name_length) {
                 return false;
             }
+
+            if (memcmp(a->data.struct_.name, b->data.struct_.name, a_name_length) != 0) {
+                return false;
+            }
+
+            if (a->data.struct_.field_count != b->data.struct_.field_count) {
+                return false;
+            }
+
+            for (i32 i = 0; i < a->data.struct_.field_count; i++) {
+                if (!orso_type_equal(a->data.struct_.field_types[i], b->data.struct_.field_types[i])) {
+                    return false;
+                }
+
+                i32 field_name_length_a = strlen(a->data.struct_.field_names[i]);
+                i32 field_name_length_b = strlen(b->data.struct_.field_names[i]);
+                if (field_name_length_a != field_name_length_b) {
+                    return false;
+                }
+
+                if (memcmp(a->data.struct_.field_names[i], b->data.struct_.field_names[i], field_name_length_a) != 0) {
+                    return false;
+                }
+            }
+
+            return true;
         }
-    } else {
-        return false;
+
+        case ORSO_TYPE_POINTER: {
+            return orso_type_equal(a->data.pointer.type, b->data.pointer.type);
+        }
+
+        case ORSO_TYPE_BOOL:
+        case ORSO_TYPE_FLOAT32:
+        case ORSO_TYPE_FLOAT64:
+        case ORSO_TYPE_INT32:
+        case ORSO_TYPE_INT64:
+        case ORSO_TYPE_STRING:
+        case ORSO_TYPE_VOID:
+        case ORSO_TYPE_TYPE:
+        case ORSO_TYPE_SYMBOL: return true;
+
+        case ORSO_TYPE_INVALID:
+        case ORSO_TYPE_UNDEFINED:
+        case ORSO_TYPE_UNRESOLVED: UNREACHABLE(); return false;
+
     }
-
-    return true;
 }
 
 bool type_in_list(OrsoType** list, i32 count, OrsoType* find) {
@@ -432,6 +459,16 @@ i32 orso_type_to_cstrn(OrsoType* type, char* buffer, i32 n) {
         buffer[0] = '}';
         n -= 1;
         buffer += 1;
+    } else if (ORSO_TYPE_IS_POINTER(type)) {
+        i32 written = 0;
+
+        buffer[0] = '&';
+        n -= 1;
+        buffer += 1;
+
+        written = orso_type_to_cstrn(type->data.pointer.type, buffer, n);
+        n -= (written - 1);
+        buffer += (written - 1);
     } else {
         char* type_name;
         switch (type->kind) {
@@ -447,7 +484,13 @@ i32 orso_type_to_cstrn(OrsoType* type, char* buffer, i32 n) {
             case ORSO_TYPE_INVALID: type_name = "<invalid>"; break;
             case ORSO_TYPE_UNRESOLVED: type_name = "<unresolved>"; break;
             case ORSO_TYPE_UNDEFINED: type_name = "<undefined>"; break;
-            default: type_name = "<?>"; UNREACHABLE(); break;
+            
+            case ORSO_TYPE_STRUCT:
+            case ORSO_TYPE_FUNCTION:
+            case ORSO_TYPE_NATIVE_FUNCTION:
+            case ORSO_TYPE_POINTER:
+            case ORSO_TYPE_UNION:
+                type_name = "<?>"; UNREACHABLE(); break;
         }
 
         i32 written = copy_to_buffer(buffer, type_name);

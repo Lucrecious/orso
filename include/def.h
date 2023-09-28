@@ -23,6 +23,8 @@ typedef float f32;
 typedef double f64;
 typedef void* ptr;
 
+#define unless(condition) if (!(condition))
+
 FORCE_INLINE bool i32min(i32 a, i32 b) {
   return a < b ? a : b;
 }
