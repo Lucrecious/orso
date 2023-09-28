@@ -59,6 +59,10 @@ struct OrsoType {
             i32 total_size;
             i32* field_byte_offsets;
         } struct_;
+
+        struct {
+            OrsoType* type;
+        } pointer;
     } type;
 };
 
