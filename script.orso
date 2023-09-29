@@ -1,6 +1,10 @@
-type3 :: (i32) -> void;
-type1 := (type3) -> void;
-type2 := ((i32) -> void) -> void;
+Bar :: struct {
+    foo: Foo;
+};
 
-print type2 == type3;
-print type2 == type1;
+Foo :: struct  {
+    bar: Bar;
+    x := 10;
+} or struct {
+    bar: Bar;
+};

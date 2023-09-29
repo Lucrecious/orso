@@ -593,7 +593,8 @@ static void gen_primary(Compiler* compiler, Chunk* chunk, OrsoAST* ast, OrsoType
         }
 
         case ORSO_TYPE_STRUCT: {
-            ASSERT(false, "not implemented");
+            emit_constant(compiler, chunk, *value, line);
+            //ASSERT(false, "not implemented");
             break;
         }
 

@@ -364,7 +364,7 @@ i32 copy_to_buffer(char* buffer, char* cstr) {
     return written;
 }
 
-i32 orso_type_to_cstrn(OrsoType* type, char* buffer, i32 n) {
+i32 orso_type_to_cstrn_(OrsoType* type, char* buffer, i32 n, bool is_toplevel) {
     // TODO: Make sure that n is taken into account
     i32 original_n = n;
 
@@ -384,7 +384,7 @@ i32 orso_type_to_cstrn(OrsoType* type, char* buffer, i32 n) {
             }
 
             // -1 removes the \0
-            i32 written = orso_type_to_cstrn(type->data.union_.types[i], buffer, n) - 1;
+            i32 written = orso_type_to_cstrn_(type->data.union_.types[i], buffer, n, false) - 1;
             n -= written;
             buffer += written;
 
@@ -407,7 +407,7 @@ i32 orso_type_to_cstrn(OrsoType* type, char* buffer, i32 n) {
                 buffer += 1;
             }
 
-            i32 written = orso_type_to_cstrn(type->data.function.argument_types[i], buffer, n);
+            i32 written = orso_type_to_cstrn_(type->data.function.argument_types[i], buffer, n, false);
             n -= (written - 1);
             buffer += (written - 1);
         }
@@ -416,7 +416,7 @@ i32 orso_type_to_cstrn(OrsoType* type, char* buffer, i32 n) {
         n -= written;
         buffer += written;
 
-        written = orso_type_to_cstrn(type->data.function.return_type, buffer, n);
+        written = orso_type_to_cstrn_(type->data.function.return_type, buffer, n, false);
         n -= (written - 1);
         buffer += (written - 1);
 
@@ -426,43 +426,49 @@ i32 orso_type_to_cstrn(OrsoType* type, char* buffer, i32 n) {
             written = copy_to_buffer(buffer, type->data.struct_.name);
             n -= written;
             buffer += written;
-
+        } else {
+            written = copy_to_buffer(buffer, "struct");
+            n -= written;
+            buffer += written;
+        }
+        
+        if (is_toplevel) {
             buffer[0] = ' ';
             n -= 1;
             buffer += 1;
+
+            char* struct_prefix = "{ ";
+            written = copy_to_buffer(buffer, struct_prefix);
+            n -= written;
+            buffer += written;
+
+            for (i32 i = 0; i < type->data.struct_.field_count; i++) {
+                char* name = type->data.struct_.field_names[i];
+
+                written = copy_to_buffer(buffer, name);
+                n -= written;
+                buffer += written;
+
+                char* type_colin = ": ";
+                written = copy_to_buffer(buffer, type_colin);
+                n -= written;
+                buffer += written;
+
+                OrsoType* field_type = type->data.struct_.field_types[i];
+                written = orso_type_to_cstrn_(field_type, buffer, n, false);
+                n -= (written - 1);
+                buffer += (written - 1);
+
+                char* ending_colin = "; ";
+                written = copy_to_buffer(buffer, ending_colin);
+                n -= written;
+                buffer += written;
+            }
+
+            buffer[0] = '}';
+            n -= 1;
+            buffer += 1;
         }
-
-        char* struct_prefix = "{ ";
-        written = copy_to_buffer(buffer, struct_prefix);
-        n -= written;
-        buffer += written;
-
-        for (i32 i = 0; i < type->data.struct_.field_count; i++) {
-            char* name = type->data.struct_.field_names[i];
-
-            written = copy_to_buffer(buffer, name);
-            n -= written;
-            buffer += written;
-
-            char* type_colin = ": ";
-            written = copy_to_buffer(buffer, type_colin);
-            n -= written;
-            buffer += written;
-
-            OrsoType* field_type = type->data.struct_.field_types[i];
-            written = orso_type_to_cstrn(field_type, buffer, n);
-            n -= (written - 1);
-            buffer += (written - 1);
-
-            char* ending_colin = "; ";
-            written = copy_to_buffer(buffer, ending_colin);
-            n -= written;
-            buffer += written;
-        }
-
-        buffer[0] = '}';
-        n -= 1;
-        buffer += 1;
     } else if (ORSO_TYPE_IS_POINTER(type)) {
         i32 written = 0;
 
@@ -470,7 +476,7 @@ i32 orso_type_to_cstrn(OrsoType* type, char* buffer, i32 n) {
         n -= 1;
         buffer += 1;
 
-        written = orso_type_to_cstrn(type->data.pointer.type, buffer, n);
+        written = orso_type_to_cstrn_(type->data.pointer.type, buffer, n, false);
         n -= (written - 1);
         buffer += (written - 1);
     } else {
@@ -506,6 +512,10 @@ i32 orso_type_to_cstrn(OrsoType* type, char* buffer, i32 n) {
     n -= 1;
     buffer += 1;
     return original_n - n;
+}
+
+i32 orso_type_to_cstrn(OrsoType* type, char* buffer, i32 n) {
+    return orso_type_to_cstrn_(type, buffer, n, true);
 }
 
 bool orso_is_gc_type(OrsoType* type) {

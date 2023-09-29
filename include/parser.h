@@ -166,6 +166,16 @@ struct OrsoASTNode {
     } data;
 };
 
+static khint_t ptr_hash(void* ptr) {
+    return kh_int64_hash_func((khint64_t)ptr);
+}
+
+static khint32_t ptr_equal(void* a, void* b) {
+    return kh_int64_hash_equal((khint64_t)a, (khint64_t)b);
+}
+
+KHASH_INIT(ptr2i32, void*, i32, 1, ptr_hash, ptr_equal)
+
 typedef struct OrsoAST {
     bool resolved;
     OrsoTypeSet type_set;
@@ -178,6 +188,10 @@ typedef struct OrsoAST {
 
     OrsoASTNode* root;
     OrsoSlot* folded_constants;
+
+    khash_t(ptr2i32)* type_to_zero_index;
+
+    i32 i;
     OrsoSymbolTable* symbols;
 } OrsoAST;
 

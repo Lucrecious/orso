@@ -33,6 +33,6 @@ void orso_static_analyzer_free(OrsoStaticAnalyzer* analyzer);
 
 bool orso_resolve_ast(OrsoStaticAnalyzer* analyzer, OrsoAST* ast);
 
-void orso_zero_value(OrsoType* type, OrsoSymbolTable* symbol_table, OrsoSlot* return_slots);
+i32 orso_zero_value(OrsoAST* ast, OrsoType* type, OrsoSymbolTable* symbol_table);
 
 #endif

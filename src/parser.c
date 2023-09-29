@@ -90,7 +90,14 @@ void orso_ast_init(OrsoAST* ast, OrsoSymbolTable* symbols) {
     ast->function_definition_pairs = NULL;
     orso_type_set_init(&ast->type_set);
 
+    OrsoSlot void_slot = ORSO_SLOT_I(0, &OrsoTypeUnresolved);
+    OrsoSlot bool_slot = ORSO_SLOT_I(1, &OrsoTypeUnresolved);
+    sb_push(ast->folded_constants, void_slot);
+    sb_push(ast->folded_constants, bool_slot);
+
     orso_symbol_table_init(&ast->builtins);
+
+    ast->type_to_zero_index = kh_init(ptr2i32);
 }
 
 void orso_ast_free(OrsoAST* ast) {
@@ -103,6 +110,9 @@ void orso_ast_free(OrsoAST* ast) {
 
     orso_symbol_table_free(&ast->builtins);
     orso_type_set_free(&ast->type_set);
+
+    kh_destroy(ptr2i32, ast->type_to_zero_index);
+    ast->type_to_zero_index = NULL;
 }
 
 OrsoASTNode* orso_ast_node_new(OrsoAST* ast, OrsoASTNodeType node_type, Token start) {
@@ -1042,7 +1052,7 @@ void ast_print_ast_node(OrsoASTNode* node, i32 initial, const char* prefix) {
         case ORSO_AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT: {
             printf("implicit cast: %s\n", type_info);
 
-            ast_print_ast_node(node->data.expression, initial + 1, "to: ");
+            ast_print_ast_node(node->data.expression, initial + 1, "from: ");
             break;
         }
         case ORSO_AST_NODE_TYPE_EXPRESSION_UNARY: {
@@ -1100,7 +1110,7 @@ void ast_print_ast_node(OrsoASTNode* node, i32 initial, const char* prefix) {
             break;
         }
         case ORSO_AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION: {
-            printf("struct: %s\n", type_info);
+            printf("%s\n", type_info);
             for (i32 i = 0; i < sb_count(node->data.struct_.declarations); i++) {
                 ast_print_ast_node(node->data.struct_.declarations[i], initial + 1, "field: ");
             }

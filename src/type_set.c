@@ -608,12 +608,12 @@ OrsoType* orso_type_create_struct(OrsoTypeSet* set, char* name, i32 name_length,
 void orso_named_struct_copy_data_from_completed_struct_type(OrsoType* incomplete_named_struct, OrsoType* complete_anonymous_struct) {
     OrsoType* copied_type = type_copy_new(NULL, complete_anonymous_struct);
 
-    incomplete_named_struct->data.struct_.field_count = incomplete_named_struct->data.struct_.field_count;
-    incomplete_named_struct->data.struct_.field_names = incomplete_named_struct->data.struct_.field_names;
-    incomplete_named_struct->data.struct_.field_types = incomplete_named_struct->data.struct_.field_types;
+    incomplete_named_struct->data.struct_.field_count = copied_type->data.struct_.field_count;
+    incomplete_named_struct->data.struct_.field_names = copied_type->data.struct_.field_names;
+    incomplete_named_struct->data.struct_.field_types = copied_type->data.struct_.field_types;
 
-    incomplete_named_struct->data.struct_.total_size = incomplete_named_struct->data.struct_.total_size;
-    incomplete_named_struct->data.struct_.field_byte_offsets = incomplete_named_struct->data.struct_.field_byte_offsets;
+    incomplete_named_struct->data.struct_.total_size = copied_type->data.struct_.total_size;
+    incomplete_named_struct->data.struct_.field_byte_offsets = copied_type->data.struct_.field_byte_offsets;
 
     free(copied_type);
 }

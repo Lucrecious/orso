@@ -1426,6 +1426,27 @@ static void pop_dependency(OrsoStaticAnalyzer* analyzer) {
     analyzer->dependencies.count--;
 }
 
+static bool struct_contains_incomplete_type(OrsoType* type) {
+    unless (ORSO_TYPE_IS_STRUCT(type)) {
+        return false;
+    }
+
+    if (type->data.struct_.field_count == 0) {
+        return true;
+    }
+
+    for (i32 i = 0; i < type->data.struct_.field_count; i++) {
+        OrsoType* field_type = type->data.struct_.field_types[i];
+        unless (struct_contains_incomplete_type(field_type)) {
+            continue;
+        }
+
+        return true;
+    }
+
+    return false;
+}
+
 static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, AnalysisState state, OrsoASTNode* entity_declaration) {
     OrsoType* declaration_type = &OrsoTypeUnresolved;
     if (entity_declaration->value_type == &OrsoTypeUnresolved && entity_declaration->data.declaration.type_expression) {
@@ -1602,18 +1623,25 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
             entity->narrowed_type = &OrsoTypeVoid;
         } 
 
-        OrsoSlot value[orso_bytes_to_slots(orso_type_size_bytes(entity->node->value_type))];
-        orso_zero_value(entity->node->value_type, &analyzer->symbols, value);
+        i32 value_index;
 
-        // TODO: Optimize default values since they are always the same. Probably can use the same index for them. somehjow
-        i32 value_index = add_value_to_ast_constant_stack(ast, value, entity->node->value_type);
+        // TODO: this doesn't work well with unions
+        if (struct_contains_incomplete_type(entity->node->value_type)) {
+            value_index = 1;
+        } else {
+            value_index = orso_zero_value(ast, entity->node->value_type, &analyzer->symbols);
+        }
+
         entity->node->value_index = value_index;
     } else {
         entity->narrowed_type = initial_expression->value_type_narrowed;
-        if (IS_FOLDED(initial_expression)
-        && ORSO_TYPE_IS_UNION(initial_expression->value_type)) {
-            OrsoType* folded_value_type = get_folded_type(ast, initial_expression->value_index);
-            entity->narrowed_type = folded_value_type;
+        if (IS_FOLDED(initial_expression)) {
+            entity->node->value_index = initial_expression->value_index;
+
+            if (ORSO_TYPE_IS_UNION(initial_expression->value_type)) {
+                OrsoType* folded_value_type = get_folded_type(ast, initial_expression->value_index);
+                entity->narrowed_type = folded_value_type;
+            }
         }
     }
 }
@@ -2153,6 +2181,9 @@ static void resolve_struct_definition(OrsoStaticAnalyzer* analyzer, OrsoAST* ast
     struct_definition->value_type = &OrsoTypeIncompleteStruct;
     struct_definition->value_type_narrowed = &OrsoTypeIncompleteStruct;
 
+    struct_definition->foldable = true;
+    struct_definition->value_index = 1;
+
     bool invalid_struct = false;
     for (i32 i = 0; i < declarations_count; i++) {
         OrsoASTNode* declaration = struct_definition->data.struct_.declarations[i];
@@ -2201,13 +2232,17 @@ static void resolve_struct_definition(OrsoStaticAnalyzer* analyzer, OrsoAST* ast
     struct_definition->value_type = complete_struct_type;
     struct_definition->value_type_narrowed = complete_struct_type;
 
-    i32 size_in_slots = orso_bytes_to_slots(complete_struct_type->data.struct_.total_size);
-    OrsoSlot struct_data[size_in_slots];
-    for (i32 i = 0; i < size_in_slots; i++) {
-        struct_data[i] = ORSO_SLOT_I(0, &OrsoTypeVoid);
-    }
+    if (struct_contains_incomplete_type(complete_struct_type)) {
+        struct_definition->value_index = 1;
+    } else {
+        i32 size_in_slots = orso_bytes_to_slots(complete_struct_type->data.struct_.total_size);
+        OrsoSlot struct_data[size_in_slots];
+        for (i32 i = 0; i < size_in_slots; i++) {
+            struct_data[i] = ORSO_SLOT_I(0, &OrsoTypeVoid);
+        }
 
-    struct_definition->value_index = add_value_to_ast_constant_stack(ast, struct_data, complete_struct_type);
+        struct_definition->value_index = add_value_to_ast_constant_stack(ast, struct_data, complete_struct_type);
+    }
 
     scope_free(&struct_scope);
 }
@@ -2391,38 +2426,50 @@ void orso_static_analyzer_free(OrsoStaticAnalyzer* analyzer) {
     analyzer->panic_mode = false;
 }
 
-void orso_zero_value(OrsoType* type, OrsoSymbolTable* symbol_table, OrsoSlot* return_slots) {
+i32 orso_zero_value(OrsoAST* ast, OrsoType* type, OrsoSymbolTable* symbol_table) {
+    khint_t key_index;
+
+    key_index = kh_get(ptr2i32, ast->type_to_zero_index, type);
+    if (key_index != kh_end(ast->type_to_zero_index)) {
+        return kh_value(ast->type_to_zero_index, key_index);
+    }
+
+    OrsoSlot value[orso_bytes_to_slots(orso_type_size_bytes(type))];
+
     switch (type->kind) {
         case ORSO_TYPE_POINTER:
         case ORSO_TYPE_VOID:
         case ORSO_TYPE_BOOL:
         case ORSO_TYPE_INT32:
         case ORSO_TYPE_INT64:
-            return_slots[0] = ORSO_SLOT_I(0, type);
-            return;
+            value[0] = ORSO_SLOT_I(0, type);
+            break;
+
         case ORSO_TYPE_FLOAT32:
         case ORSO_TYPE_FLOAT64:
-            return_slots[0] = ORSO_SLOT_F(0.0, type);
-            return;
+            value[0] = ORSO_SLOT_F(0.0, type);
+            break;
+
         case ORSO_TYPE_STRING:
-            return_slots[0] = ORSO_SLOT_P(orso_new_string_from_cstrn("", 0), type);
-            return;
+            value[0] = ORSO_SLOT_P(orso_new_string_from_cstrn("", 0), type);
+            break;
+
         case ORSO_TYPE_SYMBOL:
-            return_slots[0] = ORSO_SLOT_P(orso_new_symbol_from_cstrn("", 0, symbol_table), type);
-            return;
+            value[0] = ORSO_SLOT_P(orso_new_symbol_from_cstrn("", 0, symbol_table), type);
+            break;
         
-        // This should return 2 OrsoSlots, one for null type one for null value
         case ORSO_TYPE_UNION: {
             ASSERT(orso_union_type_has_type(type, &OrsoTypeVoid), "must include void type if looking for zero value");
-            return_slots[0] = ORSO_SLOT_P(&OrsoTypeVoid, &OrsoTypeType);
-            return_slots[1] = ORSO_SLOT_I(0, type);
-            return;
+            value[0] = ORSO_SLOT_P(&OrsoTypeVoid, &OrsoTypeType);
+            value[1] = ORSO_SLOT_I(0, type);
+            break;
         }
+
         case ORSO_TYPE_STRUCT: {
             for (i32 i = 0; i < orso_bytes_to_slots(type->data.struct_.total_size); i++) {
-                return_slots[i] = ORSO_SLOT_I(0, &OrsoTypeVoid);
+                value[i] = ORSO_SLOT_I(0, &OrsoTypeVoid);
             }
-            return;
+            break;
         }
 
         case ORSO_TYPE_FUNCTION:
@@ -2432,7 +2479,15 @@ void orso_zero_value(OrsoType* type, OrsoSymbolTable* symbol_table, OrsoSlot* re
         case ORSO_TYPE_UNDEFINED:
         case ORSO_TYPE_UNRESOLVED:
             UNREACHABLE();
-            return_slots[0] = ORSO_SLOT_I(0, &OrsoTypeInvalid);
-            return;
+            value[0] = ORSO_SLOT_I(0, &OrsoTypeInvalid);
+            break;
     }
+
+    i32 zero_index = add_value_to_ast_constant_stack(ast, value, type);
+
+    i32 absent;
+    key_index = kh_put(ptr2i32, ast->type_to_zero_index, type, &absent);
+    kh_value(ast->type_to_zero_index, key_index) = zero_index;
+
+    return zero_index;
 }
