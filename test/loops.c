@@ -56,9 +56,9 @@ INTERPRETER_TEST(no_braces_mix_branches,
 	"y := -2; until not (y = y + 1) do print 1 else unless false { print 2; } else print 3;",
 	"1\n2\n")
 
-INTERPRETER_TEST(cannot_use_then_instead_of_do,
+INTERPRETER_ERROR_TEST(cannot_use_then_instead_of_do,
 	"y := -2; until not (y = y + 1) then print 1 else unless false { print 2; } else print 3;",
-	"1\n2\n")
+	0, "cannot use then instead of do", 0)
 
 // INTERPRETER_TEST(for_in_integer,
 // 	"for i in 3 { print i; }",

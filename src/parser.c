@@ -170,8 +170,8 @@ OrsoASTNode* orso_ast_node_new(OrsoAST* ast, OrsoASTNodeType node_type, Token st
         case ORSO_AST_NODE_TYPE_EXPRESSION_UNARY:
         case ORSO_AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT:
         case ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION:
-        case ORSO_AST_NODE_TYPE_STATEMENT_PRINT:
-        case ORSO_AST_NODE_TYPE_STATEMENT_PRINT_EXPR:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_PRINT:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_PRINT_EXPR:
         case ORSO_AST_NODE_TYPE_STATEMENT_RETURN:
         case ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY:
         case ORSO_AST_NODE_TYPE_EXPRESSION_STATEMENT:
@@ -337,8 +337,6 @@ bool orso_ast_node_type_is_decl_or_stmt(OrsoASTNodeType node_type) {
         
         case ORSO_AST_NODE_TYPE_DECLARATION:
         case ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION:
-        case ORSO_AST_NODE_TYPE_STATEMENT_PRINT:
-        case ORSO_AST_NODE_TYPE_STATEMENT_PRINT_EXPR:
         case ORSO_AST_NODE_TYPE_STATEMENT_RETURN:
             return true;
     }
@@ -351,8 +349,6 @@ bool orso_ast_node_type_is_expression(OrsoASTNodeType node_type) {
         
         case ORSO_AST_NODE_TYPE_DECLARATION:
         case ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION:
-        case ORSO_AST_NODE_TYPE_STATEMENT_PRINT:
-        case ORSO_AST_NODE_TYPE_STATEMENT_PRINT_EXPR:
         case ORSO_AST_NODE_TYPE_STATEMENT_RETURN:
         case ORSO_AST_NODE_TYPE_UNDEFINED:
             return false;
@@ -544,7 +540,13 @@ static OrsoASTNode* ifelse(Parser* parser) {
             consume(parser, TOKEN_THEN, "Expect 'then' or block after condition.");
         }
 
-        expression_node->data.branch.then_expression = statement(parser, true);
+        {
+            OrsoASTNode* then_statement = statement(parser, true);
+            OrsoASTNode* then_expression = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_EXPRESSION_STATEMENT, then_statement->start);
+            then_expression->data.statement = then_statement;
+            then_expression->end = then_statement->end;
+            expression_node->data.branch.then_expression = then_expression;
+        }
     }
 
     if (!match(parser, TOKEN_ELSE)) {
@@ -552,7 +554,13 @@ static OrsoASTNode* ifelse(Parser* parser) {
         return expression_node;
     }
 
-    expression_node->data.branch.else_expression = statement(parser, true);
+    {
+        OrsoASTNode* else_statement = statement(parser, true);
+        OrsoASTNode* else_expression = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_EXPRESSION_STATEMENT, else_statement->start);
+        else_expression->data.statement = else_statement;
+        else_expression->end = else_statement->end;
+        expression_node->data.branch.else_expression = else_expression;
+    }
 
     expression_node->end = parser->previous;
 
@@ -740,7 +748,20 @@ static OrsoASTNode* struct_(Parser* parser) {
 
     consume(parser, TOKEN_BRACE_CLOSE, "Expect close brace.");
 
+    struct_definition->end = parser->previous;
+
     return struct_definition;
+}
+
+static OrsoASTNode* print_(Parser* parser) {
+    OrsoASTNodeType node_type = parser->previous.type == TOKEN_PRINT ? ORSO_AST_NODE_TYPE_EXPRESSION_PRINT : ORSO_AST_NODE_TYPE_EXPRESSION_PRINT_EXPR;
+    OrsoASTNode* print_expression = orso_ast_node_new(parser->ast, node_type, parser->previous);
+
+    print_expression->data.expression = expression(parser, false);
+
+    print_expression->end = parser->previous;
+
+    return print_expression;
 }
 
 ParseRule rules[] = {
@@ -794,8 +815,8 @@ ParseRule rules[] = {
     [TOKEN_FALSE]                   = { literal,    NULL,       PREC_NONE },
     [TOKEN_NULL]                    = { literal,    NULL,       PREC_NONE },
     [TOKEN_RETURN]                  = { NULL,       NULL,       PREC_NONE },
-    [TOKEN_PRINT_EXPR]              = { NULL,       NULL,       PREC_NONE },
-    [TOKEN_PRINT]                   = { NULL,       NULL,       PREC_NONE },
+    [TOKEN_PRINT_EXPR]              = { print_,     NULL,       PREC_NONE },
+    [TOKEN_PRINT]                   = { print_,     NULL,       PREC_NONE },
     [TOKEN_ERROR]                   = { NULL,       NULL,       PREC_NONE },
     [TOKEN_EOF]                     = { NULL,       NULL,       PREC_NONE },
     [TOKEN_SIZE]                    = { NULL,       NULL,       PREC_NONE },
@@ -889,16 +910,13 @@ static OrsoASTNode* expression(Parser* parser, bool type_context) {
     return expression_node;
 }
 
-static OrsoASTNode* statement(Parser* parser, bool as_expression_statement) {
+// TODO: I don't even remember why i have as_expression_statement here... i don't know whats the point???
+static OrsoASTNode* statement(Parser* parser, bool omit_end_of_statement) {
     bool is_return = false;
     OrsoASTNodeType node_type;
     if (match(parser, TOKEN_RETURN)) {
         node_type = ORSO_AST_NODE_TYPE_STATEMENT_RETURN;
         is_return = true;
-    } else if (match(parser, TOKEN_PRINT_EXPR)) { 
-        node_type = ORSO_AST_NODE_TYPE_STATEMENT_PRINT_EXPR;
-    } else if (match(parser, TOKEN_PRINT)) {
-        node_type = ORSO_AST_NODE_TYPE_STATEMENT_PRINT;
     } else {
         node_type = ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION;
     }
@@ -915,18 +933,11 @@ static OrsoASTNode* statement(Parser* parser, bool as_expression_statement) {
         statement_node->data.expression = expression(parser, false);
     }
         
-    if (!as_expression_statement) {
+    if (!omit_end_of_statement) {
         consume(parser, TOKEN_SEMICOLON, "Expect end of statement semicolon.");
     }
 
     statement_node->end = parser->previous;
-
-    if (as_expression_statement) {
-        OrsoASTNode* expression_statement = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_EXPRESSION_STATEMENT, statement_node->start);
-        expression_statement->data.statement = statement_node;
-        
-        return expression_statement;
-    }
 
     return statement_node;
 }
@@ -1124,11 +1135,11 @@ void ast_print_ast_node(OrsoASTNode* node, i32 initial, const char* prefix) {
             printf("expression: %s\n", type_info);
             ast_print_ast_node(node->data.statement, initial + 1, "statement: ");
             break;
-        case ORSO_AST_NODE_TYPE_STATEMENT_PRINT_EXPR:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_PRINT_EXPR:
             printf("print_expr\n");
             ast_print_ast_node(node->data.expression, initial + 1, "");
             break;
-        case ORSO_AST_NODE_TYPE_STATEMENT_PRINT:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_PRINT:
             printf("print\n");
             ast_print_ast_node(node->data.expression, initial + 1, "");
             break;

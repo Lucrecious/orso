@@ -968,6 +968,35 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode
             break;
         }
 
+        case ORSO_AST_NODE_TYPE_EXPRESSION_PRINT:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_PRINT_EXPR: {
+            expression(vm, compiler, ast, expression_node->data.expression, chunk);
+
+            if (!ORSO_TYPE_IS_UNION(expression_node->data.expression->value_type)) {
+                emit_put_in_union(compiler, expression_node->data.expression->value_type, chunk, expression_node->start.line);
+            }
+
+            Token start = expression_node->data.expression->start;
+            Token end = expression_node->data.expression->end;
+
+            OrsoString* expression_string = orso_new_string_from_cstrn(start.start, (end.start + end.length) - start.start);
+
+            OrsoSlot slot = ORSO_SLOT_P(expression_string, &OrsoTypeString);
+            emit_constant(compiler, chunk, slot, start.line);
+
+            OrsoSlot value_type = ORSO_SLOT_P(expression_node->data.expression->value_type, &OrsoTypeType);
+            emit_constant(compiler, chunk, value_type, start.line);
+
+            if (expression_node->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_PRINT_EXPR) {
+                emit_instruction(ORSO_OP_PRINT_EXPR, compiler, chunk, start.line);
+            } else {
+                emit_instruction(ORSO_OP_PRINT, compiler, chunk, start.line);
+            }
+
+            emit_instruction(ORSO_OP_PUSH_0, compiler, chunk, start.line);
+            break;
+        }
+
         case ORSO_AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION: {
             ASSERT(false, "not implemented");
             break;
@@ -977,8 +1006,6 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode
         case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE: UNREACHABLE();
 
         case ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION:
-        case ORSO_AST_NODE_TYPE_STATEMENT_PRINT:
-        case ORSO_AST_NODE_TYPE_STATEMENT_PRINT_EXPR:
         case ORSO_AST_NODE_TYPE_STATEMENT_RETURN:
         case ORSO_AST_NODE_TYPE_UNDEFINED:
         case ORSO_AST_NODE_TYPE_DECLARATION: UNREACHABLE();
@@ -1035,32 +1062,6 @@ static void declaration(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNod
             break;
         }
         
-        case ORSO_AST_NODE_TYPE_STATEMENT_PRINT:
-        case ORSO_AST_NODE_TYPE_STATEMENT_PRINT_EXPR: {
-                expression(vm, compiler, ast, declaration->data.expression, chunk);
-
-                if (!ORSO_TYPE_IS_UNION(declaration->data.expression->value_type)) {
-                    emit_put_in_union(compiler, declaration->data.expression->value_type, chunk, declaration->start.line);
-                }
-
-                Token start = declaration->data.expression->start;
-                Token end = declaration->data.expression->end;
-
-                OrsoString* expression_string = orso_new_string_from_cstrn(start.start, (end.start + end.length) - start.start);
-
-                OrsoSlot slot = ORSO_SLOT_P(expression_string, &OrsoTypeString);
-                emit_constant(compiler, chunk, slot, start.line);
-
-                OrsoSlot value_type = ORSO_SLOT_P(declaration->data.expression->value_type, &OrsoTypeType);
-                emit_constant(compiler, chunk, value_type, start.line);
-
-                if (declaration->node_type == ORSO_AST_NODE_TYPE_STATEMENT_PRINT_EXPR) {
-                    emit_instruction(ORSO_OP_PRINT_EXPR, compiler, chunk, start.line);
-                } else {
-                    emit_instruction(ORSO_OP_PRINT, compiler, chunk, start.line);
-                }
-            break;
-        }
 
         case ORSO_AST_NODE_TYPE_STATEMENT_RETURN: {
             if (declaration->data.expression) {

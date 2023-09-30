@@ -1,10 +1,2 @@
-Bar :: struct {
-    foo: Foo;
-};
-
-Foo :: struct  {
-    bar: Bar;
-    x := 10;
-} or struct {
-    bar: Bar;
-};
+ y := -2; 
+ unless not (y = y + 1) then { print 1; };
