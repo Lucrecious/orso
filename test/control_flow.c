@@ -73,16 +73,16 @@ INTERPRETER_TEST(no_braces_else,
 	"1\n")
 
 INTERPRETER_TEST(no_braces_more_branches,
-	"y := 10; x := unless y < 5 then print 1 else if x < 20 then print 2 else print 3; print x;",
+	"y := 10; x := unless y < 5 then print 1 else if y < 20 then print 2 else print 3; print x;",
 	"1\nnull\n")
 
 INTERPRETER_TEST(no_braces_mix_branches,
-	"y := 10; x := if y < 5 then print 1 else unless x < 20 { print 2; } else print 3; print x;",
+	"y := 10; x := if y < 5 then print 1 else unless y < 20 { print 2; } else print 3; print x;",
 	"3\nnull\n")
 
-INTERPRETER_TEST(cannot_use_do_instead_of_then,
+INTERPRETER_ERROR_TEST(cannot_use_do_instead_of_then,
 	"y := 10; x := if y < 5 do print 1 else unless x < 20 { print 2; } else print 3; print x;",
-	"3\nnull\n")
+	ORSO_ERROR_COMPILE, 0, "cannot use do instead of then for ifs")
 
 MU_TEST_SUITE(tests) {
     MU_RUN_TEST(then_branch_print);

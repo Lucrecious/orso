@@ -341,7 +341,7 @@ static i32 add_value_to_ast_constant_stack(OrsoAST* ast, OrsoSlot* value, OrsoTy
 }
 
 static bool is_builtin_function(OrsoAST* ast, OrsoSymbol* identifier, OrsoNativeFunction** function) {
-    if (strncmp(identifier->text, "clock", i32min(5, identifier->length)) == 0) {
+    if (identifier->length == 5 && strncmp(identifier->text, "clock", 5) == 0) {
         OrsoType* function_type = orso_type_set_fetch_native_function(&ast->type_set, &OrsoTypeFloat64, NULL, 0);
         *function = orso_new_native_function(clock_native, function_type);
         return true;

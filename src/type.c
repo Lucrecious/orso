@@ -582,7 +582,7 @@ OrsoType* orso_binary_arithmetic_cast(OrsoType* a, OrsoType* b, TokenType operat
         return a_count > b_count ? a : b;
     }
 
-    return a_count > 32 || b_count > 32 ? &OrsoTypeFloat64 : &OrsoTypeFloat32;
+    return a_count > 4 || b_count > 4 ? &OrsoTypeFloat64 : &OrsoTypeFloat32;
 }
 
 void orso_binary_comparison_casts(OrsoType* a, OrsoType* b, OrsoType** a_cast, OrsoType** b_cast) {
