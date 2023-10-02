@@ -23,7 +23,7 @@ typedef enum TokenType {
     TOKEN_DIRECTIVE,
 
     // keywords
-    TOKEN_STRUCT, TOKEN_FUNCTION, TOKEN_NOT, TOKEN_AND, TOKEN_OR,
+    TOKEN_STRUCT, TOKEN_NOT, TOKEN_AND, TOKEN_OR,
     TOKEN_IF, TOKEN_UNLESS, TOKEN_ELSE, TOKEN_THEN,
     TOKEN_WHILE, TOKEN_UNTIL, TOKEN_FOR, TOKEN_DO,
     TOKEN_TRUE, TOKEN_FALSE, TOKEN_NULL,
@@ -43,6 +43,7 @@ typedef struct Token {
 } Token;
 
 typedef struct Lexer {
+    Token previous_token;
     OrsoErrorFunction error_fn;
     i32 line;
     char* start;

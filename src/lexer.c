@@ -6,6 +6,7 @@
 #include <stdlib.h>
 
 void lexer_init(Lexer* lexer, const char* code) {
+    lexer->previous_token = (Token){ .length = 0, .line = 0, .start = 0, .type = TOKEN_ERROR };
     lexer->line = 0;
     lexer->start = (char*)code;
     lexer->current = (char*)code;
@@ -218,7 +219,6 @@ static TokenType identifier_type(Lexer* lexer) {
             if (lexer->current - lexer->start > 1) {
                 switch (lexer->start[1]) {
                     case 'a': return check_keyword(lexer, 2, 3, "lse", TOKEN_FALSE);
-                    case 'u': return check_keyword(lexer, 2, 2, "nc", TOKEN_FUNCTION);
                     case 'o': return check_keyword(lexer, 2, 1, "r", TOKEN_FOR);
                 }
             }
@@ -308,7 +308,7 @@ static Token directive(Lexer* lexer) {
     return create_token(lexer, TOKEN_DIRECTIVE);
 }
 
-Token lexer_next_token(Lexer* lexer) {
+Token _lexer_next_token(Lexer* lexer) {
     // skip preceeding comments and whitespace
     while (true) {
         skip_whitespace(lexer);
@@ -322,6 +322,32 @@ Token lexer_next_token(Lexer* lexer) {
     }
 
     lexer->start = lexer->current;
+
+    if (lexer->previous_token.line != lexer->line || is_at_end(lexer)) {
+        switch (lexer->previous_token.type) {
+            case TOKEN_IDENTIFIER:
+            case TOKEN_STRING:
+            case TOKEN_DIRECTIVE:
+            case TOKEN_ANNOTATION:
+            case TOKEN_FALSE:
+            case TOKEN_TRUE:
+            case TOKEN_SYMBOL:
+            case TOKEN_RETURN:
+            case TOKEN_NULL:
+            case TOKEN_BRACE_CLOSE:
+            case TOKEN_BRACKET_CLOSE:
+            case TOKEN_PARENTHESIS_CLOSE:
+            case TOKEN_INTEGER:
+            case TOKEN_FLOAT:
+                return  (Token) {
+                    .length = 0,
+                    .line = lexer->line,
+                    .start = lexer->start,
+                    .type = TOKEN_SEMICOLON,
+                };
+            default: break;
+        }
+    }
 
     if (is_at_end(lexer)) {
         return create_token(lexer, TOKEN_EOF);
@@ -369,4 +395,9 @@ Token lexer_next_token(Lexer* lexer) {
     }
 
     return error_token(lexer, "Unexpected character.");
+}
+
+Token lexer_next_token(Lexer* lexer) {
+    lexer->previous_token = _lexer_next_token(lexer);
+    return lexer->previous_token;
 }

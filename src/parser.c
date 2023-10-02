@@ -791,7 +791,6 @@ ParseRule rules[] = {
     [TOKEN_FLOAT]                   = { number,     NULL,       PREC_NONE },
     [TOKEN_ANNOTATION]              = { NULL,       NULL,       PREC_NONE },
     [TOKEN_STRUCT]                  = { struct_,    NULL,       PREC_NONE },
-    [TOKEN_FUNCTION]                = { NULL,       NULL,       PREC_NONE },
     [TOKEN_NOT]                     = { unary,      NULL,       PREC_NONE },
     [TOKEN_AND]                     = { NULL,       binary,     PREC_AND },
     [TOKEN_OR]                      = { NULL,       binary,     PREC_OR },
