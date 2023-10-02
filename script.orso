@@ -1,9 +1,7 @@
-A := 10;
+fib :: (n: i32) -> i32 {
+    FIB10 :: #fold fib(10);
 
-{
-    A := 5;
-    {
-        B :: A;
-        print B;
-    };
+    if n == 10 then return FIB10;
+
+    return if n < 2 then n else fib(n - 1) + fib(n -2);
 };

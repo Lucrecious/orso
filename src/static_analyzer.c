@@ -397,8 +397,8 @@ static i32 evaluate_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, bool 
 
 static bool is_declaration_resolved(OrsoASTNode* entity) {
     OrsoASTDeclaration* declaration = &entity->data.declaration;
-    if (entity->value_type == &OrsoTypeInvalid || (declaration->initial_value_expression && declaration->initial_value_expression->value_type == &OrsoTypeInvalid)) {
-        return false;
+    if (entity->value_type == &OrsoTypeInvalid) {
+        return true;
     }
 
     return (entity->value_index >= 0 || (declaration->initial_value_expression && declaration->initial_value_expression->value_type != &OrsoTypeUnresolved)) && entity->value_type != &OrsoTypeUnresolved;
@@ -1810,7 +1810,7 @@ static Entity* get_resolved_entity_by_identifier(
                     return NULL;
                 }
 
-                if (dependency->ast_node->value_type_narrowed->kind == ORSO_TYPE_POINTER
+                if (ORSO_TYPE_IS_POINTER(dependency->ast_node->value_type_narrowed)
                 || dependency->ast_node->value_type_narrowed->kind == ORSO_TYPE_NATIVE_FUNCTION
                 || ORSO_TYPE_IS_FUNCTION(dependency->ast_node->value_type_narrowed)) {
                     break;
@@ -2292,7 +2292,7 @@ static void resolve_statement(
 
             OrsoType* function_type = function_scope->creator->value_type;
             OrsoType* function_return_type = function_scope ? function_type->data.function.return_type : &OrsoTypeVoid;
-            unless (orso_type_fits(function_return_type, return_expression_type)) {
+            unless (return_expression_type == &OrsoTypeInvalid || orso_type_fits(function_return_type, return_expression_type)) {
                 error_range(analyzer, statement->data.expression->start, statement->data.expression->end, "Requires explict cast to return.");
             }
             break;
