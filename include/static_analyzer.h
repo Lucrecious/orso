@@ -25,7 +25,6 @@ typedef struct OrsoStaticAnalyzer {
     } dependencies;
 
     bool had_error;
-    bool panic_mode;
 } OrsoStaticAnalyzer;
 
 void orso_static_analyzer_init(OrsoStaticAnalyzer* analyzer, OrsoWriteFunction write_fn, OrsoErrorFunction error_fn);

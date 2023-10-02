@@ -310,9 +310,22 @@ compile error, 2: cannot return within an expression being set to a declaration
 ## cannot return within a declaration (not gaurenteed)
 foo :: (n: bool) -> void {
     x := if n { return; };
-};
+}1;
 print foo;
 # ---
 compile error 2: cannot return within an expression being set to a declaration
 # ---
+
+## calling a function as the expression
+foo := (a: i32, b: i32) -> i32 {
+    return a + b;
+}(2, 2);
+
+print foo;
+# ---
+4
+# ---
+
+## function shortened form
+abs :: (n: i32) -> i32 => if n < 0 then -n else n;
 

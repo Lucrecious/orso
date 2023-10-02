@@ -437,17 +437,9 @@ static OrsoASTNode* convert_assignment_expression(Parser* parser, OrsoASTNode* l
     return assignment;
 }
 
-static OrsoASTNode* convert_call_expression(Parser* parser, OrsoASTNode* left_operand, OrsoASTNode* call) {
-    if (left_operand->node_type != ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY) {
-        error_at(parser, &left_operand->start, "Expect function name.");
-        left_operand->node_type = ORSO_AST_NODE_TYPE_UNDEFINED;
-        return left_operand;
-    }
-
+static OrsoASTNode* convert_call_expression(OrsoASTNode* left_operand, OrsoASTNode* call) {
     call->start = left_operand->start;
-
     call->data.call.callee = left_operand;
-
     return call;
 }
 
@@ -854,7 +846,7 @@ static OrsoASTNode* parse_precedence(Parser* parser, Precedence precedence) {
                 left_operand = right_operand;
                 break;
             case ORSO_AST_NODE_TYPE_EXPRESSION_CALL:
-                left_operand = convert_call_expression(parser, left_operand, right_operand);
+                left_operand = convert_call_expression(left_operand, right_operand);
                 break;
             case ORSO_AST_NODE_TYPE_EXPRESSION_ASSIGNMENT:
                 left_operand = convert_assignment_expression(parser, left_operand, right_operand);

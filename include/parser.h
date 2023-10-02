@@ -193,7 +193,6 @@ typedef struct OrsoAST {
 
     khash_t(ptr2i32)* type_to_zero_index;
 
-    i32 i;
     OrsoSymbolTable* symbols;
 } OrsoAST;
 
