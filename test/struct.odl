@@ -104,3 +104,40 @@ print foo;
 # ---
 foo { b: &bar|void; } // TODO: find a way to test that no new types are made, maybe will have to be found with a bug
 # ---
+
+## recursive type that can be resolved
+Foo :: struct {
+    bar: Bar;
+};
+
+Bar :: struct {
+    baz: Baz;
+};
+
+Baz :: struct {
+    foo: &Foo;
+};
+
+foo: Foo;
+# ---
+# ---
+
+## recursive type that cannot be resolved
+## recursive type that can be resolved
+Foo :: struct {
+    bar: Bar;
+};
+
+Bar :: struct {
+    baz: Baz;
+};
+
+Baz :: struct {
+    foo: Foo;
+};
+
+foo: Foo;
+# ---
+Incomplete field.
+# ---
+

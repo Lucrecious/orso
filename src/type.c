@@ -17,6 +17,15 @@ bool orso_union_type_has_type(OrsoType* type, OrsoType* subtype) {
     return false;
 }
 bool orso_struct_type_is_incomplete(OrsoType* type) {
+    if (ORSO_TYPE_IS_UNION(type)) {
+        for (i32 i = 0; i < type->data.union_.count; i++) {
+            unless (orso_struct_type_is_incomplete(type->data.union_.types[i])) {
+                continue;
+            }
+
+            return true;
+        }
+    }
     return ORSO_TYPE_IS_STRUCT(type) && type->data.struct_.field_count == 0;
 }
 
@@ -237,6 +246,10 @@ bool orso_type_is_or_has_integer(OrsoType* type, bool include_bool) {
 }
 
 i32 orso_bytes_to_slots(i32 byte_count) {
+    if (byte_count == 0) {
+        return 1;
+    }
+
     return byte_count / ORSO_SLOT_SIZE_BYTES + (byte_count % ORSO_SLOT_SIZE_BYTES != 0);
 }
 

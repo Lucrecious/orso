@@ -19,6 +19,8 @@
     node->value_index = -1;\
 } while(false)
 
+typedef bool (*IsCircularDependencyFunc)(OrsoStaticAnalyzer*, OrsoASTNode*);
+
 static void clock_native(OrsoSlot* arguments, OrsoSlot* result) {
     (void)arguments;
     result[0] = ORSO_SLOT_F((double)clock() / CLOCKS_PER_SEC, &OrsoTypeFloat64);
@@ -738,6 +740,122 @@ static void fold_function_signature(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, 
     expression->value_index = index;
 }
 
+/* 
+ * We stop looking for circular dependencies at function boundaries. This took me a while to reason but this
+ * is okay to do even with constant folding. We can think about compiling a progarm with a language like in two different ways.
+ * Right now, the way the compiler works is through a principle I call "eager resolution". Which means that when a problem
+ * comes up during static analysis (i.e. an unresolved expression) we immediately go to resolve it. For example, a problem
+ * that may occur is that while trying to resolve the type of an entity, you need to resolve an expression, but to resolve
+ * that expression, you might need to perform a folding operation. My compiler walks down the line of dependencies and resolves
+ * all the problems that come along the way.
+ * 
+ * Circular dependencies are easily to avoid with non-functions but recursion makes things a little weird. Since a function
+ * can dependent on itself. We can have a weird situation like this:
+ *          
+ *          foo();
+ * 
+ *          foo :: null or (n: i32) -> void {
+ *              if n < 0 {
+ *                  return 0;
+ *              };
+ *              
+ *              return foo(n - 1);
+ *          };
+ * 
+ * Technically... this should run just fine right? null or function literal, and foo being a constant, means foo 
+ * should hold the address to the function expression on the right side of the OR. This is allowed and my language
+ * and should be handled.
+ * 
+ * The way my dependency system works is through expressions. Expressions always, always, always rely on other expressions.
+ * In the case above, when foo(n - 1) is about to be analyzed this is how the dependency chain looks like.
+ * 
+ *          NOTE: so far only the following things create dependencies.
+ *              - The top level type of a declaration
+ *              - The top level expression of a declaration
+ *              - Function definitons
+ *            this is why the dependency chain is not foo() -> foo, even though foo() technically depends on foo.
+ *            I could make dependencies from each and all dependencies but that's way too much and I'm pretty sure
+ *            is unnecessary since a lot of dependencies would be redundant. These are supposed to skip redundant
+ *            dependencies.
+ * 
+ *          foo() => // this would not be in the chain, but it's here because it's what kicks off the chain
+ *              (null or (n: i32) -> void { ... }) => // foo declaration expression
+ *                  (n: i32) -> void { ... } => // function definition
+ *                      foo(n - 1) // this would not be in the chain, but again, it kicks off the above since foo is not resolved.
+ * 
+ * At this point, foo does not have the function address yet during the anaysis! It's still in the process of being resolved...
+ * BUT once its expression is resolved, it will be good go! At this point, we STILL don't really know what foo is!
+ * 
+ * 
+ * If I were to naively check of dependencies the chain would contain to look like this (starting from foo(n - 1))
+ * 
+ *          foo(n - 1) => 
+ *              (null or (n: i32) -> void { ... }) => // foo declaration expression
+ * 
+ * Then we've come back and hit an expression we haven't resolved yet (remember the or wasn't resolved
+ * because we were in the middle of resolving (n: i32) -> void { ... } due to the principle of eager resolution)
+ * and therefore have a circular dependency, right? However, I found a different to do things that could work.
+ * 
+ * Imagine if instead of resolving the function block right away, I actually waited until the declaration resolved
+ * before trying to analysis the function body! Well, then I can use the address of the function, and as long as I
+ * store the scope and body, I can put it in a queue to analysis later. After I am sure I can safely resolve the
+ * function body, then I will. This wouldn't have to deal with circular dependencies.
+ * 
+ * This truth is that the above *should* work (although I haven't tested it) because of part of the proof reasoning below
+ * but this is, in truth, a little annoying to implement. It means I need to sort of break the recursion scheme and
+ * eager resolution princple. I have to allocate more memory on the heap. It's just not an ideal soluton and makes
+ * things much messier...
+ * 
+ * However, the other reasoning of the proof below suggests that the order in which I resolve expressions shouldn't matter.
+ * So I can't naively just walk up the dependency chain and check for duplicates, I need to be a tiny bit smarter. Since the
+ * order in which I resolve things doesn't matter as long as I have the data there (the scope chains basically).
+ * 
+ * I noticed that if I analyse a function body's when I know it's safe, the circular dependencies *must* be either
+ * be localized inside the function OR will hit a circular dependency of constants on the outer layer - but in either
+ * case - these circular dependencies will be a result of unused entities trying to be resolved from *inside* the function.
+ * 
+ * Therefore instead of a simply looking for duplicate expression pointers in the entire dependency chain, I start
+ * backwards and when I see a dependency to a function definition, I stop looking. This mimics the behavior of the
+ * ideal solution but allows me not break any recursion.
+ * 
+ */
+static bool is_value_circular_dependency(OrsoStaticAnalyzer* analyzer, OrsoASTNode* new_dependency) {
+    for (i32 i = analyzer->dependencies.count - 1; i >= 0; i--) {
+        OrsoAnalysisDependency* dependency = &analyzer->dependencies.chain[i];
+
+        if (dependency->ast_node->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION) {
+            return false;
+        }
+
+        if (dependency->ast_node == new_dependency) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static bool push_dependency(OrsoStaticAnalyzer* analyzer, OrsoASTNode* node, int fold_level, IsCircularDependencyFunc is_circular_dependency) {
+    if (is_circular_dependency(analyzer, node)) {
+        error_range(analyzer, node->start, node->end, "Start of a circular dependency.");
+        return false;
+    }
+
+    OrsoAnalysisDependency dependency = {
+        .fold_level = fold_level,
+        .ast_node = node,
+    };
+
+    if (sb_count(analyzer->dependencies.chain) <= analyzer->dependencies.count) {
+        sb_push(analyzer->dependencies.chain, dependency);
+        analyzer->dependencies.count = sb_count(analyzer->dependencies.chain);
+    } else {
+        analyzer->dependencies.chain[analyzer->dependencies.count++] = dependency;
+    }
+
+    return true;
+}
+
 static void resolve_declarations(
         OrsoStaticAnalyzer* analyzer,
         OrsoAST* ast,
@@ -1300,91 +1418,15 @@ static void declare_entity(OrsoStaticAnalyzer* analyzer, OrsoScope* scope, OrsoA
     add_entity(scope, identifier, entity);
 }
 
-/* 
- * We stop looking for circular dependencies at function boundaries. This took me a while to reason but this
- * is okay to do even with constant folding. We can think about compiling a progarm with a language like in two different ways.
- * Right now, the way the compiler works is through a principle I call "eager resolution". Which means that when a problem
- * comes up during static analysis (i.e. an unresolved expression) we immediately go to resolve it. For example, a problem
- * that may occur is that while trying to resolve the type of an entity, you need to resolve an expression, but to resolve
- * that expression, you might need to perform a folding operation. My compiler walks down the line of dependencies and resolves
- * all the problems that come along the way.
- * 
- * Circular dependencies are easily to avoid with non-functions but recursion makes things a little weird. Since a function
- * can dependent on itself. We can have a weird situation like this:
- *          
- *          foo();
- * 
- *          foo :: null or (n: i32) -> void {
- *              if n < 0 {
- *                  return 0;
- *              };
- *              
- *              return foo(n - 1);
- *          };
- * 
- * Technically... this should run just fine right? null or function literal, and foo being a constant, means foo 
- * should hold the address to the function expression on the right side of the OR. This is allowed and my language
- * and should be handled.
- * 
- * The way my dependency system works is through expressions. Expressions always, always, always rely on other expressions.
- * In the case above, when foo(n - 1) is about to be analyzed this is how the dependency chain looks like.
- * 
- *          NOTE: so far only the following things create dependencies.
- *              - The top level type of a declaration
- *              - The top level expression of a declaration
- *              - Function definitons
- *            this is why the dependency chain is not foo() -> foo, even though foo() technically depends on foo.
- *            I could make dependencies from each and all dependencies but that's way too much and I'm pretty sure
- *            is unnecessary since a lot of dependencies would be redundant. These are supposed to skip redundant
- *            dependencies.
- * 
- *          foo() => // this would not be in the chain, but it's here because it's what kicks off the chain
- *              (null or (n: i32) -> void { ... }) => // foo declaration expression
- *                  (n: i32) -> void { ... } => // function definition
- *                      foo(n - 1) // this would not be in the chain, but again, it kicks off the above since foo is not resolved.
- * 
- * At this point, foo does not have the function address yet during the anaysis! It's still in the process of being resolved...
- * BUT once its expression is resolved, it will be good go! At this point, we STILL don't really know what foo is!
- * 
- * 
- * If I were to naively check of dependencies the chain would contain to look like this (starting from foo(n - 1))
- * 
- *          foo(n - 1) => 
- *              (null or (n: i32) -> void { ... }) => // foo declaration expression
- * 
- * Then we've come back and hit an expression we haven't resolved yet (remember the or wasn't resolved
- * because we were in the middle of resolving (n: i32) -> void { ... } due to the principle of eager resolution)
- * and therefore have a circular dependency, right? However, I found a different to do things that could work.
- * 
- * Imagine if instead of resolving the function block right away, I actually waited until the declaration resolved
- * before trying to analysis the function body! Well, then I can use the address of the function, and as long as I
- * store the scope and body, I can put it in a queue to analysis later. After I am sure I can safely resolve the
- * function body, then I will. This wouldn't have to deal with circular dependencies.
- * 
- * This truth is that the above *should* work (although I haven't tested it) because of part of the proof reasoning below
- * but this is, in truth, a little annoying to implement. It means I need to sort of break the recursion scheme and
- * eager resolution princple. I have to allocate more memory on the heap. It's just not an ideal soluton and makes
- * things much messier...
- * 
- * However, the other reasoning of the proof below suggests that the order in which I resolve expressions shouldn't matter.
- * So I can't naively just walk up the dependency chain and check for duplicates, I need to be a tiny bit smarter. Since the
- * order in which I resolve things doesn't matter as long as I have the data there (the scope chains basically).
- * 
- * I noticed that if I analyse a function body's when I know it's safe, the circular dependencies *must* be either
- * be localized inside the function OR will hit a circular dependency of constants on the outer layer - but in either
- * case - these circular dependencies will be a result of unused entities trying to be resolved from *inside* the function.
- * 
- * Therefore instead of a simply looking for duplicate expression pointers in the entire dependency chain, I start
- * backwards and when I see a dependency to a function definition, I stop looking. This mimics the behavior of the
- * ideal solution but allows me not break any recursion.
- * 
- */
-static bool is_circular_dependency(OrsoStaticAnalyzer* analyzer, OrsoASTNode* new_dependency) {
+static bool is_sizing_circular_dependency(OrsoStaticAnalyzer* analyzer, OrsoASTNode* new_dependency) {
     for (i32 i = analyzer->dependencies.count - 1; i >= 0; i--) {
         OrsoAnalysisDependency* dependency = &analyzer->dependencies.chain[i];
 
-        if (dependency->ast_node->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION) {
-            return false;
+        if (orso_ast_node_type_is_expression(dependency->ast_node->node_type) && dependency->ast_node->value_type_narrowed == &OrsoTypeType) {
+            OrsoType* folded_type = get_folded_type(analyzer->ast, dependency->ast_node->value_index);
+            if (ORSO_TYPE_IS_POINTER(folded_type)) {
+                return false;
+            }
         }
 
         if (dependency->ast_node == new_dependency) {
@@ -1395,56 +1437,35 @@ static bool is_circular_dependency(OrsoStaticAnalyzer* analyzer, OrsoASTNode* ne
     return false;
 }
 
-static bool push_dependency(OrsoStaticAnalyzer* analyzer, OrsoASTNode* node, int fold_level) {
-    if (is_circular_dependency(analyzer, node)) {
-        error_range(analyzer, node->start, node->end, "Start of a circular dependency.");
-        return false;
-    }
-
-    OrsoAnalysisDependency dependency = {
-        .fold_level = fold_level,
-        .ast_node = node,
-    };
-
-    if (sb_count(analyzer->dependencies.chain) <= analyzer->dependencies.count) {
-        sb_push(analyzer->dependencies.chain, dependency);
-        analyzer->dependencies.count = sb_count(analyzer->dependencies.chain);
-    } else {
-        analyzer->dependencies.chain[analyzer->dependencies.count++] = dependency;
-    }
-
-    return true;
-}
-
 static void pop_dependency(OrsoStaticAnalyzer* analyzer) {
     analyzer->dependencies.count--;
 }
 
-static bool struct_contains_incomplete_type(OrsoType* type) {
-    unless (ORSO_TYPE_IS_STRUCT(type)) {
-        return false;
-    }
+// static bool struct_contains_incomplete_type(OrsoType* type) {
+//     unless (ORSO_TYPE_IS_STRUCT(type)) {
+//         return false;
+//     }
 
-    if (type->data.struct_.field_count == 0) {
-        return true;
-    }
+//     if (type->data.struct_.field_count == 0) {
+//         return true;
+//     }
 
-    for (i32 i = 0; i < type->data.struct_.field_count; i++) {
-        OrsoType* field_type = type->data.struct_.field_types[i];
-        unless (struct_contains_incomplete_type(field_type)) {
-            continue;
-        }
+//     for (i32 i = 0; i < type->data.struct_.field_count; i++) {
+//         OrsoType* field_type = type->data.struct_.field_types[i];
+//         unless (struct_contains_incomplete_type(field_type)) {
+//             continue;
+//         }
 
-        return true;
-    }
+//         return true;
+//     }
 
-    return false;
-}
+//     return false;
+// }
 
 static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, AnalysisState state, OrsoASTNode* entity_declaration) {
     OrsoType* declaration_type = &OrsoTypeUnresolved;
     if (entity_declaration->value_type == &OrsoTypeUnresolved && entity_declaration->data.declaration.type_expression) {
-        bool pushed = push_dependency(analyzer, entity_declaration->data.declaration.type_expression, state.fold_level);
+        bool pushed = push_dependency(analyzer, entity_declaration->data.declaration.type_expression, state.fold_level, is_value_circular_dependency);
         if (pushed) {
             AnalysisState new_state = state;
             new_state.mode = MODE_CONSTANT_TIME | (state.mode & MODE_FOLDING_TIME);
@@ -1478,7 +1499,7 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
                 }
             }
 
-            bool pushed = push_dependency(analyzer, entity_declaration->data.declaration.initial_value_expression, new_state.fold_level);
+            bool pushed = push_dependency(analyzer, entity_declaration->data.declaration.initial_value_expression, new_state.fold_level, is_value_circular_dependency);
             if (pushed) {
                 orso_resolve_expression(analyzer, ast, new_state, RESOLVE_PREFERENCE_PREFER_NON_TYPE_EXPRESSION, entity_declaration->data.declaration.initial_value_expression);
                 pop_dependency(analyzer);
@@ -1489,13 +1510,13 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
                 INVALIDATE(entity_declaration->data.declaration.initial_value_expression);
             }
         } else {
-            if (is_circular_dependency(analyzer, initial_expression)) {
-                unless (ORSO_TYPE_IS_UNRESOLVED(declaration_type)) {
-                    entity_declaration->value_type = declaration_type;
-                }
-                error_range(analyzer, entity_declaration->start, entity_declaration->end, "Circular dependency (entity declaration)");
-                INVALIDATE(entity_declaration->data.declaration.initial_value_expression);
-            }
+            // if (is_sizing_circular_dependency(analyzer, initial_expression)) {
+            //     unless (ORSO_TYPE_IS_UNRESOLVED(declaration_type)) {
+            //         entity_declaration->value_type = declaration_type;
+            //     }
+            //     error_range(analyzer, entity_declaration->start, entity_declaration->end, "Circular dependency (entity declaration)");
+            //     INVALIDATE(entity_declaration->data.declaration.initial_value_expression);
+            // }
         }
     }
 
@@ -1532,6 +1553,14 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
         ASSERT(cast_node->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT, "must be implicit casting node");
         
         OrsoType* completed_struct_type = cast_node->data.expression->value_type_narrowed;
+        
+        // this means that we found out later that the struct this was supposed to be was actually invalid, so we need to fix the ast
+        if (ORSO_TYPE_IS_INVALID(completed_struct_type)) {
+            INVALIDATE(cast_node);
+            INVALIDATE(entity_declaration);
+            return;
+        }
+
         ASSERT(ORSO_TYPE_IS_STRUCT(completed_struct_type), "casted expression must be a struct type");
 
         if (orso_struct_type_is_incomplete(completed_struct_type)) {
@@ -1553,7 +1582,7 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
         INVALIDATE(entity_declaration);
     }
 
-    if (!entity_declaration->data.declaration.is_mutable) {
+    unless (entity_declaration->data.declaration.is_mutable) {
         if (initial_expression != NULL && ORSO_TYPE_IS_FUNCTION(initial_expression->value_type_narrowed)) {
             OrsoFunction* function = (OrsoFunction*)ast->folded_constants[initial_expression->value_index].as.p;
             if (function->binded_name == NULL) {
@@ -1564,6 +1593,8 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
         if (initial_expression != NULL
         && ORSO_TYPE_IS_STRUCT(initial_expression->value_type_narrowed)
         && (ORSO_TYPE_IS_UNRESOLVED(declaration_type) || declaration_type->kind == ORSO_TYPE_TYPE)) {
+            
+
             OrsoASTNode* to_struct_type = orso_ast_node_new(ast, ORSO_AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT, initial_expression->start);
             to_struct_type->value_type = &OrsoTypeType;
             to_struct_type->value_type_narrowed = &OrsoTypeType;
@@ -1624,15 +1655,10 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
 
         i32 value_index = -1;
 
-        // TODO: this doesn't work well with unions
-        if (struct_contains_incomplete_type(entity->node->value_type)) {
-            value_index = 1;
-        } else {
-            if (ORSO_TYPE_IS_UNION(entity_declaration->value_type) && !orso_type_fits(entity_declaration->value_type, &OrsoTypeVoid)) {
-                error_range(analyzer, entity_declaration->end, entity_declaration->end, "Non-void union types must have a default value.");
-            } else unless (ORSO_TYPE_IS_INVALID(entity->node->value_type)) {
-                value_index = orso_zero_value(ast, entity->node->value_type, &analyzer->symbols);
-            }
+        if (ORSO_TYPE_IS_UNION(entity_declaration->value_type) && !orso_type_fits(entity_declaration->value_type, &OrsoTypeVoid)) {
+            error_range(analyzer, entity_declaration->end, entity_declaration->end, "Non-void union types must have a default value.");
+        } else unless (ORSO_TYPE_IS_INVALID(entity->node->value_type)) {
+            value_index = orso_zero_value(ast, entity->node->value_type, &analyzer->symbols);
         }
 
         entity->node->value_index = value_index;
@@ -1764,7 +1790,7 @@ static Entity* get_resolved_entity_by_identifier(
 
     #define NEXT_SCOPE() if (is_function_scope) { passed_local_mutable_access_barrier = true; } *search_scope = (*search_scope)->outer
 
-        if (!orso_symbol_table_get(&(*search_scope)->named_entities, identifier, &entity_slot)) {
+        unless (orso_symbol_table_get(&(*search_scope)->named_entities, identifier, &entity_slot)) {
             NEXT_SCOPE();
             continue;
         }
@@ -1798,24 +1824,6 @@ static Entity* get_resolved_entity_by_identifier(
                     identifier_token, identifier_token,
                     "Cannot access mutable entity declared on a different fold level.");
             return NULL;
-        }
-
-        if (ORSO_TYPE_IS_STRUCT(entity->node->value_type)) {
-            for (i32 j_ = 0; j_ < analyzer->dependencies.count; j_++) {
-                i32 j = analyzer->dependencies.count - 1 - j_;
-
-                OrsoAnalysisDependency* dependency = &analyzer->dependencies.chain[j];
-                if (dependency->ast_node == entity->node->data.declaration.initial_value_expression) {
-                    error_range(analyzer, entity->node->start, entity->node->end, "Circular struct circular dependency");
-                    return NULL;
-                }
-
-                if (ORSO_TYPE_IS_POINTER(dependency->ast_node->value_type_narrowed)
-                || dependency->ast_node->value_type_narrowed->kind == ORSO_TYPE_NATIVE_FUNCTION
-                || ORSO_TYPE_IS_FUNCTION(dependency->ast_node->value_type_narrowed)) {
-                    break;
-                }
-            }
         }
 
         if (ORSO_TYPE_IS_FUNCTION(entity->node->value_type)) {
@@ -1981,7 +1989,7 @@ static void resolve_function_expression(
 
     OrsoType* return_type = &OrsoTypeVoid;
     if (definition->return_type_expression) {
-        bool pushed = push_dependency(analyzer, definition->return_type_expression, state.fold_level);
+        bool pushed = push_dependency(analyzer, definition->return_type_expression, state.fold_level, is_value_circular_dependency);
         if (pushed) {
             AnalysisState new_state = state;
             new_state.mode = MODE_CONSTANT_TIME | (state.mode & MODE_FOLDING_TIME);
@@ -2027,7 +2035,7 @@ static void resolve_function_expression(
 
     ASSERT(definition->block->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_BLOCK, "must be block expression");
 
-    bool pushed = push_dependency(analyzer, function_definition_expression, state.fold_level);
+    bool pushed = push_dependency(analyzer, function_definition_expression, state.fold_level, is_value_circular_dependency);
     if (pushed) {
         AnalysisState new_state = state;
         new_state.mode = MODE_RUNTIME;
@@ -2243,12 +2251,19 @@ static void resolve_struct_definition(OrsoStaticAnalyzer* analyzer, OrsoAST* ast
         free(field_names[i]);
     }
 
-    struct_definition->value_type = complete_struct_type;
-    struct_definition->value_type_narrowed = complete_struct_type;
+    i32 incomplete_index = -1;
+    for (i32 i = 0; i < complete_struct_type->data.struct_.field_count; i++) {
+        OrsoType* field_type = complete_struct_type->data.struct_.field_types[i];
+        if (orso_struct_type_is_incomplete(field_type)) {
+            incomplete_index = i;
+            break;
+        }
+    }
 
-    if (struct_contains_incomplete_type(complete_struct_type)) {
-        struct_definition->value_index = 1;
-    } else {
+    if (incomplete_index < 0) {
+        struct_definition->value_type = complete_struct_type;
+        struct_definition->value_type_narrowed = complete_struct_type;
+
         i32 size_in_slots = orso_bytes_to_slots(complete_struct_type->data.struct_.total_size);
         OrsoSlot struct_data[size_in_slots];
         for (i32 i = 0; i < size_in_slots; i++) {
@@ -2256,6 +2271,11 @@ static void resolve_struct_definition(OrsoStaticAnalyzer* analyzer, OrsoAST* ast
         }
 
         struct_definition->value_index = add_value_to_ast_constant_stack(ast, struct_data, complete_struct_type);
+    } else {
+        INVALIDATE(struct_definition);
+
+        OrsoASTNode* incomplete_field = struct_definition->data.struct_.declarations[incomplete_index];
+        error_range(analyzer, incomplete_field->start, incomplete_field->end, "Incomplete field");
     }
 
     scope_free(&struct_scope);

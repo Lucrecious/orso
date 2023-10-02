@@ -1,0 +1,14 @@
+Foo :: struct {
+    bar: Bar;
+};
+
+Bar :: struct {
+    baz: Baz;
+};
+
+Baz :: struct {
+    foo: &Foo;
+};
+
+foo: Foo;
+
