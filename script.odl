@@ -1,17 +1,7 @@
-fib :: (n: i32) -> i32
-{
+fib :: (n: i32) -> i32 {
     return if n < 2 then n else fib(n - 1) + fib(n - 2)
 }
 
-fac10 := {
-    count := 10
-    factorial := 1
-    while count {
-        factorial = factorial * count
-        count = count - 1
-    }
-
-    factorial
-}
-
-print fac10
+start := clock()
+print #fold fib(35)
+print clock() - start

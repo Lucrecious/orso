@@ -323,31 +323,31 @@ Token _lexer_next_token(Lexer* lexer) {
 
     lexer->start = lexer->current;
 
-    if (lexer->previous_token.line != lexer->line || is_at_end(lexer)) {
-        switch (lexer->previous_token.type) {
-            case TOKEN_IDENTIFIER:
-            case TOKEN_STRING:
-            case TOKEN_DIRECTIVE:
-            case TOKEN_ANNOTATION:
-            case TOKEN_FALSE:
-            case TOKEN_TRUE:
-            case TOKEN_SYMBOL:
-            case TOKEN_RETURN:
-            case TOKEN_NULL:
-            case TOKEN_BRACE_CLOSE:
-            case TOKEN_BRACKET_CLOSE:
-            case TOKEN_PARENTHESIS_CLOSE:
-            case TOKEN_INTEGER:
-            case TOKEN_FLOAT:
-                return  (Token) {
-                    .length = 0,
-                    .line = lexer->line,
-                    .start = lexer->start,
-                    .type = TOKEN_SEMICOLON,
-                };
-            default: break;
-        }
-    }
+    // if (lexer->previous_token.line != lexer->line || is_at_end(lexer)) {
+    //     switch (lexer->previous_token.type) {
+    //         case TOKEN_IDENTIFIER:
+    //         case TOKEN_STRING:
+    //         case TOKEN_DIRECTIVE:
+    //         case TOKEN_ANNOTATION:
+    //         case TOKEN_FALSE:
+    //         case TOKEN_TRUE:
+    //         case TOKEN_SYMBOL:
+    //         case TOKEN_RETURN:
+    //         case TOKEN_NULL:
+    //         case TOKEN_BRACE_CLOSE:
+    //         case TOKEN_BRACKET_CLOSE:
+    //         case TOKEN_PARENTHESIS_CLOSE:
+    //         case TOKEN_INTEGER:
+    //         case TOKEN_FLOAT:
+    //             return  (Token) {
+    //                 .length = 0,
+    //                 .line = lexer->line,
+    //                 .start = lexer->start,
+    //                 .type = TOKEN_SEMICOLON,
+    //             };
+    //         default: break;
+    //     }
+    // }
 
     if (is_at_end(lexer)) {
         return create_token(lexer, TOKEN_EOF);
