@@ -111,9 +111,9 @@ test('test_control_flow', test_control_flow)
 test('test_logical_operators', test_logical_operators)
 test('test_loops', test_loops)
 
-test('test_comments', test_file_runner, args: files('test/comments.orso'))
-test('test_functions', test_file_runner, args: files('test/functions.orso'))
-test('test_constant_evaluation', test_file_runner, args: files('test/constant_evaluation.orso'))
-test('test_folding_evaluation', test_file_runner, args: files('test/folding_evaluation.orso'))
+test('test_comments', test_file_runner, args: files('test/comments.odl'))
+test('test_functions', test_file_runner, args: files('test/functions.odl'))
+test('test_constant_evaluation', test_file_runner, args: files('test/constant_evaluation.odl'))
+test('test_folding_evaluation', test_file_runner, args: files('test/folding_evaluation.odl'))
 
 
