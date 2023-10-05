@@ -160,6 +160,8 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
 #endif
         OrsoOPCode op_code = READ_BYTE();
         switch (op_code) {
+            case ORSO_OP_NO_OP: break;
+
             case ORSO_OP_POP: POP(); break;
 
             case ORSO_OP_I64_TO_F64: *PEEK(0) = ORSO_SLOT_F((f64)PEEK(0)->as.i, &OrsoTypeFloat64); break;
@@ -174,15 +176,6 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
             case ORSO_OP_SUBTRACT_F64: { f64 b = POP().as.f; PEEK(0)->as.f = PEEK(0)->as.f - b; break; }
             case ORSO_OP_MULTIPLY_F64: { f64 b = POP().as.f; PEEK(0)->as.f = PEEK(0)->as.f * b; break; }
             case ORSO_OP_DIVIDE_F64: { f64 b = POP().as.f; PEEK(0)->as.f = PEEK(0)->as.f / b; break; }
-
-            case ORSO_OP_UNION_TYPES: {
-                OrsoType* b = (OrsoType*)POP().as.p;
-                OrsoType* a = (OrsoType*)POP().as.p;
-
-                OrsoType* a_or_b = orso_type_merge(vm->type_set, a, b);
-                PUSH(ORSO_SLOT_P(a_or_b, &OrsoTypeType));
-                break;
-            }
 
             case ORSO_OP_NEGATE_I64: PEEK(0)->as.i = -PEEK(0)->as.i; break;
             case ORSO_OP_NEGATE_F64: PEEK(0)->as.f = -PEEK(0)->as.f; break;
@@ -361,6 +354,7 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
                 break;
             }
 
+            case ORSO_OP_JUMP_IF_UNION_FALSE:
             case ORSO_OP_JUMP_IF_FALSE: {
                 u16 offset = READ_U16();
                 if (orso_slot_is_falsey(*PEEK(0))) {
@@ -369,6 +363,7 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
                 break;
             }
 
+            case ORSO_OP_JUMP_IF_UNION_TRUE:
             case ORSO_OP_JUMP_IF_TRUE: {
                 u16 offset = READ_U16();
                 if (!orso_slot_is_falsey(*PEEK(0))) {

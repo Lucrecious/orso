@@ -54,8 +54,6 @@ static i32 get_stack_effect(OrsoOPCode op_code) {
         case ORSO_OP_MULTIPLY_F64: return -1;
         case ORSO_OP_DIVIDE_F64: return -1;
 
-        case ORSO_OP_UNION_TYPES: return -1;
-
         case ORSO_OP_NEGATE_I64: return 0;
         case ORSO_OP_NEGATE_F64: return 0;
 
@@ -100,6 +98,9 @@ static i32 get_stack_effect(OrsoOPCode op_code) {
         case ORSO_OP_PUT_IN_UNION: return 0;
         case ORSO_OP_NARROW_UNION: return -1;
 
+        case ORSO_OP_NO_OP: return 0;
+        case ORSO_OP_JUMP_IF_UNION_FALSE: return 0;
+        case ORSO_OP_JUMP_IF_UNION_TRUE: return 0;
         case ORSO_OP_JUMP_IF_FALSE: return 0;
         case ORSO_OP_JUMP_IF_TRUE: return 0;
         case ORSO_OP_JUMP: return 0;
@@ -652,8 +653,19 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode
 
                     emit_storage_type_convert(compiler, chunk, left->value_type, expression_node->value_type, left->end.line);
 
-                    OrsoOPCode jump_instruction = operator.type == TOKEN_AND ? ORSO_OP_JUMP_IF_FALSE : ORSO_OP_JUMP_IF_TRUE;
-                    i32 jump_rest = emit_jump(jump_instruction, compiler, chunk, operator.line);
+                    OrsoOPCode jump_instruction;
+                    if (ORSO_TYPE_IS_STRUCT(left->value_type)) {
+                        jump_instruction = operator.type == TOKEN_AND ? ORSO_OP_NO_OP : ORSO_OP_JUMP;
+                    } else if (ORSO_TYPE_IS_UNION(left->value_type)) {
+                        jump_instruction = operator.type == TOKEN_AND ? ORSO_OP_JUMP_IF_UNION_FALSE : ORSO_OP_JUMP_IF_UNION_TRUE;
+                    } else {
+                        jump_instruction = operator.type == TOKEN_AND ? ORSO_OP_JUMP_IF_FALSE : ORSO_OP_JUMP_IF_TRUE;
+                    }
+                    i32 jump_rest;
+
+                    unless (jump_instruction == ORSO_OP_NO_OP) {
+                        jump_rest = emit_jump(jump_instruction, compiler, chunk, operator.line);
+                    }
 
                     i32 previous_stack_count = compiler->current_stack_size;
                     (void)previous_stack_count;
@@ -664,7 +676,9 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode
 
                     emit_storage_type_convert(compiler, chunk, right->value_type, expression_node->value_type, right->end.line);
 
-                    patch_jump(chunk, jump_rest);
+                    unless (jump_instruction == ORSO_OP_NO_OP) {
+                        patch_jump(chunk, jump_rest);
+                    }
 
                     ASSERT(previous_stack_count == compiler->current_stack_size, "must be the as before jump.");
                     break;
@@ -731,7 +745,6 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode
                         switch (operator.type) {
                             case TOKEN_EQUAL_EQUAL: EMIT_BINARY_OP_I64(EQUAL); break;
                             case TOKEN_BANG_EQUAL: EMIT_BINARY_OP_I64(EQUAL); EMIT_NOT(); break;
-                            case TOKEN_BAR: emit_instruction(ORSO_OP_UNION_TYPES, compiler, chunk, operator.line); break;
                             default: UNREACHABLE();
                         }
                     } else {

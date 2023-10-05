@@ -123,7 +123,6 @@ foo: Foo;
 # ---
 
 ## recursive type that cannot be resolved
-## recursive type that can be resolved
 Foo :: struct {
     bar: Bar;
 };
@@ -140,4 +139,53 @@ foo: Foo;
 # ---
 Incomplete field.
 # ---
+
+## struct within group
+Foo :: (struct {
+    foo: &Foo;
+});
+
+print Foo;
+# ---
+Foo { foo: &Foo }
+# ---
+
+## struct within or
+Foo :: (struct {
+    foo: &Foo;
+}) or struct {
+    foo: &Foo;
+};
+
+print Foo;
+# ---
+Foo { foo: &Foo }
+# ---
+
+## different structs within and
+Foo :: (struct {
+    foo: &Foo;
+} and struct {
+    foo: &Foo;
+    x: i32;
+});
+
+print Foo;
+# ---
+Foo { foo: &Foo; x: i32 }
+# ---
+
+## different structs within or
+Foo :: (struct {
+    foo: &Foo;
+} or struct {
+    foo: &Foo;
+    x: i32;
+});
+
+print Foo;
+# ---
+Foo { foo: &Foo; }
+# ---
+
 

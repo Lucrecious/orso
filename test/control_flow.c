@@ -84,6 +84,10 @@ INTERPRETER_ERROR_TEST(cannot_use_do_instead_of_then,
 	"y := 10; x := if y < 5 do print 1 else unless x < 20 { print 2; } else print 3; print x;",
 	ORSO_ERROR_COMPILE, 0, "cannot use do instead of then for ifs")
 
+INTERPRETER_TEST(structs_in_conditions_are_true,
+	"Foo :: struct { x := 10; }; foo := Foo.{}; if foo then print true;",
+	"true\n")
+
 MU_TEST_SUITE(tests) {
     MU_RUN_TEST(then_branch_print);
     MU_RUN_TEST(else_branch_print);
@@ -106,6 +110,7 @@ MU_TEST_SUITE(tests) {
     MU_RUN_TEST(no_braces_more_branches);
     MU_RUN_TEST(no_braces_mix_branches);
     MU_RUN_TEST(cannot_use_do_instead_of_then);
+    MU_RUN_TEST(structs_in_conditions_are_true);
 }
 
 int main(int argc, char** argv) {

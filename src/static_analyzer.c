@@ -433,7 +433,7 @@ static bool is_block_compile_time_foldable(OrsoASTNode** block) {
     return true;
 }
 
-static void fold_constants(
+static void fold_constants_via_runtime(
         OrsoStaticAnalyzer* analyzer,
         OrsoAST* ast,
         AnalysisState state,
@@ -456,7 +456,19 @@ static void resolve_foldable(
         }
 
         case ORSO_AST_NODE_TYPE_EXPRESSION_BINARY: {
-            foldable = expression->data.binary.lhs->foldable && expression->data.binary.rhs->foldable;
+            OrsoASTNode* left = expression->data.binary.lhs;
+            OrsoASTNode* right = expression->data.binary.rhs;
+            foldable = left->foldable && right->foldable;
+
+            if (expression->operator.type == TOKEN_BAR && left->value_type_narrowed == &OrsoTypeType && right->value_type_narrowed == &OrsoTypeType) {
+                OrsoType* lhs_folded_type = get_folded_type(ast, left->value_index);
+                OrsoType* rhs_folded_type = get_folded_type(ast, right->value_index);
+
+                OrsoType* merged_type = orso_type_merge(&ast->type_set, lhs_folded_type, rhs_folded_type);
+                OrsoSlot merged_type_slot = ORSO_SLOT_P(merged_type, &OrsoTypeType);
+
+                folded_index = add_value_to_ast_constant_stack(ast, &merged_type_slot, &OrsoTypeType);
+            }
             break;
         }
 
@@ -471,6 +483,19 @@ static void resolve_foldable(
 
         case ORSO_AST_NODE_TYPE_EXPRESSION_UNARY: {
             foldable = expression->data.expression->foldable;
+
+            if (expression->operator.type == TOKEN_AMPERSAND) {
+                OrsoType* type = get_folded_type(ast, expression->data.expression->value_index);
+
+                OrsoType* pointer_type = orso_type_set_fetch_pointer(&ast->type_set, type);
+
+                expression->value_type = &OrsoTypeType;
+                expression->value_type_narrowed = &OrsoTypeType;
+
+                OrsoSlot type_slot = ORSO_SLOT_P(pointer_type, &OrsoTypeType);
+                
+                folded_index = add_value_to_ast_constant_stack(ast, &type_slot, &OrsoTypeType);
+            }
             break;
         }
 
@@ -599,36 +624,43 @@ static void resolve_foldable(
             break;
         }
 
-        case ORSO_AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_PRIMARY:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION: {
+            foldable = true;
+            folded_index = expression->value_index;
+            break;
+        }
+
         case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE:
         case ORSO_AST_NODE_TYPE_DECLARATION:
         case ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION:
         case ORSO_AST_NODE_TYPE_STATEMENT_RETURN:
-        case ORSO_AST_NODE_TYPE_EXPRESSION_PRIMARY:
         case ORSO_AST_NODE_TYPE_UNDEFINED:
-            UNREACHABLE();
+            UNREACHABLE(); break;
     }
 
     expression->foldable = foldable;
     expression->value_index = folded_index;
 }
 
-static void fold_constants(
+static void fold_constants_via_runtime(
         OrsoStaticAnalyzer* analyzer,
         OrsoAST* ast,
         AnalysisState state,
         OrsoASTNode* expression) {
 
-    // TODO: we need to figure how a better way to figure out if an expression needs to be refolded
-    if (IS_FOLDED(expression)) {
-        return;
-    }
+    // // TODO: we need to figure how a better way to figure out if an expression needs to be refolded
+    // if (IS_FOLDED(expression)) {
+    //     return;
+    // }
 
     resolve_foldable(analyzer, ast, state, expression);
 
     if (IS_FOLDED(expression)) {
         return;
     }
+
+    ASSERT(expression->value_type != &OrsoTypeType, "types must be created at compile time");
 
     // we can't fold it so nothing to do
     if (!expression->foldable) {
@@ -827,6 +859,10 @@ static bool is_value_circular_dependency(OrsoStaticAnalyzer* analyzer, OrsoASTNo
             return false;
         }
 
+        if (dependency->ast_node->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION) {
+            return false;
+        }
+
         if (dependency->ast_node == new_dependency) {
             return true;
         }
@@ -854,6 +890,10 @@ static bool push_dependency(OrsoStaticAnalyzer* analyzer, OrsoASTNode* node, int
     }
 
     return true;
+}
+
+static void pop_dependency(OrsoStaticAnalyzer* analyzer) {
+    analyzer->dependencies.count--;
 }
 
 static void resolve_declarations(
@@ -1027,13 +1067,13 @@ void orso_resolve_expression(
             if (!is_logical_operator) {
                 if (cast_left != left->value_type_narrowed) {
                     expression->data.binary.lhs = implicit_cast(ast, left, cast_left);
-                    fold_constants(analyzer, ast, state, expression->data.binary.lhs);
+                    fold_constants_via_runtime(analyzer, ast, state, expression->data.binary.lhs);
                 }
 
 
                 if (cast_right != right->value_type_narrowed) {
                     expression->data.binary.rhs = implicit_cast(ast, right, cast_right);
-                    fold_constants(analyzer, ast, state, expression->data.binary.rhs);
+                    fold_constants_via_runtime(analyzer, ast, state, expression->data.binary.rhs);
                 }
             }
             break;
@@ -1070,17 +1110,6 @@ void orso_resolve_expression(
                     error_range(analyzer, expression->data.expression->start, expression->data.expression->end, "Value of expression must be resolved at compile time.");
                     return;
                 }
-
-                OrsoType* type = get_folded_type(ast, expression->data.expression->value_index);
-
-                OrsoType* pointer_type = orso_type_set_fetch_pointer(&ast->type_set, type);
-
-                expression->value_type = &OrsoTypeType;
-                expression->value_type_narrowed = &OrsoTypeType;
-
-                OrsoSlot type_slot = ORSO_SLOT_P(pointer_type, &OrsoTypeType);
-                
-                expression->value_index = add_value_to_ast_constant_stack(ast, &type_slot, &OrsoTypeType);
             }
             break;
         }
@@ -1350,7 +1379,10 @@ void orso_resolve_expression(
         }
 
         case ORSO_AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION: {
+            // since structs are boundaries for circular dependencies, they will never be the cause of one.
+            push_dependency(analyzer, expression, state.fold_level, is_value_circular_dependency);
             resolve_struct_definition(analyzer, ast, state, expression);
+            pop_dependency(analyzer);
             break;
         }
         
@@ -1402,7 +1434,7 @@ void orso_resolve_expression(
         return;
     }
 
-    fold_constants(analyzer, ast, state, expression);
+    fold_constants_via_runtime(analyzer, ast, state, expression);
 }
 
 static void declare_entity(OrsoStaticAnalyzer* analyzer, OrsoScope* scope, OrsoASTNode* entity) {
@@ -1417,50 +1449,6 @@ static void declare_entity(OrsoStaticAnalyzer* analyzer, OrsoScope* scope, OrsoA
 
     add_entity(scope, identifier, entity);
 }
-
-static bool is_sizing_circular_dependency(OrsoStaticAnalyzer* analyzer, OrsoASTNode* new_dependency) {
-    for (i32 i = analyzer->dependencies.count - 1; i >= 0; i--) {
-        OrsoAnalysisDependency* dependency = &analyzer->dependencies.chain[i];
-
-        if (orso_ast_node_type_is_expression(dependency->ast_node->node_type) && dependency->ast_node->value_type_narrowed == &OrsoTypeType) {
-            OrsoType* folded_type = get_folded_type(analyzer->ast, dependency->ast_node->value_index);
-            if (ORSO_TYPE_IS_POINTER(folded_type)) {
-                return false;
-            }
-        }
-
-        if (dependency->ast_node == new_dependency) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-static void pop_dependency(OrsoStaticAnalyzer* analyzer) {
-    analyzer->dependencies.count--;
-}
-
-// static bool struct_contains_incomplete_type(OrsoType* type) {
-//     unless (ORSO_TYPE_IS_STRUCT(type)) {
-//         return false;
-//     }
-
-//     if (type->data.struct_.field_count == 0) {
-//         return true;
-//     }
-
-//     for (i32 i = 0; i < type->data.struct_.field_count; i++) {
-//         OrsoType* field_type = type->data.struct_.field_types[i];
-//         unless (struct_contains_incomplete_type(field_type)) {
-//             continue;
-//         }
-
-//         return true;
-//     }
-
-//     return false;
-// }
 
 static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, AnalysisState state, OrsoASTNode* entity_declaration) {
     OrsoType* declaration_type = &OrsoTypeUnresolved;
@@ -2125,8 +2113,8 @@ static void resolve_function_expression(
 *          Vector2i :: #fold generate_vector2(i32, 0);
 *          Vector2f :: #fold generate_vector2(f32, 0.0);
 *          
-*          // for now the `!` means the parameter in the function call must be a compile time constnat
-*          generate_foo(t!: type, default_value: t) -> struct { x: t; y: t; } {
+*          // for now the `#!` means the parameter in the function call must be a compile time constnat
+*          generate_foo(#! t: type, default_value: t) -> struct { x: t; y: t; } {
 *              return struct {
 *                  x := default_value;
 *                  y := default_value;

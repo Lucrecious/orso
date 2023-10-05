@@ -77,6 +77,7 @@ i32 disassemble_instruction(Chunk* chunk, i32 offset) {
 
     OrsoOPCode instruction = chunk->code[offset];
     switch(instruction) {
+        case ORSO_OP_NO_OP: return simple_instruction("OP_NO_OP", offset);
         case ORSO_OP_POP: return simple_instruction("OP_POP", offset);
         case ORSO_OP_POP_SCOPE: return pop_scope_instruction("OP_POP_SCOPE", chunk, offset);
         case ORSO_OP_PUSH_0: return simple_instruction("OP_PUSH_0", offset);
@@ -94,7 +95,6 @@ i32 disassemble_instruction(Chunk* chunk, i32 offset) {
         case ORSO_OP_DIVIDE_F64: return simple_instruction("OP_DIVIDE_F64", offset);
         case ORSO_OP_I64_TO_F64: return simple_instruction("OP_I64_TO_F64", offset);
         case ORSO_OP_F64_TO_I64: return simple_instruction("OP_F64_TO_I64", offset);
-        case ORSO_OP_UNION_TYPES: return simple_instruction("OP_UNION_TYPES", offset);
         case ORSO_OP_LOGICAL_NOT: return simple_instruction("OP_LOGICAL_NOT", offset);
         case ORSO_OP_EQUAL_I64: return simple_instruction("OP_EQUAL_I64", offset);
         case ORSO_OP_EQUAL_F64: return simple_instruction("OP_EQUAL_F64", offset);
@@ -118,6 +118,8 @@ i32 disassemble_instruction(Chunk* chunk, i32 offset) {
         case ORSO_OP_GET_LOCAL_UNION: return instruction_3arg("OP_GET_LOCAL_UNION", chunk, offset);
         case ORSO_OP_SET_LOCAL: return instruction_3arg("OP_SET_LOCAL", chunk, offset);
         case ORSO_OP_SET_LOCAL_UNION: return instruction_3arg("OP_SET_LOCAL_UNION", chunk, offset);
+        case ORSO_OP_JUMP_IF_UNION_FALSE: return jump_instruction("OP_JUMP_IF_UNION_FALSE", 1, chunk, offset);
+        case ORSO_OP_JUMP_IF_UNION_TRUE: return jump_instruction("OP_JUMP_IF_UNION_TRUE", 1, chunk, offset);
         case ORSO_OP_JUMP_IF_FALSE: return jump_instruction("OP_JUMP_IF_FALSE", 1, chunk, offset);
         case ORSO_OP_JUMP_IF_TRUE: return jump_instruction("OP_JUMP_IF_TRUE", 1, chunk, offset);
         case ORSO_OP_JUMP: return jump_instruction("OP_JUMP", 1, chunk, offset);

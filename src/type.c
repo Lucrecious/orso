@@ -60,12 +60,12 @@ bool orso_type_equal(OrsoType* a, OrsoType* b) {
                 return false;
             }
 
-            if (!orso_type_equal(a->data.function.return_type, b->data.function.return_type)) {
+            if (a->data.function.return_type != b->data.function.return_type) {
                 return false;
             }
 
             for (i32 i = 0; i < a->data.function.argument_count; i++) {
-                if (!orso_type_equal(a->data.function.argument_types[i], b->data.function.argument_types[i])) {
+                if (a->data.function.argument_types[i] != b->data.function.argument_types[i]) {
                     return false;
                 }
             }
@@ -88,7 +88,7 @@ bool orso_type_equal(OrsoType* a, OrsoType* b) {
             }
 
             for (i32 i = 0; i < a->data.struct_.field_count; i++) {
-                if (!orso_type_equal(a->data.struct_.field_types[i], b->data.struct_.field_types[i])) {
+                if (a->data.struct_.field_types[i] != b->data.struct_.field_types[i]) {
                     return false;
                 }
 
@@ -107,7 +107,7 @@ bool orso_type_equal(OrsoType* a, OrsoType* b) {
         }
 
         case ORSO_TYPE_POINTER: {
-            return orso_type_equal(a->data.pointer.type, b->data.pointer.type);
+            return a->data.pointer.type == b->data.pointer.type;
         }
 
         case ORSO_TYPE_BOOL:
