@@ -783,6 +783,10 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode
                     break;
                 }
 
+                case TOKEN_AMPERSAND:
+                    //EMIT_NOT();
+                    break;
+
                 default: UNREACHABLE();
             }
             break;

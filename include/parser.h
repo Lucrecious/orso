@@ -135,6 +135,8 @@ struct OrsoASTNode {
     // branching, blocks
     OrsoReturnGuarentee return_guarentee;
 
+    bool is_in_type_context;
+
     bool fold;
 
     bool foldable;
@@ -203,7 +205,7 @@ bool orso_parse(OrsoAST* ast, const char* source, OrsoErrorFunction error_fn);
 void orso_ast_init(OrsoAST* ast, OrsoSymbolTable* symbols);
 void orso_ast_free(OrsoAST* ast);
 
-OrsoASTNode* orso_ast_node_new(OrsoAST* ast, OrsoASTNodeType node_type, Token start);
+OrsoASTNode* orso_ast_node_new(OrsoAST* ast, OrsoASTNodeType node_type, bool is_in_type_context, Token start);
 
 bool orso_ast_node_type_is_decl_or_stmt(OrsoASTNodeType node_type);
 bool orso_ast_node_type_is_expression(OrsoASTNodeType node_type);
