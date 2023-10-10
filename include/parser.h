@@ -46,6 +46,7 @@ typedef enum OrsoASTNodeType {
     ORSO_AST_NODE_TYPE_EXPRESSION_PRINT_EXPR, // TODO: remove in favor of a native function
     ORSO_AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT,
     ORSO_AST_NODE_TYPE_EXPRESSION_BINARY,
+    ORSO_AST_NODE_TYPE_EXPRESSION_DOT,
     ORSO_AST_NODE_TYPE_EXPRESSION_UNARY,
     ORSO_AST_NODE_TYPE_EXPRESSION_GROUPING,
     ORSO_AST_NODE_TYPE_EXPRESSION_CALL,
@@ -57,6 +58,7 @@ typedef enum OrsoASTNodeType {
     ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION,
     ORSO_AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION,
     ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE,
+
     /*
     * This is a special case expression. It's simply an expression with a statement inside.
     * This is used for branching.
@@ -80,7 +82,8 @@ case ORSO_AST_NODE_TYPE_EXPRESSION_PRIMARY: \
 case ORSO_AST_NODE_TYPE_EXPRESSION_UNARY: \
 case ORSO_AST_NODE_TYPE_EXPRESSION_PRINT: \
 case ORSO_AST_NODE_TYPE_EXPRESSION_PRINT_EXPR: \
-case ORSO_AST_NODE_TYPE_EXPRESSION_STATEMENT
+case ORSO_AST_NODE_TYPE_EXPRESSION_STATEMENT: \
+case ORSO_AST_NODE_TYPE_EXPRESSION_DOT
 
 typedef struct OrsoASTFuncion {
     OrsoASTNode** parameter_nodes;
@@ -114,11 +117,18 @@ typedef struct OrsoASTBinary {
     OrsoASTNode* rhs;
 } OrsoASTBinary;
 
+typedef struct OrsoASTMemberAccess {
+    OrsoASTNode* lhs;
+
+    Token identifier;
+    OrsoASTNode* referencing_declaration;
+} OrsoASTMemberAccess;
+
 typedef struct OrsoASTDeclaration {
     bool is_mutable;
     i32 fold_level_resolved_at;
 
-    OrsoASTNode* identifier;
+    Token identifier;
     OrsoASTNode* type_expression;
     OrsoASTNode* initial_value_expression;
 } OrsoASTDeclaration;
@@ -129,6 +139,7 @@ struct OrsoASTNode {
     Token start, end, operator;
 
     // expressions TODO: Fill this in for *everything*, declarations, statements included
+    // TODO: only use value type
     OrsoType *value_type, *value_type_narrowed;
     //AccessIdentifiers *value_type_identifiers, *value_type_narrowed_identifiers;
 
@@ -147,7 +158,7 @@ struct OrsoASTNode {
     union {
         OrsoASTDeclaration declaration;
 
-        // statement, print, print_expr, cast, grouping, entity
+        // statement, print, print_expr, cast, grouping
         OrsoASTNode* expression;
         OrsoASTNode* statement; // for readability
 
@@ -167,6 +178,9 @@ struct OrsoASTNode {
 
         // structs
         OrsoASTStruct struct_;
+
+        // member access, entity
+        OrsoASTMemberAccess dot;
     } data;
 };
 
@@ -179,6 +193,13 @@ static khint32_t ptr_equal(void* a, void* b) {
 }
 
 KHASH_INIT(ptr2i32, void*, i32, 1, ptr_hash, ptr_equal)
+
+typedef struct OrsoASTNodeAndScope {
+    OrsoASTNode* node;
+    OrsoScope* scope;
+} OrsoASTNodeAndScope;
+
+KHASH_INIT(type2ns, OrsoType*, OrsoASTNodeAndScope, 1, ptr_hash, ptr_equal)
 
 typedef struct OrsoAST {
     bool resolved;
@@ -194,6 +215,7 @@ typedef struct OrsoAST {
     OrsoSlot* folded_constants;
 
     khash_t(ptr2i32)* type_to_zero_index;
+    khash_t(type2ns)* type_to_creation_node;
 
     OrsoSymbolTable* symbols;
 } OrsoAST;

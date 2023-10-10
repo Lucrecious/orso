@@ -20,14 +20,6 @@ OrsoType OrsoTypeInvalid = (OrsoType){ .kind = ORSO_TYPE_INVALID  };
 OrsoType OrsoTypeUnresolved = (OrsoType) { .kind = ORSO_TYPE_UNRESOLVED };
 OrsoType OrsoTypeUndefined = (OrsoType) { .kind = ORSO_TYPE_UNDEFINED };
 
-OrsoType OrsoTypeIncompleteStruct = (OrsoType) {
-    .kind = ORSO_TYPE_STRUCT,
-    .data.struct_.name = NULL,
-    .data.struct_.field_count = 0,
-    .data.struct_.field_names = NULL,
-    .data.struct_.field_types = NULL,
-};
-
 OrsoType OrsoTypeEmptyFunction = (OrsoType) {
     .kind = ORSO_TYPE_FUNCTION,
     .data.function.argument_count = 0,
@@ -68,37 +60,45 @@ OrsoType* function_type_new(OrsoTypeSet* set, OrsoType** arguments, i32 argument
 }
 
 // only anonymous structs can be looked up in the type set
-OrsoType* struct_type_new(OrsoTypeSet* set, char** field_names, OrsoType** field_types, i32 field_count, i32* field_offsets, i32 total_size) {
-
+OrsoType* struct_type_new(OrsoTypeSet* set, OrsoStructField* fields, i32 field_count, OrsoStructConstant* constants, i32 constant_count, i32 total_size) {
     OrsoType* struct_type = ORSO_ALLOCATE(OrsoType);
     struct_type->kind = ORSO_TYPE_STRUCT;
 
     struct_type->data.struct_.name = NULL;
 
     struct_type->data.struct_.field_count = field_count;
-    struct_type->data.struct_.field_names = ORSO_ALLOCATE_N(char*, field_count);
-    struct_type->data.struct_.field_types = ORSO_ALLOCATE_N(OrsoType*, field_count);
-
-    struct_type->data.struct_.field_byte_offsets = NULL;
+    struct_type->data.struct_.fields = NULL;
+    struct_type->data.struct_.constant_count = constant_count;
+    struct_type->data.struct_.constants = NULL;
     struct_type->data.struct_.total_size = total_size;
 
-    for (i32 i = 0; i < field_count; i++) {
-        struct_type->data.struct_.field_types[i] = field_types[i];
-    }
+    if (field_count > 0) {
+        struct_type->data.struct_.fields = ORSO_ALLOCATE_N(OrsoStructField, field_count);
 
-    for (i32 i = 0; i < field_count; i++) {
-        i32 length = strlen(field_names[i]);
-        char* name = ORSO_ALLOCATE_N(char, length + 1);
-        memcpy(name, field_names[i], length);
-        name[length] = '\0';
-
-        struct_type->data.struct_.field_names[i] = name;
-    }
-
-    if (field_offsets) {
-        struct_type->data.struct_.field_byte_offsets = ORSO_ALLOCATE_N(i32, field_count);
         for (i32 i = 0; i < field_count; i++) {
-            struct_type->data.struct_.field_byte_offsets[i] = field_offsets[i];
+            struct_type->data.struct_.fields[i] = fields[i];
+
+            i32 length = strlen(fields[i].name);
+            char* name = ORSO_ALLOCATE_N(char, length + 1);
+            memcpy(name, fields[i].name, length);
+            name[length] = '\0';
+
+            struct_type->data.struct_.fields[i].name = name;
+        }
+    }
+
+    if (constant_count > 0) {
+        struct_type->data.struct_.constants = ORSO_ALLOCATE_N(OrsoStructConstant, constant_count);
+
+        for (i32 i = 0; i < constant_count; i++) {
+            struct_type->data.struct_.constants[i] = constants[i];
+
+            i32 length = strlen(constants[i].name);
+            char* name = ORSO_ALLOCATE_N(char, length + 1);
+            memcpy(name, constants[i].name, length);
+            name[length] = '\0';
+
+            struct_type->data.struct_.constants[i].name = name;
         }
     }
 
@@ -141,10 +141,10 @@ OrsoType* type_copy_new(OrsoTypeSet* set, OrsoType* type) {
     if (ORSO_TYPE_IS_STRUCT(type)) {
         return struct_type_new(
             set,
-            type->data.struct_.field_names,
-            type->data.struct_.field_types,
+            type->data.struct_.fields,
             type->data.struct_.field_count,
-            type->data.struct_.field_byte_offsets,
+            type->data.struct_.constants,
+            type->data.struct_.constant_count,
             type->data.struct_.total_size);
     }
 
@@ -169,20 +169,21 @@ void type_free(OrsoType* type) {
         free((void**)type->data.function.argument_types);
     } else if (ORSO_TYPE_IS_STRUCT(type)) {
         for (i32 i = 0; i < type->data.struct_.field_count; i++) {
-            free(type->data.struct_.field_names[i]);
+            free(type->data.struct_.fields[i].name);
         }
 
-        free(type->data.struct_.field_names);
-        type->data.struct_.field_names = NULL;
+        free(type->data.struct_.fields);
+        type->data.struct_.fields = NULL;
 
-        free(type->data.struct_.field_types);
-        type->data.struct_.field_types = NULL;
+        for (i32 i = 0; i < type->data.struct_.constant_count; i++) {
+            free(type->data.struct_.constants[i].name);
+        }
+
+        free(type->data.struct_.constants);
+        type->data.struct_.constants = NULL;
 
         free(type->data.struct_.name);
         type->data.struct_.name = NULL;
-
-        free(type->data.struct_.field_byte_offsets);
-        type->data.struct_.field_byte_offsets = NULL;
 
         type->data.struct_.total_size = 0;
     }
@@ -236,16 +237,19 @@ static u32 hash_type(OrsoType* type) {
 
         ADD_HASH(hash, (u64)(type->data.function.return_type));
     } else if (ORSO_TYPE_IS_STRUCT(type)) {
+        ASSERT(type->data.struct_.name == NULL, "only anonymous structs are hashed");
+        ASSERT(type->data.struct_.constant_count == 0, "only anonymous structs without constants can be hashed");
+
         ADD_HASH(hash, type->data.struct_.field_count);
 
         for (i32 i = 0; i < type->data.struct_.field_count; i++) {
-            char* name = type->data.struct_.field_names[i];
+            char* name = type->data.struct_.fields[i].name;
             i32 length = strlen(name);
             for (i32 i = 0; i < length; i++) {
                 ADD_HASH(hash, name[i]);
             }
             
-            ADD_HASH(hash, (u64)(type->data.struct_.field_types[i]));
+            ADD_HASH(hash, (u64)(type->data.struct_.fields[i].type));
         }
     } else if (ORSO_TYPE_IS_POINTER(type)) {
         ADD_HASH(hash, (u64)(type->data.pointer.type));
@@ -427,6 +431,36 @@ static i32 type_compare(const void* a, const void* b) {
 
         // at this point we are comparing two different anonymous structs
 
+        i32 a_constant_count = type_a->data.struct_.constant_count;
+        i32 b_constant_count = type_b->data.struct_.constant_count;
+        // structs with more constants before structs with less
+        if (a_constant_count != b_constant_count) {
+            return a_constant_count < b_constant_count ? 1 : -1;
+        }
+
+        // sort by constant type then
+        for (i32 i = 0; i < a_constant_count; i++) {
+            OrsoType* a_constant_type = type_a->data.struct_.constants[i].type;
+            OrsoType* b_constant_type = type_b->data.struct_.constants[i].type;
+            if (a_constant_type != b_constant_type) {
+                return type_compare(a_constant_type, b_constant_type);
+            }
+        }
+
+        // sort alphabetically by constant then
+        for (i32 i = 0; i < a_constant_count; i++) {
+            char* name_a = type_a->data.struct_.constants[i].name;
+            char* name_b = type_b->data.struct_.constants[i].name;
+
+            i32 result = strcmp(name_a, name_b);
+            if (result != 0) {
+                return result;
+            }
+        }
+
+        // TODO: if names for constants match, I need to check their values and compare them
+        // I'm think I do this once I write a universal hash function for any/all types...
+
         // smaller field counts before larger ones
         i32 a_field_count = type_a->data.struct_.field_count;
         i32 b_field_count = type_b->data.struct_.field_count;
@@ -437,8 +471,8 @@ static i32 type_compare(const void* a, const void* b) {
 
         // use type comparison if the field count is the same
         for (i32 i = 0; i < a_field_count; i++) {
-            OrsoType* a_field_type = type_a->data.struct_.field_types[i];
-            OrsoType* b_field_type = type_b->data.struct_.field_types[i];
+            OrsoType* a_field_type = type_a->data.struct_.fields[i].type;
+            OrsoType* b_field_type = type_b->data.struct_.fields[i].type;
             if (a_field_type != b_field_type) {
                 return type_compare(a_field_type, b_field_type);
             }
@@ -446,8 +480,8 @@ static i32 type_compare(const void* a, const void* b) {
 
         // if the types are the same then the field names should be different
         for (i32 i = 0; i < a_field_count; i++) {
-            char* name_a = type_a->data.struct_.field_names[i];
-            char* name_b = type_b->data.struct_.field_names[i];
+            char* name_a = type_a->data.struct_.fields[i].name;
+            char* name_b = type_b->data.struct_.fields[i].name;
 
             i32 result = strcmp(name_a, name_b);
             if (result != 0) {
@@ -548,46 +582,51 @@ OrsoType* orso_type_set_fetch_native_function(OrsoTypeSet* set, OrsoType* return
     return orso_type_set_fetch_function_(set, return_type, arguments, argument_count, true);
 }
 
-OrsoType* orso_type_set_fetch_anonymous_struct(OrsoTypeSet* set, i32 field_count, char** names, OrsoType** types) {
+OrsoType* orso_type_set_fetch_anonymous_struct(OrsoTypeSet* set, i32 field_count, OrsoStructField* fields, i32 constant_count, OrsoStructConstant* constants) {
     OrsoType struct_type = {
         .kind = ORSO_TYPE_STRUCT,
         .data.struct_.field_count = field_count,
-        .data.struct_.field_names = names,
-        .data.struct_.field_types = types,
+        .data.struct_.fields = fields,
 
-        .data.struct_.field_byte_offsets = NULL,
+        .data.struct_.constant_count = constant_count,
+        .data.struct_.constants = constants,
+
         .data.struct_.total_size = 0,
     };
 
-    if (set->capacity > 0) {
-        OrsoType** entry = fetch_type(set->entries, set->capacity, &struct_type);
+    OrsoType* type;
+    if (constant_count == 0) {
+        if (set->capacity > 0) {
+            OrsoType** entry = fetch_type(set->entries, set->capacity, &struct_type);
 
-        if (*entry != NULL) {
-            return *entry;
+            if (*entry != NULL) {
+                return *entry;
+            }
         }
-    }
 
-    OrsoType* type = type_copy_new(set, &struct_type);
-    add_type(set, type);
+        type = type_copy_new(set, &struct_type);
+        add_type(set, type);
+    } else {
+        // anonymous structs with constants must be unique
+        type = type_copy_new(set, &struct_type);
+    }
 
     // put the layout in a hash table separate from type
     // it should be impossible for sizing to be infinitely recursive because the types should have resolved
     // properly for this struct type to be created
-    {
-        i32* offsets = ORSO_ALLOCATE_N(i32, field_count);
-        offsets[0] = 0;
+    if (field_count > 0) {
+        type->data.struct_.fields[0].offset = 0;
         for (i32 i = 1; i < field_count; i++) {
-            i32 previous_offset = offsets[i - 1];
-            OrsoType* previous_type = types[i - 1];
+            i32 previous_offset = type->data.struct_.fields[i - 1].offset;
+            OrsoType* previous_type = fields[i - 1].type;
 
             i32 bytes = orso_bytes_to_slots(orso_type_size_bytes(previous_type)) * ORSO_SLOT_SIZE_BYTES;
-            offsets[i] = previous_offset + bytes;
+            type->data.struct_.fields[i].offset = previous_offset + bytes;
         }
 
-        i32 size_of_final = orso_bytes_to_slots(orso_type_size_bytes(types[field_count - 1])) * ORSO_SLOT_SIZE_BYTES;
-        i32 total_size = offsets[field_count - 1] + size_of_final;
+        i32 size_of_final = orso_bytes_to_slots(orso_type_size_bytes(type->data.struct_.fields[field_count - 1].type)) * ORSO_SLOT_SIZE_BYTES;
+        i32 total_size = type->data.struct_.fields[field_count - 1].offset + size_of_final;
 
-        type->data.struct_.field_byte_offsets = offsets;
         type->data.struct_.total_size = total_size;
     }
 
@@ -597,11 +636,31 @@ OrsoType* orso_type_set_fetch_anonymous_struct(OrsoTypeSet* set, i32 field_count
 OrsoType* orso_type_create_struct(OrsoTypeSet* set, char* name, i32 name_length, OrsoType* anonymous_struct) {
     ASSERT(ORSO_TYPE_IS_STRUCT(anonymous_struct) && anonymous_struct->data.struct_.name == NULL, "can only create struct from anonymous struct");
 
-    OrsoType* new_type = type_copy_new(set, anonymous_struct);
-    new_type->data.struct_.name = ORSO_ALLOCATE_N(char, name_length + 1);
-    memcpy(new_type->data.struct_.name, name, name_length);
-    new_type->data.struct_.name[name_length] = '\0';
+    if (anonymous_struct->data.struct_.constant_count == 0) {
+        OrsoType* new_type = type_copy_new(set, anonymous_struct);
+        new_type->data.struct_.name = ORSO_ALLOCATE_N(char, name_length + 1);
+        memcpy(new_type->data.struct_.name, name, name_length);
+        new_type->data.struct_.name[name_length] = '\0';
 
+        return new_type;
+    } else {
+        // here we know that the anonymous struct is unique because it has constants, and those are never shared
+        OrsoType* new_type = type_copy_new(NULL, anonymous_struct);
+
+        anonymous_struct->data.struct_ = new_type->data.struct_;
+
+        anonymous_struct->data.struct_.name = ORSO_ALLOCATE_N(char, name_length + 1);
+        memcpy(anonymous_struct->data.struct_.name, name, name_length);
+        anonymous_struct->data.struct_.name[name_length] = '\0';
+
+        free(new_type);
+
+        return anonymous_struct;
+    }
+}
+
+OrsoType* orso_type_unique_incomplete_struct_type(OrsoTypeSet* set) {
+    OrsoType* new_type = struct_type_new(set, NULL, -1, NULL, -1, 0);
     return new_type;
 }
 
@@ -609,11 +668,12 @@ void orso_named_struct_copy_data_from_completed_struct_type(OrsoType* incomplete
     OrsoType* copied_type = type_copy_new(NULL, complete_anonymous_struct);
 
     incomplete_named_struct->data.struct_.field_count = copied_type->data.struct_.field_count;
-    incomplete_named_struct->data.struct_.field_names = copied_type->data.struct_.field_names;
-    incomplete_named_struct->data.struct_.field_types = copied_type->data.struct_.field_types;
+    incomplete_named_struct->data.struct_.fields = copied_type->data.struct_.fields;
+
+    incomplete_named_struct->data.struct_.constant_count = copied_type->data.struct_.constant_count;
+    incomplete_named_struct->data.struct_.constants = copied_type->data.struct_.constants;
 
     incomplete_named_struct->data.struct_.total_size = copied_type->data.struct_.total_size;
-    incomplete_named_struct->data.struct_.field_byte_offsets = copied_type->data.struct_.field_byte_offsets;
 
     free(copied_type);
 }

@@ -36,7 +36,7 @@ logical_operations       -> unary ((`|` |`&`) unary)*
 unary                    -> (`not` | `-` | `&`) unary | call
 call                     -> primary ( `(` arguments? `)` ) | `.` IDENTIFIER )*
 arguments                -> argument (`,` argument)*
-argument                 -> (IDENTIFIER `=`)? expression
+argument                 -> (IDENTIFIER `:`)? expression
 
 primary                  -> `true` | `false` | `null` | IDENTIFIER | INTEGER | DECIMAL
                           | STRING | SYMBOL | `(` expression `)` | function_definition | function_type | struct_definition
@@ -98,6 +98,7 @@ void orso_ast_init(OrsoAST* ast, OrsoSymbolTable* symbols) {
     orso_symbol_table_init(&ast->builtins);
 
     ast->type_to_zero_index = kh_init(ptr2i32);
+    ast->type_to_creation_node = kh_init(type2ns);
 }
 
 void orso_ast_free(OrsoAST* ast) {
@@ -113,6 +114,9 @@ void orso_ast_free(OrsoAST* ast) {
 
     kh_destroy(ptr2i32, ast->type_to_zero_index);
     ast->type_to_zero_index = NULL;
+
+    kh_destroy(type2ns, ast->type_to_creation_node);
+    ast->type_to_creation_node = NULL;
 }
 
 OrsoASTNode* orso_ast_node_new(OrsoAST* ast, OrsoASTNodeType node_type, bool is_in_type_context, Token start) {
@@ -138,7 +142,7 @@ OrsoASTNode* orso_ast_node_new(OrsoAST* ast, OrsoASTNodeType node_type, bool is_
         case ORSO_AST_NODE_TYPE_DECLARATION: {
             node->data.declaration.initial_value_expression = NULL;
             node->data.declaration.fold_level_resolved_at = -1;
-            node->data.declaration.identifier = NULL;
+            node->data.declaration.identifier = (Token){ .start = 0, .length = 0, .type = TOKEN_IDENTIFIER, .line = -1 };
             node->data.declaration.is_mutable = false;
             node->data.declaration.type_expression = NULL;
             break;
@@ -177,7 +181,6 @@ OrsoASTNode* orso_ast_node_new(OrsoAST* ast, OrsoASTNodeType node_type, bool is_
         case ORSO_AST_NODE_TYPE_EXPRESSION_PRINT:
         case ORSO_AST_NODE_TYPE_EXPRESSION_PRINT_EXPR:
         case ORSO_AST_NODE_TYPE_STATEMENT_RETURN:
-        case ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY:
         case ORSO_AST_NODE_TYPE_EXPRESSION_STATEMENT:
         case ORSO_AST_NODE_TYPE_EXPRESSION_GROUPING: {
             node->data.expression = NULL;
@@ -200,6 +203,14 @@ OrsoASTNode* orso_ast_node_new(OrsoAST* ast, OrsoASTNodeType node_type, bool is_
         
         case ORSO_AST_NODE_TYPE_EXPRESSION_PRIMARY:
             break;
+        
+        case ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_DOT: {
+            node->data.dot.lhs = NULL;
+            node->data.dot.referencing_declaration = NULL;
+            node->data.dot.identifier = (Token){ .length = 0, .line = -1, .start = NULL, .type = TOKEN_IDENTIFIER };
+            break;
+        }
 
         case ORSO_AST_NODE_TYPE_UNDEFINED: break;// UNREACHABLE();
     }
@@ -426,19 +437,18 @@ static OrsoASTNode* literal(Parser* parser, bool is_in_type_context) {
     return expression_node;
 }
 
-static OrsoASTNode* convert_assignment_expression(Parser* parser, OrsoASTNode* left_operand, OrsoASTNode* assignment) {
-    if (left_operand->node_type != ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY) {
-        error_at(parser, &left_operand->start, "Expect entity name.");
-        free(left_operand);
-        free(assignment);
-        left_operand->node_type = ORSO_AST_NODE_TYPE_UNDEFINED;
-        return left_operand;
+static OrsoASTNode* convert_assignment_expression(Parser* parser, OrsoASTNode* left, OrsoASTNode* assignment) {
+    if (left->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY || left->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_DOT) {
+        assignment->start = left->start;
+        assignment->data.binary.lhs = left;
+        return assignment;
     }
 
-    assignment->start = left_operand->start;
-    assignment->data.binary.lhs = left_operand;
-
-    return assignment;
+    error_at(parser, &left->start, "Expect l-value.");
+    free(left);
+    free(assignment);
+    left->node_type = ORSO_AST_NODE_TYPE_UNDEFINED;
+    return left;
 }
 
 static OrsoASTNode* convert_call_expression(OrsoASTNode* left_operand, OrsoASTNode* call) {
@@ -483,6 +493,7 @@ static OrsoASTNode* assignment(Parser* parser, bool is_in_type_context) {
 
 static OrsoASTNode* named_variable(Parser* parser, bool is_in_type_context) {
     OrsoASTNode* expression_node = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY, is_in_type_context, parser->previous);
+    expression_node->data.dot.identifier = parser->previous;
     return expression_node;
 }
 
@@ -764,6 +775,18 @@ static OrsoASTNode* print_(Parser* parser, bool is_in_type_context) {
     return print_expression;
 }
 
+static OrsoASTNode* dot(Parser* parser, bool is_in_type_context) {
+    OrsoASTNode* dot_expression = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_EXPRESSION_DOT, is_in_type_context, parser->previous);
+
+    // TODO: Later, this will check if the next token is an identifier, curly or square brakets 
+    consume(parser, TOKEN_IDENTIFIER, "dot can only have identifiers on the right for now.");
+
+    dot_expression->data.dot.identifier = parser->previous;
+    dot_expression->end = parser->previous;
+
+    return dot_expression;
+}
+
 ParseRule rules[] = {
     [TOKEN_PARENTHESIS_OPEN]        = { grouping_or_function_signature,   call,       PREC_CALL },
     [TOKEN_PARENTHESIS_CLOSE]       = { NULL,       NULL,       PREC_NONE },
@@ -772,7 +795,7 @@ ParseRule rules[] = {
     [TOKEN_BRACKET_OPEN]            = { NULL,       NULL,       PREC_NONE },
     [TOKEN_BRACKET_CLOSE]           = { NULL,       NULL,       PREC_NONE },
     [TOKEN_COMMA]                   = { NULL,       NULL,       PREC_NONE },
-    [TOKEN_DOT]                     = { NULL,       NULL,       PREC_NONE },
+    [TOKEN_DOT]                     = { NULL,       dot,        PREC_CALL },
     [TOKEN_MINUS]                   = { unary,      binary,     PREC_TERM },
     [TOKEN_PLUS]                    = { NULL,       binary,     PREC_TERM },
     [TOKEN_STAR]                    = { NULL,       binary,     PREC_FACTOR },
@@ -852,6 +875,11 @@ static OrsoASTNode* parse_precedence(Parser* parser, bool is_in_type_context, Pr
         switch (right_operand->node_type) {
             case ORSO_AST_NODE_TYPE_EXPRESSION_BINARY:
                 right_operand->data.binary.lhs = left_operand;
+                right_operand->start = left_operand->start;
+                left_operand = right_operand;
+                break;
+            case ORSO_AST_NODE_TYPE_EXPRESSION_DOT:
+                right_operand->data.dot.lhs = left_operand;
                 right_operand->start = left_operand->start;
                 left_operand = right_operand;
                 break;
@@ -961,6 +989,8 @@ static OrsoASTNode* entity_declaration(Parser* parser, bool as_parameter) {
     entity_declaration_node->value_index = -1;
     entity_declaration_node->data.declaration.fold_level_resolved_at = -1;
     entity_declaration_node->data.declaration.is_mutable = false;
+
+    entity_declaration_node->data.declaration.identifier = parser->previous;
 
     consume(parser, TOKEN_COLON, "Expect explicit type.");
 
@@ -1084,13 +1114,13 @@ void ast_print_ast_node(OrsoASTNode* node, i32 initial, const char* prefix) {
             break;
         }
         case ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY: {
-            printf("entity(%.*s): %s\n", node->start.length, node->start.start, type_info);
+            printf("entity(%.*s): %s\n", node->data.dot.identifier.length, node->data.dot.identifier.start, type_info);
             break;
         }
         case ORSO_AST_NODE_TYPE_EXPRESSION_ASSIGNMENT: {
             printf("assignment: %s\n", type_info);
             ast_print_ast_node(node->data.binary.lhs, initial + 1, "lvalue: ");
-            ast_print_ast_node(node->data.binary.rhs, initial + 2, "rvalue: ");
+            ast_print_ast_node(node->data.binary.rhs, initial + 1, "rvalue: ");
             break;
         }
         case ORSO_AST_NODE_TYPE_EXPRESSION_BLOCK: {
@@ -1157,6 +1187,12 @@ void ast_print_ast_node(OrsoASTNode* node, i32 initial, const char* prefix) {
         case ORSO_AST_NODE_TYPE_STATEMENT_RETURN:
             printf("return\n");
             ast_print_ast_node(node->data.expression, initial + 1, "value: ");
+            break;
+        case ORSO_AST_NODE_TYPE_EXPRESSION_DOT:
+            printf("dot(%.*s): %s\n", node->data.dot.identifier.length, node->data.dot.identifier.start, type_info);
+            if (node->data.dot.lhs) {
+                ast_print_ast_node(node->data.dot.lhs, initial + 1, "target: ");
+            }
             break;
         case ORSO_AST_NODE_TYPE_DECLARATION: {
             printf("declaration(%.*s): ", node->start.length, node->start.start);

@@ -26,9 +26,8 @@ bool orso_struct_type_is_incomplete(OrsoType* type) {
             return true;
         }
     }
-    return ORSO_TYPE_IS_STRUCT(type) && type->data.struct_.field_count == 0;
+    return ORSO_TYPE_IS_STRUCT(type) && type->data.struct_.field_count < 0;
 }
-
 
 bool orso_type_equal(OrsoType* a, OrsoType* b) {
     if (a->kind != b->kind) {
@@ -88,17 +87,17 @@ bool orso_type_equal(OrsoType* a, OrsoType* b) {
             }
 
             for (i32 i = 0; i < a->data.struct_.field_count; i++) {
-                if (a->data.struct_.field_types[i] != b->data.struct_.field_types[i]) {
+                if (a->data.struct_.fields[i].type != b->data.struct_.fields[i].type) {
                     return false;
                 }
 
-                i32 field_name_length_a = strlen(a->data.struct_.field_names[i]);
-                i32 field_name_length_b = strlen(b->data.struct_.field_names[i]);
+                i32 field_name_length_a = strlen(a->data.struct_.fields[i].name);
+                i32 field_name_length_b = strlen(b->data.struct_.fields[i].name);
                 if (field_name_length_a != field_name_length_b) {
                     return false;
                 }
 
-                if (memcmp(a->data.struct_.field_names[i], b->data.struct_.field_names[i], field_name_length_a) != 0) {
+                if (memcmp(a->data.struct_.fields[i].name, b->data.struct_.fields[i].name, field_name_length_a) != 0) {
                     return false;
                 }
             }
@@ -288,7 +287,6 @@ i32 orso_type_size_bytes(OrsoType* type) {
             return 8;
         
         case ORSO_TYPE_STRUCT: {
-            ASSERT(type != &OrsoTypeIncompleteStruct, "not allowed incomplete structs in here");
             return type->data.struct_.total_size;
         }
 
@@ -456,7 +454,7 @@ i32 orso_type_to_cstrn_(OrsoType* type, char* buffer, i32 n, bool is_toplevel) {
             buffer += written;
 
             for (i32 i = 0; i < type->data.struct_.field_count; i++) {
-                char* name = type->data.struct_.field_names[i];
+                char* name = type->data.struct_.fields[i].name;
 
                 written = copy_to_buffer(buffer, name);
                 n -= written;
@@ -467,7 +465,7 @@ i32 orso_type_to_cstrn_(OrsoType* type, char* buffer, i32 n, bool is_toplevel) {
                 n -= written;
                 buffer += written;
 
-                OrsoType* field_type = type->data.struct_.field_types[i];
+                OrsoType* field_type = type->data.struct_.fields[i].type;
                 written = orso_type_to_cstrn_(field_type, buffer, n, false);
                 n -= (written - 1);
                 buffer += (written - 1);

@@ -25,19 +25,34 @@ extern OrsoType OrsoTypeInvalid;
 extern OrsoType OrsoTypeUnresolved;
 extern OrsoType OrsoTypeUndefined;
 
-extern OrsoType OrsoTypeIncompleteStruct;
-
 extern OrsoType OrsoTypeEmptyFunction;
 
 void orso_type_set_init(OrsoTypeSet* set);
 void orso_type_set_free(OrsoTypeSet* set);
 
 OrsoType* orso_type_set_fetch_union(OrsoTypeSet* set, OrsoType** types, i32 count);
-OrsoType* orso_type_set_fetch_function(OrsoTypeSet* set, OrsoType* return_type, OrsoType** arguments, i32 argument_count);
-OrsoType* orso_type_set_fetch_native_function(OrsoTypeSet* set, OrsoType* return_type, OrsoType** arguments, i32 argument_count);
-OrsoType* orso_type_set_fetch_anonymous_struct(OrsoTypeSet* set, i32 field_count, char** names, OrsoType** types);
+
+OrsoType* orso_type_set_fetch_function(
+    OrsoTypeSet* set,
+    OrsoType* return_type,
+    OrsoType** arguments, i32 argument_count);
+
+OrsoType* orso_type_set_fetch_native_function(
+    OrsoTypeSet* set,
+    OrsoType* return_type,
+    OrsoType** arguments, i32 argument_count);
+
+OrsoType* orso_type_set_fetch_anonymous_struct(
+    OrsoTypeSet* set,
+    i32 field_count, OrsoStructField* fields,
+    i32 constant_count, OrsoStructConstant* constants);
+
 OrsoType* orso_type_set_fetch_pointer(OrsoTypeSet* set, OrsoType* type);
+
 OrsoType* orso_type_create_struct(OrsoTypeSet* set, char* name, i32 name_length, OrsoType* anonymous_struct);
 
+OrsoType* orso_type_unique_incomplete_struct_type(OrsoTypeSet* set);
+
 void orso_named_struct_copy_data_from_completed_struct_type(OrsoType* incomplete_named_struct, OrsoType* complete_anonymous_struct);
+
 #endif

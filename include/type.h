@@ -28,11 +28,21 @@ typedef enum OrsoTypeKind {
     ORSO_TYPE_STRUCT,           // used for both anonymous and named
 } OrsoTypeKind;
 
-// struct OrsoSymbol;
-// typedef struct OrsoSymbol OrsoSymbol;
-
 struct OrsoType;
 typedef struct OrsoType OrsoType;
+
+typedef struct OrsoStructField {
+    char* name;
+    OrsoType* type;
+
+    // not relevant for hashing
+    i32 offset;
+} OrsoStructField;
+
+typedef struct OrsoStructConstant {
+    char *name;
+    OrsoType* type;
+} OrsoStructConstant;
 
 struct OrsoType {
     OrsoTypeKind kind;
@@ -49,15 +59,17 @@ struct OrsoType {
         } function;
 
         struct {
-            char* name; // null if anonymous
+            // null if anonymous
+            char* name;
 
             i32 field_count;
-            char** field_names;
-            OrsoType** field_types;
+            OrsoStructField* fields;
+
+            i32 constant_count;
+            OrsoStructConstant* constants;
 
             // not relevant for hashing
             i32 total_size;
-            i32* field_byte_offsets;
         } struct_;
 
         struct {

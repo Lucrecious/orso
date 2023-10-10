@@ -288,13 +288,14 @@ static OrsoType* get_folded_type(OrsoAST* ast, i32 index) {
 }
 
 typedef enum {
-    ENTITY_QUERY_ANY,
-    ENTITY_QUERY_TYPE,
-    ENTITY_QUERY_FUNCTION,
-} QueryType;
+    QUERY_FLAG_MATCH_ANY = 0x1,
+    QUERY_FLAG_MATCH_ONLY_IN_GIVEN_SCOPE = 0x2,
+    QUERY_FLAG_MATCH_TYPE = 0x4,
+    QUERY_FLAG_MACH_FUNCTION = 0x8,
+} QueryFlags;
 
 typedef struct EntityQuery  {
-    QueryType type;
+    QueryFlags flags;
     OrsoType* search_type;
     bool skip_mutable;
 } EntityQuery;
@@ -501,37 +502,39 @@ static void resolve_foldable(
         }
 
         case ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY: {
-            OrsoScope* entity_scope;
-            Token name = expression->start;
+            OrsoASTNode* referencing_declaration = expression->data.dot.referencing_declaration;
 
-            EntityQuery query = (EntityQuery){ .skip_mutable = (state.mode & MODE_CONSTANT_TIME) };
-            Entity* entity = get_resolved_entity_by_identifier(analyzer, ast, state, name, &query, &entity_scope);
-
-            if (!entity) {
+            // this happens when the referencing declaration cannot be found OR for a builtin type
+            unless (referencing_declaration) {
+                foldable = expression->foldable;
+                folded_index = expression->value_index;
                 break;
             }
 
-            if (entity->node && entity->node->data.declaration.is_mutable) {
+            if (referencing_declaration->data.declaration.is_mutable) {
                 foldable = false;
                 break;
             }
 
-            if (entity->node) {
-                if (entity->node->data.declaration.initial_value_expression) {
-                    foldable = entity->node->data.declaration.initial_value_expression->foldable;
-                    folded_index = entity->node->data.declaration.initial_value_expression->value_index;
+            if (referencing_declaration->data.declaration.initial_value_expression) {
+                foldable = referencing_declaration->data.declaration.initial_value_expression->foldable;
+                folded_index = referencing_declaration->data.declaration.initial_value_expression->value_index;
 
-                    unless (ORSO_TYPE_IS_INVALID(entity->node->data.declaration.initial_value_expression->value_type)) {
-                        ASSERT(folded_index >= 0, "since the entity is a constant, it should have a folded value already");
-                    }
-                } else {
-                    foldable = true;
-                    folded_index = entity->node->value_index;
+                unless (ORSO_TYPE_IS_INVALID(referencing_declaration->data.declaration.initial_value_expression->value_type)) {
+                    ASSERT(folded_index >= 0, "since the entity is a constant, it should have a folded value already");
                 }
             } else {
                 foldable = true;
-                folded_index = entity->value_index;
+                folded_index = referencing_declaration->value_index;
             }
+            break;
+        }
+
+        case ORSO_AST_NODE_TYPE_EXPRESSION_DOT: {
+            ASSERT(expression->data.dot.referencing_declaration, "referencing declaration must be present for dot expression");
+
+            foldable = expression->data.dot.referencing_declaration->foldable;
+            folded_index = expression->data.dot.referencing_declaration->value_index;
             break;
         }
 
@@ -1052,6 +1055,7 @@ void orso_resolve_expression(
                     expression->value_type = merged_type;
                     break;
                 }
+
                 default: UNREACHABLE();
             }
 
@@ -1120,18 +1124,116 @@ void orso_resolve_expression(
             EntityQuery query = {
                 .search_type = expression->is_in_type_context ? &OrsoTypeType : NULL,
                 .skip_mutable = (state.mode & MODE_CONSTANT_TIME),
-                .type = expression->is_in_type_context ? ENTITY_QUERY_TYPE : ENTITY_QUERY_ANY,
+                .flags = expression->is_in_type_context ? QUERY_FLAG_MATCH_TYPE : QUERY_FLAG_MATCH_ANY,
             };
 
-            Entity* entity = get_resolved_entity_by_identifier(analyzer, ast, state, expression->start, &query, &entity_scope);
+            Entity* entity = get_resolved_entity_by_identifier(analyzer, ast, state, expression->data.dot.identifier, &query, &entity_scope);
 
             if (entity == NULL) {
                 INVALIDATE(expression);
                 return;
             }
 
+            // keep for constant folding so not redo entity look up and simplify work there
+            expression->data.dot.referencing_declaration = entity->node;
+
             expression->value_type = entity->declared_type;
             expression->value_type_narrowed = entity->narrowed_type;
+
+            if (entity->node == NULL) {
+                expression->foldable = true;
+                expression->value_index = entity->value_index;
+            }
+            break;
+        }
+
+        case ORSO_AST_NODE_TYPE_EXPRESSION_DOT: {
+            OrsoASTNode* left = expression->data.dot.lhs;
+            ASSERT(left, "for now left must be present");
+
+            if (expression->data.dot.referencing_declaration) {
+                expression->value_type = expression->data.dot.referencing_declaration->value_type;
+                expression->value_type_narrowed = expression->data.dot.referencing_declaration->value_type;
+                break;
+            }
+
+            orso_resolve_expression(analyzer, ast, state, left);
+
+            if (ORSO_TYPE_IS_UNION(left->value_type_narrowed)) {
+                error_range(analyzer, left->start, left->end, "Member accessor can only be used on concrete non-union types.");
+                INVALIDATE(expression);
+                break;
+            }
+
+            if (ORSO_TYPE_IS_INVALID(left->value_type)) {
+                INVALIDATE(expression);
+                break;
+            }
+
+            OrsoASTNodeAndScope node_and_scope;
+            bool skip_mutable = false;
+            if (ORSO_TYPE_IS_STRUCT(left->value_type_narrowed)) {
+                khint_t key_index = kh_get(type2ns, ast->type_to_creation_node, left->value_type_narrowed);
+                node_and_scope = kh_value(ast->type_to_creation_node, key_index);
+            } else if (left->value_type_narrowed == &OrsoTypeType && ORSO_TYPE_IS_STRUCT(get_folded_type(ast, left->value_index))) {
+                OrsoType* struct_type = get_folded_type(ast, left->value_index);
+                khint_t key_index = kh_get(type2ns, ast->type_to_creation_node, struct_type);
+                node_and_scope = kh_value(ast->type_to_creation_node, key_index);
+                skip_mutable = true;
+            } else {
+                error_range(analyzer, left->start, left->end, "Member accessor can only be used on structs or struct types");
+                INVALIDATE(expression);
+                break;
+            }
+
+            OrsoASTNode* referencing_declaration = NULL;
+            for (i32 i = 0; i < sb_count(node_and_scope.node->data.struct_.declarations); i++) {
+                OrsoASTNode* declaration = node_and_scope.node->data.struct_.declarations[i];
+                if (skip_mutable && declaration->data.declaration.is_mutable) {
+                    continue;
+                }
+
+                Token declaration_name = declaration->data.declaration.identifier;
+                if (declaration_name.length == expression->data.dot.identifier.length &&
+                    strncmp(declaration_name.start, expression->data.dot.identifier.start, declaration_name.length) == 0) {
+                    referencing_declaration = declaration;
+                    break;
+                }
+            }
+
+            if (referencing_declaration == NULL) {
+                error_token(analyzer, expression->data.dot.identifier, "Field is not present in type.");
+                INVALIDATE(expression);
+                break;
+            }
+
+            // keep until constant folding so no need to redo the entity look up
+            expression->data.dot.referencing_declaration = referencing_declaration;
+
+            unless (is_declaration_resolved(referencing_declaration)) {
+                AnalysisState search_state = state;
+                search_state.scope = node_and_scope.scope;
+
+                EntityQuery query = {
+                    .flags = QUERY_FLAG_MATCH_ANY | QUERY_FLAG_MATCH_ONLY_IN_GIVEN_SCOPE,
+                    .skip_mutable = skip_mutable,
+                };
+
+                OrsoScope* found_scope;
+                Entity* entity = get_resolved_entity_by_identifier(analyzer, ast, search_state, expression->data.dot.identifier, &query, &found_scope);
+
+                unless (entity) {
+                    INVALIDATE(expression);
+                    break;
+                }
+
+                expression->value_type = entity->node->value_type;
+                expression->value_type_narrowed = entity->node->value_type;
+                break;
+            }
+
+            expression->value_type = referencing_declaration->value_type;
+            expression->value_type_narrowed = referencing_declaration->value_type;
             break;
         }
 
@@ -1143,31 +1245,55 @@ void orso_resolve_expression(
                 return;
             }
 
+            // TODO: Find a way to merge the fitting logic
+            if (expression->data.binary.lhs->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY) {
+                OrsoScope* entity_scope;
+                Entity* entity;
+                Token identifier = expression->data.binary.lhs->data.dot.identifier;
+                entity = get_resolved_entity_by_identifier(analyzer, ast, state, identifier, NULL, &entity_scope);
 
-            OrsoScope* entity_scope;
-            Entity* entity = get_resolved_entity_by_identifier(analyzer, ast, state, expression->start, NULL, &entity_scope);
+                
+                if (entity == NULL) {
+                    INVALIDATE(expression);
+                    return;
+                }
 
-            if (entity == NULL) {
-                INVALIDATE(expression);
-                return;
-            }
+                expression->value_type = expression->data.binary.rhs->value_type;
+                expression->value_type_narrowed = expression->data.binary.rhs->value_type_narrowed;
 
-            expression->value_type = expression->data.binary.rhs->value_type;
-            expression->value_type_narrowed = expression->data.binary.rhs->value_type_narrowed;
+                OrsoType* right_side_narrowed_type = expression->data.binary.rhs->value_type_narrowed;
+                expression->value_type = entity->declared_type;
+                
+                unless (orso_type_fits(entity->declared_type, right_side_narrowed_type)) {
+                    error_range(analyzer, expression->start, expression->end, "Explicit cast required to assign to variable.");
+                    return;
+                }
 
-            // no-commit: this needs to be used during the flow typing phase
-            OrsoType* right_side_narrowed_type = expression->data.binary.rhs->value_type_narrowed;
-            expression->value_type = entity->declared_type;
-            
-            unless (orso_type_fits(entity->declared_type, right_side_narrowed_type)) {
-                error_range(analyzer, expression->start, expression->end, "Explicit cast required.");
-                return;
-            }
+                expression->value_type_narrowed = right_side_narrowed_type;
 
-            expression->value_type_narrowed = right_side_narrowed_type;
+                if (ORSO_TYPE_IS_UNION(entity->declared_type)) {
+                    entity->narrowed_type = expression->value_type_narrowed;
+                }
 
-            if (ORSO_TYPE_IS_UNION(entity->declared_type)) {
-                entity->narrowed_type = expression->value_type_narrowed;
+            } else if (expression->data.binary.lhs->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_DOT) {
+                OrsoASTNode* dot_node = expression->data.binary.lhs;
+                orso_resolve_expression(analyzer, ast, state, dot_node);
+
+                if (ORSO_TYPE_IS_INVALID(dot_node->value_type)) {
+                    INVALIDATE(expression);
+                    return;
+                }
+
+                unless (orso_type_fits(dot_node->value_type, expression->data.binary.rhs->value_type_narrowed)) {
+                    error_range(analyzer, expression->start, expression->end, "Explicit cast required to cast to member.");
+                    return;
+                }
+
+                expression->value_type = dot_node->value_type;
+                expression->value_type_narrowed = dot_node->value_type;
+
+            } else {
+                UNREACHABLE();
             }
             break;
         }
@@ -1345,6 +1471,7 @@ void orso_resolve_expression(
             }
             break;
         }
+
         case ORSO_AST_NODE_TYPE_EXPRESSION_CALL: {
             bool argument_invalid = false;
             for (i32 i = 0; i < sb_count(expression->data.call.arguments); i++) {
@@ -1374,6 +1501,7 @@ void orso_resolve_expression(
             expression->value_type_narrowed = narrowed_callee_type->data.function.return_type;
             break;
         }
+
         case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION: {
             resolve_function_expression(analyzer, ast, state, expression);
             break;
@@ -1452,6 +1580,8 @@ static void declare_entity(OrsoStaticAnalyzer* analyzer, OrsoScope* scope, OrsoA
 }
 
 static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, AnalysisState state, OrsoASTNode* entity_declaration) {
+#define INITIAL_EXPRESSION (entity_declaration->data.declaration.initial_value_expression)
+
     OrsoType* declaration_type = &OrsoTypeUnresolved;
     if (entity_declaration->value_type == &OrsoTypeUnresolved && entity_declaration->data.declaration.type_expression) {
         bool pushed = push_dependency(analyzer, entity_declaration->data.declaration.type_expression, state.fold_level, is_value_circular_dependency);
@@ -1466,10 +1596,8 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
         }
     }
 
-    OrsoASTNode* initial_expression = entity_declaration->data.declaration.initial_value_expression;
-
-    if (initial_expression != NULL) {
-        if (initial_expression->value_type == &OrsoTypeUnresolved) {
+    if (INITIAL_EXPRESSION != NULL) {
+        if (INITIAL_EXPRESSION->value_type == &OrsoTypeUnresolved) {
             AnalysisState new_state = state;
             switch (state.scope->type) {
                 case SCOPE_TYPE_FUNCTION_BODY:
@@ -1560,11 +1688,11 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
         return;
     }
 
-    if (initial_expression && (initial_expression->value_type == &OrsoTypeUndefined || initial_expression->value_type == &OrsoTypeInvalid)) {
-        if (initial_expression->value_type == &OrsoTypeUndefined) {
+    if (INITIAL_EXPRESSION && (INITIAL_EXPRESSION->value_type == &OrsoTypeUndefined || INITIAL_EXPRESSION->value_type == &OrsoTypeInvalid)) {
+        if (INITIAL_EXPRESSION->value_type == &OrsoTypeUndefined) {
             error_range(analyzer,
-                initial_expression->start,
-                initial_expression->end,
+                INITIAL_EXPRESSION->start,
+                INITIAL_EXPRESSION->end,
                 "Initial declaration expression has an undefined type.");
         }
         
@@ -1572,29 +1700,40 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
     }
 
     unless (entity_declaration->data.declaration.is_mutable) {
-        if (initial_expression != NULL && ORSO_TYPE_IS_FUNCTION(initial_expression->value_type_narrowed)) {
-            OrsoFunction* function = (OrsoFunction*)ast->folded_constants[initial_expression->value_index].as.p;
+        if (INITIAL_EXPRESSION != NULL && ORSO_TYPE_IS_FUNCTION(INITIAL_EXPRESSION->value_type_narrowed)) {
+            OrsoFunction* function = (OrsoFunction*)ast->folded_constants[INITIAL_EXPRESSION->value_index].as.p;
             if (function->binded_name == NULL) {
                 function->binded_name = name;
             }
         }
 
-        if (initial_expression != NULL
-        && ORSO_TYPE_IS_STRUCT(initial_expression->value_type_narrowed)
+        if (INITIAL_EXPRESSION != NULL
+        && ORSO_TYPE_IS_STRUCT(INITIAL_EXPRESSION->value_type_narrowed)
         && (ORSO_TYPE_IS_UNRESOLVED(declaration_type) || declaration_type->kind == ORSO_TYPE_TYPE)) {
-            OrsoASTNode* to_struct_type = orso_ast_node_new(ast, ORSO_AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT, initial_expression->is_in_type_context, initial_expression->start);
+            OrsoASTNode* to_struct_type = orso_ast_node_new(ast, ORSO_AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT, INITIAL_EXPRESSION->is_in_type_context, INITIAL_EXPRESSION->start);
             to_struct_type->value_type = &OrsoTypeType;
             to_struct_type->value_type_narrowed = &OrsoTypeType;
-            to_struct_type->data.expression = initial_expression;
+            to_struct_type->data.expression = INITIAL_EXPRESSION;
 
             to_struct_type->fold = false;
             to_struct_type->foldable = true;
-            OrsoType* named_struct = orso_type_create_struct(&ast->type_set, entity_declaration->start.start, entity_declaration->start.length, initial_expression->value_type_narrowed);
+            OrsoType* named_struct = orso_type_create_struct(&ast->type_set, entity_declaration->start.start, entity_declaration->start.length, INITIAL_EXPRESSION->value_type_narrowed);
             OrsoSlot struct_type_slot = ORSO_SLOT_P(named_struct, &OrsoTypeType);
             to_struct_type->value_index = add_value_to_ast_constant_stack(ast, &struct_type_slot, &OrsoTypeType);
 
-            initial_expression = to_struct_type;
-            entity_declaration->data.declaration.initial_value_expression = initial_expression;
+            OrsoType* initial_expression_type = INITIAL_EXPRESSION->value_type_narrowed;
+
+            khint_t key_index = kh_get(type2ns, ast->type_to_creation_node, initial_expression_type);
+            ASSERT(key_index != kh_end(ast->type_to_creation_node), "this shoudl always find something");
+
+            INITIAL_EXPRESSION = to_struct_type;
+
+            OrsoASTNodeAndScope node_and_scope = kh_value(ast->type_to_creation_node, key_index);
+
+            int absent;
+            key_index = kh_put(type2ns, ast->type_to_creation_node, named_struct, &absent);
+
+            kh_value(ast->type_to_creation_node, key_index) = node_and_scope;
         }
     }
 
@@ -1606,11 +1745,11 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
     // TODO: Outer if should be if the expression is null or not
     unless (ORSO_TYPE_IS_UNION(entity_declaration->value_type)) {
         if (entity_declaration->value_type == &OrsoTypeUnresolved) {
-            ASSERT(initial_expression != NULL, "this should be a parsing error.");
+            ASSERT(INITIAL_EXPRESSION != NULL, "this should be a parsing error.");
 
             OrsoType* expression_type = entity_declaration->data.declaration.is_mutable ?
-                    initial_expression->value_type :
-                    initial_expression->value_type_narrowed;
+                    INITIAL_EXPRESSION->value_type :
+                    INITIAL_EXPRESSION->value_type_narrowed;
 
             if (expression_type != &OrsoTypeBool && orso_type_fits(&OrsoTypeInteger32, expression_type)) {
                 entity_declaration->value_type = &OrsoTypeInteger32;
@@ -1618,24 +1757,24 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
                 entity_declaration->value_type = expression_type;
             }
         } else {
-            unless (initial_expression == NULL || orso_type_fits(entity_declaration->value_type, initial_expression->value_type_narrowed)) {
-                unless (ORSO_TYPE_IS_INVALID(initial_expression->value_type)) {
-                    error_range(analyzer, initial_expression->start, initial_expression->end, "Explicit cast required to set define entity.");
+            unless (INITIAL_EXPRESSION == NULL || orso_type_fits(entity_declaration->value_type, INITIAL_EXPRESSION->value_type_narrowed)) {
+                unless (ORSO_TYPE_IS_INVALID(INITIAL_EXPRESSION->value_type)) {
+                    error_range(analyzer, INITIAL_EXPRESSION->start, INITIAL_EXPRESSION->end, "Explicit cast required to set define entity.");
                 }
             }
         }
     } else {
-        if (initial_expression != NULL && !orso_type_fits(entity_declaration->value_type, initial_expression->value_type)) {
+        if (INITIAL_EXPRESSION != NULL && !orso_type_fits(entity_declaration->value_type, INITIAL_EXPRESSION->value_type)) {
             error_range2(analyzer,
                     entity_declaration->data.declaration.type_expression->start, entity_declaration->data.declaration.type_expression->end,
-                    initial_expression->start, initial_expression->end, "Type mismatch between expression type and declaration type.");
+                    INITIAL_EXPRESSION->start, INITIAL_EXPRESSION->end, "Type mismatch between expression type and declaration type.");
         }
     }
 
     entity->declared_type = entity_declaration->value_type;
     entity->narrowed_type = entity_declaration->value_type;
 
-    if (initial_expression == NULL) {
+    if (INITIAL_EXPRESSION == NULL) {
         if (ORSO_TYPE_IS_UNION(entity_declaration->value_type)) {
             entity->narrowed_type = &OrsoTypeVoid;
         } 
@@ -1649,17 +1788,21 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
         }
 
         entity->node->value_index = value_index;
+        entity->node->foldable = value_index >= 0;
     } else {
-        entity->narrowed_type = initial_expression->value_type_narrowed;
-        if (IS_FOLDED(initial_expression)) {
-            entity->node->value_index = initial_expression->value_index;
-
-            if (ORSO_TYPE_IS_UNION(initial_expression->value_type)) {
-                OrsoType* folded_value_type = get_folded_type(ast, initial_expression->value_index);
+        entity->narrowed_type = INITIAL_EXPRESSION->value_type_narrowed;
+        if (IS_FOLDED(INITIAL_EXPRESSION)) {
+            if (ORSO_TYPE_IS_UNION(INITIAL_EXPRESSION->value_type)) {
+                OrsoType* folded_value_type = get_folded_type(ast, INITIAL_EXPRESSION->value_index);
                 entity->narrowed_type = folded_value_type;
             }
+
+            entity->node->value_index = INITIAL_EXPRESSION->value_index;
+            entity->node->foldable = INITIAL_EXPRESSION->value_index >= 0;
         }
     }
+
+#undef INITIAL_EXPRESSION
 }
 
 static Entity* get_builtin_entity(OrsoAST* ast, OrsoSymbol* identifier) {
@@ -1775,7 +1918,10 @@ static Entity* get_resolved_entity_by_identifier(
     while (*search_scope) {
         bool is_function_scope = (*search_scope)->type == SCOPE_TYPE_FUNCTION_PARAMETERS;
 
-    #define NEXT_SCOPE() if (is_function_scope) { passed_local_mutable_access_barrier = true; } *search_scope = (*search_scope)->outer
+    #define NEXT_SCOPE() \
+        if (is_function_scope) { passed_local_mutable_access_barrier = true; }\
+        if (query->flags & QUERY_FLAG_MATCH_ONLY_IN_GIVEN_SCOPE) { break; }\
+        *search_scope = (*search_scope)->outer
 
         unless (orso_symbol_table_get(&(*search_scope)->named_entities, identifier, &entity_slot)) {
             NEXT_SCOPE();
@@ -1905,17 +2051,17 @@ static Entity* get_resolved_entity_by_identifier(
             return entity;
         }
 
-        if (query->type == ENTITY_QUERY_ANY) {
+        if (query->flags == QUERY_FLAG_MATCH_ANY) {
             return entity;
         }
 
         OrsoType* type = entity->node->value_type;
 
-        if (query->type == ENTITY_QUERY_TYPE && query->search_type == type) {
+        if (query->flags == QUERY_FLAG_MATCH_TYPE && query->search_type == type) {
             return entity;
         }
 
-        if (query->type == ENTITY_QUERY_FUNCTION && ORSO_TYPE_IS_FUNCTION(type)) {
+        if (query->flags == QUERY_FLAG_MACH_FUNCTION && ORSO_TYPE_IS_FUNCTION(type)) {
             return entity;
         }
 
@@ -2191,15 +2337,30 @@ static void resolve_struct_definition(OrsoStaticAnalyzer* analyzer, OrsoAST* ast
 
     i32 declarations_count = sb_count(struct_definition->data.struct_.declarations);
 
-    struct_definition->value_type = &OrsoTypeIncompleteStruct;
-    struct_definition->value_type_narrowed = &OrsoTypeIncompleteStruct;
+    OrsoType* incomplete_struct = orso_type_unique_incomplete_struct_type(&ast->type_set);
+    struct_definition->value_type = incomplete_struct;
+    struct_definition->value_type_narrowed = incomplete_struct;
 
     struct_definition->foldable = true;
-    struct_definition->value_index = 1;
+    OrsoSlot unique_zero_slot = ORSO_SLOT_I(0, struct_definition->value_type_narrowed);
+    struct_definition->value_index = add_value_to_ast_constant_stack(ast, &unique_zero_slot, struct_definition->value_type_narrowed);
+
+    int absent;
+    khint_t key_index = kh_put(type2ns, ast->type_to_creation_node, struct_definition->value_type_narrowed, &absent);
+    kh_value(ast->type_to_creation_node, key_index) = (OrsoASTNodeAndScope){
+        .node = struct_definition,
+        .scope = &struct_scope
+    };
+
+    OrsoASTNodeAndScope node_and_scope = kh_value(ast->type_to_creation_node, key_index);
+
+    i32 field_count = 0;
 
     bool invalid_struct = false;
     for (i32 i = 0; i < declarations_count; i++) {
         OrsoASTNode* declaration = struct_definition->data.struct_.declarations[i];
+        field_count += (declaration->data.declaration.is_mutable);
+
         resolve_entity_declaration(analyzer, ast, state, declaration);
 
         if (ORSO_TYPE_IS_INVALID(declaration->value_type) || ORSO_TYPE_IS_UNRESOLVED(declaration->value_type)) {
@@ -2208,39 +2369,58 @@ static void resolve_struct_definition(OrsoStaticAnalyzer* analyzer, OrsoAST* ast
         }
     }
 
-    if (declarations_count == 0) {
-        invalid_struct = true;
-        error_range(analyzer, struct_definition->start, struct_definition->end, "Structs are not allowed to be empty.");
-    }
-
     if (invalid_struct) {
         INVALIDATE(struct_definition);
+        key_index = kh_get(type2ns, ast->type_to_creation_node, struct_definition->value_type_narrowed);
+        kh_value(ast->type_to_creation_node, key_index).scope = NULL;
         scope_free(&struct_scope);
         return;
     }
 
-    OrsoType* types[declarations_count];
-    for (i32 i = 0; i < declarations_count; i++) {
-        types[i] = struct_definition->data.struct_.declarations[i]->value_type;
+    i32 constant_count = declarations_count - field_count;
+
+    OrsoStructField fields[field_count];
+    OrsoStructConstant constants[constant_count];
+
+    {
+        i32 field_counter = 0;
+        i32 constant_counter = 0;
+
+        for (i32 i = 0; i < declarations_count; i++) {
+            Token identifier = struct_definition->data.struct_.declarations[i]->data.declaration.identifier;
+            char* name = ORSO_ALLOCATE_N(char, identifier.length + 1);
+
+            memcpy(name, identifier.start, identifier.length);
+            
+            name[identifier.length] = '\0';
+
+            if (struct_definition->data.struct_.declarations[i]->data.declaration.is_mutable) {
+                fields[field_counter].type = struct_definition->data.struct_.declarations[i]->value_type;
+                fields[field_counter].name = name;
+                field_counter++;
+            } else {
+                constants[constant_counter].type = struct_definition->data.struct_.declarations[i]->value_type;
+                constants[constant_counter].name = name;
+                constant_counter++;
+            }
+        }
     }
 
-    char* field_names[declarations_count];
-    for (i32 i = 0; i < declarations_count; i++) {
-        char* name = ORSO_ALLOCATE_N(char, struct_definition->data.struct_.declarations[i]->start.length);
-        strncpy(name, struct_definition->data.struct_.declarations[i]->start.start,
-                struct_definition->data.struct_.declarations[i]->start.length);
+    OrsoType* complete_struct_type;
 
-        field_names[i] = name;
+    complete_struct_type = orso_type_set_fetch_anonymous_struct(&ast->type_set, field_count, fields, constant_count, constants);
+
+    for (i32 i = 0; i < field_count; i++) {
+        free(fields[i].name);
     }
 
-    OrsoType* complete_struct_type = orso_type_set_fetch_anonymous_struct(&ast->type_set, declarations_count, (char**)field_names, (OrsoType**)types);
-    for (i32 i = 0; i < declarations_count; i++) {
-        free(field_names[i]);
+    for (i32 i = 0; i < constant_count; i++) {
+        free(constants[i].name);
     }
 
     i32 incomplete_index = -1;
     for (i32 i = 0; i < complete_struct_type->data.struct_.field_count; i++) {
-        OrsoType* field_type = complete_struct_type->data.struct_.field_types[i];
+        OrsoType* field_type = complete_struct_type->data.struct_.fields[i].type;
         if (orso_struct_type_is_incomplete(field_type)) {
             incomplete_index = i;
             break;
@@ -2258,6 +2438,10 @@ static void resolve_struct_definition(OrsoStaticAnalyzer* analyzer, OrsoAST* ast
         }
 
         struct_definition->value_index = add_value_to_ast_constant_stack(ast, struct_data, complete_struct_type);
+
+        key_index = kh_put(type2ns, ast->type_to_creation_node, complete_struct_type, &absent);
+        node_and_scope.scope = NULL;
+        kh_value(ast->type_to_creation_node, key_index) = node_and_scope;
     } else {
         INVALIDATE(struct_definition);
 

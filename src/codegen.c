@@ -809,7 +809,7 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode
         }
 
         case ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY: {
-            Token identifier_token = expression_node->start;
+            Token identifier_token = expression_node->data.dot.identifier;
             bool is_local;
             i32 index = retrieve_variable(vm, compiler, &identifier_token, &is_local);
 
@@ -825,6 +825,11 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode
             } else {
                 emit_instruction3(get_union_op, compiler, index, chunk, expression_node->start.line);
             }
+            break;
+        }
+
+        case ORSO_AST_NODE_TYPE_EXPRESSION_DOT: {
+            ASSERT(false, "not implemented");
             break;
         }
 

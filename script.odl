@@ -1,2 +1,9 @@
-x :: i32;
-y := #type &x;
+Foo :: struct {
+    Qux :: struct {
+        Thud :: Baz + 1;
+    };
+};
+
+Baz :: 69;
+
+print Foo.Qux.Thud;
