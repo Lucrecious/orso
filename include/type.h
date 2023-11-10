@@ -69,7 +69,7 @@ struct OrsoType {
             OrsoStructConstant* constants;
 
             // not relevant for hashing
-            i32 total_size;
+            i32 total_bytes;
         } struct_;
 
         struct {
@@ -138,5 +138,7 @@ OrsoType* orso_binary_arithmetic_cast(OrsoType* a, OrsoType* b, TokenType operat
 void orso_binary_comparison_casts(OrsoType* a, OrsoType* b, OrsoType** a_cast, OrsoType** b_cast);
 
 void orso_binary_equality_casts(OrsoType* a, OrsoType* b, OrsoType** a_cast, OrsoType** b_cast);
+
+//void generate_struct_layout()
 
 #endif

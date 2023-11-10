@@ -24,7 +24,13 @@ void mywrite(const char* chars) {
 
 typedef int (*int_getter)(void*);
 
+struct TEST {
+    short int x;
+    char c;
+};
+
 int main(int argc, char **argv) {
+    printf("size of char inside struct: %ld and size of int: %ld\n", sizeof(struct TEST), sizeof(int long));
     // if (argc < 2) {
     //     printf("No script file provided!\n");
     //     return 1;

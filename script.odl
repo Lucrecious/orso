@@ -1,9 +1,5 @@
-Foo :: struct {
-    Qux :: struct {
-        Thud :: Baz + 1;
-    };
+vector2 := struct {
+    x := 0;
+    y := 0.0;
 };
 
-Baz :: 69;
-
-print Foo.Qux.Thud;

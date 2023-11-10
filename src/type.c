@@ -287,7 +287,7 @@ i32 orso_type_size_bytes(OrsoType* type) {
             return 8;
         
         case ORSO_TYPE_STRUCT: {
-            return type->data.struct_.total_size;
+            return type->data.struct_.total_bytes;
         }
 
         case ORSO_TYPE_INVALID:

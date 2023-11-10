@@ -70,7 +70,7 @@ OrsoType* struct_type_new(OrsoTypeSet* set, OrsoStructField* fields, i32 field_c
     struct_type->data.struct_.fields = NULL;
     struct_type->data.struct_.constant_count = constant_count;
     struct_type->data.struct_.constants = NULL;
-    struct_type->data.struct_.total_size = total_size;
+    struct_type->data.struct_.total_bytes = total_size;
 
     if (field_count > 0) {
         struct_type->data.struct_.fields = ORSO_ALLOCATE_N(OrsoStructField, field_count);
@@ -145,7 +145,7 @@ OrsoType* type_copy_new(OrsoTypeSet* set, OrsoType* type) {
             type->data.struct_.field_count,
             type->data.struct_.constants,
             type->data.struct_.constant_count,
-            type->data.struct_.total_size);
+            type->data.struct_.total_bytes);
     }
 
     if (ORSO_TYPE_IS_POINTER(type)) {
@@ -185,7 +185,7 @@ void type_free(OrsoType* type) {
         free(type->data.struct_.name);
         type->data.struct_.name = NULL;
 
-        type->data.struct_.total_size = 0;
+        type->data.struct_.total_bytes = 0;
     }
 }
 
@@ -591,7 +591,7 @@ OrsoType* orso_type_set_fetch_anonymous_struct(OrsoTypeSet* set, i32 field_count
         .data.struct_.constant_count = constant_count,
         .data.struct_.constants = constants,
 
-        .data.struct_.total_size = 0,
+        .data.struct_.total_bytes = 0,
     };
 
     OrsoType* type;
@@ -627,7 +627,7 @@ OrsoType* orso_type_set_fetch_anonymous_struct(OrsoTypeSet* set, i32 field_count
         i32 size_of_final = orso_bytes_to_slots(orso_type_size_bytes(type->data.struct_.fields[field_count - 1].type)) * ORSO_SLOT_SIZE_BYTES;
         i32 total_size = type->data.struct_.fields[field_count - 1].offset + size_of_final;
 
-        type->data.struct_.total_size = total_size;
+        type->data.struct_.total_bytes = total_size;
     }
 
     return type;
@@ -673,7 +673,7 @@ void orso_named_struct_copy_data_from_completed_struct_type(OrsoType* incomplete
     incomplete_named_struct->data.struct_.constant_count = copied_type->data.struct_.constant_count;
     incomplete_named_struct->data.struct_.constants = copied_type->data.struct_.constants;
 
-    incomplete_named_struct->data.struct_.total_size = copied_type->data.struct_.total_size;
+    incomplete_named_struct->data.struct_.total_bytes = copied_type->data.struct_.total_bytes;
 
     free(copied_type);
 }

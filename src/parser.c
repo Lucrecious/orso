@@ -95,6 +95,9 @@ void orso_ast_init(OrsoAST* ast, OrsoSymbolTable* symbols) {
     sb_push(ast->folded_constants, void_slot);
     sb_push(ast->folded_constants, bool_slot);
 
+    ast->void_index = 0;
+    ast->true_index = 1;
+
     orso_symbol_table_init(&ast->builtins);
 
     ast->type_to_zero_index = kh_init(ptr2i32);

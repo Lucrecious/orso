@@ -202,6 +202,9 @@ typedef struct OrsoASTNodeAndScope {
 KHASH_INIT(type2ns, OrsoType*, OrsoASTNodeAndScope, 1, ptr_hash, ptr_equal)
 
 typedef struct OrsoAST {
+    i32 void_index;
+    i32 true_index;
+
     bool resolved;
     OrsoTypeSet type_set;
 

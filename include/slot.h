@@ -4,6 +4,7 @@
 #include "def.h"
 #include "type.h"
 
+// TODO: Separate type from OrsoSlot, OrsoSlot should only be data, no meta data.
 typedef struct OrsoSlot {
 #ifdef DEBUG_TRACE_EXECUTION
     OrsoType* type;

@@ -2342,8 +2342,7 @@ static void resolve_struct_definition(OrsoStaticAnalyzer* analyzer, OrsoAST* ast
     struct_definition->value_type_narrowed = incomplete_struct;
 
     struct_definition->foldable = true;
-    OrsoSlot unique_zero_slot = ORSO_SLOT_I(0, struct_definition->value_type_narrowed);
-    struct_definition->value_index = add_value_to_ast_constant_stack(ast, &unique_zero_slot, struct_definition->value_type_narrowed);
+    struct_definition->value_index = ast->true_index;
 
     int absent;
     khint_t key_index = kh_put(type2ns, ast->type_to_creation_node, struct_definition->value_type_narrowed, &absent);
@@ -2380,6 +2379,7 @@ static void resolve_struct_definition(OrsoStaticAnalyzer* analyzer, OrsoAST* ast
     i32 constant_count = declarations_count - field_count;
 
     OrsoStructField fields[field_count];
+    OrsoASTNode* ast_fields[field_count];
     OrsoStructConstant constants[constant_count];
 
     {
@@ -2397,6 +2397,9 @@ static void resolve_struct_definition(OrsoStaticAnalyzer* analyzer, OrsoAST* ast
             if (struct_definition->data.struct_.declarations[i]->data.declaration.is_mutable) {
                 fields[field_counter].type = struct_definition->data.struct_.declarations[i]->value_type;
                 fields[field_counter].name = name;
+
+                ast_fields[field_counter] = struct_definition->data.struct_.declarations[i];
+
                 field_counter++;
             } else {
                 constants[constant_counter].type = struct_definition->data.struct_.declarations[i]->value_type;
@@ -2431,13 +2434,24 @@ static void resolve_struct_definition(OrsoStaticAnalyzer* analyzer, OrsoAST* ast
         struct_definition->value_type = complete_struct_type;
         struct_definition->value_type_narrowed = complete_struct_type;
 
-        i32 size_in_slots = orso_bytes_to_slots(complete_struct_type->data.struct_.total_size);
-        OrsoSlot struct_data[size_in_slots];
-        for (i32 i = 0; i < size_in_slots; i++) {
-            struct_data[i] = ORSO_SLOT_I(0, &OrsoTypeVoid);
+        ASSERT(struct_definition->value_type->data.struct_.field_count == field_count, "completed struct must have the same number as fields as ast field declaration nodes");
+
+        i32 size_in_slots = orso_bytes_to_slots(complete_struct_type->data.struct_.total_bytes);
+        byte struct_data[size_in_slots * ORSO_SLOT_SIZE_BYTES];
+        for (i32 i = 0; i < size_in_slots * ORSO_SLOT_SIZE_BYTES; i++) {
+            struct_data[i] = 0;
         }
 
-        struct_definition->value_index = add_value_to_ast_constant_stack(ast, struct_data, complete_struct_type);
+        for (i32 i = 0; i < field_count; i++) {
+            i32 offset = complete_struct_type->data.struct_.fields[i].offset;
+            i32 copy_bytes = orso_type_size_bytes(complete_struct_type->data.struct_.fields[i].type);
+
+            OrsoASTNode* declaration = ast_fields[i];
+            byte* value_src = (byte*)&ast->folded_constants[declaration->value_index];
+            memcpy(struct_data + offset, value_src, copy_bytes);
+        }
+
+        struct_definition->value_index = add_value_to_ast_constant_stack(ast, (OrsoSlot*)struct_data, complete_struct_type);
 
         key_index = kh_put(type2ns, ast->type_to_creation_node, complete_struct_type, &absent);
         node_and_scope.scope = NULL;
@@ -2663,7 +2677,7 @@ i32 orso_zero_value(OrsoAST* ast, OrsoType* type, OrsoSymbolTable* symbol_table)
         }
 
         case ORSO_TYPE_STRUCT: {
-            for (i32 i = 0; i < orso_bytes_to_slots(type->data.struct_.total_size); i++) {
+            for (i32 i = 0; i < orso_bytes_to_slots(type->data.struct_.total_bytes); i++) {
                 value[i] = ORSO_SLOT_I(0, &OrsoTypeVoid);
             }
             break;
