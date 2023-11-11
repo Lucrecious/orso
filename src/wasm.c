@@ -5,7 +5,7 @@
 EMSCRIPTEN_KEEPALIVE
 void run_source(char* source, OrsoWriteFunction write_fn, OrsoErrorFunction error_fn) {
     OrsoVM vm;
-    orso_vm_init(&vm, write_fn);
+    orso_vm_init(&vm, write_fn, 1000000);
 
     orso_run_source(*vm, source, error_fn);
 

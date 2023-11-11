@@ -282,7 +282,7 @@ OrsoSymbol* orso_unmanaged_symbol_from_cstrn(const char* start, i32 length, Orso
     memcpy(symbol->text, start, length);
     symbol->text[length] = '\0';
 
-    OrsoSlot slot = ORSO_SLOT_I(0, &OrsoTypeVoid);
+    OrsoSlot slot = ORSO_SLOT_I(0);
     orso_symbol_table_set(symbol_table, symbol, slot);
 
     return symbol;
@@ -301,7 +301,7 @@ OrsoSymbol* orso_new_symbol_from_cstrn(const char* start, i32 length, OrsoSymbol
     memcpy(symbol->text, start, length);
     symbol->text[length] = '\0';
 
-    OrsoSlot slot = ORSO_SLOT_I(0, &OrsoTypeVoid);
+    OrsoSlot slot = ORSO_SLOT_I(0);
     orso_symbol_table_set(symbol_table, symbol, slot);
 
     return symbol;

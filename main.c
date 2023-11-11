@@ -101,7 +101,7 @@ int main(int argc, char **argv) {
     source[size] = '\0';
 
     OrsoVM vm;
-    orso_vm_init(&vm, mywrite);
+    orso_vm_init(&vm, mywrite, 1000);
     orso_run_source(&vm, source, myerror);
     orso_vm_free(&vm);
 

@@ -25,16 +25,23 @@ typedef struct OrsoVM {
 
     struct {
         OrsoSymbolTable name_to_index;
+#ifdef DEBUG_TRACE_EXECUTION
+        OrsoType** types;
+#endif
         OrsoSlot* values;
     } globals;
 
     OrsoSymbolTable symbols;
+
+#ifdef DEBUG_TRACE_EXECUTION
+    OrsoType** stack_types;
+#endif
     
     OrsoSlot* stack;
     OrsoSlot* stack_top;
 } OrsoVM;
 
-void orso_vm_init(OrsoVM* vm, OrsoWriteFunction write_fn);
+void orso_vm_init(OrsoVM* vm, OrsoWriteFunction write_fn, i32 stack_size);
 void orso_vm_free(OrsoVM* vm);
 
 void orso_vm_call(OrsoVM* vm, OrsoFunction* function);

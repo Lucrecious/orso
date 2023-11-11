@@ -19,7 +19,7 @@ static i32 constant_instruction(const char* name, Chunk* chunk, i32 offset, bool
     printf("%-16s %4d => ", name, index);
     orso_print_slot(chunk->constants[index],
 #ifdef DEBUG_TRACE_EXECUTION
-        chunk->constants[index].type
+        chunk->constant_types[index]
 #else
         &OrsoTypeUnresolved
 #endif

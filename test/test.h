@@ -38,7 +38,7 @@ void write_to_test_error_buffer(OrsoError error) {
 #define INTERPRETER_TEST(NAME, SOURCE, EXPECTED) MU_TEST(NAME) { \
     clear_test_buffer(); \
     OrsoVM vm; \
-    orso_vm_init(&vm, write_to_test_buffer); \
+    orso_vm_init(&vm, write_to_test_buffer, 1000); \
     orso_run_source(&vm, SOURCE, NULL); \
     orso_vm_free(&vm); \
     MU_ASSERT_STRING_EQ(EXPECTED, test_buffer); \
@@ -47,7 +47,7 @@ void write_to_test_error_buffer(OrsoError error) {
 #define INTERPRETER_ERROR_TEST(NAME, SOURCE, ERROR_TYPE, LINE, MESSAGE) MU_TEST(NAME) { \
     clear_test_error_buffer(); \
     OrsoVM vm; \
-    orso_vm_init(&vm, NULL); \
+    orso_vm_init(&vm, NULL, 1000); \
     orso_run_source(&vm, SOURCE, write_to_test_error_buffer); \
     orso_vm_free(&vm); \
     MU_ASSERT_STRING_EQ(MESSAGE, test_error_buffer); \

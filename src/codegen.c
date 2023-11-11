@@ -164,8 +164,15 @@ static void emit_instruction(const OrsoOPCode op_code, Compiler* compiler, Chunk
 }
 
 // TODO: Remove compiler from the parameters... instead try to bubble up the stack effect somehow
-static void emit_constant(Compiler* compiler, Chunk* chunk, OrsoSlot slot, i32 line) {
-    u32 index = chunk_add_constant(chunk, slot);
+#ifdef DEBUG_TRACE_EXECUTION
+#define EMIT_CONSTANT(compiler, chunk, slot, line, type) emit_constant(compiler, chunk, slot, line, type)
+static void emit_constant(Compiler* compiler, Chunk* chunk, OrsoSlot slot, i32 line, OrsoType* type)
+#else
+#define EMIT_CONSTANT(compiler, chunk, slot, line, type) emit_constant(compiler, chunk, slot, line)
+static void emit_constant(Compiler* compiler, Chunk* chunk, OrsoSlot slot, i32 line)
+#endif
+{
+    u32 index = CHUNK_ADD_CONSTANT(chunk, slot, type);
 
     if (index < UINT8_MAX) {
         emit_instruction(ORSO_OP_CONSTANT_SHORT, compiler, chunk, line);
@@ -250,7 +257,7 @@ static void emit_entity_get(Compiler* compiler, u32 index, Chunk* chunk, i32 lin
 }
 
 static void emit_put_in_union(Compiler* compiler, OrsoType* type, Chunk* chunk, i32 line) {
-    emit_constant(compiler, chunk, ORSO_SLOT_P(type, &OrsoTypeType), line);
+    EMIT_CONSTANT(compiler, chunk, ORSO_SLOT_P(type), line, &OrsoTypeType);
     emit_instruction(ORSO_OP_PUT_IN_UNION, compiler, chunk, line);
 }
 
@@ -361,17 +368,29 @@ static OrsoFunction* compiler_end(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, 
     return compiler->function;
 }
 
-static i32 add_global(OrsoVM* vm, Token* name, i32 slot_count) {
+#ifdef DEBUG_TRACE_EXECUTION
+#define DECLARE_GLOBAL(vm, name, slot_count, type) add_global(vm, name, slot_count, type)
+static i32 add_global(OrsoVM* vm, Token* name, i32 slot_count, OrsoType* type)
+#else
+#define DECLARE_GLOBAL(vm, name, slot_count, type) add_global(vm, name, slot_count)
+static i32 add_global(OrsoVM* vm, Token* name, i32 slot_count)
+#endif
+{
     OrsoSymbol* identifier = orso_new_symbol_from_cstrn(name->start, name->length, &vm->symbols);
 
     OrsoSlot index_slot;
     ASSERT(!orso_symbol_table_get(&vm->globals.name_to_index, identifier, &index_slot), "double global definition");
 
-    index_slot = ORSO_SLOT_I(sb_count(vm->globals.values), &OrsoTypeInteger32);
+    // Use the specific khash for this
+    index_slot = ORSO_SLOT_I(sb_count(vm->globals.values));
     orso_symbol_table_set(&vm->globals.name_to_index, identifier, index_slot);
 
     for (i32 i = 0; i < slot_count; i++) {
-        sb_push(vm->globals.values, ORSO_SLOT_I(0, &OrsoTypeInvalid));
+#ifdef DEBUG_TRACE_EXECUTION
+        sb_push(vm->globals.types, type);
+#endif
+
+        sb_push(vm->globals.values, ORSO_SLOT_I(0));
     }
 
     i32 index = index_slot.as.i;
@@ -407,10 +426,6 @@ static i32 add_local(Compiler* compiler, Token name, i32 slot_count) {
 
 static FORCE_INLINE bool is_global_scope(Compiler* compiler) {
     return compiler->scope_depth == 0;
-}
-
-static i32 declare_global_entity(OrsoVM* vm, Token* name, i32 slot_count) {
-    return add_global(vm, name, slot_count);
 }
 
 static i32 declare_local_entity(Compiler* compiler, Token* name, i32 slot_count) {
@@ -517,7 +532,7 @@ static OrsoType* gen_block(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, Chunk* 
 static void define_entity(OrsoVM* vm, Compiler* compiler, Chunk* chunk, OrsoType* type, Token* name, i32 line) {
     if (!ORSO_TYPE_IS_UNION(type)) {
         if (is_global_scope(compiler)) {
-            i32 index = declare_global_entity(vm, name, 1);
+            i32 index = DECLARE_GLOBAL(vm, name, 1, type);
             emit_instruction3(ORSO_OP_DEFINE_GLOBAL, compiler, index, chunk, line);
 
         } else {
@@ -526,7 +541,7 @@ static void define_entity(OrsoVM* vm, Compiler* compiler, Chunk* chunk, OrsoType
 
     } else {
         if (is_global_scope(compiler)) {
-            i32 index = declare_global_entity(vm, name, 2);
+            i32 index = DECLARE_GLOBAL(vm, name, 2, type);
             emit_instruction3(ORSO_OP_DEFINE_GLOBAL_UNION, compiler, index, chunk, line);
 
         } else {
@@ -552,7 +567,8 @@ static void function_expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, Or
     if (!compiler->skip_function_definitions && stored_function->chunk.code == NULL /*is not compiled yet*/) {
         orso_compile_function(vm, ast, stored_function, function_defintion_expression);
     }
-    emit_constant(compiler, chunk, ORSO_SLOT_P(stored_function, (OrsoType*)stored_function->signature), function_defintion_expression->start.line);
+    OrsoSlot function_value = ORSO_SLOT_P(stored_function);
+    EMIT_CONSTANT(compiler, chunk, function_value, function_defintion_expression->start.line, stored_function->signature);
 }
 
 static void gen_primary(Compiler* compiler, Chunk* chunk, OrsoAST* ast, OrsoType* value_type, i32 value_index, i32 line) {
@@ -571,10 +587,7 @@ static void gen_primary(Compiler* compiler, Chunk* chunk, OrsoAST* ast, OrsoType
             } else if (value->as.i == 1) {
                 emit_instruction(ORSO_OP_PUSH_1, compiler, chunk, line);
             } else {
-#ifdef DEBUG_TRACE_EXECUTION
-                value->type = value_type;
-#endif
-                emit_constant(compiler, chunk, *value, line);
+                EMIT_CONSTANT(compiler, chunk, *value, line, value_type);
             }
             break;
         }
@@ -584,18 +597,18 @@ static void gen_primary(Compiler* compiler, Chunk* chunk, OrsoAST* ast, OrsoType
         case ORSO_TYPE_NATIVE_FUNCTION:
         case ORSO_TYPE_SYMBOL:
         case ORSO_TYPE_STRING: {
-            emit_constant(compiler, chunk, *value, line);
+            EMIT_CONSTANT(compiler, chunk, *value, line, value_type);
             break;
         }
         case ORSO_TYPE_UNION: {
-            emit_constant(compiler, chunk, *value, line);
-            emit_constant(compiler, chunk, *(value + 1), line);
+            EMIT_CONSTANT(compiler, chunk, *value, line, &OrsoTypeType);
+            EMIT_CONSTANT(compiler, chunk, *(value + 1), line, value_type);
             break;
         }
 
         case ORSO_TYPE_STRUCT: {
-            emit_constant(compiler, chunk, *value, line);
-            //ASSERT(false, "not implemented");
+            EMIT_CONSTANT(compiler, chunk, *value, line, value_type);
+            ASSERT(false, "not implemented");
             break;
         }
 
@@ -1003,11 +1016,11 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode
 
             OrsoString* expression_string = orso_new_string_from_cstrn(start.start, (end.start + end.length) - start.start);
 
-            OrsoSlot slot = ORSO_SLOT_P(expression_string, &OrsoTypeString);
-            emit_constant(compiler, chunk, slot, start.line);
+            OrsoSlot slot = ORSO_SLOT_P(expression_string);
+            EMIT_CONSTANT(compiler, chunk, slot, start.line, &OrsoTypeString);
 
-            OrsoSlot value_type = ORSO_SLOT_P(expression_node->data.expression->value_type, &OrsoTypeType);
-            emit_constant(compiler, chunk, value_type, start.line);
+            OrsoSlot value_type = ORSO_SLOT_P(expression_node->data.expression->value_type);
+            EMIT_CONSTANT(compiler, chunk, value_type, start.line, &OrsoTypeType);
 
             if (expression_node->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_PRINT_EXPR) {
                 emit_instruction(ORSO_OP_PRINT_EXPR, compiler, chunk, start.line);
@@ -1060,7 +1073,7 @@ static void default_value(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, Chunk* c
         } else {
             ASSERT(entity_declaration->value_index >= 0, "if no expression, there must be an implicit value");
             OrsoSlot* default_value = &ast->folded_constants[entity_declaration->value_index];
-            emit_constant(compiler, chunk, *default_value, entity_declaration->end.line);
+            EMIT_CONSTANT(compiler, chunk, *default_value, entity_declaration->end.line, conform_type);
         }
     }
 }

@@ -215,6 +215,7 @@ typedef struct OrsoAST {
     OrsoASTNode** nodes;
 
     OrsoASTNode* root;
+    OrsoType** folded_constant_types;
     OrsoSlot* folded_constants;
 
     khash_t(ptr2i32)* type_to_zero_index;

@@ -85,13 +85,14 @@ void orso_ast_init(OrsoAST* ast, OrsoSymbolTable* symbols) {
     ast->resolved = false;
     ast->root = NULL;
     ast->nodes = NULL;
+    ast->folded_constant_types = NULL;
     ast->folded_constants = NULL;
     ast->symbols = symbols;
     ast->function_definition_pairs = NULL;
     orso_type_set_init(&ast->type_set);
 
-    OrsoSlot void_slot = ORSO_SLOT_I(0, &OrsoTypeUnresolved);
-    OrsoSlot bool_slot = ORSO_SLOT_I(1, &OrsoTypeUnresolved);
+    OrsoSlot void_slot = ORSO_SLOT_I(0);
+    OrsoSlot bool_slot = ORSO_SLOT_I(1);
     sb_push(ast->folded_constants, void_slot);
     sb_push(ast->folded_constants, bool_slot);
 
@@ -341,8 +342,9 @@ static OrsoType* value_to_integer_type(i64 value) {
     return &OrsoTypeInteger64;
 }
 
-static i32 add_constant_value(Parser* parser, OrsoSlot value) {
+static i32 add_constant_value(Parser* parser, OrsoSlot value, OrsoType* type) {
     i32 index = sb_count(parser->ast->folded_constants);
+    sb_push(parser->ast->folded_constant_types, type);
     sb_push(parser->ast->folded_constants, value);
     return index;
 }
@@ -380,13 +382,13 @@ static OrsoASTNode* number(Parser* parser, bool is_in_type_context) {
         case TOKEN_INTEGER: {
             i64 value = cstrn_to_i64(parser->previous.start, parser->previous.length);
             expression_node->value_type = value_to_integer_type(value);
-            expression_node->value_index = add_constant_value(parser, ORSO_SLOT_I(value, expression_node->value_type));
+            expression_node->value_index = add_constant_value(parser, ORSO_SLOT_I(value), expression_node->value_type);
             break;
         }
         case TOKEN_FLOAT: {
             f64 value = cstrn_to_f64(parser->previous.start, parser->previous.length);
             expression_node->value_type = &OrsoTypeFloat64;
-            expression_node->value_index = add_constant_value(parser, ORSO_SLOT_F(value, &OrsoTypeFloat64));
+            expression_node->value_index = add_constant_value(parser, ORSO_SLOT_F(value), &OrsoTypeFloat64);
             break;
         }
         default: UNREACHABLE();
@@ -408,25 +410,25 @@ static OrsoASTNode* literal(Parser* parser, bool is_in_type_context) {
             expression_node->value_type = &OrsoTypeBool;
 
             i64 is_true = (i64)(parser->previous.type == TOKEN_TRUE);
-            expression_node->value_index = add_constant_value(parser, ORSO_SLOT_I(is_true, &OrsoTypeBool));
+            expression_node->value_index = add_constant_value(parser, ORSO_SLOT_I(is_true), &OrsoTypeBool);
             break;
         }
         case TOKEN_NULL: {
             expression_node->value_type = &OrsoTypeVoid;
-            expression_node->value_index = add_constant_value(parser, ORSO_SLOT_I(0, &OrsoTypeVoid));
+            expression_node->value_index = add_constant_value(parser, ORSO_SLOT_I(0), &OrsoTypeVoid);
             break;
         }
         case TOKEN_STRING: {
             expression_node->value_type = &OrsoTypeString;
             OrsoString* value = orso_new_string_from_cstrn(expression_node->start.start + 1, expression_node->start.length - 2);
-            expression_node->value_index = add_constant_value(parser, ORSO_SLOT_P(value, &OrsoTypeString));
+            expression_node->value_index = add_constant_value(parser, ORSO_SLOT_P(value), &OrsoTypeString);
             break;
         };
 
         case TOKEN_SYMBOL: {
             expression_node->value_type = &OrsoTypeSymbol;
             OrsoSymbol* value = orso_new_symbol_from_cstrn(expression_node->start.start + 1, expression_node->start.length - 2, parser->ast->symbols);
-            expression_node->value_index = add_constant_value(parser, ORSO_SLOT_P(value, &OrsoTypeSymbol));
+            expression_node->value_index = add_constant_value(parser, ORSO_SLOT_P(value), &OrsoTypeSymbol);
             break;
         }
         default:

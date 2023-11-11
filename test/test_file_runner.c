@@ -101,7 +101,7 @@ bool run_test(Test* test) {
     char* source = test->code;
 
     OrsoVM vm;
-    orso_vm_init(&vm, write_to_test_buffer);
+    orso_vm_init(&vm, write_to_test_buffer, 1000);
 
     orso_run_source(&vm, source, write_to_test_error_buffer);
 

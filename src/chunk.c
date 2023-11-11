@@ -6,13 +6,26 @@
 #include "object.h"
 #include "sb.h"
 
-u32 chunk_add_constant(Chunk* chunk, OrsoSlot value) {
+#ifdef DEBUG_TRACE_EXECUTION
+u32 chunk_add_constant(Chunk* chunk, OrsoSlot value, OrsoType* type)
+#else
+u32 chunk_add_constant(Chunk* chunk, OrsoSlot value)
+#endif
+{
     u32 index = sb_count(chunk->constants);
     sb_push(chunk->constants, value);
+
+#ifdef DEBUG_TRACE_EXECUTION
+    sb_push(chunk->constant_types, type);
+#endif
+
     return index;
 }
 
 void chunk_init(Chunk* chunk) {
+#ifdef DEBUG_TRACE_EXECUTION
+    chunk->constant_types = NULL;
+#endif
     chunk->constants = NULL;
     chunk->code = NULL;
     chunk->lines = NULL;
@@ -22,6 +35,9 @@ void chunk_free(Chunk* chunk) {
     sb_free(chunk->code);
     sb_free(chunk->lines);
     sb_free(chunk->constants);
+#ifdef DEBUG_TRACE_EXECUTION
+    sb_free(chunk->constant_types);
+#endif
     chunk_init(chunk);
 }
 

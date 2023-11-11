@@ -4,11 +4,10 @@
 #include "def.h"
 #include "type.h"
 
-// TODO: Separate type from OrsoSlot, OrsoSlot should only be data, no meta data.
 typedef struct OrsoSlot {
-#ifdef DEBUG_TRACE_EXECUTION
-    OrsoType* type;
-#endif
+// #ifdef DEBUG_TRACE_EXECUTION
+//     OrsoType* type;
+// #endif
     union {
         i64 i;
         f64 f;
@@ -21,17 +20,17 @@ typedef struct OrsoSlot {
 
 #define ORSO_SLOT_SIZE_BYTES 8
 
-#ifdef DEBUG_TRACE_EXECUTION
-#define ORSO_SLOT_I(VALUE, TYPE) (OrsoSlot){ .as.i = VALUE, .type = TYPE }
-#define ORSO_SLOT_U(VALUE, TYPE) (OrsoSlot){ .as.u = VALUE, .type = TYPE }
-#define ORSO_SLOT_F(VALUE, TYPE) (OrsoSlot){ .as.f = VALUE, .type = TYPE }
-#define ORSO_SLOT_P(VALUE, TYPE) (OrsoSlot){ .as.p = VALUE, .type = TYPE }
-#else
-#define ORSO_SLOT_I(VALUE, TYPE) (OrsoSlot){ .as.i = VALUE }
-#define ORSO_SLOT_U(VALUE, TYPE) (OrsoSlot){ .as.u = VALUE }
-#define ORSO_SLOT_F(VALUE, TYPE) (OrsoSlot){ .as.f = VALUE }
-#define ORSO_SLOT_P(VALUE, TYPE) (OrsoSlot){ .as.p = VALUE }
-#endif
+// #ifdef DEBUG_TRACE_EXECUTION
+// #define ORSO_SLOT_I(VALUE) (OrsoSlot){ .as.i = VALUE, .type = TYPE }
+// #define ORSO_SLOT_U(VALUE) (OrsoSlot){ .as.u = VALUE, .type = TYPE }
+// #define ORSO_SLOT_F(VALUE) (OrsoSlot){ .as.f = VALUE, .type = TYPE }
+// #define ORSO_SLOT_P(VALUE) (OrsoSlot){ .as.p = VALUE, .type = TYPE }
+// #else
+#define ORSO_SLOT_I(VALUE) ((OrsoSlot){ .as.i = VALUE })
+#define ORSO_SLOT_U(VALUE) ((OrsoSlot){ .as.u = VALUE })
+#define ORSO_SLOT_F(VALUE) ((OrsoSlot){ .as.f = VALUE })
+#define ORSO_SLOT_P(VALUE) ((OrsoSlot){ .as.p = VALUE })
+// #endif
 
 bool FORCE_INLINE orso_slot_is_falsey(OrsoSlot slot) {
     return slot.as.u == 0;
