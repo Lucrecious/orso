@@ -7,16 +7,24 @@
 #include "sb.h"
 
 #ifdef DEBUG_TRACE_EXECUTION
-u32 chunk_add_constant(Chunk* chunk, OrsoSlot value, OrsoType* type)
+u32 chunk_add_constant(Chunk* chunk, byte* data, u32 size, OrsoType* type)
 #else
-u32 chunk_add_constant(Chunk* chunk, OrsoSlot value)
+u32 chunk_add_constant(Chunk* chunk, byte* data, u32 size)
 #endif
 {
+    u32 slot_size = orso_bytes_to_slots(size);
     u32 index = sb_count(chunk->constants);
-    sb_push(chunk->constants, value);
+    for (size_t i = 0; i < slot_size; i++) {
+        sb_push(chunk->constants, (OrsoSlot){ .as.i = 0 });
+#ifdef DEBUG_TRACE_EXECUTION
+        sb_push(chunk->constant_types, &OrsoTypeInvalid);
+#endif
+    }
+
+    memcpy(chunk->constants + index, data, size);
 
 #ifdef DEBUG_TRACE_EXECUTION
-    sb_push(chunk->constant_types, type);
+    chunk->constant_types[index] = type;
 #endif
 
     return index;

@@ -8,25 +8,41 @@
 #include "sb.h"
 #include "type_set.h"
 
-static i32 constant_instruction(const char* name, Chunk* chunk, i32 offset, bool is_short) {
-    u32 index;
+typedef enum {
+    II_GLOBAL,
+    II_LOCAL,
+    II_CONSTANT,
+} IndexInstruction;
 
-    if (is_short) {
-        index = chunk->code[offset + 1];
-    } else {
-        index = ORSO_u8s_to_u24(chunk->code[offset + 1], chunk->code[offset + 2], chunk->code[offset + 3]);
+static i32 index_instruction(const char* name, Chunk* chunk, i32 offset, u32 index_size_bytes, IndexInstruction instruction) {
+    u64 index = 0;
+    for (size_t i = 0; i < index_size_bytes; i++) {
+        index <<= 8;
+        index |= (byte)chunk->code[offset + 1 + i];
     }
-    printf("%-16s %4d => ", name, index);
-    orso_print_slot(chunk->constants[index],
-#ifdef DEBUG_TRACE_EXECUTION
-        chunk->constant_types[index]
-#else
-        &OrsoTypeUnresolved
-#endif
-    );
-    printf("\n");
 
-    return is_short ? offset + 2 : offset + 4;
+    switch (instruction) {
+        case II_LOCAL:
+        case II_GLOBAL: {
+            printf("%-16s %4llu\n", name, index);
+            break;
+        }
+
+        case II_CONSTANT: {
+            printf("%-16s %4llu => ", name, index);
+            orso_print_slot(chunk->constants[index / sizeof(OrsoSlot)],
+        #ifdef DEBUG_TRACE_EXECUTION
+                chunk->constant_types[index / sizeof(OrsoSlot)]
+        #else
+                &OrsoTypeUnresolved
+        #endif
+            );
+            printf("\n");
+        }
+    }
+
+
+    return offset + index_size_bytes + 2;
 }
 
 static i32 pop_scope_instruction(const char* name, Chunk* chunk, i32 offset) {
@@ -36,14 +52,6 @@ static i32 pop_scope_instruction(const char* name, Chunk* chunk, i32 offset) {
     printf("\n");
 
     return offset + 3;
-}
-
-static i32 instruction_3arg(const char* name, Chunk* chunk, i32 offset) {
-    u32 index = ORSO_u8s_to_u24(chunk->code[offset + 1], chunk->code[offset + 2], chunk->code[offset + 3]);
-    printf("%-16s %d", name, index);
-    printf("\n");
-
-    return offset + 4;
 }
 
 static i32 instruction_arg(const char* name, Chunk* chunk, i32 offset) {
@@ -79,10 +87,10 @@ i32 disassemble_instruction(Chunk* chunk, i32 offset) {
     switch(instruction) {
         case ORSO_OP_NO_OP: return simple_instruction("OP_NO_OP", offset);
         case ORSO_OP_POP: return simple_instruction("OP_POP", offset);
+        case ORSO_OP_POPN: return instruction_arg("OP_POPN", chunk, offset);
         case ORSO_OP_POP_SCOPE: return pop_scope_instruction("OP_POP_SCOPE", chunk, offset);
         case ORSO_OP_PUSH_0: return simple_instruction("OP_PUSH_0", offset);
         case ORSO_OP_PUSH_1: return simple_instruction("OP_PUSH_1", offset);
-        case ORSO_OP_PUSH_NULL_UNION: return simple_instruction("OP_PUSH_NULL_UNION", offset);
         case ORSO_OP_NEGATE_I64: return simple_instruction("OP_NEGATE_I64", offset);
         case ORSO_OP_NEGATE_F64: return simple_instruction("OP_NEGATE_F64", offset);
         case ORSO_OP_ADD_I64: return simple_instruction("OP_ADD_I64", offset);
@@ -104,20 +112,19 @@ i32 disassemble_instruction(Chunk* chunk, i32 offset) {
         case ORSO_OP_GREATER_F64: return simple_instruction("OP_GREATER_F64", offset);
         case ORSO_OP_EQUAL_STRING: return simple_instruction("OP_EQUAL_STRING", offset);
         case ORSO_OP_EQUAL_SYMBOL: return simple_instruction("OP_EQUAL_SYMBOL", offset);
-        case ORSO_OP_CONSTANT: return constant_instruction("OP_CONSTANT", chunk, offset, false);
-        case ORSO_OP_CONSTANT_SHORT: return constant_instruction("OP_CONSTANT_SHORT", chunk, offset, true);
-        case ORSO_OP_DEFINE_GLOBAL: return instruction_3arg("OP_DEFINE_GLOBAL", chunk, offset);
-        case ORSO_OP_SET_GLOBAL: return instruction_3arg("OP_SET_GLOBAL", chunk, offset);
-        case ORSO_OP_GET_GLOBAL: return instruction_3arg("OP_GET_GLOBAL", chunk, offset);
-        case ORSO_OP_GET_GLOBAL_SHORT: return instruction_arg("OP_GET_GLOBAL_SHORT", chunk, offset);
-        case ORSO_OP_DEFINE_GLOBAL_UNION: return instruction_3arg("OP_DEFINE_GLOBAL_UNION", chunk, offset);
-        case ORSO_OP_GET_GLOBAL_UNION: return instruction_3arg("OP_GET_GLOBAL_UNION", chunk, offset);
-        case ORSO_OP_SET_GLOBAL_UNION: return instruction_3arg("OP_SET_GLOBAL_UNION", chunk, offset);
-        case ORSO_OP_GET_LOCAL: return instruction_3arg("OP_GET_LOCAL", chunk, offset);
-        case ORSO_OP_GET_LOCAL_SHORT: return instruction_arg("OP_GET_LOCAL_SHORT", chunk, offset); 
-        case ORSO_OP_GET_LOCAL_UNION: return instruction_3arg("OP_GET_LOCAL_UNION", chunk, offset);
-        case ORSO_OP_SET_LOCAL: return instruction_3arg("OP_SET_LOCAL", chunk, offset);
-        case ORSO_OP_SET_LOCAL_UNION: return instruction_3arg("OP_SET_LOCAL_UNION", chunk, offset);
+        case ORSO_OP_CONSTANT_8BIT_ADDRESS: return index_instruction("OP_CONSTANT_8BIT_ADDRESS", chunk, offset, 1, II_CONSTANT);
+        case ORSO_OP_CONSTANT_16BIT_ADDRESS: return index_instruction("OP_CONSTANT_16BIT_ADDRESS", chunk, offset, 2, II_CONSTANT);
+        case ORSO_OP_CONSTANT_32BIT_ADDRESS: return index_instruction("OP_CONSTANT_32BIT_ADDRESS", chunk, offset, 4, II_CONSTANT);
+        case ORSO_OP_SET_LOCAL_8BIT_ADDRESS: return index_instruction("OP_SET_LOCAL_8BIT_ADDRESS", chunk, offset, 1, II_LOCAL);
+        case ORSO_OP_SET_LOCAL_16BIT_ADDRESS: return index_instruction("OP_SET_LOCAL_16BIT_ADDRESS", chunk, offset, 2, II_LOCAL);
+        case ORSO_OP_GET_LOCAL_8BIT_ADDRESS: return index_instruction("OP_GET_LOCAL_8BIT_ADDRESS", chunk, offset, 1, II_LOCAL);
+        case ORSO_OP_GET_LOCAL_16BIT_ADDRESS: return index_instruction("OP_GET_LOCAL_16BIT_ADDRESS", chunk, offset, 2, II_LOCAL);
+        case ORSO_OP_SET_GLOBAL_8BIT_ADDRESS: return index_instruction("OP_SET_GLOBAL_8BIT_ADDRESS", chunk, offset, 1, II_GLOBAL);
+        case ORSO_OP_SET_GLOBAL_16BIT_ADDRESS: return index_instruction("OP_SET_GLOBAL_16BIT_ADDRESS", chunk, offset, 2, II_GLOBAL);
+        case ORSO_OP_SET_GLOBAL_32BIT_ADDRESS: return index_instruction("OP_SET_GLOBAL_32BIT_ADDRESS", chunk, offset, 4, II_GLOBAL);
+        case ORSO_OP_GET_GLOBAL_8BIT_ADDRESS: return index_instruction("OP_GET_GLOBAL_8BIT_ADDRESS", chunk, offset, 1, II_GLOBAL);
+        case ORSO_OP_GET_GLOBAL_16BIT_ADDRESS: return index_instruction("OP_GET_GLOBAL_16BIT_ADDRESS", chunk, offset, 2, II_GLOBAL);
+        case ORSO_OP_GET_GLOBAL_32BIT_ADDRESS: return index_instruction("OP_GET_GLOBAL_32BIT_ADDRESS", chunk, offset, 4, II_GLOBAL);
         case ORSO_OP_JUMP_IF_UNION_FALSE: return jump_instruction("OP_JUMP_IF_UNION_FALSE", 1, chunk, offset);
         case ORSO_OP_JUMP_IF_UNION_TRUE: return jump_instruction("OP_JUMP_IF_UNION_TRUE", 1, chunk, offset);
         case ORSO_OP_JUMP_IF_FALSE: return jump_instruction("OP_JUMP_IF_FALSE", 1, chunk, offset);
@@ -125,7 +132,7 @@ i32 disassemble_instruction(Chunk* chunk, i32 offset) {
         case ORSO_OP_JUMP: return jump_instruction("OP_JUMP", 1, chunk, offset);
         case ORSO_OP_LOOP: return jump_instruction("OP_LOOP", -1, chunk, offset);
         case ORSO_OP_CALL: return simple_instruction("OP_CALL", offset + 2);
-        case ORSO_OP_PUT_IN_UNION: return simple_instruction("OP_PUT_IN_UNION", offset);
+        case ORSO_OP_PUT_IN_UNION: return instruction_arg("OP_PUT_IN_UNION", chunk, offset);
         case ORSO_OP_NARROW_UNION: return simple_instruction("OP_NARROW_UNION", offset);
         case ORSO_OP_CONCAT_STRING: return simple_instruction("OP_CONCAT_STRING", offset);
         case ORSO_OP_RETURN: return simple_instruction("OP_RETURN", offset + 1);

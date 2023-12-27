@@ -34,6 +34,14 @@ FORCE_INLINE bool i32max(i32 a, i32 b) {
   return a > b ? a : b;
 }
 
+FORCE_INLINE bool minu32(i32 a, i32 b) {
+  return a < b ? a : b;
+}
+
+FORCE_INLINE bool maxu32(i32 a, i32 b) {
+  return a > b ? a : b;
+}
+
 // Copied from Wren 
 #ifdef DEBUG
 

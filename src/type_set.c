@@ -620,11 +620,11 @@ OrsoType* orso_type_set_fetch_anonymous_struct(OrsoTypeSet* set, i32 field_count
             i32 previous_offset = type->data.struct_.fields[i - 1].offset;
             OrsoType* previous_type = fields[i - 1].type;
 
-            i32 bytes = orso_bytes_to_slots(orso_type_size_bytes(previous_type)) * ORSO_SLOT_SIZE_BYTES;
+            i32 bytes = orso_bytes_to_slots(orso_type_size_bytes(previous_type)) * sizeof(OrsoSlot);
             type->data.struct_.fields[i].offset = previous_offset + bytes;
         }
 
-        i32 size_of_final = orso_bytes_to_slots(orso_type_size_bytes(type->data.struct_.fields[field_count - 1].type)) * ORSO_SLOT_SIZE_BYTES;
+        i32 size_of_final = orso_bytes_to_slots(orso_type_size_bytes(type->data.struct_.fields[field_count - 1].type)) * sizeof(OrsoSlot);
         i32 total_size = type->data.struct_.fields[field_count - 1].offset + size_of_final;
 
         type->data.struct_.total_bytes = total_size;

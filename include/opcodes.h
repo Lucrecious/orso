@@ -7,6 +7,7 @@ typedef enum OrsoOPCode {
     ORSO_OP_NO_OP,
 
     ORSO_OP_POP,
+    ORSO_OP_POPN,
     ORSO_OP_POP_SCOPE,
 
     ORSO_OP_I64_TO_F64,
@@ -27,30 +28,35 @@ typedef enum OrsoOPCode {
 
     ORSO_OP_PUSH_1,
     ORSO_OP_PUSH_0,
-    ORSO_OP_PUSH_NULL_UNION,
 
-    ORSO_OP_CONSTANT_SHORT,
-    ORSO_OP_CONSTANT,
+    // get constant (address: n-bits, size: byte < 8)
+    ORSO_OP_CONSTANT_8BIT_ADDRESS,
+    ORSO_OP_CONSTANT_16BIT_ADDRESS,
+    ORSO_OP_CONSTANT_32BIT_ADDRESS,
 
-    ORSO_OP_SET_LOCAL,
-    ORSO_OP_GET_LOCAL,
-    ORSO_OP_GET_LOCAL_SHORT,
+    // set local (address: n-bits, size: byte)
+    ORSO_OP_SET_LOCAL_8BIT_ADDRESS,
+    ORSO_OP_SET_LOCAL_16BIT_ADDRESS,
 
-    ORSO_OP_SET_LOCAL_UNION,
-    ORSO_OP_GET_LOCAL_UNION,
+    // get local (address: n-bits, size: byte < 8)
+    ORSO_OP_GET_LOCAL_8BIT_ADDRESS,
+    ORSO_OP_GET_LOCAL_16BIT_ADDRESS,
     
-    ORSO_OP_DEFINE_GLOBAL,
-    ORSO_OP_SET_GLOBAL,
-    ORSO_OP_GET_GLOBAL,
-    ORSO_OP_GET_GLOBAL_SHORT,
+    // set global (address: n-bits, size: byte)
+    ORSO_OP_SET_GLOBAL_8BIT_ADDRESS,
+    ORSO_OP_SET_GLOBAL_16BIT_ADDRESS,
+    ORSO_OP_SET_GLOBAL_32BIT_ADDRESS,
 
-    ORSO_OP_DEFINE_GLOBAL_UNION,
-    ORSO_OP_GET_GLOBAL_UNION,
-    ORSO_OP_SET_GLOBAL_UNION,
+    // get global (address: n-bits, size: byte)
+    ORSO_OP_GET_GLOBAL_8BIT_ADDRESS,
+    ORSO_OP_GET_GLOBAL_16BIT_ADDRESS,
+    ORSO_OP_GET_GLOBAL_32BIT_ADDRESS,
 
+    // union stack manip
     ORSO_OP_PUT_IN_UNION,
     ORSO_OP_NARROW_UNION,
 
+    // jumps
     ORSO_OP_JUMP_IF_FALSE,
     ORSO_OP_JUMP_IF_TRUE,
     ORSO_OP_JUMP_IF_UNION_FALSE,
@@ -58,12 +64,13 @@ typedef enum OrsoOPCode {
     ORSO_OP_JUMP,
     ORSO_OP_LOOP,
 
+    // call
     ORSO_OP_CALL,
+    ORSO_OP_RETURN,
 
+    // builtin
     ORSO_OP_PRINT_EXPR,
     ORSO_OP_PRINT,
-
-    ORSO_OP_RETURN,
 } OrsoOPCode;
 
 #endif

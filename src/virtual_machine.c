@@ -72,6 +72,24 @@ static FORCE_INLINE void push_i64(OrsoVM* vm, OrsoSlot value) {
     vm->stack_top++;
 }
 
+#ifdef DEBUG_TRACE_EXECUTION
+#define RESERVE_STACK_SPACE(vm, slot_count, type) reserve_stack_space(vm, slot_count, type)
+static FORCE_INLINE void reserve_stack_space(OrsoVM* vm, u32 slot_count, OrsoType* type) {
+    for (u32 i = 0; i < slot_count; i++) {
+        vm->stack_types[vm->stack_top - vm->stack + i] = &OrsoTypeInvalid;
+    }
+    vm->stack_types[vm->stack_top - vm->stack] = type;
+#else
+#define RESERVE_STACK_SPACE(vm, slot_count, type) reserve_stack_space(vm, slot_count)
+static FORCE_INLINE void reserve_stack_space(OrsoVM* vm, u32 slot_count) {
+#endif
+
+    for (u32 i = 0; i < slot_count; i++) {
+        vm->stack_top->as.i = 0;
+        vm->stack_top++;
+    }
+}
+
 void orso_vm_push_object(OrsoVM* vm, OrsoObject* object) {
     *vm->stack_top = ORSO_SLOT_P(object);
 #ifdef DEBUG_TRACE_EXECUTION
@@ -142,6 +160,7 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
 #define READ_BYTE() *(frame->ip++)
 #define READ_U24() ORSO_u8s_to_u24(READ_BYTE(), READ_BYTE(), READ_BYTE())
 #define READ_U16() ORSO_u8s_to_u16(READ_BYTE(), READ_BYTE())
+#define READ_U32() ORSO_u8s_to_u32(READ_BYTE(), READ_BYTE(), READ_BYTE(), READ_BYTE())
 #define READ_TYPE_KIND() ORSO_u8s_to_TypeKind(READ_BYTE(), READ_BYTE())
 #define READ_TYPE() ORSO_TYPE_SINGLE(\
     ORSO_u8s_to_u64(\
@@ -239,14 +258,6 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
                 break;
             }
 
-            case ORSO_OP_PUSH_NULL_UNION: {
-                const OrsoSlot void_type = ORSO_SLOT_P(&OrsoTypeVoid);
-                const OrsoSlot null_value = ORSO_SLOT_I(0);
-                PUSH(void_type, &OrsoTypeType);
-                PUSH(null_value, &OrsoTypeVoid);
-                break;
-            }
-
             case ORSO_OP_POP_SCOPE: {
                 byte local_slot_count = READ_BYTE();
                 byte block_value_slots = READ_BYTE();
@@ -254,123 +265,161 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
 
                 for (i32 i = 0; i < block_value_slots; i++) {
                     vm->stack[stack_size - (local_slot_count + block_value_slots) + i] = *(vm->stack_top - block_value_slots + i);
+            #ifdef DEBUG_TRACE_EXECUTION
+                    u32 type_index = (vm->stack_top - block_value_slots + i) - vm->stack;
+                    vm->stack_types[stack_size - (local_slot_count + block_value_slots) + i] = *(vm->stack_types + type_index);
+            #endif
+
                 }
 
                 POPN(local_slot_count);
                 break;
             }
 
-            case ORSO_OP_CONSTANT: {
-                u32 index = READ_U24();
-                PUSH(frame->function->chunk.constants[index], frame->function->chunk.constant_types[index]);
+            case ORSO_OP_POPN: {
+                POPN(READ_BYTE());
                 break;
             }
 
-            case ORSO_OP_CONSTANT_SHORT: {
+#define PUSH_CONSTANT() do { \
+    OrsoSlot* current_top = vm->stack_top; \
+    RESERVE_STACK_SPACE(vm, orso_bytes_to_slots(size), (frame->function->chunk.constant_types[index / sizeof(OrsoSlot)])); \
+    byte* constant = ((byte*)frame->function->chunk.constants) + index; \
+    memcpy(current_top, constant, size); \
+} while(0)
+
+            case ORSO_OP_CONSTANT_8BIT_ADDRESS: {
                 byte index = READ_BYTE();
-                PUSH(frame->function->chunk.constants[index], frame->function->chunk.constant_types[index]);
+                byte size = READ_BYTE();
+
+                PUSH_CONSTANT();
                 break;
             }
 
-            case ORSO_OP_DEFINE_GLOBAL: {
-                u32 index = READ_U24();
-                vm->globals.values[index] = *PEEK(0);
-                POP();
+            case ORSO_OP_CONSTANT_16BIT_ADDRESS: {
+                u32 index = READ_U16();
+                byte size = READ_BYTE();
+
+                PUSH_CONSTANT();
                 break;
             }
 
-            case ORSO_OP_DEFINE_GLOBAL_UNION: {
-                u32 index = READ_U24();
-                OrsoSlot type = *PEEK(1);
-                vm->globals.values[index] = type;
-                vm->globals.values[index + 1] = *PEEK(0);
+            case ORSO_OP_CONSTANT_32BIT_ADDRESS: {
+                u32 index = READ_U32();
+                byte size = READ_BYTE();
 
-                POP();
-                POP();
+                PUSH_CONSTANT();
+                break;
+            }
+#undef PUSH_CONSTANT
+
+            case ORSO_OP_SET_GLOBAL_8BIT_ADDRESS: {
+                u32 index = READ_BYTE();
+                byte size = READ_BYTE();
+
+                u32 slot_size = orso_bytes_to_slots(size);
+                memcpy(((byte*)vm->globals.values) + index, PEEK(slot_size - 1), size);
                 break;
             }
 
-            case ORSO_OP_GET_GLOBAL: {
-                u32 index = READ_U24();
-                OrsoSlot slot = vm->globals.values[index];
-                PUSH(slot, vm->globals.types[index]);
+            case ORSO_OP_SET_GLOBAL_16BIT_ADDRESS: {
+                u32 index = READ_U16();
+                byte size = READ_BYTE();
+
+                u32 slot_size = orso_bytes_to_slots(size);
+                memcpy(((byte*)vm->globals.values) + index, PEEK(slot_size - 1), size);
                 break;
             }
 
-            case ORSO_OP_GET_GLOBAL_SHORT: {
+            case ORSO_OP_SET_GLOBAL_32BIT_ADDRESS: {
+                u32 index = READ_U32();
+                byte size = READ_BYTE();
+
+                u32 slot_size = orso_bytes_to_slots(size);
+                memcpy(((byte*)vm->globals.values) + index, PEEK(slot_size - 1), size);
+                break;
+            }
+
+#define PUSH_GLOBAL() do { \
+    OrsoSlot* current_top = vm->stack_top; \
+    RESERVE_STACK_SPACE(vm, orso_bytes_to_slots(size), (vm->globals.types[index / sizeof(OrsoSlot)])); \
+    byte* global = ((byte*)vm->globals.values) + index; \
+    memcpy(current_top, global, size); \
+} while(0)
+
+            case ORSO_OP_GET_GLOBAL_8BIT_ADDRESS: {
+                u32 index = READ_BYTE();
+                byte size = READ_BYTE();
+
+                PUSH_GLOBAL();
+                break;
+            }
+
+            case ORSO_OP_GET_GLOBAL_16BIT_ADDRESS: {
+                u32 index = READ_U16();
+                byte size = READ_BYTE();
+
+                PUSH_GLOBAL();
+                break;
+            }
+
+            case ORSO_OP_GET_GLOBAL_32BIT_ADDRESS: {
+                u32 index = READ_U32();
+                byte size = READ_BYTE();
+
+                PUSH_GLOBAL();
+                break;
+            }
+#undef PUSH_GLOBAL
+
+            case ORSO_OP_SET_LOCAL_8BIT_ADDRESS: {
                 byte index = READ_BYTE();
-                OrsoSlot slot = vm->globals.values[index];
-                PUSH(slot, vm->globals.types[index]);
+                byte size = READ_BYTE();
+
+                byte slot_size = orso_bytes_to_slots(size);
+                memcpy(((byte*)frame->slots) + index, PEEK(slot_size - 1), size);
                 break;
             }
 
-            case ORSO_OP_GET_LOCAL: {
-                u32 index = READ_U24();
-                OrsoSlot slot = frame->slots[index];
-                PUSH(slot, vm->stack_types[(vm->stack_top - 1) - (frame->slots + index)]);
+            case ORSO_OP_SET_LOCAL_16BIT_ADDRESS: {
+                u32 index = READ_U16();
+                byte size = READ_BYTE();
+
+                byte slot_size = orso_bytes_to_slots(size);
+                memcpy(((byte*)frame->slots) + index, PEEK(slot_size - 1), size);
                 break;
             }
 
-            case ORSO_OP_GET_LOCAL_SHORT: {
+#define PUSH_LOCAL() do { \
+    OrsoSlot* current_top = vm->stack_top; \
+    RESERVE_STACK_SPACE(vm, orso_bytes_to_slots(size), \
+        vm->stack_types[(vm->stack_top - 1) - (frame->slots + (index / sizeof(OrsoSlot)))]); \
+    byte* local = ((byte*)frame->slots) + index; \
+    memcpy(current_top, local, size); \
+} while(0)
+
+            case ORSO_OP_GET_LOCAL_8BIT_ADDRESS: {
                 byte index = READ_BYTE();
-                OrsoSlot slot = frame->slots[index];
-                PUSH(slot, vm->stack_types[(vm->stack_top - 1) - (frame->slots + index)]);
+                byte size = READ_BYTE();
+
+                PUSH_LOCAL();
                 break;
             }
 
-            case ORSO_OP_GET_GLOBAL_UNION: {
-                u32 index = READ_U24();
-                OrsoSlot type = vm->globals.values[index];
-                OrsoSlot value = vm->globals.values[index + 1];
+            case ORSO_OP_GET_LOCAL_16BIT_ADDRESS: {
+                u32 index = READ_U16();
+                byte size = READ_BYTE();
 
-                PUSH(type, vm->globals.types[index]);
-                PUSH(value, vm->globals.types[index + 1]);
+                PUSH_LOCAL();
                 break;
             }
-
-            case ORSO_OP_GET_LOCAL_UNION: {
-                u32 index = READ_U24();
-                OrsoSlot type = frame->slots[index];
-                OrsoSlot value = frame->slots[index + 1];
-
-                PUSH(type, vm->stack_types[(vm->stack_top - 1) - (frame->slots + index)]);
-                PUSH(value, vm->stack_types[(vm->stack_top - 1) - (frame->slots + index)]);
-                break;
-            }
-
-            case ORSO_OP_SET_GLOBAL: {
-                u32 index = READ_U24();
-                vm->globals.values[index] = *PEEK(0);
-                break;
-            }
-
-            case ORSO_OP_SET_LOCAL: {
-                u32 index = READ_U24();
-                frame->slots[index] = *PEEK(0);
-                break;
-            }
-
-            case ORSO_OP_SET_GLOBAL_UNION: {
-                OrsoSlot type = *PEEK(1);
-                OrsoSlot value = *PEEK(0);
-
-                u32 index = READ_U24();
-                vm->globals.values[index] = type;
-                vm->globals.values[index + 1] = value;
-                break;
-            }
-
-            case ORSO_OP_SET_LOCAL_UNION: {
-                OrsoSlot type = *PEEK(1);
-                OrsoSlot value = *PEEK(0);
-
-                u32 index = READ_U24();
-                frame->slots[index] = type;
-                frame->slots[index + 1] = value;
-                break;
-            }
+#undef PUSH_LOCAL
 
             case ORSO_OP_PUT_IN_UNION: {
+                printf("TODO: put in union needs to handle byte size");
+                byte size = READ_BYTE();
+                (void)size;
+
                 OrsoType* type = (OrsoType*)POP().as.p;
                 OrsoSlot value = POP();
                 PUSH(ORSO_SLOT_P(type), &OrsoTypeType);
@@ -492,6 +541,7 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
 #undef READ_TYPE_KIND
 #undef READ_U16
 #undef READ_U24
+#undef READ_U32
 #undef READ_BYTE
 }
 

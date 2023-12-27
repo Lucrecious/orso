@@ -19,11 +19,11 @@ void chunk_write(Chunk* chunk, byte byte, i32 line);
 i32 chunk_get_line(Chunk* chunk, i32 offset);
 
 #ifdef DEBUG_TRACE_EXECUTION
-#define CHUNK_ADD_CONSTANT(chunk, value, type) chunk_add_constant(chunk, value, type)
-u32 chunk_add_constant(Chunk* chunk, OrsoSlot value, OrsoType* type);
+#define CHUNK_ADD_CONSTANT(chunk, data, size, type) chunk_add_constant(chunk, data, size, type)
+u32 chunk_add_constant(Chunk* chunk, byte* data, u32 size, OrsoType* type);
 #else
-#define CHUNK_ADD_CONSTANT(chunk, value, type) chunk_add_constant(chunk, value)
-u32 chunk_add_constant(Chunk* chunk, OrsoSlot value);
+#define CHUNK_ADD_CONSTANT(chunk, data, size, type) chunk_add_constant(chunk, data, size)
+u32 chunk_add_constant(Chunk* chunk, byte* data, u32 size);
 #endif
 
 void orso_print_slot(OrsoSlot slot, OrsoType* type);

@@ -249,7 +249,7 @@ i32 orso_bytes_to_slots(i32 byte_count) {
         return 1;
     }
 
-    return byte_count / ORSO_SLOT_SIZE_BYTES + (byte_count % ORSO_SLOT_SIZE_BYTES != 0);
+    return (byte_count / sizeof(OrsoSlot)) + ((byte_count % sizeof(OrsoSlot) != 0));
 }
 
 i32 orso_type_size_bytes(OrsoType* type) {
@@ -320,12 +320,7 @@ bool orso_integer_fit(OrsoType* storage_type, OrsoType* value_type, bool include
 }
 
 i32 orso_type_slot_count(OrsoType* type) {
-    i32 slot_size = 1;
-    if (ORSO_TYPE_IS_UNION(type)) {
-        slot_size = 2;
-    }
-
-    return slot_size;
+    return orso_bytes_to_slots(orso_type_size_bytes(type));
 }
 
 bool orso_type_fits(OrsoType* storage_type, OrsoType* value_type) {

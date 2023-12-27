@@ -362,6 +362,7 @@ static bool can_call(OrsoType* type, OrsoASTNode** arguments) {
         OrsoType* parameter_type = type->data.function.argument_types[i];
         OrsoType* argument_type = arguments[i]->value_type_narrowed;
         if (!orso_type_fits(parameter_type, argument_type)) {
+            // TODO: error_range - argument is invalid
             return false;
         }
     }
@@ -454,7 +455,8 @@ static void resolve_foldable(
             OrsoASTNode* right = expression->data.binary.rhs;
             foldable = left->foldable && right->foldable;
 
-            if (expression->operator.type == TOKEN_BAR && left->value_type_narrowed == &OrsoTypeType && right->value_type_narrowed == &OrsoTypeType) {
+            if (expression->operator.type == TOKEN_BAR) {
+                ASSERT(left->value_type_narrowed == &OrsoTypeType && right->value_type_narrowed == &OrsoTypeType, "both left and right must be types");
                 OrsoType* lhs_folded_type = get_folded_type(ast, left->value_index);
                 OrsoType* rhs_folded_type = get_folded_type(ast, right->value_index);
 
@@ -605,14 +607,13 @@ static void resolve_foldable(
 
         case ORSO_AST_NODE_TYPE_EXPRESSION_STATEMENT: {
             switch (expression->data.statement->node_type) {
-                case ORSO_AST_NODE_TYPE_STATEMENT_RETURN: foldable = false; break;
-
                 case ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION: {
                     foldable = expression->data.statement->data.expression->foldable;
                     break;
                 }
 
-                case ORSO_AST_NODE_TYPE_UNDEFINED: break;
+                case ORSO_AST_NODE_TYPE_UNDEFINED:
+                case ORSO_AST_NODE_TYPE_STATEMENT_RETURN: foldable = false; break;
 
                 case ORSO_AST_NODE_TYPE_DECLARATION:
                 case ORSO_AST_NODE_TYPE_EXPRESSION_CASE: UNREACHABLE(); 
@@ -690,6 +691,8 @@ static void fold_constants_via_runtime(
     * it doesn't matter.
     */
     if (ORSO_TYPE_IS_UNION(expression->value_type)) {
+        ASSERT(!ORSO_TYPE_IS_UNION(expression->value_type_narrowed), "narrowed value type must not be union");
+
         OrsoType* narrowed_type = (OrsoType*)ast->folded_constants[value_index].as.p;
 
         if (state.mode & MODE_CONSTANT_TIME) {
@@ -942,7 +945,7 @@ void orso_resolve_expression(
         AnalysisState state,
         OrsoASTNode* expression) {
 
-    ASSERT(orso_ast_node_type_is_expression(expression->node_type), "should be only be expressions");
+    ASSERT(orso_ast_node_type_is_expression(expression->node_type), "should be only expressions");
 
     if (expression->value_type != &OrsoTypeUnresolved) {
         return;
@@ -1442,7 +1445,7 @@ void orso_resolve_expression(
 
             if (branch_return_guarentee == ORSO_NO_RETURN_GUARENTEED) {
                 OrsoType* else_block_type = &OrsoTypeVoid;
-                OrsoType* else_block_narrowed_type = else_block_type;
+                OrsoType* else_block_narrowed_type = &OrsoTypeVoid;
                 if (expression->data.branch.else_expression) {
                     else_block_type = expression->data.branch.else_expression->value_type;
                     else_block_narrowed_type = expression->data.branch.else_expression->value_type_narrowed;
@@ -1483,7 +1486,7 @@ void orso_resolve_expression(
             }
 
             OrsoType* narrowed_callee_type = expression->data.call.callee->value_type_narrowed;
-            if ((!ORSO_TYPE_IS_FUNCTION(narrowed_callee_type) && narrowed_callee_type->kind != ORSO_TYPE_NATIVE_FUNCTION) || !can_call(narrowed_callee_type, expression->data.call.arguments)) {
+            if ((!ORSO_TYPE_IS_FUNCTION(narrowed_callee_type) && !ORSO_TYPE_IS_NATIVE_FUNCTION(narrowed_callee_type)) || !can_call(narrowed_callee_type, expression->data.call.arguments)) {
                 error_range(analyzer, expression->data.call.callee->start, expression->data.call.callee->end, "Cannot call this value.");
                 return;
             }
@@ -1571,6 +1574,8 @@ static void declare_entity(OrsoStaticAnalyzer* analyzer, OrsoScope* scope, OrsoA
 }
 
 static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, AnalysisState state, OrsoASTNode* entity_declaration) {
+// due to the way structs are resolved, it is possible for the initial value expression to be swapped out with another
+// this is simply a safer way of accessing the initial value expression
 #define INITIAL_EXPRESSION (entity_declaration->data.declaration.initial_value_expression)
 
     OrsoType* declaration_type = &OrsoTypeUnresolved;
@@ -1931,11 +1936,13 @@ static Entity* get_resolved_entity_by_identifier(
             continue;
         }
 
+        // this means that the declaration is *after* the entity we are trying to resolve
         if (entity->node->data.declaration.is_mutable && !is_declaration_resolved(entity->node)) {
             NEXT_SCOPE();
             continue;
         }
 
+        // ensure that the value is resolved
         if (entity->node->data.declaration.initial_value_expression) {
             AnalysisState new_state = state;
             new_state.scope = *search_scope;
@@ -2042,17 +2049,17 @@ static Entity* get_resolved_entity_by_identifier(
             return entity;
         }
 
-        if (query->flags == QUERY_FLAG_MATCH_ANY) {
+        if (query->flags & QUERY_FLAG_MATCH_ANY) {
             return entity;
         }
 
         OrsoType* type = entity->node->value_type;
 
-        if (query->flags == QUERY_FLAG_MATCH_TYPE && query->search_type == type) {
+        if (query->flags & QUERY_FLAG_MATCH_TYPE && query->search_type == type) {
             return entity;
         }
 
-        if (query->flags == QUERY_FLAG_MACH_FUNCTION && ORSO_TYPE_IS_FUNCTION(type)) {
+        if (query->flags & QUERY_FLAG_MACH_FUNCTION && ORSO_TYPE_IS_FUNCTION(type)) {
             return entity;
         }
 
@@ -2090,17 +2097,14 @@ static void resolve_function_expression(
     scope_init(&function_parameter_scope, SCOPE_TYPE_FUNCTION_PARAMETERS, state.scope, function_definition_expression);
     OrsoType* parameter_types[parameter_count];
 
-    // forward declare parameters
-    for (i32 i = 0; i < sb_count(definition->parameter_nodes); i++) {
-        declare_entity(analyzer, &function_parameter_scope, definition->parameter_nodes[i]);
-    }
+    forward_scan_declaration_names(analyzer, &function_parameter_scope, definition->parameter_nodes, parameter_count);
 
     bool parameter_invalid = false;
 
     // Resolves parameters for function type
     for (i32 i = 0; i < parameter_count; i++) {
         AnalysisState new_state = state;
-        // parameters look syntacticly like mutables, but they their initial expressions should be constants
+        // parameters look syntacticly like mutables, but their initial expressions should be constants
         new_state.mode = MODE_CONSTANT_TIME | (state.mode & MODE_FOLDING_TIME);
         new_state.scope = &function_parameter_scope;
         resolve_entity_declaration(analyzer, ast, new_state, definition->parameter_nodes[i]);
@@ -2427,9 +2431,9 @@ static void resolve_struct_definition(OrsoStaticAnalyzer* analyzer, OrsoAST* ast
 
         ASSERT(struct_definition->value_type->data.struct_.field_count == field_count, "completed struct must have the same number as fields as ast field declaration nodes");
 
-        i32 size_in_slots = orso_bytes_to_slots(complete_struct_type->data.struct_.total_bytes);
-        byte struct_data[size_in_slots * ORSO_SLOT_SIZE_BYTES];
-        for (i32 i = 0; i < size_in_slots * ORSO_SLOT_SIZE_BYTES; i++) {
+        u64 size_in_slots = orso_bytes_to_slots(complete_struct_type->data.struct_.total_bytes);
+        byte struct_data[size_in_slots * sizeof(OrsoSlot)];
+        for (u64 i = 0; i < size_in_slots * sizeof(OrsoSlot); i++) {
             struct_data[i] = 0;
         }
 
@@ -2664,8 +2668,12 @@ i32 orso_zero_value(OrsoAST* ast, OrsoType* type, OrsoSymbolTable* symbol_table)
         
         case ORSO_TYPE_UNION: {
             ASSERT(orso_union_type_has_type(type, &OrsoTypeVoid), "must include void type if looking for zero value");
+            
+            u32 size_bytes = orso_type_size_bytes(type);
+            for (u32 i = 0; i < size_bytes; i++) {
+                value[i] = ORSO_SLOT_I(0);
+            }
             value[0] = ORSO_SLOT_P(&OrsoTypeVoid);
-            value[1] = ORSO_SLOT_I(0);
             break;
         }
 
