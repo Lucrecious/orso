@@ -222,6 +222,8 @@ static void emit(Compiler* compiler, Chunk* chunk, i32 line, const int op_code, 
         }
 
         case ORSO_OP_NARROW_UNION: {
+            byte byte_offset = (byte)va_arg(args, long);
+            chunk_write(chunk, byte_offset ,line);
             stack_effect = -1;
             break;
         }
@@ -354,7 +356,7 @@ static void emit_type_convert(Compiler* compiler, OrsoType* from_type, OrsoType*
 
 static void emit_storage_type_convert(Compiler* compiler, Chunk* chunk, OrsoType* source, OrsoType* destination, i32 line) {
     if (ORSO_TYPE_IS_UNION(source) && !ORSO_TYPE_IS_UNION(destination)) {
-        emit(compiler, chunk, line, ORSO_OP_NARROW_UNION);
+        emit(compiler, chunk, line, ORSO_OP_NARROW_UNION, orso_type_size_bytes(source));
     } else if (!ORSO_TYPE_IS_UNION(source) && ORSO_TYPE_IS_UNION(destination)) {
         emit_put_in_union(compiler, chunk, line, (OrsoType*)source);
     }
@@ -736,13 +738,13 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode
                     expression(vm, compiler, ast, left, chunk);
 
                     if (ORSO_TYPE_IS_UNION(left->value_type)) {
-                        emit(compiler, chunk, left->start.line, ORSO_OP_NARROW_UNION);
+                        emit(compiler, chunk, left->start.line, ORSO_OP_NARROW_UNION, orso_type_size_bytes(left->value_type));
                     }
 
                     expression(vm, compiler, ast, right, chunk);
 
                     if (ORSO_TYPE_IS_UNION(right->value_type)) {
-                        emit(compiler, chunk, right->start.line, ORSO_OP_NARROW_UNION);
+                        emit(compiler, chunk, right->start.line, ORSO_OP_NARROW_UNION, orso_type_size_bytes(right->value_type));;
                     }
 
                     if (orso_type_is_integer(left->value_type_narrowed, true)) {
@@ -806,10 +808,7 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode
 
         case ORSO_AST_NODE_TYPE_EXPRESSION_UNARY: {
             expression(vm, compiler, ast, expression_node->data.expression, chunk);
-            if (!ORSO_TYPE_IS_UNION(expression_node->value_type)
-                && ORSO_TYPE_IS_UNION(expression_node->data.expression->value_type)) {
-                emit(compiler, chunk, expression_node->start.line, ORSO_OP_NARROW_UNION);
-            }
+            emit_storage_type_convert(compiler, chunk, expression_node->data.expression->value_type, expression_node->value_type, expression_node->start.line);
 
             OrsoASTNode* unary = expression_node->data.expression;
             Token operator = expression_node->operator;
@@ -842,10 +841,7 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode
 
         case ORSO_AST_NODE_TYPE_EXPRESSION_GROUPING: {
             expression(vm, compiler, ast, expression_node->data.expression, chunk);
-            if (ORSO_TYPE_IS_UNION(expression_node->data.expression->value_type)
-                && !ORSO_TYPE_IS_UNION(expression_node->value_type)) {
-                emit(compiler, chunk, expression_node->end.line, ORSO_OP_NARROW_UNION);
-            }
+            emit_storage_type_convert(compiler, chunk, expression_node->data.expression->value_type, expression_node->value_type, expression_node->end.line);
             break;
         }
         
@@ -1075,13 +1071,7 @@ static void default_value(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, Chunk* c
     if (entity_declaration->data.declaration.initial_value_expression != NULL) {
         OrsoASTNode* default_expression = entity_declaration->data.declaration.initial_value_expression;
         expression(vm, compiler, ast, default_expression, chunk);
-
-        if (ORSO_TYPE_IS_UNION(conform_type) && !ORSO_TYPE_IS_UNION(default_expression->value_type)) {
-            emit_put_in_union(compiler, chunk, default_expression->start.line, default_expression->value_type);
-        } else if (!ORSO_TYPE_IS_UNION(conform_type) && ORSO_TYPE_IS_UNION(default_expression->value_type)) {
-            emit(compiler, chunk, default_expression->start.line, ORSO_OP_NARROW_UNION);
-        }
-
+        emit_storage_type_convert(compiler, chunk, default_expression->value_type, conform_type, default_expression->start.line);
     } else {
         if (ORSO_TYPE_IS_UNION(conform_type)) {
             ASSERT(orso_type_fits(conform_type, &OrsoTypeVoid), "default type only allowed for void type unions.");

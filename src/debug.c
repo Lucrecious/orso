@@ -30,7 +30,7 @@ static i32 index_instruction(const char* name, Chunk* chunk, i32 offset, u32 ind
 
         case II_CONSTANT: {
             printf("%-16s %4llu => ", name, index);
-            orso_print_slot(chunk->constants[index / sizeof(OrsoSlot)],
+            orso_print_slot(chunk->constants + (index / sizeof(OrsoSlot)),
         #ifdef DEBUG_TRACE_EXECUTION
                 chunk->constant_types[index / sizeof(OrsoSlot)]
         #else

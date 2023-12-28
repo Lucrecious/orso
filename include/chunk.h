@@ -26,7 +26,7 @@ u32 chunk_add_constant(Chunk* chunk, byte* data, u32 size, OrsoType* type);
 u32 chunk_add_constant(Chunk* chunk, byte* data, u32 size);
 #endif
 
-void orso_print_slot(OrsoSlot slot, OrsoType* type);
+void orso_print_slot(OrsoSlot* slot, OrsoType* type);
 
 void chunk_free(Chunk* chunk);
 

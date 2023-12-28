@@ -194,7 +194,7 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
 
             u32 index = entry->value.as.u;
             printf("%s = ", entry->key->text);
-            OrsoSlot value = vm->globals.values[index];
+            OrsoSlot* value = vm->globals.values + index;
             orso_print_slot(value, vm->globals.types[index]);
             printf("\n");
         }
@@ -203,7 +203,7 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
         i32 stack_size = vm->stack_top - vm->stack;
         for (i32 index = 0; index < stack_size; index++) {
             printf("[");
-            orso_print_slot(vm->stack[index], vm->stack_types[index]);
+            orso_print_slot(vm->stack + index, vm->stack_types[index]);
             printf("]");
         }
         printf(" }\n");
@@ -410,33 +410,52 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
                 u32 index = READ_U16();
                 byte size = READ_BYTE();
 
-                PUSH_LOCAL();
+                OrsoSlot* current_top = vm->stack_top;
+                RESERVE_STACK_SPACE(vm, orso_bytes_to_slots(size),
+                    vm->stack_types[(vm->stack_top - 1) - (frame->slots + (index / sizeof(OrsoSlot)))]);
+                byte* local = ((byte*)frame->slots) + index;
+                memcpy(current_top, local, size);
                 break;
             }
 #undef PUSH_LOCAL
 
             case ORSO_OP_PUT_IN_UNION: {
-                printf("TODO: put in union needs to handle byte size");
                 byte size = READ_BYTE();
-                (void)size;
 
-                OrsoType* type = (OrsoType*)POP().as.p;
-                OrsoSlot value = POP();
-                PUSH(ORSO_SLOT_P(type), &OrsoTypeType);
-                PUSH(value, type);
+                OrsoType* type = (OrsoType*)(PEEK(0)->as.p);
+                byte slot_size = orso_bytes_to_slots(size);
+                memmove(PEEK(slot_size-1), PEEK(slot_size), slot_size * sizeof(OrsoSlot));
+                // for (u32 i = 0; i < slot_size; ++i) {
+                //     *PEEK(i) = *PEEK(i + 1);
+                // }
+                PEEK(slot_size)->as.p = type;
+
+            #ifdef DEBUG_TRACE_EXECUTION
+                u32 stack_index = (vm->stack_top - slot_size - 1) - vm->stack;
+                for (u32 i = 0; i < slot_size + 1; ++i) {
+                    vm->stack_types[stack_index + i] = &OrsoTypeInvalid;
+                }
+
+                vm->stack_types[stack_index] = &OrsoTypeType;
+                vm->stack_types[stack_index + 1] = type;
+            #endif
                 break;
             }
 
             case ORSO_OP_NARROW_UNION: {
-                OrsoSlot value = POP();
+                byte type_offset = READ_BYTE();
+                ASSERT(type_offset % sizeof(OrsoSlot), "must be perfectly slot size");
+                byte slot_offset = type_offset / sizeof(OrsoSlot);
 
-#ifdef DEBUG_TRACE_EXECUTION
-                OrsoType* type = PEEK(0)->as.p;
-#endif
+            #ifdef DEBUG_TRACE_EXECUTION
+                u32 stack_index = (vm->stack_top - (slot_offset - 1)) - vm->stack;
 
-                // pop type
+                vm->stack_types[stack_index] = (OrsoType*)vm->stack[stack_index].as.p;
+            #endif
+
+                memmove(PEEK(slot_offset - 1), PEEK(slot_offset - 2), type_offset - sizeof(OrsoSlot));
+
                 POP();
-                PUSH(value, type);
                 break;
             }
 
@@ -485,7 +504,7 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
                 OrsoString* expression_string = (OrsoString*)(PEEK(0)->as.p);
                 OrsoType* union_type = (OrsoType*)PEEK(2)->as.p;
                 ASSERT(!ORSO_TYPE_IS_UNION(union_type), "must be single type.");
-                OrsoString* value_string = orso_slot_to_string(*PEEK(1), union_type);
+                OrsoString* value_string = orso_slot_to_string(PEEK(1), union_type);
 
                 if (vm->write_fn != NULL) {
                     if (op_code == ORSO_OP_PRINT_EXPR) {

@@ -258,7 +258,7 @@ i32 orso_type_size_bytes(OrsoType* type) {
             // take the max amount of bytes that value can take up
             i32 total = 0;
             for (i32 i = 0; i < type->data.union_.count; i++) {
-                total = i32max(orso_type_size_bytes(type->data.union_.types[i]), total);
+                total = maxi32(orso_type_size_bytes(type->data.union_.types[i]), total);
             }
 
             return total + sizeof(OrsoType*);

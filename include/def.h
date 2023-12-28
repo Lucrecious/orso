@@ -26,19 +26,19 @@ typedef void* ptr;
 #define unless(condition) if (!(condition))
 #define until(condition) while (!(condition))
 
-FORCE_INLINE bool i32min(i32 a, i32 b) {
+FORCE_INLINE i32 mini32(i32 a, i32 b) {
   return a < b ? a : b;
 }
 
-FORCE_INLINE bool i32max(i32 a, i32 b) {
+FORCE_INLINE i32 maxi32(i32 a, i32 b) {
   return a > b ? a : b;
 }
 
-FORCE_INLINE bool minu32(i32 a, i32 b) {
+FORCE_INLINE u32 minu32(i32 a, i32 b) {
   return a < b ? a : b;
 }
 
-FORCE_INLINE bool maxu32(i32 a, i32 b) {
+FORCE_INLINE u32 maxu32(i32 a, i32 b) {
   return a > b ? a : b;
 }
 

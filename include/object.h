@@ -71,9 +71,9 @@ FORCE_INLINE bool orso_string_equal(OrsoString* a, OrsoString* b) {
 OrsoString* orso_string_concat(OrsoString* a, OrsoString* b);
 
 // TODO: move to a better file
-char* orso_slot_to_new_cstrn(OrsoSlot slot, OrsoType* type);
+char* orso_slot_to_new_cstrn(OrsoSlot* slot, OrsoType* type);
 
-OrsoString* orso_slot_to_string(OrsoSlot slot, OrsoType* type);
+OrsoString* orso_slot_to_string(OrsoSlot* slot, OrsoType* type);
 
 OrsoString* orso_new_string_from_cstrn(const char* start, i32 length);
 

@@ -1,4 +1,2 @@
-{
-    x: i32|void = 48;
-    print x;
-};
+x: string|i32 = "hello world";
+print x;
