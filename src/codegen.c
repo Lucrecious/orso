@@ -501,7 +501,7 @@ static i32 add_local(Compiler* compiler, Token name, i32 slot_count) {
         local->stack_position = 0;
     }
 
-    ASSERT(local->stack_position == compiler->current_stack_size,
+    ASSERT(local->stack_position == compiler->current_stack_size - slot_count,
             "The calculated stack position for the local must properly related to the tracked compiler stack");
 
     return compiler->locals_count - 1;
@@ -612,21 +612,10 @@ static OrsoType* gen_block(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, Chunk* 
     return return_value_type;
 }
 
-static u64 define_entity(OrsoVM* vm, Compiler* compiler, Chunk* chunk, OrsoType* type, Token* name, i32 line) {
-    (void)chunk; // TODO: remove this paramter if necessary
-    (void)line;
-    if (is_global_scope(compiler)) {
-        // u32 byte_size = orso_type_size_bytes(type);
-        u32 slot_size = orso_type_slot_count(type);
-
-        u32 index = DECLARE_GLOBAL(vm, name, slot_size, type);
-        // index *= sizeof(OrsoSlot);
-        // emit(compiler, chunk, line, ORSO_OP_SET_GLOBAL_32BIT_ADDRESS, index, (long)byte_size);
-        // emit_pop(compiler, chunk, slot_size, line);
-        return index;
-    } else {
-        return declare_local_entity(compiler, name, orso_type_slot_count(type));
-    }
+static u64 define_global_entity(OrsoVM* vm, Token* name, OrsoType* type) {
+    u32 slot_size = orso_type_slot_count(type);
+    u32 index = DECLARE_GLOBAL(vm, name, slot_size, type);
+    return index;
 }
 
 static void declare_local_function_definition(Compiler* compiler, OrsoFunction* function){ 
@@ -1143,61 +1132,66 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode
 #undef EMIT_BINARY_OP
 }
 
-static void default_value(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, Chunk* chunk, OrsoASTNode* entity_declaration, u32 vm_index) {
+static void set_global_entity_default_value(OrsoVM* vm, OrsoAST* ast, OrsoASTNode* entity_declaration, u32 global_index) {
+    OrsoType* conform_type = entity_declaration->value_type;
+    if (entity_declaration->data.declaration.initial_value_expression != NULL) {
+        OrsoASTNode* default_expression = entity_declaration->data.declaration.initial_value_expression;
+        ASSERT(!ORSO_TYPE_IS_UNION(default_expression->value_type), "this should be a concrete type since its foldable");
+        ASSERT(default_expression->foldable && default_expression->value_index >= 0, "TODO: this needs to be caught and thrown");
+
+        u32 index = global_index;
+        u32 slot_count = orso_type_slot_count(conform_type);
+        if (ORSO_TYPE_IS_UNION(conform_type)) {
+            vm->globals.values[index] = ORSO_SLOT_P(default_expression->value_type);
+            index++;
+            slot_count--;
+        } 
+        
+        for (u32 i = 0; i < slot_count; ++i) {
+            vm->globals.values[index + i] = ast->folded_constants[default_expression->value_index + i];
+        }
+    } else {
+        if (ORSO_TYPE_IS_UNION(conform_type)) {
+            ASSERT(orso_type_fits(conform_type, &OrsoTypeVoid), "default type only allowed for void type unions.");
+            vm->globals.values[global_index] = ORSO_SLOT_P(&OrsoTypeVoid);
+            // no need to set any other value since they should be 0
+        } else {
+            memcpy(vm->globals.values + global_index, ast->folded_constants + entity_declaration->value_index, orso_type_slot_count(conform_type));
+        }
+    }
+}
+
+static void set_local_entity_default_value(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, Chunk* chunk, OrsoASTNode* entity_declaration) {
     OrsoType* conform_type = entity_declaration->value_type;
 
     if (entity_declaration->data.declaration.initial_value_expression != NULL) {
         OrsoASTNode* default_expression = entity_declaration->data.declaration.initial_value_expression;
 
-        if (is_global_scope(compiler)) {
-            ASSERT(!ORSO_TYPE_IS_UNION(default_expression->value_type), "this should be a concrete type since its foldable");
-            ASSERT(default_expression->foldable && default_expression->value_index >= 0, "TODO: this needs to be caught and thrown");
-
-            u32 index = vm_index;
-            u32 slot_count = orso_type_slot_count(conform_type);
-            if (ORSO_TYPE_IS_UNION(conform_type)) {
-                vm->globals.values[index] = ORSO_SLOT_P(default_expression->value_type);
-                index++;
-                slot_count--;
-            } 
-            
-            for (u32 i = 0; i < slot_count; ++i) {
-                vm->globals.values[index + i] = ast->folded_constants[default_expression->value_index + i];
-            }
-        } else {
-            expression(vm, compiler, ast, default_expression, chunk);
-            emit_storage_type_convert(compiler, chunk, default_expression->value_type, conform_type, default_expression->start.line);
-        }
+        expression(vm, compiler, ast, default_expression, chunk);
+        emit_storage_type_convert(compiler, chunk, default_expression->value_type, conform_type, default_expression->start.line);
     } else {
-        if (is_global_scope(compiler)) {
-            if (ORSO_TYPE_IS_UNION(conform_type)) {
-                ASSERT(orso_type_fits(conform_type, &OrsoTypeVoid), "default type only allowed for void type unions.");
-                vm->globals.values[vm_index] = ORSO_SLOT_P(&OrsoTypeVoid);
-                // no need to set any other value since they should be 0
-            } else {
-                memcpy(vm->globals.values + vm_index, ast->folded_constants + entity_declaration->value_index, orso_type_slot_count(conform_type));
-            }
+        if (ORSO_TYPE_IS_UNION(conform_type)) {
+            ASSERT(orso_type_fits(conform_type, &OrsoTypeVoid), "default type only allowed for void type unions.");
+            emit(compiler, chunk, entity_declaration->end.line, ORSO_OP_PUSH_0);
+            emit_put_in_union(compiler, chunk, entity_declaration->end.line, conform_type);
         } else {
-            if (ORSO_TYPE_IS_UNION(conform_type)) {
-                ASSERT(orso_type_fits(conform_type, &OrsoTypeVoid), "default type only allowed for void type unions.");
-                emit(compiler, chunk, entity_declaration->end.line, ORSO_OP_PUSH_0);
-                emit_put_in_union(compiler, chunk, entity_declaration->end.line, conform_type);
-            } else {
-                ASSERT(entity_declaration->value_index >= 0, "if no expression, there must be an implicit value");
-                OrsoSlot* default_value = &ast->folded_constants[entity_declaration->value_index];
-                emit_constant(compiler, chunk, (byte*)default_value, entity_declaration->end.line, conform_type);
-            }
+            ASSERT(entity_declaration->value_index >= 0, "if no expression, there must be an implicit value");
+            OrsoSlot* default_value = &ast->folded_constants[entity_declaration->value_index];
+            emit_constant(compiler, chunk, (byte*)default_value, entity_declaration->end.line, conform_type);
         }
     }
 }
 
 static void entity_declaration(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode* variable_declaration, Chunk* chunk) {
     ASSERT(variable_declaration->value_type != &OrsoTypeUnresolved, "all declarations must be resolved");
-    u32 index = define_entity(vm, compiler, chunk,
-            variable_declaration->value_type, &variable_declaration->start,
-            variable_declaration->start.line);
 
-    default_value(vm, compiler, ast, chunk, variable_declaration, index);
+    if (is_global_scope(compiler)) {
+        u32 index = define_global_entity(vm, &variable_declaration->start, variable_declaration->value_type);
+        set_global_entity_default_value(vm, ast, variable_declaration, index);
+    } else {
+        set_local_entity_default_value(vm, compiler, ast, chunk, variable_declaration);
+        declare_local_entity(compiler, &variable_declaration->start, orso_type_slot_count(variable_declaration->value_type));
+    }
 }
 
 static void declaration(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode* declaration, Chunk* chunk) {
@@ -1254,10 +1248,9 @@ OrsoFunction* orso_generate_expression_function(OrsoCodeBuilder* builder, OrsoAS
     compiler_init(&compiler, ORSO_FUNCTION_TYPE_SCRIPT, builder->vm, run_function, (OrsoType*)function_type);
     compiler.skip_function_definitions = !is_folding_time;
 
-    declare_local_function_definition(&compiler, compiler.function);
-
     // The vm will put this guy on the stack.
     compiler.max_stack_size = compiler.current_stack_size = 1;
+    declare_local_function_definition(&compiler, compiler.function);
 
     Chunk* top_chunk = &compiler.function->chunk;
 
@@ -1292,8 +1285,7 @@ void orso_compile_function(OrsoVM* vm, OrsoAST* ast, OrsoFunction* function, Ors
     for (i32 i = 0; i < sb_count(function_definition->parameter_nodes); i++) {
         OrsoASTNode* parameter = function_definition->parameter_nodes[i];
         apply_stack_effects(&function_compiler, orso_type_slot_count(parameter->value_type));
-        define_entity(vm, &function_compiler, function_chunk,
-                parameter->value_type, &parameter->start, parameter->start.line);
+        declare_local_entity(&function_compiler, &parameter->start, orso_type_slot_count(parameter->value_type));
     }
 
     expression(vm, &function_compiler, ast, function_definition->block, function_chunk);
@@ -1307,12 +1299,11 @@ OrsoFunction* orso_generate_code(OrsoVM* vm, OrsoAST* ast) {
     OrsoFunction* main_function = orso_new_function();
     compiler_init(&compiler, ORSO_FUNCTION_TYPE_SCRIPT, vm, main_function, (OrsoType*)function_type);
 
-    declare_local_function_definition(&compiler, compiler.function);
-
     // when a function is called it is placed on the stack. The caller does this... In this case,
     // the caller is the virtual machine. So we start at stack size 1 since it should be there when
     // the program starts.
     compiler.max_stack_size = compiler.current_stack_size = 1;
+    declare_local_function_definition(&compiler, compiler.function);
 
     Chunk* top_chunk = &compiler.function->chunk;
 

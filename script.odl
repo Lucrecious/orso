@@ -1,8 +1,12 @@
-v := struct {
-    w: i32|string = "hi";
+{
+    x := {
+        vector := struct {
+            x := 2;
+            y := 3;
+        };
+
+        vector.y;
+    };
+
+    print x;
 };
-
-foo: i32|string|void;
-foo = v.w;
-print foo;
-
