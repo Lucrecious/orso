@@ -531,8 +531,8 @@ static void resolve_foldable(
         case ORSO_AST_NODE_TYPE_EXPRESSION_DOT: {
             ASSERT(expression->data.dot.referencing_declaration, "referencing declaration must be present for dot expression");
 
-            foldable = expression->data.dot.referencing_declaration->foldable;
-            folded_index = expression->data.dot.referencing_declaration->value_index;
+            foldable = expression->foldable && expression->data.dot.referencing_declaration->foldable;
+            folded_index = foldable ? expression->data.dot.referencing_declaration->value_index : -1;
             break;
         }
 
@@ -2438,12 +2438,24 @@ static void resolve_struct_definition(OrsoStaticAnalyzer* analyzer, OrsoAST* ast
         }
 
         for (i32 i = 0; i < field_count; i++) {
-            i32 offset = complete_struct_type->data.struct_.fields[i].offset;
-            i32 copy_bytes = orso_type_size_bytes(complete_struct_type->data.struct_.fields[i].type);
-
+            OrsoType* field_type = complete_struct_type->data.struct_.fields[i].type;
+            u32 offset = complete_struct_type->data.struct_.fields[i].offset;
             OrsoASTNode* declaration = ast_fields[i];
+
+            u32 bytes_to_copy = orso_type_size_bytes(field_type);
+
+            if (ORSO_TYPE_IS_UNION(field_type)) {
+                OrsoType* value_expression_type = declaration->data.declaration.initial_value_expression == NULL ?
+                    &OrsoTypeType : declaration->data.declaration.initial_value_expression->value_type;
+                ASSERT(!ORSO_TYPE_IS_UNION(value_expression_type), "initial expression cannot be a union.");
+
+                memcpy(struct_data + offset, (byte*)(&value_expression_type), sizeof(OrsoSlot));
+                offset += sizeof(OrsoSlot);
+                bytes_to_copy -= sizeof(OrsoSlot);
+            }
+
             byte* value_src = (byte*)&ast->folded_constants[declaration->value_index];
-            memcpy(struct_data + offset, value_src, copy_bytes);
+            memcpy(struct_data + offset, value_src, bytes_to_copy);
         }
 
         struct_definition->value_index = add_value_to_ast_constant_stack(ast, (OrsoSlot*)struct_data, complete_struct_type);
@@ -2633,7 +2645,7 @@ void orso_static_analyzer_free(OrsoStaticAnalyzer* analyzer) {
 }
 
 i32 orso_zero_value(OrsoAST* ast, OrsoType* type, OrsoSymbolTable* symbol_table) {
-    ASSERT(false, "fix zero values for unions and structs");
+    // ASSERT(false, "fix zero values for unions and structs");
 
     khint_t key_index;
 
@@ -2669,8 +2681,8 @@ i32 orso_zero_value(OrsoAST* ast, OrsoType* type, OrsoSymbolTable* symbol_table)
         case ORSO_TYPE_UNION: {
             ASSERT(orso_union_type_has_type(type, &OrsoTypeVoid), "must include void type if looking for zero value");
             
-            u32 size_bytes = orso_type_size_bytes(type);
-            for (u32 i = 0; i < size_bytes; i++) {
+            u32 size_slots = orso_type_slot_count(type);
+            for (u32 i = 0; i < size_slots; i++) {
                 value[i] = ORSO_SLOT_I(0);
             }
             value[0] = ORSO_SLOT_P(&OrsoTypeVoid);

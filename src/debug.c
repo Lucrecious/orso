@@ -73,6 +73,21 @@ static i32 simple_instruction(const char* name, i32 offset) {
     return offset + 1;
 }
 
+
+static i32 get_field_instruction(const char* name, Chunk* chunk, i32 offset, bool has_field_size) {
+    //byte total_struct_size = chunk->code[offset + 1];
+    byte field_offset = chunk->code[offset + 2];
+
+    if (has_field_size) {
+        byte field_size = chunk->code[offset + 3];
+        printf("%-16s %4d (%d)\n", name, field_offset, field_size);
+        return offset + 4;
+    } else {
+        printf("%-16s %d\n", name, field_offset);
+        return offset + 3;
+    }
+}
+
 i32 disassemble_instruction(Chunk* chunk, i32 offset) {
     printf("%04d ", offset);
 
@@ -125,6 +140,12 @@ i32 disassemble_instruction(Chunk* chunk, i32 offset) {
         case ORSO_OP_GET_GLOBAL_8BIT_ADDRESS: return index_instruction("OP_GET_GLOBAL_8BIT_ADDRESS", chunk, offset, 1, II_GLOBAL);
         case ORSO_OP_GET_GLOBAL_16BIT_ADDRESS: return index_instruction("OP_GET_GLOBAL_16BIT_ADDRESS", chunk, offset, 2, II_GLOBAL);
         case ORSO_OP_GET_GLOBAL_32BIT_ADDRESS: return index_instruction("OP_GET_GLOBAL_32BIT_ADDRESS", chunk, offset, 4, II_GLOBAL);
+        case ORSO_OP_GET_FIELD_VOID: return get_field_instruction("ORSO_OP_GET_FIELD_VOID", chunk, offset, false);
+        case ORSO_OP_GET_FIELD_BOOL: return get_field_instruction("ORSO_OP_GET_FIELD_BOOL", chunk, offset, false);
+        case ORSO_OP_GET_FIELD_I32: return get_field_instruction("ORSO_OP_GET_FIELD_I32", chunk, offset, false);
+        case ORSO_OP_GET_FIELD_F32: return get_field_instruction("ORSO_OP_GET_FIELD_F32", chunk, offset, false);
+        case ORSO_OP_GET_FIELD_SLOT: return get_field_instruction("ORSO_OP_GET_FIELD_SLOT", chunk, offset, false);
+        case ORSO_OP_GET_FIELD_BYTES: return get_field_instruction("ORSO_OP_GET_FIELD_BYTES", chunk, offset, true);
         case ORSO_OP_JUMP_IF_UNION_FALSE: return jump_instruction("OP_JUMP_IF_UNION_FALSE", 1, chunk, offset);
         case ORSO_OP_JUMP_IF_UNION_TRUE: return jump_instruction("OP_JUMP_IF_UNION_TRUE", 1, chunk, offset);
         case ORSO_OP_JUMP_IF_FALSE: return jump_instruction("OP_JUMP_IF_FALSE", 1, chunk, offset);

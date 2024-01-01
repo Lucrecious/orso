@@ -29,28 +29,28 @@ typedef enum OrsoOPCode {
     ORSO_OP_PUSH_1,
     ORSO_OP_PUSH_0,
 
-    // get constant (address: n-bits, size: byte < 8)
     ORSO_OP_CONSTANT_8BIT_ADDRESS,
     ORSO_OP_CONSTANT_16BIT_ADDRESS,
     ORSO_OP_CONSTANT_32BIT_ADDRESS,
 
-    // set local (address: n-bits, size: byte)
     ORSO_OP_SET_LOCAL_8BIT_ADDRESS,
     ORSO_OP_SET_LOCAL_16BIT_ADDRESS,
-
-    // get local (address: n-bits, size: byte < 8)
     ORSO_OP_GET_LOCAL_8BIT_ADDRESS,
     ORSO_OP_GET_LOCAL_16BIT_ADDRESS,
     
-    // set global (address: n-bits, size: byte)
     ORSO_OP_SET_GLOBAL_8BIT_ADDRESS,
     ORSO_OP_SET_GLOBAL_16BIT_ADDRESS,
     ORSO_OP_SET_GLOBAL_32BIT_ADDRESS,
-
-    // get global (address: n-bits, size: byte)
     ORSO_OP_GET_GLOBAL_8BIT_ADDRESS,
     ORSO_OP_GET_GLOBAL_16BIT_ADDRESS,
     ORSO_OP_GET_GLOBAL_32BIT_ADDRESS,
+
+    ORSO_OP_GET_FIELD_VOID,
+    ORSO_OP_GET_FIELD_BOOL,
+    ORSO_OP_GET_FIELD_I32,
+    ORSO_OP_GET_FIELD_F32,
+    ORSO_OP_GET_FIELD_SLOT,
+    ORSO_OP_GET_FIELD_BYTES,
 
     // union stack manip
     ORSO_OP_PUT_IN_UNION,

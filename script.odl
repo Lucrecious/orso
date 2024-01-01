@@ -1,2 +1,8 @@
-x: string|i32 = "hello world";
-print x;
+v := struct {
+    w: i32|string = "hi";
+};
+
+foo: i32|string|void;
+foo = v.w;
+print foo;
+

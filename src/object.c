@@ -145,7 +145,10 @@ char* orso_slot_to_new_cstrn(OrsoSlot* slot, OrsoType* type) {
         }
 
         case ORSO_TYPE_STRUCT: {
-            return cstrn_new("<struct TODO proper print>", 27);
+            u32 size = type->data.struct_.total_bytes;
+            char buffer[256];
+            snprintf(buffer, 256, "<struct %d bytes>", size);
+            return cstrn_new(buffer, strlen(buffer));
         }
 
         case ORSO_TYPE_UNION: {

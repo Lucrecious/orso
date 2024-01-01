@@ -121,7 +121,9 @@ bool orso_type_is_or_has_integer(OrsoType* type, bool include_bool);
 
 i32 orso_bytes_to_slots(i32 byte_count);
 
-i32 orso_type_size_bytes(OrsoType* type);
+u32 orso_type_size_bytes(OrsoType* type);
+
+OrsoStructField* orso_type_struct_find_field(OrsoType* struct_, const char* name, size_t name_length);
 
 bool orso_integer_fit(OrsoType* storage_type, OrsoType* value_type, bool include_bool);
 

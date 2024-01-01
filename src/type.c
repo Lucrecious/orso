@@ -252,7 +252,23 @@ i32 orso_bytes_to_slots(i32 byte_count) {
     return (byte_count / sizeof(OrsoSlot)) + ((byte_count % sizeof(OrsoSlot) != 0));
 }
 
-i32 orso_type_size_bytes(OrsoType* type) {
+OrsoStructField* orso_type_struct_find_field(OrsoType* struct_, const char* name, size_t name_length) {
+    for (i32 i = 0; i < struct_->data.struct_.field_count; i++) {
+        if (strlen(struct_->data.struct_.fields[i].name) != name_length) {
+            continue;
+        }
+
+        if (strncmp(struct_->data.struct_.fields[i].name, name, name_length) != 0) {
+            continue;
+        }
+
+        return struct_->data.struct_.fields + i;
+    }
+
+    return NULL;
+}
+
+u32 orso_type_size_bytes(OrsoType* type) {
     switch (type->kind) {
         case ORSO_TYPE_UNION: {
             // take the max amount of bytes that value can take up

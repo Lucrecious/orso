@@ -107,3 +107,5 @@ int main(int argc, char **argv) {
 
     return 0;
 }
+
+// TODO: do error messages that act more like a tutorial 
