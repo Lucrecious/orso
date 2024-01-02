@@ -1134,13 +1134,13 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode
 
 static void set_global_entity_default_value(OrsoVM* vm, OrsoAST* ast, OrsoASTNode* entity_declaration, u32 global_index) {
     OrsoType* conform_type = entity_declaration->value_type;
+    u32 slot_count = orso_type_slot_count(conform_type);
     if (entity_declaration->data.declaration.initial_value_expression != NULL) {
         OrsoASTNode* default_expression = entity_declaration->data.declaration.initial_value_expression;
         ASSERT(!ORSO_TYPE_IS_UNION(default_expression->value_type), "this should be a concrete type since its foldable");
         ASSERT(default_expression->foldable && default_expression->value_index >= 0, "TODO: this needs to be caught and thrown");
 
         u32 index = global_index;
-        u32 slot_count = orso_type_slot_count(conform_type);
         if (ORSO_TYPE_IS_UNION(conform_type)) {
             vm->globals.values[index] = ORSO_SLOT_P(default_expression->value_type);
             index++;
@@ -1156,7 +1156,7 @@ static void set_global_entity_default_value(OrsoVM* vm, OrsoAST* ast, OrsoASTNod
             vm->globals.values[global_index] = ORSO_SLOT_P(&OrsoTypeVoid);
             // no need to set any other value since they should be 0
         } else {
-            memcpy(vm->globals.values + global_index, ast->folded_constants + entity_declaration->value_index, orso_type_slot_count(conform_type));
+            memcpy(&vm->globals.values[global_index], &ast->folded_constants[entity_declaration->value_index], orso_type_size_bytes(conform_type));
         }
     }
 }

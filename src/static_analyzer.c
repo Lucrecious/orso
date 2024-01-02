@@ -1684,6 +1684,8 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
         return;
     }
 
+
+
     if (INITIAL_EXPRESSION && (INITIAL_EXPRESSION->value_type == &OrsoTypeUndefined || INITIAL_EXPRESSION->value_type == &OrsoTypeInvalid)) {
         if (INITIAL_EXPRESSION->value_type == &OrsoTypeUndefined) {
             error_range(analyzer,
@@ -1730,6 +1732,16 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
             key_index = kh_put(type2ns, ast->type_to_creation_node, named_struct, &absent);
 
             kh_value(ast->type_to_creation_node, key_index) = node_and_scope;
+
+            
+            {
+                int absent;
+                khint_t index = kh_put(ptr2i32, ast->type_to_zero_index, named_struct, &absent);
+
+                i32 value_index = to_struct_type->data.expression->value_index;
+                ASSERT(value_index >= 0, "must be the value of the anonymous type");
+                kh_value(ast->type_to_zero_index, index) = value_index;
+            }
         }
     }
 
@@ -2645,8 +2657,6 @@ void orso_static_analyzer_free(OrsoStaticAnalyzer* analyzer) {
 }
 
 i32 orso_zero_value(OrsoAST* ast, OrsoType* type, OrsoSymbolTable* symbol_table) {
-    // ASSERT(false, "fix zero values for unions and structs");
-
     khint_t key_index;
 
     key_index = kh_get(ptr2i32, ast->type_to_zero_index, type);

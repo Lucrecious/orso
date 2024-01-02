@@ -130,6 +130,7 @@ typedef struct OrsoASTDeclaration {
 
     Token identifier;
     OrsoASTNode* type_expression;
+    
     OrsoASTNode* initial_value_expression;
 } OrsoASTDeclaration;
 
@@ -152,7 +153,7 @@ struct OrsoASTNode {
 
     bool foldable;
 
-    // primary, folding value
+    // primary, folding value, declaration default value
     i32 value_index;
 
     union {
