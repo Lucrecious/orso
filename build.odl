@@ -1,0 +1,62 @@
+compiler :: #load <compiler.odl>
+
+#run {
+    target := compiler.create_target_executable("./hello_world");
+
+    compiler.add_main_source(target, "./hello_world.odl");
+
+    compiler.compile(target);
+
+    compiler.execute(target);
+};
+
+// convenience function for very simple compilation
+#run {
+    // you can load almost anywhere even just inside a scope
+    compiler :: #load <compiler.odl> 
+
+    // __FILE_PATH__ is a constant that holds the absoulute path to this file
+    compiler.compile_and_run(main: __FILE_PATH__, output: __FILE_PATH__);
+};
+
+// with using on compiler
+#run {
+    using compiler;
+
+    target := create_target_executable("./hello_world");
+
+    add_main_source(target "./hello_world.sdl");
+
+    compile(target);
+
+    execute(target);
+};
+
+// possibly linking with sdl and using its include directory
+#run {
+    using compiler;
+
+    target := create_target_executable("./sdl_test");
+
+    add_main_source(target, "./test.odl");
+
+    add_c_load_directory(target, "/path/to/sdl/include");
+
+    add_c_library(target, "/path/to/sdl/library");
+
+    compile(target);
+
+    execute(target);
+};
+
+// building a library
+#run {
+    using compiler;
+
+    target := create_target_library("./library.odll");
+
+    add_source_directory("/path/to/library/files/");
+    add_source_file("/path/to/library/file);
+
+    compile(target);
+};
