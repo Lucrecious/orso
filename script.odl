@@ -1,16 +1,26 @@
-{
-    vector2 :: struct {
-        x := 0;
-        y := 0;
-    };
-    
-    v: vector2;
-
-    v.x = 420;
-    v.y = 69;
-
-    print v.x;
-    print v.y;
+vector2 :: struct {
+    x := 0.0;
+    y := 0.0;
 };
 
+add :: (a: vector2, b: vector2) -> vector2 {
+    return {
+        result: vector2;
+        result.x = a.x + b.x;
+        result.y = a.y + b.y;
+        result;
+    };
+};
 
+v1: vector2;
+v1.x = 32.0;
+v1.y = 380.0;
+
+v2: vector2;
+v2.x = 37.0;
+v2.y = 40.0;
+
+v3: vector2;
+v3 = add(v1, v2);
+print_expr v3.x;
+print_expr v3.y;

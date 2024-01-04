@@ -575,7 +575,6 @@ static i64 retrieve_local_variable(Compiler* compiler, Token* name) {
 
 static u32 retrieve_variable(OrsoVM* vm, Compiler* compiler, Token* name, bool* is_local) {
     i64 index = retrieve_local_variable(compiler, name);
-    i32 local_index;
     if (index < 0) {
         index = retrieve_global_variable(vm, name);
         ASSERT(index >= 0, "global must be defined.");
@@ -583,11 +582,10 @@ static u32 retrieve_variable(OrsoVM* vm, Compiler* compiler, Token* name, bool* 
         *is_local = false;
         return index;
     } else {
-        local_index = index;
         index = compiler->locals[index].stack_position;
 
         *is_local = true;
-        return local_index;
+        return index;
     }
 }
 
@@ -724,9 +722,11 @@ static void expression_lvalue(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, Orso
                 }
                 ASSERT(field != NULL, "the field offset must be found at this point since it should have been found during analysis");
 
-                OrsoSlot offset = ORSO_SLOT_U(field->offset);
-                emit_constant(compiler, chunk, (byte*)&offset, lvalue_node->data.dot.identifier.line, &OrsoTypeInteger64);
-                emit(compiler, chunk, lvalue_node->data.dot.identifier.line, ORSO_OP_ADD_PTR_I64);
+                if (field->offset > 0) {
+                    OrsoSlot offset = ORSO_SLOT_U(field->offset);
+                    emit_constant(compiler, chunk, (byte*)&offset, lvalue_node->data.dot.identifier.line, &OrsoTypeInteger64);
+                    emit(compiler, chunk, lvalue_node->data.dot.identifier.line, ORSO_OP_ADD_PTR_I64);
+                }
             } else {
                 UNREACHABLE();
             }
@@ -1044,7 +1044,7 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode
             expression_lvalue(vm, compiler, ast, expression_node->lvalue_node, chunk);
 
             bool is_field = (expression_node->lvalue_node->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_DOT);
-            if (is_field || ORSO_TYPE_IS_STRUCT(expression_node->lvalue_node->value_type)) {
+            if (is_field || ORSO_TYPE_IS_STRUCT(expression_node->lvalue_node->value_type) || ORSO_TYPE_IS_UNION(expression_node->lvalue_node->value_type)) {
                 OrsoOPCode lvalue_set = ORSO_OP_NO_OP;
                 switch(expression_node->lvalue_node->value_type->kind) {
                     case ORSO_TYPE_VOID: {
@@ -1076,7 +1076,7 @@ static void expression(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode
                     }
                     case ORSO_TYPE_UNION:
                     case ORSO_TYPE_STRUCT: {
-                        lvalue_set = ORSO_OP_GET_FIELD_BYTES;
+                        lvalue_set = ORSO_OP_SET_LVALUE_BYTES;
                         break;
                     }
 

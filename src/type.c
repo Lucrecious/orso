@@ -6,8 +6,6 @@
 #include "sb.h"
 
 bool orso_union_type_contains_type(OrsoType* union_, OrsoType* type) {
-    ASSERT(type->kind == ORSO_TYPE_UNION, "must be a union type");
-
     if (!ORSO_TYPE_IS_UNION(type)) {
         return orso_union_type_has_type(union_, type);
     }
@@ -293,7 +291,7 @@ u32 orso_type_size_bytes(OrsoType* type) {
                 total = maxi32(orso_type_size_bytes(type->data.union_.types[i]), total);
             }
 
-            return total + sizeof(OrsoType*);
+            return orso_bytes_to_slots(total + sizeof(OrsoType*)) * sizeof(OrsoSlot);
         }
 
         case ORSO_TYPE_VOID:

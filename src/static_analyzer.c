@@ -538,6 +538,7 @@ static void resolve_foldable(
 
         case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION: {
             foldable = true;
+            folded_index = expression->value_index;
             break;
         }
 

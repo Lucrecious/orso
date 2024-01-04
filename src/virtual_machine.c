@@ -374,7 +374,7 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
 #define PUSH_LOCAL() do { \
     OrsoSlot* current_top = vm->stack_top; \
     RESERVE_STACK_SPACE(vm, orso_bytes_to_slots(size), \
-        vm->stack_types[(vm->stack_top - 1) - (frame->slots + (index / sizeof(OrsoSlot)))]); \
+        vm->stack_types[(frame->slots + (index / sizeof(OrsoSlot))) - vm->stack]); \
     byte* local = ((byte*)frame->slots) + index; \
     memcpy(current_top, local, size); \
 } while(0)
@@ -391,11 +391,7 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
                 u32 index = READ_U16();
                 byte size = READ_BYTE();
 
-                OrsoSlot* current_top = vm->stack_top;
-                RESERVE_STACK_SPACE(vm, orso_bytes_to_slots(size),
-                    vm->stack_types[(vm->stack_top - 1) - (frame->slots + (index / sizeof(OrsoSlot)))]);
-                byte* local = ((byte*)frame->slots) + index;
-                memcpy(current_top, local, size);
+                PUSH_LOCAL();
                 break;
             }
 #undef PUSH_LOCAL
@@ -630,16 +626,14 @@ static void run(OrsoVM* vm, OrsoErrorFunction error_fn) {
                 byte result_size = READ_BYTE();
                 for (i32 i = 0; i < result_size; i++) {
                     frame->slots[i] = *PEEK(result_size - i - 1);
-                }
-
-                for (i32 i = 0; i < result_size; i++) {
-                    POP();
+                #ifdef DEBUG_TRACE_EXECUTION
+                    vm->stack_types[(frame->slots + i) - vm->stack] = &OrsoTypeInvalid;
+                #endif
                 }
 
                 vm->frame_count--;
 
                 if (vm->frame_count == 0) {
-                    //POP_PTR();
                     return;
                 }
 

@@ -1,6 +1,8 @@
-compiler :: #load <compiler.odl>
+
 
 #run {
+    compiler :: #load <compiler.odl>
+
     target := compiler.create_target_executable("./hello_world");
 
     compiler.add_main_source(target, "./hello_world.odl");
