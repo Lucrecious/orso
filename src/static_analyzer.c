@@ -956,9 +956,35 @@ void orso_resolve_expression(
         state.mode |= MODE_FOLDING_TIME;
     }
 
+    // expression->is_lvalue
+    // this is a field that needs to be set if the expression can be an lvalue.
+    // it is initially to false which means by default, an expression is not an lvalue
+    // This needs to be set to true and transferred up the ast appropriately for expressions
+    // that can ALSO be referred to as "location values". During an assignment, the left hand
+    // side must be an lvalue.
+    // lvalues can be as simple as this:
+    //   foo = 10;
+    // where foo is an lvalue
+    //   (foo) = 10;
+    // should also work fine
+    //   foo + 1 = 10;
+    // should NOT work (foo + 1 is not an lvalue) 
+    //   foo.value = 10;
+    // should work since foo refers to an lvalue, thus, foo.value refers to an lvalue.
+    //   struct { value := 0; }.value = 10;
+    // this should NOT work since the leftmost value is not an lvalue, therefore
+    // .value cannot be an lvalue. Make note: this is totally fine syntax as a non-lvalue.
+    // Rules for lvalues are found below in the code.
+    // Also, for clarity: something being an lvalue is not mutally exclusive from it being
+    // unassignable. i.e. constants, depending on how they are implemented, can be lvalues
+    // since they inhabit a location in memory. However, that doesn't mean that they are assignable.
+    // These are two independent checks that the analyzer makes.
+
     switch (expression->node_type) {
         case ORSO_AST_NODE_TYPE_EXPRESSION_GROUPING: {
             orso_resolve_expression(analyzer, ast, state, expression->data.expression);
+            expression->lvalue_node = expression->data.expression->lvalue_node;
+
             expression->value_type = expression->data.expression->value_type_narrowed;
             expression->value_type_narrowed = expression->data.expression->value_type_narrowed;
             break;
@@ -1114,6 +1140,8 @@ void orso_resolve_expression(
         }
 
         case ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY: {
+            expression->lvalue_node = expression;
+
             OrsoScope* entity_scope;
             EntityQuery query = {
                 .search_type = expression->is_in_type_context ? &OrsoTypeType : NULL,
@@ -1152,6 +1180,10 @@ void orso_resolve_expression(
             }
 
             orso_resolve_expression(analyzer, ast, state, left);
+            if (left->lvalue_node != NULL) {
+                expression->lvalue_node = left->lvalue_node;
+            }
+
 
             if (ORSO_TYPE_IS_UNION(left->value_type_narrowed)) {
                 error_range(analyzer, left->start, left->end, "Member accessor can only be used on concrete non-union types.");
@@ -1239,11 +1271,22 @@ void orso_resolve_expression(
                 return;
             }
 
-            // TODO: Find a way to merge the fitting logic
-            if (expression->data.binary.lhs->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY) {
+            orso_resolve_expression(analyzer, ast, state, expression->data.binary.lhs);
+            OrsoASTNode* lvalue_node = expression->data.binary.lhs->lvalue_node;
+            if (lvalue_node == NULL) {
+                error_range(analyzer, expression->data.binary.lhs->start, expression->data.binary.lhs->end, "Expression does not resolve to an lvalue.");
+                INVALIDATE(expression);
+                return;
+            } 
+
+            lvalue_node = expression->data.binary.lhs;
+            expression->lvalue_node = lvalue_node;
+
+            // // TODO: Find a way to merge the fitting logic
+            if (lvalue_node->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY) {
                 OrsoScope* entity_scope;
                 Entity* entity;
-                Token identifier = expression->data.binary.lhs->data.dot.identifier;
+                Token identifier = lvalue_node->data.dot.identifier;
                 entity = get_resolved_entity_by_identifier(analyzer, ast, state, identifier, NULL, &entity_scope);
 
                 
@@ -1252,25 +1295,26 @@ void orso_resolve_expression(
                     return;
                 }
 
-                expression->value_type = expression->data.binary.rhs->value_type;
-                expression->value_type_narrowed = expression->data.binary.rhs->value_type_narrowed;
+                expression->value_type = entity->declared_type;
+                expression->value_type_narrowed = entity->declared_type;
 
                 OrsoType* right_side_narrowed_type = expression->data.binary.rhs->value_type_narrowed;
-                expression->value_type = entity->declared_type;
-                
                 unless (orso_type_fits(entity->declared_type, right_side_narrowed_type)) {
                     error_range(analyzer, expression->start, expression->end, "Explicit cast required to assign to variable.");
                     return;
                 }
 
                 expression->value_type_narrowed = right_side_narrowed_type;
+                ASSERT(!ORSO_TYPE_IS_UNION(expression->value_type) ||
+                        orso_union_type_contains_type(expression->value_type, right_side_narrowed_type),
+                        "this will fail in situations where the right side is not converted to the type of the left side. As of now, this is only known to happen with small numbers going into bigger numbers");
 
                 if (ORSO_TYPE_IS_UNION(entity->declared_type)) {
                     entity->narrowed_type = expression->value_type_narrowed;
                 }
 
-            } else if (expression->data.binary.lhs->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_DOT) {
-                OrsoASTNode* dot_node = expression->data.binary.lhs;
+            } else if (lvalue_node->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_DOT) {
+                OrsoASTNode* dot_node = lvalue_node;
                 orso_resolve_expression(analyzer, ast, state, dot_node);
 
                 if (ORSO_TYPE_IS_INVALID(dot_node->value_type)) {

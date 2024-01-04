@@ -139,6 +139,7 @@ OrsoASTNode* orso_ast_node_new(OrsoAST* ast, OrsoASTNodeType node_type, bool is_
     node->fold = false;
     node->foldable = false;
     node->is_in_type_context = is_in_type_context;
+    node->lvalue_node = NULL;
 
     node->value_index = -1;
 
@@ -443,17 +444,22 @@ static OrsoASTNode* literal(Parser* parser, bool is_in_type_context) {
 }
 
 static OrsoASTNode* convert_assignment_expression(Parser* parser, OrsoASTNode* left, OrsoASTNode* assignment) {
-    if (left->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY || left->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_DOT) {
-        assignment->start = left->start;
-        assignment->data.binary.lhs = left;
-        return assignment;
-    }
+    (void)parser;
+    assignment->start = left->start;
+    assignment->data.binary.lhs = left;
+    return assignment;
 
-    error_at(parser, &left->start, "Expect l-value.");
-    free(left);
-    free(assignment);
-    left->node_type = ORSO_AST_NODE_TYPE_UNDEFINED;
-    return left;
+    // if (left->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY || left->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_DOT) {
+    //     assignment->start = left->start;
+    //     assignment->data.binary.lhs = left;
+    //     return assignment;
+    // }
+
+    // error_at(parser, &left->start, "Expect l-value.");
+    // free(left);
+    // free(assignment);
+    // left->node_type = ORSO_AST_NODE_TYPE_UNDEFINED;
+    // return left;
 }
 
 static OrsoASTNode* convert_call_expression(OrsoASTNode* left_operand, OrsoASTNode* call) {

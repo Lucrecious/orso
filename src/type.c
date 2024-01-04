@@ -5,6 +5,22 @@
 
 #include "sb.h"
 
+bool orso_union_type_contains_type(OrsoType* union_, OrsoType* type) {
+    ASSERT(type->kind == ORSO_TYPE_UNION, "must be a union type");
+
+    if (!ORSO_TYPE_IS_UNION(type)) {
+        return orso_union_type_has_type(union_, type);
+    }
+
+    for (i32 i = 0; i < type->data.union_.count; i++) {
+        if (!orso_union_type_has_type(union_, type->data.union_.types[i])) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 bool orso_union_type_has_type(OrsoType* type, OrsoType* subtype) {
     ASSERT(type->kind == ORSO_TYPE_UNION, "must be a union type");
 

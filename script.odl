@@ -1,12 +1,16 @@
-vector2 :: struct {
-    x := 0;
-    y := 0;
+{
+    vector2 :: struct {
+        x := 0;
+        y := 0;
+    };
+    
+    v: vector2;
+
+    v.x = 420;
+    v.y = 69;
+
+    print v.x;
+    print v.y;
 };
- 
-v: vector2;
 
-v.x = 420;
-v.y = 69;
 
-print v.x;
-print v.y;

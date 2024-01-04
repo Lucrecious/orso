@@ -97,6 +97,7 @@ bool orso_type_equal(OrsoType* a, OrsoType* b);
 
 // orso_type_has_type_kind
 bool orso_union_type_has_type(OrsoType* type, OrsoType* subtype);
+bool orso_union_type_contains_type(OrsoType* union_, OrsoType* type);
 
 OrsoType* orso_type_merge(struct OrsoTypeSet* set, OrsoType* a, OrsoType* b);
 

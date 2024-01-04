@@ -156,6 +156,8 @@ struct OrsoASTNode {
     // primary, folding value, declaration default value
     i32 value_index;
 
+    OrsoASTNode* lvalue_node;
+
     union {
         OrsoASTDeclaration declaration;
 
