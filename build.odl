@@ -55,10 +55,13 @@
 #run {
     using compiler;
 
-    target := create_target_library("./library.odll");
+    target := create_target_library("./library.odll", library_type.static);
+    // library_type.shared for shared
 
-    add_source_directory("/path/to/library/files/");
-    add_source_file("/path/to/library/file);
+    add_source_directory(target, "/path/to/library/files/");
+    add_source_file(target, "/path/to/library/file");
+    add_source_file(target, "/path/to/another/file");
+    add_source_files(target, "/path/to/file_a", "/path/to/file_b");
 
     compile(target);
 };
