@@ -19,9 +19,11 @@ const char* SOURCES[] = {
 };
 
 typedef enum {
+    ORSO_BUILD_MODE_NONE = 0x0,
     ORSO_BUILD_MODE_DEBUG = 0x1,
     ORSO_BUILD_MODE_RELEASE = 0x2,
     ORSO_BUILD_MODE_DEBUG_TRACE = 0x4,
+    ORSO_BUILD_MODE_TEST = 0x8,
 } build_mode_t;
 
 void print_usage() {
@@ -29,6 +31,7 @@ void print_usage() {
     nob_log(NOB_INFO, "       --debug (-d)           compiles debug build");
     nob_log(NOB_INFO, "       --release (-r)         compiles release build");
     nob_log(NOB_INFO, "       --debug-trace (-dt)    compiles debug-trace build");
+    nob_log(NOB_INFO, "       --test                 compiles the test suite");
 }
 
 
@@ -54,6 +57,9 @@ bool build_program(build_mode_t build_mode, const char* output_name) {
     } else if (build_mode & ORSO_BUILD_MODE_RELEASE) {
         nob_cmd_append(&cmd, "-O3");
         nob_cmd_append(&cmd, "-o", nob_temp_sprintf("./bin/%s", output_name));
+    } else if (build_mode & ORSO_BUILD_MODE_TEST) {
+        nob_cmd_append(&cmd, "-ggdb");
+        nob_cmd_append(&cmd, "-o", nob_temp_sprintf("./bin/%s", output_name));
     } else {
         NOB_ASSERT(false && "Unreachable");
         return 1;
@@ -63,7 +69,11 @@ bool build_program(build_mode_t build_mode, const char* output_name) {
         nob_cmd_append(&cmd, SOURCES[i]);
     }
 
-    nob_cmd_append(&cmd, "./src/main.c");
+    if (build_mode & ORSO_BUILD_MODE_TEST)  {
+        nob_cmd_append(&cmd, "./test/test.c");
+    } else {
+        nob_cmd_append(&cmd, "./src/main.c");
+    }
 
     return nob_cmd_run_sync(cmd);
 }
@@ -73,26 +83,33 @@ int main(int argc, char** argv) {
 
     nob_shift_args(&argc, &argv);
 
-    build_mode_t mode = ORSO_BUILD_MODE_DEBUG | ORSO_BUILD_MODE_DEBUG_TRACE;
+    build_mode_t mode = ORSO_BUILD_MODE_NONE;
 
     const char* output_name = "dorso";
 
-    while (argc > 0) {
-        const char* option = nob_shift_args(&argc, &argv);
+    if (argc == 0) {
+        mode = ORSO_BUILD_MODE_DEBUG | ORSO_BUILD_MODE_DEBUG_TRACE;
+    } else {
+        while (argc > 0) {
+            const char* option = nob_shift_args(&argc, &argv);
 
-        if (strcmp(option, "--release") == 0 || strcmp(option, "-r") == 0) {
-            mode = ORSO_BUILD_MODE_RELEASE;
-            output_name = "orso";
-        } else if (strcmp(option, "--debug") == 0 || strcmp(option, "-d") == 0) {
-            mode = ORSO_BUILD_MODE_DEBUG;
-            output_name = "dorso";
-        } else if (strcmp(option, "--debug-trace") == 0 || strcmp(option, "-dt") == 0) {
-            mode = ORSO_BUILD_MODE_DEBUG | ORSO_BUILD_MODE_DEBUG_TRACE;
-            output_name = "dorso";
-        } else {
-            nob_log(NOB_ERROR, nob_temp_sprintf("unknown option: %s", option));
-            print_usage();
-            return 1;
+            if (strcmp(option, "--release") == 0 || strcmp(option, "-r") == 0) {
+                mode |= ORSO_BUILD_MODE_RELEASE;
+                output_name = "orso";
+            } else if (strcmp(option, "--debug") == 0 || strcmp(option, "-d") == 0) {
+                mode |= ORSO_BUILD_MODE_DEBUG;
+                output_name = "dorso";
+            } else if (strcmp(option, "--debug-trace") == 0 || strcmp(option, "-dt") == 0) {
+                mode |= ORSO_BUILD_MODE_DEBUG | ORSO_BUILD_MODE_DEBUG_TRACE;
+                output_name = "dorso";
+            } else if (strcmp(option, "--test") == 0) {
+                mode |= ORSO_BUILD_MODE_TEST;
+                output_name = "test";
+            } else {
+                nob_log(NOB_ERROR, nob_temp_sprintf("unknown option: %s", option));
+                print_usage();
+                return 1;
+            }
         }
     }
 
