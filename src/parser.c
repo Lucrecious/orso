@@ -329,7 +329,7 @@ static void synchronize(Parser* parser) {
     }
 }
 
-static OrsoASTNode* declaration(Parser* parser);
+static OrsoASTNode* declaration(Parser* parser, bool is_top_level);
 static OrsoASTNode* expression(Parser* parser, bool is_in_type_context);
 static OrsoASTNode* statement(Parser* parser, bool lack_semicolin);
 static ParseRule* get_rule(TokenType type);
@@ -448,18 +448,6 @@ static OrsoASTNode* convert_assignment_expression(Parser* parser, OrsoASTNode* l
     assignment->start = left->start;
     assignment->data.binary.lhs = left;
     return assignment;
-
-    // if (left->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY || left->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_DOT) {
-    //     assignment->start = left->start;
-    //     assignment->data.binary.lhs = left;
-    //     return assignment;
-    // }
-
-    // error_at(parser, &left->start, "Expect l-value.");
-    // free(left);
-    // free(assignment);
-    // left->node_type = ORSO_AST_NODE_TYPE_UNDEFINED;
-    // return left;
 }
 
 static OrsoASTNode* convert_call_expression(OrsoASTNode* left_operand, OrsoASTNode* call) {
@@ -517,7 +505,7 @@ static void parse_block(Parser* parser, OrsoASTNode* block) {
     block->data.block = NULL;
 
     while (!check(parser, TOKEN_BRACE_CLOSE) && !check(parser, TOKEN_EOF)) {
-        OrsoASTNode* declaration_node = declaration(parser);
+        OrsoASTNode* declaration_node = declaration(parser, false);
         sb_push(block->data.block, declaration_node);
     }
 
@@ -1043,12 +1031,17 @@ static OrsoASTNode* entity_declaration(Parser* parser, bool as_parameter) {
     return entity_declaration_node;
 }
 
-static OrsoASTNode* declaration(Parser* parser) {
-    OrsoASTNode* node;
+static OrsoASTNode* declaration(Parser* parser, bool is_top_level) {
+    OrsoASTNode* node = NULL;
     if (is_incoming_declaration_declaration(parser)) {
         node = entity_declaration(parser, false);
     } else {
-        node = statement(parser, false);
+        unless (is_top_level) {
+            node = statement(parser, false);
+        } else {
+            error_at_current(parser, "Expect global entity declarations.");
+            advance(parser);
+        }
     }
 
     if (parser->panic_mode) {
@@ -1067,11 +1060,13 @@ bool orso_parse(OrsoAST* ast, const char* source, OrsoErrorFunction error_fn) {
     ast->root = orso_ast_node_new(parser.ast, ORSO_AST_NODE_TYPE_EXPRESSION_BLOCK, false, parser.previous);
 
     while (!match(&parser, TOKEN_EOF)) {
-        OrsoASTNode* declaration_node = declaration(&parser);
-        sb_push(ast->root->data.block, declaration_node);
+        OrsoASTNode* declaration_node = declaration(&parser, true);
+        if (declaration_node) {
+            sb_push(ast->root->data.block, declaration_node);
+        }
     }
 
-    consume(&parser, TOKEN_EOF, "Expect end of expression.");
+    consume(&parser, TOKEN_EOF, "Expect end of file.");
 
     return !parser.had_error;
 }

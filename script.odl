@@ -1,27 +1,8 @@
-vector2 :: struct {
-    x := 0.0;
-    y := 0.0;
+x :: 1;
+
+foo := 2;
+
+main :: () -> i32 {
+    print x + foo;
+    return 0;
 };
-
-add :: (a: vector2, b: vector2) -> vector2 {
-    return {
-        result: vector2;
-        result.x = a.x + b.x;
-        result.y = a.y + b.y;
-        result;
-    };
-};
-
-dot :: (a: vector2, b: vector2) -> f64 {
-    return a.x * b.x + a.y * b.y;
-};
-
-v1: vector2;
-v1.x = 1.0;
-v1.y = 2.0;
-
-v2: vector2;
-v2.x = 3.0;
-v2.y = 4.0;
-
-print_expr dot(v1, v2);

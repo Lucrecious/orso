@@ -18,14 +18,8 @@ typedef struct {
     i32 stack_position;
 } Local;
 
-typedef enum {
-    ORSO_FUNCTION_TYPE_FUNCTION,
-    ORSO_FUNCTION_TYPE_SCRIPT,
-} OrsoCompilerFunctionType;
-
 typedef struct Compiler {
     OrsoFunction* function;
-    OrsoCompilerFunctionType function_type;
 
     bool skip_function_definitions;
 
@@ -41,7 +35,7 @@ typedef struct Compiler {
 static i32 add_local(Compiler* compiler, Token name, i32 slot_count);
 
 // A Token* is passed in instead of OrsoSymbol* because Token* cant be garbage collected and OrsoSymbol* can and would be.
-static void compiler_init(Compiler* compiler, OrsoCompilerFunctionType function_type, OrsoVM* vm, OrsoFunction* function, OrsoType* creator_type) {
+static void compiler_init(Compiler* compiler, OrsoVM* vm, OrsoFunction* function, OrsoType* creator_type) {
     ASSERT(function, "must be not null");
 
     // TODO: remove if possible, previously this was used to get the garbage collector but thats being
@@ -50,7 +44,6 @@ static void compiler_init(Compiler* compiler, OrsoCompilerFunctionType function_
 
     compiler->functions_to_compile = NULL;
     compiler->function = NULL;
-    compiler->function_type = function_type;
 
     compiler->locals = NULL;
     compiler->scope_depth = 0;
@@ -534,10 +527,6 @@ static i32 add_local(Compiler* compiler, Token name, i32 slot_count) {
             "The calculated stack position for the local must properly related to the tracked compiler stack");
 
     return compiler->locals_count - 1;
-}
-
-static FORCE_INLINE bool is_global_scope(Compiler* compiler) {
-    return compiler->scope_depth == 0;
 }
 
 static i32 declare_local_entity(Compiler* compiler, Token* name, i32 slot_count) {
@@ -1321,16 +1310,16 @@ static void set_local_entity_default_value(OrsoVM* vm, Compiler* compiler, OrsoA
     }
 }
 
-static void entity_declaration(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode* variable_declaration, Chunk* chunk) {
-    ASSERT(variable_declaration->value_type != &OrsoTypeUnresolved, "all declarations must be resolved");
+static void global_entity_declaration(OrsoVM* vm, OrsoAST* ast, OrsoASTNode* entity_declaration) {
+    ASSERT(entity_declaration->value_type != &OrsoTypeUnresolved, "all declarations must be resolved");
+    u32 index = define_global_entity(vm, &entity_declaration->start, entity_declaration->value_type);
+    set_global_entity_default_value(vm, ast, entity_declaration, index);
+}
 
-    if (is_global_scope(compiler)) {
-        u32 index = define_global_entity(vm, &variable_declaration->start, variable_declaration->value_type);
-        set_global_entity_default_value(vm, ast, variable_declaration, index);
-    } else {
-        set_local_entity_default_value(vm, compiler, ast, chunk, variable_declaration);
-        declare_local_entity(compiler, &variable_declaration->start, orso_type_slot_count(variable_declaration->value_type));
-    }
+static void local_entity_declaration(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode* variable_declaration, Chunk* chunk) {
+    ASSERT(variable_declaration->value_type != &OrsoTypeUnresolved, "all declarations must be resolved");
+    set_local_entity_default_value(vm, compiler, ast, chunk, variable_declaration);
+    declare_local_entity(compiler, &variable_declaration->start, orso_type_slot_count(variable_declaration->value_type));
 }
 
 static void declaration(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode* declaration, Chunk* chunk) {
@@ -1359,7 +1348,7 @@ static void declaration(OrsoVM* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNod
         }
 
         case ORSO_AST_NODE_TYPE_DECLARATION: {
-            entity_declaration(vm, compiler, ast, declaration, chunk);
+            local_entity_declaration(vm, compiler, ast, declaration, chunk);
             break;
         }
 
@@ -1384,7 +1373,7 @@ OrsoFunction* orso_generate_expression_function(OrsoCodeBuilder* builder, OrsoAS
 
     OrsoFunction* run_function = orso_new_function();
 
-    compiler_init(&compiler, ORSO_FUNCTION_TYPE_SCRIPT, builder->vm, run_function, (OrsoType*)function_type);
+    compiler_init(&compiler, builder->vm, run_function, (OrsoType*)function_type);
     compiler.skip_function_definitions = !is_folding_time;
 
     // The vm will put this guy on the stack.
@@ -1408,7 +1397,7 @@ OrsoFunction* orso_generate_expression_function(OrsoCodeBuilder* builder, OrsoAS
 
 void orso_compile_function(OrsoVM* vm, OrsoAST* ast, OrsoFunction* function, OrsoASTNode* function_definition_expression) {
     Compiler function_compiler;
-    compiler_init(&function_compiler, ORSO_FUNCTION_TYPE_FUNCTION, vm, function, function_definition_expression->value_type);
+    compiler_init(&function_compiler, vm, function, function_definition_expression->value_type);
 
     // this is placed down by the caller
     function_compiler.max_stack_size = function_compiler.current_stack_size = 1;
@@ -1432,25 +1421,53 @@ void orso_compile_function(OrsoVM* vm, OrsoAST* ast, OrsoFunction* function, Ors
     compiler_end(vm, &function_compiler, ast, function_chunk, function_definition_expression->end.line);
 }
 
+#define MAIN_IDENTIFIER "main"
+
 OrsoFunction* orso_generate_code(OrsoVM* vm, OrsoAST* ast) {
-    Compiler compiler;
-    OrsoType* function_type = orso_type_set_fetch_function(&ast->type_set, &OrsoTypeVoid, NULL, 0);
-    OrsoFunction* main_function = orso_new_function();
-    compiler_init(&compiler, ORSO_FUNCTION_TYPE_SCRIPT, vm, main_function, (OrsoType*)function_type);
-
-    // when a function is called it is placed on the stack. The caller does this... In this case,
-    // the caller is the virtual machine. So we start at stack size 1 since it should be there when
-    // the program starts.
-    compiler.max_stack_size = compiler.current_stack_size = 1;
-    declare_local_function_definition(&compiler, compiler.function);
-
-    Chunk* top_chunk = &compiler.function->chunk;
+    OrsoFunction* main_function = NULL;
+    OrsoASTNode* main_declaration = NULL;
 
     for (i32 i = 0; i < sb_count(ast->root->data.block); i++) {
-        declaration(vm, &compiler, ast, ast->root->data.block[i], top_chunk);
+        OrsoASTNode* declaration_ = ast->root->data.block[i];
+        global_entity_declaration(vm, ast, declaration_);
+        
+        Token identifier = declaration_->data.declaration.identifier;
+        if (identifier.length != strlen(MAIN_IDENTIFIER)){
+            continue;
+        }
+        
+        if (strncmp(identifier.start, MAIN_IDENTIFIER, strlen(MAIN_IDENTIFIER)) != 0) {
+            continue;
+        }
+            
+        if (!ORSO_TYPE_IS_FUNCTION(declaration_->value_type)) {
+            // TODO: allow code generator to have errors, main must be a function type
+            return NULL;
+        }
+
+        OrsoType* function_type = declaration_->value_type;
+        if (function_type->data.function.return_type->kind != ORSO_TYPE_INT32) {
+            // TODO: allow code generator to throw error here, main must return i32
+            return NULL;
+        }
+
+        if (function_type->data.function.argument_count != 0) {
+            // TODO: allow code gen to throw error here, main must have 0 args for now
+            return NULL;
+        }
+
+        ASSERT(declaration_->value_index >= 0, "must be folded and have a value");
+
+        main_declaration = declaration_;
+        main_function = (OrsoFunction*)ast->folded_constants[declaration_->value_index].as.p;
+        break;
     }
 
-    OrsoFunction* function = compiler_end(vm, &compiler, ast, top_chunk, ast->root->end.line);
+    if (main_declaration == NULL) {
+        return NULL;
+    }
+
+    orso_compile_function(vm, ast, main_function, main_declaration->data.declaration.initial_value_expression);
 
     // TODO: Am I somehow missing an opertunity to warn for unused functions by doing this?
     for (i32 i = 0; i < sb_count(ast->function_definition_pairs); i++) {
@@ -1460,7 +1477,5 @@ OrsoFunction* orso_generate_code(OrsoVM* vm, OrsoAST* ast) {
         }
     }
 
-    compiler_free(&compiler);
-
-    return function;
+    return main_function;
 }

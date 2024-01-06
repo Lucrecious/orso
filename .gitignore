@@ -130,3 +130,7 @@ packagecache
 
 playground/orso.js
 playground/orso.wasm
+
+bin
+nob.old
+nob

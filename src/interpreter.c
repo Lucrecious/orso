@@ -57,6 +57,7 @@ void orso_run_source(OrsoVM* vm, const char* source, OrsoErrorFunction error_fn)
     //orso_ast_free(&ast);
 
     if (!main_function) {
+        printf("something failed. TODO: better error messages..\n");
         analyzer.had_error = false;
         return;
     }
