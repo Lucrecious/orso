@@ -154,7 +154,7 @@ char* orso_slot_to_new_cstrn(OrsoSlot* slot, OrsoType* type) {
         case ORSO_TYPE_UNION: {
             OrsoType* type = (OrsoType*)slot->as.p;
             char* cstr = orso_slot_to_new_cstrn(slot + 1, type);
-            char* union_cstr = "<union: %s>";
+            char* union_cstr = "%s";
             size_t buffer_length = strlen(cstr) + strlen(union_cstr);
             char buffer[buffer_length + 1];
             snprintf(buffer, buffer_length + 1, union_cstr, cstr);

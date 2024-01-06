@@ -42,7 +42,7 @@ bool build_program(build_mode_t build_mode, const char* output_name) {
 
     nob_cmd_append(&cmd, "cc");
     nob_cmd_append(&cmd, "-Wall", "-Wextra");
-    nob_cmd_append(&cmd, "-Db_sanitize=address");
+    nob_cmd_append(&cmd, "-fsanitize=address");
     nob_cmd_append(&cmd, "-std=c99");
 
     if (build_mode & ORSO_BUILD_MODE_DEBUG_TRACE) {

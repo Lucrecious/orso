@@ -1301,7 +1301,7 @@ static void set_local_entity_default_value(OrsoVM* vm, Compiler* compiler, OrsoA
         if (ORSO_TYPE_IS_UNION(conform_type)) {
             ASSERT(orso_type_fits(conform_type, &OrsoTypeVoid), "default type only allowed for void type unions.");
             emit(compiler, chunk, entity_declaration->end.line, ORSO_OP_PUSH_0);
-            emit_put_in_union(compiler, chunk, entity_declaration->end.line, conform_type);
+            emit_put_in_union(compiler, chunk, entity_declaration->end.line, &OrsoTypeVoid);
         } else {
             ASSERT(entity_declaration->value_index >= 0, "if no expression, there must be an implicit value");
             OrsoSlot* default_value = &ast->folded_constants[entity_declaration->value_index];
