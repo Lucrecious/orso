@@ -86,10 +86,11 @@ bool test_template(
 bool test_variable_declarations() {
     bool success = true;
     {
-        const char* source_args[] = { "i32", "i64", "f32", "bool", "string", "symbol", "void", "string|void" };
+        const char* source_args[] = { "i32", "i64", "f64", "f32", "bool", "string", "symbol", "void", "string|void" };
         const char* output_args[] = { 
             "i32",      "0",
             "i64",      "0",
+            "f64",      "0.0",
             "f32",      "0.0",
             "bool",     "false",
             "string",   "",
@@ -100,23 +101,57 @@ bool test_variable_declarations() {
 
         size_t count = len(source_args);
 
-        const char* global_define_explicit_type_implicit_value = "value: %s; main :: () -> i32 { print_expr value; return 0; };";
+        const char* global_type_no_value = "value: %s; main :: () -> i32 { print_expr value; return 0; };";
         char* output = "value (%s) => %s\n";
 
         for (size_t i = 0; i < count; i++) {
             success = test_template(
-                    global_define_explicit_type_implicit_value, output,
+                    global_type_no_value, output,
                     source_args + i, 1,
                     output_args + i * 2, 2) && success;
         }
 
-        const char* local_define_explicit_type_implicit_value = "main :: () -> i32 { value: %s; print_expr value; return 0; };";
+        const char* local_type_no_value = "main :: () -> i32 { value: %s; print_expr value; return 0; };";
 
         for (size_t i = 0; i < count; i++) {
             success = test_template(
-                    local_define_explicit_type_implicit_value, output,
+                    local_type_no_value, output,
                     source_args + i, 1,
                     output_args + i * 2, 2) && success;
+        }
+    }
+    
+    {
+        const char* source_args[] = { "42", "42.0", "true", "\"forty-two\"", "'forty-two'", "null", "\"forty-two\"" };
+        const char* output_args[] = {
+            "i32",          "42",
+            "f64",          "42.0",
+            "bool",         "true",
+            "string",       "forty-two",
+            "symbol",       "'forty-two'",
+            "void",         "null",
+            "string",       "forty-two",
+        };
+
+        size_t count = len(source_args);
+
+        const char* global_no_type_value = "value := %s; main :: () -> i32 { print_expr value; return 0; };";
+        const char* output = "value (%s) => %s\n";
+
+        for (size_t i = 0; i < count; i++) {
+            success = test_template(
+                    global_no_type_value, output,
+                    source_args + i, 1,
+                    output_args + i * 2, 2) && success;
+        }
+
+        const char* local_no_type_value = "main :: () -> i32 { value := %s; print_expr value; return 0; };";
+
+        for (size_t i = 0; i < count; i++) {
+            success = test_template(
+                local_no_type_value, output,
+                source_args + i, 1,
+                output_args + i * 2, 2) && success;
         }
     }
 
