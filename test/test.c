@@ -4,6 +4,8 @@
 #include "error.h"
 #include "../nob.h"
 
+#define DEFAULT_BUFFER_SIZE 1024
+
 typedef struct {
     i32 capacity;
     i32 count;
@@ -12,7 +14,7 @@ typedef struct {
 errors_t errors = {0};
 
 i32 write_buffer_count = 0;
-char write_buffer[1024];
+char write_buffer[DEFAULT_BUFFER_SIZE];
 
 void error_to_buffer(OrsoError error) {
     nob_da_append(&errors, error);
@@ -36,58 +38,39 @@ void write_to_buffer(const char* chars) {
     write_buffer_count += snprintf(write_buffer + write_buffer_count, 1024 - write_buffer_count, "%s", chars);
 }
 
-bool test_local_variable_declaration_explicit_type_implicit_value(const char* type, const char* printed_value, const char* printed_type) {
+static size_t snprintfv(char* buffer, size_t len, const char* format, const char** args, size_t argc) {
+    switch (argc) {
+        case 0: return snprintf(buffer, len, "%s", format);
+        case 1: return snprintf(buffer, len, format, args[0]);
+        case 2: return snprintf(buffer, len, format, args[0], args[1]);
+        case 3: return snprintf(buffer, len, format, args[0], args[1], args[2]);
+        default: UNREACHABLE();
+    }
+
+    return 0;
+}
+
+bool test_template(
+        const char* code_template,
+        const char* output_template,
+        const char** code_args, size_t code_arg_count,
+        const char** output_args, size_t output_arg_count) {
     errors.count = 0;
     write_buffer_count = 0;
     write_buffer[0] = '\0';
+
+    char source_buffer[DEFAULT_BUFFER_SIZE];
+    snprintfv(source_buffer, DEFAULT_BUFFER_SIZE, code_template, code_args, code_arg_count);
 
     OrsoVM vm;
     orso_vm_init(&vm, write_to_buffer, 1000);
 
-    char source_template[] = "main :: () -> i32 { value: %s; print_expr value; return 0; };";
-    char expected_template[] = "value (%s) => %s\n";
-
-    char source_buffer[1024];
-    snprintf(source_buffer, 1024, source_template, type);
-
     orso_run_source(&vm, source_buffer, error_to_buffer);
 
     orso_vm_free(&vm);
 
-    char expected_buffer[1024];
-    snprintf(expected_buffer, 1024, expected_template, printed_type, printed_value);
-
-    if (strcmp(expected_buffer, write_buffer) == 0) {
-        return true;
-    }
-
-    printf("Test failed for source:\n    %s\n", source_buffer);
-    printf("***\n");
-    printf("Expected: %s\n", expected_buffer);
-    printf("Got:      %s\n\n", write_buffer);
-    return false;
-}
-
-bool test_global_variable_declaration_explicit_type_implicit_value(const char* type, const char* printed_value, const char* printed_type) {
-    errors.count = 0;
-    write_buffer_count = 0;
-    write_buffer[0] = '\0';
-
-    OrsoVM vm;
-    orso_vm_init(&vm, write_to_buffer, 2000);
-
-    char source_template[] = "value: %s; main :: () -> i32 { print_expr value; return 0; };";
-    char expected_template[] = "value (%s) => %s\n";
-
-    char source_buffer[1024];
-    snprintf(source_buffer, 1024, source_template, type);
-
-    orso_run_source(&vm, source_buffer, error_to_buffer);
-
-    orso_vm_free(&vm);
-
-    char expected_buffer[1024];
-    snprintf(expected_buffer, 1024, expected_template, printed_type, printed_value);
+    char expected_buffer[DEFAULT_BUFFER_SIZE];
+    snprintfv(expected_buffer, DEFAULT_BUFFER_SIZE, output_template, output_args, output_arg_count);
 
     if (strcmp(expected_buffer, write_buffer) == 0) {
         return true;
@@ -103,23 +86,37 @@ bool test_global_variable_declaration_explicit_type_implicit_value(const char* t
 bool test_variable_declarations() {
     bool success = true;
     {
-        char* types[] = { "i32", "i64", "f32", "bool", "string", "symbol", "void", "string|void" };
-        char* print_types[] = { "i32", "i64", "f32", "bool", "string", "symbol", "void", "void" };
-        char* print_values[] = { "0", "0", "0.0", "false", "", "''", "null", "null" };
-        size_t count = sizeof(types) / sizeof(types[0]);
+        const char* source_args[] = { "i32", "i64", "f32", "bool", "string", "symbol", "void", "string|void" };
+        const char* output_args[] = { 
+            "i32",      "0",
+            "i64",      "0",
+            "f32",      "0.0",
+            "bool",     "false",
+            "string",   "",
+            "symbol",   "''",
+            "void",     "null",
+            "void",     "null"
+        };
+
+        size_t count = len(source_args);
+
+        const char* global_define_explicit_type_implicit_value = "value: %s; main :: () -> i32 { print_expr value; return 0; };";
+        char* output = "value (%s) => %s\n";
 
         for (size_t i = 0; i < count; i++) {
-            char* type = types[i];
-            char* print_type = print_types[i];
-            char* print_value = print_values[i];
-            success = test_global_variable_declaration_explicit_type_implicit_value(type, print_value, print_type) && success;
+            success = test_template(
+                    global_define_explicit_type_implicit_value, output,
+                    source_args + i, 1,
+                    output_args + i * 2, 2) && success;
         }
 
+        const char* local_define_explicit_type_implicit_value = "main :: () -> i32 { value: %s; print_expr value; return 0; };";
+
         for (size_t i = 0; i < count; i++) {
-            char* type = types[i];
-            char* print_type = print_types[i];
-            char* print_value = print_values[i];
-            success = test_local_variable_declaration_explicit_type_implicit_value(type, print_value, print_type) && success;
+            success = test_template(
+                    local_define_explicit_type_implicit_value, output,
+                    source_args + i, 1,
+                    output_args + i * 2, 2) && success;
         }
     }
 

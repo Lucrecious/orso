@@ -26,6 +26,8 @@ typedef void* ptr;
 #define unless(condition) if (!(condition))
 #define until(condition) while (!(condition))
 
+#define len(a) sizeof(a) / sizeof(a[0]);
+
 FORCE_INLINE i32 mini32(i32 a, i32 b) {
   return a < b ? a : b;
 }

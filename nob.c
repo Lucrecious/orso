@@ -53,6 +53,7 @@ bool build_program(build_mode_t build_mode, const char* output_name) {
 
     if (build_mode & ORSO_BUILD_MODE_DEBUG) {
         nob_cmd_append(&cmd, "-ggdb");
+        nob_cmd_append(&cmd, "-DDEBUG");
         nob_cmd_append(&cmd, "-o", nob_temp_sprintf("./bin/%s", output_name));
     } else if (build_mode & ORSO_BUILD_MODE_RELEASE) {
         nob_cmd_append(&cmd, "-O3");
