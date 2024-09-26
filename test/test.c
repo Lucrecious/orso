@@ -88,15 +88,15 @@ bool test_variable_declarations() {
     {
         const char* source_args[] = { "i32", "i64", "f64", "f32", "bool", "string", "symbol", "void", "string|void" };
         const char* output_args[] = { 
-            "i32",      "0",
-            "i64",      "0",
-            "f64",      "0.0",
-            "f32",      "0.0",
-            "bool",     "false",
-            "string",   "",
-            "symbol",   "''",
-            "void",     "null",
-            "void",     "null"
+            "i32",             "0",
+            "i64",             "0",
+            "f64",             "0.0",
+            "f32",             "0.0",
+            "bool",            "false",
+            "string",          "",
+            "symbol",          "''",
+            "void",            "null",
+            "string|void",     "null"
         };
 
         size_t count = len(source_args);

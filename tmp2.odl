@@ -1,45 +1,27 @@
-point :: struct {
-    x: i32;
-    y: i32;
+vector2 :: struct {
+    x := 0;
+    y := 0;
 };
 
-// returns true if T is a struct, otherwise false
-is_named_struct :: (T: type) -> bool;
-
-// returns true if T is an anonymous struct, otherwise false
-is_anonymous_struct :: (T: type) -> bool;
-
-// simply allocates spaces on heap for the type
-alloc :: (!T: type) -> &T;
-
-// allocates on the stack
-make :: (!T: type) -> T {
-    #assert type_info(T).type == TypeInfo.STRUCT;
-    return T();
+add :: (a: vector2, b: vector2) -> vector2 {
+    sum: vector2;
+    sum.x = a.x + b.x;
+    sum.y = a.y + b.y;
+    
+    return sum;
 };
 
-struct(i32, i32) {
-    item1: 0;
-    item2: 0;
+main :: () -> i32 {
+    a: vector2;
+    b: vector2;
+
+    a.x = 1;
+    b.y = 1;
+
+    sum := add(a, b);
+
+    print sum.x;
+    print sum.y;
+
+    return 0;
 };
-
-// allocates space and sets 
-new :: (!T: type) -> &T {
-    #assert type_info(T).type == TypeInfo.STRUCT;
-    value_ptr := alloc(T);
-    *value_ptr = make(T);
-    return value_ptr;
-};
-
-
-my_point := struct {
-    x: i32;
-    y: i32;
-};
-
-print type_of(point);
-print type_of(my_point);
-
-# output
-point
-struct(i32, i32)
