@@ -16,6 +16,20 @@
 
 #define PROJECT_NAME "orso"
 
+/*
+
+[ ] Use generic hash table with allocators
+[ ] Use arena allocator for everything instead of ORSO_ALLOCATE
+[ ] For debugging, instead of printing the disaseembly, write it in the file
+[ ] For debugging, instead of printing ast write it in a file instead
+[ ] Better error messages
+
+[ ] Get DearImGui set up but only for debugging version, use macros and nob to make sure of this
+    [ ] Make a nice debugging view that matches commands to lines of code
+    [ ] Make a nice debugging view for the ast nodes
+
+*/
+
 void log_fatal(cstr_t format, ...) {
     va_list args;
     va_start(args, format);

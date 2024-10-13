@@ -3,21 +3,21 @@
 
 #include "lexer.h"
 
-typedef enum OrsoErrorType {
+typedef enum error_type_t {
     ORSO_ERROR_COMPILE,
     ORSO_ERROR_RUNTIME
-} OrsoErrorType;
+} error_type_t;
 
-typedef enum OrsoErrorRegionType {
+typedef enum error_region_type_t {
     ORSO_ERROR_REGION_TYPE_TOKEN,
     ORSO_ERROR_REGION_TYPE_RANGE,
     ORSO_ERROR_REGION_TYPE_RANGE2,
-} OrsoErrorRegionType;
+} error_region_type_t;
 
 typedef struct error_t {
     char* message;
-    OrsoErrorType type;
-    OrsoErrorRegionType region_type;
+    error_type_t type;
+    error_region_type_t region_type;
 
     union {
         token_t token;
