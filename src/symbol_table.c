@@ -16,12 +16,12 @@ void orso_symbol_table_free(symbol_table_t* table) {
     orso_symbol_table_init(table);
 }
 
-static OrsoSymbolTableEntry* find_entry(OrsoSymbolTableEntry* entries, i32 capacity, OrsoSymbol* key) {
+static symbol_table_entry_t* find_entry(symbol_table_entry_t* entries, i32 capacity, symbol_t* key) {
     u32 index = key->hash & (capacity - 1);
-    OrsoSymbolTableEntry* tombstone = NULL;
+    symbol_table_entry_t* tombstone = NULL;
 
     for (;;) {
-        OrsoSymbolTableEntry* entry = &entries[index];
+        symbol_table_entry_t* entry = &entries[index];
 
         if (entry->key == NULL) {
             if (entry->value.as.i == 0) {
@@ -40,7 +40,7 @@ static OrsoSymbolTableEntry* find_entry(OrsoSymbolTableEntry* entries, i32 capac
 }
 
 static void adjust_capacity(symbol_table_t* table, i32 capacity) {
-    OrsoSymbolTableEntry* entries = ORSO_ALLOCATE_N(OrsoSymbolTableEntry, capacity);
+    symbol_table_entry_t* entries = ORSO_ALLOCATE_N(symbol_table_entry_t, capacity);
     for (i32 i = 0; i < capacity; i++) {
         entries[i].key = NULL;
         entries[i].value = ORSO_SLOT_I(0);
@@ -48,12 +48,12 @@ static void adjust_capacity(symbol_table_t* table, i32 capacity) {
 
     table->count = 0;
     for (i32 i = 0; i < table->capacity; i++) {
-        OrsoSymbolTableEntry* entry = &table->entries[i];
+        symbol_table_entry_t* entry = &table->entries[i];
         if (entry->key == NULL) {
             continue;
         }
 
-        OrsoSymbolTableEntry* destination = find_entry(entries, capacity, entry->key);
+        symbol_table_entry_t* destination = find_entry(entries, capacity, entry->key);
         destination->key = entry->key;
         destination->value = entry->value;
         table->count++;
@@ -64,12 +64,12 @@ static void adjust_capacity(symbol_table_t* table, i32 capacity) {
     table->capacity = capacity;
 }
 
-bool orso_symbol_table_get(symbol_table_t* table, OrsoSymbol* symbol, slot_t* value) {
+bool orso_symbol_table_get(symbol_table_t* table, symbol_t* symbol, slot_t* value) {
     if (table->count == 0) {
         return false;
     }
 
-    OrsoSymbolTableEntry* entry = find_entry(table->entries, table->capacity, symbol);
+    symbol_table_entry_t* entry = find_entry(table->entries, table->capacity, symbol);
     if (entry->key == NULL) {
         return false;
     }
@@ -78,13 +78,13 @@ bool orso_symbol_table_get(symbol_table_t* table, OrsoSymbol* symbol, slot_t* va
     return true;
 }
 
-bool orso_symbol_table_set(symbol_table_t* table, OrsoSymbol* key, slot_t value) {
+bool orso_symbol_table_set(symbol_table_t* table, symbol_t* key, slot_t value) {
     if (table->count + 1 > table->capacity * ORSO_SYMBOL_TABLE_MAX_LOAD) {
         i32 capacity = GROW_CAPACITY(table->capacity);
         adjust_capacity(table, capacity);
     }
 
-    OrsoSymbolTableEntry* entry = find_entry(table->entries, table->capacity, key);
+    symbol_table_entry_t* entry = find_entry(table->entries, table->capacity, key);
     bool is_new_key = (entry->key == NULL);
 
     if (is_new_key && entry->value.as.i == 0) {
@@ -97,12 +97,12 @@ bool orso_symbol_table_set(symbol_table_t* table, OrsoSymbol* key, slot_t value)
     return is_new_key;
 }
 
-bool orso_symbol_table_remove(symbol_table_t* table, OrsoSymbol* key) {
+bool orso_symbol_table_remove(symbol_table_t* table, symbol_t* key) {
     if (table->count == 0) {
         return false;
     }
 
-    OrsoSymbolTableEntry* entry = find_entry(table->entries, table->capacity, key);
+    symbol_table_entry_t* entry = find_entry(table->entries, table->capacity, key);
     if (entry == NULL) {
         return false;
     }
@@ -115,7 +115,7 @@ bool orso_symbol_table_remove(symbol_table_t* table, OrsoSymbol* key) {
 
 void orso_symbol_table_add_all(symbol_table_t* source, symbol_table_t* destination) {
     for (i32 i = 0; i < source->capacity; i++) {
-        OrsoSymbolTableEntry* entry = &source->entries[i];
+        symbol_table_entry_t* entry = &source->entries[i];
         if (entry->key == NULL) {
             continue;
         }
@@ -124,14 +124,14 @@ void orso_symbol_table_add_all(symbol_table_t* source, symbol_table_t* destinati
     }
 }
 
-OrsoSymbol* orso_symbol_table_find_cstrn(symbol_table_t* table, const char* start, i32 length, u32 hash) {
+symbol_t* orso_symbol_table_find_cstrn(symbol_table_t* table, const char* start, i32 length, u32 hash) {
     if (table->count == 0) {
         return NULL;
     }
 
     u32 index = hash & (table->capacity - 1);
     for (;;) {
-        OrsoSymbolTableEntry* entry = &table->entries[index++];
+        symbol_table_entry_t* entry = &table->entries[index++];
 
         if (entry->key == NULL) {
             if (entry->value.as.i == 0) {

@@ -44,8 +44,8 @@ type_t* orso_type_set_fetch_native_function(
 
 type_t* orso_type_set_fetch_anonymous_struct(
     type_set_t* set,
-    i32 field_count, OrsoStructField* fields,
-    i32 constant_count, OrsoStructConstant* constants);
+    i32 field_count, struct_field_t* fields,
+    i32 constant_count, struct_constant_t* constants);
 
 type_t* orso_type_set_fetch_pointer(type_set_t* set, type_t* type);
 

@@ -187,7 +187,7 @@ static void run(vm_t* vm, error_function_t error_fn) {
     for (;;) {
 #ifdef DEBUG_TRACE_EXECUTION
         for (i32 i = 0; i < vm->globals.name_to_index.capacity; i++) {
-            OrsoSymbolTableEntry* entry = &vm->globals.name_to_index.entries[i];
+            symbol_table_entry_t* entry = &vm->globals.name_to_index.entries[i];
             if (entry->key == NULL) {
                 continue;
             }
@@ -217,7 +217,7 @@ static void run(vm_t* vm, error_function_t error_fn) {
         disassemble_instruction(&frame->function->chunk, frame->ip - frame->function->chunk.code);
         printf("\n");
 #endif
-        OrsoOPCode op_code = READ_BYTE();
+        op_code_t op_code = READ_BYTE();
         switch (op_code) {
             case ORSO_OP_NO_OP: break;
 

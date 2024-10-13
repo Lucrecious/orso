@@ -17,18 +17,18 @@ typedef struct OrsoString {
     char text[];
 } OrsoString;
 
-typedef struct OrsoSymbol {
+typedef struct symbol_t {
     OrsoObject object;
     i32 length;
     u32 hash;
     char text[];
-} OrsoSymbol;
+} symbol_t;
 
 typedef struct function_t {
     OrsoObject object;
-    Chunk chunk;
+    chunk_t chunk;
     type_t* signature;
-    OrsoSymbol* binded_name;
+    symbol_t* binded_name;
 } function_t;
 
 typedef struct OrsoStruct {
@@ -87,12 +87,12 @@ OrsoStruct* orso_new_struct(void);
 i64 cstrn_to_i64(const char* text, i32 length);
 f64 cstrn_to_f64(const char* text, i32 length);
 
-OrsoSymbol* orso_unmanaged_symbol_from_cstrn(const char* start, i32 length, symbol_table_t* symbol_table);
+symbol_t* orso_unmanaged_symbol_from_cstrn(const char* start, i32 length, symbol_table_t* symbol_table);
 
-FORCE_INLINE void orso_unmanaged_symbol_free(OrsoSymbol* symbol) {
+FORCE_INLINE void orso_unmanaged_symbol_free(symbol_t* symbol) {
     free(symbol);
 }
 
-OrsoSymbol* orso_new_symbol_from_cstrn(const char* start, i32 length, symbol_table_t* symbol_table);
+symbol_t* orso_new_symbol_from_cstrn(const char* start, i32 length, symbol_table_t* symbol_table);
 
 #endif

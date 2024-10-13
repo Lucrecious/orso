@@ -121,7 +121,7 @@ typedef struct ast_binary_t {
 typedef struct ast_member_access_t {
     ast_node_t* lhs;
 
-    Token identifier;
+    token_t identifier;
     ast_node_t* referencing_declaration;
 } ast_member_access_t;
 
@@ -129,7 +129,7 @@ typedef struct ast_declaration_t {
     bool is_mutable;
     i32 fold_level_resolved_at;
 
-    Token identifier;
+    token_t identifier;
     ast_node_t* type_expression;
     
     ast_node_t* initial_value_expression;
@@ -138,7 +138,7 @@ typedef struct ast_declaration_t {
 struct ast_node_t {
     ast_node_type_t node_type;
 
-    Token start, end, operator;
+    token_t start, end, operator;
 
     // expressions TODO: Fill this in for *everything*, declarations, statements included
     // TODO: only use value type
@@ -237,7 +237,7 @@ bool orso_parse(ast_t* ast, const char* source, error_function_t error_fn);
 void orso_ast_init(ast_t* ast, symbol_table_t* symbols);
 void orso_ast_free(ast_t* ast);
 
-ast_node_t* orso_ast_node_new(ast_t* ast, ast_node_type_t node_type, bool is_in_type_context, Token start);
+ast_node_t* orso_ast_node_new(ast_t* ast, ast_node_type_t node_type, bool is_in_type_context, token_t start);
 
 bool orso_ast_node_type_is_decl_or_stmt(ast_node_type_t node_type);
 bool orso_ast_node_type_is_expression(ast_node_type_t node_type);

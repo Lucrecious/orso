@@ -33,8 +33,8 @@ void orso_object_free(OrsoObject* object) {
 #endif
     switch (object->type->kind) {
         case ORSO_TYPE_SYMBOL: {
-            OrsoSymbol* symbol = (OrsoSymbol*)object;
-            orso_object_reallocate((OrsoObject*)symbol, &OrsoTypeSymbol, sizeof(OrsoSymbol) + symbol->length, 0);
+            symbol_t* symbol = (symbol_t*)object;
+            orso_object_reallocate((OrsoObject*)symbol, &OrsoTypeSymbol, sizeof(symbol_t) + symbol->length, 0);
             break;
         }
         case ORSO_TYPE_STRING: {
@@ -105,7 +105,7 @@ char* orso_slot_to_new_cstrn(slot_t* slot, type_t* type) {
         case ORSO_TYPE_STRING: return cstrn_new(((OrsoString*)slot->as.p)->text, ((OrsoString*)slot->as.p)->length);
 
         case ORSO_TYPE_SYMBOL: {
-            OrsoSymbol* symbol = (OrsoSymbol*)slot->as.p;
+            symbol_t* symbol = (symbol_t*)slot->as.p;
             // 2 single quotes
             // 1 \0
             char buffer[symbol->length + 3];
@@ -280,14 +280,14 @@ f64 cstrn_to_f64(const char* text, i32 length) {
     return value * fact;
 }
 
-OrsoSymbol* orso_unmanaged_symbol_from_cstrn(const char* start, i32 length, symbol_table_t* symbol_table) {
+symbol_t* orso_unmanaged_symbol_from_cstrn(const char* start, i32 length, symbol_table_t* symbol_table) {
     u32 hash = orso_hash_cstrn(start, length);
-    OrsoSymbol* symbol = orso_symbol_table_find_cstrn(symbol_table, start, length, hash);
+    symbol_t* symbol = orso_symbol_table_find_cstrn(symbol_table, start, length, hash);
     if (symbol != NULL) {
         return symbol;
     }
 
-    symbol = ORSO_ALLOCATE_FLEX(OrsoSymbol, length + 1);
+    symbol = ORSO_ALLOCATE_FLEX(symbol_t, length + 1);
     symbol->object.type = &OrsoTypeSymbol;
     symbol->hash = hash;
     symbol->length = length;
@@ -300,14 +300,14 @@ OrsoSymbol* orso_unmanaged_symbol_from_cstrn(const char* start, i32 length, symb
     return symbol;
 }
 
-OrsoSymbol* orso_new_symbol_from_cstrn(const char* start, i32 length, symbol_table_t* symbol_table) {
+symbol_t* orso_new_symbol_from_cstrn(const char* start, i32 length, symbol_table_t* symbol_table) {
     u32 hash = orso_hash_cstrn(start, length);
-    OrsoSymbol* symbol = orso_symbol_table_find_cstrn(symbol_table, start, length, hash);
+    symbol_t* symbol = orso_symbol_table_find_cstrn(symbol_table, start, length, hash);
     if (symbol != NULL) {
         return symbol;
     }
 
-    symbol = ORSO_OBJECT_ALLOCATE_FLEX(OrsoSymbol, &OrsoTypeSymbol, length + 1);
+    symbol = ORSO_OBJECT_ALLOCATE_FLEX(symbol_t, &OrsoTypeSymbol, length + 1);
     symbol->hash = hash;
     symbol->length = length;
     memcpy(symbol->text, start, length);

@@ -31,18 +31,18 @@ typedef enum type_kind_t {
 struct type_t;
 typedef struct type_t type_t;
 
-typedef struct OrsoStructField {
+typedef struct struct_field_t {
     char* name;
     type_t* type;
 
     // not relevant for hashing
     i32 offset;
-} OrsoStructField;
+} struct_field_t;
 
-typedef struct OrsoStructConstant {
+typedef struct struct_constant_t {
     char *name;
     type_t* type;
-} OrsoStructConstant;
+} struct_constant_t;
 
 struct type_t {
     type_kind_t kind;
@@ -63,10 +63,10 @@ struct type_t {
             char* name;
 
             i32 field_count;
-            OrsoStructField* fields;
+            struct_field_t* fields;
 
             i32 constant_count;
-            OrsoStructConstant* constants;
+            struct_constant_t* constants;
 
             // not relevant for hashing
             i32 total_bytes;
@@ -124,7 +124,7 @@ i32 orso_bytes_to_slots(i32 byte_count);
 
 u32 orso_type_size_bytes(type_t* type);
 
-OrsoStructField* orso_type_struct_find_field(type_t* struct_, const char* name, size_t name_length);
+struct_field_t* orso_type_struct_find_field(type_t* struct_, const char* name, size_t name_length);
 
 bool orso_integer_fit(type_t* storage_type, type_t* value_type, bool include_bool);
 
@@ -136,7 +136,7 @@ i32 orso_type_to_cstrn(type_t* type, char* buffer, i32 n);
 
 bool orso_is_gc_type(type_t* type);
 
-type_t* orso_binary_arithmetic_cast(type_t* a, type_t* b, TokenType operation);
+type_t* orso_binary_arithmetic_cast(type_t* a, type_t* b, token_type_t operation);
 
 void orso_binary_comparison_casts(type_t* a, type_t* b, type_t** a_cast, type_t** b_cast);
 

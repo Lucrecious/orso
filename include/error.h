@@ -14,27 +14,27 @@ typedef enum OrsoErrorRegionType {
     ORSO_ERROR_REGION_TYPE_RANGE2,
 } OrsoErrorRegionType;
 
-typedef struct OrsoError {
+typedef struct error_t {
     char* message;
     OrsoErrorType type;
     OrsoErrorRegionType region_type;
 
     union {
-        Token token;
+        token_t token;
         struct {
-            Token start;
-            Token end;
+            token_t start;
+            token_t end;
         } range;
 
         struct {
-            Token start1;
-            Token end1;
+            token_t start1;
+            token_t end1;
 
-            Token start2;
-            Token end2;
+            token_t start2;
+            token_t end2;
         } range2;
 
     } region;
-} OrsoError;
+} error_t;
 
 #endif

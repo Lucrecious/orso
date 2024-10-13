@@ -29,7 +29,7 @@ void orso_run_source(vm_t* vm, const char* source, error_function_t error_fn) {
     ast_t ast;
     orso_ast_init(&ast, &vm->symbols);
 
-    OrsoStaticAnalyzer analyzer;
+    analyzer_t analyzer;
     orso_static_analyzer_init(&analyzer, vm->write_fn, error_fn);
 
     if (!orso_parse(&ast, source, error_fn)) {

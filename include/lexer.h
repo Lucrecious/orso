@@ -4,7 +4,7 @@
 #include "common.h"
 #include "def.h"
 
-typedef enum TokenType {
+typedef enum token_type_t {
     // single character
     TOKEN_PARENTHESIS_OPEN, TOKEN_PARENTHESIS_CLOSE,
     TOKEN_BRACE_OPEN, TOKEN_BRACE_CLOSE,
@@ -33,24 +33,24 @@ typedef enum TokenType {
     TOKEN_PRINT_EXPR, TOKEN_PRINT,
 
     TOKEN_ERROR, TOKEN_EOF, TOKEN_SIZE,
-} TokenType;
+} token_type_t;
 
-typedef struct Token {
+typedef struct token_t {
     char* start;
     i32 length;
     i32 line;
-    TokenType type;
-} Token;
+    token_type_t type;
+} token_t;
 
-typedef struct Lexer {
-    Token previous_token;
+typedef struct lexer_t {
+    token_t previous_token;
     error_function_t error_fn;
     i32 line;
     char* start;
     char* current;
-} Lexer;
+} lexer_t;
 
-void lexer_init(Lexer* state, const char* code);
-Token lexer_next_token(Lexer* state);
+void lexer_init(lexer_t* state, const char* code);
+token_t lexer_next_token(lexer_t* state);
 
 #endif

@@ -266,7 +266,7 @@ i32 orso_bytes_to_slots(i32 byte_count) {
     return (byte_count / sizeof(slot_t)) + ((byte_count % sizeof(slot_t) != 0));
 }
 
-OrsoStructField* orso_type_struct_find_field(type_t* struct_, const char* name, size_t name_length) {
+struct_field_t* orso_type_struct_find_field(type_t* struct_, const char* name, size_t name_length) {
     for (i32 i = 0; i < struct_->data.struct_.field_count; i++) {
         if (strlen(struct_->data.struct_.fields[i].name) != name_length) {
             continue;
@@ -578,7 +578,7 @@ bool orso_is_gc_type(type_t* type) {
     return false;
 }
 
-type_t* orso_binary_arithmetic_cast(type_t* a, type_t* b, TokenType operation) {
+type_t* orso_binary_arithmetic_cast(type_t* a, type_t* b, token_type_t operation) {
     if (ORSO_TYPE_IS_UNION(a) || ORSO_TYPE_IS_UNION(b)) {
         return &OrsoTypeInvalid;
     }

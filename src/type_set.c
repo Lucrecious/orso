@@ -60,7 +60,7 @@ type_t* function_type_new(type_set_t* set, type_t** arguments, i32 argument_coun
 }
 
 // only anonymous structs can be looked up in the type set
-type_t* struct_type_new(type_set_t* set, OrsoStructField* fields, i32 field_count, OrsoStructConstant* constants, i32 constant_count, i32 total_size) {
+type_t* struct_type_new(type_set_t* set, struct_field_t* fields, i32 field_count, struct_constant_t* constants, i32 constant_count, i32 total_size) {
     type_t* struct_type = ORSO_ALLOCATE(type_t);
     struct_type->kind = ORSO_TYPE_STRUCT;
 
@@ -73,7 +73,7 @@ type_t* struct_type_new(type_set_t* set, OrsoStructField* fields, i32 field_coun
     struct_type->data.struct_.total_bytes = total_size;
 
     if (field_count > 0) {
-        struct_type->data.struct_.fields = ORSO_ALLOCATE_N(OrsoStructField, field_count);
+        struct_type->data.struct_.fields = ORSO_ALLOCATE_N(struct_field_t, field_count);
 
         for (i32 i = 0; i < field_count; i++) {
             struct_type->data.struct_.fields[i] = fields[i];
@@ -88,7 +88,7 @@ type_t* struct_type_new(type_set_t* set, OrsoStructField* fields, i32 field_coun
     }
 
     if (constant_count > 0) {
-        struct_type->data.struct_.constants = ORSO_ALLOCATE_N(OrsoStructConstant, constant_count);
+        struct_type->data.struct_.constants = ORSO_ALLOCATE_N(struct_constant_t, constant_count);
 
         for (i32 i = 0; i < constant_count; i++) {
             struct_type->data.struct_.constants[i] = constants[i];
@@ -582,7 +582,7 @@ type_t* orso_type_set_fetch_native_function(type_set_t* set, type_t* return_type
     return orso_type_set_fetch_function_(set, return_type, arguments, argument_count, true);
 }
 
-type_t* orso_type_set_fetch_anonymous_struct(type_set_t* set, i32 field_count, OrsoStructField* fields, i32 constant_count, OrsoStructConstant* constants) {
+type_t* orso_type_set_fetch_anonymous_struct(type_set_t* set, i32 field_count, struct_field_t* fields, i32 constant_count, struct_constant_t* constants) {
     type_t struct_type = {
         .kind = ORSO_TYPE_STRUCT,
         .data.struct_.field_count = field_count,

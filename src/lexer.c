@@ -5,8 +5,8 @@
 #include <string.h>
 #include <stdlib.h>
 
-void lexer_init(Lexer* lexer, const char* code) {
-    lexer->previous_token = (Token){ .length = 0, .line = 0, .start = 0, .type = TOKEN_ERROR };
+void lexer_init(lexer_t* lexer, const char* code) {
+    lexer->previous_token = (token_t){ .length = 0, .line = 0, .start = 0, .type = TOKEN_ERROR };
     lexer->line = 0;
     lexer->start = (char*)code;
     lexer->current = (char*)code;
@@ -22,12 +22,12 @@ static bool is_alpha(char c) {
         || c == '_';
 }
 
-static bool is_at_end(Lexer* lexer) {
+static bool is_at_end(lexer_t* lexer) {
     return *lexer->current == '\0';
 }
 
-static Token create_token(Lexer* lexer, TokenType type) {
-    Token token = { 
+static token_t create_token(lexer_t* lexer, token_type_t type) {
+    token_t token = { 
         .type = type,
         .start = lexer->start,
         .length = lexer->current - lexer->start,
@@ -37,8 +37,8 @@ static Token create_token(Lexer* lexer, TokenType type) {
     return token;
 }
 
-static Token error_token(Lexer* lexer, const char* message) {
-    Token token = {
+static token_t error_token(lexer_t* lexer, const char* message) {
+    token_t token = {
         .type = TOKEN_ERROR,
         .start = (char*)message,
         .length = (i32)(strlen(message)),
@@ -48,16 +48,16 @@ static Token error_token(Lexer* lexer, const char* message) {
     return token;
 }
 
-static char advance(Lexer* lexer) {
+static char advance(lexer_t* lexer) {
     lexer->current++;
     return lexer->current[-1];
 }
 
-static char FORCE_INLINE peek(Lexer* lexer) {
+static char FORCE_INLINE peek(lexer_t* lexer) {
     return lexer->current[0];
 }
 
-static char peek_next(Lexer* lexer) {
+static char peek_next(lexer_t* lexer) {
     if (is_at_end(lexer)) {
         return '\0';
     }
@@ -65,7 +65,7 @@ static char peek_next(Lexer* lexer) {
     return lexer->current[1];
 }
 
-static bool match(Lexer* lexer, char expected) {
+static bool match(lexer_t* lexer, char expected) {
     if (is_at_end(lexer)) {
         return false;
     }
@@ -78,7 +78,7 @@ static bool match(Lexer* lexer, char expected) {
     return true;
 }
 
-static bool match2(Lexer* lexer, const char* expected) {
+static bool match2(lexer_t* lexer, const char* expected) {
     ASSERT(strlen(expected) == 2, "the size of expected must be 2");
 
     if (is_at_end(lexer)) {
@@ -93,7 +93,7 @@ static bool match2(Lexer* lexer, const char* expected) {
     return true;
 }
 
-static void skip_whitespace(Lexer* lexer) {
+static void skip_whitespace(lexer_t* lexer) {
     for (;;) {
         char c = peek(lexer);
         switch (c) {
@@ -112,7 +112,7 @@ static void skip_whitespace(Lexer* lexer) {
     }
 }
 
-static bool skip_comments(Lexer* lexer) {
+static bool skip_comments(lexer_t* lexer) {
     if (match2(lexer, "//")) {
         while (!is_at_end(lexer)) {
             char c = advance(lexer);
@@ -149,7 +149,7 @@ static bool skip_comments(Lexer* lexer) {
     return false;
 }
 
-static FORCE_INLINE Token _string_symbol(Lexer* lexer, char terminator, TokenType type) {
+static FORCE_INLINE token_t _string_symbol(lexer_t* lexer, char terminator, token_type_t type) {
     while (peek(lexer) != terminator && !is_at_end(lexer)) {
         if (peek(lexer) == '\n') {
             lexer->line++;
@@ -165,15 +165,15 @@ static FORCE_INLINE Token _string_symbol(Lexer* lexer, char terminator, TokenTyp
     return create_token(lexer, type);
 }
 
-static Token string(Lexer* lexer) {
+static token_t string(lexer_t* lexer) {
     return _string_symbol(lexer, '"', TOKEN_STRING);
 }
 
-static Token symbol(Lexer* lexer) {
+static token_t symbol(lexer_t* lexer) {
     return _string_symbol(lexer, '\'', TOKEN_SYMBOL);
 }
 
-static Token annotation(Lexer* lexer) {
+static token_t annotation(lexer_t* lexer) {
     while (is_alpha(peek(lexer)) || is_digit(peek(lexer))) {
         advance(lexer);
     }
@@ -181,7 +181,7 @@ static Token annotation(Lexer* lexer) {
     return create_token(lexer, TOKEN_ANNOTATION);
 }
 
-static Token number(Lexer* lexer) {
+static token_t number(lexer_t* lexer) {
     while (is_digit(peek(lexer)) || peek(lexer) == '_') {
         advance(lexer);
     }
@@ -200,8 +200,8 @@ static Token number(Lexer* lexer) {
     return create_token(lexer, is_float ? TOKEN_FLOAT : TOKEN_INTEGER);
 }
 
-static TokenType check_keyword(Lexer* lexer, i32 start, i32 length,
-        const char* rest, TokenType type) {
+static token_type_t check_keyword(lexer_t* lexer, i32 start, i32 length,
+        const char* rest, token_type_t type) {
     if (lexer->current - lexer->start == start + length &&
         memcmp(lexer->start + start, rest, length)== 0) {
         return type;
@@ -210,7 +210,7 @@ static TokenType check_keyword(Lexer* lexer, i32 start, i32 length,
     return TOKEN_IDENTIFIER;
 }
 
-static TokenType identifier_type(Lexer* lexer) {
+static token_type_t identifier_type(lexer_t* lexer) {
     switch (lexer->start[0]) {
         case 'a': return check_keyword(lexer, 1, 2, "nd", TOKEN_AND);
         case 'd': return check_keyword(lexer, 1, 1, "o", TOKEN_DO);
@@ -271,7 +271,7 @@ static TokenType identifier_type(Lexer* lexer) {
     return TOKEN_IDENTIFIER;
 }
 
-static Token identifier(Lexer* lexer) {
+static token_t identifier(lexer_t* lexer) {
     while (is_alpha(peek(lexer)) || is_digit(peek(lexer))) {
         advance(lexer);
     }
@@ -300,7 +300,7 @@ static bool is_directive_character(char c) {
     return false;
 }
 
-static Token directive(Lexer* lexer) {
+static token_t directive(lexer_t* lexer) {
     while (is_directive_character(peek(lexer))) {
         advance(lexer);
     }
@@ -308,7 +308,7 @@ static Token directive(Lexer* lexer) {
     return create_token(lexer, TOKEN_DIRECTIVE);
 }
 
-Token _lexer_next_token(Lexer* lexer) {
+token_t _lexer_next_token(lexer_t* lexer) {
     // skip preceeding comments and whitespace
     while (true) {
         skip_whitespace(lexer);
@@ -339,7 +339,7 @@ Token _lexer_next_token(Lexer* lexer) {
     //         case TOKEN_PARENTHESIS_CLOSE:
     //         case TOKEN_INTEGER:
     //         case TOKEN_FLOAT:
-    //             return  (Token) {
+    //             return  (token_t) {
     //                 .length = 0,
     //                 .line = lexer->line,
     //                 .start = lexer->start,
@@ -397,7 +397,7 @@ Token _lexer_next_token(Lexer* lexer) {
     return error_token(lexer, "Unexpected character.");
 }
 
-Token lexer_next_token(Lexer* lexer) {
+token_t lexer_next_token(lexer_t* lexer) {
     lexer->previous_token = _lexer_next_token(lexer);
     return lexer->previous_token;
 }

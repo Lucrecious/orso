@@ -3,7 +3,7 @@
 
 #include "def.h"
 
-typedef enum OrsoOPCode {
+typedef enum op_code_t {
     ORSO_OP_NO_OP,
 
     ORSO_OP_POP,
@@ -75,6 +75,6 @@ typedef enum OrsoOPCode {
     // builtin
     ORSO_OP_PRINT_EXPR,
     ORSO_OP_PRINT,
-} OrsoOPCode;
+} op_code_t;
 
 #endif

@@ -19,7 +19,7 @@
     node->value_index = -1;\
 } while(false)
 
-typedef bool (*IsCircularDependencyFunc)(OrsoStaticAnalyzer*, ast_node_t*);
+typedef bool (*IsCircularDependencyFunc)(analyzer_t*, ast_node_t*);
 
 static void clock_native(slot_t* arguments, slot_t* result) {
     (void)arguments;
@@ -60,7 +60,7 @@ static void scope_init(scope_t* scope, scope_type_t type, scope_t* outer, ast_no
 static void scope_free(scope_t* scope) {
     scope->outer = NULL;
     for (i32 i = 0; i < scope->named_entities.capacity; i++) {
-        OrsoSymbolTableEntry* entry = &scope->named_entities.entries[i];
+        symbol_table_entry_t* entry = &scope->named_entities.entries[i];
         if (entry->key == NULL) {
             continue;
         }
@@ -81,7 +81,7 @@ static scope_t* scope_copy_new(scope_t* scope) {
     orso_symbol_table_add_all(&scope->named_entities, &scope_copy->named_entities);
 
     for (i32 i = 0; i < scope_copy->named_entities.capacity; i++) {
-        OrsoSymbolTableEntry* entry = &scope_copy->named_entities.entries[i];
+        symbol_table_entry_t* entry = &scope_copy->named_entities.entries[i];
         if (entry->key == NULL) {
             continue;
         }
@@ -103,7 +103,7 @@ static void scope_merge(type_set_t* set, scope_t* scope, scope_t* a, scope_t* b)
     }
 
     for (i32 i = 0; i < scope->named_entities.capacity; i++) {
-        OrsoSymbolTableEntry* entry = &scope->named_entities.entries[i];
+        symbol_table_entry_t* entry = &scope->named_entities.entries[i];
         if (entry->key == NULL) {
             continue;
         }
@@ -149,7 +149,7 @@ static void scope_merge(type_set_t* set, scope_t* scope, scope_t* a, scope_t* b)
     scope_merge(set, scope->outer, a->outer, b->outer);
 }
 
-static void add_entity(scope_t* scope, OrsoSymbol* identifier, ast_node_t* declaration_node) {
+static void add_entity(scope_t* scope, symbol_t* identifier, ast_node_t* declaration_node) {
     Entity* entity = ORSO_ALLOCATE(Entity);
     entity->declared_type = &OrsoTypeUnresolved;
     entity->narrowed_type = &OrsoTypeUnresolved;
@@ -159,7 +159,7 @@ static void add_entity(scope_t* scope, OrsoSymbol* identifier, ast_node_t* decla
     orso_symbol_table_set(&scope->named_entities, identifier, ORSO_SLOT_P(entity));
 }
 
-static Entity* add_builtin_entity(ast_t* ast, OrsoSymbol* identifier, type_t* type, i32 value_index) {
+static Entity* add_builtin_entity(ast_t* ast, symbol_t* identifier, type_t* type, i32 value_index) {
     Entity* entity = ORSO_ALLOCATE(Entity);
     entity->declared_type = type;
     entity->narrowed_type = type;
@@ -171,9 +171,9 @@ static Entity* add_builtin_entity(ast_t* ast, OrsoSymbol* identifier, type_t* ty
     return entity;
 }
 
-static void function_dependencies_cannot_be_compiled(OrsoStaticAnalyzer* analyzer) {
+static void function_dependencies_cannot_be_compiled(analyzer_t* analyzer) {
     for (i32 i = 0; i < analyzer->dependencies.count; i++) {
-        OrsoAnalysisDependency* dependency = &analyzer->dependencies.chain[i];
+        analysis_dependency_t* dependency = &analyzer->dependencies.chain[i];
         ast_node_t* node = dependency->ast_node;
         if (node->node_type != ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION) {
             continue;
@@ -183,11 +183,11 @@ static void function_dependencies_cannot_be_compiled(OrsoStaticAnalyzer* analyze
     }
 }
 
-static void error_token(OrsoStaticAnalyzer* analyzer, Token token, const char* message) {
+static void error_token(analyzer_t* analyzer, token_t token, const char* message) {
     analyzer->had_error = true;
 
     function_dependencies_cannot_be_compiled(analyzer);
-    OrsoError error = {
+    error_t error = {
         .type = ORSO_ERROR_COMPILE,
         .region_type = ORSO_ERROR_REGION_TYPE_TOKEN,
         .region.token = token,
@@ -197,11 +197,11 @@ static void error_token(OrsoStaticAnalyzer* analyzer, Token token, const char* m
     analyzer->error_fn(error);
 }
 
-static void error_range(OrsoStaticAnalyzer* analyzer, Token start, Token end, const char* message) {
+static void error_range(analyzer_t* analyzer, token_t start, token_t end, const char* message) {
     analyzer->had_error = true;
 
     function_dependencies_cannot_be_compiled(analyzer);
-    OrsoError error = {
+    error_t error = {
         .type = ORSO_ERROR_COMPILE,
         .region_type = ORSO_ERROR_REGION_TYPE_RANGE,
         .region.range.start = start,
@@ -212,11 +212,11 @@ static void error_range(OrsoStaticAnalyzer* analyzer, Token start, Token end, co
     analyzer->error_fn(error);
 }
 
-static void error_range2(OrsoStaticAnalyzer* analyzer, Token start1, Token end1, Token start2, Token end2, const char* message) {
+static void error_range2(analyzer_t* analyzer, token_t start1, token_t end1, token_t start2, token_t end2, const char* message) {
     analyzer->had_error = true;
 
     function_dependencies_cannot_be_compiled(analyzer);
-    OrsoError error = {
+    error_t error = {
         .type = ORSO_ERROR_COMPILE,
         .region_type = ORSO_ERROR_REGION_TYPE_RANGE2,
         .region.range2.start1 = start1,
@@ -229,7 +229,7 @@ static void error_range2(OrsoStaticAnalyzer* analyzer, Token start1, Token end1,
     analyzer->error_fn(error);
 }
 
-static type_t* resolve_unary_type(ast_t* ast, TokenType operator, type_t* operand) {
+static type_t* resolve_unary_type(ast_t* ast, token_type_t operator, type_t* operand) {
     if (operand == &OrsoTypeInvalid) {
         return &OrsoTypeInvalid;
     }
@@ -301,14 +301,14 @@ typedef struct EntityQuery  {
 } EntityQuery;
 
 static Entity* get_resolved_entity_by_identifier(
-        OrsoStaticAnalyzer* analyzer,
+        analyzer_t* analyzer,
         ast_t* ast,
         AnalysisState state,
-        Token identifier_token,
+        token_t identifier_token,
         EntityQuery* query,
         scope_t** found_scope);
 
-static bool is_builtin_type(OrsoSymbol* identifier, type_t** type) {
+static bool is_builtin_type(symbol_t* identifier, type_t** type) {
 #define RETURN_IF_TYPE(SYMBOL, TYPE_STRING, TYPE_ID) \
 if (strlen(SYMBOL->text) == (sizeof(#TYPE_STRING) - 1) && \
     memcmp(SYMBOL->text, #TYPE_STRING, (sizeof(#TYPE_STRING) - 1)) == 0) { \
@@ -341,7 +341,7 @@ static i32 add_value_to_ast_constant_stack(ast_t* ast, slot_t* value, type_t* ty
     return sb_count(ast->folded_constants) - slot_count;
 }
 
-static bool is_builtin_function(ast_t* ast, OrsoSymbol* identifier, OrsoNativeFunction** function) {
+static bool is_builtin_function(ast_t* ast, symbol_t* identifier, OrsoNativeFunction** function) {
     if (identifier->length == 5 && strncmp(identifier->text, "clock", 5) == 0) {
         type_t* function_type = orso_type_set_fetch_native_function(&ast->type_set, &OrsoTypeFloat64, NULL, 0);
         *function = orso_new_native_function(clock_native, function_type);
@@ -370,7 +370,7 @@ static bool can_call(type_t* type, ast_node_t** arguments) {
     return true;
 }
 
-static i32 evaluate_expression(OrsoStaticAnalyzer* analyzer, ast_t* ast, bool is_folding_time, ast_node_t* expression) {
+static i32 evaluate_expression(analyzer_t* analyzer, ast_t* ast, bool is_folding_time, ast_node_t* expression) {
     vm_t vm;
     // TODO: Make sure this uses the same writing function as the vm that runs the code at the end.
     vm_init(&vm, NULL, 256);
@@ -378,7 +378,7 @@ static i32 evaluate_expression(OrsoStaticAnalyzer* analyzer, ast_t* ast, bool is
     // TODO: try to set this in a more reobust place
     vm.type_set = &ast->type_set;
 
-    OrsoCodeBuilder builder;
+    code_builder_t builder;
     orso_code_builder_init(&builder, &vm, ast);
 
     function_t* function = orso_generate_expression_function(&builder, expression, is_folding_time);
@@ -429,13 +429,13 @@ static bool is_block_compile_time_foldable(ast_node_t** block) {
 }
 
 static void fold_constants_via_runtime(
-        OrsoStaticAnalyzer* analyzer,
+        analyzer_t* analyzer,
         ast_t* ast,
         AnalysisState state,
         ast_node_t* expression);
 
 static void resolve_foldable(
-        OrsoStaticAnalyzer* analyzer,
+        analyzer_t* analyzer,
         ast_t* ast,
         AnalysisState state,
         ast_node_t* expression) {
@@ -646,7 +646,7 @@ static void resolve_foldable(
 }
 
 static void fold_constants_via_runtime(
-        OrsoStaticAnalyzer* analyzer,
+        analyzer_t* analyzer,
         ast_t* ast,
         AnalysisState state,
         ast_node_t* expression) {
@@ -710,7 +710,7 @@ static void fold_constants_via_runtime(
     expression->value_index = value_index;
 }
 
-static void fold_function_signature(OrsoStaticAnalyzer* analyzer, ast_t* ast, ast_node_t* expression) {
+static void fold_function_signature(analyzer_t* analyzer, ast_t* ast, ast_node_t* expression) {
     ASSERT(expression->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE, "must be a function signature");
 
     unless (IS_FOLDED(expression->data.function.return_type_expression)) {
@@ -851,9 +851,9 @@ static void fold_function_signature(OrsoStaticAnalyzer* analyzer, ast_t* ast, as
  * ideal solution but allows me not break any recursion.
  * 
  */
-static bool is_value_circular_dependency(OrsoStaticAnalyzer* analyzer, ast_node_t* new_dependency) {
+static bool is_value_circular_dependency(analyzer_t* analyzer, ast_node_t* new_dependency) {
     for (i32 i = analyzer->dependencies.count - 1; i >= 0; i--) {
-        OrsoAnalysisDependency* dependency = &analyzer->dependencies.chain[i];
+        analysis_dependency_t* dependency = &analyzer->dependencies.chain[i];
 
         if (dependency->ast_node->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION) {
             return false;
@@ -871,13 +871,13 @@ static bool is_value_circular_dependency(OrsoStaticAnalyzer* analyzer, ast_node_
     return false;
 }
 
-static bool push_dependency(OrsoStaticAnalyzer* analyzer, ast_node_t* node, int fold_level, IsCircularDependencyFunc is_circular_dependency) {
+static bool push_dependency(analyzer_t* analyzer, ast_node_t* node, int fold_level, IsCircularDependencyFunc is_circular_dependency) {
     if (is_circular_dependency(analyzer, node)) {
         error_range(analyzer, node->start, node->end, "Start of a circular dependency.");
         return false;
     }
 
-    OrsoAnalysisDependency dependency = {
+    analysis_dependency_t dependency = {
         .fold_level = fold_level,
         .ast_node = node,
     };
@@ -892,44 +892,44 @@ static bool push_dependency(OrsoStaticAnalyzer* analyzer, ast_node_t* node, int 
     return true;
 }
 
-static void pop_dependency(OrsoStaticAnalyzer* analyzer) {
+static void pop_dependency(analyzer_t* analyzer) {
     analyzer->dependencies.count--;
 }
 
 static void resolve_declarations(
-        OrsoStaticAnalyzer* analyzer,
+        analyzer_t* analyzer,
         ast_t* ast,
         AnalysisState state,
         ast_node_t** declarations,
         i32 count);
 
 static void resolve_declaration(
-        OrsoStaticAnalyzer* analyzer,
+        analyzer_t* analyzer,
         ast_t* ast,
         AnalysisState state,
         ast_node_t* declaration_node);
 
 static void resolve_statement(
-    OrsoStaticAnalyzer* analyzer,
+    analyzer_t* analyzer,
     ast_t* ast,
     AnalysisState state,
     ast_node_t* statement);
 
 static void resolve_function_expression(
-        OrsoStaticAnalyzer* analyzer,
+        analyzer_t* analyzer,
         ast_t* ast,
         AnalysisState state,
         ast_node_t* function_definition_expression);
 
 static void resolve_struct_definition(
-    OrsoStaticAnalyzer* analyzer,
+    analyzer_t* analyzer,
     ast_t* ast,
     AnalysisState state,
     ast_node_t* struct_definition);
 
-static void declare_entity(OrsoStaticAnalyzer* analyzer, scope_t* scope, ast_node_t* entity);
+static void declare_entity(analyzer_t* analyzer, scope_t* scope, ast_node_t* entity);
 
-static void forward_scan_declaration_names(OrsoStaticAnalyzer* analyzer, scope_t* scope, ast_node_t** declarations, i32 count) {
+static void forward_scan_declaration_names(analyzer_t* analyzer, scope_t* scope, ast_node_t** declarations, i32 count) {
     for (i32 i = 0; i < count; i++) {
         ast_node_t* declaration = declarations[i];
         if (declaration->node_type != ORSO_AST_NODE_TYPE_DECLARATION) {
@@ -941,7 +941,7 @@ static void forward_scan_declaration_names(OrsoStaticAnalyzer* analyzer, scope_t
 }
 
 void orso_resolve_expression(
-        OrsoStaticAnalyzer* analyzer,
+        analyzer_t* analyzer,
         ast_t* ast,
         AnalysisState state,
         ast_node_t* expression) {
@@ -1220,7 +1220,7 @@ void orso_resolve_expression(
                     continue;
                 }
 
-                Token declaration_name = declaration->data.declaration.identifier;
+                token_t declaration_name = declaration->data.declaration.identifier;
                 if (declaration_name.length == expression->data.dot.identifier.length &&
                     strncmp(declaration_name.start, expression->data.dot.identifier.start, declaration_name.length) == 0) {
                     referencing_declaration = declaration;
@@ -1287,7 +1287,7 @@ void orso_resolve_expression(
             if (lvalue_node->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY) {
                 scope_t* entity_scope;
                 Entity* entity;
-                Token identifier = lvalue_node->data.dot.identifier;
+                token_t identifier = lvalue_node->data.dot.identifier;
                 entity = get_resolved_entity_by_identifier(analyzer, ast, state, identifier, NULL, &entity_scope);
 
                 
@@ -1605,8 +1605,8 @@ void orso_resolve_expression(
     fold_constants_via_runtime(analyzer, ast, state, expression);
 }
 
-static void declare_entity(OrsoStaticAnalyzer* analyzer, scope_t* scope, ast_node_t* entity) {
-    OrsoSymbol* identifier = orso_unmanaged_symbol_from_cstrn(entity->start.start, entity->start.length, &analyzer->symbols);
+static void declare_entity(analyzer_t* analyzer, scope_t* scope, ast_node_t* entity) {
+    symbol_t* identifier = orso_unmanaged_symbol_from_cstrn(entity->start.start, entity->start.length, &analyzer->symbols);
     slot_t slot_type_pair;
     if (orso_symbol_table_get(&scope->named_entities, identifier, &slot_type_pair)) {
         const char message[126];
@@ -1618,7 +1618,7 @@ static void declare_entity(OrsoStaticAnalyzer* analyzer, scope_t* scope, ast_nod
     add_entity(scope, identifier, entity);
 }
 
-static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, ast_t* ast, AnalysisState state, ast_node_t* entity_declaration) {
+static void resolve_entity_declaration(analyzer_t* analyzer, ast_t* ast, AnalysisState state, ast_node_t* entity_declaration) {
 // due to the way structs are resolved, it is possible for the initial value expression to be swapped out with another
 // this is simply a safer way of accessing the initial value expression
 #define INITIAL_EXPRESSION (entity_declaration->data.declaration.initial_value_expression)
@@ -1679,7 +1679,7 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, ast_t* ast,
     }
 
     slot_t entity_slot;
-    OrsoSymbol* name = orso_unmanaged_symbol_from_cstrn(entity_declaration->start.start, entity_declaration->start.length, &analyzer->symbols);
+    symbol_t* name = orso_unmanaged_symbol_from_cstrn(entity_declaration->start.start, entity_declaration->start.length, &analyzer->symbols);
 
     ASSERT(orso_symbol_table_get(&state.scope->named_entities, name, &entity_slot), "should be forward_declared already");
 
@@ -1858,7 +1858,7 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, ast_t* ast,
 #undef INITIAL_EXPRESSION
 }
 
-static Entity* get_builtin_entity(ast_t* ast, OrsoSymbol* identifier) {
+static Entity* get_builtin_entity(ast_t* ast, symbol_t* identifier) {
     slot_t entity_slot;
     if (!orso_symbol_table_get(&ast->builtins, identifier, &entity_slot)) {
         type_t* type;
@@ -1945,16 +1945,16 @@ static Entity* get_builtin_entity(ast_t* ast, OrsoSymbol* identifier) {
  * This function below is what does this recursive dependency thing.
 */
 static Entity* get_resolved_entity_by_identifier(
-        OrsoStaticAnalyzer* analyzer,
+        analyzer_t* analyzer,
         ast_t* ast,
         AnalysisState state,
-        Token identifier_token,
+        token_t identifier_token,
         EntityQuery* query,
         scope_t** search_scope) { // TODO: consider removing search scope from params, check if it's actually used
 
     bool passed_local_mutable_access_barrier = false;
 
-    OrsoSymbol* identifier = orso_unmanaged_symbol_from_cstrn(identifier_token.start, identifier_token.length, &analyzer->symbols);
+    symbol_t* identifier = orso_unmanaged_symbol_from_cstrn(identifier_token.start, identifier_token.length, &analyzer->symbols);
     
     // early return if looking at a built in type
     {
@@ -2086,7 +2086,7 @@ static Entity* get_resolved_entity_by_identifier(
             function_t* function = (function_t*)ast->folded_constants[entity->node->data.declaration.initial_value_expression->value_index].as.p;
             for (i32 i = 0; i < analyzer->dependencies.count; i++) {
                 i32 i_ = analyzer->dependencies.count - 1 - i;
-                OrsoAnalysisDependency* dependency = &analyzer->dependencies.chain[i_];
+                analysis_dependency_t* dependency = &analyzer->dependencies.chain[i_];
                 ast_node_t* node = dependency->ast_node;
                 if (node->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION) {
                     function_t* folded_function = (function_t*)ast->folded_constants[node->value_index].as.p;
@@ -2131,7 +2131,7 @@ static Entity* get_resolved_entity_by_identifier(
 }
 
 static void resolve_function_expression(
-        OrsoStaticAnalyzer* analyzer,
+        analyzer_t* analyzer,
         ast_t* ast,
         AnalysisState state,
         ast_node_t* function_definition_expression) {
@@ -2378,7 +2378,7 @@ static void resolve_function_expression(
 * 
 * 
 */
-static void resolve_struct_definition(OrsoStaticAnalyzer* analyzer, ast_t* ast, AnalysisState state, ast_node_t* struct_definition) {
+static void resolve_struct_definition(analyzer_t* analyzer, ast_t* ast, AnalysisState state, ast_node_t* struct_definition) {
     scope_t struct_scope;
     scope_init(&struct_scope, SCOPE_TYPE_STRUCT, state.scope, struct_definition);
 
@@ -2430,16 +2430,16 @@ static void resolve_struct_definition(OrsoStaticAnalyzer* analyzer, ast_t* ast, 
 
     i32 constant_count = declarations_count - field_count;
 
-    OrsoStructField fields[field_count];
+    struct_field_t fields[field_count];
     ast_node_t* ast_fields[field_count];
-    OrsoStructConstant constants[constant_count];
+    struct_constant_t constants[constant_count];
 
     {
         i32 field_counter = 0;
         i32 constant_counter = 0;
 
         for (i32 i = 0; i < declarations_count; i++) {
-            Token identifier = struct_definition->data.struct_.declarations[i]->data.declaration.identifier;
+            token_t identifier = struct_definition->data.struct_.declarations[i]->data.declaration.identifier;
             char* name = ORSO_ALLOCATE_N(char, identifier.length + 1);
 
             memcpy(name, identifier.start, identifier.length);
@@ -2539,7 +2539,7 @@ static scope_t* get_closest_outer_function_scope(scope_t* scope) {
 }
 
 static void resolve_statement(
-        OrsoStaticAnalyzer* analyzer,
+        analyzer_t* analyzer,
         ast_t* ast,
         AnalysisState state,
         ast_node_t* statement) {
@@ -2574,7 +2574,7 @@ static void resolve_statement(
 }
 
 static void resolve_declaration(
-        OrsoStaticAnalyzer* analyzer,
+        analyzer_t* analyzer,
         ast_t* ast,
         AnalysisState state,
         ast_node_t* declaration_node) {
@@ -2590,7 +2590,7 @@ static void resolve_declaration(
     }
 }
 
-void resolve_declarations(OrsoStaticAnalyzer* analyzer, ast_t* ast, AnalysisState state, ast_node_t** declarations, i32 count) {
+void resolve_declarations(analyzer_t* analyzer, ast_t* ast, AnalysisState state, ast_node_t** declarations, i32 count) {
     for (i32 i = 0; i < count; i++) {
         ast_node_t* declaration = declarations[i];
         // Constants are meant to be solved at compile time, which means they do not run during a particular state
@@ -2639,7 +2639,7 @@ void resolve_declarations(OrsoStaticAnalyzer* analyzer, ast_t* ast, AnalysisStat
     }
 }
 
-bool orso_resolve_ast(OrsoStaticAnalyzer* analyzer, ast_t* ast) {
+bool orso_resolve_ast(analyzer_t* analyzer, ast_t* ast) {
     if (ast->root->data.block == NULL) {
         ast->resolved = false;
         // error(analyzer, 0, "No code to run. Akin to having no main function.");
@@ -2666,7 +2666,7 @@ bool orso_resolve_ast(OrsoStaticAnalyzer* analyzer, ast_t* ast) {
     return ast->resolved;
 }
 
-void orso_static_analyzer_init(OrsoStaticAnalyzer* analyzer, write_function_t write_fn, error_function_t error_fn) {
+void orso_static_analyzer_init(analyzer_t* analyzer, write_function_t write_fn, error_function_t error_fn) {
     analyzer->error_fn = error_fn;
     analyzer->had_error = false;
 
@@ -2679,9 +2679,9 @@ void orso_static_analyzer_init(OrsoStaticAnalyzer* analyzer, write_function_t wr
     orso_symbol_table_init(&analyzer->symbols);
 }
 
-void orso_static_analyzer_free(OrsoStaticAnalyzer* analyzer) {
+void orso_static_analyzer_free(analyzer_t* analyzer) {
     for (i32 i = 0; i < analyzer->symbols.capacity; i++) {
-        OrsoSymbolTableEntry* entry = &analyzer->symbols.entries[i];
+        symbol_table_entry_t* entry = &analyzer->symbols.entries[i];
         if (entry->key == NULL) {
             continue;
         }

@@ -48,9 +48,9 @@ struct_definition        -> `struct` `{` entity_declaration* `}`
 typedef struct Parser {
     error_function_t error_fn;
     ast_t* ast; // TODO: Consider moving this outside parser and instead passed through arguments
-    Lexer lexer;
-    Token previous;
-    Token current;
+    lexer_t lexer;
+    token_t previous;
+    token_t current;
 
     bool had_error;
     bool panic_mode;
@@ -120,7 +120,7 @@ void orso_ast_free(ast_t* ast) {
     ast->type_to_creation_node = NULL;
 }
 
-ast_node_t* orso_ast_node_new(ast_t* ast, ast_node_type_t node_type, bool is_in_type_context, Token start) {
+ast_node_t* orso_ast_node_new(ast_t* ast, ast_node_type_t node_type, bool is_in_type_context, token_t start) {
     ast_node_t* node = (ast_node_t*)arena_alloc(&ast->allocator, sizeof(ast_node_t));
     
     sb_push(ast->nodes, node);
@@ -144,7 +144,7 @@ ast_node_t* orso_ast_node_new(ast_t* ast, ast_node_type_t node_type, bool is_in_
         case ORSO_AST_NODE_TYPE_DECLARATION: {
             node->data.declaration.initial_value_expression = NULL;
             node->data.declaration.fold_level_resolved_at = -1;
-            node->data.declaration.identifier = (Token){ .start = 0, .length = 0, .type = TOKEN_IDENTIFIER, .line = -1 };
+            node->data.declaration.identifier = (token_t){ .start = 0, .length = 0, .type = TOKEN_IDENTIFIER, .line = -1 };
             node->data.declaration.is_mutable = false;
             node->data.declaration.type_expression = NULL;
             break;
@@ -210,7 +210,7 @@ ast_node_t* orso_ast_node_new(ast_t* ast, ast_node_type_t node_type, bool is_in_
         case ORSO_AST_NODE_TYPE_EXPRESSION_DOT: {
             node->data.dot.lhs = NULL;
             node->data.dot.referencing_declaration = NULL;
-            node->data.dot.identifier = (Token){ .length = 0, .line = -1, .start = NULL, .type = TOKEN_IDENTIFIER };
+            node->data.dot.identifier = (token_t){ .length = 0, .line = -1, .start = NULL, .type = TOKEN_IDENTIFIER };
             break;
         }
 
@@ -228,7 +228,7 @@ static void parser_init(Parser* parser, ast_t* ast, const char* source, error_fu
     parser->panic_mode = false;
 }
 
-static void error_at(Parser* parser, Token* token, const char* specific) {
+static void error_at(Parser* parser, token_t* token, const char* specific) {
     if (parser->panic_mode) {
         return;
     }
@@ -255,7 +255,7 @@ static void error_at(Parser* parser, Token* token, const char* specific) {
 
     n += snprintf(msg + n, MESSAGE_SIZE - n, ": %s", specific);
 
-    OrsoError error = {
+    error_t error = {
         .type = ORSO_ERROR_COMPILE,
         .region_type = ORSO_ERROR_REGION_TYPE_TOKEN,
         .message = message,
@@ -285,7 +285,7 @@ static void advance(Parser* parser) {
     }
 }
 
-static void consume(Parser* parser, TokenType type, const char* message) {
+static void consume(Parser* parser, token_type_t type, const char* message) {
     if (parser->current.type == type) {
         advance(parser);
         return;
@@ -294,11 +294,11 @@ static void consume(Parser* parser, TokenType type, const char* message) {
     error_at_current(parser, message);
 }
 
-static FORCE_INLINE bool check(Parser* parser, TokenType type) {
+static FORCE_INLINE bool check(Parser* parser, token_type_t type) {
     return parser->current.type == type;
 }
 
-static bool match(Parser* parser, TokenType type) {
+static bool match(Parser* parser, token_type_t type) {
     if (!check(parser, type)) {
         return false;
     }
@@ -329,7 +329,7 @@ static void synchronize(Parser* parser) {
 static ast_node_t* declaration(Parser* parser, bool is_top_level);
 static ast_node_t* expression(Parser* parser, bool is_in_type_context);
 static ast_node_t* statement(Parser* parser, bool lack_semicolin);
-static ParseRule* get_rule(TokenType type);
+static ParseRule* get_rule(token_type_t type);
 static bool check_expression(Parser* parser);
 static ast_node_t* parse_precedence(Parser* parser, bool is_in_type_context, Precedence precedence);
 
@@ -425,7 +425,7 @@ static ast_node_t* literal(Parser* parser, bool is_in_type_context) {
 
         case TOKEN_SYMBOL: {
             expression_node->value_type = &OrsoTypeSymbol;
-            OrsoSymbol* value = orso_new_symbol_from_cstrn(expression_node->start.start + 1, expression_node->start.length - 2, parser->ast->symbols);
+            symbol_t* value = orso_new_symbol_from_cstrn(expression_node->start.start + 1, expression_node->start.length - 2, parser->ast->symbols);
             expression_node->value_index = add_constant_value(parser, ORSO_SLOT_P(value), &OrsoTypeSymbol);
             break;
         }
@@ -575,9 +575,9 @@ static ast_node_t* ifelse(Parser* parser, bool is_in_type_context) {
 static bool is_incoming_function_signature(Parser* parser) {
     ASSERT(parser->previous.type == TOKEN_PARENTHESIS_OPEN, "must be starting to open a parenthesis");
 
-    Lexer look_ahead_lexer = parser->lexer;
+    lexer_t look_ahead_lexer = parser->lexer;
     i32 parenthesis_level = 1;
-    Token next = parser->current;
+    token_t next = parser->current;
     // get matching close parenthesis
     while (true) {
         if (next.type == TOKEN_EOF) {
@@ -608,9 +608,9 @@ static bool is_incoming_declaration_declaration(Parser* parser) {
         return false;
     }
 
-    Lexer lookahead_lexer = parser->lexer;
+    lexer_t lookahead_lexer = parser->lexer;
 
-    Token token = lexer_next_token(&lookahead_lexer);
+    token_t token = lexer_next_token(&lookahead_lexer);
 
     return token.type == TOKEN_COLON;
 }
@@ -718,7 +718,7 @@ static ast_node_t* unary(Parser* parser, bool is_in_type_context) {
 static ast_node_t* binary(Parser* parser, bool is_in_type_context) {
     ast_node_t* expression_node = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_EXPRESSION_BINARY, is_in_type_context, parser->previous);
 
-    Token operator = parser->previous;
+    token_t operator = parser->previous;
     expression_node->operator = operator;
     expression_node->data.binary.lhs = NULL;
     expression_node->data.binary.rhs = NULL;
@@ -919,14 +919,14 @@ static ast_node_t* parse_precedence(Parser* parser, bool is_in_type_context, Pre
     return left_operand;
 }
 
-static ParseRule* get_rule(TokenType type) {
+static ParseRule* get_rule(token_type_t type) {
     return &rules[type];
 }
 
 static ast_node_t* expression(Parser* parser, bool is_in_type_context) {
     bool fold = false;
     if (match(parser, TOKEN_DIRECTIVE)) {
-        Token directive = parser->previous;
+        token_t directive = parser->previous;
         fold = (directive.length - 1 == strlen("fold") && strncmp(directive.start + 1, "fold", 4) == 0);
 
         bool is_type_directive = (directive.length - 1 == strlen("type") && strncmp(directive.start + 1, "type", 4) == 0);
@@ -1086,7 +1086,7 @@ void ast_print_ast_node(ast_node_t* node, i32 initial, const char* prefix) {
 
     switch (node->node_type) {
         case ORSO_AST_NODE_TYPE_EXPRESSION_BINARY: {
-            Token operator = node->operator;
+            token_t operator = node->operator;
             printf("binary(%.*s): %s\n", operator.length, operator.start, type_info);
 
             ast_print_ast_node(node->data.binary.lhs, initial + 1, "left: ");

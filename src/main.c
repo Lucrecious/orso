@@ -27,7 +27,7 @@ void log_fatal(cstr_t format, ...) {
     va_end(args);
 }
 
-void myerror(OrsoError error) {
+void myerror(error_t error) {
     switch (error.type) {
         case ORSO_ERROR_COMPILE: {
             fprintf(stderr, "[line %d] %s\n", error.region.token.line + 1, error.message);

@@ -7,9 +7,9 @@
 #include "sb.h"
 
 #ifdef DEBUG_TRACE_EXECUTION
-u32 chunk_add_constant(Chunk* chunk, byte* data, u32 size, type_t* type)
+u32 chunk_add_constant(chunk_t* chunk, byte* data, u32 size, type_t* type)
 #else
-u32 chunk_add_constant(Chunk* chunk, byte* data, u32 size)
+u32 chunk_add_constant(chunk_t* chunk, byte* data, u32 size)
 #endif
 {
     u32 slot_size = orso_bytes_to_slots(size);
@@ -30,7 +30,7 @@ u32 chunk_add_constant(Chunk* chunk, byte* data, u32 size)
     return index;
 }
 
-void chunk_init(Chunk* chunk) {
+void chunk_init(chunk_t* chunk) {
 #ifdef DEBUG_TRACE_EXECUTION
     chunk->constant_types = NULL;
 #endif
@@ -39,7 +39,7 @@ void chunk_init(Chunk* chunk) {
     chunk->lines = NULL;
 }
 
-void chunk_free(Chunk* chunk) {
+void chunk_free(chunk_t* chunk) {
     sb_free(chunk->code);
     sb_free(chunk->lines);
     sb_free(chunk->constants);
@@ -49,7 +49,7 @@ void chunk_free(Chunk* chunk) {
     chunk_init(chunk);
 }
 
-void chunk_write(Chunk* chunk, byte byte, i32 line) {
+void chunk_write(chunk_t* chunk, byte byte, i32 line) {
     sb_push(chunk->code, byte);
 
     i32 lines_count = sb_count(chunk->lines);
@@ -61,7 +61,7 @@ void chunk_write(Chunk* chunk, byte byte, i32 line) {
     }
 }
 
-i32 chunk_get_line(Chunk* chunk, i32 offset) {
+i32 chunk_get_line(chunk_t* chunk, i32 offset) {
     for (i32 i = 0; i < sb_count(chunk->lines); i += 2) {
         if (offset < chunk->lines[i + 1]) {
             return chunk->lines[i];
