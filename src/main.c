@@ -80,7 +80,7 @@ int main(int argc, char **argv) {
         source = cstr2string(source_, &allocator);
     }
 
-    OrsoVM vm;
+    vm_t vm;
     orso_vm_init(&vm, mywrite, 1000);
     orso_run_source(&vm, source.cstr, myerror);
     orso_vm_free(&vm);

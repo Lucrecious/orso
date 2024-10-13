@@ -15,7 +15,7 @@ typedef struct {
     OrsoSlot* slots;
 } CallFrame;
 
-typedef struct OrsoVM {
+typedef struct vm_t {
     OrsoWriteFunction write_fn;
 
     OrsoTypeSet* type_set;
@@ -39,14 +39,14 @@ typedef struct OrsoVM {
     
     OrsoSlot* stack;
     OrsoSlot* stack_top;
-} OrsoVM;
+} vm_t;
 
-void orso_vm_init(OrsoVM* vm, OrsoWriteFunction write_fn, i32 stack_size);
-void orso_vm_free(OrsoVM* vm);
+void orso_vm_init(vm_t* vm, OrsoWriteFunction write_fn, i32 stack_size);
+void orso_vm_free(vm_t* vm);
 
-void orso_vm_call(OrsoVM* vm, OrsoFunction* function);
-void orso_vm_push_object(OrsoVM* vm, OrsoObject* object);
+void orso_vm_call(vm_t* vm, OrsoFunction* function);
+void orso_vm_push_object(vm_t* vm, OrsoObject* object);
 
-void orso_vm_interpret(OrsoVM* vm, OrsoErrorFunction error_fn);
+void orso_vm_interpret(vm_t* vm, OrsoErrorFunction error_fn);
 
 #endif

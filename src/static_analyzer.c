@@ -371,7 +371,7 @@ static bool can_call(OrsoType* type, OrsoASTNode** arguments) {
 }
 
 static i32 evaluate_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, bool is_folding_time, OrsoASTNode* expression) {
-    OrsoVM vm;
+    vm_t vm;
     // TODO: Make sure this uses the same writing function as the vm that runs the code at the end.
     orso_vm_init(&vm, NULL, 256);
     

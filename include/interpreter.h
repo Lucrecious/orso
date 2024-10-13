@@ -5,11 +5,11 @@
 #include "virtual_machine.h"
 #include "codegen.h"
 
-OrsoFunction* orso_compile_ast(OrsoVM* vm, OrsoAST* ast);
+OrsoFunction* orso_compile_ast(vm_t* vm, OrsoAST* ast);
 
 // leaves return value on the stack and returns its stack position (since it can be any size)
-OrsoSlot* orso_call_function(OrsoVM* vm, OrsoFunction* function, OrsoErrorFunction error_fn);
+OrsoSlot* orso_call_function(vm_t* vm, OrsoFunction* function, OrsoErrorFunction error_fn);
 
-void orso_run_source(OrsoVM* vm, const char* source, OrsoErrorFunction error_fn);
+void orso_run_source(vm_t* vm, const char* source, OrsoErrorFunction error_fn);
 
 #endif
