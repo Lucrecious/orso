@@ -21,12 +21,12 @@
 
 typedef bool (*IsCircularDependencyFunc)(OrsoStaticAnalyzer*, OrsoASTNode*);
 
-static void clock_native(OrsoSlot* arguments, OrsoSlot* result) {
+static void clock_native(slot_t* arguments, slot_t* result) {
     (void)arguments;
     result[0] = ORSO_SLOT_F((double)clock() / CLOCKS_PER_SEC);
 }
 
-typedef OrsoSymbolTable SymbolTable;
+typedef symbol_table_t SymbolTable;
 
 typedef enum ExpressionFoldingMode {
     MODE_RUNTIME = 0x1,
@@ -42,8 +42,8 @@ typedef struct AnalysisState {
 
 typedef struct Entity {
     // TODO: instead of using declarad type just use narrowed type and the type of the decalrtion node
-    OrsoType* declared_type;
-    OrsoType* narrowed_type;
+    type_t* declared_type;
+    type_t* narrowed_type;
 
     OrsoASTNode* node;
     i32 value_index;
@@ -96,7 +96,7 @@ static OrsoScope* scope_copy_new(OrsoScope* scope) {
     return scope_copy;
 }
 
-static void scope_merge(OrsoTypeSet* set, OrsoScope* scope, OrsoScope* a, OrsoScope* b) {
+static void scope_merge(type_set_t* set, OrsoScope* scope, OrsoScope* a, OrsoScope* b) {
     if (!scope) {
         ASSERT(!a && !b, "if no more scopes then all should be no more");
         return;
@@ -108,8 +108,8 @@ static void scope_merge(OrsoTypeSet* set, OrsoScope* scope, OrsoScope* a, OrsoSc
             continue;
         }
 
-        OrsoSlot entity_a_slot;
-        OrsoSlot entity_b_slot;
+        slot_t entity_a_slot;
+        slot_t entity_b_slot;
         if (!orso_symbol_table_get(&a->named_entities, entry->key, &entity_a_slot)
                 || !orso_symbol_table_get(&b->named_entities, entry->key, &entity_b_slot)) {
             continue;
@@ -118,8 +118,8 @@ static void scope_merge(OrsoTypeSet* set, OrsoScope* scope, OrsoScope* a, OrsoSc
         Entity* entity_a = (Entity*)entity_a_slot.as.p;
         Entity* entity_b = (Entity*)entity_b_slot.as.p;
 
-        OrsoType* anded_type;
-        OrsoType* anded_narrowed;
+        type_t* anded_type;
+        type_t* anded_narrowed;
         if (entity_a->declared_type == &OrsoTypeUnresolved || entity_b->declared_type == &OrsoTypeUnresolved) {
             if (entity_a->declared_type == entity_b->declared_type) {
                 continue;
@@ -159,7 +159,7 @@ static void add_entity(OrsoScope* scope, OrsoSymbol* identifier, OrsoASTNode* de
     orso_symbol_table_set(&scope->named_entities, identifier, ORSO_SLOT_P(entity));
 }
 
-static Entity* add_builtin_entity(OrsoAST* ast, OrsoSymbol* identifier, OrsoType* type, i32 value_index) {
+static Entity* add_builtin_entity(OrsoAST* ast, OrsoSymbol* identifier, type_t* type, i32 value_index) {
     Entity* entity = ORSO_ALLOCATE(Entity);
     entity->declared_type = type;
     entity->narrowed_type = type;
@@ -229,7 +229,7 @@ static void error_range2(OrsoStaticAnalyzer* analyzer, Token start1, Token end1,
     analyzer->error_fn(error);
 }
 
-static OrsoType* resolve_unary_type(OrsoAST* ast, TokenType operator, OrsoType* operand) {
+static type_t* resolve_unary_type(OrsoAST* ast, TokenType operator, type_t* operand) {
     if (operand == &OrsoTypeInvalid) {
         return &OrsoTypeInvalid;
     }
@@ -261,7 +261,7 @@ static OrsoType* resolve_unary_type(OrsoAST* ast, TokenType operator, OrsoType* 
     }
 }
 
-static OrsoASTNode* implicit_cast(OrsoAST* ast, OrsoASTNode* operand, OrsoType* value_type) {
+static OrsoASTNode* implicit_cast(OrsoAST* ast, OrsoASTNode* operand, type_t* value_type) {
     OrsoASTNode* implicit_cast = orso_ast_node_new(ast, ORSO_AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT, operand->is_in_type_context, operand->start);
     implicit_cast->end = operand->end;
 
@@ -277,13 +277,13 @@ static OrsoASTNode* implicit_cast(OrsoAST* ast, OrsoASTNode* operand, OrsoType* 
 
 #define IS_FOLDED(EXPRESSION_PTR) (EXPRESSION_PTR->value_index >= 0)
 
-static OrsoType* get_folded_type(OrsoAST* ast, i32 index) {
+static type_t* get_folded_type(OrsoAST* ast, i32 index) {
     if (index < 0) {
         return &OrsoTypeInvalid;
     }
 
-    OrsoSlot* type_slot = &ast->folded_constants[index];
-    OrsoType* type = (OrsoType*)type_slot->as.p;
+    slot_t* type_slot = &ast->folded_constants[index];
+    type_t* type = (type_t*)type_slot->as.p;
     return type;
 }
 
@@ -296,7 +296,7 @@ typedef enum {
 
 typedef struct EntityQuery  {
     QueryFlags flags;
-    OrsoType* search_type;
+    type_t* search_type;
     bool skip_mutable;
 } EntityQuery;
 
@@ -308,7 +308,7 @@ static Entity* get_resolved_entity_by_identifier(
         EntityQuery* query,
         OrsoScope** found_scope);
 
-static bool is_builtin_type(OrsoSymbol* identifier, OrsoType** type) {
+static bool is_builtin_type(OrsoSymbol* identifier, type_t** type) {
 #define RETURN_IF_TYPE(SYMBOL, TYPE_STRING, TYPE_ID) \
 if (strlen(SYMBOL->text) == (sizeof(#TYPE_STRING) - 1) && \
     memcmp(SYMBOL->text, #TYPE_STRING, (sizeof(#TYPE_STRING) - 1)) == 0) { \
@@ -332,7 +332,7 @@ if (strlen(SYMBOL->text) == (sizeof(#TYPE_STRING) - 1) && \
 #undef RETURN_IF_TYPE
 }
 
-static i32 add_value_to_ast_constant_stack(OrsoAST* ast, OrsoSlot* value, OrsoType* type) {
+static i32 add_value_to_ast_constant_stack(OrsoAST* ast, slot_t* value, type_t* type) {
     i32 slot_count = orso_type_slot_count(type);
     for (i32 i = 0; i < slot_count; i ++) {
         sb_push(ast->folded_constants, value[i]);
@@ -343,7 +343,7 @@ static i32 add_value_to_ast_constant_stack(OrsoAST* ast, OrsoSlot* value, OrsoTy
 
 static bool is_builtin_function(OrsoAST* ast, OrsoSymbol* identifier, OrsoNativeFunction** function) {
     if (identifier->length == 5 && strncmp(identifier->text, "clock", 5) == 0) {
-        OrsoType* function_type = orso_type_set_fetch_native_function(&ast->type_set, &OrsoTypeFloat64, NULL, 0);
+        type_t* function_type = orso_type_set_fetch_native_function(&ast->type_set, &OrsoTypeFloat64, NULL, 0);
         *function = orso_new_native_function(clock_native, function_type);
         return true;
     }
@@ -351,7 +351,7 @@ static bool is_builtin_function(OrsoAST* ast, OrsoSymbol* identifier, OrsoNative
     return false;
 }
 
-static bool can_call(OrsoType* type, OrsoASTNode** arguments) {
+static bool can_call(type_t* type, OrsoASTNode** arguments) {
     ASSERT(ORSO_TYPE_IS_FUNCTION(type), "must be a function type");
 
     if (type->data.function.argument_count != sb_count(arguments)) {
@@ -359,8 +359,8 @@ static bool can_call(OrsoType* type, OrsoASTNode** arguments) {
     }
 
     for (i32 i = 0; i < type->data.function.argument_count; i++) {
-        OrsoType* parameter_type = type->data.function.argument_types[i];
-        OrsoType* argument_type = arguments[i]->value_type_narrowed;
+        type_t* parameter_type = type->data.function.argument_types[i];
+        type_t* argument_type = arguments[i]->value_type_narrowed;
         if (!orso_type_fits(parameter_type, argument_type)) {
             // TODO: error_range - argument is invalid
             return false;
@@ -373,7 +373,7 @@ static bool can_call(OrsoType* type, OrsoASTNode** arguments) {
 static i32 evaluate_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, bool is_folding_time, OrsoASTNode* expression) {
     vm_t vm;
     // TODO: Make sure this uses the same writing function as the vm that runs the code at the end.
-    orso_vm_init(&vm, NULL, 256);
+    vm_init(&vm, NULL, 256);
     
     // TODO: try to set this in a more reobust place
     vm.type_set = &ast->type_set;
@@ -381,11 +381,11 @@ static i32 evaluate_expression(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, bool 
     OrsoCodeBuilder builder;
     orso_code_builder_init(&builder, &vm, ast);
 
-    OrsoFunction* function = orso_generate_expression_function(&builder, expression, is_folding_time);
+    function_t* function = orso_generate_expression_function(&builder, expression, is_folding_time);
 
     orso_code_builder_free(&builder);
 
-    OrsoSlot* value = orso_call_function(&vm, function, analyzer->error_fn);
+    slot_t* value = orso_call_function(&vm, function, analyzer->error_fn);
 
     i32 value_index = add_value_to_ast_constant_stack(ast, value, expression->value_type);
 
@@ -457,11 +457,11 @@ static void resolve_foldable(
 
             if (expression->operator.type == TOKEN_BAR) {
                 ASSERT(left->value_type_narrowed == &OrsoTypeType && right->value_type_narrowed == &OrsoTypeType, "both left and right must be types");
-                OrsoType* lhs_folded_type = get_folded_type(ast, left->value_index);
-                OrsoType* rhs_folded_type = get_folded_type(ast, right->value_index);
+                type_t* lhs_folded_type = get_folded_type(ast, left->value_index);
+                type_t* rhs_folded_type = get_folded_type(ast, right->value_index);
 
-                OrsoType* merged_type = orso_type_merge(&ast->type_set, lhs_folded_type, rhs_folded_type);
-                OrsoSlot merged_type_slot = ORSO_SLOT_P(merged_type);
+                type_t* merged_type = orso_type_merge(&ast->type_set, lhs_folded_type, rhs_folded_type);
+                slot_t merged_type_slot = ORSO_SLOT_P(merged_type);
 
                 folded_index = add_value_to_ast_constant_stack(ast, &merged_type_slot, &OrsoTypeType);
             }
@@ -482,14 +482,14 @@ static void resolve_foldable(
 
             if (expression->operator.type == TOKEN_AMPERSAND) {
                 if (expression->is_in_type_context) {
-                    OrsoType* type = get_folded_type(ast, expression->data.expression->value_index);
+                    type_t* type = get_folded_type(ast, expression->data.expression->value_index);
 
-                    OrsoType* pointer_type = orso_type_set_fetch_pointer(&ast->type_set, type);
+                    type_t* pointer_type = orso_type_set_fetch_pointer(&ast->type_set, type);
 
                     expression->value_type = &OrsoTypeType;
                     expression->value_type_narrowed = &OrsoTypeType;
 
-                    OrsoSlot type_slot = ORSO_SLOT_P(pointer_type);
+                    slot_t type_slot = ORSO_SLOT_P(pointer_type);
                     
                     folded_index = add_value_to_ast_constant_stack(ast, &type_slot, &OrsoTypeType);
                 } else {
@@ -557,7 +557,7 @@ static void resolve_foldable(
             // we should probably let the user know and also not allow them to fold something
             // that has an invalid thing.
             if (ORSO_TYPE_IS_FUNCTION(expression->data.call.callee->value_type)) {
-                OrsoFunction* function = (OrsoFunction*)ast->folded_constants[expression->data.call.callee->value_index].as.p;
+                function_t* function = (function_t*)ast->folded_constants[expression->data.call.callee->value_index].as.p;
                 OrsoASTNode* function_definition = NULL;
                 for (i32 i = 0; i < sb_count(ast->function_definition_pairs); i++) {
                     if (function == ast->function_definition_pairs[i].function) {
@@ -694,7 +694,7 @@ static void fold_constants_via_runtime(
     if (ORSO_TYPE_IS_UNION(expression->value_type)) {
         ASSERT(!ORSO_TYPE_IS_UNION(expression->value_type_narrowed), "narrowed value type must not be union");
 
-        OrsoType* narrowed_type = (OrsoType*)ast->folded_constants[value_index].as.p;
+        type_t* narrowed_type = (type_t*)ast->folded_constants[value_index].as.p;
 
         if (state.mode & MODE_CONSTANT_TIME) {
 
@@ -722,7 +722,7 @@ static void fold_function_signature(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, 
     }
 
     bool hit_error = false;
-    OrsoType** parameter_types = NULL;
+    type_t** parameter_types = NULL;
 
     for (i32 i = 0; i < sb_count(expression->data.function.parameter_nodes); i++) {
         OrsoASTNode* parameter = expression->data.function.parameter_nodes[i];
@@ -740,7 +740,7 @@ static void fold_function_signature(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, 
 
         i32 index = parameter->value_index + ORSO_TYPE_IS_UNION(parameter->value_type);
 
-        OrsoType* type = (OrsoType*)ast->folded_constants[index].as.p;
+        type_t* type = (type_t*)ast->folded_constants[index].as.p;
         sb_push(parameter_types, type);
     }
 
@@ -756,16 +756,16 @@ static void fold_function_signature(OrsoStaticAnalyzer* analyzer, OrsoAST* ast, 
         return;
     }
 
-    OrsoType* return_type;
+    type_t* return_type;
     {
         i32 index = return_type_expression->value_index + ORSO_TYPE_IS_UNION(return_type_expression->value_type);
-        return_type = (OrsoType*)ast->folded_constants[index].as.p;
+        return_type = (type_t*)ast->folded_constants[index].as.p;
     }
 
-    OrsoType* function_type = orso_type_set_fetch_function(&ast->type_set, return_type, parameter_types, sb_count(parameter_types));
+    type_t* function_type = orso_type_set_fetch_function(&ast->type_set, return_type, parameter_types, sb_count(parameter_types));
     sb_free(parameter_types);
 
-    OrsoSlot function_type_slot = ORSO_SLOT_P(function_type);
+    slot_t function_type_slot = ORSO_SLOT_P(function_type);
     i32 index = add_value_to_ast_constant_stack(ast, &function_type_slot, &OrsoTypeType);
 
     expression->foldable = true;
@@ -1012,8 +1012,8 @@ void orso_resolve_expression(
             //   if it's arthimetic, or comparisons, then let them merge at the end
             //   if it's logical, then you need to do special things
 
-            OrsoType* cast_left = &OrsoTypeInvalid;
-            OrsoType* cast_right = &OrsoTypeInvalid;
+            type_t* cast_left = &OrsoTypeInvalid;
+            type_t* cast_right = &OrsoTypeInvalid;
 
             expression->value_type_narrowed = &OrsoTypeUnresolved;
 
@@ -1024,7 +1024,7 @@ void orso_resolve_expression(
                 case TOKEN_MINUS:
                 case TOKEN_STAR:
                 case TOKEN_SLASH: {
-                    OrsoType* combined_type = orso_binary_arithmetic_cast(left->value_type_narrowed, right->value_type_narrowed, expression->operator.type);
+                    type_t* combined_type = orso_binary_arithmetic_cast(left->value_type_narrowed, right->value_type_narrowed, expression->operator.type);
                     expression->value_type = combined_type;
 
                     ASSERT(!ORSO_TYPE_IS_UNION(expression->value_type), "arthimetic must narrow down to a single type");
@@ -1070,7 +1070,7 @@ void orso_resolve_expression(
                     cast_left = left->value_type;
                     cast_right = right->value_type;
 
-                    OrsoType* merged_type = orso_type_merge(&ast->type_set, left->value_type, right->value_type);
+                    type_t* merged_type = orso_type_merge(&ast->type_set, left->value_type, right->value_type);
 
                     expression->value_type_narrowed = orso_type_merge(&ast->type_set, left->value_type_narrowed, right->value_type_narrowed);
                     expression->value_type = merged_type;
@@ -1126,7 +1126,7 @@ void orso_resolve_expression(
                     return;
                 }
             } else {
-                OrsoType* new_type = resolve_unary_type(ast, expression->operator.type, expression->data.expression->value_type_narrowed);
+                type_t* new_type = resolve_unary_type(ast, expression->operator.type, expression->data.expression->value_type_narrowed);
                 expression->value_type = new_type;
                 expression->value_type_narrowed = new_type;
                 
@@ -1203,7 +1203,7 @@ void orso_resolve_expression(
                 khint_t key_index = kh_get(type2ns, ast->type_to_creation_node, left->value_type_narrowed);
                 node_and_scope = kh_value(ast->type_to_creation_node, key_index);
             } else if (left->value_type_narrowed == &OrsoTypeType && ORSO_TYPE_IS_STRUCT(get_folded_type(ast, left->value_index))) {
-                OrsoType* struct_type = get_folded_type(ast, left->value_index);
+                type_t* struct_type = get_folded_type(ast, left->value_index);
                 khint_t key_index = kh_get(type2ns, ast->type_to_creation_node, struct_type);
                 node_and_scope = kh_value(ast->type_to_creation_node, key_index);
                 skip_mutable = true;
@@ -1299,7 +1299,7 @@ void orso_resolve_expression(
                 expression->value_type = entity->declared_type;
                 expression->value_type_narrowed = entity->declared_type;
 
-                OrsoType* right_side_narrowed_type = expression->data.binary.rhs->value_type_narrowed;
+                type_t* right_side_narrowed_type = expression->data.binary.rhs->value_type_narrowed;
                 unless (orso_type_fits(entity->declared_type, right_side_narrowed_type)) {
                     error_range(analyzer, expression->start, expression->end, "Explicit cast required to assign to variable.");
                     return;
@@ -1489,8 +1489,8 @@ void orso_resolve_expression(
             }
 
             if (branch_return_guarentee == ORSO_NO_RETURN_GUARENTEED) {
-                OrsoType* else_block_type = &OrsoTypeVoid;
-                OrsoType* else_block_narrowed_type = &OrsoTypeVoid;
+                type_t* else_block_type = &OrsoTypeVoid;
+                type_t* else_block_narrowed_type = &OrsoTypeVoid;
                 if (expression->data.branch.else_expression) {
                     else_block_type = expression->data.branch.else_expression->value_type;
                     else_block_narrowed_type = expression->data.branch.else_expression->value_type_narrowed;
@@ -1530,7 +1530,7 @@ void orso_resolve_expression(
                 return;
             }
 
-            OrsoType* narrowed_callee_type = expression->data.call.callee->value_type_narrowed;
+            type_t* narrowed_callee_type = expression->data.call.callee->value_type_narrowed;
             if ((!ORSO_TYPE_IS_FUNCTION(narrowed_callee_type) && !ORSO_TYPE_IS_NATIVE_FUNCTION(narrowed_callee_type)) || !can_call(narrowed_callee_type, expression->data.call.arguments)) {
                 error_range(analyzer, expression->data.call.callee->start, expression->data.call.callee->end, "Cannot call this value.");
                 return;
@@ -1607,7 +1607,7 @@ void orso_resolve_expression(
 
 static void declare_entity(OrsoStaticAnalyzer* analyzer, OrsoScope* scope, OrsoASTNode* entity) {
     OrsoSymbol* identifier = orso_unmanaged_symbol_from_cstrn(entity->start.start, entity->start.length, &analyzer->symbols);
-    OrsoSlot slot_type_pair;
+    slot_t slot_type_pair;
     if (orso_symbol_table_get(&scope->named_entities, identifier, &slot_type_pair)) {
         const char message[126];
         snprintf((char*)message, 126, "Duplicate entity definition of '%.*s'.", entity->start.length, entity->start.start);
@@ -1623,7 +1623,7 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
 // this is simply a safer way of accessing the initial value expression
 #define INITIAL_EXPRESSION (entity_declaration->data.declaration.initial_value_expression)
 
-    OrsoType* declaration_type = &OrsoTypeUnresolved;
+    type_t* declaration_type = &OrsoTypeUnresolved;
     if (entity_declaration->value_type == &OrsoTypeUnresolved && entity_declaration->data.declaration.type_expression) {
         bool pushed = push_dependency(analyzer, entity_declaration->data.declaration.type_expression, state.fold_level, is_value_circular_dependency);
         if (pushed) {
@@ -1678,7 +1678,7 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
         }
     }
 
-    OrsoSlot entity_slot;
+    slot_t entity_slot;
     OrsoSymbol* name = orso_unmanaged_symbol_from_cstrn(entity_declaration->start.start, entity_declaration->start.length, &analyzer->symbols);
 
     ASSERT(orso_symbol_table_get(&state.scope->named_entities, name, &entity_slot), "should be forward_declared already");
@@ -1702,7 +1702,7 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
         }
 
         // This must be available at compile time
-        OrsoType* struct_type = get_folded_type(ast, entity_declaration->value_index);
+        type_t* struct_type = get_folded_type(ast, entity_declaration->value_index);
         unless (orso_struct_type_is_incomplete(struct_type) && struct_type->data.struct_.name) {
             return;
         }
@@ -1710,7 +1710,7 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
         OrsoASTNode* cast_node = entity_declaration->data.declaration.initial_value_expression;
         ASSERT(cast_node->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT, "must be implicit casting node");
         
-        OrsoType* completed_struct_type = cast_node->data.expression->value_type_narrowed;
+        type_t* completed_struct_type = cast_node->data.expression->value_type_narrowed;
         
         // this means that we found out later that the struct this was supposed to be was actually invalid, so we need to fix the ast
         if (ORSO_TYPE_IS_INVALID(completed_struct_type)) {
@@ -1744,7 +1744,7 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
 
     unless (entity_declaration->data.declaration.is_mutable) {
         if (INITIAL_EXPRESSION != NULL && ORSO_TYPE_IS_FUNCTION(INITIAL_EXPRESSION->value_type_narrowed)) {
-            OrsoFunction* function = (OrsoFunction*)ast->folded_constants[INITIAL_EXPRESSION->value_index].as.p;
+            function_t* function = (function_t*)ast->folded_constants[INITIAL_EXPRESSION->value_index].as.p;
             if (function->binded_name == NULL) {
                 function->binded_name = name;
             }
@@ -1760,11 +1760,11 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
 
             to_struct_type->fold = false;
             to_struct_type->foldable = true;
-            OrsoType* named_struct = orso_type_create_struct(&ast->type_set, entity_declaration->start.start, entity_declaration->start.length, INITIAL_EXPRESSION->value_type_narrowed);
-            OrsoSlot struct_type_slot = ORSO_SLOT_P(named_struct);
+            type_t* named_struct = orso_type_create_struct(&ast->type_set, entity_declaration->start.start, entity_declaration->start.length, INITIAL_EXPRESSION->value_type_narrowed);
+            slot_t struct_type_slot = ORSO_SLOT_P(named_struct);
             to_struct_type->value_index = add_value_to_ast_constant_stack(ast, &struct_type_slot, &OrsoTypeType);
 
-            OrsoType* initial_expression_type = INITIAL_EXPRESSION->value_type_narrowed;
+            type_t* initial_expression_type = INITIAL_EXPRESSION->value_type_narrowed;
 
             khint_t key_index = kh_get(type2ns, ast->type_to_creation_node, initial_expression_type);
             ASSERT(key_index != kh_end(ast->type_to_creation_node), "this shoudl always find something");
@@ -1800,7 +1800,7 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
         if (entity_declaration->value_type == &OrsoTypeUnresolved) {
             ASSERT(INITIAL_EXPRESSION != NULL, "this should be a parsing error.");
 
-            OrsoType* expression_type = entity_declaration->data.declaration.is_mutable ?
+            type_t* expression_type = entity_declaration->data.declaration.is_mutable ?
                     INITIAL_EXPRESSION->value_type :
                     INITIAL_EXPRESSION->value_type_narrowed;
 
@@ -1846,7 +1846,7 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
         entity->narrowed_type = INITIAL_EXPRESSION->value_type_narrowed;
         if (IS_FOLDED(INITIAL_EXPRESSION)) {
             if (ORSO_TYPE_IS_UNION(INITIAL_EXPRESSION->value_type)) {
-                OrsoType* folded_value_type = get_folded_type(ast, INITIAL_EXPRESSION->value_index);
+                type_t* folded_value_type = get_folded_type(ast, INITIAL_EXPRESSION->value_index);
                 entity->narrowed_type = folded_value_type;
             }
 
@@ -1859,18 +1859,18 @@ static void resolve_entity_declaration(OrsoStaticAnalyzer* analyzer, OrsoAST* as
 }
 
 static Entity* get_builtin_entity(OrsoAST* ast, OrsoSymbol* identifier) {
-    OrsoSlot entity_slot;
+    slot_t entity_slot;
     if (!orso_symbol_table_get(&ast->builtins, identifier, &entity_slot)) {
-        OrsoType* type;
+        type_t* type;
         OrsoNativeFunction* function;
-        OrsoType* value_type = NULL;
-        OrsoSlot value_slot;
+        type_t* value_type = NULL;
+        slot_t value_slot;
         if (is_builtin_type(identifier, &type)) {
             value_slot = ORSO_SLOT_P(type);
             value_type = &OrsoTypeType;
         } else if (is_builtin_function(ast, identifier, &function)) {
             value_slot = ORSO_SLOT_P(function);
-            value_type = (OrsoType*)function->signature;
+            value_type = (type_t*)function->signature;
         }
 
         if (value_type) {
@@ -1965,7 +1965,7 @@ static Entity* get_resolved_entity_by_identifier(
         }
     }
 
-    OrsoSlot entity_slot;
+    slot_t entity_slot;
     *search_scope = state.scope;
 
     while (*search_scope) {
@@ -2083,13 +2083,13 @@ static Entity* get_resolved_entity_by_identifier(
             *     [1] by analyzed I mean type checked, type flowed, constants folded, etc. i.e. getting the ast ready for codegen.
             */
 
-            OrsoFunction* function = (OrsoFunction*)ast->folded_constants[entity->node->data.declaration.initial_value_expression->value_index].as.p;
+            function_t* function = (function_t*)ast->folded_constants[entity->node->data.declaration.initial_value_expression->value_index].as.p;
             for (i32 i = 0; i < analyzer->dependencies.count; i++) {
                 i32 i_ = analyzer->dependencies.count - 1 - i;
                 OrsoAnalysisDependency* dependency = &analyzer->dependencies.chain[i_];
                 OrsoASTNode* node = dependency->ast_node;
                 if (node->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION) {
-                    OrsoFunction* folded_function = (OrsoFunction*)ast->folded_constants[node->value_index].as.p;
+                    function_t* folded_function = (function_t*)ast->folded_constants[node->value_index].as.p;
                     if (folded_function == function && dependency->fold_level != state.fold_level) {
                         // TODO: Use better system to figure out whether function definition can be compiled or not
                         // In this case, it cannot because of the fold level circular dependency.
@@ -2110,7 +2110,7 @@ static Entity* get_resolved_entity_by_identifier(
             return entity;
         }
 
-        OrsoType* type = entity->node->value_type;
+        type_t* type = entity->node->value_type;
 
         if (query->flags & QUERY_FLAG_MATCH_TYPE && query->search_type == type) {
             return entity;
@@ -2152,7 +2152,7 @@ static void resolve_function_expression(
 
     OrsoScope function_parameter_scope;
     scope_init(&function_parameter_scope, SCOPE_TYPE_FUNCTION_PARAMETERS, state.scope, function_definition_expression);
-    OrsoType* parameter_types[parameter_count];
+    type_t* parameter_types[parameter_count];
 
     forward_scan_declaration_names(analyzer, &function_parameter_scope, definition->parameter_nodes, parameter_count);
 
@@ -2172,7 +2172,7 @@ static void resolve_function_expression(
         }
     }
 
-    OrsoType* return_type = &OrsoTypeVoid;
+    type_t* return_type = &OrsoTypeVoid;
     if (definition->return_type_expression) {
         bool pushed = push_dependency(analyzer, definition->return_type_expression, state.fold_level, is_value_circular_dependency);
         if (pushed) {
@@ -2198,9 +2198,9 @@ static void resolve_function_expression(
         return;
     }
 
-    OrsoType* function_type = orso_type_set_fetch_function(&ast->type_set, return_type, parameter_types, parameter_count);
+    type_t* function_type = orso_type_set_fetch_function(&ast->type_set, return_type, parameter_types, parameter_count);
 
-    OrsoFunction* function = orso_new_function();
+    function_t* function = orso_new_function();
     function->signature = function_type;
 
     sb_push(ast->function_definition_pairs, ((FunctionDefinitionPair){
@@ -2210,13 +2210,13 @@ static void resolve_function_expression(
 
     
     function_definition_expression->foldable = true;
-    OrsoSlot function_slot_value = ORSO_SLOT_P(function);
-    i32 function_constant_index = add_value_to_ast_constant_stack(ast, &function_slot_value, (OrsoType*)function_type);
+    slot_t function_slot_value = ORSO_SLOT_P(function);
+    i32 function_constant_index = add_value_to_ast_constant_stack(ast, &function_slot_value, (type_t*)function_type);
     function_definition_expression->value_index = function_constant_index;
 
     // TODO: Maybe use a marco defined for this file for setting both the value and type, maybe an inlined function
-    function_definition_expression->value_type = (OrsoType*)function_type;
-    function_definition_expression->value_type_narrowed = (OrsoType*)function_type;
+    function_definition_expression->value_type = (type_t*)function_type;
+    function_definition_expression->value_type_narrowed = (type_t*)function_type;
 
     ASSERT(definition->block->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_BLOCK, "must be block expression");
 
@@ -2389,7 +2389,7 @@ static void resolve_struct_definition(OrsoStaticAnalyzer* analyzer, OrsoAST* ast
 
     i32 declarations_count = sb_count(struct_definition->data.struct_.declarations);
 
-    OrsoType* incomplete_struct = orso_type_unique_incomplete_struct_type(&ast->type_set);
+    type_t* incomplete_struct = orso_type_unique_incomplete_struct_type(&ast->type_set);
     struct_definition->value_type = incomplete_struct;
     struct_definition->value_type_narrowed = incomplete_struct;
 
@@ -2461,7 +2461,7 @@ static void resolve_struct_definition(OrsoStaticAnalyzer* analyzer, OrsoAST* ast
         }
     }
 
-    OrsoType* complete_struct_type;
+    type_t* complete_struct_type;
 
     complete_struct_type = orso_type_set_fetch_anonymous_struct(&ast->type_set, field_count, fields, constant_count, constants);
 
@@ -2475,7 +2475,7 @@ static void resolve_struct_definition(OrsoStaticAnalyzer* analyzer, OrsoAST* ast
 
     i32 incomplete_index = -1;
     for (i32 i = 0; i < complete_struct_type->data.struct_.field_count; i++) {
-        OrsoType* field_type = complete_struct_type->data.struct_.fields[i].type;
+        type_t* field_type = complete_struct_type->data.struct_.fields[i].type;
         if (orso_struct_type_is_incomplete(field_type)) {
             incomplete_index = i;
             break;
@@ -2489,33 +2489,33 @@ static void resolve_struct_definition(OrsoStaticAnalyzer* analyzer, OrsoAST* ast
         ASSERT(struct_definition->value_type->data.struct_.field_count == field_count, "completed struct must have the same number as fields as ast field declaration nodes");
 
         u64 size_in_slots = orso_bytes_to_slots(complete_struct_type->data.struct_.total_bytes);
-        byte struct_data[size_in_slots * sizeof(OrsoSlot)];
-        for (u64 i = 0; i < size_in_slots * sizeof(OrsoSlot); i++) {
+        byte struct_data[size_in_slots * sizeof(slot_t)];
+        for (u64 i = 0; i < size_in_slots * sizeof(slot_t); i++) {
             struct_data[i] = 0;
         }
 
         for (i32 i = 0; i < field_count; i++) {
-            OrsoType* field_type = complete_struct_type->data.struct_.fields[i].type;
+            type_t* field_type = complete_struct_type->data.struct_.fields[i].type;
             u32 offset = complete_struct_type->data.struct_.fields[i].offset;
             OrsoASTNode* declaration = ast_fields[i];
 
             u32 bytes_to_copy = orso_type_size_bytes(field_type);
 
             if (ORSO_TYPE_IS_UNION(field_type)) {
-                OrsoType* value_expression_type = declaration->data.declaration.initial_value_expression == NULL ?
+                type_t* value_expression_type = declaration->data.declaration.initial_value_expression == NULL ?
                     &OrsoTypeType : declaration->data.declaration.initial_value_expression->value_type;
                 ASSERT(!ORSO_TYPE_IS_UNION(value_expression_type), "initial expression cannot be a union.");
 
-                memcpy(struct_data + offset, (byte*)(&value_expression_type), sizeof(OrsoSlot));
-                offset += sizeof(OrsoSlot);
-                bytes_to_copy -= sizeof(OrsoSlot);
+                memcpy(struct_data + offset, (byte*)(&value_expression_type), sizeof(slot_t));
+                offset += sizeof(slot_t);
+                bytes_to_copy -= sizeof(slot_t);
             }
 
             byte* value_src = (byte*)&ast->folded_constants[declaration->value_index];
             memcpy(struct_data + offset, value_src, bytes_to_copy);
         }
 
-        struct_definition->value_index = add_value_to_ast_constant_stack(ast, (OrsoSlot*)struct_data, complete_struct_type);
+        struct_definition->value_index = add_value_to_ast_constant_stack(ast, (slot_t*)struct_data, complete_struct_type);
 
         key_index = kh_put(type2ns, ast->type_to_creation_node, complete_struct_type, &absent);
         node_and_scope.scope = NULL;
@@ -2549,7 +2549,7 @@ static void resolve_statement(
             break;
 
         case ORSO_AST_NODE_TYPE_STATEMENT_RETURN: {
-            OrsoType* return_expression_type = &OrsoTypeVoid;
+            type_t* return_expression_type = &OrsoTypeVoid;
 
             if (statement->data.expression) {
                 orso_resolve_expression(analyzer, ast, state, statement->data.expression);
@@ -2559,8 +2559,8 @@ static void resolve_statement(
             OrsoScope* function_scope = get_closest_outer_function_scope(state.scope);
             ASSERT(function_scope, "right now all scopes should be under a function scope");
 
-            OrsoType* function_type = function_scope->creator->value_type;
-            OrsoType* function_return_type = function_scope ? function_type->data.function.return_type : &OrsoTypeVoid;
+            type_t* function_type = function_scope->creator->value_type;
+            type_t* function_return_type = function_scope ? function_type->data.function.return_type : &OrsoTypeVoid;
             unless (return_expression_type == &OrsoTypeInvalid || orso_type_fits(function_return_type, return_expression_type)) {
                 error_range(analyzer, statement->data.expression->start, statement->data.expression->end, "Requires explict cast to return.");
             }
@@ -2666,7 +2666,7 @@ bool orso_resolve_ast(OrsoStaticAnalyzer* analyzer, OrsoAST* ast) {
     return ast->resolved;
 }
 
-void orso_static_analyzer_init(OrsoStaticAnalyzer* analyzer, OrsoWriteFunction write_fn, OrsoErrorFunction error_fn) {
+void orso_static_analyzer_init(OrsoStaticAnalyzer* analyzer, write_function_t write_fn, OrsoErrorFunction error_fn) {
     analyzer->error_fn = error_fn;
     analyzer->had_error = false;
 
@@ -2701,7 +2701,7 @@ void orso_static_analyzer_free(OrsoStaticAnalyzer* analyzer) {
     analyzer->had_error = false;
 }
 
-i32 orso_zero_value(OrsoAST* ast, OrsoType* type, OrsoSymbolTable* symbol_table) {
+i32 orso_zero_value(OrsoAST* ast, type_t* type, symbol_table_t* symbol_table) {
     khint_t key_index;
 
     key_index = kh_get(ptr2i32, ast->type_to_zero_index, type);
@@ -2709,7 +2709,7 @@ i32 orso_zero_value(OrsoAST* ast, OrsoType* type, OrsoSymbolTable* symbol_table)
         return kh_value(ast->type_to_zero_index, key_index);
     }
 
-    OrsoSlot value[orso_bytes_to_slots(orso_type_size_bytes(type))];
+    slot_t value[orso_bytes_to_slots(orso_type_size_bytes(type))];
 
     switch (type->kind) {
         case ORSO_TYPE_POINTER:

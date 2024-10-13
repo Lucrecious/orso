@@ -7,9 +7,9 @@
 
 typedef struct Chunk {
 #ifdef DEBUG_TRACE_EXECUTION
-    OrsoType** constant_types;
+    type_t** constant_types;
 #endif
-    OrsoSlot* constants;
+    slot_t* constants;
     i32* lines; // run-length encoded
     byte* code;
 } Chunk;
@@ -20,13 +20,13 @@ i32 chunk_get_line(Chunk* chunk, i32 offset);
 
 #ifdef DEBUG_TRACE_EXECUTION
 #define CHUNK_ADD_CONSTANT(chunk, data, size, type) chunk_add_constant(chunk, data, size, type)
-u32 chunk_add_constant(Chunk* chunk, byte* data, u32 size, OrsoType* type);
+u32 chunk_add_constant(Chunk* chunk, byte* data, u32 size, type_t* type);
 #else
 #define CHUNK_ADD_CONSTANT(chunk, data, size, type) chunk_add_constant(chunk, data, size)
 u32 chunk_add_constant(Chunk* chunk, byte* data, u32 size);
 #endif
 
-void orso_print_slot(OrsoSlot* slot, OrsoType* type);
+void orso_print_slot(slot_t* slot, type_t* type);
 
 void chunk_free(Chunk* chunk);
 

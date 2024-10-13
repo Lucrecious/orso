@@ -5,13 +5,13 @@
 
 #define GROW_CAPACITY(capacity) capacity == 0 ? 8 : capacity * 2
 
-void orso_symbol_table_init(OrsoSymbolTable* table) {
+void orso_symbol_table_init(symbol_table_t* table) {
     table->entries = NULL;
     table->count = 0;
     table->capacity = 0;
 }
 
-void orso_symbol_table_free(OrsoSymbolTable* table) {
+void orso_symbol_table_free(symbol_table_t* table) {
     free(table->entries);
     orso_symbol_table_init(table);
 }
@@ -39,7 +39,7 @@ static OrsoSymbolTableEntry* find_entry(OrsoSymbolTableEntry* entries, i32 capac
     }
 }
 
-static void adjust_capacity(OrsoSymbolTable* table, i32 capacity) {
+static void adjust_capacity(symbol_table_t* table, i32 capacity) {
     OrsoSymbolTableEntry* entries = ORSO_ALLOCATE_N(OrsoSymbolTableEntry, capacity);
     for (i32 i = 0; i < capacity; i++) {
         entries[i].key = NULL;
@@ -64,7 +64,7 @@ static void adjust_capacity(OrsoSymbolTable* table, i32 capacity) {
     table->capacity = capacity;
 }
 
-bool orso_symbol_table_get(OrsoSymbolTable* table, OrsoSymbol* symbol, OrsoSlot* value) {
+bool orso_symbol_table_get(symbol_table_t* table, OrsoSymbol* symbol, slot_t* value) {
     if (table->count == 0) {
         return false;
     }
@@ -78,7 +78,7 @@ bool orso_symbol_table_get(OrsoSymbolTable* table, OrsoSymbol* symbol, OrsoSlot*
     return true;
 }
 
-bool orso_symbol_table_set(OrsoSymbolTable* table, OrsoSymbol* key, OrsoSlot value) {
+bool orso_symbol_table_set(symbol_table_t* table, OrsoSymbol* key, slot_t value) {
     if (table->count + 1 > table->capacity * ORSO_SYMBOL_TABLE_MAX_LOAD) {
         i32 capacity = GROW_CAPACITY(table->capacity);
         adjust_capacity(table, capacity);
@@ -97,7 +97,7 @@ bool orso_symbol_table_set(OrsoSymbolTable* table, OrsoSymbol* key, OrsoSlot val
     return is_new_key;
 }
 
-bool orso_symbol_table_remove(OrsoSymbolTable* table, OrsoSymbol* key) {
+bool orso_symbol_table_remove(symbol_table_t* table, OrsoSymbol* key) {
     if (table->count == 0) {
         return false;
     }
@@ -113,7 +113,7 @@ bool orso_symbol_table_remove(OrsoSymbolTable* table, OrsoSymbol* key) {
     return true;
 }
 
-void orso_symbol_table_add_all(OrsoSymbolTable* source, OrsoSymbolTable* destination) {
+void orso_symbol_table_add_all(symbol_table_t* source, symbol_table_t* destination) {
     for (i32 i = 0; i < source->capacity; i++) {
         OrsoSymbolTableEntry* entry = &source->entries[i];
         if (entry->key == NULL) {
@@ -124,7 +124,7 @@ void orso_symbol_table_add_all(OrsoSymbolTable* source, OrsoSymbolTable* destina
     }
 }
 
-OrsoSymbol* orso_symbol_table_find_cstrn(OrsoSymbolTable* table, const char* start, i32 length, u32 hash) {
+OrsoSymbol* orso_symbol_table_find_cstrn(symbol_table_t* table, const char* start, i32 length, u32 hash) {
     if (table->count == 0) {
         return NULL;
     }

@@ -14,8 +14,8 @@ typedef struct OrsoCodeBuilder {
 void orso_code_builder_init(OrsoCodeBuilder* builder, vm_t* vm, OrsoAST* ast);
 void orso_code_builder_free(OrsoCodeBuilder* builder);
 
-void orso_compile_function(vm_t* vm, OrsoAST* ast, OrsoFunction* function, OrsoASTNode* function_definition_expression);
-OrsoFunction* orso_generate_expression_function(OrsoCodeBuilder* builder, OrsoASTNode* expression, bool is_folding_time);
-OrsoFunction* orso_generate_code(vm_t* vm, OrsoAST* ast);
+void orso_compile_function(vm_t* vm, OrsoAST* ast, function_t* function, OrsoASTNode* function_definition_expression);
+function_t* orso_generate_expression_function(OrsoCodeBuilder* builder, OrsoASTNode* expression, bool is_folding_time);
+function_t* orso_generate_code(vm_t* vm, OrsoAST* ast);
 
 #endif

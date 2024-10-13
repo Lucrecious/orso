@@ -8,7 +8,7 @@
 
 #define ORSO_UNION_NUM_MAX 4
 
-typedef enum OrsoTypeKind {
+typedef enum type_kind_t {
     ORSO_TYPE_INVALID = 0,      // error type
     ORSO_TYPE_UNDEFINED,        // used for blocks with returns
     ORSO_TYPE_UNRESOLVED,       // unresolved (not undefined, not error, not defined)
@@ -26,14 +26,14 @@ typedef enum OrsoTypeKind {
     ORSO_TYPE_POINTER,          // &type
     ORSO_TYPE_UNION,            // type1|type2|...|typen
     ORSO_TYPE_STRUCT,           // used for both anonymous and named
-} OrsoTypeKind;
+} type_kind_t;
 
-struct OrsoType;
-typedef struct OrsoType OrsoType;
+struct type_t;
+typedef struct type_t type_t;
 
 typedef struct OrsoStructField {
     char* name;
-    OrsoType* type;
+    type_t* type;
 
     // not relevant for hashing
     i32 offset;
@@ -41,21 +41,21 @@ typedef struct OrsoStructField {
 
 typedef struct OrsoStructConstant {
     char *name;
-    OrsoType* type;
+    type_t* type;
 } OrsoStructConstant;
 
-struct OrsoType {
-    OrsoTypeKind kind;
+struct type_t {
+    type_kind_t kind;
     union {
         struct {
             i32 count;
-            OrsoType** types;
+            type_t** types;
         } union_;
 
         struct {
-            OrsoType* return_type;
+            type_t* return_type;
             i32 argument_count;
-            OrsoType** argument_types;
+            type_t** argument_types;
         } function;
 
         struct {
@@ -73,7 +73,7 @@ struct OrsoType {
         } struct_;
 
         struct {
-            OrsoType* type;
+            type_t* type;
         } pointer;
     } data;
 };
@@ -87,60 +87,60 @@ struct OrsoType {
 #define ORSO_TYPE_IS_UNDEFINED(TYPE) (TYPE->kind == ORSO_TYPE_UNDEFINED)
 #define ORSO_TYPE_IS_UNRESOLVED(TYPE) (TYPE->kind == ORSO_TYPE_UNRESOLVED)
 
-struct OrsoTypeSet;
+struct type_set_t;
 
-bool orso_union_type_has_type(OrsoType* type, OrsoType* subtype);
+bool orso_union_type_has_type(type_t* type, type_t* subtype);
 
-bool orso_struct_type_is_incomplete(OrsoType* type);
+bool orso_struct_type_is_incomplete(type_t* type);
 
-bool orso_type_equal(OrsoType* a, OrsoType* b);
+bool orso_type_equal(type_t* a, type_t* b);
 
 // orso_type_has_type_kind
-bool orso_union_type_has_type(OrsoType* type, OrsoType* subtype);
-bool orso_union_type_contains_type(OrsoType* union_, OrsoType* type);
+bool orso_union_type_has_type(type_t* type, type_t* subtype);
+bool orso_union_type_contains_type(type_t* union_, type_t* type);
 
-OrsoType* orso_type_merge(struct OrsoTypeSet* set, OrsoType* a, OrsoType* b);
+type_t* orso_type_merge(struct type_set_t* set, type_t* a, type_t* b);
 
-bool orso_type_is_float(OrsoType* type);
-bool orso_type_is_integer(OrsoType* type, bool include_bool);
-bool orso_type_is_number(OrsoType* type, bool include_bool);
-FORCE_INLINE bool orso_type_is_unsigned_integer_type(OrsoType* type, bool include_bool){
+bool orso_type_is_float(type_t* type);
+bool orso_type_is_integer(type_t* type, bool include_bool);
+bool orso_type_is_number(type_t* type, bool include_bool);
+FORCE_INLINE bool orso_type_is_unsigned_integer_type(type_t* type, bool include_bool){
     (void)type;
     (void)include_bool;
     return false;
 }
 
 // orso_has_float_type
-bool orso_union_has_float(OrsoType* type);
+bool orso_union_has_float(type_t* type);
 
-bool orso_type_is_or_has_float(OrsoType* type);
+bool orso_type_is_or_has_float(type_t* type);
 
 // orso_has_integer_type
-bool orso_union_has_integer(OrsoType* type, bool include_bool);
+bool orso_union_has_integer(type_t* type, bool include_bool);
 
-bool orso_type_is_or_has_integer(OrsoType* type, bool include_bool);
+bool orso_type_is_or_has_integer(type_t* type, bool include_bool);
 
 i32 orso_bytes_to_slots(i32 byte_count);
 
-u32 orso_type_size_bytes(OrsoType* type);
+u32 orso_type_size_bytes(type_t* type);
 
-OrsoStructField* orso_type_struct_find_field(OrsoType* struct_, const char* name, size_t name_length);
+OrsoStructField* orso_type_struct_find_field(type_t* struct_, const char* name, size_t name_length);
 
-bool orso_integer_fit(OrsoType* storage_type, OrsoType* value_type, bool include_bool);
+bool orso_integer_fit(type_t* storage_type, type_t* value_type, bool include_bool);
 
-i32 orso_type_slot_count(OrsoType* type);
+i32 orso_type_slot_count(type_t* type);
 
-bool orso_type_fits(OrsoType* storage_type, OrsoType* value_type);
+bool orso_type_fits(type_t* storage_type, type_t* value_type);
 
-i32 orso_type_to_cstrn(OrsoType* type, char* buffer, i32 n);
+i32 orso_type_to_cstrn(type_t* type, char* buffer, i32 n);
 
-bool orso_is_gc_type(OrsoType* type);
+bool orso_is_gc_type(type_t* type);
 
-OrsoType* orso_binary_arithmetic_cast(OrsoType* a, OrsoType* b, TokenType operation);
+type_t* orso_binary_arithmetic_cast(type_t* a, type_t* b, TokenType operation);
 
-void orso_binary_comparison_casts(OrsoType* a, OrsoType* b, OrsoType** a_cast, OrsoType** b_cast);
+void orso_binary_comparison_casts(type_t* a, type_t* b, type_t** a_cast, type_t** b_cast);
 
-void orso_binary_equality_casts(OrsoType* a, OrsoType* b, OrsoType** a_cast, OrsoType** b_cast);
+void orso_binary_equality_casts(type_t* a, type_t* b, type_t** a_cast, type_t** b_cast);
 
 //void generate_struct_layout()
 

@@ -9,6 +9,6 @@ struct OrsoError;
 #define MAX_PARAMETERS 100
 
 typedef void (*OrsoErrorFunction)(struct OrsoError error);
-typedef void (*OrsoWriteFunction)(const char* chars);
+typedef void (*write_function_t)(const char* chars);
 
 #endif

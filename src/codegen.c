@@ -19,11 +19,11 @@ typedef struct {
 } Local;
 
 typedef struct Compiler {
-    OrsoFunction* function;
+    function_t* function;
 
     bool skip_function_definitions;
 
-    OrsoFunction** functions_to_compile;
+    function_t** functions_to_compile;
 
     Local* locals;
     i32 locals_count;
@@ -35,7 +35,7 @@ typedef struct Compiler {
 static i32 add_local(Compiler* compiler, Token name, i32 slot_count);
 
 // A Token* is passed in instead of OrsoSymbol* because Token* cant be garbage collected and OrsoSymbol* can and would be.
-static void compiler_init(Compiler* compiler, vm_t* vm, OrsoFunction* function, OrsoType* creator_type) {
+static void compiler_init(Compiler* compiler, vm_t* vm, function_t* function, type_t* creator_type) {
     ASSERT(function, "must be not null");
 
     // TODO: remove if possible, previously this was used to get the garbage collector but thats being
@@ -260,7 +260,7 @@ static void emit(Compiler* compiler, Chunk* chunk, i32 line, const int op_code, 
         }
 
         case ORSO_OP_PUT_IN_UNION: {
-            OrsoType* type = va_arg(args, OrsoType*);
+            type_t* type = va_arg(args, type_t*);
             chunk_write(chunk, (byte)orso_type_size_bytes(type), line);
 
             stack_effect = 0;
@@ -304,7 +304,7 @@ static void emit(Compiler* compiler, Chunk* chunk, i32 line, const int op_code, 
         }
 
         case ORSO_OP_CALL: {
-            OrsoType* function_type = va_arg(args, OrsoType*);
+            type_t* function_type = va_arg(args, type_t*);
             ASSERT(ORSO_TYPE_IS_FUNCTION(function_type), "must be function");
 
             i32 argument_slots = 0;
@@ -323,7 +323,7 @@ static void emit(Compiler* compiler, Chunk* chunk, i32 line, const int op_code, 
         }
 
         case ORSO_OP_RETURN: {
-            OrsoType* type = va_arg(args, OrsoType*);
+            type_t* type = va_arg(args, type_t*);
             // TODO: Figure out more robust way of doing this instead of casting to byte
             chunk_write(chunk, (byte)orso_type_slot_count(type), line);
 
@@ -333,7 +333,7 @@ static void emit(Compiler* compiler, Chunk* chunk, i32 line, const int op_code, 
 
         case ORSO_OP_PRINT_EXPR:
         case ORSO_OP_PRINT: {
-            OrsoType* type = va_arg(args, OrsoType*);
+            type_t* type = va_arg(args, type_t*);
             stack_effect -= orso_type_slot_count(type);
 
             // the string expression and the type of the value
@@ -348,11 +348,11 @@ static void emit(Compiler* compiler, Chunk* chunk, i32 line, const int op_code, 
 }
 
 // TODO: Remove compiler from the parameters... instead try to bubble up the stack effect somehow
-static void emit_constant(Compiler* compiler, Chunk* chunk, byte* data, i32 line, OrsoType* type)
+static void emit_constant(Compiler* compiler, Chunk* chunk, byte* data, i32 line, type_t* type)
 {
     u32 size = orso_type_size_bytes(type);
     u32 address = CHUNK_ADD_CONSTANT(chunk, data, size, type);
-    address *= sizeof(OrsoSlot);
+    address *= sizeof(slot_t);
 
     ASSERT(address < UINT32_MAX, "address is too high");
 
@@ -365,10 +365,10 @@ static void emit_constant(Compiler* compiler, Chunk* chunk, byte* data, i32 line
     }
 }
 
-static void emit_put_in_union(Compiler* compiler, Chunk* chunk, i32 line, OrsoType* type) {
-    OrsoSlot slot = ORSO_SLOT_P(type);
+static void emit_put_in_union(Compiler* compiler, Chunk* chunk, i32 line, type_t* type) {
+    slot_t slot = ORSO_SLOT_P(type);
     emit_constant(compiler, chunk, (byte*)&slot, line, &OrsoTypeType);
-    emit(compiler, chunk, line, ORSO_OP_PUT_IN_UNION, (OrsoType*)type);
+    emit(compiler, chunk, line, ORSO_OP_PUT_IN_UNION, (type_t*)type);
 }
 
 static void patch_jump(Chunk* chunk, i32 offset) {
@@ -385,7 +385,7 @@ static void patch_jump(Chunk* chunk, i32 offset) {
 }
 
 static void emit_entity_get(Compiler* compiler, u32 index, byte size_bytes, Chunk* chunk, i32 line, bool is_local) {
-    index *= sizeof(OrsoSlot);
+    index *= sizeof(slot_t);
     if (is_local) {
         ASSERT(index <= UINT16_MAX, "must be short");
         emit(compiler, chunk, line, ORSO_OP_GET_LOCAL_16BIT_ADDRESS, (long)index, (long)size_bytes);
@@ -394,7 +394,7 @@ static void emit_entity_get(Compiler* compiler, u32 index, byte size_bytes, Chun
     }
 }
 
-static void emit_type_convert(Compiler* compiler, OrsoType* from_type, OrsoType* to_type, Chunk* chunk, i32 line) {
+static void emit_type_convert(Compiler* compiler, type_t* from_type, type_t* to_type, Chunk* chunk, i32 line) {
     bool include_bool = true;
     ASSERT(orso_type_is_number(from_type, include_bool) && orso_type_is_number(to_type, include_bool), "Implicit type conversion only works for number types right now.");
     if (orso_type_is_float(from_type) && orso_type_is_integer(to_type, include_bool)) {
@@ -404,11 +404,11 @@ static void emit_type_convert(Compiler* compiler, OrsoType* from_type, OrsoType*
     } 
 }
 
-static void emit_storage_type_convert(Compiler* compiler, Chunk* chunk, OrsoType* source, OrsoType* destination, i32 line) {
+static void emit_storage_type_convert(Compiler* compiler, Chunk* chunk, type_t* source, type_t* destination, i32 line) {
     if (ORSO_TYPE_IS_UNION(source) && !ORSO_TYPE_IS_UNION(destination)) {
         emit(compiler, chunk, line, ORSO_OP_NARROW_UNION, orso_type_size_bytes(source));
     } else if (!ORSO_TYPE_IS_UNION(source) && ORSO_TYPE_IS_UNION(destination)) {
-        emit_put_in_union(compiler, chunk, line, (OrsoType*)source);
+        emit_put_in_union(compiler, chunk, line, (type_t*)source);
     }
 }
 
@@ -428,16 +428,16 @@ static void emit_pop(Compiler* compiler, Chunk* chunk, u32 pop_count, i32 line) 
     }
 }
 
-static OrsoFunction* compiler_end(vm_t* vm, Compiler* compiler, OrsoAST* ast, Chunk* chunk, i32 line) {
+static function_t* compiler_end(vm_t* vm, Compiler* compiler, OrsoAST* ast, Chunk* chunk, i32 line) {
     emit(compiler, chunk, line, ORSO_OP_PUSH_0);
-    emit(compiler, chunk, line, ORSO_OP_RETURN, (OrsoType*)&OrsoTypeVoid);
+    emit(compiler, chunk, line, ORSO_OP_RETURN, (type_t*)&OrsoTypeVoid);
 
     // compile left over functions
     // TODO: make this faster. this is super slow because i need a hashmap to look up the functions
     // faster. Or I need to figure out a way to decide whether or not i should compile a function
     // on the fly.
     {
-        OrsoFunction** functions_to_compile = NULL;
+        function_t** functions_to_compile = NULL;
         for (i32 i = 0; i < sb_count(compiler->functions_to_compile); i++) {
             sb_push(functions_to_compile, compiler->functions_to_compile[i]);
         }
@@ -446,7 +446,7 @@ static OrsoFunction* compiler_end(vm_t* vm, Compiler* compiler, OrsoAST* ast, Ch
         compiler->functions_to_compile = NULL;
 
         for (i32 i = 0; i < sb_count(functions_to_compile); i++) {
-            OrsoFunction* function = functions_to_compile[i];
+            function_t* function = functions_to_compile[i];
             if (function->chunk.code != NULL) {
                 continue;
             }
@@ -475,7 +475,7 @@ static OrsoFunction* compiler_end(vm_t* vm, Compiler* compiler, OrsoAST* ast, Ch
 
 #ifdef DEBUG_TRACE_EXECUTION
 #define DECLARE_GLOBAL(vm, name, slot_count, type) add_global(vm, name, slot_count, type)
-static i32 add_global(OrsoVM* vm, Token* name, i32 slot_count, OrsoType* type)
+static i32 add_global(vm_t* vm, Token* name, i32 slot_count, type_t* type)
 #else
 #define DECLARE_GLOBAL(vm, name, slot_count, type) add_global(vm, name, slot_count)
 static i32 add_global(vm_t* vm, Token* name, i32 slot_count)
@@ -483,7 +483,7 @@ static i32 add_global(vm_t* vm, Token* name, i32 slot_count)
 {
     OrsoSymbol* identifier = orso_new_symbol_from_cstrn(name->start, name->length, &vm->symbols);
 
-    OrsoSlot index_slot;
+    slot_t index_slot;
     ASSERT(!orso_symbol_table_get(&vm->globals.name_to_index, identifier, &index_slot), "double global definition");
 
     // Use the specific khash for this
@@ -535,7 +535,7 @@ static i32 declare_local_entity(Compiler* compiler, Token* name, i32 slot_count)
 
 static i32 retrieve_global_variable(vm_t* vm, Token* name) {
     OrsoSymbol* identifier = orso_new_symbol_from_cstrn(name->start, name->length, &vm->symbols);
-    OrsoSlot value;
+    slot_t value;
     if (!orso_symbol_table_get(&vm->globals.name_to_index, identifier, &value)) {
         return -1;
     }
@@ -582,7 +582,7 @@ static void begin_scope(Compiler* compiler) {
     compiler->scope_depth++;
 }
 
-static void end_scope(Compiler* compiler, Chunk* chunk, OrsoType* block_value_type, i32 line) {
+static void end_scope(Compiler* compiler, Chunk* chunk, type_t* block_value_type, i32 line) {
     compiler->scope_depth--;
 
     // pop all local object markers
@@ -605,7 +605,7 @@ static void end_scope(Compiler* compiler, Chunk* chunk, OrsoType* block_value_ty
 static void declaration(vm_t* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode* declaration, Chunk* chunk);
 static void expression(vm_t* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode* expression_node, Chunk* chunk);
 
-static OrsoType* gen_block(vm_t* vm, Compiler* compiler, OrsoAST* ast, Chunk* chunk, OrsoASTNode** block, i32 node_count, i32 end_line) {
+static type_t* gen_block(vm_t* vm, Compiler* compiler, OrsoAST* ast, Chunk* chunk, OrsoASTNode** block, i32 node_count, i32 end_line) {
     OrsoASTNode* final_expression_statement = node_count > 0 ? block[node_count - 1] : NULL;
 
     final_expression_statement = final_expression_statement && final_expression_statement->node_type != ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION ?
@@ -615,7 +615,7 @@ static OrsoType* gen_block(vm_t* vm, Compiler* compiler, OrsoAST* ast, Chunk* ch
         declaration(vm, compiler, ast, block[i], chunk);
     }
 
-    OrsoType* return_value_type = &OrsoTypeInvalid;
+    type_t* return_value_type = &OrsoTypeInvalid;
     if (final_expression_statement) {
         OrsoASTNode* final_expression = final_expression_statement->data.expression;
         return_value_type = final_expression->value_type;
@@ -628,17 +628,17 @@ static OrsoType* gen_block(vm_t* vm, Compiler* compiler, OrsoAST* ast, Chunk* ch
     return return_value_type;
 }
 
-static u64 define_global_entity(vm_t* vm, Token* name, OrsoType* type) {
+static u64 define_global_entity(vm_t* vm, Token* name, type_t* type) {
     u32 slot_size = orso_type_slot_count(type);
     u32 index = DECLARE_GLOBAL(vm, name, slot_size, type);
     return index;
 }
 
-static void declare_local_function_definition(Compiler* compiler, OrsoFunction* function){ 
+static void declare_local_function_definition(Compiler* compiler, function_t* function){ 
     // used in assert
     (void)function;
     // TODO: fix this assert, why does function->type need to be converted to type? Will it never be unresolved?
-    ASSERT((OrsoType*)function->signature != &OrsoTypeUnresolved, "Must have resolved type");
+    ASSERT((type_t*)function->signature != &OrsoTypeUnresolved, "Must have resolved type");
 
     Token empty = { .start = "", .length = 0 };
     declare_local_entity(compiler, &empty, 1);
@@ -647,18 +647,18 @@ static void declare_local_function_definition(Compiler* compiler, OrsoFunction* 
 static void function_expression(vm_t* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode* function_defintion_expression, Chunk* chunk) {
     ASSERT(ORSO_TYPE_IS_FUNCTION(function_defintion_expression->value_type), "must be function if calling this");
 
-    OrsoFunction* stored_function = (OrsoFunction*)ast->folded_constants[function_defintion_expression->value_index].as.p;
+    function_t* stored_function = (function_t*)ast->folded_constants[function_defintion_expression->value_index].as.p;
     if (!compiler->skip_function_definitions && stored_function->chunk.code == NULL /*is not compiled yet*/) {
         orso_compile_function(vm, ast, stored_function, function_defintion_expression);
     }
-    OrsoSlot function_value = ORSO_SLOT_P(stored_function);
+    slot_t function_value = ORSO_SLOT_P(stored_function);
     emit_constant(compiler, chunk, (byte*)&function_value, function_defintion_expression->start.line, stored_function->signature);
 }
 
-static void gen_primary(Compiler* compiler, Chunk* chunk, OrsoAST* ast, OrsoType* value_type, i32 value_index, i32 line) {
+static void gen_primary(Compiler* compiler, Chunk* chunk, OrsoAST* ast, type_t* value_type, i32 value_index, i32 line) {
     ASSERT(value_index >= 0, "must be pointing to a contant value...");
 
-    OrsoSlot* value = &ast->folded_constants[value_index];
+    slot_t* value = &ast->folded_constants[value_index];
     switch (value_type->kind) {
         case ORSO_TYPE_BOOL:
         case ORSO_TYPE_INT32:
@@ -699,7 +699,7 @@ static void expression_lvalue(vm_t* vm, Compiler* compiler, OrsoAST* ast, OrsoAS
             OrsoASTNode* referencing_declaration = lvalue_node->data.dot.referencing_declaration;
 
             if (ORSO_TYPE_IS_STRUCT(lvalue_node->data.dot.lhs->value_type)) {
-                OrsoType* struct_type = lvalue_node->data.dot.lhs->value_type;
+                type_t* struct_type = lvalue_node->data.dot.lhs->value_type;
                 Token field_name = referencing_declaration->data.declaration.identifier;
                 OrsoStructField* field = NULL;
                 for (i32 i = 0; i < struct_type->data.struct_.field_count; ++i) {
@@ -712,7 +712,7 @@ static void expression_lvalue(vm_t* vm, Compiler* compiler, OrsoAST* ast, OrsoAS
                 ASSERT(field != NULL, "the field offset must be found at this point since it should have been found during analysis");
 
                 if (field->offset > 0) {
-                    OrsoSlot offset = ORSO_SLOT_U(field->offset);
+                    slot_t offset = ORSO_SLOT_U(field->offset);
                     emit_constant(compiler, chunk, (byte*)&offset, lvalue_node->data.dot.identifier.line, &OrsoTypeInteger64);
                     emit(compiler, chunk, lvalue_node->data.dot.identifier.line, ORSO_OP_ADD_PTR_I64);
                 }
@@ -728,7 +728,7 @@ static void expression_lvalue(vm_t* vm, Compiler* compiler, OrsoAST* ast, OrsoAS
             Token identifier_token = lvalue_node->data.dot.identifier;
 
             index = retrieve_variable(vm, compiler, &identifier_token, &is_local);
-            index *= sizeof(OrsoSlot);
+            index *= sizeof(slot_t);
 
             OrsoOPCode push_code = is_local ? ORSO_OP_PUSH_LOCAL_ADDRESS : ORSO_OP_PUSH_GLOBAL_ADDRESS;
             ASSERT((!is_local || index <= UINT16_MAX), "local address must be short");
@@ -788,7 +788,7 @@ static void expression(vm_t* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode* 
         // TODO: for now going to do this super naively until I get a better hash table that is more generic that I can
         // use for more things. This is will be super slow but I just want to get it to work.
         if (!compiler->skip_function_definitions && ORSO_TYPE_IS_FUNCTION(expression_node->value_type)) {
-            OrsoFunction* function = (OrsoFunction*)ast->folded_constants[expression_node->value_index].as.p;
+            function_t* function = (function_t*)ast->folded_constants[expression_node->value_index].as.p;
             sb_push(compiler->functions_to_compile, function);
         }
 
@@ -1025,7 +1025,7 @@ static void expression(vm_t* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode* 
 
         case ORSO_AST_NODE_TYPE_EXPRESSION_ASSIGNMENT: {
             expression(vm, compiler, ast, expression_node->data.binary.rhs, chunk);
-            OrsoType* right_side_type = expression_node->data.binary.rhs->value_type;
+            type_t* right_side_type = expression_node->data.binary.rhs->value_type;
 
             emit_storage_type_convert(compiler, chunk, right_side_type, expression_node->value_type, expression_node->start.line);
 
@@ -1097,7 +1097,7 @@ static void expression(vm_t* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode* 
 
             OrsoASTNode** block = expression_node->data.block;
             i32 node_count = sb_count(block);
-            OrsoType* return_value_type = gen_block(vm, compiler, ast, chunk, block, node_count, expression_node->end.line);
+            type_t* return_value_type = gen_block(vm, compiler, ast, chunk, block, node_count, expression_node->end.line);
 
             end_scope(compiler, chunk, return_value_type, expression_node->end.line);
             break;
@@ -1190,18 +1190,18 @@ static void expression(vm_t* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode* 
             expression(vm, compiler, ast, expression_node->data.call.callee, chunk);
             emit_storage_type_convert(compiler, chunk, expression_node->value_type, expression_node->value_type_narrowed, expression_node->end.line);
 
-            OrsoType* function_type = expression_node->data.call.callee->value_type_narrowed;
+            type_t* function_type = expression_node->data.call.callee->value_type_narrowed;
 
             for (i32 i = 0; i < sb_count(expression_node->data.call.arguments); i++) {
                 OrsoASTNode* argument = expression_node->data.call.arguments[i];
                 expression(vm, compiler, ast, argument, chunk);
 
-                OrsoType* parameter_type = function_type->data.function.argument_types[i];
+                type_t* parameter_type = function_type->data.function.argument_types[i];
                 emit_storage_type_convert(compiler, chunk, argument->value_type, parameter_type, expression_node->end.line);
             }
 
-            OrsoType* overload_type = function_type;
-            emit(compiler, chunk, expression_node->data.call.callee->start.line, ORSO_OP_CALL, (OrsoType*)overload_type);
+            type_t* overload_type = function_type;
+            emit(compiler, chunk, expression_node->data.call.callee->start.line, ORSO_OP_CALL, (type_t*)overload_type);
             break;
         }
 
@@ -1223,10 +1223,10 @@ static void expression(vm_t* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode* 
 
             OrsoString* expression_string = orso_new_string_from_cstrn(start.start, (end.start + end.length) - start.start);
 
-            OrsoSlot slot = ORSO_SLOT_P(expression_string);
+            slot_t slot = ORSO_SLOT_P(expression_string);
             emit_constant(compiler, chunk, (byte*)&slot, start.line, &OrsoTypeString);
 
-            OrsoSlot value_type = ORSO_SLOT_P(expression_node->data.expression->value_type);
+            slot_t value_type = ORSO_SLOT_P(expression_node->data.expression->value_type);
             emit_constant(compiler, chunk, (byte*)&value_type, start.line, &OrsoTypeType);
 
             if (expression_node->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_PRINT_EXPR) {
@@ -1261,7 +1261,7 @@ static void expression(vm_t* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode* 
 }
 
 static void set_global_entity_default_value(vm_t* vm, OrsoAST* ast, OrsoASTNode* entity_declaration, u32 global_index) {
-    OrsoType* conform_type = entity_declaration->value_type;
+    type_t* conform_type = entity_declaration->value_type;
     u32 slot_count = orso_type_slot_count(conform_type);
     if (entity_declaration->data.declaration.initial_value_expression != NULL) {
         OrsoASTNode* default_expression = entity_declaration->data.declaration.initial_value_expression;
@@ -1290,7 +1290,7 @@ static void set_global_entity_default_value(vm_t* vm, OrsoAST* ast, OrsoASTNode*
 }
 
 static void set_local_entity_default_value(vm_t* vm, Compiler* compiler, OrsoAST* ast, Chunk* chunk, OrsoASTNode* entity_declaration) {
-    OrsoType* conform_type = entity_declaration->value_type;
+    type_t* conform_type = entity_declaration->value_type;
 
     if (entity_declaration->data.declaration.initial_value_expression != NULL) {
         OrsoASTNode* default_expression = entity_declaration->data.declaration.initial_value_expression;
@@ -1304,7 +1304,7 @@ static void set_local_entity_default_value(vm_t* vm, Compiler* compiler, OrsoAST
             emit_put_in_union(compiler, chunk, entity_declaration->end.line, &OrsoTypeVoid);
         } else {
             ASSERT(entity_declaration->value_index >= 0, "if no expression, there must be an implicit value");
-            OrsoSlot* default_value = &ast->folded_constants[entity_declaration->value_index];
+            slot_t* default_value = &ast->folded_constants[entity_declaration->value_index];
             emit_constant(compiler, chunk, (byte*)default_value, entity_declaration->end.line, conform_type);
         }
     }
@@ -1343,7 +1343,7 @@ static void declaration(vm_t* vm, Compiler* compiler, OrsoAST* ast, OrsoASTNode*
                 emit_storage_type_convert(compiler, chunk, &OrsoTypeVoid, compiler->function->signature->data.function.return_type, declaration->start.line);
             }
             
-            emit(compiler, chunk, declaration->end.line, ORSO_OP_RETURN, (OrsoType*)compiler->function->signature->data.function.return_type);
+            emit(compiler, chunk, declaration->end.line, ORSO_OP_RETURN, (type_t*)compiler->function->signature->data.function.return_type);
             break;
         }
 
@@ -1367,13 +1367,13 @@ void orso_code_builder_free(OrsoCodeBuilder* builder) {
     (void)builder;
 }
 
-OrsoFunction* orso_generate_expression_function(OrsoCodeBuilder* builder, OrsoASTNode* expression_node, bool is_folding_time) {
+function_t* orso_generate_expression_function(OrsoCodeBuilder* builder, OrsoASTNode* expression_node, bool is_folding_time) {
     Compiler compiler;
-    OrsoType* function_type = orso_type_set_fetch_function(&builder->ast->type_set, expression_node->value_type, NULL, 0);
+    type_t* function_type = orso_type_set_fetch_function(&builder->ast->type_set, expression_node->value_type, NULL, 0);
 
-    OrsoFunction* run_function = orso_new_function();
+    function_t* run_function = orso_new_function();
 
-    compiler_init(&compiler, builder->vm, run_function, (OrsoType*)function_type);
+    compiler_init(&compiler, builder->vm, run_function, (type_t*)function_type);
     compiler.skip_function_definitions = !is_folding_time;
 
     // The vm will put this guy on the stack.
@@ -1384,18 +1384,18 @@ OrsoFunction* orso_generate_expression_function(OrsoCodeBuilder* builder, OrsoAS
 
     expression(builder->vm, &compiler, builder->ast, expression_node, top_chunk);
 
-    emit(&compiler, top_chunk, expression_node->start.line, ORSO_OP_RETURN, (OrsoType*)expression_node->value_type);
+    emit(&compiler, top_chunk, expression_node->start.line, ORSO_OP_RETURN, (type_t*)expression_node->value_type);
 
     compiler_end(builder->vm, &compiler, builder->ast, top_chunk, expression_node->end.line);
 
-    OrsoFunction* function = compiler.function;
+    function_t* function = compiler.function;
 
     compiler_free(&compiler);
 
     return function;
 }
 
-void orso_compile_function(vm_t* vm, OrsoAST* ast, OrsoFunction* function, OrsoASTNode* function_definition_expression) {
+void orso_compile_function(vm_t* vm, OrsoAST* ast, function_t* function, OrsoASTNode* function_definition_expression) {
     Compiler function_compiler;
     compiler_init(&function_compiler, vm, function, function_definition_expression->value_type);
 
@@ -1423,8 +1423,8 @@ void orso_compile_function(vm_t* vm, OrsoAST* ast, OrsoFunction* function, OrsoA
 
 #define MAIN_IDENTIFIER "main"
 
-OrsoFunction* orso_generate_code(vm_t* vm, OrsoAST* ast) {
-    OrsoFunction* main_function = NULL;
+function_t* orso_generate_code(vm_t* vm, OrsoAST* ast) {
+    function_t* main_function = NULL;
     OrsoASTNode* main_declaration = NULL;
 
     for (i32 i = 0; i < sb_count(ast->root->data.block); i++) {
@@ -1445,7 +1445,7 @@ OrsoFunction* orso_generate_code(vm_t* vm, OrsoAST* ast) {
             return NULL;
         }
 
-        OrsoType* function_type = declaration_->value_type;
+        type_t* function_type = declaration_->value_type;
         if (function_type->data.function.return_type->kind != ORSO_TYPE_INT32) {
             // TODO: allow code generator to throw error here, main must return i32
             return NULL;
@@ -1459,7 +1459,7 @@ OrsoFunction* orso_generate_code(vm_t* vm, OrsoAST* ast) {
         ASSERT(declaration_->value_index >= 0, "must be folded and have a value");
 
         main_declaration = declaration_;
-        main_function = (OrsoFunction*)ast->folded_constants[declaration_->value_index].as.p;
+        main_function = (function_t*)ast->folded_constants[declaration_->value_index].as.p;
         break;
     }
 
@@ -1471,7 +1471,7 @@ OrsoFunction* orso_generate_code(vm_t* vm, OrsoAST* ast) {
 
     // TODO: Am I somehow missing an opertunity to warn for unused functions by doing this?
     for (i32 i = 0; i < sb_count(ast->function_definition_pairs); i++) {
-        OrsoFunction* function = ast->function_definition_pairs[i].function;
+        function_t* function = ast->function_definition_pairs[i].function;
         if (function->chunk.code == NULL) {
             orso_compile_function(vm, ast, function, ast->function_definition_pairs[i].ast_defintion);
         }

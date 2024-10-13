@@ -80,7 +80,7 @@ typedef struct {
     Precedence precedence;
 } ParseRule;
 
-void orso_ast_init(OrsoAST* ast, OrsoSymbolTable* symbols) {
+void orso_ast_init(OrsoAST* ast, symbol_table_t* symbols) {
     ASSERT(symbols, "cannot be null");
     ast->resolved = false;
     ast->root = NULL;
@@ -91,8 +91,8 @@ void orso_ast_init(OrsoAST* ast, OrsoSymbolTable* symbols) {
     ast->function_definition_pairs = NULL;
     orso_type_set_init(&ast->type_set);
 
-    OrsoSlot void_slot = ORSO_SLOT_I(0);
-    OrsoSlot bool_slot = ORSO_SLOT_I(1);
+    slot_t void_slot = ORSO_SLOT_I(0);
+    slot_t bool_slot = ORSO_SLOT_I(1);
     sb_push(ast->folded_constants, void_slot);
     sb_push(ast->folded_constants, bool_slot);
 
@@ -336,14 +336,14 @@ static ParseRule* get_rule(TokenType type);
 static bool check_expression(Parser* parser);
 static OrsoASTNode* parse_precedence(Parser* parser, bool is_in_type_context, Precedence precedence);
 
-static OrsoType* value_to_integer_type(i64 value) {
+static type_t* value_to_integer_type(i64 value) {
     if (value >= INT32_MIN && value <= INT32_MAX) {
         return &OrsoTypeInteger32;
     }
     return &OrsoTypeInteger64;
 }
 
-static i32 add_constant_value(Parser* parser, OrsoSlot value, OrsoType* type) {
+static i32 add_constant_value(Parser* parser, slot_t value, type_t* type) {
     i32 index = sb_count(parser->ast->folded_constants);
     sb_push(parser->ast->folded_constant_types, type);
     sb_push(parser->ast->folded_constants, value);

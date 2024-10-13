@@ -10,43 +10,43 @@
 #define STACK_MAX (FRAMES_MAX * UINT8_COUNT)
 
 typedef struct {
-    OrsoFunction* function;
+    function_t* function;
     byte* ip;
-    OrsoSlot* slots;
-} CallFrame;
+    slot_t* slots;
+} call_frame_t;
 
 typedef struct vm_t {
-    OrsoWriteFunction write_fn;
+    write_function_t write_fn;
 
-    OrsoTypeSet* type_set;
+    type_set_t* type_set;
 
-    CallFrame frames[FRAMES_MAX];
+    call_frame_t frames[FRAMES_MAX];
     i32 frame_count;
 
     struct {
-        OrsoSymbolTable name_to_index;
+        symbol_table_t name_to_index;
 #ifdef DEBUG_TRACE_EXECUTION
-        OrsoType** types;
+        type_t** types;
 #endif
-        OrsoSlot* values;
+        slot_t* values;
     } globals;
 
-    OrsoSymbolTable symbols;
+    symbol_table_t symbols;
 
 #ifdef DEBUG_TRACE_EXECUTION
-    OrsoType** stack_types;
+    type_t** stack_types;
 #endif
     
-    OrsoSlot* stack;
-    OrsoSlot* stack_top;
+    slot_t* stack;
+    slot_t* stack_top;
 } vm_t;
 
-void orso_vm_init(vm_t* vm, OrsoWriteFunction write_fn, i32 stack_size);
-void orso_vm_free(vm_t* vm);
+void vm_init(vm_t* vm, write_function_t write_fn, i32 stack_size);
+void vm_free(vm_t* vm);
 
-void orso_vm_call(vm_t* vm, OrsoFunction* function);
-void orso_vm_push_object(vm_t* vm, OrsoObject* object);
+void vm_call(vm_t* vm, function_t* function);
+void vm_push_object(vm_t* vm, OrsoObject* object);
 
-void orso_vm_interpret(vm_t* vm, OrsoErrorFunction error_fn);
+void vm_interpret(vm_t* vm, OrsoErrorFunction error_fn);
 
 #endif

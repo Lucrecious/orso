@@ -7,7 +7,7 @@
 #include "sb.h"
 
 #ifdef DEBUG_TRACE_EXECUTION
-u32 chunk_add_constant(Chunk* chunk, byte* data, u32 size, OrsoType* type)
+u32 chunk_add_constant(Chunk* chunk, byte* data, u32 size, type_t* type)
 #else
 u32 chunk_add_constant(Chunk* chunk, byte* data, u32 size)
 #endif
@@ -15,7 +15,7 @@ u32 chunk_add_constant(Chunk* chunk, byte* data, u32 size)
     u32 slot_size = orso_bytes_to_slots(size);
     u32 index = sb_count(chunk->constants);
     for (size_t i = 0; i < slot_size; i++) {
-        sb_push(chunk->constants, (OrsoSlot){ .as.i = 0 });
+        sb_push(chunk->constants, (slot_t){ .as.i = 0 });
 #ifdef DEBUG_TRACE_EXECUTION
         sb_push(chunk->constant_types, &OrsoTypeInvalid);
 #endif
@@ -73,7 +73,7 @@ i32 chunk_get_line(Chunk* chunk, i32 offset) {
     return -1;
 }
 
-void orso_print_slot(OrsoSlot* slot, OrsoType* type) {
+void orso_print_slot(slot_t* slot, type_t* type) {
     // TODO: This should not be necessary... This only fails on global values because
     // there's a time during runtime when they are uninitialized. Honestly though....
     // initial values for globals should already be in the global values list. So global defines

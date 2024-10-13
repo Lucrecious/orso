@@ -6,21 +6,21 @@
 
 #include <stdio.h>
 
-OrsoSlot* orso_call_function(vm_t* vm, OrsoFunction* function, OrsoErrorFunction error_fn) {
-    orso_vm_push_object(vm, (OrsoObject*)function);
-    orso_vm_call(vm, function);
+slot_t* orso_call_function(vm_t* vm, function_t* function, OrsoErrorFunction error_fn) {
+    vm_push_object(vm, (OrsoObject*)function);
+    vm_call(vm, function);
 
-    orso_vm_interpret(vm, error_fn);
+    vm_interpret(vm, error_fn);
 
     // skip the function local and land on the return type
     // caller is responsible for knowing the type of the return value
     return vm->stack;
 }
 
-OrsoFunction* orso_compile_ast(vm_t* vm, OrsoAST* ast) {
+function_t* orso_compile_ast(vm_t* vm, OrsoAST* ast) {
     ASSERT(ast->resolved, "must be resolved");
 
-    OrsoFunction* main_function = orso_generate_code(vm, ast);
+    function_t* main_function = orso_generate_code(vm, ast);
 
     return main_function;
 }
@@ -52,7 +52,7 @@ void orso_run_source(vm_t* vm, const char* source, OrsoErrorFunction error_fn) {
     #endif
 
 
-    OrsoFunction* main_function = orso_compile_ast(vm, &ast);
+    function_t* main_function = orso_compile_ast(vm, &ast);
 
     //orso_ast_free(&ast);
 

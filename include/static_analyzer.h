@@ -15,7 +15,7 @@ typedef struct OrsoAnalysisDependency {
 
 typedef struct OrsoStaticAnalyzer {
     OrsoErrorFunction error_fn;
-    OrsoSymbolTable symbols;
+    symbol_table_t symbols;
 
     OrsoAST* ast;
 
@@ -27,11 +27,11 @@ typedef struct OrsoStaticAnalyzer {
     bool had_error;
 } OrsoStaticAnalyzer;
 
-void orso_static_analyzer_init(OrsoStaticAnalyzer* analyzer, OrsoWriteFunction write_fn, OrsoErrorFunction error_fn);
+void orso_static_analyzer_init(OrsoStaticAnalyzer* analyzer, write_function_t write_fn, OrsoErrorFunction error_fn);
 void orso_static_analyzer_free(OrsoStaticAnalyzer* analyzer);
 
 bool orso_resolve_ast(OrsoStaticAnalyzer* analyzer, OrsoAST* ast);
 
-i32 orso_zero_value(OrsoAST* ast, OrsoType* type, OrsoSymbolTable* symbol_table);
+i32 orso_zero_value(OrsoAST* ast, type_t* type, symbol_table_t* symbol_table);
 
 #endif

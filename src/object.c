@@ -6,7 +6,7 @@
 #include "symbol_table.h"
 #include "type_set.h"
 
-void* orso_object_reallocate(OrsoObject* pointer, OrsoType* type, size_t old_size, size_t new_size) {
+void* orso_object_reallocate(OrsoObject* pointer, type_t* type, size_t old_size, size_t new_size) {
     (void)old_size;
 
     if (new_size == 0) {
@@ -43,9 +43,9 @@ void orso_object_free(OrsoObject* object) {
             break;
         }
         case ORSO_TYPE_FUNCTION: {
-            OrsoFunction* function = (OrsoFunction*)object;
+            function_t* function = (function_t*)object;
             chunk_free(&function->chunk);
-            orso_object_reallocate((OrsoObject*)function, (OrsoType*)&OrsoTypeEmptyFunction, sizeof(OrsoFunction), 0);
+            orso_object_reallocate((OrsoObject*)function, (type_t*)&OrsoTypeEmptyFunction, sizeof(function_t), 0);
             break;
         }
         default: UNREACHABLE();
@@ -69,7 +69,7 @@ char* cstrn_new(const char* start, i32 length) {
     return cstr;
 }
 
-char* orso_slot_to_new_cstrn(OrsoSlot* slot, OrsoType* type) {
+char* orso_slot_to_new_cstrn(slot_t* slot, type_t* type) {
     switch (type->kind) {
         case ORSO_TYPE_BOOL: {
             if (ORSO_SLOT_IS_FALSE((*slot))) {
@@ -114,7 +114,7 @@ char* orso_slot_to_new_cstrn(OrsoSlot* slot, OrsoType* type) {
         }
 
         case ORSO_TYPE_FUNCTION: {
-            OrsoFunction* function = (OrsoFunction*)slot->as.p;
+            function_t* function = (function_t*)slot->as.p;
             const i32 BUFFER_SIZE = 500;
             char buffer[BUFFER_SIZE];
             i32 n = snprintf(buffer, BUFFER_SIZE, "<%s :: (",
@@ -152,7 +152,7 @@ char* orso_slot_to_new_cstrn(OrsoSlot* slot, OrsoType* type) {
         }
 
         case ORSO_TYPE_UNION: {
-            OrsoType* type = (OrsoType*)slot->as.p;
+            type_t* type = (type_t*)slot->as.p;
             char* cstr = orso_slot_to_new_cstrn(slot + 1, type);
             char* union_cstr = "%s";
             size_t buffer_length = strlen(cstr) + strlen(union_cstr);
@@ -163,7 +163,7 @@ char* orso_slot_to_new_cstrn(OrsoSlot* slot, OrsoType* type) {
         }
 
         case ORSO_TYPE_TYPE: {
-            OrsoType* type = (OrsoType*)slot->as.p;
+            type_t* type = (type_t*)slot->as.p;
 
             char buffer[128];
 
@@ -180,7 +180,7 @@ char* orso_slot_to_new_cstrn(OrsoSlot* slot, OrsoType* type) {
     }
 }
 
-OrsoString* orso_slot_to_string(OrsoSlot* slot, OrsoType* type) {
+OrsoString* orso_slot_to_string(slot_t* slot, type_t* type) {
     char* cstr = orso_slot_to_new_cstrn(slot, type);
     OrsoString* string = orso_new_string_from_cstrn(cstr, strlen(cstr));
     free(cstr);
@@ -198,8 +198,8 @@ OrsoString* orso_string_concat(OrsoString* a, OrsoString* b) {
     return string;
 }
 
-OrsoFunction* orso_new_function(void) {
-    OrsoFunction* function = ORSO_OBJECT_ALLOCATE(OrsoFunction, (OrsoType*)&OrsoTypeEmptyFunction);
+function_t* orso_new_function(void) {
+    function_t* function = ORSO_OBJECT_ALLOCATE(function_t, (type_t*)&OrsoTypeEmptyFunction);
     function->signature = &OrsoTypeEmptyFunction;
     chunk_init(&function->chunk);
     function->binded_name = NULL;
@@ -207,11 +207,11 @@ OrsoFunction* orso_new_function(void) {
     return function;
 }
 
-bool is_function_compiled(OrsoFunction* function) {
+bool is_function_compiled(function_t* function) {
     return function->chunk.code != NULL;
 }
 
-OrsoNativeFunction* orso_new_native_function(NativeFunction function, OrsoType* type) {
+OrsoNativeFunction* orso_new_native_function(NativeFunction function, type_t* type) {
     OrsoNativeFunction* function_obj = ORSO_OBJECT_ALLOCATE(OrsoNativeFunction, type);
     function_obj->function = function;
     function_obj->signature = type;
@@ -280,7 +280,7 @@ f64 cstrn_to_f64(const char* text, i32 length) {
     return value * fact;
 }
 
-OrsoSymbol* orso_unmanaged_symbol_from_cstrn(const char* start, i32 length, OrsoSymbolTable* symbol_table) {
+OrsoSymbol* orso_unmanaged_symbol_from_cstrn(const char* start, i32 length, symbol_table_t* symbol_table) {
     u32 hash = orso_hash_cstrn(start, length);
     OrsoSymbol* symbol = orso_symbol_table_find_cstrn(symbol_table, start, length, hash);
     if (symbol != NULL) {
@@ -294,13 +294,13 @@ OrsoSymbol* orso_unmanaged_symbol_from_cstrn(const char* start, i32 length, Orso
     memcpy(symbol->text, start, length);
     symbol->text[length] = '\0';
 
-    OrsoSlot slot = ORSO_SLOT_I(0);
+    slot_t slot = ORSO_SLOT_I(0);
     orso_symbol_table_set(symbol_table, symbol, slot);
 
     return symbol;
 }
 
-OrsoSymbol* orso_new_symbol_from_cstrn(const char* start, i32 length, OrsoSymbolTable* symbol_table) {
+OrsoSymbol* orso_new_symbol_from_cstrn(const char* start, i32 length, symbol_table_t* symbol_table) {
     u32 hash = orso_hash_cstrn(start, length);
     OrsoSymbol* symbol = orso_symbol_table_find_cstrn(symbol_table, start, length, hash);
     if (symbol != NULL) {
@@ -313,7 +313,7 @@ OrsoSymbol* orso_new_symbol_from_cstrn(const char* start, i32 length, OrsoSymbol
     memcpy(symbol->text, start, length);
     symbol->text[length] = '\0';
 
-    OrsoSlot slot = ORSO_SLOT_I(0);
+    slot_t slot = ORSO_SLOT_I(0);
     orso_symbol_table_set(symbol_table, symbol, slot);
 
     return symbol;

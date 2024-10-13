@@ -27,13 +27,13 @@ typedef enum OrsoScopeType {
 
 typedef struct OrsoScope {
     OrsoASTNode* creator;
-    OrsoSymbolTable named_entities;
+    symbol_table_t named_entities;
     OrsoScopeType type;
     struct OrsoScope* outer;
 } OrsoScope;
 
 typedef struct FunctionDefinitionPair {
-    OrsoFunction* function;
+    function_t* function;
     OrsoASTNode* ast_defintion;
 } FunctionDefinitionPair;
 
@@ -141,7 +141,7 @@ struct OrsoASTNode {
 
     // expressions TODO: Fill this in for *everything*, declarations, statements included
     // TODO: only use value type
-    OrsoType *value_type, *value_type_narrowed;
+    type_t *value_type, *value_type_narrowed;
     //AccessIdentifiers *value_type_identifiers, *value_type_narrowed_identifiers;
 
     // branching, blocks
@@ -202,36 +202,36 @@ typedef struct OrsoASTNodeAndScope {
     OrsoScope* scope;
 } OrsoASTNodeAndScope;
 
-KHASH_INIT(type2ns, OrsoType*, OrsoASTNodeAndScope, 1, ptr_hash, ptr_equal)
+KHASH_INIT(type2ns, type_t*, OrsoASTNodeAndScope, 1, ptr_hash, ptr_equal)
 
 typedef struct OrsoAST {
     i32 void_index;
     i32 true_index;
 
     bool resolved;
-    OrsoTypeSet type_set;
+    type_set_t type_set;
 
-    OrsoSymbolTable builtins;
+    symbol_table_t builtins;
 
     FunctionDefinitionPair* function_definition_pairs;
 
     OrsoASTNode** nodes;
 
     OrsoASTNode* root;
-    OrsoType** folded_constant_types;
-    OrsoSlot* folded_constants;
+    type_t** folded_constant_types;
+    slot_t* folded_constants;
 
     khash_t(ptr2i32)* type_to_zero_index;
     khash_t(type2ns)* type_to_creation_node;
 
-    OrsoSymbolTable* symbols;
+    symbol_table_t* symbols;
 } OrsoAST;
 
 void orso_ast_print(OrsoAST* ast, const char* name);
 
 bool orso_parse(OrsoAST* ast, const char* source, OrsoErrorFunction error_fn);
 
-void orso_ast_init(OrsoAST* ast, OrsoSymbolTable* symbols);
+void orso_ast_init(OrsoAST* ast, symbol_table_t* symbols);
 void orso_ast_free(OrsoAST* ast);
 
 OrsoASTNode* orso_ast_node_new(OrsoAST* ast, OrsoASTNodeType node_type, bool is_in_type_context, Token start);

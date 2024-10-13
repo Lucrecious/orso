@@ -5,7 +5,7 @@
 
 #include "sb.h"
 
-bool orso_union_type_contains_type(OrsoType* union_, OrsoType* type) {
+bool orso_union_type_contains_type(type_t* union_, type_t* type) {
     if (!ORSO_TYPE_IS_UNION(type)) {
         return orso_union_type_has_type(union_, type);
     }
@@ -19,7 +19,7 @@ bool orso_union_type_contains_type(OrsoType* union_, OrsoType* type) {
     return true;
 }
 
-bool orso_union_type_has_type(OrsoType* type, OrsoType* subtype) {
+bool orso_union_type_has_type(type_t* type, type_t* subtype) {
     ASSERT(type->kind == ORSO_TYPE_UNION, "must be a union type");
 
     for (i32 i = 0; i < type->data.union_.count; i++) {
@@ -30,7 +30,7 @@ bool orso_union_type_has_type(OrsoType* type, OrsoType* subtype) {
 
     return false;
 }
-bool orso_struct_type_is_incomplete(OrsoType* type) {
+bool orso_struct_type_is_incomplete(type_t* type) {
     if (ORSO_TYPE_IS_UNION(type)) {
         for (i32 i = 0; i < type->data.union_.count; i++) {
             unless (orso_struct_type_is_incomplete(type->data.union_.types[i])) {
@@ -43,7 +43,7 @@ bool orso_struct_type_is_incomplete(OrsoType* type) {
     return ORSO_TYPE_IS_STRUCT(type) && type->data.struct_.field_count < 0;
 }
 
-bool orso_type_equal(OrsoType* a, OrsoType* b) {
+bool orso_type_equal(type_t* a, type_t* b) {
     if (a->kind != b->kind) {
         return false;
     }
@@ -140,7 +140,7 @@ bool orso_type_equal(OrsoType* a, OrsoType* b) {
     }
 }
 
-bool type_in_list(OrsoType** list, i32 count, OrsoType* find) {
+bool type_in_list(type_t** list, i32 count, type_t* find) {
     for (i32 i = 0; i < count; i++) {
         if (list[i] == find) {
             return true;
@@ -151,12 +151,12 @@ bool type_in_list(OrsoType** list, i32 count, OrsoType* find) {
 }
 
 // TODO: make this faster... Preferably type_in_list should be O(1)
-OrsoType* orso_type_merge(OrsoTypeSet* set, OrsoType* a, OrsoType* b) {
+type_t* orso_type_merge(type_set_t* set, type_t* a, type_t* b) {
     if (a == b) {
         return a;
     }
 
-    OrsoType** types = NULL;
+    type_t** types = NULL;
 
     if (ORSO_TYPE_IS_UNION(a)) {
         for (i32 i = 0; i < a->data.union_.count; i++) {
@@ -180,14 +180,14 @@ OrsoType* orso_type_merge(OrsoTypeSet* set, OrsoType* a, OrsoType* b) {
         }
     }
 
-    OrsoType* merged = orso_type_set_fetch_union(set, types, sb_count(types));
+    type_t* merged = orso_type_set_fetch_union(set, types, sb_count(types));
 
     sb_free(types);
 
     return merged;
 }
 
-bool orso_type_is_float(OrsoType* type) {
+bool orso_type_is_float(type_t* type) {
     switch (type->kind) {
         case ORSO_TYPE_FLOAT32:
         case ORSO_TYPE_FLOAT64: return true;
@@ -196,7 +196,7 @@ bool orso_type_is_float(OrsoType* type) {
     }
 }
 
-bool orso_type_is_integer(OrsoType* type, bool include_bool) {
+bool orso_type_is_integer(type_t* type, bool include_bool) {
     if (include_bool && type->kind == ORSO_TYPE_BOOL) {
         return true;
     }
@@ -209,12 +209,12 @@ bool orso_type_is_integer(OrsoType* type, bool include_bool) {
     }
 }
 
-bool orso_type_is_number(OrsoType* type, bool include_bool) {
+bool orso_type_is_number(type_t* type, bool include_bool) {
     return orso_type_is_float(type) || orso_type_is_integer(type, include_bool);
 }
 
 
-bool orso_union_has_float(OrsoType* type) {
+bool orso_union_has_float(type_t* type) {
     ASSERT(ORSO_TYPE_IS_UNION(type), "must be union type");
 
     for (i32 i = 0; i < type->data.union_.count; i++) {
@@ -228,7 +228,7 @@ bool orso_union_has_float(OrsoType* type) {
     return false;
 }
 
-bool orso_type_is_or_has_float(OrsoType* type) {
+bool orso_type_is_or_has_float(type_t* type) {
     if (ORSO_TYPE_IS_UNION(type)) {
         return orso_union_has_float(type);
     } else {
@@ -236,7 +236,7 @@ bool orso_type_is_or_has_float(OrsoType* type) {
     }
 }
 
-bool orso_union_has_integer(OrsoType* type, bool include_bool) {
+bool orso_union_has_integer(type_t* type, bool include_bool) {
     ASSERT(ORSO_TYPE_IS_UNION(type), "must be union type");
 
     for (i32 i = 0; i < type->data.union_.count; i++) {
@@ -250,7 +250,7 @@ bool orso_union_has_integer(OrsoType* type, bool include_bool) {
     return false;
 }
 
-bool orso_type_is_or_has_integer(OrsoType* type, bool include_bool) {
+bool orso_type_is_or_has_integer(type_t* type, bool include_bool) {
     if (ORSO_TYPE_IS_UNION(type)) {
         return orso_union_has_integer(type, include_bool);
     } else {
@@ -263,10 +263,10 @@ i32 orso_bytes_to_slots(i32 byte_count) {
         return 1;
     }
 
-    return (byte_count / sizeof(OrsoSlot)) + ((byte_count % sizeof(OrsoSlot) != 0));
+    return (byte_count / sizeof(slot_t)) + ((byte_count % sizeof(slot_t) != 0));
 }
 
-OrsoStructField* orso_type_struct_find_field(OrsoType* struct_, const char* name, size_t name_length) {
+OrsoStructField* orso_type_struct_find_field(type_t* struct_, const char* name, size_t name_length) {
     for (i32 i = 0; i < struct_->data.struct_.field_count; i++) {
         if (strlen(struct_->data.struct_.fields[i].name) != name_length) {
             continue;
@@ -282,7 +282,7 @@ OrsoStructField* orso_type_struct_find_field(OrsoType* struct_, const char* name
     return NULL;
 }
 
-u32 orso_type_size_bytes(OrsoType* type) {
+u32 orso_type_size_bytes(type_t* type) {
     switch (type->kind) {
         case ORSO_TYPE_UNION: {
             // take the max amount of bytes that value can take up
@@ -291,7 +291,7 @@ u32 orso_type_size_bytes(OrsoType* type) {
                 total = maxi32(orso_type_size_bytes(type->data.union_.types[i]), total);
             }
 
-            return orso_bytes_to_slots(total + sizeof(OrsoType*)) * sizeof(OrsoSlot);
+            return orso_bytes_to_slots(total + sizeof(type_t*)) * sizeof(slot_t);
         }
 
         case ORSO_TYPE_VOID:
@@ -329,7 +329,7 @@ u32 orso_type_size_bytes(OrsoType* type) {
     return 0;
 }
 
-bool orso_integer_fit(OrsoType* storage_type, OrsoType* value_type, bool include_bool) {
+bool orso_integer_fit(type_t* storage_type, type_t* value_type, bool include_bool) {
     if (ORSO_TYPE_IS_UNION(storage_type)) {
         return false;
     }
@@ -349,11 +349,11 @@ bool orso_integer_fit(OrsoType* storage_type, OrsoType* value_type, bool include
     return orso_type_size_bytes(storage_type) >= orso_type_size_bytes(value_type);
 }
 
-i32 orso_type_slot_count(OrsoType* type) {
+i32 orso_type_slot_count(type_t* type) {
     return orso_bytes_to_slots(orso_type_size_bytes(type));
 }
 
-bool orso_type_fits(OrsoType* storage_type, OrsoType* value_type) {
+bool orso_type_fits(type_t* storage_type, type_t* value_type) {
     if (storage_type == value_type) {
         return true;
     }
@@ -400,7 +400,7 @@ i32 copy_to_buffer(char* buffer, char* cstr) {
     return written;
 }
 
-i32 orso_type_to_cstrn_(OrsoType* type, char* buffer, i32 n, bool is_toplevel) {
+i32 orso_type_to_cstrn_(type_t* type, char* buffer, i32 n, bool is_toplevel) {
     // TODO: Make sure that n is taken into account
     i32 original_n = n;
 
@@ -490,7 +490,7 @@ i32 orso_type_to_cstrn_(OrsoType* type, char* buffer, i32 n, bool is_toplevel) {
                 n -= written;
                 buffer += written;
 
-                OrsoType* field_type = type->data.struct_.fields[i].type;
+                type_t* field_type = type->data.struct_.fields[i].type;
                 written = orso_type_to_cstrn_(field_type, buffer, n, false);
                 n -= (written - 1);
                 buffer += (written - 1);
@@ -550,11 +550,11 @@ i32 orso_type_to_cstrn_(OrsoType* type, char* buffer, i32 n, bool is_toplevel) {
     return original_n - n;
 }
 
-i32 orso_type_to_cstrn(OrsoType* type, char* buffer, i32 n) {
+i32 orso_type_to_cstrn(type_t* type, char* buffer, i32 n) {
     return orso_type_to_cstrn_(type, buffer, n, true);
 }
 
-bool orso_is_gc_type(OrsoType* type) {
+bool orso_is_gc_type(type_t* type) {
     if (type->kind == ORSO_TYPE_STRING) {
         return true;
     }
@@ -578,7 +578,7 @@ bool orso_is_gc_type(OrsoType* type) {
     return false;
 }
 
-OrsoType* orso_binary_arithmetic_cast(OrsoType* a, OrsoType* b, TokenType operation) {
+type_t* orso_binary_arithmetic_cast(type_t* a, type_t* b, TokenType operation) {
     if (ORSO_TYPE_IS_UNION(a) || ORSO_TYPE_IS_UNION(b)) {
         return &OrsoTypeInvalid;
     }
@@ -621,7 +621,7 @@ OrsoType* orso_binary_arithmetic_cast(OrsoType* a, OrsoType* b, TokenType operat
     return a_count > 4 || b_count > 4 ? &OrsoTypeFloat64 : &OrsoTypeFloat32;
 }
 
-void orso_binary_comparison_casts(OrsoType* a, OrsoType* b, OrsoType** a_cast, OrsoType** b_cast) {
+void orso_binary_comparison_casts(type_t* a, type_t* b, type_t** a_cast, type_t** b_cast) {
     if (ORSO_TYPE_IS_UNION(a) || ORSO_TYPE_IS_UNION(b)) {
         *a_cast = &OrsoTypeInvalid;
         *b_cast = &OrsoTypeInvalid;
@@ -660,7 +660,7 @@ void orso_binary_comparison_casts(OrsoType* a, OrsoType* b, OrsoType** a_cast, O
     *b_cast = &OrsoTypeInvalid;
 }
 
-void orso_binary_equality_casts(OrsoType* a, OrsoType* b, OrsoType** a_cast, OrsoType** b_cast) {
+void orso_binary_equality_casts(type_t* a, type_t* b, type_t** a_cast, type_t** b_cast) {
     if (ORSO_TYPE_IS_UNION(a) || ORSO_TYPE_IS_UNION(b)) {
         *a_cast = &OrsoTypeInvalid;
         *b_cast = &OrsoTypeInvalid;

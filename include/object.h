@@ -8,7 +8,7 @@
 #include "symbol_table.h"
 
 typedef struct OrsoObject {
-    OrsoType* type;
+    type_t* type;
 } OrsoObject;
 
 typedef struct OrsoString {
@@ -24,26 +24,26 @@ typedef struct OrsoSymbol {
     char text[];
 } OrsoSymbol;
 
-typedef struct OrsoFunction {
+typedef struct function_t {
     OrsoObject object;
     Chunk chunk;
-    OrsoType* signature;
+    type_t* signature;
     OrsoSymbol* binded_name;
-} OrsoFunction;
+} function_t;
 
 typedef struct OrsoStruct {
-    OrsoSlot* slots;
+    slot_t* slots;
 } OrsoStruct;
 
-typedef void (*NativeFunction)(OrsoSlot* arguments, OrsoSlot* result);
+typedef void (*NativeFunction)(slot_t* arguments, slot_t* result);
 
 typedef struct OrsoNativeFunction {
     OrsoObject object;
-    OrsoType* signature;
+    type_t* signature;
     NativeFunction function;
 } OrsoNativeFunction;
 
-void* orso_object_reallocate(OrsoObject* pointer, OrsoType* type, size_t old_size, size_t new_size);
+void* orso_object_reallocate(OrsoObject* pointer, type_t* type, size_t old_size, size_t new_size);
 void orso_object_free(OrsoObject* pointer);
 
 #define ORSO_OBJECT_ALLOCATE_N(TYPE, ORSO_TYPE, N) (TYPE*)orso_object_reallocate(NULL, ORSO_TYPE, 0, sizeof(TYPE) * N)
@@ -71,28 +71,28 @@ FORCE_INLINE bool orso_string_equal(OrsoString* a, OrsoString* b) {
 OrsoString* orso_string_concat(OrsoString* a, OrsoString* b);
 
 // TODO: move to a better file
-char* orso_slot_to_new_cstrn(OrsoSlot* slot, OrsoType* type);
+char* orso_slot_to_new_cstrn(slot_t* slot, type_t* type);
 
-OrsoString* orso_slot_to_string(OrsoSlot* slot, OrsoType* type);
+OrsoString* orso_slot_to_string(slot_t* slot, type_t* type);
 
 OrsoString* orso_new_string_from_cstrn(const char* start, i32 length);
 
-OrsoFunction* orso_new_function(void);
-bool is_function_compiled(OrsoFunction* function);
+function_t* orso_new_function(void);
+bool is_function_compiled(function_t* function);
 
-OrsoNativeFunction* orso_new_native_function(NativeFunction function, OrsoType* type);
+OrsoNativeFunction* orso_new_native_function(NativeFunction function, type_t* type);
 
 OrsoStruct* orso_new_struct(void);
 
 i64 cstrn_to_i64(const char* text, i32 length);
 f64 cstrn_to_f64(const char* text, i32 length);
 
-OrsoSymbol* orso_unmanaged_symbol_from_cstrn(const char* start, i32 length, OrsoSymbolTable* symbol_table);
+OrsoSymbol* orso_unmanaged_symbol_from_cstrn(const char* start, i32 length, symbol_table_t* symbol_table);
 
 FORCE_INLINE void orso_unmanaged_symbol_free(OrsoSymbol* symbol) {
     free(symbol);
 }
 
-OrsoSymbol* orso_new_symbol_from_cstrn(const char* start, i32 length, OrsoSymbolTable* symbol_table);
+OrsoSymbol* orso_new_symbol_from_cstrn(const char* start, i32 length, symbol_table_t* symbol_table);
 
 #endif

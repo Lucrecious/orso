@@ -17,14 +17,14 @@
 
 #include <time.h>
 
-void orso_vm_init(vm_t* vm, OrsoWriteFunction write_fn, i32 stack_size) {
+void vm_init(vm_t* vm, write_function_t write_fn, i32 stack_size) {
     vm->frame_count = 0;
 
     vm->type_set = NULL;
 
     i32 stack_size_slot_count = orso_bytes_to_slots(stack_size);
 
-    vm->stack = ORSO_ALLOCATE_N(OrsoSlot, stack_size_slot_count);
+    vm->stack = ORSO_ALLOCATE_N(slot_t, stack_size_slot_count);
     vm->stack_top = vm->stack;
 
     vm->globals.values = NULL;
@@ -40,7 +40,7 @@ void orso_vm_init(vm_t* vm, OrsoWriteFunction write_fn, i32 stack_size) {
     orso_symbol_table_init(&vm->globals.name_to_index);
 }
 
-void orso_vm_free(vm_t* vm) {
+void vm_free(vm_t* vm) {
     orso_symbol_table_free(&vm->symbols);
     orso_symbol_table_free(&vm->globals.name_to_index);
 
@@ -61,9 +61,9 @@ void orso_vm_free(vm_t* vm) {
 }
 
 #ifdef DEBUG_TRACE_EXECUTION
-static FORCE_INLINE void push_i64(OrsoVM* vm, OrsoSlot value, OrsoType* type) {
+static FORCE_INLINE void push_i64(vm_t* vm, slot_t value, OrsoType* type) {
 #else
-static FORCE_INLINE void push_i64(vm_t* vm, OrsoSlot value) {
+static FORCE_INLINE void push_i64(vm_t* vm, slot_t value) {
 #endif
     *vm->stack_top = value;
 #ifdef DEBUG_TRACE_EXECUTION
@@ -74,7 +74,7 @@ static FORCE_INLINE void push_i64(vm_t* vm, OrsoSlot value) {
 
 #ifdef DEBUG_TRACE_EXECUTION
 #define RESERVE_STACK_SPACE(vm, slot_count, type) reserve_stack_space(vm, slot_count, type)
-static FORCE_INLINE void reserve_stack_space(OrsoVM* vm, u32 slot_count, OrsoType* type) {
+static FORCE_INLINE void reserve_stack_space(vm_t* vm, u32 slot_count, OrsoType* type) {
     for (u32 i = 0; i < slot_count; i++) {
         vm->stack_types[vm->stack_top - vm->stack + i] = &OrsoTypeInvalid;
     }
@@ -90,7 +90,7 @@ static FORCE_INLINE void reserve_stack_space(vm_t* vm, u32 slot_count) {
     }
 }
 
-void orso_vm_push_object(vm_t* vm, OrsoObject* object) {
+void vm_push_object(vm_t* vm, OrsoObject* object) {
     *vm->stack_top = ORSO_SLOT_P(object);
 #ifdef DEBUG_TRACE_EXECUTION
     vm->stack_types[vm->stack_top - vm->stack] =  object->type;
@@ -98,7 +98,7 @@ void orso_vm_push_object(vm_t* vm, OrsoObject* object) {
     vm->stack_top++;
 }
 
-static FORCE_INLINE OrsoSlot pop(vm_t* vm) {
+static FORCE_INLINE slot_t pop(vm_t* vm) {
     vm->stack_top--;
     return *vm->stack_top;
 }
@@ -107,23 +107,23 @@ static FORCE_INLINE void pop_n(vm_t* vm, u32 count) {
     vm->stack_top -= count;
 }
 
-static FORCE_INLINE OrsoSlot* peek(vm_t* vm, i32 i) {
+static FORCE_INLINE slot_t* peek(vm_t* vm, i32 i) {
     return (vm->stack_top - (i + 1));
 }
 
-static void call(vm_t* vm, OrsoFunction* function, i32 argument_slots) {
+static void call(vm_t* vm, function_t* function, i32 argument_slots) {
     if (vm->frame_count == FRAMES_MAX) {
         // TODO
         UNREACHABLE();
     }
 
-    CallFrame* frame = &vm->frames[vm->frame_count++];
+    call_frame_t* frame = &vm->frames[vm->frame_count++];
     frame->function = function;
     frame->ip = function->chunk.code;
     frame->slots = vm->stack_top - argument_slots - 1;
 }
 
-void orso_vm_call(vm_t* vm, OrsoFunction* function) {
+void vm_call(vm_t* vm, function_t* function) {
     i32 argument_slots = 0;
     for (i32 i = 0; i < function->signature->data.function.argument_count; i++) {
         argument_slots += orso_type_slot_count(function->signature->data.function.argument_types[i]);
@@ -133,7 +133,7 @@ void orso_vm_call(vm_t* vm, OrsoFunction* function) {
 
 static void call_object(vm_t* vm, OrsoObject* callee, i32 argument_slots) {
     if (ORSO_TYPE_IS_FUNCTION(callee->type)) {
-        OrsoFunction* function = (OrsoFunction*)callee;
+        function_t* function = (function_t*)callee;
         call(vm, function, argument_slots);
         return;
     } else if (callee->type->kind == ORSO_TYPE_NATIVE_FUNCTION) {
@@ -155,7 +155,7 @@ static void call_object(vm_t* vm, OrsoObject* callee, i32 argument_slots) {
 }
 
 static void run(vm_t* vm, OrsoErrorFunction error_fn) {
-    CallFrame* frame = &vm->frames[vm->frame_count - 1];
+    call_frame_t* frame = &vm->frames[vm->frame_count - 1];
 
 #define READ_BYTE() *(frame->ip++)
 #define READ_U24() ORSO_u8s_to_u24(READ_BYTE(), READ_BYTE(), READ_BYTE())
@@ -194,7 +194,7 @@ static void run(vm_t* vm, OrsoErrorFunction error_fn) {
 
             u32 index = entry->value.as.u;
             printf("%s = ", entry->key->text);
-            OrsoSlot* value = vm->globals.values + index;
+            slot_t* value = vm->globals.values + index;
             orso_print_slot(value, vm->globals.types[index]);
             printf("\n");
         }
@@ -261,12 +261,12 @@ static void run(vm_t* vm, OrsoErrorFunction error_fn) {
             case ORSO_OP_LOGICAL_NOT: PEEK(0)->as.i = !PEEK(0)->as.i; SLOT_ADD_TYPE(PEEK(0), &OrsoTypeBool); break;
 
             case ORSO_OP_PUSH_0: {
-                const OrsoSlot zero = ORSO_SLOT_I(0);
+                const slot_t zero = ORSO_SLOT_I(0);
                 PUSH(zero, &OrsoTypeInteger64);
                 break;
             }
             case ORSO_OP_PUSH_1: {
-                const OrsoSlot one = ORSO_SLOT_I(1);
+                const slot_t one = ORSO_SLOT_I(1);
                 PUSH(one, &OrsoTypeInteger64);
                 break;
             }
@@ -307,8 +307,8 @@ static void run(vm_t* vm, OrsoErrorFunction error_fn) {
             }
 
 #define PUSH_CONSTANT() do { \
-    OrsoSlot* current_top = vm->stack_top; \
-    RESERVE_STACK_SPACE(vm, orso_bytes_to_slots(size), (frame->function->chunk.constant_types[index / sizeof(OrsoSlot)])); \
+    slot_t* current_top = vm->stack_top; \
+    RESERVE_STACK_SPACE(vm, orso_bytes_to_slots(size), (frame->function->chunk.constant_types[index / sizeof(slot_t)])); \
     byte* constant = ((byte*)frame->function->chunk.constants) + index; \
     memcpy(current_top, constant, size); \
 } while(0)
@@ -340,8 +340,8 @@ static void run(vm_t* vm, OrsoErrorFunction error_fn) {
 
 
 #define PUSH_GLOBAL() do { \
-    OrsoSlot* current_top = vm->stack_top; \
-    RESERVE_STACK_SPACE(vm, orso_bytes_to_slots(size), (vm->globals.types[index / sizeof(OrsoSlot)])); \
+    slot_t* current_top = vm->stack_top; \
+    RESERVE_STACK_SPACE(vm, orso_bytes_to_slots(size), (vm->globals.types[index / sizeof(slot_t)])); \
     byte* global = ((byte*)vm->globals.values) + index; \
     memcpy(current_top, global, size); \
 } while(0)
@@ -372,9 +372,9 @@ static void run(vm_t* vm, OrsoErrorFunction error_fn) {
 #undef PUSH_GLOBAL
 
 #define PUSH_LOCAL() do { \
-    OrsoSlot* current_top = vm->stack_top; \
+    slot_t* current_top = vm->stack_top; \
     RESERVE_STACK_SPACE(vm, orso_bytes_to_slots(size), \
-        vm->stack_types[(frame->slots + (index / sizeof(OrsoSlot))) - vm->stack]); \
+        vm->stack_types[(frame->slots + (index / sizeof(slot_t))) - vm->stack]); \
     byte* local = ((byte*)frame->slots) + index; \
     memcpy(current_top, local, size); \
 } while(0)
@@ -405,7 +405,7 @@ static void run(vm_t* vm, OrsoErrorFunction error_fn) {
                 byte field_offset = READ_BYTE();  \
                 \
                 byte struct_slot_size = orso_bytes_to_slots(struct_size); \
-                OrsoSlot* new_top = vm->stack_top - struct_slot_size; \
+                slot_t* new_top = vm->stack_top - struct_slot_size; \
                 \
                 new_top->as.UNION_ID = *((CAST_TYPE*)((((byte*)new_top) + field_offset))); \
                 \
@@ -438,7 +438,7 @@ static void run(vm_t* vm, OrsoErrorFunction error_fn) {
 
                 byte struct_slot_size = orso_bytes_to_slots(struct_size);
 
-                memmove(vm->stack_top - struct_slot_size, ((byte*)(vm->stack_top - struct_slot_size)) + field_offset, sizeof(OrsoSlot));
+                memmove(vm->stack_top - struct_slot_size, ((byte*)(vm->stack_top - struct_slot_size)) + field_offset, sizeof(slot_t));
 
                 POPN(struct_slot_size - 1);
 
@@ -456,7 +456,7 @@ static void run(vm_t* vm, OrsoErrorFunction error_fn) {
 
                 byte struct_slot_size = orso_bytes_to_slots(struct_size);
 
-                ASSERT(field_size % sizeof(OrsoSlot) == 0, "field size must be aligned to slots");
+                ASSERT(field_size % sizeof(slot_t) == 0, "field size must be aligned to slots");
                 memmove(vm->stack_top - struct_slot_size, ((byte*)(vm->stack_top - struct_slot_size)) + field_offset, field_size);
 
                 byte field_slot_size = orso_bytes_to_slots(field_size);
@@ -479,8 +479,8 @@ static void run(vm_t* vm, OrsoErrorFunction error_fn) {
 
             case ORSO_OP_SET_LVALUE_SLOT: {
                 void* ptr = POP().as.p;
-                OrsoSlot value = *PEEK(0);
-                *((OrsoSlot*)ptr) = value;
+                slot_t value = *PEEK(0);
+                *((slot_t*)ptr) = value;
                 break;
             }
             case ORSO_OP_SET_LVALUE_BOOL: {
@@ -516,9 +516,9 @@ static void run(vm_t* vm, OrsoErrorFunction error_fn) {
             case ORSO_OP_PUT_IN_UNION: {
                 byte size = READ_BYTE();
 
-                OrsoType* type = (OrsoType*)(PEEK(0)->as.p);
+                type_t* type = (type_t*)(PEEK(0)->as.p);
                 byte slot_size = orso_bytes_to_slots(size);
-                memmove(PEEK(slot_size-1), PEEK(slot_size), slot_size * sizeof(OrsoSlot));
+                memmove(PEEK(slot_size-1), PEEK(slot_size), slot_size * sizeof(slot_t));
                 // for (u32 i = 0; i < slot_size; ++i) {
                 //     *PEEK(i) = *PEEK(i + 1);
                 // }
@@ -538,8 +538,8 @@ static void run(vm_t* vm, OrsoErrorFunction error_fn) {
 
             case ORSO_OP_NARROW_UNION: {
                 byte type_offset = READ_BYTE();
-                ASSERT(type_offset % sizeof(OrsoSlot), "must be perfectly slot size");
-                byte slot_offset = type_offset / sizeof(OrsoSlot);
+                ASSERT(type_offset % sizeof(slot_t), "must be perfectly slot size");
+                byte slot_offset = type_offset / sizeof(slot_t);
 
             #ifdef DEBUG_TRACE_EXECUTION
                 u32 stack_index = (vm->stack_top - (slot_offset - 1)) - vm->stack;
@@ -547,7 +547,7 @@ static void run(vm_t* vm, OrsoErrorFunction error_fn) {
                 vm->stack_types[stack_index] = (OrsoType*)vm->stack[stack_index].as.p;
             #endif
 
-                memmove(PEEK(slot_offset - 1), PEEK(slot_offset - 2), type_offset - sizeof(OrsoSlot));
+                memmove(PEEK(slot_offset - 1), PEEK(slot_offset - 2), type_offset - sizeof(slot_t));
 
                 POP();
                 break;
@@ -593,7 +593,7 @@ static void run(vm_t* vm, OrsoErrorFunction error_fn) {
 
             case ORSO_OP_PRINT:
             case ORSO_OP_PRINT_EXPR: {
-                OrsoType* type = (OrsoType*)POP().as.p; // pop expression type
+                type_t* type = (type_t*)POP().as.p; // pop expression type
 
                 OrsoString* expression_string = (OrsoString*)(POP().as.p);
 
@@ -657,6 +657,6 @@ static void run(vm_t* vm, OrsoErrorFunction error_fn) {
 }
 
 
-void orso_vm_interpret(vm_t* vm, OrsoErrorFunction error_fn) {
+void vm_interpret(vm_t* vm, OrsoErrorFunction error_fn) {
     run(vm, error_fn);
 }
