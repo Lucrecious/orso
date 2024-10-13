@@ -10,14 +10,14 @@ struct OrsoInterpreter;
 
 typedef struct OrsoAnalysisDependency {
     i32 fold_level;
-    OrsoASTNode* ast_node; 
+    ast_node_t* ast_node; 
 } OrsoAnalysisDependency;
 
 typedef struct OrsoStaticAnalyzer {
-    OrsoErrorFunction error_fn;
+    error_function_t error_fn;
     symbol_table_t symbols;
 
-    OrsoAST* ast;
+    ast_t* ast;
 
     struct {
         i32 count;
@@ -27,11 +27,11 @@ typedef struct OrsoStaticAnalyzer {
     bool had_error;
 } OrsoStaticAnalyzer;
 
-void orso_static_analyzer_init(OrsoStaticAnalyzer* analyzer, write_function_t write_fn, OrsoErrorFunction error_fn);
+void orso_static_analyzer_init(OrsoStaticAnalyzer* analyzer, write_function_t write_fn, error_function_t error_fn);
 void orso_static_analyzer_free(OrsoStaticAnalyzer* analyzer);
 
-bool orso_resolve_ast(OrsoStaticAnalyzer* analyzer, OrsoAST* ast);
+bool orso_resolve_ast(OrsoStaticAnalyzer* analyzer, ast_t* ast);
 
-i32 orso_zero_value(OrsoAST* ast, type_t* type, symbol_table_t* symbol_table);
+i32 orso_zero_value(ast_t* ast, type_t* type, symbol_table_t* symbol_table);
 
 #endif

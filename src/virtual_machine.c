@@ -154,7 +154,7 @@ static void call_object(vm_t* vm, OrsoObject* callee, i32 argument_slots) {
     UNREACHABLE();
 }
 
-static void run(vm_t* vm, OrsoErrorFunction error_fn) {
+static void run(vm_t* vm, error_function_t error_fn) {
     call_frame_t* frame = &vm->frames[vm->frame_count - 1];
 
 #define READ_BYTE() *(frame->ip++)
@@ -657,6 +657,6 @@ static void run(vm_t* vm, OrsoErrorFunction error_fn) {
 }
 
 
-void vm_interpret(vm_t* vm, OrsoErrorFunction error_fn) {
+void vm_interpret(vm_t* vm, error_function_t error_fn) {
     run(vm, error_fn);
 }

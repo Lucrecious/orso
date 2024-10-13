@@ -6,9 +6,11 @@
 
 #define STRINGT_IMPLEMENTATION
 #include "stringt.h"
+#undef STRINGT_IMPLEMENTATION
 
 #define ARENA_IMPLEMENTATION
 #include "arena.h"
+#undef ARENA_IMPLEMENTATION
 
 #include <libtcc.h>
 
@@ -47,7 +49,7 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
-    arena_t allocator = {};
+    arena_t allocator = {0};
 
     string_t path = cstr2string(argv[1], &allocator);
 

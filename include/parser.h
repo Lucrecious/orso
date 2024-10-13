@@ -7,37 +7,38 @@
 #include "symbol_table.h"
 #include "type.h"
 #include "type_set.h"
+#include "arena.h"
 
-typedef enum OrsoReturnGuarentee {
+typedef enum return_guarentee_t {
     ORSO_NO_RETURN_GUARENTEED,
     ORSO_MAYBE_RETURNS,
     ORSO_RETURN_GUARENTEED,
-} OrsoReturnGuarentee;
+} return_guarentee_t;
 
-struct OrsoASTNode;
-typedef struct OrsoASTNode OrsoASTNode;
+struct ast_node_t;
+typedef struct ast_node_t ast_node_t;
 
-typedef enum OrsoScopeType {
+typedef enum scope_type_t {
     SCOPE_TYPE_MODULE,
     SCOPE_TYPE_FUNCTION_PARAMETERS,
     SCOPE_TYPE_FUNCTION_BODY,
     SCOPE_TYPE_BLOCK,
     SCOPE_TYPE_STRUCT,
-} OrsoScopeType;
+} scope_type_t;
 
-typedef struct OrsoScope {
-    OrsoASTNode* creator;
+typedef struct scope_t {
+    ast_node_t* creator;
     symbol_table_t named_entities;
-    OrsoScopeType type;
-    struct OrsoScope* outer;
-} OrsoScope;
+    scope_type_t type;
+    struct scope_t* outer;
+} scope_t;
 
-typedef struct FunctionDefinitionPair {
+typedef struct function_definition_pair_t {
     function_t* function;
-    OrsoASTNode* ast_defintion;
-} FunctionDefinitionPair;
+    ast_node_t* ast_defintion;
+} function_definition_pair_t;
 
-typedef enum OrsoASTNodeType {
+typedef enum ast_node_type_t {
     ORSO_AST_NODE_TYPE_UNDEFINED, // TODO: try to remove this shit
     ORSO_AST_NODE_TYPE_DECLARATION,
     ORSO_AST_NODE_TYPE_STATEMENT_RETURN,
@@ -64,7 +65,7 @@ typedef enum OrsoASTNodeType {
     * This is used for branching.
     */
     ORSO_AST_NODE_TYPE_EXPRESSION_STATEMENT,
-} OrsoASTNodeType;
+} ast_node_type_t;
 
 #define ORSO_AST_NODE_TYPE_EXPRESSION_CASE \
 ORSO_AST_NODE_TYPE_EXPRESSION_ASSIGNMENT: \
@@ -85,57 +86,57 @@ case ORSO_AST_NODE_TYPE_EXPRESSION_PRINT_EXPR: \
 case ORSO_AST_NODE_TYPE_EXPRESSION_STATEMENT: \
 case ORSO_AST_NODE_TYPE_EXPRESSION_DOT
 
-typedef struct OrsoASTFuncion {
-    OrsoASTNode** parameter_nodes;
-    OrsoASTNode* return_type_expression;
+typedef struct ast_function_t {
+    ast_node_t** parameter_nodes;
+    ast_node_t* return_type_expression;
 
-    OrsoASTNode* block;
+    ast_node_t* block;
 
     bool compilable;
-} OrsoASTFunction;
+} ast_function_t;
 
-typedef struct OrsoASTStruct {
-    OrsoASTNode** declarations;
-} OrsoASTStruct;
+typedef struct ast_struct_t {
+    ast_node_t** declarations;
+} ast_struct_t;
 
-typedef struct OrsoASTCall {
-    OrsoASTNode* callee;
-    OrsoASTNode** arguments;
-} OrsoASTCall;
+typedef struct ast_call_t {
+    ast_node_t* callee;
+    ast_node_t** arguments;
+} ast_call_t;
 
-typedef struct OrsoASTBranch {
-    OrsoASTNode* condition;
-    OrsoASTNode* then_expression;
-    OrsoASTNode* else_expression;
+typedef struct ast_branch_t {
+    ast_node_t* condition;
+    ast_node_t* then_expression;
+    ast_node_t* else_expression;
 
     bool looping;
     bool condition_negated;
-} OrsoASTBranch;
+} ast_branch_t;
 
-typedef struct OrsoASTBinary {
-    OrsoASTNode* lhs;
-    OrsoASTNode* rhs;
-} OrsoASTBinary;
+typedef struct ast_binary_t {
+    ast_node_t* lhs;
+    ast_node_t* rhs;
+} ast_binary_t;
 
-typedef struct OrsoASTMemberAccess {
-    OrsoASTNode* lhs;
+typedef struct ast_member_access_t {
+    ast_node_t* lhs;
 
     Token identifier;
-    OrsoASTNode* referencing_declaration;
-} OrsoASTMemberAccess;
+    ast_node_t* referencing_declaration;
+} ast_member_access_t;
 
-typedef struct OrsoASTDeclaration {
+typedef struct ast_declaration_t {
     bool is_mutable;
     i32 fold_level_resolved_at;
 
     Token identifier;
-    OrsoASTNode* type_expression;
+    ast_node_t* type_expression;
     
-    OrsoASTNode* initial_value_expression;
-} OrsoASTDeclaration;
+    ast_node_t* initial_value_expression;
+} ast_declaration_t;
 
-struct OrsoASTNode {
-    OrsoASTNodeType node_type;
+struct ast_node_t {
+    ast_node_type_t node_type;
 
     Token start, end, operator;
 
@@ -145,7 +146,7 @@ struct OrsoASTNode {
     //AccessIdentifiers *value_type_identifiers, *value_type_narrowed_identifiers;
 
     // branching, blocks
-    OrsoReturnGuarentee return_guarentee;
+    return_guarentee_t return_guarentee;
 
     bool is_in_type_context;
 
@@ -156,34 +157,34 @@ struct OrsoASTNode {
     // primary, folding value, declaration default value
     i32 value_index;
 
-    OrsoASTNode* lvalue_node;
+    ast_node_t* lvalue_node;
 
     union {
-        OrsoASTDeclaration declaration;
+        ast_declaration_t declaration;
 
         // statement, print, print_expr, cast, grouping
-        OrsoASTNode* expression;
-        OrsoASTNode* statement; // for readability
+        ast_node_t* expression;
+        ast_node_t* statement; // for readability
 
-        OrsoASTCall call;
+        ast_call_t call;
 
         // binary, assignment
-        OrsoASTBinary binary;
+        ast_binary_t binary;
 
         // block (declarations or statements)
-        OrsoASTNode** block;
+        ast_node_t** block;
 
         // branching (if, unless, while, until)
-        OrsoASTBranch branch;
+        ast_branch_t branch;
 
         // function signatures and defintions
-        OrsoASTFunction function;
+        ast_function_t function;
 
         // structs
-        OrsoASTStruct struct_;
+        ast_struct_t struct_;
 
         // member access, entity
-        OrsoASTMemberAccess dot;
+        ast_member_access_t dot;
     } data;
 };
 
@@ -197,14 +198,16 @@ static khint32_t ptr_equal(void* a, void* b) {
 
 KHASH_INIT(ptr2i32, void*, i32, 1, ptr_hash, ptr_equal)
 
-typedef struct OrsoASTNodeAndScope {
-    OrsoASTNode* node;
-    OrsoScope* scope;
-} OrsoASTNodeAndScope;
+typedef struct ast_node_and_scope_t {
+    ast_node_t* node;
+    scope_t* scope;
+} ast_node_and_scope_t;
 
-KHASH_INIT(type2ns, type_t*, OrsoASTNodeAndScope, 1, ptr_hash, ptr_equal)
+KHASH_INIT(type2ns, type_t*, ast_node_and_scope_t, 1, ptr_hash, ptr_equal)
 
-typedef struct OrsoAST {
+typedef struct ast_t {
+    arena_t allocator;
+
     i32 void_index;
     i32 true_index;
 
@@ -213,11 +216,11 @@ typedef struct OrsoAST {
 
     symbol_table_t builtins;
 
-    FunctionDefinitionPair* function_definition_pairs;
+    function_definition_pair_t* function_definition_pairs;
 
-    OrsoASTNode** nodes;
+    ast_node_t** nodes;
 
-    OrsoASTNode* root;
+    ast_node_t* root;
     type_t** folded_constant_types;
     slot_t* folded_constants;
 
@@ -225,18 +228,18 @@ typedef struct OrsoAST {
     khash_t(type2ns)* type_to_creation_node;
 
     symbol_table_t* symbols;
-} OrsoAST;
+} ast_t;
 
-void orso_ast_print(OrsoAST* ast, const char* name);
+void orso_ast_print(ast_t* ast, const char* name);
 
-bool orso_parse(OrsoAST* ast, const char* source, OrsoErrorFunction error_fn);
+bool orso_parse(ast_t* ast, const char* source, error_function_t error_fn);
 
-void orso_ast_init(OrsoAST* ast, symbol_table_t* symbols);
-void orso_ast_free(OrsoAST* ast);
+void orso_ast_init(ast_t* ast, symbol_table_t* symbols);
+void orso_ast_free(ast_t* ast);
 
-OrsoASTNode* orso_ast_node_new(OrsoAST* ast, OrsoASTNodeType node_type, bool is_in_type_context, Token start);
+ast_node_t* orso_ast_node_new(ast_t* ast, ast_node_type_t node_type, bool is_in_type_context, Token start);
 
-bool orso_ast_node_type_is_decl_or_stmt(OrsoASTNodeType node_type);
-bool orso_ast_node_type_is_expression(OrsoASTNodeType node_type);
+bool orso_ast_node_type_is_decl_or_stmt(ast_node_type_t node_type);
+bool orso_ast_node_type_is_expression(ast_node_type_t node_type);
 
 #endif

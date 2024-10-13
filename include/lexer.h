@@ -44,7 +44,7 @@ typedef struct Token {
 
 typedef struct Lexer {
     Token previous_token;
-    OrsoErrorFunction error_fn;
+    error_function_t error_fn;
     i32 line;
     char* start;
     char* current;

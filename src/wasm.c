@@ -3,7 +3,7 @@
 #include "interpreter.h"
 
 EMSCRIPTEN_KEEPALIVE
-void run_source(char* source, write_function_t write_fn, OrsoErrorFunction error_fn) {
+void run_source(char* source, write_function_t write_fn, error_function_t error_fn) {
     vm_t vm;
     vm_init(&vm, write_fn, 1000000);
 

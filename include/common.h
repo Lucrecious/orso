@@ -8,7 +8,7 @@ struct OrsoError;
 #define UINT8_COUNT (UINT8_MAX + 1)
 #define MAX_PARAMETERS 100
 
-typedef void (*OrsoErrorFunction)(struct OrsoError error);
+typedef void (*error_function_t)(struct OrsoError error);
 typedef void (*write_function_t)(const char* chars);
 
 #endif

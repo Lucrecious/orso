@@ -6,7 +6,7 @@
 
 #include <stdio.h>
 
-slot_t* orso_call_function(vm_t* vm, function_t* function, OrsoErrorFunction error_fn) {
+slot_t* orso_call_function(vm_t* vm, function_t* function, error_function_t error_fn) {
     vm_push_object(vm, (OrsoObject*)function);
     vm_call(vm, function);
 
@@ -17,7 +17,7 @@ slot_t* orso_call_function(vm_t* vm, function_t* function, OrsoErrorFunction err
     return vm->stack;
 }
 
-function_t* orso_compile_ast(vm_t* vm, OrsoAST* ast) {
+function_t* orso_compile_ast(vm_t* vm, ast_t* ast) {
     ASSERT(ast->resolved, "must be resolved");
 
     function_t* main_function = orso_generate_code(vm, ast);
@@ -25,8 +25,8 @@ function_t* orso_compile_ast(vm_t* vm, OrsoAST* ast) {
     return main_function;
 }
 
-void orso_run_source(vm_t* vm, const char* source, OrsoErrorFunction error_fn) {
-    OrsoAST ast;
+void orso_run_source(vm_t* vm, const char* source, error_function_t error_fn) {
+    ast_t ast;
     orso_ast_init(&ast, &vm->symbols);
 
     OrsoStaticAnalyzer analyzer;

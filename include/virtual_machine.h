@@ -47,6 +47,6 @@ void vm_free(vm_t* vm);
 void vm_call(vm_t* vm, function_t* function);
 void vm_push_object(vm_t* vm, OrsoObject* object);
 
-void vm_interpret(vm_t* vm, OrsoErrorFunction error_fn);
+void vm_interpret(vm_t* vm, error_function_t error_fn);
 
 #endif
