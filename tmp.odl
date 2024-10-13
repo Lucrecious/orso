@@ -1,5 +1,0 @@
-main :: () -> i32 {
-    value: string|void;
-    print_expr value;
-    return 0;
-};
