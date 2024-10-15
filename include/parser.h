@@ -9,6 +9,8 @@
 #include "type_set.h"
 #include "arena.h"
 
+#include "khash.h"
+
 typedef enum return_guarentee_t {
     ORSO_NO_RETURN_GUARENTEED,
     ORSO_MAYBE_RETURNS,

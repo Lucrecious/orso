@@ -103,8 +103,8 @@ void orso_ast_init(ast_t* ast, symbol_table_t* symbols) {
 
     orso_symbol_table_init(&ast->builtins);
 
-    ast->type_to_zero_index = kh_init(ptr2i32);
-    ast->type_to_creation_node = kh_init(type2ns);
+    ast->type_to_zero_index = kh_init(ptr2i32, NULL);
+    ast->type_to_creation_node = kh_init(type2ns, NULL);
 }
 
 void orso_ast_free(ast_t* ast) {
@@ -113,10 +113,7 @@ void orso_ast_free(ast_t* ast) {
     orso_symbol_table_free(&ast->builtins);
     orso_type_set_free(&ast->type_set);
 
-    kh_destroy(ptr2i32, ast->type_to_zero_index);
     ast->type_to_zero_index = NULL;
-
-    kh_destroy(type2ns, ast->type_to_creation_node);
     ast->type_to_creation_node = NULL;
 }
 

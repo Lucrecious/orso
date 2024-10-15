@@ -3,7 +3,6 @@
 
 #include "def.h"
 #include "type.h"
-#include "khash.h"
 
 typedef struct type_set_t {
     i32 count;

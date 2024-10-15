@@ -40,7 +40,6 @@ int main() {
 	kh_del(32, h, k);
 	for (k = kh_begin(h); k != kh_end(h); ++k)
 		if (kh_exist(h, k)) kh_value(h, k) = 1;
-	kh_destroy(32, h);
 	return 0;
 }
 */
@@ -129,6 +128,8 @@ int main() {
 #include <string.h>
 #include <limits.h>
 
+#include "arena.h"
+
 /* compiler specific configuration */
 
 #if UINT_MAX == 0xffffffffu
@@ -176,19 +177,6 @@ typedef khint_t khiter_t;
 #define kroundup32(x) (--(x), (x)|=(x)>>1, (x)|=(x)>>2, (x)|=(x)>>4, (x)|=(x)>>8, (x)|=(x)>>16, ++(x))
 #endif
 
-#ifndef kcalloc
-#define kcalloc(N,Z) calloc(N,Z)
-#endif
-#ifndef kmalloc
-#define kmalloc(Z) malloc(Z)
-#endif
-#ifndef krealloc
-#define krealloc(P,Z) realloc(P,Z)
-#endif
-#ifndef kfree
-#define kfree(P) free(P)
-#endif
-
 static const double __ac_HASH_UPPER = 0.77;
 
 #define __KHASH_TYPE(name, khkey_t, khval_t) \
@@ -197,11 +185,11 @@ static const double __ac_HASH_UPPER = 0.77;
 		khint32_t *flags; \
 		khkey_t *keys; \
 		khval_t *vals; \
+		arena_t *allocator; \
 	} kh_##name##_t;
 
 #define __KHASH_PROTOTYPES(name, khkey_t, khval_t)	 					\
-	extern kh_##name##_t *kh_init_##name(void);							\
-	extern void kh_destroy_##name(kh_##name##_t *h);					\
+	extern kh_##name##_t *kh_init_##name(arena_t *allocator);			\
 	extern void kh_clear_##name(kh_##name##_t *h);						\
 	extern khint_t kh_get_##name(const kh_##name##_t *h, khkey_t key); 	\
 	extern int kh_resize_##name(kh_##name##_t *h, khint_t new_n_buckets); \
@@ -209,16 +197,11 @@ static const double __ac_HASH_UPPER = 0.77;
 	extern void kh_del_##name(kh_##name##_t *h, khint_t x);
 
 #define __KHASH_IMPL(name, SCOPE, khkey_t, khval_t, kh_is_map, __hash_func, __hash_equal) \
-	SCOPE kh_##name##_t *kh_init_##name(void) {							\
-		return (kh_##name##_t*)kcalloc(1, sizeof(kh_##name##_t));		\
-	}																	\
-	SCOPE void kh_destroy_##name(kh_##name##_t *h)						\
-	{																	\
-		if (h) {														\
-			kfree((void *)h->keys); kfree(h->flags);					\
-			kfree((void *)h->vals);										\
-			kfree(h);													\
-		}																\
+	SCOPE kh_##name##_t *kh_init_##name(arena_t *allocator) {					\
+		kh_##name##_t *table = arena_alloc(allocator, sizeof(kh_##name##_t));	\
+		memset(table, 0, sizeof(kh_##name##_t));							  	\
+		table->allocator = allocator;											\
+		return table;															\
 	}																	\
 	SCOPE void kh_clear_##name(kh_##name##_t *h)						\
 	{																	\
@@ -250,16 +233,16 @@ static const double __ac_HASH_UPPER = 0.77;
 			if (new_n_buckets < 4) new_n_buckets = 4;					\
 			if (h->size >= (khint_t)(new_n_buckets * __ac_HASH_UPPER + 0.5)) j = 0;	/* requested size is too small */ \
 			else { /* hash table size to be changed (shrink or expand); rehash */ \
-				new_flags = (khint32_t*)kmalloc(__ac_fsize(new_n_buckets) * sizeof(khint32_t));	\
+				new_flags = (khint32_t*)arena_alloc(h->allocator, __ac_fsize(new_n_buckets) * sizeof(khint32_t));	\
 				if (!new_flags) return -1;								\
 				memset(new_flags, 0xaa, __ac_fsize(new_n_buckets) * sizeof(khint32_t)); \
 				if (h->n_buckets < new_n_buckets) {	/* expand */		\
-					khkey_t *new_keys = (khkey_t*)krealloc((void *)h->keys, new_n_buckets * sizeof(khkey_t)); \
-					if (!new_keys) { kfree(new_flags); return -1; }		\
+					khkey_t *new_keys = (khkey_t*)arena_realloc(h->allocator, (void *)h->keys, h->n_buckets * sizeof(khkey_t), new_n_buckets * sizeof(khkey_t)); \
+					if (!new_keys) { return -1; }		\
 					h->keys = new_keys;									\
 					if (kh_is_map) {									\
-						khval_t *new_vals = (khval_t*)krealloc((void *)h->vals, new_n_buckets * sizeof(khval_t)); \
-						if (!new_vals) { kfree(new_flags); return -1; }	\
+						khval_t *new_vals = (khval_t*)arena_realloc(h->allocator, (void *)h->vals, h->n_buckets * sizeof(khval_t), new_n_buckets * sizeof(khval_t)); \
+						if (!new_vals) { return -1; }	\
 						h->vals = new_vals;								\
 					}													\
 				} /* otherwise shrink */								\
@@ -293,10 +276,9 @@ static const double __ac_HASH_UPPER = 0.77;
 				}														\
 			}															\
 			if (h->n_buckets > new_n_buckets) { /* shrink the hash table */ \
-				h->keys = (khkey_t*)krealloc((void *)h->keys, new_n_buckets * sizeof(khkey_t)); \
-				if (kh_is_map) h->vals = (khval_t*)krealloc((void *)h->vals, new_n_buckets * sizeof(khval_t)); \
+				h->keys = (khkey_t*)arena_realloc(h->allocator, (void *)h->keys, h->n_buckets * sizeof(khkey_t), new_n_buckets * sizeof(khkey_t)); \
+				if (kh_is_map) h->vals = (khval_t*)arena_realloc(h->allocator, (void *)h->vals, h->n_buckets * sizeof(khval_t), new_n_buckets * sizeof(khval_t)); \
 			}															\
-			kfree(h->flags); /* free the working space */				\
 			h->flags = new_flags;										\
 			h->n_buckets = new_n_buckets;								\
 			h->n_occupied = h->size;									\
@@ -436,14 +418,7 @@ static kh_inline khint_t __ac_Wang_hash(khint_t key)
   @param  name  Name of the hash table [symbol]
   @return       Pointer to the hash table [khash_t(name)*]
  */
-#define kh_init(name) kh_init_##name()
-
-/*! @function
-  @abstract     Destroy a hash table.
-  @param  name  Name of the hash table [symbol]
-  @param  h     Pointer to the hash table [khash_t(name)*]
- */
-#define kh_destroy(name, h) kh_destroy_##name(h)
+#define kh_init(name, allocator) kh_init_##name(allocator)
 
 /*! @function
   @abstract     Reset a hash table without deallocating memory.
