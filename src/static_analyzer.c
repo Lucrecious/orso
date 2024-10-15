@@ -1200,12 +1200,10 @@ void orso_resolve_expression(
             ast_node_and_scope_t node_and_scope;
             bool skip_mutable = false;
             if (ORSO_TYPE_IS_STRUCT(left->value_type_narrowed)) {
-                khint_t key_index = kh_get(type2ns, ast->type_to_creation_node, left->value_type_narrowed);
-                node_and_scope = kh_value(ast->type_to_creation_node, key_index);
+                table_get(type2ns, ast->type_to_creation_node, left->value_type_narrowed, &node_and_scope);
             } else if (left->value_type_narrowed == &OrsoTypeType && ORSO_TYPE_IS_STRUCT(get_folded_type(ast, left->value_index))) {
                 type_t* struct_type = get_folded_type(ast, left->value_index);
-                khint_t key_index = kh_get(type2ns, ast->type_to_creation_node, struct_type);
-                node_and_scope = kh_value(ast->type_to_creation_node, key_index);
+                table_get(type2ns, ast->type_to_creation_node, struct_type, &node_and_scope);
                 skip_mutable = true;
             } else {
                 error_range(analyzer, left->start, left->end, "Member accessor can only be used on structs or struct types");
@@ -1766,26 +1764,18 @@ static void resolve_entity_declaration(analyzer_t* analyzer, ast_t* ast, Analysi
 
             type_t* initial_expression_type = INITIAL_EXPRESSION->value_type_narrowed;
 
-            khint_t key_index = kh_get(type2ns, ast->type_to_creation_node, initial_expression_type);
-            ASSERT(key_index != kh_end(ast->type_to_creation_node), "this shoudl always find something");
+            ast_node_and_scope_t node_and_scope;
+            bool found = table_get(type2ns, ast->type_to_creation_node, initial_expression_type, &node_and_scope);
+            ASSERT(!found, "this shoudl always find something");
 
             INITIAL_EXPRESSION = to_struct_type;
 
-            ast_node_and_scope_t node_and_scope = kh_value(ast->type_to_creation_node, key_index);
-
-            int absent;
-            key_index = kh_put(type2ns, ast->type_to_creation_node, named_struct, &absent);
-
-            kh_value(ast->type_to_creation_node, key_index) = node_and_scope;
-
+            table_put(type2ns, ast->type_to_creation_node, named_struct, node_and_scope);
             
             {
-                int absent;
-                khint_t index = kh_put(ptr2i32, ast->type_to_zero_index, named_struct, &absent);
-
                 i32 value_index = to_struct_type->data.expression->value_index;
                 ASSERT(value_index >= 0, "must be the value of the anonymous type");
-                kh_value(ast->type_to_zero_index, index) = value_index;
+                table_put(ptr2i32, ast->type_to_zero_index, named_struct, value_index);
             }
         }
     }
@@ -2396,14 +2386,11 @@ static void resolve_struct_definition(analyzer_t* analyzer, ast_t* ast, Analysis
     struct_definition->foldable = true;
     struct_definition->value_index = ast->true_index;
 
-    int absent;
-    khint_t key_index = kh_put(type2ns, ast->type_to_creation_node, struct_definition->value_type_narrowed, &absent);
-    kh_value(ast->type_to_creation_node, key_index) = (ast_node_and_scope_t){
+    ast_node_and_scope_t node_and_scope = {
         .node = struct_definition,
         .scope = &struct_scope
     };
-
-    ast_node_and_scope_t node_and_scope = kh_value(ast->type_to_creation_node, key_index);
+    table_put(type2ns, ast->type_to_creation_node, struct_definition->value_type_narrowed, node_and_scope);
 
     i32 field_count = 0;
 
@@ -2422,8 +2409,10 @@ static void resolve_struct_definition(analyzer_t* analyzer, ast_t* ast, Analysis
 
     if (invalid_struct) {
         INVALIDATE(struct_definition);
-        key_index = kh_get(type2ns, ast->type_to_creation_node, struct_definition->value_type_narrowed);
-        kh_value(ast->type_to_creation_node, key_index).scope = NULL;
+        ast_node_and_scope_t node_and_scope;
+        table_get(type2ns, ast->type_to_creation_node, struct_definition->value_type_narrowed, &node_and_scope);
+        node_and_scope.scope = NULL;
+        table_put(type2ns, ast->type_to_creation_node, struct_definition->value_type_narrowed, node_and_scope);
         scope_free(&struct_scope);
         return;
     }
@@ -2517,9 +2506,8 @@ static void resolve_struct_definition(analyzer_t* analyzer, ast_t* ast, Analysis
 
         struct_definition->value_index = add_value_to_ast_constant_stack(ast, (slot_t*)struct_data, complete_struct_type);
 
-        key_index = kh_put(type2ns, ast->type_to_creation_node, complete_struct_type, &absent);
         node_and_scope.scope = NULL;
-        kh_value(ast->type_to_creation_node, key_index) = node_and_scope;
+        table_put(type2ns, ast->type_to_creation_node, complete_struct_type, node_and_scope);
     } else {
         INVALIDATE(struct_definition);
 
@@ -2702,11 +2690,9 @@ void orso_static_analyzer_free(analyzer_t* analyzer) {
 }
 
 i32 orso_zero_value(ast_t* ast, type_t* type, symbol_table_t* symbol_table) {
-    khint_t key_index;
-
-    key_index = kh_get(ptr2i32, ast->type_to_zero_index, type);
-    if (key_index != kh_end(ast->type_to_zero_index)) {
-        return kh_value(ast->type_to_zero_index, key_index);
+    i32 result = -1;
+    if (table_get(ptr2i32, ast->type_to_zero_index, type, &result)) {
+        return result;
     }
 
     slot_t value[orso_bytes_to_slots(orso_type_size_bytes(type))];
@@ -2764,9 +2750,6 @@ i32 orso_zero_value(ast_t* ast, type_t* type, symbol_table_t* symbol_table) {
 
     i32 zero_index = add_value_to_ast_constant_stack(ast, value, type);
 
-    i32 absent;
-    key_index = kh_put(ptr2i32, ast->type_to_zero_index, type, &absent);
-    kh_value(ast->type_to_zero_index, key_index) = zero_index;
-
+    table_put(ptr2i32, ast->type_to_zero_index, type, zero_index);
     return zero_index;
 }
