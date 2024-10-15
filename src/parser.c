@@ -45,6 +45,17 @@ function_type            -> `(` (logic_or (`,` logic_or)*)? `)` `->` logic_or
 struct_definition        -> `struct` `{` entity_declaration* `}`
 */
 
+static int ptr_hash(void* ptr) {
+    return kh_int64_hash_func((khint64_t)ptr);
+}
+
+static int ptr_equal(void* a, void* b) {
+    return kh_int64_hash_equal((khint64_t)a, (khint64_t)b);
+}
+
+implement_table(ptr2i32, void*, i32, ptr_hash, ptr_equal)
+implement_table(type2ns, type_t*, ast_node_and_scope_t, ptr_hash, ptr_equal)
+
 typedef struct Parser {
     error_function_t error_fn;
     ast_t* ast; // TODO: Consider moving this outside parser and instead passed through arguments
@@ -103,18 +114,17 @@ void orso_ast_init(ast_t* ast, symbol_table_t* symbols) {
 
     orso_symbol_table_init(&ast->builtins);
 
-    ast->type_to_zero_index = kh_init(ptr2i32, NULL);
-    ast->type_to_creation_node = kh_init(type2ns, NULL);
+    ast->type_to_zero_index = table_new(ptr2i32, &ast->allocator);
+    ast->type_to_creation_node = table_new(type2ns, &ast->allocator);
 }
 
 void orso_ast_free(ast_t* ast) {
     arena_free(&ast->allocator);
+    ast->type_to_zero_index = NULL;
+    ast->type_to_creation_node = NULL;
 
     orso_symbol_table_free(&ast->builtins);
     orso_type_set_free(&ast->type_set);
-
-    ast->type_to_zero_index = NULL;
-    ast->type_to_creation_node = NULL;
 }
 
 ast_node_t* orso_ast_node_new(ast_t* ast, ast_node_type_t node_type, bool is_in_type_context, token_t start) {

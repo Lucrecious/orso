@@ -9,7 +9,7 @@
 #include "type_set.h"
 #include "arena.h"
 
-#include "khash.h"
+#include "table.h"
 
 typedef enum return_guarentee_t {
     ORSO_NO_RETURN_GUARENTEED,
@@ -190,22 +190,16 @@ struct ast_node_t {
     } data;
 };
 
-static khint_t ptr_hash(void* ptr) {
-    return kh_int64_hash_func((khint64_t)ptr);
-}
-
-static khint32_t ptr_equal(void* a, void* b) {
-    return kh_int64_hash_equal((khint64_t)a, (khint64_t)b);
-}
-
-KHASH_INIT(ptr2i32, void*, i32, 1, ptr_hash, ptr_equal)
+declare_table(ptr2i32, void*, i32)
+// KHASH_INIT(ptr2i32, void*, i32, 1, ptr_hash, ptr_equal)
 
 typedef struct ast_node_and_scope_t {
     ast_node_t* node;
     scope_t* scope;
 } ast_node_and_scope_t;
 
-KHASH_INIT(type2ns, type_t*, ast_node_and_scope_t, 1, ptr_hash, ptr_equal)
+// KHASH_INIT(type2ns, type_t*, ast_node_and_scope_t, 1, ptr_hash, ptr_equal)
+declare_table(type2ns, type_t*, ast_node_and_scope_t)
 
 typedef struct ast_t {
     arena_t allocator;
@@ -226,8 +220,8 @@ typedef struct ast_t {
     type_t** folded_constant_types;
     slot_t* folded_constants;
 
-    khash_t(ptr2i32)* type_to_zero_index;
-    khash_t(type2ns)* type_to_creation_node;
+    table_t(ptr2i32)* type_to_zero_index;
+    table_t(type2ns)* type_to_creation_node;
 
     symbol_table_t* symbols;
 } ast_t;

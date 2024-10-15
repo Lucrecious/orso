@@ -1,6 +1,8 @@
 #ifndef TABLE_H_
 #define TABLE_H_
 
+#include "khash.h"
+
 
 #define protocol_table(NAME, K, V) \
     table_##NAME##_t *table_##NAME##_new(arena_t *allocator); \
