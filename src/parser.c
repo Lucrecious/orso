@@ -102,7 +102,7 @@ void orso_ast_init(ast_t* ast, symbol_table_t* symbols) {
     ast->folded_constants = NULL;
     ast->symbols = symbols;
     ast->function_definition_pairs = NULL;
-    orso_type_set_init(&ast->type_set);
+    type_set_init(&ast->type_set, &ast->allocator);
 
     slot_t void_slot = ORSO_SLOT_I(0);
     slot_t bool_slot = ORSO_SLOT_I(1);
@@ -124,7 +124,6 @@ void orso_ast_free(ast_t* ast) {
     ast->type_to_creation_node = NULL;
 
     orso_symbol_table_free(&ast->builtins);
-    orso_type_set_free(&ast->type_set);
 }
 
 ast_node_t* orso_ast_node_new(ast_t* ast, ast_node_type_t node_type, bool is_in_type_context, token_t start) {

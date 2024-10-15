@@ -3,12 +3,13 @@
 
 #include "def.h"
 #include "type.h"
+#include "arena.h"
 
 typedef struct type_set_t {
     i32 count;
     i32 capacity;
     type_t** entries;
-    type_t** heap;
+    arena_t *allocator;
 } type_set_t;
 
 extern type_t OrsoTypeVoid;
@@ -26,8 +27,7 @@ extern type_t OrsoTypeUndefined;
 
 extern type_t OrsoTypeEmptyFunction;
 
-void orso_type_set_init(type_set_t* set);
-void orso_type_set_free(type_set_t* set);
+void type_set_init(type_set_t* set, arena_t *allocator);
 
 type_t* orso_type_set_fetch_union(type_set_t* set, type_t** types, i32 count);
 

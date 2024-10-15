@@ -27,41 +27,40 @@ type_t OrsoTypeEmptyFunction = (type_t) {
     .data.function.return_type = &OrsoTypeVoid,
 };
 
+#define ALLOC(TYPE) (TYPE*)arena_alloc(set->allocator, sizeof(TYPE))
+#define ALLOC_N(TYPE, N) (TYPE*)arena_alloc(set->allocator, sizeof(TYPE)*N)
+
 type_t* union_type_new(type_set_t* set, type_t** types, i32 count) {
     //ASSERT(count <= ORSO_UNION_NUM_MAX, "cannot create union type with more than 4 types"); // TODO: Add this in later, need codegen and runtime errors first
 
-    type_t* union_type = ORSO_ALLOCATE(type_t);
+    type_t* union_type = ALLOC(type_t);
     union_type->kind = ORSO_TYPE_UNION;
     union_type->data.union_.count = count;
-    union_type->data.union_.types = ORSO_ALLOCATE_N(type_t*, count);
+    union_type->data.union_.types = ALLOC_N(type_t*, count);
     for (i32 i = 0; i < union_type->data.union_.count; i++) {
         union_type->data.union_.types[i] = types[i];
     }
-
-    sb_push(set->heap, (type_t*)union_type);
 
     return union_type;
 }
 
 type_t* function_type_new(type_set_t* set, type_t** arguments, i32 argument_count, type_t* return_type, bool is_native) {
-    type_t* function_type = ORSO_ALLOCATE(type_t);
+    type_t* function_type = ALLOC(type_t);
     function_type->kind = is_native ? ORSO_TYPE_NATIVE_FUNCTION : ORSO_TYPE_FUNCTION;
     function_type->data.function.argument_count = argument_count;
-    function_type->data.function.argument_types = ORSO_ALLOCATE_N(type_t*, argument_count);
+    function_type->data.function.argument_types = ALLOC_N(type_t*, argument_count);
     for (i32 i = 0; i < argument_count; i++) {
         function_type->data.function.argument_types[i] = arguments[i];
     }
 
     function_type->data.function.return_type = return_type;
 
-    sb_push(set->heap, function_type);
-
     return function_type;
 }
 
 // only anonymous structs can be looked up in the type set
 type_t* struct_type_new(type_set_t* set, struct_field_t* fields, i32 field_count, struct_constant_t* constants, i32 constant_count, i32 total_size) {
-    type_t* struct_type = ORSO_ALLOCATE(type_t);
+    type_t* struct_type = ALLOC(type_t);
     struct_type->kind = ORSO_TYPE_STRUCT;
 
     struct_type->data.struct_.name = NULL;
@@ -73,13 +72,13 @@ type_t* struct_type_new(type_set_t* set, struct_field_t* fields, i32 field_count
     struct_type->data.struct_.total_bytes = total_size;
 
     if (field_count > 0) {
-        struct_type->data.struct_.fields = ORSO_ALLOCATE_N(struct_field_t, field_count);
+        struct_type->data.struct_.fields = ALLOC_N(struct_field_t, field_count);
 
         for (i32 i = 0; i < field_count; i++) {
             struct_type->data.struct_.fields[i] = fields[i];
 
             i32 length = strlen(fields[i].name);
-            char* name = ORSO_ALLOCATE_N(char, length + 1);
+            char* name = ALLOC_N(char, length + 1);
             memcpy(name, fields[i].name, length);
             name[length] = '\0';
 
@@ -88,13 +87,13 @@ type_t* struct_type_new(type_set_t* set, struct_field_t* fields, i32 field_count
     }
 
     if (constant_count > 0) {
-        struct_type->data.struct_.constants = ORSO_ALLOCATE_N(struct_constant_t, constant_count);
+        struct_type->data.struct_.constants = ALLOC_N(struct_constant_t, constant_count);
 
         for (i32 i = 0; i < constant_count; i++) {
             struct_type->data.struct_.constants[i] = constants[i];
 
             i32 length = strlen(constants[i].name);
-            char* name = ORSO_ALLOCATE_N(char, length + 1);
+            char* name = ALLOC_N(char, length + 1);
             memcpy(name, constants[i].name, length);
             name[length] = '\0';
 
@@ -102,19 +101,13 @@ type_t* struct_type_new(type_set_t* set, struct_field_t* fields, i32 field_count
         }
     }
 
-    if (set) {
-        sb_push(set->heap, struct_type);
-    }
-
     return struct_type;
 }
 
 type_t* pointer_type_new(type_set_t* set, type_t* type) {
-    type_t* pointer = ORSO_ALLOCATE(type_t);
+    type_t* pointer = ALLOC(type_t);
     pointer->kind = ORSO_TYPE_POINTER;
     pointer->data.pointer.type = type;
-    
-    sb_push(set->heap, pointer);
 
     return pointer;
 }
@@ -191,31 +184,13 @@ void type_free(type_t* type) {
 
 static bool add_type(type_set_t* set, type_t* type);
 
-void orso_type_set_init(type_set_t* set) {
+void type_set_init(type_set_t* set, arena_t *allocator) {
     set->capacity = 0;
     set->count = 0;
     set->entries = NULL;
-    set->heap = NULL;
+    set->allocator = allocator;
 
     add_type(set, (type_t*)&OrsoTypeEmptyFunction);
-}
-
-void orso_type_set_free(type_set_t* set) {
-    for (i32 i = 0; i < sb_count(set->heap); i++) {
-        type_t* type = set->heap[i];
-        type_free(type);
-        free(type);
-        set->heap[i] = NULL;
-    }
-
-    sb_free(set->heap);
-
-    free(set->entries);
-
-    set->capacity = 0;
-    set->count = 0;
-    set->entries = NULL;
-    set->heap = NULL;
 }
 
 static u32 hash_type(type_t* type) {
@@ -281,7 +256,7 @@ static type_t** fetch_type(type_t** types, i32 capacity, type_t* type) {
 }
 
 static void adjust_capacity(type_set_t* set, i32 capacity) {
-    type_t** entries = ORSO_ALLOCATE_N(type_t*, capacity);
+    type_t** entries = ALLOC_N(type_t*, capacity);
 
     for (i32 i = 0; i < capacity; i++) {
         entries[i] = NULL;
@@ -504,7 +479,7 @@ type_t* orso_type_set_fetch_union(type_set_t* set, type_t** types, i32 count) {
     type_t union_type = {
         .kind = ORSO_TYPE_UNION,
         .data.union_.count = count,
-        .data.union_.types = ORSO_ALLOCATE_N(type_t*, count)
+        .data.union_.types = ALLOC_N(type_t*, count)
     };
 
     for (i32 i = 0; i < count; i++) {
@@ -638,7 +613,7 @@ type_t* orso_type_create_struct(type_set_t* set, char* name, i32 name_length, ty
 
     if (anonymous_struct->data.struct_.constant_count == 0) {
         type_t* new_type = type_copy_new(set, anonymous_struct);
-        new_type->data.struct_.name = ORSO_ALLOCATE_N(char, name_length + 1);
+        new_type->data.struct_.name = ALLOC_N(char, name_length + 1);
         memcpy(new_type->data.struct_.name, name, name_length);
         new_type->data.struct_.name[name_length] = '\0';
 
@@ -649,7 +624,7 @@ type_t* orso_type_create_struct(type_set_t* set, char* name, i32 name_length, ty
 
         anonymous_struct->data.struct_ = new_type->data.struct_;
 
-        anonymous_struct->data.struct_.name = ORSO_ALLOCATE_N(char, name_length + 1);
+        anonymous_struct->data.struct_.name = ALLOC_N(char, name_length + 1);
         memcpy(anonymous_struct->data.struct_.name, name, name_length);
         anonymous_struct->data.struct_.name[name_length] = '\0';
 
