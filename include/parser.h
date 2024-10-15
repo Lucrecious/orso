@@ -191,14 +191,12 @@ struct ast_node_t {
 };
 
 declare_table(ptr2i32, void*, i32)
-// KHASH_INIT(ptr2i32, void*, i32, 1, ptr_hash, ptr_equal)
 
 typedef struct ast_node_and_scope_t {
     ast_node_t* node;
     scope_t* scope;
 } ast_node_and_scope_t;
 
-// KHASH_INIT(type2ns, type_t*, ast_node_and_scope_t, 1, ptr_hash, ptr_equal)
 declare_table(type2ns, type_t*, ast_node_and_scope_t)
 
 typedef struct ast_t {
