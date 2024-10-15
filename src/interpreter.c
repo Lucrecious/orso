@@ -30,7 +30,7 @@ void orso_run_source(vm_t* vm, const char* source, error_function_t error_fn) {
     orso_ast_init(&ast, &vm->symbols);
 
     analyzer_t analyzer;
-    orso_static_analyzer_init(&analyzer, vm->write_fn, error_fn);
+    analyzer_init(&analyzer, vm->write_fn, error_fn);
 
     if (!orso_parse(&ast, source, error_fn)) {
         orso_ast_free(&ast);
@@ -41,7 +41,7 @@ void orso_run_source(vm_t* vm, const char* source, error_function_t error_fn) {
         orso_ast_print(&ast, "unresolved");
     #endif
 
-    bool resolved = orso_resolve_ast(&analyzer, &ast);
+    bool resolved = resolve_ast(&analyzer, &ast);
     if (!resolved) {
         orso_ast_free(&ast);
         return;

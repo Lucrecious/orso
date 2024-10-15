@@ -72,7 +72,7 @@ static scope_t *scope_copy_new(scope_t *scope, arena_t *allocator) {
             continue;
         }
 
-        Entity* entity_copy = ORSO_ALLOCATE(Entity);
+        Entity* entity_copy = (Entity*)arena_alloc(allocator, sizeof(Entity));
         *entity_copy = *((Entity*)entry->value.as.p);
         entry->value = ORSO_SLOT_P(entity_copy);
     }
@@ -135,8 +135,8 @@ static void scope_merge(type_set_t* set, scope_t* scope, scope_t* a, scope_t* b)
     scope_merge(set, scope->outer, a->outer, b->outer);
 }
 
-static void add_entity(scope_t* scope, symbol_t* identifier, ast_node_t* declaration_node) {
-    Entity* entity = ORSO_ALLOCATE(Entity);
+static void add_entity(scope_t* scope, arena_t *allocator, symbol_t* identifier, ast_node_t* declaration_node) {
+    Entity* entity = arena_alloc(allocator, sizeof(Entity));
     entity->declared_type = &OrsoTypeUnresolved;
     entity->narrowed_type = &OrsoTypeUnresolved;
     entity->node = declaration_node;
@@ -146,7 +146,7 @@ static void add_entity(scope_t* scope, symbol_t* identifier, ast_node_t* declara
 }
 
 static Entity* add_builtin_entity(ast_t* ast, symbol_t* identifier, type_t* type, i32 value_index) {
-    Entity* entity = ORSO_ALLOCATE(Entity);
+    Entity* entity = arena_alloc(&ast->allocator, sizeof(Entity));
     entity->declared_type = type;
     entity->narrowed_type = type;
     entity->node = NULL;
@@ -1591,7 +1591,7 @@ static void declare_entity(analyzer_t* analyzer, scope_t* scope, ast_node_t* ent
         return;
     }
 
-    add_entity(scope, identifier, entity);
+    add_entity(scope, &analyzer->allocator, identifier, entity);
 }
 
 static void resolve_entity_declaration(analyzer_t* analyzer, ast_t* ast, AnalysisState state, ast_node_t* entity_declaration) {
@@ -2403,7 +2403,7 @@ static void resolve_struct_definition(analyzer_t* analyzer, ast_t* ast, Analysis
 
         for (i32 i = 0; i < declarations_count; i++) {
             token_t identifier = struct_definition->data.struct_.declarations[i]->data.declaration.identifier;
-            char* name = ORSO_ALLOCATE_N(char, identifier.length + 1);
+            char* name = arena_alloc(&analyzer->allocator, sizeof(char)*(identifier.length + 1));
 
             memcpy(name, identifier.start, identifier.length);
             
@@ -2599,7 +2599,7 @@ void resolve_declarations(analyzer_t* analyzer, ast_t* ast, AnalysisState state,
     }
 }
 
-bool orso_resolve_ast(analyzer_t* analyzer, ast_t* ast) {
+bool resolve_ast(analyzer_t* analyzer, ast_t* ast) {
     if (ast->root->data.block == NULL) {
         ast->resolved = false;
         // error(analyzer, 0, "No code to run. Akin to having no main function.");
@@ -2624,7 +2624,7 @@ bool orso_resolve_ast(analyzer_t* analyzer, ast_t* ast) {
     return ast->resolved;
 }
 
-void orso_static_analyzer_init(analyzer_t* analyzer, write_function_t write_fn, error_function_t error_fn) {
+void analyzer_init(analyzer_t* analyzer, write_function_t write_fn, error_function_t error_fn) {
     analyzer->error_fn = error_fn;
     analyzer->had_error = false;
 
@@ -2639,7 +2639,7 @@ void orso_static_analyzer_init(analyzer_t* analyzer, write_function_t write_fn, 
     symbol_table_init(&analyzer->symbols, &analyzer->allocator);
 }
 
-void orso_static_analyzer_free(analyzer_t* analyzer) {
+void analyzer_free(analyzer_t* analyzer) {
     for (i32 i = 0; i < analyzer->symbols.capacity; i++) {
         symbol_table_entry_t* entry = &analyzer->symbols.entries[i];
         if (entry->key == NULL) {
