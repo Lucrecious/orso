@@ -5,6 +5,7 @@
 #include "common.h"
 #include "type_set.h"
 #include "virtual_machine.h"
+#include "arena.h"
 
 struct interpreter_t;
 
@@ -25,6 +26,8 @@ typedef struct analyzer_t {
     } dependencies;
 
     bool had_error;
+
+    arena_t allocator;
 } analyzer_t;
 
 void orso_static_analyzer_init(analyzer_t* analyzer, write_function_t write_fn, error_function_t error_fn);

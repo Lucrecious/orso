@@ -5,15 +5,11 @@
 
 #define GROW_CAPACITY(capacity) capacity == 0 ? 8 : capacity * 2
 
-void orso_symbol_table_init(symbol_table_t* table) {
+void symbol_table_init(symbol_table_t* table, arena_t *allocator) {
     table->entries = NULL;
     table->count = 0;
     table->capacity = 0;
-}
-
-void orso_symbol_table_free(symbol_table_t* table) {
-    free(table->entries);
-    orso_symbol_table_init(table);
+    table->allocator = allocator;
 }
 
 static symbol_table_entry_t* find_entry(symbol_table_entry_t* entries, i32 capacity, symbol_t* key) {
@@ -40,7 +36,7 @@ static symbol_table_entry_t* find_entry(symbol_table_entry_t* entries, i32 capac
 }
 
 static void adjust_capacity(symbol_table_t* table, i32 capacity) {
-    symbol_table_entry_t* entries = ORSO_ALLOCATE_N(symbol_table_entry_t, capacity);
+    symbol_table_entry_t* entries = arena_alloc(table->allocator, sizeof(symbol_table_entry_t)*capacity);
     for (i32 i = 0; i < capacity; i++) {
         entries[i].key = NULL;
         entries[i].value = ORSO_SLOT_I(0);
@@ -64,7 +60,7 @@ static void adjust_capacity(symbol_table_t* table, i32 capacity) {
     table->capacity = capacity;
 }
 
-bool orso_symbol_table_get(symbol_table_t* table, symbol_t* symbol, slot_t* value) {
+bool symbol_table_get(symbol_table_t* table, symbol_t* symbol, slot_t* value) {
     if (table->count == 0) {
         return false;
     }
@@ -78,7 +74,7 @@ bool orso_symbol_table_get(symbol_table_t* table, symbol_t* symbol, slot_t* valu
     return true;
 }
 
-bool orso_symbol_table_set(symbol_table_t* table, symbol_t* key, slot_t value) {
+bool symbol_table_set(symbol_table_t* table, symbol_t* key, slot_t value) {
     if (table->count + 1 > table->capacity * ORSO_SYMBOL_TABLE_MAX_LOAD) {
         i32 capacity = GROW_CAPACITY(table->capacity);
         adjust_capacity(table, capacity);
@@ -97,7 +93,7 @@ bool orso_symbol_table_set(symbol_table_t* table, symbol_t* key, slot_t value) {
     return is_new_key;
 }
 
-bool orso_symbol_table_remove(symbol_table_t* table, symbol_t* key) {
+bool symbol_table_remove(symbol_table_t* table, symbol_t* key) {
     if (table->count == 0) {
         return false;
     }
@@ -113,18 +109,18 @@ bool orso_symbol_table_remove(symbol_table_t* table, symbol_t* key) {
     return true;
 }
 
-void orso_symbol_table_add_all(symbol_table_t* source, symbol_table_t* destination) {
+void symbol_table_add_all(symbol_table_t* source, symbol_table_t* destination) {
     for (i32 i = 0; i < source->capacity; i++) {
         symbol_table_entry_t* entry = &source->entries[i];
         if (entry->key == NULL) {
             continue;
         }
 
-        orso_symbol_table_set(destination, entry->key, entry->value);
+        symbol_table_set(destination, entry->key, entry->value);
     }
 }
 
-symbol_t* orso_symbol_table_find_cstrn(symbol_table_t* table, const char* start, i32 length, u32 hash) {
+symbol_t* symbol_table_find_cstrn(symbol_table_t* table, const char* start, i32 length, u32 hash) {
     if (table->count == 0) {
         return NULL;
     }

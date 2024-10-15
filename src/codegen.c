@@ -484,11 +484,11 @@ static i32 add_global(vm_t* vm, token_t* name, i32 slot_count)
     symbol_t* identifier = orso_new_symbol_from_cstrn(name->start, name->length, &vm->symbols);
 
     slot_t index_slot;
-    ASSERT(!orso_symbol_table_get(&vm->globals.name_to_index, identifier, &index_slot), "double global definition");
+    ASSERT(!symbol_table_get(&vm->globals.name_to_index, identifier, &index_slot), "double global definition");
 
     // Use the specific khash for this
     index_slot = ORSO_SLOT_I(sb_count(vm->globals.values));
-    orso_symbol_table_set(&vm->globals.name_to_index, identifier, index_slot);
+    symbol_table_set(&vm->globals.name_to_index, identifier, index_slot);
 
     for (i32 i = 0; i < slot_count; i++) {
 #ifdef DEBUG_TRACE_EXECUTION
@@ -536,7 +536,7 @@ static i32 declare_local_entity(Compiler* compiler, token_t* name, i32 slot_coun
 static i32 retrieve_global_variable(vm_t* vm, token_t* name) {
     symbol_t* identifier = orso_new_symbol_from_cstrn(name->start, name->length, &vm->symbols);
     slot_t value;
-    if (!orso_symbol_table_get(&vm->globals.name_to_index, identifier, &value)) {
+    if (!symbol_table_get(&vm->globals.name_to_index, identifier, &value)) {
         return -1;
     }
 

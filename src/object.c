@@ -282,7 +282,7 @@ f64 cstrn_to_f64(const char* text, i32 length) {
 
 symbol_t* orso_unmanaged_symbol_from_cstrn(const char* start, i32 length, symbol_table_t* symbol_table) {
     u32 hash = orso_hash_cstrn(start, length);
-    symbol_t* symbol = orso_symbol_table_find_cstrn(symbol_table, start, length, hash);
+    symbol_t* symbol = symbol_table_find_cstrn(symbol_table, start, length, hash);
     if (symbol != NULL) {
         return symbol;
     }
@@ -295,14 +295,14 @@ symbol_t* orso_unmanaged_symbol_from_cstrn(const char* start, i32 length, symbol
     symbol->text[length] = '\0';
 
     slot_t slot = ORSO_SLOT_I(0);
-    orso_symbol_table_set(symbol_table, symbol, slot);
+    symbol_table_set(symbol_table, symbol, slot);
 
     return symbol;
 }
 
 symbol_t* orso_new_symbol_from_cstrn(const char* start, i32 length, symbol_table_t* symbol_table) {
     u32 hash = orso_hash_cstrn(start, length);
-    symbol_t* symbol = orso_symbol_table_find_cstrn(symbol_table, start, length, hash);
+    symbol_t* symbol = symbol_table_find_cstrn(symbol_table, start, length, hash);
     if (symbol != NULL) {
         return symbol;
     }
@@ -314,7 +314,7 @@ symbol_t* orso_new_symbol_from_cstrn(const char* start, i32 length, symbol_table
     symbol->text[length] = '\0';
 
     slot_t slot = ORSO_SLOT_I(0);
-    orso_symbol_table_set(symbol_table, symbol, slot);
+    symbol_table_set(symbol_table, symbol, slot);
 
     return symbol;
 }

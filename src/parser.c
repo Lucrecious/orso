@@ -112,7 +112,7 @@ void orso_ast_init(ast_t* ast, symbol_table_t* symbols) {
     ast->void_index = 0;
     ast->true_index = 1;
 
-    orso_symbol_table_init(&ast->builtins);
+    symbol_table_init(&ast->builtins, &ast->allocator);
 
     ast->type_to_zero_index = table_new(ptr2i32, &ast->allocator);
     ast->type_to_creation_node = table_new(type2ns, &ast->allocator);
@@ -120,10 +120,6 @@ void orso_ast_init(ast_t* ast, symbol_table_t* symbols) {
 
 void orso_ast_free(ast_t* ast) {
     arena_free(&ast->allocator);
-    ast->type_to_zero_index = NULL;
-    ast->type_to_creation_node = NULL;
-
-    orso_symbol_table_free(&ast->builtins);
 }
 
 ast_node_t* orso_ast_node_new(ast_t* ast, ast_node_type_t node_type, bool is_in_type_context, token_t start) {

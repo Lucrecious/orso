@@ -18,40 +18,37 @@
 #include <time.h>
 
 void vm_init(vm_t* vm, write_function_t write_fn, i32 stack_size) {
+    vm->allocator = (arena_t){0};
+
     vm->frame_count = 0;
 
     vm->type_set = NULL;
 
     i32 stack_size_slot_count = orso_bytes_to_slots(stack_size);
 
-    vm->stack = ORSO_ALLOCATE_N(slot_t, stack_size_slot_count);
+    vm->stack = arena_alloc(&vm->allocator, sizeof(slot_t)*stack_size_slot_count);
     vm->stack_top = vm->stack;
 
     vm->globals.values = NULL;
 
 #ifdef DEBUG_TRACE_EXECUTION
-    vm->stack_types = ORSO_ALLOCATE_N(OrsoType*, stack_size_slot_count);
+    vm->stack_types = arena_alloc(&vm->allocator, sizeof(OrsoType*)*stack_size_slot_count);
     vm->globals.types = NULL;
 #endif
 
     vm->write_fn = write_fn;
 
-    orso_symbol_table_init(&vm->symbols);
-    orso_symbol_table_init(&vm->globals.name_to_index);
+    symbol_table_init(&vm->symbols, &vm->allocator);
+    symbol_table_init(&vm->globals.name_to_index, &vm->allocator);
 }
 
 void vm_free(vm_t* vm) {
-    orso_symbol_table_free(&vm->symbols);
-    orso_symbol_table_free(&vm->globals.name_to_index);
-
-    free(vm->stack);
+    arena_free(&vm->allocator);
     vm->stack = NULL;
     vm->stack_top = NULL;
 
 #ifdef DEBUG_TRACE_EXECUTION
-    free(vm->stack_types);
     vm->stack_types = NULL;
-
     sb_free(vm->globals.types);
     vm->globals.types = NULL;
 #endif

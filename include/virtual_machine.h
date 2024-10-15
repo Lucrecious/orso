@@ -39,6 +39,8 @@ typedef struct vm_t {
     
     slot_t* stack;
     slot_t* stack_top;
+
+    arena_t allocator;
 } vm_t;
 
 void vm_init(vm_t* vm, write_function_t write_fn, i32 stack_size);

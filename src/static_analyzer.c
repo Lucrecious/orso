@@ -50,35 +50,21 @@ typedef struct Entity {
 
 } Entity;
 
-static void scope_init(scope_t* scope, scope_type_t type, scope_t* outer, ast_node_t* creator_expression) {
+static void scope_init(scope_t* scope, arena_t *allocator, scope_type_t type, scope_t* outer, ast_node_t* creator_expression) {
     scope->outer = outer;
     scope->creator = creator_expression;
     scope->type = type;
-    orso_symbol_table_init(&scope->named_entities);
+    symbol_table_init(&scope->named_entities, allocator);
 }
 
-static void scope_free(scope_t* scope) {
-    scope->outer = NULL;
-    for (i32 i = 0; i < scope->named_entities.capacity; i++) {
-        symbol_table_entry_t* entry = &scope->named_entities.entries[i];
-        if (entry->key == NULL) {
-            continue;
-        }
-
-        Entity* pair = (Entity*)entry->value.as.p;
-        free(pair);
-    }
-    orso_symbol_table_free(&scope->named_entities);
-}
-
-static scope_t* scope_copy_new(scope_t* scope) {
+static scope_t *scope_copy_new(scope_t *scope, arena_t *allocator) {
     if (scope == NULL) {
         return NULL;
     }
 
-    scope_t* scope_copy = ORSO_ALLOCATE(scope_t);
-    scope_init(scope_copy, scope->type, NULL, scope->creator);
-    orso_symbol_table_add_all(&scope->named_entities, &scope_copy->named_entities);
+    scope_t *scope_copy = arena_alloc(allocator, sizeof(scope_t));
+    scope_init(scope_copy, allocator, scope->type, NULL, scope->creator);
+    symbol_table_add_all(&scope->named_entities, &scope_copy->named_entities);
 
     for (i32 i = 0; i < scope_copy->named_entities.capacity; i++) {
         symbol_table_entry_t* entry = &scope_copy->named_entities.entries[i];
@@ -91,7 +77,7 @@ static scope_t* scope_copy_new(scope_t* scope) {
         entry->value = ORSO_SLOT_P(entity_copy);
     }
 
-    scope_copy->outer = scope_copy_new(scope->outer);
+    scope_copy->outer = scope_copy_new(scope->outer, allocator);
 
     return scope_copy;
 }
@@ -110,8 +96,8 @@ static void scope_merge(type_set_t* set, scope_t* scope, scope_t* a, scope_t* b)
 
         slot_t entity_a_slot;
         slot_t entity_b_slot;
-        if (!orso_symbol_table_get(&a->named_entities, entry->key, &entity_a_slot)
-                || !orso_symbol_table_get(&b->named_entities, entry->key, &entity_b_slot)) {
+        if (!symbol_table_get(&a->named_entities, entry->key, &entity_a_slot)
+                || !symbol_table_get(&b->named_entities, entry->key, &entity_b_slot)) {
             continue;
         }
 
@@ -156,7 +142,7 @@ static void add_entity(scope_t* scope, symbol_t* identifier, ast_node_t* declara
     entity->node = declaration_node;
     entity->value_index = -1;
 
-    orso_symbol_table_set(&scope->named_entities, identifier, ORSO_SLOT_P(entity));
+    symbol_table_set(&scope->named_entities, identifier, ORSO_SLOT_P(entity));
 }
 
 static Entity* add_builtin_entity(ast_t* ast, symbol_t* identifier, type_t* type, i32 value_index) {
@@ -166,7 +152,7 @@ static Entity* add_builtin_entity(ast_t* ast, symbol_t* identifier, type_t* type
     entity->node = NULL;
     entity->value_index = value_index;
 
-    orso_symbol_table_set(&ast->builtins, identifier, ORSO_SLOT_P(entity));
+    symbol_table_set(&ast->builtins, identifier, ORSO_SLOT_P(entity));
 
     return entity;
 }
@@ -945,7 +931,7 @@ void orso_resolve_expression(
         ast_t* ast,
         AnalysisState state,
         ast_node_t* expression) {
-
+    
     ASSERT(orso_ast_node_type_is_expression(expression->node_type), "should be only expressions");
 
     if (expression->value_type != &OrsoTypeUnresolved) {
@@ -993,7 +979,7 @@ void orso_resolve_expression(
 
         case ORSO_AST_NODE_TYPE_EXPRESSION_PRIMARY: {
             INVALIDATE(expression);
-            return;
+            break;
         }
 
         case ORSO_AST_NODE_TYPE_EXPRESSION_BINARY: {
@@ -1005,7 +991,7 @@ void orso_resolve_expression(
 
             if (ORSO_TYPE_IS_INVALID(left->value_type) || ORSO_TYPE_IS_INVALID(right->value_type)) {
                 INVALIDATE(expression);
-                return;
+                break;
             }
 
             // TODO: Remember to do different things depending on operation
@@ -1087,7 +1073,7 @@ void orso_resolve_expression(
             if (cast_left == &OrsoTypeInvalid || cast_right == &OrsoTypeInvalid) {
                 INVALIDATE(expression);
                 error_range2(analyzer, left->start, left->end, right->start, right->end, "Incompatible types for binary operation.");
-                return;
+                break;
             }
 
             if (!is_logical_operator) {
@@ -1110,20 +1096,20 @@ void orso_resolve_expression(
 
             if (ORSO_TYPE_IS_INVALID(expression->data.expression->value_type)) {
                 INVALIDATE(expression);
-                return;
+                break;
             }
 
             if (expression->is_in_type_context && expression->operator.type == TOKEN_AMPERSAND) {
                 if (expression->data.expression->value_type_narrowed != &OrsoTypeType) {
                     INVALIDATE(expression);
                     error_range(analyzer, expression->start, expression->end, "Ampersand is only allowed on types.");
-                    return;
+                    break;
                 }
 
                 unless (IS_FOLDED(expression->data.expression)) {
                     INVALIDATE(expression);
                     error_range(analyzer, expression->data.expression->start, expression->data.expression->end, "Value of expression must be resolved at compile time.");
-                    return;
+                    break;
                 }
             } else {
                 type_t* new_type = resolve_unary_type(ast, expression->operator.type, expression->data.expression->value_type_narrowed);
@@ -1134,7 +1120,7 @@ void orso_resolve_expression(
 
                 if (expression->value_type_narrowed == &OrsoTypeInvalid) {
                     error_range(analyzer, expression->start, expression->end, "Incompatible type for unary operation");
-                    return;
+                    break;
                 }
             }
             break;
@@ -1154,7 +1140,7 @@ void orso_resolve_expression(
 
             if (entity == NULL) {
                 INVALIDATE(expression);
-                return;
+                break;
             }
 
             // keep for constant folding so not redo entity look up and simplify work there
@@ -1267,7 +1253,7 @@ void orso_resolve_expression(
 
             if (ORSO_TYPE_IS_INVALID(expression->data.binary.rhs->value_type)) {
                 INVALIDATE(expression);
-                return;
+                break;
             }
 
             orso_resolve_expression(analyzer, ast, state, expression->data.binary.lhs);
@@ -1275,7 +1261,7 @@ void orso_resolve_expression(
             if (lvalue_node == NULL) {
                 error_range(analyzer, expression->data.binary.lhs->start, expression->data.binary.lhs->end, "Expression does not resolve to an lvalue.");
                 INVALIDATE(expression);
-                return;
+                break;
             } 
 
             lvalue_node = expression->data.binary.lhs;
@@ -1291,7 +1277,7 @@ void orso_resolve_expression(
                 
                 if (entity == NULL) {
                     INVALIDATE(expression);
-                    return;
+                    break;
                 }
 
                 expression->value_type = entity->declared_type;
@@ -1300,7 +1286,7 @@ void orso_resolve_expression(
                 type_t* right_side_narrowed_type = expression->data.binary.rhs->value_type_narrowed;
                 unless (orso_type_fits(entity->declared_type, right_side_narrowed_type)) {
                     error_range(analyzer, expression->start, expression->end, "Explicit cast required to assign to variable.");
-                    return;
+                    break;
                 }
 
                 expression->value_type_narrowed = right_side_narrowed_type;
@@ -1318,12 +1304,12 @@ void orso_resolve_expression(
 
                 if (ORSO_TYPE_IS_INVALID(dot_node->value_type)) {
                     INVALIDATE(expression);
-                    return;
+                    break;
                 }
 
                 unless (orso_type_fits(dot_node->value_type, expression->data.binary.rhs->value_type_narrowed)) {
                     error_range(analyzer, expression->start, expression->end, "Explicit cast required to cast to member.");
-                    return;
+                    break;
                 }
 
                 expression->value_type = dot_node->value_type;
@@ -1337,7 +1323,7 @@ void orso_resolve_expression(
 
         case ORSO_AST_NODE_TYPE_EXPRESSION_BLOCK: {
             scope_t block_scope;
-            scope_init(&block_scope, SCOPE_TYPE_BLOCK, state.scope, expression);
+            scope_init(&block_scope, &analyzer->allocator, SCOPE_TYPE_BLOCK, state.scope, expression);
 
             i32 declarations_count = sb_count(expression->data.block);
             forward_scan_declaration_names(analyzer, &block_scope, expression->data.block, declarations_count);
@@ -1387,8 +1373,6 @@ void orso_resolve_expression(
                     expression->value_type_narrowed = last_expression_statement->data.expression->value_type_narrowed;
                 }
             }
-
-            scope_free(&block_scope);
             break;
         }
 
@@ -1397,7 +1381,7 @@ void orso_resolve_expression(
 
             if (ORSO_TYPE_IS_INVALID(expression->data.statement->data.expression->value_type)) {
                 INVALIDATE(expression);
-                return;
+                break;
             }
 
             expression->return_guarentee = expression->data.statement->data.expression ? 
@@ -1424,12 +1408,12 @@ void orso_resolve_expression(
         case ORSO_AST_NODE_TYPE_EXPRESSION_BRANCHING: {
             orso_resolve_expression(analyzer, ast, state, expression->data.branch.condition);
 
-            scope_t* then_scope = scope_copy_new(state.scope);
+            scope_t* then_scope = scope_copy_new(state.scope, &analyzer->allocator);
             AnalysisState then_state = state;
             then_state.scope = then_scope;
             orso_resolve_expression(analyzer, ast, then_state, expression->data.branch.then_expression);
 
-            scope_t* else_scope = scope_copy_new(state.scope);
+            scope_t* else_scope = scope_copy_new(state.scope, &analyzer->allocator);
             AnalysisState else_state = state;
             else_state.scope = else_scope;
             if (expression->data.branch.else_expression) {
@@ -1465,25 +1449,19 @@ void orso_resolve_expression(
             scope_merge(&ast->type_set, state.scope, then_state.scope, else_state.scope);
 
             while (then_scope) {
-                scope_t* outer_scope = then_scope->outer;
-                scope_free(then_scope);
-                free(then_scope);
-
+                scope_t *outer_scope = scope_copy_new(then_scope->outer, &analyzer->allocator);
                 then_scope = outer_scope;
             }
 
             while (else_scope) {
-                scope_t* outer_scope = else_scope->outer;
-                scope_free(else_scope);
-                free(else_scope);
-
+                scope_t* outer_scope = scope_copy_new(else_scope->outer, &analyzer->allocator);
                 else_scope = outer_scope;
             }
 
             if (ORSO_TYPE_IS_INVALID(expression->data.branch.then_expression->value_type) ||
                 (expression->data.branch.else_expression && ORSO_TYPE_IS_INVALID(expression->data.branch.else_expression->value_type))) {
                 INVALIDATE(expression);
-                return;
+                break;
             }
 
             if (branch_return_guarentee == ORSO_NO_RETURN_GUARENTEED) {
@@ -1525,13 +1503,13 @@ void orso_resolve_expression(
 
             if (argument_invalid || ORSO_TYPE_IS_INVALID(expression->data.call.callee->value_type)) {
                 INVALIDATE(expression);
-                return;
+                break;
             }
 
             type_t* narrowed_callee_type = expression->data.call.callee->value_type_narrowed;
             if ((!ORSO_TYPE_IS_FUNCTION(narrowed_callee_type) && !ORSO_TYPE_IS_NATIVE_FUNCTION(narrowed_callee_type)) || !can_call(narrowed_callee_type, expression->data.call.arguments)) {
                 error_range(analyzer, expression->data.call.callee->start, expression->data.call.callee->end, "Cannot call this value.");
-                return;
+                break;
             }
 
             expression->value_type = narrowed_callee_type->data.function.return_type;
@@ -1567,7 +1545,7 @@ void orso_resolve_expression(
 
             if (invalid_parameter || ORSO_TYPE_IS_INVALID(expression->data.function.return_type_expression->value_type)) {
                 INVALIDATE(expression);
-                return;
+                break;
             }
 
             fold_function_signature(analyzer, ast, expression);
@@ -1606,7 +1584,7 @@ void orso_resolve_expression(
 static void declare_entity(analyzer_t* analyzer, scope_t* scope, ast_node_t* entity) {
     symbol_t* identifier = orso_unmanaged_symbol_from_cstrn(entity->start.start, entity->start.length, &analyzer->symbols);
     slot_t slot_type_pair;
-    if (orso_symbol_table_get(&scope->named_entities, identifier, &slot_type_pair)) {
+    if (symbol_table_get(&scope->named_entities, identifier, &slot_type_pair)) {
         const char message[126];
         snprintf((char*)message, 126, "Duplicate entity definition of '%.*s'.", entity->start.length, entity->start.start);
         error_token(analyzer, entity->start, "Cannot overload this entity definition");
@@ -1679,9 +1657,9 @@ static void resolve_entity_declaration(analyzer_t* analyzer, ast_t* ast, Analysi
     slot_t entity_slot;
     symbol_t* name = orso_unmanaged_symbol_from_cstrn(entity_declaration->start.start, entity_declaration->start.length, &analyzer->symbols);
 
-    ASSERT(orso_symbol_table_get(&state.scope->named_entities, name, &entity_slot), "should be forward_declared already");
+    ASSERT(symbol_table_get(&state.scope->named_entities, name, &entity_slot), "should be forward_declared already");
 
-    orso_symbol_table_get(&state.scope->named_entities, name, &entity_slot);
+    symbol_table_get(&state.scope->named_entities, name, &entity_slot);
 
     Entity* entity = (Entity*)entity_slot.as.p;
 
@@ -1850,7 +1828,7 @@ static void resolve_entity_declaration(analyzer_t* analyzer, ast_t* ast, Analysi
 
 static Entity* get_builtin_entity(ast_t* ast, symbol_t* identifier) {
     slot_t entity_slot;
-    if (!orso_symbol_table_get(&ast->builtins, identifier, &entity_slot)) {
+    if (!symbol_table_get(&ast->builtins, identifier, &entity_slot)) {
         type_t* type;
         OrsoNativeFunction* function;
         type_t* value_type = NULL;
@@ -1966,7 +1944,7 @@ static Entity* get_resolved_entity_by_identifier(
         if (query->flags & QUERY_FLAG_MATCH_ONLY_IN_GIVEN_SCOPE) { break; }\
         *search_scope = (*search_scope)->outer
 
-        unless (orso_symbol_table_get(&(*search_scope)->named_entities, identifier, &entity_slot)) {
+        unless (symbol_table_get(&(*search_scope)->named_entities, identifier, &entity_slot)) {
             NEXT_SCOPE();
             continue;
         }
@@ -2141,7 +2119,7 @@ static void resolve_function_expression(
     // }
 
     scope_t function_parameter_scope;
-    scope_init(&function_parameter_scope, SCOPE_TYPE_FUNCTION_PARAMETERS, state.scope, function_definition_expression);
+    scope_init(&function_parameter_scope, &analyzer->allocator, SCOPE_TYPE_FUNCTION_PARAMETERS, state.scope, function_definition_expression);
     type_t* parameter_types[parameter_count];
 
     forward_scan_declaration_names(analyzer, &function_parameter_scope, definition->parameter_nodes, parameter_count);
@@ -2216,14 +2194,11 @@ static void resolve_function_expression(
         new_state.mode = MODE_RUNTIME;
 
         scope_t function_scope;
-        scope_init(&function_scope, SCOPE_TYPE_FUNCTION_BODY, &function_parameter_scope, function_definition_expression);
+        scope_init(&function_scope, &analyzer->allocator, SCOPE_TYPE_FUNCTION_BODY, &function_parameter_scope, function_definition_expression);
         new_state.scope = &function_scope;
         orso_resolve_expression(analyzer, ast, new_state, definition->block);
         pop_dependency(analyzer);
-        scope_free(&function_scope);
     }
-
-    scope_free(&function_parameter_scope);
 
     if (return_type != &OrsoTypeVoid && definition->block->return_guarentee != ORSO_RETURN_GUARENTEED) {
         error_range(analyzer, function_definition_expression->start, function_definition_expression->end, "Function definition does not return on all branches.");
@@ -2370,7 +2345,7 @@ static void resolve_function_expression(
 */
 static void resolve_struct_definition(analyzer_t* analyzer, ast_t* ast, AnalysisState state, ast_node_t* struct_definition) {
     scope_t struct_scope;
-    scope_init(&struct_scope, SCOPE_TYPE_STRUCT, state.scope, struct_definition);
+    scope_init(&struct_scope, &analyzer->allocator, SCOPE_TYPE_STRUCT, state.scope, struct_definition);
 
     state.fold_level = MODE_CONSTANT_TIME;
     state.scope = &struct_scope;
@@ -2413,7 +2388,6 @@ static void resolve_struct_definition(analyzer_t* analyzer, ast_t* ast, Analysis
         table_get(type2ns, ast->type_to_creation_node, struct_definition->value_type_narrowed, &node_and_scope);
         node_and_scope.scope = NULL;
         table_put(type2ns, ast->type_to_creation_node, struct_definition->value_type_narrowed, node_and_scope);
-        scope_free(&struct_scope);
         return;
     }
 
@@ -2514,8 +2488,6 @@ static void resolve_struct_definition(analyzer_t* analyzer, ast_t* ast, Analysis
         ast_node_t* incomplete_field = struct_definition->data.struct_.declarations[incomplete_index];
         error_range(analyzer, incomplete_field->start, incomplete_field->end, "Incomplete field");
     }
-
-    scope_free(&struct_scope);
 }
 
 static scope_t* get_closest_outer_function_scope(scope_t* scope) {
@@ -2635,7 +2607,7 @@ bool orso_resolve_ast(analyzer_t* analyzer, ast_t* ast) {
     }
 
     scope_t global_scope;
-    scope_init(&global_scope, SCOPE_TYPE_MODULE, NULL, NULL);
+    scope_init(&global_scope, &analyzer->allocator, SCOPE_TYPE_MODULE, NULL, NULL);
 
     AnalysisState analysis_state = (AnalysisState) {
         .mode = MODE_RUNTIME,
@@ -2646,8 +2618,6 @@ bool orso_resolve_ast(analyzer_t* analyzer, ast_t* ast) {
     i32 declaration_count = sb_count(ast->root->data.block);
     forward_scan_declaration_names(analyzer, &global_scope, ast->root->data.block, declaration_count);
     resolve_declarations(analyzer, ast, analysis_state, ast->root->data.block, declaration_count);
-
-    scope_free(&global_scope);
 
     ast->resolved = !analyzer->had_error;
 
@@ -2661,10 +2631,12 @@ void orso_static_analyzer_init(analyzer_t* analyzer, write_function_t write_fn, 
     analyzer->dependencies.count = 0;
     analyzer->dependencies.chain = NULL;
 
+    analyzer->allocator = (arena_t){0};
+
     // TODO: fix
     (void)write_fn;
 
-    orso_symbol_table_init(&analyzer->symbols);
+    symbol_table_init(&analyzer->symbols, &analyzer->allocator);
 }
 
 void orso_static_analyzer_free(analyzer_t* analyzer) {
@@ -2676,8 +2648,6 @@ void orso_static_analyzer_free(analyzer_t* analyzer) {
 
         orso_unmanaged_symbol_free(entry->key);
     }
-
-    orso_symbol_table_free(&analyzer->symbols);
 
     sb_free(analyzer->dependencies.chain);
     analyzer->dependencies.chain = NULL;
