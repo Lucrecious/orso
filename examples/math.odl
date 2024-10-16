@@ -1,0 +1,11 @@
+main :: () -> i32 {
+    x := 5;
+    y := 10;
+    print_expr x + y;
+
+    t := 13.0;
+    v := 56.0;
+    s := t + v;
+    print_expr s;
+    return 0;
+};

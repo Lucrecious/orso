@@ -151,37 +151,6 @@ type_t* type_copy_new(type_set_t* set, type_t* type) {
     return NULL;
 }
 
-void type_free(type_t* type) {
-    if (ORSO_TYPE_IS_UNION(type)) {
-        free(type->data.union_.types);
-    } else if (ORSO_TYPE_IS_FUNCTION(type)) {
-        for (i32 i = 0; i < type->data.function.argument_count; i++) {
-            type->data.function.argument_types[i] = NULL;
-        }
-
-        free((void**)type->data.function.argument_types);
-    } else if (ORSO_TYPE_IS_STRUCT(type)) {
-        for (i32 i = 0; i < type->data.struct_.field_count; i++) {
-            free(type->data.struct_.fields[i].name);
-        }
-
-        free(type->data.struct_.fields);
-        type->data.struct_.fields = NULL;
-
-        for (i32 i = 0; i < type->data.struct_.constant_count; i++) {
-            free(type->data.struct_.constants[i].name);
-        }
-
-        free(type->data.struct_.constants);
-        type->data.struct_.constants = NULL;
-
-        free(type->data.struct_.name);
-        type->data.struct_.name = NULL;
-
-        type->data.struct_.total_bytes = 0;
-    }
-}
-
 static bool add_type(type_set_t* set, type_t* type);
 
 void type_set_init(type_set_t* set, arena_t *allocator) {

@@ -55,7 +55,6 @@ static void adjust_capacity(symbol_table_t* table, i32 capacity) {
         table->count++;
     }
 
-    free(table->entries);
     table->entries = entries;
     table->capacity = capacity;
 }
