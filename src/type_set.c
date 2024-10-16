@@ -243,7 +243,6 @@ static void adjust_capacity(type_set_t* set, i32 capacity) {
         set->count++;
     }
 
-    free(set->entries);
     set->entries = entries;
     set->capacity = capacity;
 }
@@ -597,8 +596,6 @@ type_t* orso_type_create_struct(type_set_t* set, char* name, i32 name_length, ty
         memcpy(anonymous_struct->data.struct_.name, name, name_length);
         anonymous_struct->data.struct_.name[name_length] = '\0';
 
-        free(new_type);
-
         return anonymous_struct;
     }
 }
@@ -618,6 +615,4 @@ void orso_named_struct_copy_data_from_completed_struct_type(type_t* incomplete_n
     incomplete_named_struct->data.struct_.constants = copied_type->data.struct_.constants;
 
     incomplete_named_struct->data.struct_.total_bytes = copied_type->data.struct_.total_bytes;
-
-    free(copied_type);
 }

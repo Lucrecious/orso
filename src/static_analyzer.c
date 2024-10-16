@@ -2428,14 +2428,6 @@ static void resolve_struct_definition(analyzer_t* analyzer, ast_t* ast, Analysis
 
     complete_struct_type = orso_type_set_fetch_anonymous_struct(&ast->type_set, field_count, fields, constant_count, constants);
 
-    for (i32 i = 0; i < field_count; i++) {
-        free(fields[i].name);
-    }
-
-    for (i32 i = 0; i < constant_count; i++) {
-        free(constants[i].name);
-    }
-
     i32 incomplete_index = -1;
     for (i32 i = 0; i < complete_struct_type->data.struct_.field_count; i++) {
         type_t* field_type = complete_struct_type->data.struct_.fields[i].type;
