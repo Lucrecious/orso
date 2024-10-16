@@ -188,9 +188,14 @@ ast_node_t* orso_ast_node_new(ast_t* ast, ast_node_type_t node_type, bool is_in_
         case ORSO_AST_NODE_TYPE_EXPRESSION_PRINT_EXPR:
         case ORSO_AST_NODE_TYPE_STATEMENT_RETURN:
         case ORSO_AST_NODE_TYPE_EXPRESSION_STATEMENT:
-        case ORSO_AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER:
         case ORSO_AST_NODE_TYPE_EXPRESSION_GROUPING: {
             node->data.expression = NULL;
+            break;
+        }
+
+        case ORSO_AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER: {
+            node->data.initiailizer.type = NULL;
+            node->data.initiailizer.arguments = NULL;
             break;
         }
         
@@ -213,7 +218,6 @@ ast_node_t* orso_ast_node_new(ast_t* ast, ast_node_type_t node_type, bool is_in_
         
         case ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY:
         case ORSO_AST_NODE_TYPE_EXPRESSION_DOT: {
-            node->data.dot.is_initializer = false;
             node->data.dot.lhs = NULL;
             node->data.dot.referencing_declaration = NULL;
             node->data.dot.identifier = (token_t){ .length = 0, .line = -1, .start = NULL, .type = TOKEN_IDENTIFIER };
@@ -691,12 +695,12 @@ static ast_node_t* grouping_or_function_signature_or_definition(Parser* parser, 
     return expression_node;
 }
 
-static ast_node_t** parse_arguments(Parser* parser, bool is_in_type_context) {
-    ast_node_t** arguments = NULL;
+static ast_node_t **parse_arguments(Parser* parser, bool is_in_type_context) {
+    ast_node_t **arguments = NULL;
 
     if (!check(parser, TOKEN_PARENTHESIS_CLOSE)) {
         do {
-            ast_node_t* argument = expression(parser, is_in_type_context);
+            ast_node_t *argument = expression(parser, is_in_type_context);
             sb_push(arguments, argument);
         } while (match(parser, TOKEN_COMMA));
     }
@@ -777,24 +781,32 @@ static ast_node_t* print_(Parser* parser, bool is_in_type_context) {
     return print_expression;
 }
 
-static ast_node_t* dot(Parser* parser, bool is_in_type_context) {
-    ast_node_t* dot_expression = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_EXPRESSION_DOT, is_in_type_context, parser->previous);
+static ast_node_t *dot(Parser* parser, bool is_in_type_context) {
 
 
     if (match(parser, TOKEN_BRACE_OPEN)) {
-        dot_expression->data.dot.identifier = parser->previous;
+        ast_node_t *initiailizer = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER, is_in_type_context, parser->previous);
+        if (!match(parser, TOKEN_BRACE_CLOSE)) {
+            do {
+                ast_node_t *argument = expression(parser, is_in_type_context);
+                sb_push(initiailizer->data.initiailizer.arguments, argument);
 
-        consume(parser, TOKEN_BRACE_CLOSE, "Expect brace close after brace open for initializer right now.");
-        dot_expression->end = parser->previous;
-        dot_expression->data.dot.is_initializer = true;
+            } while (match(parser, TOKEN_COMMA));
 
+            consume(parser, TOKEN_BRACE_CLOSE, "Expect brace close after brace open for initializer right now.");
+        }
+
+        initiailizer->end = parser->previous;
+
+        return initiailizer;
     } else {
+        ast_node_t *dot_expression = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_EXPRESSION_DOT, is_in_type_context, parser->previous);
         consume(parser, TOKEN_IDENTIFIER, "dot can only have identifiers on the right for now.");
         dot_expression->data.dot.identifier = parser->previous;
         dot_expression->end = parser->previous;
-    }
 
-    return dot_expression;
+        return dot_expression;
+    }
 }
 
 ParseRule rules[] = {
@@ -884,16 +896,15 @@ static ast_node_t* parse_precedence(Parser* parser, bool is_in_type_context, Pre
                 right_operand->start = left_operand->start;
                 left_operand = right_operand;
                 break;
+            case ORSO_AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER: {
+                right_operand->data.initiailizer.type = left_operand;
+                left_operand = right_operand;
+                break;
+            }
             case ORSO_AST_NODE_TYPE_EXPRESSION_DOT:
-                if (right_operand->data.dot.is_initializer) {
-                    right_operand->node_type = ORSO_AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER;
-                    right_operand->data.expression = left_operand;
-                    left_operand = right_operand;
-                } else {
-                    right_operand->data.dot.lhs = left_operand;
-                    right_operand->start = left_operand->start;
-                    left_operand = right_operand;
-                }
+                right_operand->data.dot.lhs = left_operand;
+                right_operand->start = left_operand->start;
+                left_operand = right_operand;
                 break;
             case ORSO_AST_NODE_TYPE_EXPRESSION_CALL:
                 left_operand = convert_call_expression(left_operand, right_operand);
@@ -1114,8 +1125,8 @@ void ast_print_ast_node(ast_node_t* node, i32 initial, const char* prefix) {
         }
 
         case ORSO_AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER: {
-            printf("type initializer: %s\n", type_info);
-            ast_print_ast_node(node->data.expression, initial + 1, "type: ");
+            printf("TODO: print arguments as well, type initializer: %s\n", type_info);
+            ast_print_ast_node(node->data.initiailizer.type, initial + 1, "type: ");
             break;
         }
 

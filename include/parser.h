@@ -125,7 +125,6 @@ typedef struct ast_binary_t {
 typedef struct ast_member_access_t {
     ast_node_t* lhs;
 
-    bool is_initializer;
     token_t identifier;
     ast_node_t* referencing_declaration;
 } ast_member_access_t;
@@ -139,6 +138,12 @@ typedef struct ast_declaration_t {
     
     ast_node_t* initial_value_expression;
 } ast_declaration_t;
+
+typedef struct ast_type_initializer_t ast_type_initializer_t;
+struct ast_type_initializer_t {
+    ast_node_t *type;
+    ast_node_t **arguments;
+};
 
 struct ast_node_t {
     ast_node_type_t node_type;
@@ -190,6 +195,9 @@ struct ast_node_t {
 
         // member access, entity
         ast_member_access_t dot;
+
+        // type initializer
+        ast_type_initializer_t initiailizer;
     } data;
 };
 

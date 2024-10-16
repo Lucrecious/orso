@@ -987,21 +987,21 @@ void orso_resolve_expression(
         }
 
         case ORSO_AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER: {
-            orso_resolve_expression(analyzer, ast, state, expression->data.expression);
+            orso_resolve_expression(analyzer, ast, state, expression->data.initiailizer.type);
 
-            if (expression->data.expression->value_type_narrowed != &OrsoTypeType) {
-                error_range(analyzer, expression->data.expression->start, expression->data.expression->end, "Expression must be a type");
+            if (expression->data.initiailizer.type->value_type_narrowed != &OrsoTypeType) {
+                error_range(analyzer, expression->data.initiailizer.type->start, expression->data.initiailizer.type->end, "Expression must be a type");
                 INVALIDATE(expression);
                 break;
             }
 
             if (expression->data.expression->value_index < 0) {
-                error_range(analyzer, expression->data.expression->start, expression->data.expression->end, "type must be a constant");
+                error_range(analyzer, expression->data.initiailizer.type->start, expression->data.initiailizer.type->end, "type must be a constant");
                 INVALIDATE(expression);
                 break;
             }
 
-            slot_t slot = ast->folded_constants[expression->data.expression->value_index];
+            slot_t slot = ast->folded_constants[expression->data.initiailizer.type->value_index];
             type_t *type = (type_t*)slot.as.p;
             expression->value_type = type;
             expression->value_type_narrowed = type;
