@@ -39,10 +39,12 @@ arguments                -> argument (`,` argument)*
 argument                 -> (IDENTIFIER `:`)? expression
 
 primary                  -> `true` | `false` | `null` | IDENTIFIER | INTEGER | DECIMAL
-                          | STRING | SYMBOL | `(` expression `)` | function_definition | function_type | struct_definition
+                          | STRING | SYMBOL | `(` expression `)` | function_definition | function_type | struct_definition 
+                          | type_init
 function_definition      -> `(` parameters? `)` `->` logic_or block
 function_type            -> `(` (logic_or (`,` logic_or)*)? `)` `->` logic_or
 struct_definition        -> `struct` `{` entity_declaration* `}`
+type_init                ->  logic_or`{` `}`
 */
 
 static int ptr_hash(void* ptr) {
@@ -69,7 +71,7 @@ typedef struct Parser {
 
 typedef enum {
     PREC_NONE,
-    PREC_BLOCK,       // {}, branch expressions (if/unless/while/until else) // TODO: use CALL precedence. Find a way to not parse until an assignment for entity declaration types
+    PREC_BLOCK,       // {}, branch expressions (if/unless/while/until else)
     PREC_ASSIGNMENT,  // =
     PREC_OR,          // or
     PREC_AND,         // and
@@ -186,6 +188,7 @@ ast_node_t* orso_ast_node_new(ast_t* ast, ast_node_type_t node_type, bool is_in_
         case ORSO_AST_NODE_TYPE_EXPRESSION_PRINT_EXPR:
         case ORSO_AST_NODE_TYPE_STATEMENT_RETURN:
         case ORSO_AST_NODE_TYPE_EXPRESSION_STATEMENT:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER:
         case ORSO_AST_NODE_TYPE_EXPRESSION_GROUPING: {
             node->data.expression = NULL;
             break;
@@ -210,6 +213,7 @@ ast_node_t* orso_ast_node_new(ast_t* ast, ast_node_type_t node_type, bool is_in_
         
         case ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY:
         case ORSO_AST_NODE_TYPE_EXPRESSION_DOT: {
+            node->data.dot.is_initializer = false;
             node->data.dot.lhs = NULL;
             node->data.dot.referencing_declaration = NULL;
             node->data.dot.identifier = (token_t){ .length = 0, .line = -1, .start = NULL, .type = TOKEN_IDENTIFIER };
@@ -456,12 +460,6 @@ static ast_node_t* convert_call_expression(ast_node_t* left_operand, ast_node_t*
 }
 
 static ast_node_t* convert_function_definition(Parser* parser, ast_node_t* left_operand, ast_node_t* function_definition) {
-    if (left_operand->node_type != ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE) {
-        error_at(parser, &left_operand->start, "Expect a function signature.");
-        left_operand->node_type = ORSO_AST_NODE_TYPE_UNDEFINED;
-        return left_operand;
-    }
-
     for (i32 i = 0; i < sb_count(left_operand->data.function.parameter_nodes); i++) {
         ast_node_t* parameter = left_operand->data.function.parameter_nodes[i];
         if (parameter->node_type != ORSO_AST_NODE_TYPE_DECLARATION) {
@@ -649,7 +647,16 @@ static void parse_function_signature(Parser* parser, ast_node_t* function_defini
     function_definition->data.function.return_type_expression = expression(parser, true);
 }
 
-static ast_node_t* grouping_or_function_signature(Parser* parser, bool is_in_type_context) {
+static ast_node_t* function_definition(Parser* parser, bool is_in_type_context) {
+    ast_node_t* function_definition_expression = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION, is_in_type_context, parser->previous);
+    function_definition_expression->data.function.compilable = true;
+    function_definition_expression->data.function.block = block(parser, is_in_type_context);
+    function_definition_expression->end = parser->previous;
+
+    return function_definition_expression;
+}
+
+static ast_node_t* grouping_or_function_signature_or_definition(Parser* parser, bool is_in_type_context) {
     ast_node_type_t node_type;
     if (is_incoming_function_signature(parser)) {
         node_type = ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE;
@@ -664,6 +671,12 @@ static ast_node_t* grouping_or_function_signature(Parser* parser, bool is_in_typ
 
         expression_node->value_type = &OrsoTypeUnresolved;
         expression_node->value_type_narrowed = &OrsoTypeUnresolved;
+        expression_node->end = parser->previous;
+
+        if (match(parser, TOKEN_BRACE_OPEN)) {
+            ast_node_t *definition = function_definition(parser, is_in_type_context);
+            expression_node = convert_function_definition(parser, expression_node, definition);
+        }
     } else {
         expression_node->data.expression = expression(parser, is_in_type_context);
 
@@ -734,15 +747,6 @@ static ast_node_t* binary(Parser* parser, bool is_in_type_context) {
     return expression_node;
 }
 
-static ast_node_t* function_definition(Parser* parser, bool is_in_type_context) {
-    ast_node_t* function_definition_expression = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION, is_in_type_context, parser->previous);
-    function_definition_expression->data.function.compilable = true;
-    function_definition_expression->data.function.block = block(parser, is_in_type_context);
-    function_definition_expression->end = parser->previous;
-
-    return function_definition_expression;
-}
-
 static ast_node_t* struct_(Parser* parser, bool is_in_type_context) {
     (void)is_in_type_context;
 
@@ -776,19 +780,27 @@ static ast_node_t* print_(Parser* parser, bool is_in_type_context) {
 static ast_node_t* dot(Parser* parser, bool is_in_type_context) {
     ast_node_t* dot_expression = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_EXPRESSION_DOT, is_in_type_context, parser->previous);
 
-    // TODO: Later, this will check if the next token is an identifier, curly or square brakets 
-    consume(parser, TOKEN_IDENTIFIER, "dot can only have identifiers on the right for now.");
 
-    dot_expression->data.dot.identifier = parser->previous;
-    dot_expression->end = parser->previous;
+    if (match(parser, TOKEN_BRACE_OPEN)) {
+        dot_expression->data.dot.identifier = parser->previous;
+
+        consume(parser, TOKEN_BRACE_CLOSE, "Expect brace close after brace open for initializer right now.");
+        dot_expression->end = parser->previous;
+        dot_expression->data.dot.is_initializer = true;
+
+    } else {
+        consume(parser, TOKEN_IDENTIFIER, "dot can only have identifiers on the right for now.");
+        dot_expression->data.dot.identifier = parser->previous;
+        dot_expression->end = parser->previous;
+    }
 
     return dot_expression;
 }
 
 ParseRule rules[] = {
-    [TOKEN_PARENTHESIS_OPEN]        = { grouping_or_function_signature,   call,       PREC_CALL },
+    [TOKEN_PARENTHESIS_OPEN]        = { grouping_or_function_signature_or_definition,   call,       PREC_CALL },
     [TOKEN_PARENTHESIS_CLOSE]       = { NULL,       NULL,       PREC_NONE },
-    [TOKEN_BRACE_OPEN]              = { block,      function_definition,     PREC_BLOCK },
+    [TOKEN_BRACE_OPEN]              = { block,      NULL,       PREC_BLOCK },
     [TOKEN_BRACE_CLOSE]             = { NULL,       NULL,       PREC_NONE },
     [TOKEN_BRACKET_OPEN]            = { NULL,       NULL,       PREC_NONE },
     [TOKEN_BRACKET_CLOSE]           = { NULL,       NULL,       PREC_NONE },
@@ -860,11 +872,7 @@ static ast_node_t* parse_precedence(Parser* parser, bool is_in_type_context, Pre
         left_operand->is_in_type_context = is_in_type_context;
     }
 
-    // we make an exception here for open brace after a function signature. 
-    // TODO: Look at the note at the precedence enum, this if statement could possibly be removed
-    // bool is_function_definition_exception = left_operand->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE && parser->current.type == TOKEN_BRACE_OPEN;
-
-    while (precedence <= get_rule(parser->current.type)->precedence || (left_operand->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE && parser->current.type == TOKEN_BRACE_OPEN)) {
+    while (precedence <= get_rule(parser->current.type)->precedence) {
         advance(parser);
         ParseFn infix_rule = get_rule(parser->previous.type)->infix;
         ast_node_t* right_operand = infix_rule(parser, is_in_type_context);
@@ -877,18 +885,21 @@ static ast_node_t* parse_precedence(Parser* parser, bool is_in_type_context, Pre
                 left_operand = right_operand;
                 break;
             case ORSO_AST_NODE_TYPE_EXPRESSION_DOT:
-                right_operand->data.dot.lhs = left_operand;
-                right_operand->start = left_operand->start;
-                left_operand = right_operand;
+                if (right_operand->data.dot.is_initializer) {
+                    right_operand->node_type = ORSO_AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER;
+                    right_operand->data.expression = left_operand;
+                    left_operand = right_operand;
+                } else {
+                    right_operand->data.dot.lhs = left_operand;
+                    right_operand->start = left_operand->start;
+                    left_operand = right_operand;
+                }
                 break;
             case ORSO_AST_NODE_TYPE_EXPRESSION_CALL:
                 left_operand = convert_call_expression(left_operand, right_operand);
                 break;
             case ORSO_AST_NODE_TYPE_EXPRESSION_ASSIGNMENT:
                 left_operand = convert_assignment_expression(parser, left_operand, right_operand);
-                break;
-            case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION:
-                left_operand = convert_function_definition(parser, left_operand, right_operand);
                 break;
             default: UNREACHABLE();
         }
@@ -1099,6 +1110,12 @@ void ast_print_ast_node(ast_node_t* node, i32 initial, const char* prefix) {
             printf("grouping: %s\n", type_info);
 
             ast_print_ast_node(node->data.expression, initial + 1, "");
+            break;
+        }
+
+        case ORSO_AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER: {
+            printf("type initializer: %s\n", type_info);
+            ast_print_ast_node(node->data.expression, initial + 1, "type: ");
             break;
         }
 

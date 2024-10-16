@@ -61,6 +61,7 @@ typedef enum ast_node_type_t {
     ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION,
     ORSO_AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION,
     ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE,
+    ORSO_AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER,
 
     /*
     * This is a special case expression. It's simply an expression with a statement inside.
@@ -86,6 +87,7 @@ case ORSO_AST_NODE_TYPE_EXPRESSION_UNARY: \
 case ORSO_AST_NODE_TYPE_EXPRESSION_PRINT: \
 case ORSO_AST_NODE_TYPE_EXPRESSION_PRINT_EXPR: \
 case ORSO_AST_NODE_TYPE_EXPRESSION_STATEMENT: \
+case ORSO_AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER: \
 case ORSO_AST_NODE_TYPE_EXPRESSION_DOT
 
 typedef struct ast_function_t {
@@ -123,6 +125,7 @@ typedef struct ast_binary_t {
 typedef struct ast_member_access_t {
     ast_node_t* lhs;
 
+    bool is_initializer;
     token_t identifier;
     ast_node_t* referencing_declaration;
 } ast_member_access_t;

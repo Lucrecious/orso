@@ -14,8 +14,12 @@ main :: () -> i32 {
     print_expr v.x;
     print_expr v.y;
 
-    v1 := vector2{};
+    v1 := vector2.{};
     print_expr v1.x;
+    print_expr v1.y;
+
+    v2 := vector2.{10, 10.0};
+    print_expr v2.x;
     print_expr v2.y;
     return 0;
 };

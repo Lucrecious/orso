@@ -758,6 +758,7 @@ static void expression_lvalue(vm_t* vm, Compiler* compiler, ast_t* ast, ast_node
         case ORSO_AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION:
         case ORSO_AST_NODE_TYPE_EXPRESSION_STATEMENT:
         case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER:
             UNREACHABLE();
             break;
     }
@@ -1243,6 +1244,10 @@ static void expression(vm_t* vm, Compiler* compiler, ast_t* ast, ast_node_t* exp
             ASSERT(false, "not implemented");
             break;
         }
+
+
+        // for now these are solved at compile time as well
+        case ORSO_AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER:
 
         // function signatures MUST be resolved at compile time ALWAYS
         case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE: UNREACHABLE();

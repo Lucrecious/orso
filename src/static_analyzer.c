@@ -436,6 +436,15 @@ static void resolve_foldable(
             break;
         }
 
+        case ORSO_AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER: {
+            foldable = true;
+            slot_t slot = ast->folded_constants[expression->data.expression->value_index];
+            type_t *type = (type_t*)slot.as.p;
+            i32 value_index = orso_zero_value(ast, type, ast->symbols);
+            folded_index = value_index;
+            break;
+        }
+
         case ORSO_AST_NODE_TYPE_EXPRESSION_BINARY: {
             ast_node_t* left = expression->data.binary.lhs;
             ast_node_t* right = expression->data.binary.rhs;
@@ -974,6 +983,28 @@ void orso_resolve_expression(
 
             expression->value_type = expression->data.expression->value_type_narrowed;
             expression->value_type_narrowed = expression->data.expression->value_type_narrowed;
+            break;
+        }
+
+        case ORSO_AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER: {
+            orso_resolve_expression(analyzer, ast, state, expression->data.expression);
+
+            if (expression->data.expression->value_type_narrowed != &OrsoTypeType) {
+                error_range(analyzer, expression->data.expression->start, expression->data.expression->end, "Expression must be a type");
+                INVALIDATE(expression);
+                break;
+            }
+
+            if (expression->data.expression->value_index < 0) {
+                error_range(analyzer, expression->data.expression->start, expression->data.expression->end, "type must be a constant");
+                INVALIDATE(expression);
+                break;
+            }
+
+            slot_t slot = ast->folded_constants[expression->data.expression->value_index];
+            type_t *type = (type_t*)slot.as.p;
+            expression->value_type = type;
+            expression->value_type_narrowed = type;
             break;
         }
 
@@ -1744,7 +1775,7 @@ static void resolve_entity_declaration(analyzer_t* analyzer, ast_t* ast, Analysi
 
             ast_node_and_scope_t node_and_scope;
             bool found = table_get(type2ns, ast->type_to_creation_node, initial_expression_type, &node_and_scope);
-            ASSERT(!found, "this shoudl always find something");
+            ASSERT(found, "this shoudl always find something");
 
             INITIAL_EXPRESSION = to_struct_type;
 
