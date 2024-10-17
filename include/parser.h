@@ -134,9 +134,9 @@ typedef struct ast_declaration_t {
     i32 fold_level_resolved_at;
 
     token_t identifier;
-    ast_node_t* type_expression;
+    ast_node_t *type_expression;
     
-    ast_node_t* initial_value_expression;
+    ast_node_t *initial_value_expression;
 } ast_declaration_t;
 
 typedef struct ast_type_initializer_t ast_type_initializer_t;
@@ -167,14 +167,14 @@ struct ast_node_t {
     // primary, folding value, declaration default value
     i32 value_index;
 
-    ast_node_t* lvalue_node;
+    ast_node_t *lvalue_node;
 
     union {
         ast_declaration_t declaration;
 
         // statement, print, print_expr, cast, grouping
-        ast_node_t* expression;
-        ast_node_t* statement; // for readability
+        ast_node_t *expression;
+        ast_node_t *statement; // for readability
 
         ast_call_t call;
 
@@ -182,7 +182,7 @@ struct ast_node_t {
         ast_binary_t binary;
 
         // block (declarations or statements)
-        ast_node_t** block;
+        ast_node_t **block;
 
         // branching (if, unless, while, until)
         ast_branch_t branch;
@@ -204,8 +204,8 @@ struct ast_node_t {
 declare_table(ptr2i32, void*, i32)
 
 typedef struct ast_node_and_scope_t {
-    ast_node_t* node;
-    scope_t* scope;
+    ast_node_t *node;
+    scope_t *scope;
 } ast_node_and_scope_t;
 
 declare_table(type2ns, type_t*, ast_node_and_scope_t)
@@ -223,28 +223,32 @@ typedef struct ast_t {
 
     function_definition_pair_t* function_definition_pairs;
 
-    ast_node_t** nodes;
+    ast_node_t **nodes;
 
-    ast_node_t* root;
-    type_t** folded_constant_types;
-    slot_t* folded_constants;
+    ast_node_t *root;
+    type_t **folded_constant_types;
+    slot_t *folded_constants;
 
-    table_t(ptr2i32)* type_to_zero_index;
-    table_t(type2ns)* type_to_creation_node;
+    table_t(ptr2i32) *type_to_zero_index;
+    table_t(type2ns) *type_to_creation_node;
 
-    symbol_table_t* symbols;
+    symbol_table_t *symbols;
 } ast_t;
 
-void orso_ast_print(ast_t* ast, const char* name);
+void orso_ast_print(ast_t *ast, const char *name);
 
-bool orso_parse(ast_t* ast, const char* source, error_function_t error_fn);
+i32 add_value_to_ast_constant_stack(ast_t *ast, slot_t *value, type_t *type);
+bool orso_parse(ast_t *ast, const char *source, error_function_t error_fn);
+type_t *get_folded_type(ast_t *ast, i32 index);
 
-void orso_ast_init(ast_t* ast, symbol_table_t* symbols);
-void orso_ast_free(ast_t* ast);
+void orso_ast_init(ast_t *ast, symbol_table_t* symbols);
+void orso_ast_free(ast_t *ast);
 
-ast_node_t* orso_ast_node_new(ast_t* ast, ast_node_type_t node_type, bool is_in_type_context, token_t start);
+ast_node_t* orso_ast_node_new(ast_t *ast, ast_node_type_t node_type, bool is_in_type_context, token_t start);
 
 bool orso_ast_node_type_is_decl_or_stmt(ast_node_type_t node_type);
 bool orso_ast_node_type_is_expression(ast_node_type_t node_type);
+
+i32 orso_zero_value(ast_t *ast, type_t *type, symbol_table_t *symbol_table);
 
 #endif

@@ -30,11 +30,9 @@ typedef struct analyzer_t {
     arena_t allocator;
 } analyzer_t;
 
-void analyzer_init(analyzer_t* analyzer, write_function_t write_fn, error_function_t error_fn);
-void analyzer_free(analyzer_t* analyzer);
+void analyzer_init(analyzer_t *analyzer, write_function_t write_fn, error_function_t error_fn);
+void analyzer_free(analyzer_t *analyzer);
 
-bool resolve_ast(analyzer_t* analyzer, ast_t* ast);
-
-i32 orso_zero_value(ast_t* ast, type_t* type, symbol_table_t* symbol_table);
+bool resolve_ast(analyzer_t *analyzer, ast_t *ast);
 
 #endif

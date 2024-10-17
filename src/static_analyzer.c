@@ -247,7 +247,7 @@ static type_t* resolve_unary_type(ast_t* ast, token_type_t operator, type_t* ope
     }
 }
 
-static ast_node_t* implicit_cast(ast_t* ast, ast_node_t* operand, type_t* value_type) {
+static ast_node_t *implicit_cast(ast_t *ast, ast_node_t *operand, type_t *value_type) {
     ast_node_t* implicit_cast = orso_ast_node_new(ast, ORSO_AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT, operand->is_in_type_context, operand->start);
     implicit_cast->end = operand->end;
 
@@ -262,16 +262,6 @@ static ast_node_t* implicit_cast(ast_t* ast, ast_node_t* operand, type_t* value_
 }
 
 #define IS_FOLDED(EXPRESSION_PTR) (EXPRESSION_PTR->value_index >= 0)
-
-static type_t* get_folded_type(ast_t* ast, i32 index) {
-    if (index < 0) {
-        return &OrsoTypeInvalid;
-    }
-
-    slot_t* type_slot = &ast->folded_constants[index];
-    type_t* type = (type_t*)type_slot->as.p;
-    return type;
-}
 
 typedef enum {
     QUERY_FLAG_MATCH_ANY = 0x1,
@@ -316,15 +306,6 @@ if (strlen(SYMBOL->text) == (sizeof(#TYPE_STRING) - 1) && \
     return false;
 
 #undef RETURN_IF_TYPE
-}
-
-static i32 add_value_to_ast_constant_stack(ast_t* ast, slot_t* value, type_t* type) {
-    i32 slot_count = orso_type_slot_count(type);
-    for (i32 i = 0; i < slot_count; i ++) {
-        sb_push(ast->folded_constants, value[i]);
-    }
-    
-    return sb_count(ast->folded_constants) - slot_count;
 }
 
 static bool is_builtin_function(ast_t* ast, symbol_t* identifier, OrsoNativeFunction** function) {
@@ -437,25 +418,32 @@ static void resolve_foldable(
         }
 
         case ORSO_AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER: {
-            foldable = true;
-            slot_t slot = ast->folded_constants[expression->data.expression->value_index];
-            type_t *type = (type_t*)slot.as.p;
-            i32 value_index = orso_zero_value(ast, type, ast->symbols);
-            folded_index = value_index;
+            if (sb_count(expression->data.initiailizer.arguments) == 0) {
+                foldable = true;
+                type_t *type = get_folded_type(ast, expression->data.initiailizer.type->value_index);
+                i32 value_index = orso_zero_value(ast, type, ast->symbols);
+                folded_index = value_index;
+            } else {
+                foldable = true;
+                for (int i = 0; i < sb_count(expression->data.initiailizer.arguments); ++i) {
+                    ast_node_t *arg = expression->data.initiailizer.arguments[i];
+                    foldable &= arg->foldable;
+                }
+            }
             break;
         }
 
         case ORSO_AST_NODE_TYPE_EXPRESSION_BINARY: {
-            ast_node_t* left = expression->data.binary.lhs;
-            ast_node_t* right = expression->data.binary.rhs;
+            ast_node_t *left = expression->data.binary.lhs;
+            ast_node_t *right = expression->data.binary.rhs;
             foldable = left->foldable && right->foldable;
 
             if (expression->operator.type == TOKEN_BAR) {
                 ASSERT(left->value_type_narrowed == &OrsoTypeType && right->value_type_narrowed == &OrsoTypeType, "both left and right must be types");
-                type_t* lhs_folded_type = get_folded_type(ast, left->value_index);
-                type_t* rhs_folded_type = get_folded_type(ast, right->value_index);
+                type_t *lhs_folded_type = get_folded_type(ast, left->value_index);
+                type_t *rhs_folded_type = get_folded_type(ast, right->value_index);
 
-                type_t* merged_type = orso_type_merge(&ast->type_set, lhs_folded_type, rhs_folded_type);
+                type_t *merged_type = orso_type_merge(&ast->type_set, lhs_folded_type, rhs_folded_type);
                 slot_t merged_type_slot = ORSO_SLOT_P(merged_type);
 
                 folded_index = add_value_to_ast_constant_stack(ast, &merged_type_slot, &OrsoTypeType);
@@ -995,17 +983,62 @@ void orso_resolve_expression(
                 break;
             }
 
-            if (expression->data.expression->value_index < 0) {
+            if (expression->data.initiailizer.type->value_index < 0) {
                 error_range(analyzer, expression->data.initiailizer.type->start, expression->data.initiailizer.type->end, "type must be a constant");
                 INVALIDATE(expression);
                 break;
             }
 
-            slot_t slot = ast->folded_constants[expression->data.initiailizer.type->value_index];
-            type_t *type = (type_t*)slot.as.p;
-            expression->value_type = type;
-            expression->value_type_narrowed = type;
-            break;
+            type_t *type = get_folded_type(ast, expression->data.initiailizer.type->value_index);
+
+            if (ORSO_TYPE_IS_STRUCT(type)) {
+                int arg_count = sb_count(expression->data.initiailizer.arguments);
+                if (type->data.struct_.field_count < arg_count) {
+                    error_range(analyzer, expression->data.initiailizer.arguments[0]->start, expression->data.initiailizer.arguments[arg_count-1]->end, "Too many arguments for struct");
+                    INVALIDATE(expression);
+                    break;
+                }
+
+                bool is_invalidated = false;
+                for (int i = 0; i < arg_count; ++i) {
+                    ast_node_t *arg = expression->data.initiailizer.arguments[i];
+                    orso_resolve_expression(analyzer, ast, state, arg);
+                    if (ORSO_TYPE_IS_INVALID(arg->value_type)) {
+                        is_invalidated = true;
+                        continue;
+                    }
+
+                    if (i < type->data.struct_.field_count) {
+                        type_t *field_type = type->data.struct_.fields[i].type;
+                        type_t *arg_type = arg->value_type_narrowed;
+                        unless (field_type == arg_type) {
+                            if (can_cast_implicit(arg_type, field_type)) {
+                                ast_node_t *casted = implicit_cast(ast, arg, field_type);
+                                fold_constants_via_runtime(analyzer, ast, state, casted);
+                                expression->data.initiailizer.arguments[i] = casted;
+                            } else {
+                                error_range(analyzer, arg->start, arg->end, "This argument is the wrong type");
+                                is_invalidated = true;
+                                continue;
+                            }
+                        }
+                    }
+                }
+
+                if (is_invalidated) {
+                    INVALIDATE(expression);
+                    break;
+                }
+
+                type_t *type = get_folded_type(ast, expression->data.initiailizer.type->value_index);
+                expression->value_type = type;
+                expression->value_type_narrowed = type;
+                break;
+            } else {
+                error_range(analyzer, expression->start, expression->end, "initializer list is only for structs at the moment");
+                INVALIDATE(expression);
+                break;
+            }
         }
 
         case ORSO_AST_NODE_TYPE_EXPRESSION_PRIMARY: {
@@ -1014,10 +1047,10 @@ void orso_resolve_expression(
         }
 
         case ORSO_AST_NODE_TYPE_EXPRESSION_BINARY: {
-            ast_node_t* left = expression->data.binary.lhs;
+            ast_node_t *left = expression->data.binary.lhs;
             orso_resolve_expression(analyzer, ast, state, left);
 
-            ast_node_t* right = expression->data.binary.rhs;
+            ast_node_t *right = expression->data.binary.rhs;
             orso_resolve_expression(analyzer, ast, state, right);
 
             if (ORSO_TYPE_IS_INVALID(left->value_type) || ORSO_TYPE_IS_INVALID(right->value_type)) {
@@ -1029,8 +1062,8 @@ void orso_resolve_expression(
             //   if it's arthimetic, or comparisons, then let them merge at the end
             //   if it's logical, then you need to do special things
 
-            type_t* cast_left = &OrsoTypeInvalid;
-            type_t* cast_right = &OrsoTypeInvalid;
+            type_t *cast_left = &OrsoTypeInvalid;
+            type_t *cast_right = &OrsoTypeInvalid;
 
             expression->value_type_narrowed = &OrsoTypeUnresolved;
 
@@ -1041,7 +1074,7 @@ void orso_resolve_expression(
                 case TOKEN_MINUS:
                 case TOKEN_STAR:
                 case TOKEN_SLASH: {
-                    type_t* combined_type = orso_binary_arithmetic_cast(left->value_type_narrowed, right->value_type_narrowed, expression->operator.type);
+                    type_t *combined_type = orso_binary_arithmetic_cast(left->value_type_narrowed, right->value_type_narrowed, expression->operator.type);
                     expression->value_type = combined_type;
 
                     ASSERT(!ORSO_TYPE_IS_UNION(expression->value_type), "arthimetic must narrow down to a single type");
@@ -1087,7 +1120,7 @@ void orso_resolve_expression(
                     cast_left = left->value_type;
                     cast_right = right->value_type;
 
-                    type_t* merged_type = orso_type_merge(&ast->type_set, left->value_type, right->value_type);
+                    type_t *merged_type = orso_type_merge(&ast->type_set, left->value_type, right->value_type);
 
                     expression->value_type_narrowed = orso_type_merge(&ast->type_set, left->value_type_narrowed, right->value_type_narrowed);
                     expression->value_type = merged_type;
@@ -2680,69 +2713,4 @@ void analyzer_free(analyzer_t* analyzer) {
 
     analyzer->error_fn = NULL;
     analyzer->had_error = false;
-}
-
-i32 orso_zero_value(ast_t* ast, type_t* type, symbol_table_t* symbol_table) {
-    i32 result = -1;
-    if (table_get(ptr2i32, ast->type_to_zero_index, type, &result)) {
-        return result;
-    }
-
-    slot_t value[orso_bytes_to_slots(orso_type_size_bytes(type))];
-
-    switch (type->kind) {
-        case ORSO_TYPE_POINTER:
-        case ORSO_TYPE_VOID:
-        case ORSO_TYPE_BOOL:
-        case ORSO_TYPE_INT32:
-        case ORSO_TYPE_INT64:
-            value[0] = ORSO_SLOT_I(0);
-            break;
-
-        case ORSO_TYPE_FLOAT32:
-        case ORSO_TYPE_FLOAT64:
-            value[0] = ORSO_SLOT_F(0.0);
-            break;
-
-        case ORSO_TYPE_STRING:
-            value[0] = ORSO_SLOT_P(orso_new_string_from_cstrn("", 0));
-            break;
-
-        case ORSO_TYPE_SYMBOL:
-            value[0] = ORSO_SLOT_P(orso_new_symbol_from_cstrn("", 0, symbol_table));
-            break;
-        
-        case ORSO_TYPE_UNION: {
-            ASSERT(orso_union_type_has_type(type, &OrsoTypeVoid), "must include void type if looking for zero value");
-            
-            u32 size_slots = orso_type_slot_count(type);
-            for (u32 i = 0; i < size_slots; i++) {
-                value[i] = ORSO_SLOT_I(0);
-            }
-            value[0] = ORSO_SLOT_P(&OrsoTypeVoid);
-            break;
-        }
-
-        case ORSO_TYPE_STRUCT: {
-            for (i32 i = 0; i < orso_bytes_to_slots(type->data.struct_.total_bytes); i++) {
-                value[i] = ORSO_SLOT_I(0);
-            }
-            break;
-        }
-
-        case ORSO_TYPE_FUNCTION:
-        case ORSO_TYPE_NATIVE_FUNCTION:
-        case ORSO_TYPE_TYPE:
-        case ORSO_TYPE_INVALID:
-        case ORSO_TYPE_UNDEFINED:
-        case ORSO_TYPE_UNRESOLVED:
-            UNREACHABLE();
-            value[0] = ORSO_SLOT_I(0);
-            break;
-    }
-
-    i32 zero_index = add_value_to_ast_constant_stack(ast, value, type);
-
-    table_put(ptr2i32, ast->type_to_zero_index, type, zero_index);
-    return zero_index;
 }

@@ -1092,6 +1092,90 @@ bool orso_parse(ast_t* ast, const char* source, error_function_t error_fn) {
     return !parser.had_error;
 }
 
+i32 add_value_to_ast_constant_stack(ast_t *ast, slot_t *value, type_t *type) {
+    i32 slot_count = orso_type_slot_count(type);
+    for (i32 i = 0; i < slot_count; i ++) {
+        sb_push(ast->folded_constants, value[i]);
+    }
+    
+    return sb_count(ast->folded_constants) - slot_count;
+}
+
+i32 orso_zero_value(ast_t *ast, type_t *type, symbol_table_t *symbol_table) {
+    i32 result = -1;
+    if (table_get(ptr2i32, ast->type_to_zero_index, type, &result)) {
+        return result;
+    }
+
+    slot_t value[orso_bytes_to_slots(orso_type_size_bytes(type))];
+
+    switch (type->kind) {
+        case ORSO_TYPE_POINTER:
+        case ORSO_TYPE_VOID:
+        case ORSO_TYPE_BOOL:
+        case ORSO_TYPE_INT32:
+        case ORSO_TYPE_INT64:
+            value[0] = ORSO_SLOT_I(0);
+            break;
+
+        case ORSO_TYPE_FLOAT32:
+        case ORSO_TYPE_FLOAT64:
+            value[0] = ORSO_SLOT_F(0.0);
+            break;
+
+        case ORSO_TYPE_STRING:
+            value[0] = ORSO_SLOT_P(orso_new_string_from_cstrn("", 0));
+            break;
+
+        case ORSO_TYPE_SYMBOL:
+            value[0] = ORSO_SLOT_P(orso_new_symbol_from_cstrn("", 0, symbol_table));
+            break;
+        
+        case ORSO_TYPE_UNION: {
+            ASSERT(orso_union_type_has_type(type, &OrsoTypeVoid), "must include void type if looking for zero value");
+            
+            u32 size_slots = orso_type_slot_count(type);
+            for (u32 i = 0; i < size_slots; i++) {
+                value[i] = ORSO_SLOT_I(0);
+            }
+            value[0] = ORSO_SLOT_P(&OrsoTypeVoid);
+            break;
+        }
+
+        case ORSO_TYPE_STRUCT: {
+            for (i32 i = 0; i < orso_bytes_to_slots(type->data.struct_.total_bytes); i++) {
+                value[i] = ORSO_SLOT_I(0);
+            }
+            break;
+        }
+
+        case ORSO_TYPE_FUNCTION:
+        case ORSO_TYPE_NATIVE_FUNCTION:
+        case ORSO_TYPE_TYPE:
+        case ORSO_TYPE_INVALID:
+        case ORSO_TYPE_UNDEFINED:
+        case ORSO_TYPE_UNRESOLVED:
+            UNREACHABLE();
+            value[0] = ORSO_SLOT_I(0);
+            break;
+    }
+
+    i32 zero_index = add_value_to_ast_constant_stack(ast, value, type);
+
+    table_put(ptr2i32, ast->type_to_zero_index, type, zero_index);
+    return zero_index;
+}
+
+type_t *get_folded_type(ast_t *ast, i32 index) {
+    if (index < 0) {
+        return &OrsoTypeInvalid;
+    }
+
+    slot_t* type_slot = &ast->folded_constants[index];
+    type_t* type = (type_t*)type_slot->as.p;
+    return type;
+}
+
 void ast_print_ast_node(ast_node_t* node, i32 initial, const char* prefix) {
     printf("%*s%s", initial, "", prefix);
 

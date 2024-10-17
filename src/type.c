@@ -329,7 +329,7 @@ u32 orso_type_size_bytes(type_t* type) {
     return 0;
 }
 
-bool orso_integer_fit(type_t* storage_type, type_t* value_type, bool include_bool) {
+bool orso_integer_fit(type_t *storage_type, type_t *value_type, bool include_bool) {
     if (ORSO_TYPE_IS_UNION(storage_type)) {
         return false;
     }
@@ -578,7 +578,30 @@ bool orso_is_gc_type(type_t* type) {
     return false;
 }
 
-type_t* orso_binary_arithmetic_cast(type_t* a, type_t* b, token_type_t operation) {
+bool can_cast_implicit(type_t *type_to_cast, type_t *type) {
+    if (ORSO_TYPE_IS_INVALID(type_to_cast)) return false;
+    if (ORSO_TYPE_IS_INVALID(type)) return false;
+
+    if (type_to_cast == type) return true;
+
+    if (ORSO_TYPE_IS_UNION(type)) {
+        return orso_union_type_contains_type(type, type_to_cast);
+    }
+
+    if (ORSO_TYPE_IS_UNION(type_to_cast)) return false;
+
+    u32 type_to_cast_size = orso_type_size_bytes(type_to_cast);
+    u32 type_size = orso_type_size_bytes(type);
+    if (orso_type_is_number(type_to_cast, true) && orso_type_is_number(type, true) && type_to_cast_size <= type_size) {
+        if (orso_type_is_integer(type_to_cast, true) || (orso_type_is_float(type_to_cast) && orso_type_is_float(type))) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+type_t *orso_binary_arithmetic_cast(type_t *a, type_t *b, token_type_t operation) {
     if (ORSO_TYPE_IS_UNION(a) || ORSO_TYPE_IS_UNION(b)) {
         return &OrsoTypeInvalid;
     }
@@ -621,7 +644,7 @@ type_t* orso_binary_arithmetic_cast(type_t* a, type_t* b, token_type_t operation
     return a_count > 4 || b_count > 4 ? &OrsoTypeFloat64 : &OrsoTypeFloat32;
 }
 
-void orso_binary_comparison_casts(type_t* a, type_t* b, type_t** a_cast, type_t** b_cast) {
+void orso_binary_comparison_casts(type_t *a, type_t *b, type_t **a_cast, type_t **b_cast) {
     if (ORSO_TYPE_IS_UNION(a) || ORSO_TYPE_IS_UNION(b)) {
         *a_cast = &OrsoTypeInvalid;
         *b_cast = &OrsoTypeInvalid;
@@ -660,7 +683,7 @@ void orso_binary_comparison_casts(type_t* a, type_t* b, type_t** a_cast, type_t*
     *b_cast = &OrsoTypeInvalid;
 }
 
-void orso_binary_equality_casts(type_t* a, type_t* b, type_t** a_cast, type_t** b_cast) {
+void orso_binary_equality_casts(type_t *a, type_t *b, type_t **a_cast, type_t **b_cast) {
     if (ORSO_TYPE_IS_UNION(a) || ORSO_TYPE_IS_UNION(b)) {
         *a_cast = &OrsoTypeInvalid;
         *b_cast = &OrsoTypeInvalid;

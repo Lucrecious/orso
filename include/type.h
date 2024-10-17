@@ -89,58 +89,60 @@ struct type_t {
 
 struct type_set_t;
 
-bool orso_union_type_has_type(type_t* type, type_t* subtype);
+bool orso_union_type_has_type(type_t *type, type_t *subtype);
 
-bool orso_struct_type_is_incomplete(type_t* type);
+bool orso_struct_type_is_incomplete(type_t *type);
 
-bool orso_type_equal(type_t* a, type_t* b);
+bool orso_type_equal(type_t *a, type_t *b);
 
 // orso_type_has_type_kind
-bool orso_union_type_has_type(type_t* type, type_t* subtype);
-bool orso_union_type_contains_type(type_t* union_, type_t* type);
+bool orso_union_type_has_type(type_t *type, type_t *subtype);
+bool orso_union_type_contains_type(type_t *union_, type_t *type);
 
-type_t* orso_type_merge(struct type_set_t* set, type_t* a, type_t* b);
+type_t* orso_type_merge(struct type_set_t *set, type_t *a, type_t *b);
 
-bool orso_type_is_float(type_t* type);
-bool orso_type_is_integer(type_t* type, bool include_bool);
-bool orso_type_is_number(type_t* type, bool include_bool);
-FORCE_INLINE bool orso_type_is_unsigned_integer_type(type_t* type, bool include_bool){
+bool orso_type_is_float(type_t *type);
+bool orso_type_is_integer(type_t *type, bool include_bool);
+bool orso_type_is_number(type_t *type, bool include_bool);
+FORCE_INLINE bool orso_type_is_unsigned_integer_type(type_t *type, bool include_bool){
     (void)type;
     (void)include_bool;
     return false;
 }
 
 // orso_has_float_type
-bool orso_union_has_float(type_t* type);
+bool orso_union_has_float(type_t *type);
 
-bool orso_type_is_or_has_float(type_t* type);
+bool orso_type_is_or_has_float(type_t *type);
 
 // orso_has_integer_type
-bool orso_union_has_integer(type_t* type, bool include_bool);
+bool orso_union_has_integer(type_t *type, bool include_bool);
 
-bool orso_type_is_or_has_integer(type_t* type, bool include_bool);
+bool orso_type_is_or_has_integer(type_t *type, bool include_bool);
 
 i32 orso_bytes_to_slots(i32 byte_count);
 
-u32 orso_type_size_bytes(type_t* type);
+u32 orso_type_size_bytes(type_t *type);
 
-struct_field_t* orso_type_struct_find_field(type_t* struct_, const char* name, size_t name_length);
+struct_field_t *orso_type_struct_find_field(type_t *struct_, const char *name, size_t name_length);
 
-bool orso_integer_fit(type_t* storage_type, type_t* value_type, bool include_bool);
+bool orso_integer_fit(type_t *storage_type, type_t *value_type, bool include_bool);
 
-i32 orso_type_slot_count(type_t* type);
+i32 orso_type_slot_count(type_t *type);
 
-bool orso_type_fits(type_t* storage_type, type_t* value_type);
+bool orso_type_fits(type_t *storage_type, type_t *value_type);
 
-i32 orso_type_to_cstrn(type_t* type, char* buffer, i32 n);
+i32 orso_type_to_cstrn(type_t *type, char *buffer, i32 n);
 
-bool orso_is_gc_type(type_t* type);
+bool orso_is_gc_type(type_t *type);
 
-type_t* orso_binary_arithmetic_cast(type_t* a, type_t* b, token_type_t operation);
+bool can_cast_implicit(type_t *type_to_cast, type_t *type);
 
-void orso_binary_comparison_casts(type_t* a, type_t* b, type_t** a_cast, type_t** b_cast);
+type_t *orso_binary_arithmetic_cast(type_t *a, type_t *b, token_type_t operation);
 
-void orso_binary_equality_casts(type_t* a, type_t* b, type_t** a_cast, type_t** b_cast);
+void orso_binary_comparison_casts(type_t *a, type_t *b, type_t **a_cast, type_t **b_cast);
+
+void orso_binary_equality_casts(type_t *a, type_t *b, type_t **a_cast, type_t **b_cast);
 
 //void generate_struct_layout()
 
