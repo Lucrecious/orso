@@ -152,7 +152,6 @@ static void call_object(vm_t* vm, OrsoObject* callee, i32 argument_slots) {
 }
 
 void vm_print_stack(vm_t *vm) {
-    (void)vm;
 }
 
 void vm_disassemble_current_instruction(vm_t *vm) {

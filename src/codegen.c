@@ -1252,7 +1252,7 @@ static void expression(vm_t *vm, Compiler *compiler, ast_t *ast, ast_node_t *exp
         }
 
         case ORSO_AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER: {
-            i32 stack_position = compiler->current_stack_size*sizeof(byte);
+            i32 stack_position = compiler->current_stack_size*sizeof(slot_t);
 
             type_t *type = get_folded_type(ast, expression_node->data.initiailizer.type->value_index);
 
@@ -1360,7 +1360,7 @@ static void local_entity_declaration(vm_t* vm, Compiler* compiler, ast_t* ast, a
     declare_local_entity(compiler, &variable_declaration->start, orso_type_slot_count(variable_declaration->value_type));
 }
 
-static void declaration(vm_t* vm, Compiler* compiler, ast_t* ast, ast_node_t* declaration, chunk_t* chunk) {
+static void declaration(vm_t *vm, Compiler *compiler, ast_t *ast, ast_node_t *declaration, chunk_t *chunk) {
     switch (declaration->node_type) {
         case ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION: {
             ast_node_t* expression_ = declaration->data.expression;
@@ -1396,20 +1396,20 @@ static void declaration(vm_t* vm, Compiler* compiler, ast_t* ast, ast_node_t* de
     }
 }
 
-void orso_code_builder_init(code_builder_t* builder, vm_t* vm, ast_t* ast) {
+void orso_code_builder_init(code_builder_t *builder, vm_t *vm, ast_t *ast) {
     builder->vm = vm;
     builder->ast = ast;
 }
 
-void orso_code_builder_free(code_builder_t* builder) { 
+void orso_code_builder_free(code_builder_t *builder) { 
     (void)builder;
 }
 
-function_t* orso_generate_expression_function(code_builder_t* builder, ast_node_t* expression_node, bool is_folding_time) {
+function_t *orso_generate_expression_function(code_builder_t *builder, ast_node_t *expression_node, bool is_folding_time) {
     Compiler compiler;
-    type_t* function_type = orso_type_set_fetch_function(&builder->ast->type_set, expression_node->value_type, NULL, 0);
+    type_t *function_type = orso_type_set_fetch_function(&builder->ast->type_set, expression_node->value_type, NULL, 0);
 
-    function_t* run_function = orso_new_function();
+    function_t *run_function = orso_new_function();
 
     compiler_init(&compiler, builder->vm, run_function, (type_t*)function_type);
     compiler.skip_function_definitions = !is_folding_time;
@@ -1418,7 +1418,7 @@ function_t* orso_generate_expression_function(code_builder_t* builder, ast_node_
     compiler.max_stack_size = compiler.current_stack_size = 1;
     declare_local_function_definition(&compiler, compiler.function);
 
-    chunk_t* top_chunk = &compiler.function->chunk;
+    chunk_t *top_chunk = &compiler.function->chunk;
 
     expression(builder->vm, &compiler, builder->ast, expression_node, top_chunk);
 
@@ -1426,14 +1426,14 @@ function_t* orso_generate_expression_function(code_builder_t* builder, ast_node_
 
     compiler_end(builder->vm, &compiler, builder->ast, top_chunk, expression_node->end.line);
 
-    function_t* function = compiler.function;
+    function_t *function = compiler.function;
 
     compiler_free(&compiler);
 
     return function;
 }
 
-void orso_compile_function(vm_t* vm, ast_t* ast, function_t* function, ast_node_t* function_definition_expression) {
+void orso_compile_function(vm_t *vm, ast_t *ast, function_t *function, ast_node_t *function_definition_expression) {
     Compiler function_compiler;
     compiler_init(&function_compiler, vm, function, function_definition_expression->value_type);
 
@@ -1444,12 +1444,12 @@ void orso_compile_function(vm_t* vm, ast_t* ast, function_t* function, ast_node_
     begin_scope(&function_compiler);
 
     function_compiler.function->signature = function_definition_expression->value_type;
-    chunk_t* function_chunk = &function_compiler.function->chunk;
+    chunk_t *function_chunk = &function_compiler.function->chunk;
 
-    ast_function_t* function_definition = &function_definition_expression->data.function;
+    ast_function_t *function_definition = &function_definition_expression->data.function;
 
     for (i32 i = 0; i < sb_count(function_definition->parameter_nodes); i++) {
-        ast_node_t* parameter = function_definition->parameter_nodes[i];
+        ast_node_t *parameter = function_definition->parameter_nodes[i];
         apply_stack_effects(&function_compiler, orso_type_slot_count(parameter->value_type));
         declare_local_entity(&function_compiler, &parameter->start, orso_type_slot_count(parameter->value_type));
     }
@@ -1461,9 +1461,9 @@ void orso_compile_function(vm_t* vm, ast_t* ast, function_t* function, ast_node_
 
 #define MAIN_IDENTIFIER "main"
 
-function_t* generate_code(vm_t* vm, ast_t* ast) {
-    function_t* main_function = NULL;
-    ast_node_t* main_declaration = NULL;
+function_t *generate_code(vm_t *vm, ast_t *ast) {
+    function_t *main_function = NULL;
+    ast_node_t *main_declaration = NULL;
 
     for (i32 i = 0; i < sb_count(ast->root->data.block); i++) {
         ast_node_t* declaration_ = ast->root->data.block[i];
@@ -1483,7 +1483,7 @@ function_t* generate_code(vm_t* vm, ast_t* ast) {
             return NULL;
         }
 
-        type_t* function_type = declaration_->value_type;
+        type_t *function_type = declaration_->value_type;
         if (function_type->data.function.return_type->kind != ORSO_TYPE_INT32) {
             // TODO: allow code generator to throw error here, main must return i32
             return NULL;
@@ -1509,7 +1509,7 @@ function_t* generate_code(vm_t* vm, ast_t* ast) {
 
     // TODO: Am I somehow missing an opertunity to warn for unused functions by doing this?
     for (i32 i = 0; i < sb_count(ast->function_definition_pairs); i++) {
-        function_t* function = ast->function_definition_pairs[i].function;
+        function_t *function = ast->function_definition_pairs[i].function;
         if (function->chunk.code == NULL) {
             orso_compile_function(vm, ast, function, ast->function_definition_pairs[i].ast_defintion);
         }
