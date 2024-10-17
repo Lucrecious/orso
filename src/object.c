@@ -25,34 +25,7 @@ void* orso_object_reallocate(OrsoObject* pointer, type_t* type, size_t old_size,
     return result;
 }
 
-void orso_object_free(OrsoObject* object) {
-#ifdef DEBUG_GC_PRINT
-    char type_buffer[256];
-    orso_type_to_cstrn(object->type, type_buffer, 256);
-    printf("%p free type %s\n", (void*)object, type_buffer);
-#endif
-    switch (object->type->kind) {
-        case ORSO_TYPE_SYMBOL: {
-            symbol_t* symbol = (symbol_t*)object;
-            orso_object_reallocate((OrsoObject*)symbol, &OrsoTypeSymbol, sizeof(symbol_t) + symbol->length, 0);
-            break;
-        }
-        case ORSO_TYPE_STRING: {
-            OrsoString* string = (OrsoString*)object;
-            orso_object_reallocate((OrsoObject*)string, &OrsoTypeString, sizeof(OrsoString) + string->length, 0);
-            break;
-        }
-        case ORSO_TYPE_FUNCTION: {
-            function_t* function = (function_t*)object;
-            chunk_free(&function->chunk);
-            orso_object_reallocate((OrsoObject*)function, (type_t*)&OrsoTypeEmptyFunction, sizeof(function_t), 0);
-            break;
-        }
-        default: UNREACHABLE();
-    }
-}
-
-OrsoString* orso_new_string_from_cstrn(const char* start, i32 length) {
+OrsoString *orso_new_string_from_cstrn(const char* start, i32 length) {
     OrsoString* string = ORSO_OBJECT_ALLOCATE_FLEX(OrsoString, &OrsoTypeString, length + 1);
     string->length = length;
     memcpy(string->text, start, length);
@@ -69,127 +42,111 @@ char* cstrn_new(const char* start, i32 length) {
     return cstr;
 }
 
-char* orso_slot_to_new_cstrn(slot_t* slot, type_t* type) {
+string_t slot_to_string(slot_t *slot, type_t *type, arena_t *allocator) {
     switch (type->kind) {
         case ORSO_TYPE_BOOL: {
             if (ORSO_SLOT_IS_FALSE((*slot))) {
-                return cstrn_new("false", 5);
+                return str("false");
             } else {
-                return cstrn_new("true", 4);
+                return str("true");
             }
         }
 
         case ORSO_TYPE_INT32:
         case ORSO_TYPE_INT64: {
-            // Max characters for i64 is 19 + sign and \0
-            char buffer[21];
-            i32 length = snprintf(buffer, 21, "%lld", slot->as.i);
-            return cstrn_new(buffer, length);
+            return string_format("%lld", allocator, slot->as.i);
         }
 
         case ORSO_TYPE_FLOAT32:
         case ORSO_TYPE_FLOAT64: {
-            // Using Wren's num to string for this: https://github.com/wren-lang/wren/blob/main/src/vm/wren_value.c#L775
-            char buffer[24];
-            i32 length;
-            if (slot->as.f == (i64)slot->as.f) {
-                length = snprintf(buffer, 24, "%.1f", slot->as.f);
-            } else {
-                length = snprintf(buffer, 24, "%.14g", slot->as.f);
-            }
-            return cstrn_new(buffer, length);
+            return string_format("%.14f", allocator, slot->as.f);
         }
 
-        case ORSO_TYPE_VOID: return cstrn_new("null", 4);
+        case ORSO_TYPE_VOID: return str("null");
 
-        case ORSO_TYPE_STRING: return cstrn_new(((OrsoString*)slot->as.p)->text, ((OrsoString*)slot->as.p)->length);
+        case ORSO_TYPE_STRING: return cstrn2string(((OrsoString*)slot->as.p)->text, ((OrsoString*)slot->as.p)->length, allocator);
 
         case ORSO_TYPE_SYMBOL: {
             symbol_t* symbol = (symbol_t*)slot->as.p;
-            // 2 single quotes
-            // 1 \0
-            char buffer[symbol->length + 3];
-            snprintf(buffer, symbol->length + 3, "'%s'", symbol->text);
-            return cstrn_new(buffer, symbol->length + 3);
+            return string_format("'%s'", allocator, (char*)symbol->text);
         }
 
         case ORSO_TYPE_FUNCTION: {
-            function_t* function = (function_t*)slot->as.p;
-            const i32 BUFFER_SIZE = 500;
-            char buffer[BUFFER_SIZE];
-            i32 n = snprintf(buffer, BUFFER_SIZE, "<%s :: (",
-                    function->binded_name ? function->binded_name->text : "<anonymous>");
+            string_t string;
 
-            char tmp_buffer[128];
-            for (i32 i = 0; i < function->signature->data.function.argument_count; i++) {
-                orso_type_to_cstrn(function->signature->data.function.argument_types[i], tmp_buffer, 128);
+            arena_t tmp_allocator = {0}; {
+                string_builder_t sb = {.allocator = &tmp_allocator};
 
-                n += snprintf(buffer + n, BUFFER_SIZE - n, "%s%s", tmp_buffer,
-                        i == function->signature->data.function.argument_count - 1 ? "" : ", ");
-            }
+                function_t* function = (function_t*)slot->as.p;
+                sb_add_cstr(&sb, string_format("<%s :: (", &tmp_allocator,
+                    function->binded_name ? function->binded_name->text : "<anonymous>").cstr);
 
-            orso_type_to_cstrn(function->signature->data.function.return_type, tmp_buffer, 128);
-            n += snprintf(buffer + n, BUFFER_SIZE - n, ") -> %s>", tmp_buffer);
-            
-            buffer[n] = '\0';
+                for (i32 i = 0; i < function->signature->data.function.argument_count; i++) {
+                    string_t arg_type = type_to_string(function->signature->data.function.argument_types[i], &tmp_allocator);
+                    sb_add_cstr(&sb, arg_type.cstr);
 
-            return cstrn_new(buffer, n);
+                    if (i < function->signature->data.function.argument_count - 1)  {
+                        sb_add_cstr(&sb, ", ");
+                    }
+                }
+
+                string_t return_type_string = type_to_string(function->signature->data.function.return_type, &tmp_allocator);
+                sb_add_cstr(&sb, string_format(") -> %s>", &tmp_allocator, return_type_string.cstr).cstr);
+
+                string = sb_render(&sb, allocator);
+            } arena_free(&tmp_allocator);
+
+            return string;
         }
 
         case ORSO_TYPE_NATIVE_FUNCTION: {
-            return cstrn_new("<native>", 8);
+            return str("<native>");
         }
 
         case ORSO_TYPE_POINTER: {
-            return cstrn_new("<ptr>", 5);
+            return str("<ptr>");
         }
 
         case ORSO_TYPE_STRUCT: {
             u32 size = type->data.struct_.total_bytes;
-            char buffer[256];
-            snprintf(buffer, 256, "<struct %d bytes>", size);
-            return cstrn_new(buffer, strlen(buffer));
+            return string_format("<struct %d bytes>", allocator, size);
         }
 
         case ORSO_TYPE_UNION: {
-            type_t* type = (type_t*)slot->as.p;
-            char* cstr = orso_slot_to_new_cstrn(slot + 1, type);
-            char* union_cstr = "%s";
-            size_t buffer_length = strlen(cstr) + strlen(union_cstr);
-            char buffer[buffer_length + 1];
-            snprintf(buffer, buffer_length + 1, union_cstr, cstr);
-            free(cstr);
-            return cstrn_new(buffer, buffer_length);
+            type_t *type = (type_t*)slot->as.p;
+            return slot_to_string(slot + 1, type, allocator);
         }
 
         case ORSO_TYPE_TYPE: {
-            type_t* type = (type_t*)slot->as.p;
+            string_t result;
 
-            char buffer[128];
+            arena_t tmp_allocator = {0}; {
+                type_t *type = (type_t*)slot->as.p;
+                string_t type_string = type_to_string(type, &tmp_allocator);
+                result = string_format("<%s>", allocator, type_string.cstr);
+            } arena_free(&tmp_allocator);
 
-            char tmp_buffer[128];
-            orso_type_to_cstrn(type, tmp_buffer, 128);
-
-            snprintf(buffer, 128, "<%s>", tmp_buffer);
-
-            return cstrn_new(buffer, strlen(buffer));
+            return result;
         }
-        case ORSO_TYPE_UNDEFINED: return cstrn_new("<undefined>", 11);
-        case ORSO_TYPE_UNRESOLVED: return cstrn_new("<unresolved>", 12);
-        case ORSO_TYPE_INVALID: return cstrn_new("<invalid>", 9);
+        case ORSO_TYPE_UNDEFINED: return str("<undefined>");
+        case ORSO_TYPE_UNRESOLVED: return str("<unresolved>");
+        case ORSO_TYPE_INVALID: return str("<invalid>");
     }
 }
 
-OrsoString* orso_slot_to_string(slot_t* slot, type_t* type) {
-    char* cstr = orso_slot_to_new_cstrn(slot, type);
-    OrsoString* string = orso_new_string_from_cstrn(cstr, strlen(cstr));
-    free(cstr);
+OrsoString *orso_slot_to_string(slot_t* slot, type_t* type) {
+    OrsoString *string;
+
+    arena_t tmp = {0}; {
+        string_t value = slot_to_string(slot, type, &tmp);
+        string = orso_new_string_from_cstrn(value.cstr, value.length);
+    } arena_free(&tmp);
 
     return string;
 }
 
-OrsoString* orso_string_concat(OrsoString* a, OrsoString* b) {
-    OrsoString* string = ORSO_OBJECT_ALLOCATE_FLEX(OrsoString, &OrsoTypeString, a->length + b->length + 1);
+OrsoString *orso_string_concat(OrsoString *a, OrsoString *b) {
+    OrsoString *string = ORSO_OBJECT_ALLOCATE_FLEX(OrsoString, &OrsoTypeString, a->length + b->length + 1);
     string->length = a->length + b->length;
     memcpy(string->text, a->text, a->length);
     memcpy(string->text + a->length, b->text, b->length);

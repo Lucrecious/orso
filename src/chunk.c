@@ -73,11 +73,7 @@ i32 chunk_get_line(chunk_t* chunk, i32 offset) {
     return -1;
 }
 
-void orso_print_slot(slot_t* slot, type_t* type) {
-    // TODO: This should not be necessary... This only fails on global values because
-    // there's a time during runtime when they are uninitialized. Honestly though....
-    // initial values for globals should already be in the global values list. So global defines
-    // would not even be part of the byte code
+void orso_print_slot(slot_t *slot, type_t *type) {
     switch (type->kind) {
         case ORSO_TYPE_INVALID:
         case ORSO_TYPE_UNDEFINED:
@@ -104,7 +100,9 @@ void orso_print_slot(slot_t* slot, type_t* type) {
             break;
         }
     }
-    char* cstr = orso_slot_to_new_cstrn(slot, type);
-    printf("%s", cstr);
-    free(cstr);
+    
+    arena_t tmp = {0}; {
+        string_t s = slot_to_string(slot, type, &tmp);
+        printf("%s", s.cstr);
+    } arena_free(&tmp);
 }

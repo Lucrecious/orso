@@ -400,123 +400,76 @@ i32 copy_to_buffer(char* buffer, char* cstr) {
     return written;
 }
 
-i32 orso_type_to_cstrn_(type_t* type, char* buffer, i32 n, bool is_toplevel) {
-    // TODO: Make sure that n is taken into account
-    i32 original_n = n;
+string_t type_to_string_toplevel(type_t *type, arena_t *allocator, bool is_toplevel) {
+    string_builder_t sb = {.allocator = allocator};
 
     // type1|type2|type3|type4
     if (ORSO_TYPE_IS_UNION(type)) {
         for (i32 i = 0; i < type->data.union_.count; i++) {
             if (i != 0) {
-                buffer[0] = '|';
-                n -= 1;
-                buffer += 1;
+                sb_add_char(&sb, '|');
             }
 
             if (ORSO_TYPE_IS_FUNCTION(type->data.union_.types[i]) || type->data.union_.types[i]->kind == ORSO_TYPE_NATIVE_FUNCTION) {
-                buffer[0] = '(';
-                n -= 1;
-                buffer += 1;
+                sb_add_char(&sb, '(');
             }
 
-            // -1 removes the \0
-            i32 written = orso_type_to_cstrn_(type->data.union_.types[i], buffer, n, false) - 1;
-            n -= written;
-            buffer += written;
+            string_t inner_type = type_to_string_toplevel(type->data.union_.types[i], allocator, false);
+            sb_add_cstr(&sb, inner_type.cstr);
 
             if (ORSO_TYPE_IS_FUNCTION(type->data.union_.types[i]) || type->data.union_.types[i]->kind == ORSO_TYPE_NATIVE_FUNCTION) {
-                buffer[0] = ')';
-                n -= 1;
-                buffer += 1;
+                sb_add_char(&sb, ')');
             }
         }
     // (arg1_type, arg2_type, ..., argn_type) -> return_type
     } else if (ORSO_TYPE_IS_FUNCTION(type) || type->kind == ORSO_TYPE_NATIVE_FUNCTION) {
-        buffer[0] = '(';
-        n -= 1;
-        buffer += 1;
+        sb_add_char(&sb, '(');
 
         for (i32 i = 0; i < type->data.function.argument_count; i++) {
             if (i != 0) {
-                buffer[0] = ',';
-                n -= 1;
-                buffer += 1;
+                sb_add_char(&sb, ',');
             }
 
-            i32 written = orso_type_to_cstrn_(type->data.function.argument_types[i], buffer, n, false);
-            n -= (written - 1);
-            buffer += (written - 1);
+            string_t arg_type = type_to_string_toplevel(type->data.function.argument_types[i], allocator, false);
+            sb_add_cstr(&sb, arg_type.cstr);
         }
 
-        i32 written = copy_to_buffer(buffer, ") -> ");
-        n -= written;
-        buffer += written;
+        sb_add_cstr(&sb, ") -> ");
 
-        written = orso_type_to_cstrn_(type->data.function.return_type, buffer, n, false);
-        n -= (written - 1);
-        buffer += (written - 1);
-
+        string_t return_type = type_to_string_toplevel(type->data.function.return_type, allocator, false);
+        sb_add_cstr(&sb, return_type.cstr);
     } else if (ORSO_TYPE_IS_STRUCT(type)) {
-        i32 written = 0;
         if (type->data.struct_.name) {
-            written = copy_to_buffer(buffer, type->data.struct_.name);
-            n -= written;
-            buffer += written;
+            sb_add_cstr(&sb, type->data.struct_.name);
         } else {
-            written = copy_to_buffer(buffer, "struct");
-            n -= written;
-            buffer += written;
+            sb_add_cstr(&sb, "struct");
         }
         
         if (is_toplevel) {
-            buffer[0] = ' ';
-            n -= 1;
-            buffer += 1;
-
-            char* struct_prefix = "{ ";
-            written = copy_to_buffer(buffer, struct_prefix);
-            n -= written;
-            buffer += written;
+            sb_add_cstr(&sb, " { ");
 
             for (i32 i = 0; i < type->data.struct_.field_count; i++) {
-                char* name = type->data.struct_.fields[i].name;
+                char *name = type->data.struct_.fields[i].name;
 
-                written = copy_to_buffer(buffer, name);
-                n -= written;
-                buffer += written;
+                sb_add_cstr(&sb, name);
+                sb_add_cstr(&sb, ": ");
 
-                char* type_colin = ": ";
-                written = copy_to_buffer(buffer, type_colin);
-                n -= written;
-                buffer += written;
+                type_t *field_type = type->data.struct_.fields[i].type;
+                string_t type_string = type_to_string_toplevel(field_type, allocator, false);
+                sb_add_cstr(&sb, type_string.cstr);
 
-                type_t* field_type = type->data.struct_.fields[i].type;
-                written = orso_type_to_cstrn_(field_type, buffer, n, false);
-                n -= (written - 1);
-                buffer += (written - 1);
-
-                char* ending_colin = "; ";
-                written = copy_to_buffer(buffer, ending_colin);
-                n -= written;
-                buffer += written;
+                sb_add_cstr(&sb, "; ");
             }
 
-            buffer[0] = '}';
-            n -= 1;
-            buffer += 1;
+            sb_add_char(&sb, '}');
         }
     } else if (ORSO_TYPE_IS_POINTER(type)) {
-        i32 written = 0;
+        sb_add_char(&sb, '&');
 
-        buffer[0] = '&';
-        n -= 1;
-        buffer += 1;
-
-        written = orso_type_to_cstrn_(type->data.pointer.type, buffer, n, false);
-        n -= (written - 1);
-        buffer += (written - 1);
+        string_t type_string = type_to_string_toplevel(type->data.pointer.type, allocator, false);
+        sb_add_cstr(&sb, type_string.cstr);
     } else {
-        char* type_name;
+        char *type_name;
         switch (type->kind) {
             case ORSO_TYPE_BOOL: type_name = "bool"; break;
             case ORSO_TYPE_FLOAT32: type_name = "f32"; break;
@@ -539,19 +492,16 @@ i32 orso_type_to_cstrn_(type_t* type, char* buffer, i32 n, bool is_toplevel) {
                 type_name = "<?>"; UNREACHABLE(); break;
         }
 
-        i32 written = copy_to_buffer(buffer, type_name);
-        n -= written;
-        buffer += written;
+        sb_add_cstr(&sb, type_name);
     }
 
-    buffer[0] = '\0';
-    n -= 1;
-    buffer += 1;
-    return original_n - n;
+    string_t string = sb_render(&sb, allocator);
+
+    return string;
 }
 
-i32 orso_type_to_cstrn(type_t* type, char* buffer, i32 n) {
-    return orso_type_to_cstrn_(type, buffer, n, true);
+string_t type_to_string(type_t *type, arena_t *allocator) {
+    return type_to_string_toplevel(type, allocator, true);
 }
 
 bool orso_is_gc_type(type_t* type) {

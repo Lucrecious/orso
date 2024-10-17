@@ -5,6 +5,7 @@
 
 #include "def.h"
 #include "lexer.h"
+#include "stringt.h"
 
 #define ORSO_UNION_NUM_MAX 4
 
@@ -132,7 +133,7 @@ i32 orso_type_slot_count(type_t *type);
 
 bool orso_type_fits(type_t *storage_type, type_t *value_type);
 
-i32 orso_type_to_cstrn(type_t *type, char *buffer, i32 n);
+string_t type_to_string(type_t *type, arena_t *allocator);
 
 bool orso_is_gc_type(type_t *type);
 
