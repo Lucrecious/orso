@@ -3,11 +3,18 @@ vector2 :: struct {
     y := 0.0;
 };
 
-main :: () -> i32 {
+main :: () {
     left := vector2.{-1};
     right := vector2.{1};
     up := vector2.{,1};
     down := vector2.{,-1};
 
-    return 0;
+    print_expr left.x;
+    print_expr left.y;
+    print_expr right.x;
+    print_expr right.y;
+    print_expr up.x;
+    print_expr up.y;
+    print_expr down.x;
+    print_expr down.y;
 };

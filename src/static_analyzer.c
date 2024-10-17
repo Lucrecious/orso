@@ -694,10 +694,10 @@ static void fold_constants_via_runtime(
     expression->value_index = value_index;
 }
 
-static void fold_function_signature(analyzer_t* analyzer, ast_t* ast, ast_node_t* expression) {
+static void fold_function_signature(analyzer_t *analyzer, ast_t *ast, ast_node_t *expression) {
     ASSERT(expression->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE, "must be a function signature");
 
-    unless (IS_FOLDED(expression->data.function.return_type_expression)) {
+    unless (!expression->data.function.return_type_expression || IS_FOLDED(expression->data.function.return_type_expression)) {
         error_range(analyzer,
             expression->data.function.return_type_expression->start,
             expression->data.function.return_type_expression->end,
@@ -706,10 +706,10 @@ static void fold_function_signature(analyzer_t* analyzer, ast_t* ast, ast_node_t
     }
 
     bool hit_error = false;
-    type_t** parameter_types = NULL;
+    type_t **parameter_types = NULL;
 
     for (i32 i = 0; i < sb_count(expression->data.function.parameter_nodes); i++) {
-        ast_node_t* parameter = expression->data.function.parameter_nodes[i];
+        ast_node_t *parameter = expression->data.function.parameter_nodes[i];
         unless (IS_FOLDED(parameter)) {
             hit_error = true;
             error_range(analyzer, parameter->start, parameter->end, "Parameter type must be resolved at compile time.");
@@ -724,7 +724,7 @@ static void fold_function_signature(analyzer_t* analyzer, ast_t* ast, ast_node_t
 
         i32 index = parameter->value_index + ORSO_TYPE_IS_UNION(parameter->value_type);
 
-        type_t* type = (type_t*)ast->folded_constants[index].as.p;
+        type_t *type = (type_t*)ast->folded_constants[index].as.p;
         sb_push(parameter_types, type);
     }
 
@@ -733,20 +733,24 @@ static void fold_function_signature(analyzer_t* analyzer, ast_t* ast, ast_node_t
         return;
     }
 
-    ast_node_t* return_type_expression = expression->data.function.return_type_expression;
-    if (return_type_expression->value_type_narrowed != &OrsoTypeType) {
+    ast_node_t *return_type_expression = expression->data.function.return_type_expression;
+    if (return_type_expression && return_type_expression->value_type_narrowed != &OrsoTypeType) {
         error_range(analyzer, return_type_expression->start, return_type_expression->end, "Invalid return type.");
         sb_free(parameter_types);
         return;
     }
 
-    type_t* return_type;
+    type_t *return_type;
     {
-        i32 index = return_type_expression->value_index + ORSO_TYPE_IS_UNION(return_type_expression->value_type);
-        return_type = (type_t*)ast->folded_constants[index].as.p;
+        if (return_type_expression) {
+            i32 index = return_type_expression->value_index + ORSO_TYPE_IS_UNION(return_type_expression->value_type);
+            return_type = (type_t*)ast->folded_constants[index].as.p;
+        } else {
+            return_type = &OrsoTypeVoid;
+        }
     }
 
-    type_t* function_type = orso_type_set_fetch_function(&ast->type_set, return_type, parameter_types, sb_count(parameter_types));
+    type_t *function_type = orso_type_set_fetch_function(&ast->type_set, return_type, parameter_types, sb_count(parameter_types));
     sb_free(parameter_types);
 
     slot_t function_type_slot = ORSO_SLOT_P(function_type);
@@ -1607,6 +1611,7 @@ void orso_resolve_expression(
                 }
             }
 
+            ASSERT(expression->data.function.return_type_expression, "during static analysis, function signatures should not have a null return type, that's only valid for function definitions after parsing");
             orso_resolve_expression(analyzer, ast, state, expression->data.function.return_type_expression);
 
             if (invalid_parameter || ORSO_TYPE_IS_INVALID(expression->data.function.return_type_expression->value_type)) {

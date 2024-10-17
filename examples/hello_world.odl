@@ -1,4 +1,3 @@
-main :: () -> i32 {
+main :: () {
     print "hello, world!";
-    return 0;
 };

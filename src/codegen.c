@@ -1479,7 +1479,8 @@ function_t *generate_code(vm_t *vm, ast_t *ast) {
         }
 
         type_t *function_type = declaration_->value_type;
-        if (function_type->data.function.return_type->kind != ORSO_TYPE_INT32) {
+        unless (function_type->data.function.return_type->kind == ORSO_TYPE_INT32
+         || function_type->data.function.return_type->kind == ORSO_TYPE_VOID) {
             // TODO: allow code generator to throw error here, main must return i32
             return NULL;
         }

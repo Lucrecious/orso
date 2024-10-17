@@ -91,42 +91,42 @@ case ORSO_AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER: \
 case ORSO_AST_NODE_TYPE_EXPRESSION_DOT
 
 typedef struct ast_function_t {
-    ast_node_t** parameter_nodes;
-    ast_node_t* return_type_expression;
+    ast_node_t **parameter_nodes;
+    ast_node_t *return_type_expression;
 
-    ast_node_t* block;
+    ast_node_t *block;
 
     bool compilable;
 } ast_function_t;
 
 typedef struct ast_struct_t {
-    ast_node_t** declarations;
+    ast_node_t **declarations;
 } ast_struct_t;
 
 typedef struct ast_call_t {
-    ast_node_t* callee;
-    ast_node_t** arguments;
+    ast_node_t *callee;
+    ast_node_t **arguments;
 } ast_call_t;
 
 typedef struct ast_branch_t {
-    ast_node_t* condition;
-    ast_node_t* then_expression;
-    ast_node_t* else_expression;
+    ast_node_t *condition;
+    ast_node_t *then_expression;
+    ast_node_t *else_expression;
 
     bool looping;
     bool condition_negated;
 } ast_branch_t;
 
 typedef struct ast_binary_t {
-    ast_node_t* lhs;
-    ast_node_t* rhs;
+    ast_node_t *lhs;
+    ast_node_t *rhs;
 } ast_binary_t;
 
 typedef struct ast_member_access_t {
-    ast_node_t* lhs;
+    ast_node_t *lhs;
 
     token_t identifier;
-    ast_node_t* referencing_declaration;
+    ast_node_t *referencing_declaration;
 } ast_member_access_t;
 
 typedef struct ast_declaration_t {

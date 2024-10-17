@@ -59,7 +59,7 @@ static int ptr_equal(void* a, void* b) {
 implement_table(ptr2i32, void*, i32, ptr_hash, ptr_equal)
 implement_table(type2ns, type_t*, ast_node_and_scope_t, ptr_hash, ptr_equal)
 
-typedef struct Parser {
+typedef struct parser_t {
     error_function_t error_fn;
     ast_t* ast; // TODO: Consider moving this outside parser and instead passed through arguments
     lexer_t lexer;
@@ -68,7 +68,7 @@ typedef struct Parser {
 
     bool had_error;
     bool panic_mode;
-} Parser;
+} parser_t;
 
 typedef enum {
     PREC_NONE,
@@ -86,7 +86,7 @@ typedef enum {
     PREC_PRIMARY
 } Precedence;
 
-typedef ast_node_t* (*ParseFn)(Parser*, bool is_in_type_context);
+typedef ast_node_t* (*ParseFn)(parser_t*, bool is_in_type_context);
 
 typedef struct {
     ParseFn prefix;
@@ -231,7 +231,7 @@ ast_node_t* orso_ast_node_new(ast_t* ast, ast_node_type_t node_type, bool is_in_
     return node;
 }
 
-static void parser_init(Parser* parser, ast_t* ast, const char* source, error_function_t error_fn) {
+static void parser_init(parser_t* parser, ast_t* ast, const char* source, error_function_t error_fn) {
     lexer_init(&parser->lexer, source);
     parser->ast = ast;
     parser->error_fn = error_fn;
@@ -239,7 +239,7 @@ static void parser_init(Parser* parser, ast_t* ast, const char* source, error_fu
     parser->panic_mode = false;
 }
 
-static void error_at(Parser* parser, token_t* token, const char* specific) {
+static void error_at(parser_t* parser, token_t* token, const char* specific) {
     if (parser->panic_mode) {
         return;
     }
@@ -275,15 +275,15 @@ static void error_at(Parser* parser, token_t* token, const char* specific) {
     parser->error_fn(error);
 }
 
-static void error_at_current(Parser* parser, const char* message) {
+static void error_at_current(parser_t* parser, const char* message) {
     error_at(parser, &parser->current, message);
 }
 
-static void error(Parser* parser, const char* message) {
+static void error(parser_t* parser, const char* message) {
     error_at(parser, &parser->previous, message);
 }
 
-static void advance(Parser* parser) {
+static void advance(parser_t* parser) {
     parser->previous = parser->current;
 
     for (;;) {
@@ -296,7 +296,7 @@ static void advance(Parser* parser) {
     }
 }
 
-static void consume(Parser* parser, token_type_t type, const char* message) {
+static void consume(parser_t* parser, token_type_t type, const char* message) {
     if (parser->current.type == type) {
         advance(parser);
         return;
@@ -305,11 +305,11 @@ static void consume(Parser* parser, token_type_t type, const char* message) {
     error_at_current(parser, message);
 }
 
-static FORCE_INLINE bool check(Parser* parser, token_type_t type) {
+static FORCE_INLINE bool check(parser_t* parser, token_type_t type) {
     return parser->current.type == type;
 }
 
-static bool match(Parser* parser, token_type_t type) {
+static bool match(parser_t* parser, token_type_t type) {
     if (!check(parser, type)) {
         return false;
     }
@@ -318,7 +318,7 @@ static bool match(Parser* parser, token_type_t type) {
     return true;
 }
 
-static void synchronize(Parser* parser) {
+static void synchronize(parser_t* parser) {
     parser->panic_mode = false;
 
     while (!check(parser, TOKEN_EOF)) {
@@ -337,12 +337,12 @@ static void synchronize(Parser* parser) {
     }
 }
 
-static ast_node_t* declaration(Parser* parser, bool is_top_level);
-static ast_node_t* expression(Parser* parser, bool is_in_type_context);
-static ast_node_t* statement(Parser* parser, bool lack_semicolin);
+static ast_node_t* declaration(parser_t* parser, bool is_top_level);
+static ast_node_t* expression(parser_t* parser, bool is_in_type_context);
+static ast_node_t* statement(parser_t* parser, bool lack_semicolin);
 static ParseRule* get_rule(token_type_t type);
-static bool check_expression(Parser* parser);
-static ast_node_t* parse_precedence(Parser* parser, bool is_in_type_context, Precedence precedence);
+static bool check_expression(parser_t* parser);
+static ast_node_t* parse_precedence(parser_t* parser, bool is_in_type_context, Precedence precedence);
 
 static type_t* value_to_integer_type(i64 value) {
     if (value >= INT32_MIN && value <= INT32_MAX) {
@@ -351,7 +351,7 @@ static type_t* value_to_integer_type(i64 value) {
     return &OrsoTypeInteger64;
 }
 
-static i32 add_constant_value(Parser* parser, slot_t value, type_t* type) {
+static i32 add_constant_value(parser_t* parser, slot_t value, type_t* type) {
     i32 index = sb_count(parser->ast->folded_constants);
     sb_push(parser->ast->folded_constant_types, type);
     sb_push(parser->ast->folded_constants, value);
@@ -384,7 +384,7 @@ bool orso_ast_node_type_is_expression(ast_node_type_t node_type) {
     }
 }
 
-static ast_node_t* number(Parser* parser, bool is_in_type_context) {
+static ast_node_t* number(parser_t* parser, bool is_in_type_context) {
     ast_node_t* expression_node = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_EXPRESSION_PRIMARY, is_in_type_context, parser->previous);
 
     switch (parser->previous.type)  {
@@ -410,8 +410,8 @@ static ast_node_t* number(Parser* parser, bool is_in_type_context) {
     return expression_node;
 }
 
-static ast_node_t* literal(Parser* parser, bool is_in_type_context) {
-    ast_node_t* expression_node = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_EXPRESSION_PRIMARY, is_in_type_context, parser->previous);
+static ast_node_t *literal(parser_t *parser, bool is_in_type_context) {
+    ast_node_t *expression_node = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_EXPRESSION_PRIMARY, is_in_type_context, parser->previous);
 
     switch (parser->previous.type) {
         case TOKEN_FALSE:
@@ -429,14 +429,14 @@ static ast_node_t* literal(Parser* parser, bool is_in_type_context) {
         }
         case TOKEN_STRING: {
             expression_node->value_type = &OrsoTypeString;
-            OrsoString* value = orso_new_string_from_cstrn(expression_node->start.start + 1, expression_node->start.length - 2);
+            OrsoString *value = orso_new_string_from_cstrn(expression_node->start.start + 1, expression_node->start.length - 2);
             expression_node->value_index = add_constant_value(parser, ORSO_SLOT_P(value), &OrsoTypeString);
             break;
         };
 
         case TOKEN_SYMBOL: {
             expression_node->value_type = &OrsoTypeSymbol;
-            symbol_t* value = orso_new_symbol_from_cstrn(expression_node->start.start + 1, expression_node->start.length - 2, parser->ast->symbols);
+            symbol_t *value = orso_new_symbol_from_cstrn(expression_node->start.start + 1, expression_node->start.length - 2, parser->ast->symbols);
             expression_node->value_index = add_constant_value(parser, ORSO_SLOT_P(value), &OrsoTypeSymbol);
             break;
         }
@@ -451,22 +451,22 @@ static ast_node_t* literal(Parser* parser, bool is_in_type_context) {
     return expression_node;
 }
 
-static ast_node_t* convert_assignment_expression(Parser* parser, ast_node_t* left, ast_node_t* assignment) {
+static ast_node_t *convert_assignment_expression(parser_t *parser, ast_node_t *left, ast_node_t *assignment) {
     (void)parser;
     assignment->start = left->start;
     assignment->data.binary.lhs = left;
     return assignment;
 }
 
-static ast_node_t* convert_call_expression(ast_node_t* left_operand, ast_node_t* call) {
+static ast_node_t *convert_call_expression(ast_node_t *left_operand, ast_node_t *call) {
     call->start = left_operand->start;
     call->data.call.callee = left_operand;
     return call;
 }
 
-static ast_node_t* convert_function_definition(Parser* parser, ast_node_t* left_operand, ast_node_t* function_definition) {
+static ast_node_t *convert_function_definition(parser_t *parser, ast_node_t *left_operand, ast_node_t *function_definition) {
     for (i32 i = 0; i < sb_count(left_operand->data.function.parameter_nodes); i++) {
-        ast_node_t* parameter = left_operand->data.function.parameter_nodes[i];
+        ast_node_t *parameter = left_operand->data.function.parameter_nodes[i];
         if (parameter->node_type != ORSO_AST_NODE_TYPE_DECLARATION) {
             error_at(parser, &parameter->start, "Expect an entity declaration.");
             left_operand->node_type = ORSO_AST_NODE_TYPE_UNDEFINED;
@@ -483,7 +483,7 @@ static ast_node_t* convert_function_definition(Parser* parser, ast_node_t* left_
     return function_definition;
 }
 
-static ast_node_t* assignment(Parser* parser, bool is_in_type_context) {
+static ast_node_t* assignment(parser_t* parser, bool is_in_type_context) {
     ast_node_t* expression_node = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_EXPRESSION_ASSIGNMENT, is_in_type_context, parser->previous);
 
     expression_node->data.binary.rhs = expression(parser, is_in_type_context);
@@ -492,17 +492,17 @@ static ast_node_t* assignment(Parser* parser, bool is_in_type_context) {
     return expression_node;
 }
 
-static ast_node_t* named_variable(Parser* parser, bool is_in_type_context) {
+static ast_node_t* named_variable(parser_t* parser, bool is_in_type_context) {
     ast_node_t* expression_node = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY, is_in_type_context, parser->previous);
     expression_node->data.dot.identifier = parser->previous;
     return expression_node;
 }
 
-static ast_node_t* variable(Parser* parser, bool is_in_type_context) {
+static ast_node_t* variable(parser_t* parser, bool is_in_type_context) {
     return named_variable(parser, is_in_type_context);
 }
 
-static void parse_block(Parser* parser, ast_node_t* block) {
+static void parse_block(parser_t* parser, ast_node_t* block) {
     block->return_guarentee = ORSO_NO_RETURN_GUARENTEED;
     block->data.block = NULL;
 
@@ -514,7 +514,7 @@ static void parse_block(Parser* parser, ast_node_t* block) {
     consume(parser, TOKEN_BRACE_CLOSE, "Expect '}' after block.");
 }
 
-static ast_node_t* block(Parser* parser, bool is_in_type_context) {
+static ast_node_t* block(parser_t* parser, bool is_in_type_context) {
     (void)is_in_type_context;
 
     ast_node_t* expression_node = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_EXPRESSION_BLOCK, is_in_type_context, parser->previous);
@@ -525,7 +525,7 @@ static ast_node_t* block(Parser* parser, bool is_in_type_context) {
     return expression_node;
 }
 
-static ast_node_t* ifelse(Parser* parser, bool is_in_type_context) {
+static ast_node_t* ifelse(parser_t* parser, bool is_in_type_context) {
     ast_node_t* expression_node = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_EXPRESSION_BRANCHING, is_in_type_context, parser->previous);
 
     expression_node->data.branch.condition_negated = false;
@@ -577,7 +577,7 @@ static ast_node_t* ifelse(Parser* parser, bool is_in_type_context) {
     return expression_node;
 }
 
-static bool is_incoming_function_signature(Parser* parser) {
+static bool is_incoming_function_signature(parser_t* parser) {
     ASSERT(parser->previous.type == TOKEN_PARENTHESIS_OPEN, "must be starting to open a parenthesis");
 
     lexer_t look_ahead_lexer = parser->lexer;
@@ -604,11 +604,11 @@ static bool is_incoming_function_signature(Parser* parser) {
     }
 
     next = lexer_next_token(&look_ahead_lexer);
-    
-    return next.type == TOKEN_ARROW_RIGHT;
+
+    return next.type == TOKEN_ARROW_RIGHT || next.type == TOKEN_BRACE_OPEN;
 }
 
-static bool is_incoming_declaration_declaration(Parser* parser) {
+static bool is_incoming_declaration_declaration(parser_t* parser) {
     if (parser->current.type != TOKEN_IDENTIFIER) {
         return false;
     }
@@ -620,9 +620,9 @@ static bool is_incoming_declaration_declaration(Parser* parser) {
     return token.type == TOKEN_COLON;
 }
 
-static ast_node_t* entity_declaration(Parser* parser, bool as_parameter);
+static ast_node_t* entity_declaration(parser_t* parser, bool as_parameter);
 
-static ast_node_t** parse_parameters(Parser* parser) {
+static ast_node_t** parse_parameters(parser_t* parser) {
     ast_node_t** parameters = NULL;
     until (check(parser, TOKEN_PARENTHESIS_CLOSE)) {
         if (is_incoming_declaration_declaration(parser)) {
@@ -638,7 +638,7 @@ static ast_node_t** parse_parameters(Parser* parser) {
     return parameters;
 }
 
-static void parse_function_signature(Parser* parser, ast_node_t* function_definition) {
+static void parse_function_signature(parser_t *parser, ast_node_t *function_definition) {
     ASSERT(function_definition->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE, "must be a function signature");
     function_definition->data.function.parameter_nodes = NULL;
     function_definition->data.function.return_type_expression = NULL;
@@ -647,13 +647,13 @@ static void parse_function_signature(Parser* parser, ast_node_t* function_defini
 
     consume(parser, TOKEN_PARENTHESIS_CLOSE, "Expect close parenthesis for end of arguments.");
 
-    consume(parser, TOKEN_ARROW_RIGHT, "Expect -> for return type.");
-
-    function_definition->data.function.return_type_expression = expression(parser, true);
+    if (match(parser, TOKEN_ARROW_RIGHT)) {
+        function_definition->data.function.return_type_expression = expression(parser, true);
+    }
 }
 
-static ast_node_t* function_definition(Parser* parser, bool is_in_type_context) {
-    ast_node_t* function_definition_expression = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION, is_in_type_context, parser->previous);
+static ast_node_t *function_definition(parser_t *parser, bool is_in_type_context) {
+    ast_node_t *function_definition_expression = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION, is_in_type_context, parser->previous);
     function_definition_expression->data.function.compilable = true;
     function_definition_expression->data.function.block = block(parser, is_in_type_context);
     function_definition_expression->end = parser->previous;
@@ -661,11 +661,11 @@ static ast_node_t* function_definition(Parser* parser, bool is_in_type_context) 
     return function_definition_expression;
 }
 
-static ast_node_t* grouping_or_function_signature_or_definition(Parser* parser, bool is_in_type_context) {
+static ast_node_t *grouping_or_function_signature_or_definition(parser_t *parser, bool is_in_type_context) {
     ast_node_type_t node_type;
     if (is_incoming_function_signature(parser)) {
         node_type = ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE;
-    } else {
+    } else  {
         node_type = ORSO_AST_NODE_TYPE_EXPRESSION_GROUPING;
     }
 
@@ -696,7 +696,7 @@ static ast_node_t* grouping_or_function_signature_or_definition(Parser* parser, 
     return expression_node;
 }
 
-static ast_node_t **parse_arguments(Parser* parser, bool is_in_type_context) {
+static ast_node_t **parse_arguments(parser_t* parser, bool is_in_type_context) {
     ast_node_t **arguments = NULL;
 
     if (!check(parser, TOKEN_PARENTHESIS_CLOSE)) {
@@ -715,7 +715,7 @@ static ast_node_t **parse_arguments(Parser* parser, bool is_in_type_context) {
     return arguments;
 }
 
-static ast_node_t* call(Parser* parser, bool is_in_type_context) {
+static ast_node_t* call(parser_t* parser, bool is_in_type_context) {
     ast_node_t* expression_node = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_EXPRESSION_CALL, is_in_type_context, parser->previous);
 
     expression_node->data.call.callee = NULL;
@@ -725,7 +725,7 @@ static ast_node_t* call(Parser* parser, bool is_in_type_context) {
     return expression_node;
 }
 
-static ast_node_t* unary(Parser* parser, bool is_in_type_context) {
+static ast_node_t* unary(parser_t* parser, bool is_in_type_context) {
     ast_node_t* expression_node = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_EXPRESSION_UNARY, is_in_type_context, parser->previous);
     expression_node->operator = parser->previous;
 
@@ -735,7 +735,7 @@ static ast_node_t* unary(Parser* parser, bool is_in_type_context) {
     return expression_node;
 }
 
-static ast_node_t* binary(Parser* parser, bool is_in_type_context) {
+static ast_node_t* binary(parser_t* parser, bool is_in_type_context) {
     ast_node_t* expression_node = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_EXPRESSION_BINARY, is_in_type_context, parser->previous);
 
     token_t operator = parser->previous;
@@ -752,7 +752,7 @@ static ast_node_t* binary(Parser* parser, bool is_in_type_context) {
     return expression_node;
 }
 
-static ast_node_t* struct_(Parser* parser, bool is_in_type_context) {
+static ast_node_t* struct_(parser_t* parser, bool is_in_type_context) {
     (void)is_in_type_context;
 
     ast_node_t* struct_definition = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION, is_in_type_context, parser->previous);
@@ -771,7 +771,7 @@ static ast_node_t* struct_(Parser* parser, bool is_in_type_context) {
     return struct_definition;
 }
 
-static ast_node_t* print_(Parser* parser, bool is_in_type_context) {
+static ast_node_t* print_(parser_t* parser, bool is_in_type_context) {
     ast_node_type_t node_type = parser->previous.type == TOKEN_PRINT ? ORSO_AST_NODE_TYPE_EXPRESSION_PRINT : ORSO_AST_NODE_TYPE_EXPRESSION_PRINT_EXPR;
     ast_node_t* print_expression = orso_ast_node_new(parser->ast, node_type, is_in_type_context, parser->previous);
 
@@ -782,7 +782,7 @@ static ast_node_t* print_(Parser* parser, bool is_in_type_context) {
     return print_expression;
 }
 
-static ast_node_t *dot(Parser* parser, bool is_in_type_context) {
+static ast_node_t *dot(parser_t* parser, bool is_in_type_context) {
     if (match(parser, TOKEN_BRACE_OPEN)) {
         ast_node_t *initiailizer = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER, is_in_type_context, parser->previous);
         if (!match(parser, TOKEN_BRACE_CLOSE)) {
@@ -869,11 +869,11 @@ ParseRule rules[] = {
     [TOKEN_SIZE]                    = { NULL,       NULL,       PREC_NONE },
 };
 
-static bool check_expression(Parser* parser) {
+static bool check_expression(parser_t* parser) {
     return get_rule(parser->current.type)->prefix != NULL;
 }
 
-static ast_node_t* parse_precedence(Parser* parser, bool is_in_type_context, Precedence precedence) {
+static ast_node_t* parse_precedence(parser_t* parser, bool is_in_type_context, Precedence precedence) {
     advance(parser);
 
     ParseFn prefix_rule = get_rule(parser->previous.type)->prefix;
@@ -950,7 +950,7 @@ static ParseRule* get_rule(token_type_t type) {
     return &rules[type];
 }
 
-static ast_node_t* expression(Parser* parser, bool is_in_type_context) {
+static ast_node_t* expression(parser_t* parser, bool is_in_type_context) {
     bool fold = false;
     if (match(parser, TOKEN_DIRECTIVE)) {
         token_t directive = parser->previous;
@@ -969,7 +969,7 @@ static ast_node_t* expression(Parser* parser, bool is_in_type_context) {
 }
 
 // TODO: I don't even remember why i have as_expression_statement here... i don't know whats the point???
-static ast_node_t *statement(Parser* parser, bool omit_end_of_statement) {
+static ast_node_t *statement(parser_t* parser, bool omit_end_of_statement) {
     bool is_return = false;
     ast_node_type_t node_type;
     if (match(parser, TOKEN_RETURN)) {
@@ -1000,7 +1000,7 @@ static ast_node_t *statement(Parser* parser, bool omit_end_of_statement) {
     return statement_node;
 }
 
-static ast_node_t *entity_declaration(Parser* parser, bool as_parameter) {
+static ast_node_t *entity_declaration(parser_t* parser, bool as_parameter) {
     ast_node_t *entity_declaration_node = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_DECLARATION, false, parser->current);
 
     advance(parser);
@@ -1055,7 +1055,7 @@ static ast_node_t *entity_declaration(Parser* parser, bool as_parameter) {
     return entity_declaration_node;
 }
 
-static ast_node_t *declaration(Parser *parser, bool is_top_level) {
+static ast_node_t *declaration(parser_t *parser, bool is_top_level) {
     ast_node_t *node = NULL;
     if (is_incoming_declaration_declaration(parser)) {
         node = entity_declaration(parser, false);
@@ -1076,7 +1076,7 @@ static ast_node_t *declaration(Parser *parser, bool is_top_level) {
 }
 
 bool parse(ast_t *ast, const char *source, error_function_t error_fn) {
-    Parser parser;
+    parser_t parser;
     parser_init(&parser, ast, source, error_fn);
 
     advance(&parser);
