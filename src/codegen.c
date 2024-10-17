@@ -18,7 +18,7 @@ typedef struct {
     i32 stack_position;
 } Local;
 
-typedef struct Compiler {
+typedef struct compiler_t {
     function_t* function;
 
     bool skip_function_definitions;
@@ -30,12 +30,12 @@ typedef struct Compiler {
     i32 scope_depth;
     i32 current_stack_size;
     i32 max_stack_size;
-} Compiler;
+} compiler_t;
 
-static i32 add_local(Compiler* compiler, token_t name, i32 slot_count);
+static i32 add_local(compiler_t* compiler, token_t name, i32 slot_count);
 
 // A token_t* is passed in instead of symbol_t* because token_t* cant be garbage collected and symbol_t* can and would be.
-static void compiler_init(Compiler* compiler, vm_t* vm, function_t* function, type_t* creator_type) {
+static void compiler_init(compiler_t* compiler, vm_t* vm, function_t* function, type_t* creator_type) {
     ASSERT(function, "must be not null");
 
     // TODO: remove if possible, previously this was used to get the garbage collector but thats being
@@ -57,7 +57,7 @@ static void compiler_init(Compiler* compiler, vm_t* vm, function_t* function, ty
     compiler->skip_function_definitions = false;
 }
 
-static void compiler_free(Compiler* compiler) {
+static void compiler_free(compiler_t* compiler) {
     sb_free(compiler->locals);
     compiler->locals = NULL;
     compiler->locals_count = 0;
@@ -68,13 +68,13 @@ static void compiler_free(Compiler* compiler) {
     sb_free(compiler->functions_to_compile);
 }
 
-static void apply_stack_effects(Compiler* compiler, i32 stack_effects) {
+static void apply_stack_effects(compiler_t* compiler, i32 stack_effects) {
     compiler->current_stack_size += stack_effects;
     compiler->max_stack_size = compiler->current_stack_size > compiler->max_stack_size
         ? compiler->current_stack_size : compiler->max_stack_size;
 }
 
-static void emit(Compiler* compiler, chunk_t* chunk, i32 line, const int op_code, ...) {
+static void emit(compiler_t* compiler, chunk_t* chunk, i32 line, const int op_code, ...) {
     va_list args;
     va_start(args, op_code);
 
@@ -348,7 +348,7 @@ static void emit(Compiler* compiler, chunk_t* chunk, i32 line, const int op_code
 }
 
 // TODO: Remove compiler from the parameters... instead try to bubble up the stack effect somehow
-static void emit_constant(Compiler* compiler, chunk_t* chunk, byte* data, i32 line, type_t* type)
+static void emit_constant(compiler_t* compiler, chunk_t* chunk, byte* data, i32 line, type_t* type)
 {
     u32 size = orso_type_size_bytes(type);
     u32 address = CHUNK_ADD_CONSTANT(chunk, data, size, type);
@@ -365,7 +365,7 @@ static void emit_constant(Compiler* compiler, chunk_t* chunk, byte* data, i32 li
     }
 }
 
-static void emit_put_in_union(Compiler* compiler, chunk_t* chunk, i32 line, type_t* type) {
+static void emit_put_in_union(compiler_t* compiler, chunk_t* chunk, i32 line, type_t* type) {
     slot_t slot = ORSO_SLOT_P(type);
     emit_constant(compiler, chunk, (byte*)&slot, line, &OrsoTypeType);
     emit(compiler, chunk, line, ORSO_OP_PUT_IN_UNION, (type_t*)type);
@@ -384,7 +384,7 @@ static void patch_jump(chunk_t* chunk, i32 offset) {
     chunk->code[offset + 1] = b2;
 }
 
-static void emit_entity_get(Compiler* compiler, u32 index, byte size_bytes, chunk_t* chunk, i32 line, bool is_local) {
+static void emit_entity_get(compiler_t* compiler, u32 index, byte size_bytes, chunk_t* chunk, i32 line, bool is_local) {
     index *= sizeof(slot_t);
     if (is_local) {
         ASSERT(index <= UINT16_MAX, "must be short");
@@ -394,7 +394,7 @@ static void emit_entity_get(Compiler* compiler, u32 index, byte size_bytes, chun
     }
 }
 
-static void emit_type_convert(Compiler* compiler, type_t* from_type, type_t* to_type, chunk_t* chunk, i32 line) {
+static void emit_type_convert(compiler_t* compiler, type_t* from_type, type_t* to_type, chunk_t* chunk, i32 line) {
     bool include_bool = true;
     ASSERT(orso_type_is_number(from_type, include_bool) && orso_type_is_number(to_type, include_bool), "Implicit type conversion only works for number types right now.");
     if (orso_type_is_float(from_type) && orso_type_is_integer(to_type, include_bool)) {
@@ -404,7 +404,7 @@ static void emit_type_convert(Compiler* compiler, type_t* from_type, type_t* to_
     } 
 }
 
-static void emit_storage_type_convert(Compiler* compiler, chunk_t* chunk, type_t* source, type_t* destination, i32 line) {
+static void emit_storage_type_convert(compiler_t* compiler, chunk_t* chunk, type_t* source, type_t* destination, i32 line) {
     if (ORSO_TYPE_IS_UNION(source) && !ORSO_TYPE_IS_UNION(destination)) {
         emit(compiler, chunk, line, ORSO_OP_NARROW_UNION, orso_type_size_bytes(source));
     } else if (!ORSO_TYPE_IS_UNION(source) && ORSO_TYPE_IS_UNION(destination)) {
@@ -412,7 +412,7 @@ static void emit_storage_type_convert(Compiler* compiler, chunk_t* chunk, type_t
     }
 }
 
-static void emit_pop(Compiler* compiler, chunk_t* chunk, u32 pop_count, i32 line) {
+static void emit_pop(compiler_t* compiler, chunk_t* chunk, u32 pop_count, i32 line) {
     if (pop_count < 1) {
         return;
     }
@@ -428,7 +428,7 @@ static void emit_pop(Compiler* compiler, chunk_t* chunk, u32 pop_count, i32 line
     }
 }
 
-static function_t* compiler_end(vm_t* vm, Compiler* compiler, ast_t* ast, chunk_t* chunk, i32 line) {
+static function_t* compiler_end(vm_t* vm, compiler_t* compiler, ast_t* ast, chunk_t* chunk, i32 line) {
     emit(compiler, chunk, line, ORSO_OP_PUSH_0);
     emit(compiler, chunk, line, ORSO_OP_RETURN, (type_t*)&OrsoTypeVoid);
 
@@ -460,7 +460,7 @@ static function_t* compiler_end(vm_t* vm, Compiler* compiler, ast_t* ast, chunk_
                     break;
                 }
 
-                orso_compile_function(vm, ast, function, ast->function_definition_pairs[j].ast_defintion);
+                compile_function(vm, ast, function, ast->function_definition_pairs[j].ast_defintion);
             }
         }
     }
@@ -503,7 +503,7 @@ static i32 add_global(vm_t* vm, token_t* name, i32 slot_count)
     return index;
 }
 
-static i32 add_local(Compiler* compiler, token_t name, i32 slot_count) {
+static i32 add_local(compiler_t* compiler, token_t name, i32 slot_count) {
     ASSERT(slot_count > 0, "local must consume stack space");
 
     while (sb_count(compiler->locals) <= compiler->locals_count) {
@@ -529,7 +529,7 @@ static i32 add_local(Compiler* compiler, token_t name, i32 slot_count) {
     return compiler->locals_count - 1;
 }
 
-static i32 declare_local_entity(Compiler* compiler, token_t* name, i32 slot_count) {
+static i32 declare_local_entity(compiler_t* compiler, token_t* name, i32 slot_count) {
     return add_local(compiler, *name, slot_count);
 }
 
@@ -551,7 +551,7 @@ static bool identifiers_equal(token_t* a, token_t* b) {
     return memcmp(a->start, b->start, a->length) == 0;
 }
 
-static i64 retrieve_local_variable(Compiler* compiler, token_t* name) {
+static i64 retrieve_local_variable(compiler_t* compiler, token_t* name) {
     for (i64 i = compiler->locals_count - 1; i >= 0; i--) {
         Local* local = &compiler->locals[i];
         if (identifiers_equal(name, &local->name)) {
@@ -562,7 +562,7 @@ static i64 retrieve_local_variable(Compiler* compiler, token_t* name) {
     return -1;
 }
 
-static u32 retrieve_variable(vm_t* vm, Compiler* compiler, token_t* name, bool* is_local) {
+static u32 retrieve_variable(vm_t* vm, compiler_t* compiler, token_t* name, bool* is_local) {
     i64 index = retrieve_local_variable(compiler, name);
     if (index < 0) {
         index = retrieve_global_variable(vm, name);
@@ -578,11 +578,11 @@ static u32 retrieve_variable(vm_t* vm, Compiler* compiler, token_t* name, bool* 
     }
 }
 
-static void begin_scope(Compiler* compiler) {
+static void begin_scope(compiler_t* compiler) {
     compiler->scope_depth++;
 }
 
-static void end_scope(Compiler* compiler, chunk_t* chunk, type_t* block_value_type, i32 line) {
+static void end_scope(compiler_t* compiler, chunk_t* chunk, type_t* block_value_type, i32 line) {
     compiler->scope_depth--;
 
     // pop all local object markers
@@ -602,10 +602,10 @@ static void end_scope(Compiler* compiler, chunk_t* chunk, type_t* block_value_ty
     emit(compiler, chunk, line, ORSO_OP_POP_SCOPE, (long)total_local_slot_count, (long)block_value_slots);
 }
 
-static void declaration(vm_t* vm, Compiler* compiler, ast_t* ast, ast_node_t* declaration, chunk_t* chunk);
-static void expression(vm_t* vm, Compiler* compiler, ast_t* ast, ast_node_t* expression_node, chunk_t* chunk);
+static void declaration(vm_t* vm, compiler_t* compiler, ast_t* ast, ast_node_t* declaration, chunk_t* chunk);
+static void expression(vm_t* vm, compiler_t* compiler, ast_t* ast, ast_node_t* expression_node, chunk_t* chunk);
 
-static type_t* gen_block(vm_t* vm, Compiler* compiler, ast_t* ast, chunk_t* chunk, ast_node_t** block, i32 node_count, i32 end_line) {
+static type_t* gen_block(vm_t* vm, compiler_t* compiler, ast_t* ast, chunk_t* chunk, ast_node_t** block, i32 node_count, i32 end_line) {
     ast_node_t* final_expression_statement = node_count > 0 ? block[node_count - 1] : NULL;
 
     final_expression_statement = final_expression_statement && final_expression_statement->node_type != ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION ?
@@ -634,7 +634,7 @@ static u64 define_global_entity(vm_t* vm, token_t* name, type_t* type) {
     return index;
 }
 
-static void declare_local_function_definition(Compiler* compiler, function_t* function){ 
+static void declare_local_function_definition(compiler_t* compiler, function_t* function){ 
     // used in assert
     (void)function;
     // TODO: fix this assert, why does function->type need to be converted to type? Will it never be unresolved?
@@ -644,18 +644,18 @@ static void declare_local_function_definition(Compiler* compiler, function_t* fu
     declare_local_entity(compiler, &empty, 1);
 }
 
-static void function_expression(vm_t* vm, Compiler* compiler, ast_t* ast, ast_node_t* function_defintion_expression, chunk_t* chunk) {
+static void function_expression(vm_t* vm, compiler_t* compiler, ast_t* ast, ast_node_t* function_defintion_expression, chunk_t* chunk) {
     ASSERT(ORSO_TYPE_IS_FUNCTION(function_defintion_expression->value_type), "must be function if calling this");
 
     function_t* stored_function = (function_t*)ast->folded_constants[function_defintion_expression->value_index].as.p;
     if (!compiler->skip_function_definitions && stored_function->chunk.code == NULL /*is not compiled yet*/) {
-        orso_compile_function(vm, ast, stored_function, function_defintion_expression);
+        compile_function(vm, ast, stored_function, function_defintion_expression);
     }
     slot_t function_value = ORSO_SLOT_P(stored_function);
     emit_constant(compiler, chunk, (byte*)&function_value, function_defintion_expression->start.line, stored_function->signature);
 }
 
-static void gen_primary(Compiler *compiler, chunk_t *chunk, ast_t *ast, type_t *value_type, i32 value_index, i32 line) {
+static void gen_primary(compiler_t *compiler, chunk_t *chunk, ast_t *ast, type_t *value_type, i32 value_index, i32 line) {
     ASSERT(value_index >= 0, "must be pointing to a contant value...");
 
     slot_t* value = &ast->folded_constants[value_index];
@@ -691,7 +691,7 @@ static void gen_primary(Compiler *compiler, chunk_t *chunk, ast_t *ast, type_t *
     }
 }
 
-static void expression_lvalue(vm_t *vm, Compiler *compiler, ast_t *ast, ast_node_t *lvalue_node, chunk_t *chunk) {
+static void expression_lvalue(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *lvalue_node, chunk_t *chunk) {
     switch (lvalue_node->node_type) {
         case ORSO_AST_NODE_TYPE_EXPRESSION_DOT:
             expression_lvalue(vm, compiler, ast, lvalue_node->lvalue_node, chunk);
@@ -808,7 +808,7 @@ static op_code_t get_lvalue_op_by_type(type_t *type) {
     return lvalue_set;
 }
 
-static void expression(vm_t *vm, Compiler *compiler, ast_t *ast, ast_node_t *expression_node, chunk_t *chunk) {
+static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *expression_node, chunk_t *chunk) {
 #define EMIT_BINARY_OP(OP, TYPE) do { \
     emit(compiler, chunk, operator.line, ORSO_OP_##OP##_##TYPE); \
 } while(false)
@@ -824,16 +824,11 @@ static void expression(vm_t *vm, Compiler *compiler, ast_t *ast, ast_node_t *exp
     emit(compiler, chunk, operator.line, ORSO_OP_NEGATE_##TYPE); \
 } while (false)
 
-// #ifdef DEBUG
-//     bool requires_entity = expression_node->type == EXPRESSION_ASSIGNMENT || expression_node->type == EXPRESSION_ENTITY;
-//     ASSERT(!compiler->literals_only || (expression_node->folded_value_index >= 0 || !requires_entity), "compiler is assuming folded values only for ALL expressions");
-// #endif
-
     if (expression_node->value_index >= 0) {
         // TODO: for now going to do this super naively until I get a better hash table that is more generic that I can
         // use for more things. This is will be super slow but I just want to get it to work.
         if (!compiler->skip_function_definitions && ORSO_TYPE_IS_FUNCTION(expression_node->value_type)) {
-            function_t* function = (function_t*)ast->folded_constants[expression_node->value_index].as.p;
+            function_t *function = (function_t*)ast->folded_constants[expression_node->value_index].as.p;
             sb_push(compiler->functions_to_compile, function);
         }
 
@@ -1327,7 +1322,7 @@ static void set_global_entity_default_value(vm_t* vm, ast_t* ast, ast_node_t* en
     }
 }
 
-static void set_local_entity_default_value(vm_t* vm, Compiler* compiler, ast_t* ast, chunk_t* chunk, ast_node_t* entity_declaration) {
+static void set_local_entity_default_value(vm_t* vm, compiler_t* compiler, ast_t* ast, chunk_t* chunk, ast_node_t* entity_declaration) {
     type_t* conform_type = entity_declaration->value_type;
 
     if (entity_declaration->data.declaration.initial_value_expression != NULL) {
@@ -1354,13 +1349,13 @@ static void global_entity_declaration(vm_t* vm, ast_t* ast, ast_node_t* entity_d
     set_global_entity_default_value(vm, ast, entity_declaration, index);
 }
 
-static void local_entity_declaration(vm_t* vm, Compiler* compiler, ast_t* ast, ast_node_t* variable_declaration, chunk_t* chunk) {
+static void local_entity_declaration(vm_t* vm, compiler_t* compiler, ast_t* ast, ast_node_t* variable_declaration, chunk_t* chunk) {
     ASSERT(variable_declaration->value_type != &OrsoTypeUnresolved, "all declarations must be resolved");
     set_local_entity_default_value(vm, compiler, ast, chunk, variable_declaration);
     declare_local_entity(compiler, &variable_declaration->start, orso_type_slot_count(variable_declaration->value_type));
 }
 
-static void declaration(vm_t *vm, Compiler *compiler, ast_t *ast, ast_node_t *declaration, chunk_t *chunk) {
+static void declaration(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *declaration, chunk_t *chunk) {
     switch (declaration->node_type) {
         case ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION: {
             ast_node_t* expression_ = declaration->data.expression;
@@ -1406,7 +1401,7 @@ void orso_code_builder_free(code_builder_t *builder) {
 }
 
 function_t *orso_generate_expression_function(code_builder_t *builder, ast_node_t *expression_node, bool is_folding_time) {
-    Compiler compiler;
+    compiler_t compiler;
     type_t *function_type = orso_type_set_fetch_function(&builder->ast->type_set, expression_node->value_type, NULL, 0);
 
     function_t *run_function = orso_new_function();
@@ -1433,8 +1428,8 @@ function_t *orso_generate_expression_function(code_builder_t *builder, ast_node_
     return function;
 }
 
-void orso_compile_function(vm_t *vm, ast_t *ast, function_t *function, ast_node_t *function_definition_expression) {
-    Compiler function_compiler;
+void compile_function(vm_t *vm, ast_t *ast, function_t *function, ast_node_t *function_definition_expression) {
+    compiler_t function_compiler;
     compiler_init(&function_compiler, vm, function, function_definition_expression->value_type);
 
     // this is placed down by the caller
@@ -1505,13 +1500,13 @@ function_t *generate_code(vm_t *vm, ast_t *ast) {
         return NULL;
     }
 
-    orso_compile_function(vm, ast, main_function, main_declaration->data.declaration.initial_value_expression);
+    compile_function(vm, ast, main_function, main_declaration->data.declaration.initial_value_expression);
 
     // TODO: Am I somehow missing an opertunity to warn for unused functions by doing this?
     for (i32 i = 0; i < sb_count(ast->function_definition_pairs); i++) {
         function_t *function = ast->function_definition_pairs[i].function;
         if (function->chunk.code == NULL) {
-            orso_compile_function(vm, ast, function, ast->function_definition_pairs[i].ast_defintion);
+            compile_function(vm, ast, function, ast->function_definition_pairs[i].ast_defintion);
         }
     }
 
