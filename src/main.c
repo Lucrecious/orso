@@ -181,12 +181,18 @@ int main(int argc, char **argv) {
         }
 
         if (trace) {
-            orso_call_function(&vm, main, myerror);
+            vm.type_set = &ast.type_set;
+            vm_begin(&vm, main);
+            do {
+                // printf("--- %d ---", vm.frames[vm.frame_count-1].ip);
+                vm_print_stack(&vm);
+                vm_disassemble_current_instruction(&vm);
+            } while (vm_step(&vm));
         }
     } else {
         vm_t vm;
         vm_init(&vm, mywrite, 1000);
-        run_source(&vm, source.cstr, myerror);
+        vm_run_source(&vm, source.cstr, myerror);
         vm_free(&vm);
     }
 

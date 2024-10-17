@@ -25,7 +25,7 @@ function_t *compile_ast(vm_t *vm, ast_t *ast) {
     return main_function;
 }
 
-void run_source(vm_t* vm, const char* source, error_function_t error_fn) {
+void vm_run_source(vm_t* vm, const char* source, error_function_t error_fn) {
     ast_t ast;
     ast_init(&ast, &vm->symbols);
 
