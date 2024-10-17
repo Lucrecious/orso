@@ -1461,7 +1461,7 @@ void orso_compile_function(vm_t* vm, ast_t* ast, function_t* function, ast_node_
 
 #define MAIN_IDENTIFIER "main"
 
-function_t* orso_generate_code(vm_t* vm, ast_t* ast) {
+function_t* generate_code(vm_t* vm, ast_t* ast) {
     function_t* main_function = NULL;
     ast_node_t* main_declaration = NULL;
 

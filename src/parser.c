@@ -93,7 +93,7 @@ typedef struct {
     Precedence precedence;
 } ParseRule;
 
-void orso_ast_init(ast_t* ast, symbol_table_t* symbols) {
+void ast_init(ast_t* ast, symbol_table_t* symbols) {
     ASSERT(symbols, "cannot be null");
     ast->allocator = (arena_t){0};
 
@@ -1072,7 +1072,7 @@ static ast_node_t* declaration(Parser* parser, bool is_top_level) {
     return node;
 }
 
-bool orso_parse(ast_t* ast, const char* source, error_function_t error_fn) {
+bool parse(ast_t* ast, const char* source, error_function_t error_fn) {
     Parser parser;
     parser_init(&parser, ast, source, error_fn);
 
@@ -1330,7 +1330,7 @@ void ast_print_ast_node(ast_node_t* node, i32 initial, const char* prefix) {
     }
 }
 
-void orso_ast_print(ast_t* ast, const char* name) {
+void ast_print(ast_t* ast, const char* name) {
     printf("=== %s ===\n", name);
     ast_print_ast_node(ast->root, 0, "");
 }

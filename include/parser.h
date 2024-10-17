@@ -235,13 +235,13 @@ typedef struct ast_t {
     symbol_table_t *symbols;
 } ast_t;
 
-void orso_ast_print(ast_t *ast, const char *name);
+void ast_print(ast_t *ast, const char *name);
 
 i32 add_value_to_ast_constant_stack(ast_t *ast, slot_t *value, type_t *type);
-bool orso_parse(ast_t *ast, const char *source, error_function_t error_fn);
+bool parse(ast_t *ast, const char *source, error_function_t error_fn);
 type_t *get_folded_type(ast_t *ast, i32 index);
 
-void orso_ast_init(ast_t *ast, symbol_table_t* symbols);
+void ast_init(ast_t *ast, symbol_table_t* symbols);
 void orso_ast_free(ast_t *ast);
 
 ast_node_t* orso_ast_node_new(ast_t *ast, ast_node_type_t node_type, bool is_in_type_context, token_t start);

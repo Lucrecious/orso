@@ -7,7 +7,7 @@ void run_source(char* source, write_function_t write_fn, error_function_t error_
     vm_t vm;
     vm_init(&vm, write_fn, 1000000);
 
-    orso_run_source(*vm, source, error_fn);
+    run_source(*vm, source, error_fn);
 
     vm_free(&vm);
 }

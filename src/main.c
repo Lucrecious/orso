@@ -16,9 +16,11 @@
 
 #define PROJECT_NAME "orso"
 
+#include "debug.h"
+
 /*
 
-[x] Use generic hash table with allocators
+[ ] Use tsoding-like arrays with allocators and replace sb
 [ ] Allow for "native" structs
 [ ] Unions as a native struct
 [ ] Write printf in orso itself
@@ -62,13 +64,51 @@ typedef int (*int_getter)(void*);
 
 int main(int argc, char **argv) {
     if (argc < 2) {
-        printf("Usage: orso <path/to/file.odl>\n");
+        printf("Usage: \n");
+        printf("    orso [-[baAt]] <path/to/file.odl>        without any option, simply runs orso file in the interpreter\n");
+        printf("                                             with options:\n");
+        printf("                                                   -b prints the byte code of the given source\n");
+        printf("                                                   -a prints the ast of the given source before static analysis\n");
+        printf("                                                   -A prints the ast of the given source after static analysis\n");
+        printf("                                                   -t runs the source in the interpreter, and prints the running byte code\n");
+        printf("Examples:\n");
+        printf("orso -t examples/hello_world.odl        runs and prints the byte code as the program runs\n");
+        printf("orso -ab examples/hello_world.odl       prints the byte code and ast of the program without running \n");
+        printf("orso examples/hello_world.odl           runs the program in the interpreter\n");
         exit(1);
     }
 
     arena_t allocator = {0};
 
-    string_t path = cstr2string(argv[1], &allocator);
+    bool print_ast_before = false;
+    bool print_ast_after = false;
+    bool print_byte_code = false;
+    bool trace = false;
+    string_t path;
+    if (argc == 2) {
+        path = cstr2string(argv[1], &allocator);
+    } else if (argc == 3) {
+        char *options = argv[1];
+        size_t options_len = strlen(options);
+
+        if (options_len < 2 || options[0] != '-') {
+            log_fatal("Invalid argument. Check usage: ./orso");
+            exit(1);
+        }
+
+        for (size_t i = 1; i < options_len; ++i) {
+            if (options[i] == 't') trace = true;
+            else if (options[i] == 'a') print_ast_before = true;
+            else if (options[i] == 'A') print_ast_after = true;
+            else if (options[i] == 'b') print_byte_code = true;
+            else {
+                log_fatal("Unknown option: %c. Check usage: ./orso", options[i]);
+                exit(1);
+            }
+        }
+
+        path = cstr2string(argv[2], &allocator);
+    }
 
     FILE* file;
     file = fopen(path.cstr, "r");
@@ -99,12 +139,56 @@ int main(int argc, char **argv) {
         source = cstr2string(source_, &allocator);
     }
 
-    vm_t vm;
-    vm_init(&vm, mywrite, 1000);
-    orso_run_source(&vm, source.cstr, myerror);
-    vm_free(&vm);
+
+    unless (!print_ast_before && !print_ast_after && !print_byte_code && !trace) {
+        vm_t vm;
+        vm_init(&vm, mywrite, 1000);
+
+        ast_t ast;
+        ast_init(&ast, &vm.symbols);
+        bool success = parse(&ast, source.cstr, myerror);
+
+        if (print_ast_before) {
+            if (!success) {
+                log_fatal("Unable to parse ast. Cannot print.");
+                exit(1);
+            }
+
+            ast_print(&ast, "before static analysis");
+        }
+
+        analyzer_t analyzer;
+        analyzer_init(&analyzer, mywrite, myerror);
+        success = resolve_ast(&analyzer, &ast);
+
+        if (print_ast_after) {
+            ast_print(&ast, "after static analysis");
+        }
+
+        if ((print_byte_code || trace) && !success) {
+            log_fatal("unable to resolve ast, and cannot trace nor generate the byte code");
+            exit(1);
+        }
+
+        function_t *main = generate_code(&vm, &ast);
+        unless (main) {
+            log_fatal("no main function. cannot trace nor generate the byte code");
+            exit(1);
+        }
+
+        if (print_byte_code) {
+            chunk_disassemble(&main->chunk, "main");
+        }
+
+        if (trace) {
+            orso_call_function(&vm, main, myerror);
+        }
+    } else {
+        vm_t vm;
+        vm_init(&vm, mywrite, 1000);
+        run_source(&vm, source.cstr, myerror);
+        vm_free(&vm);
+    }
 
     return 0;
 }
-
-// TODO: do error messages that act more like a tutorial 

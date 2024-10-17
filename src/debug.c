@@ -14,7 +14,7 @@ typedef enum {
     II_CONSTANT,
 } IndexInstruction;
 
-static i32 index_instruction(const char* name, chunk_t* chunk, i32 offset, u32 index_size_bytes, IndexInstruction instruction) {
+static i32 index_instruction(const char *name, chunk_t *chunk, i32 offset, u32 index_size_bytes, IndexInstruction instruction) {
     u64 index = 0;
     for (size_t i = 0; i < index_size_bytes; i++) {
         index <<= 8;
@@ -45,7 +45,7 @@ static i32 index_instruction(const char* name, chunk_t* chunk, i32 offset, u32 i
     return offset + index_size_bytes + 2;
 }
 
-static i32 pop_scope_instruction(const char* name, chunk_t* chunk, i32 offset) {
+static i32 pop_scope_instruction(const char *name, chunk_t *chunk, i32 offset) {
     byte stack_pop_count = chunk->code[offset + 1];
     byte block_slot_count = chunk->code[offset + 2];
     printf("%-16s %d %d", name, stack_pop_count, block_slot_count);
@@ -54,7 +54,7 @@ static i32 pop_scope_instruction(const char* name, chunk_t* chunk, i32 offset) {
     return offset + 3;
 }
 
-static i32 instruction_arg(const char* name, chunk_t* chunk, i32 offset) {
+static i32 instruction_arg(const char *name, chunk_t *chunk, i32 offset) {
     byte index = chunk->code[offset + 1];
     printf("%-16s %d", name, index);
     printf("\n");
@@ -62,19 +62,19 @@ static i32 instruction_arg(const char* name, chunk_t* chunk, i32 offset) {
     return offset + 2;
 }
 
-static int jump_instruction(const char* name, int sign, chunk_t* chunk, int offset) {
+static int jump_instruction(const char *name, int sign, chunk_t *chunk, int offset) {
     u16 jump = ORSO_u8s_to_u16(chunk->code[offset + 1], chunk->code[offset + 2]);
     printf("%-16s %4d -> %d\n", name, offset, offset + 3 + sign * jump);
     return offset + 3;
 }
 
-static i32 simple_instruction(const char* name, i32 offset) {
+static i32 simple_instruction(const char *name, i32 offset) {
     printf("%s\n", name);
     return offset + 1;
 }
 
 
-static i32 get_field_instruction(const char* name, chunk_t* chunk, i32 offset, bool has_field_size) {
+static i32 get_field_instruction(const char *name, chunk_t *chunk, i32 offset, bool has_field_size) {
     //byte total_struct_size = chunk->code[offset + 1];
     byte field_offset = chunk->code[offset + 2];
 
@@ -88,7 +88,7 @@ static i32 get_field_instruction(const char* name, chunk_t* chunk, i32 offset, b
     }
 }
 
-i32 disassemble_instruction(chunk_t* chunk, i32 offset) {
+i32 disassemble_instruction(chunk_t *chunk, i32 offset) {
     printf("%04d ", offset);
 
 
@@ -165,7 +165,7 @@ i32 disassemble_instruction(chunk_t* chunk, i32 offset) {
     }
 }
 
-void chunk_disassemble(chunk_t* chunk, const char* name) {
+void chunk_disassemble(chunk_t *chunk, const char *name) {
     printf("=== %s ===\n", name);
 
     for (i32 offset = 0; offset < sb_count(chunk->code);) {
