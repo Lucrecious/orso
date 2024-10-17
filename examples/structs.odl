@@ -1,12 +1,13 @@
 vector2 :: struct {
-    x := 42.0;
-    y := 69.0;
+    x := 0.0;
+    y := 0.0;
 };
 
 main :: () -> i32 {
-    v2 := vector2.{1, 2};
-    print_expr v2.x;
-    print_expr v2.y;
+    left := vector2.{-1};
+    right := vector2.{1};
+    up := vector2.{,1};
+    down := vector2.{,-1};
 
     return 0;
 };

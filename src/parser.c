@@ -783,14 +783,16 @@ static ast_node_t* print_(Parser* parser, bool is_in_type_context) {
 }
 
 static ast_node_t *dot(Parser* parser, bool is_in_type_context) {
-
-
     if (match(parser, TOKEN_BRACE_OPEN)) {
         ast_node_t *initiailizer = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER, is_in_type_context, parser->previous);
         if (!match(parser, TOKEN_BRACE_CLOSE)) {
             do {
-                ast_node_t *argument = expression(parser, is_in_type_context);
-                sb_push(initiailizer->data.initiailizer.arguments, argument);
+                if (check(parser, TOKEN_COMMA) || check(parser, TOKEN_BRACE_CLOSE)) {
+                    sb_push(initiailizer->data.initiailizer.arguments, NULL);
+                } else {
+                    ast_node_t *argument = expression(parser, is_in_type_context);
+                    sb_push(initiailizer->data.initiailizer.arguments, argument);
+                }
 
             } while (match(parser, TOKEN_COMMA));
 
@@ -967,7 +969,7 @@ static ast_node_t* expression(Parser* parser, bool is_in_type_context) {
 }
 
 // TODO: I don't even remember why i have as_expression_statement here... i don't know whats the point???
-static ast_node_t* statement(Parser* parser, bool omit_end_of_statement) {
+static ast_node_t *statement(Parser* parser, bool omit_end_of_statement) {
     bool is_return = false;
     ast_node_type_t node_type;
     if (match(parser, TOKEN_RETURN)) {
@@ -977,7 +979,7 @@ static ast_node_t* statement(Parser* parser, bool omit_end_of_statement) {
         node_type = ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION;
     }
 
-    ast_node_t* statement_node = orso_ast_node_new(parser->ast, node_type, false, parser->current);
+    ast_node_t *statement_node = orso_ast_node_new(parser->ast, node_type, false, parser->current);
 
     // this can be shortened to (!is_return || check_expression(parser)) but this is clearer
     if (is_return) {
@@ -998,8 +1000,8 @@ static ast_node_t* statement(Parser* parser, bool omit_end_of_statement) {
     return statement_node;
 }
 
-static ast_node_t* entity_declaration(Parser* parser, bool as_parameter) {
-    ast_node_t* entity_declaration_node = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_DECLARATION, false, parser->current);
+static ast_node_t *entity_declaration(Parser* parser, bool as_parameter) {
+    ast_node_t *entity_declaration_node = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_DECLARATION, false, parser->current);
 
     advance(parser);
 
@@ -1053,8 +1055,8 @@ static ast_node_t* entity_declaration(Parser* parser, bool as_parameter) {
     return entity_declaration_node;
 }
 
-static ast_node_t* declaration(Parser* parser, bool is_top_level) {
-    ast_node_t* node = NULL;
+static ast_node_t *declaration(Parser *parser, bool is_top_level) {
+    ast_node_t *node = NULL;
     if (is_incoming_declaration_declaration(parser)) {
         node = entity_declaration(parser, false);
     } else {
@@ -1073,7 +1075,7 @@ static ast_node_t* declaration(Parser* parser, bool is_top_level) {
     return node;
 }
 
-bool parse(ast_t* ast, const char* source, error_function_t error_fn) {
+bool parse(ast_t *ast, const char *source, error_function_t error_fn) {
     Parser parser;
     parser_init(&parser, ast, source, error_fn);
 
@@ -1082,7 +1084,7 @@ bool parse(ast_t* ast, const char* source, error_function_t error_fn) {
     ast->root = orso_ast_node_new(parser.ast, ORSO_AST_NODE_TYPE_EXPRESSION_BLOCK, false, parser.previous);
 
     while (!match(&parser, TOKEN_EOF)) {
-        ast_node_t* declaration_node = declaration(&parser, true);
+        ast_node_t *declaration_node = declaration(&parser, true);
         if (declaration_node) {
             sb_push(ast->root->data.block, declaration_node);
         }
@@ -1233,7 +1235,12 @@ static void ast_print_ast_node(ast_node_t *node, u32 level) {
                 ast_node_t *arg = node->data.initiailizer.arguments[i];
                 print_indent(level + 1);
                 print_line("arg %llu", i);
-                ast_print_ast_node(arg, level + 2);
+                if (arg) {
+                    ast_print_ast_node(arg, level + 2);
+                } else {
+                    print_indent(level+2);
+                    print_line("<default>");
+                }
             }
             break;
         }

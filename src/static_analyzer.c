@@ -427,6 +427,7 @@ static void resolve_foldable(
                 foldable = true;
                 for (int i = 0; i < sb_count(expression->data.initiailizer.arguments); ++i) {
                     ast_node_t *arg = expression->data.initiailizer.arguments[i];
+                    unless (arg) continue;
                     foldable &= arg->foldable;
                 }
             }
@@ -1002,6 +1003,7 @@ void orso_resolve_expression(
                 bool is_invalidated = false;
                 for (int i = 0; i < arg_count; ++i) {
                     ast_node_t *arg = expression->data.initiailizer.arguments[i];
+                    unless (arg) continue;
                     orso_resolve_expression(analyzer, ast, state, arg);
                     if (ORSO_TYPE_IS_INVALID(arg->value_type)) {
                         is_invalidated = true;
