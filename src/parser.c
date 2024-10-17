@@ -1177,80 +1177,244 @@ type_t *get_folded_type(ast_t *ast, i32 index) {
     return type;
 }
 
-static void ast_print_ast_node(ast_node_t *node, u32 level) {
-    static arena_t tmp_allocator = {0};
-
+static void print_indent(u32 level) {
     for (u32 i = 0; i < level; ++i) {
         printf(" ");
     }
+}
+
+static void print_line(const cstr_t format, ...) {
+	va_list args;
+	va_start(args, format);
+
+	vprintf(format, args);
+
+	va_end(args);
+
+	printf("\n");
+}
+
+static void ast_print_ast_node(ast_node_t *node, u32 level) {
+    static arena_t tmp_allocator = {0};
+
+    #define type2cstr(node) (type_to_string(node->value_type, &tmp_allocator).cstr)
 
     switch (node->node_type) {
         case ORSO_AST_NODE_TYPE_EXPRESSION_BINARY: {
-            string_t type_string = type_to_string(node->value_type, &tmp_allocator);
-            string_t label = string_format("binary (%.*s): %s", &tmp_allocator, node->operator.length, node->operator.start, type_string.cstr);
-            printf("%s\n", label.cstr);
-            ast_print_ast_node(node->data.binary.lhs, level+1);
-            ast_print_ast_node(node->data.binary.rhs, level+1);
+            string_t label = string_format("binary (%.*s): %s", &tmp_allocator, node->operator.length, node->operator.start, type2cstr(node));
+
+            print_indent(level);
+            print_line("%s", label.cstr);
+
+            print_indent(level + 1);
+            print_line("left");
+            ast_print_ast_node(node->data.binary.lhs, level+2);
+
+            print_indent(level + 1);
+            print_line("right");
+            ast_print_ast_node(node->data.binary.rhs, level+2);
             break;
         }
         case ORSO_AST_NODE_TYPE_EXPRESSION_GROUPING: {
+            print_indent(level);
+            print_line("group (...): %s", type2cstr(node));
+            ast_print_ast_node(node->data.expression, level + 1);
             break;
         }
 
         case ORSO_AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER: {
+            print_indent(level);
+            print_line("type initializer: %s", type2cstr(node));
+
+            print_indent(level + 1);
+            print_line("type");
+            ast_print_ast_node(node->data.initiailizer.type, level+2);
+            for (int i = 0; i < sb_count(node->data.initiailizer.arguments); ++i) {
+                ast_node_t *arg = node->data.initiailizer.arguments[i];
+                print_indent(level + 1);
+                print_line("arg %llu", i);
+                ast_print_ast_node(arg, level + 2);
+            }
             break;
         }
 
         case ORSO_AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT: {
+            print_indent(level);
+            print_line("implicit cast: %s", type2cstr(node));
+
+            ast_print_ast_node(node->data.expression, level + 1);
             break;
         }
         case ORSO_AST_NODE_TYPE_EXPRESSION_UNARY: {
+            print_indent(level);
+            print_line("unary (%.*s): %s", node->operator.length, node->operator.start, type2cstr(node));
+            ast_print_ast_node(node->data.expression, level + 1);
             break;
         }
         case ORSO_AST_NODE_TYPE_EXPRESSION_PRIMARY: {
+            print_indent(level);
+            print_line("primary (%.*s): %s", node->start.length, node->start.start, type2cstr(node));;
             break;
         }
         case ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY: {
+            print_indent(level);
+            print_line("entity (%.*s): %s", node->data.dot.identifier.length, node->data.dot.identifier.start, type2cstr(node));
             break;
         }
         case ORSO_AST_NODE_TYPE_EXPRESSION_ASSIGNMENT: {
+            print_indent(level);
+            print_line("=: %s", type2cstr(node));
+
+            print_indent(level + 1);
+            print_line("lvalue");
+            ast_print_ast_node(node->data.binary.lhs, level + 2);
+
+            print_indent(level + 1);
+            print_line("rhs");
+            ast_print_ast_node(node->data.binary.rhs, level + 2);
             break;
         }
         case ORSO_AST_NODE_TYPE_EXPRESSION_BLOCK: {
+            print_indent(level);
+            print_line("{...}: %s", type2cstr(node));
+            for (int i = 0; i < sb_count(node->data.block); ++i) {
+                ast_print_ast_node(node->data.block[i], level + 1);
+            }
             break;
         }
         case ORSO_AST_NODE_TYPE_EXPRESSION_BRANCHING: {
+            print_indent(level);
+            cstr_t branch = NULL;
+            unless (node->data.branch.looping) {
+                if (node->data.branch.condition_negated) {
+                    branch = "unless";
+                } else {
+                    branch = "if";
+                }
+            } else {
+                if (node->data.branch.condition_negated) {
+                    branch = "until";
+                } else {
+                    branch = "while";
+                }
+            }
+            print_line("branch (%s): %s", branch, type2cstr(node));
+
+            print_indent(level + 1);
+            print_line("condition");
+            ast_print_ast_node(node->data.branch.condition, level + 2);
+
+            print_indent(level + 1);
+            print_line("then");
+            ast_print_ast_node(node->data.branch.then_expression, level + 2);
+
+            if (node->data.branch.else_expression) {
+                print_indent(level + 1);
+                print_line("else");
+                ast_print_ast_node(node->data.branch.else_expression, level + 2);
+            }
             break;
         }
         case ORSO_AST_NODE_TYPE_EXPRESSION_CALL: {
+            print_indent(level);
+            print_line("call: %s", type2cstr(node));
+
+            print_indent(level+1);
+            print_line("callee");
+            ast_print_ast_node(node->data.call.callee, level + 2);
+            
+            print_indent(level+1);
+            print_line("arguments");
+
+            for (int i = 0; i < sb_count(node->data.call.arguments); ++i) {
+                ast_node_t *arg = node->data.call.arguments[i];
+                ast_print_ast_node(arg, level+2);
+            }
             break;
         }
         case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION: {
+            print_indent(level);
+            print_line("function definition: %s", type2cstr(node));
+
+            print_indent(level + 1);
+            print_line("definition");
+            ast_print_ast_node(node->data.function.block, level + 2);
             break;
         }
         case ORSO_AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION: {
+            print_indent(level);
+            print_line("struct: %s", type2cstr(node));
+
+            print_indent(level + 1);
+            print_line("members");
+            for (int i = 0; i < sb_count(node->data.struct_.declarations); ++i) {
+                ast_node_t *declaration = node->data.struct_.declarations[i];
+                ast_print_ast_node(declaration, level + 2);
+            }
             break;
         }
         case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE: {
+            print_indent(level);
+            print_line("signature: %s", type2cstr(node));
             break;
         }
-        case ORSO_AST_NODE_TYPE_EXPRESSION_STATEMENT:
+        case ORSO_AST_NODE_TYPE_EXPRESSION_STATEMENT: {
+            print_indent(level);
+            print_line("expression statement: %s", type2cstr(node));
+            ast_print_ast_node(node->data.expression, level + 1);
             break;
-        case ORSO_AST_NODE_TYPE_EXPRESSION_PRINT_EXPR:
+        }
+        case ORSO_AST_NODE_TYPE_EXPRESSION_PRINT_EXPR: {
+            print_indent(level);
+            print_line("print_expr (to be removed)");
             break;
-        case ORSO_AST_NODE_TYPE_EXPRESSION_PRINT:
+        }
+        case ORSO_AST_NODE_TYPE_EXPRESSION_PRINT: {
+            print_indent(level);
+            print_line("print (to be removed)");
             break;
-        case ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION:
+        }
+        case ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION: {
+            print_indent(level);
+            print_line("statement expression: %s", type2cstr(node));
+            ast_print_ast_node(node->data.expression, level + 1);
             break;
-        case ORSO_AST_NODE_TYPE_STATEMENT_RETURN:
+        }
+        case ORSO_AST_NODE_TYPE_STATEMENT_RETURN: {
+            print_indent(level);
+            print_line("return");
+
+            ast_print_ast_node(node->data.expression, level + 1);
             break;
-        case ORSO_AST_NODE_TYPE_EXPRESSION_DOT:
+        }
+        case ORSO_AST_NODE_TYPE_EXPRESSION_DOT: {
+            print_indent(level);
+            print_line(".: %s", type2cstr(node));
+
+            print_indent(level+1);
+            print_line("item");
+            ast_print_ast_node(node->data.dot.lhs, level+2);
+
+            print_indent(level + 1);
+            print_line("accessor (%.*s)", node->data.dot.identifier.length, node->data.dot.identifier.start);
             break;
+        }
         case ORSO_AST_NODE_TYPE_DECLARATION: {
+            print_indent(level);
+            print_line("declaration (%.*s): %s", node->data.declaration.identifier.length, node->data.declaration.identifier.start, type2cstr(node));
+
+            if (node->data.declaration.initial_value_expression) {
+                print_indent(level+1);
+                print_line("initial value");
+                ast_print_ast_node(node->data.declaration.initial_value_expression, level+2);
+            }
             break;
         }
-        case ORSO_AST_NODE_TYPE_UNDEFINED:
+        case ORSO_AST_NODE_TYPE_UNDEFINED: {
+            print_indent(level);
+            print_line("<undefined>");
             break;
+        }
     }
 
     arena_reset(&tmp_allocator);
