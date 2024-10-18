@@ -7,7 +7,6 @@
 #include "opcodes.h"
 #include "parser.h"
 #include "static_analyzer.h"
-#include "sb.h"
 #include "type.h"
 #include "type_set.h"
 

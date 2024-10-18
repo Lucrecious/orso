@@ -5,7 +5,6 @@
 #include "def.h"
 #include "instructions.h"
 #include "opcodes.h"
-#include "sb.h"
 #include "type_set.h"
 
 typedef enum {

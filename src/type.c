@@ -3,8 +3,6 @@
 #include "symbol_table.h"
 #include "type_set.h"
 
-#include "sb.h"
-
 bool orso_union_type_contains_type(type_t *union_, type_t *type) {
     if (!ORSO_TYPE_IS_UNION(type)) {
         return orso_union_type_has_type(union_, type);

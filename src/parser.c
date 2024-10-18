@@ -8,7 +8,6 @@
 #include "error.h"
 #include "type.h"
 #include "type_set.h"
-#include "sb.h"
 #include "stringt.h"
 
 /*

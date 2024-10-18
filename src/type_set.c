@@ -1,6 +1,5 @@
 #include "type_set.h"
 
-#include "sb.h"
 #include <stdlib.h>
 #include "slot.h"
 

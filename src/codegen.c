@@ -8,7 +8,6 @@
 
 #include "opcodes.h"
 #include "instructions.h"
-#include "sb.h"
 #include "type_set.h"
 
 typedef struct {

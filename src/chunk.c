@@ -4,7 +4,6 @@
 
 #include "def.h"
 #include "object.h"
-#include "sb.h"
 
 #ifdef DEBUG
 u32 chunk_add_constant(chunk_t* chunk, byte* data, u32 size, type_t* type)
