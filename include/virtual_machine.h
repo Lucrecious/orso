@@ -28,7 +28,7 @@ typedef struct vm_t {
 #ifdef DEBUG
         types_t types;
 #endif
-        slot_t *values;
+        slots_t values;
     } globals;
 
     symbol_table_t symbols;

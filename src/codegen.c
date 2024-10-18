@@ -16,7 +16,7 @@ typedef struct {
     i32 depth;
     byte slot_count;
     i32 stack_position;
-} Local;
+} local_t;
 
 
 typedef struct functions_t functions_t;
@@ -27,14 +27,22 @@ struct functions_t {
     arena_t *allocator;
 };
 
+typedef struct locals_t locals_t;
+struct locals_t {
+    local_t *items;
+    size_t count;
+    size_t capacity;
+    arena_t *allocator;
+};
+
 typedef struct compiler_t {
-    function_t* function;
+    function_t *function;
 
     bool skip_function_definitions;
 
     functions_t functions_to_compile;
 
-    Local* locals;
+    locals_t locals;
     i32 locals_count;
     i32 scope_depth;
     i32 current_stack_size;
@@ -54,7 +62,7 @@ static void compiler_init(compiler_t* compiler, vm_t* vm, function_t* function, 
     compiler->functions_to_compile = (functions_t){.allocator=&vm->allocator};
     compiler->function = NULL;
 
-    compiler->locals = NULL;
+    compiler->locals = (locals_t){.allocator=&vm->allocator};
     compiler->scope_depth = 0;
     compiler->locals_count = 0;
 
@@ -67,8 +75,7 @@ static void compiler_init(compiler_t* compiler, vm_t* vm, function_t* function, 
 }
 
 static void compiler_free(compiler_t* compiler) {
-    sb_free(compiler->locals);
-    compiler->locals = NULL;
+    compiler->locals.count = 0;
     compiler->locals_count = 0;
 
     compiler->current_stack_size = 0;
@@ -481,10 +488,10 @@ static function_t* compiler_end(vm_t* vm, compiler_t* compiler, ast_t* ast, chun
 
 #ifdef DEBUG
 #define DECLARE_GLOBAL(vm, name, slot_count, type) add_global(vm, name, slot_count, type)
-static i32 add_global(vm_t* vm, token_t* name, i32 slot_count, type_t* type)
+static i32 add_global(vm_t *vm, token_t *name, i32 slot_count, type_t* type)
 #else
 #define DECLARE_GLOBAL(vm, name, slot_count, type) add_global(vm, name, slot_count)
-static i32 add_global(vm_t* vm, token_t* name, i32 slot_count)
+static i32 add_global(vm_t *vm, token_t *name, i32 slot_count)
 #endif
 {
     symbol_t* identifier = orso_new_symbol_from_cstrn(name->start, name->length, &vm->symbols);
@@ -493,7 +500,7 @@ static i32 add_global(vm_t* vm, token_t* name, i32 slot_count)
     ASSERT(!symbol_table_get(&vm->globals.name_to_index, identifier, &index_slot), "double global definition");
 
     // Use the specific khash for this
-    index_slot = ORSO_SLOT_I(sb_count(vm->globals.values));
+    index_slot = ORSO_SLOT_I(vm->globals.values.count);
     symbol_table_set(&vm->globals.name_to_index, identifier, index_slot);
 
     for (i32 i = 0; i < slot_count; i++) {
@@ -501,7 +508,7 @@ static i32 add_global(vm_t* vm, token_t* name, i32 slot_count)
         array_push(&vm->globals.types, type);
 #endif
 
-        sb_push(vm->globals.values, ORSO_SLOT_I(0));
+        array_push(&vm->globals.values, ORSO_SLOT_I(0));
     }
 
     i32 index = index_slot.as.i;
@@ -509,16 +516,16 @@ static i32 add_global(vm_t* vm, token_t* name, i32 slot_count)
     return index;
 }
 
-static i32 add_local(compiler_t* compiler, token_t name, i32 slot_count) {
+static i32 add_local(compiler_t *compiler, token_t name, i32 slot_count) {
     ASSERT(slot_count > 0, "local must consume stack space");
 
-    while (sb_count(compiler->locals) <= compiler->locals_count) {
-        sb_push(compiler->locals, (Local){ .depth = 0 });
+    while (compiler->locals_count >= 0 && compiler->locals.count <= (size_t)compiler->locals_count) {
+        array_push(&compiler->locals, (local_t){ .depth = 0 });
     }
 
-    Local* previous_local = compiler->locals_count > 0 ?
-            &compiler->locals[compiler->locals_count - 1] : NULL;
-    Local* local = &compiler->locals[compiler->locals_count++];
+    local_t *previous_local = compiler->locals_count > 0 ?
+            &compiler->locals.items[compiler->locals_count - 1] : NULL;
+    local_t *local = &compiler->locals.items[compiler->locals_count++];
     local->name = name;
     local->depth = compiler->scope_depth;
     local->slot_count = slot_count;
@@ -535,11 +542,11 @@ static i32 add_local(compiler_t* compiler, token_t name, i32 slot_count) {
     return compiler->locals_count - 1;
 }
 
-static i32 declare_local_entity(compiler_t* compiler, token_t* name, i32 slot_count) {
+static i32 declare_local_entity(compiler_t *compiler, token_t *name, i32 slot_count) {
     return add_local(compiler, *name, slot_count);
 }
 
-static i32 retrieve_global_variable(vm_t* vm, token_t* name) {
+static i32 retrieve_global_variable(vm_t *vm, token_t *name) {
     symbol_t* identifier = orso_new_symbol_from_cstrn(name->start, name->length, &vm->symbols);
     slot_t value;
     if (!symbol_table_get(&vm->globals.name_to_index, identifier, &value)) {
@@ -549,7 +556,7 @@ static i32 retrieve_global_variable(vm_t* vm, token_t* name) {
     return value.as.i;
 }
 
-static bool identifiers_equal(token_t* a, token_t* b) {
+static bool identifiers_equal(token_t *a, token_t *b) {
     if (a->length != b->length) {
         return false;
     }
@@ -557,9 +564,9 @@ static bool identifiers_equal(token_t* a, token_t* b) {
     return memcmp(a->start, b->start, a->length) == 0;
 }
 
-static i64 retrieve_local_variable(compiler_t* compiler, token_t* name) {
+static i64 retrieve_local_variable(compiler_t *compiler, token_t *name) {
     for (i64 i = compiler->locals_count - 1; i >= 0; i--) {
-        Local* local = &compiler->locals[i];
+        local_t *local = &compiler->locals.items[i];
         if (identifiers_equal(name, &local->name)) {
             return i;
         }
@@ -577,7 +584,7 @@ static u32 retrieve_variable(vm_t* vm, compiler_t* compiler, token_t* name, bool
         *is_local = false;
         return index;
     } else {
-        index = compiler->locals[index].stack_position;
+        index = compiler->locals.items[index].stack_position;
 
         *is_local = true;
         return index;
@@ -594,7 +601,7 @@ static void end_scope(compiler_t* compiler, chunk_t* chunk, type_t* block_value_
     // pop all local object markers
     i32 total_local_slot_count = 0;
     while (compiler->locals_count > 0) {
-        Local* local = &compiler->locals[compiler->locals_count - 1];
+        local_t* local = &compiler->locals.items[compiler->locals_count - 1];
         if (local->depth <= compiler->scope_depth) {
             break;
         }
@@ -1309,21 +1316,21 @@ static void set_global_entity_default_value(vm_t* vm, ast_t* ast, ast_node_t* en
 
         u32 index = global_index;
         if (ORSO_TYPE_IS_UNION(conform_type)) {
-            vm->globals.values[index] = ORSO_SLOT_P(default_expression->value_type);
+            vm->globals.values.items[index] = ORSO_SLOT_P(default_expression->value_type);
             index++;
             slot_count--;
         } 
         
         for (u32 i = 0; i < slot_count; ++i) {
-            vm->globals.values[index + i] = ast->folded_constants[default_expression->value_index + i];
+            vm->globals.values.items[index + i] = ast->folded_constants[default_expression->value_index + i];
         }
     } else {
         if (ORSO_TYPE_IS_UNION(conform_type)) {
             ASSERT(orso_type_fits(conform_type, &OrsoTypeVoid), "default type only allowed for void type unions.");
-            vm->globals.values[global_index] = ORSO_SLOT_P(&OrsoTypeVoid);
+            vm->globals.values.items[global_index] = ORSO_SLOT_P(&OrsoTypeVoid);
             // no need to set any other value since they should be 0
         } else {
-            memcpy(&vm->globals.values[global_index], &ast->folded_constants[entity_declaration->value_index], orso_type_size_bytes(conform_type));
+            memcpy(&vm->globals.values.items[global_index], &ast->folded_constants[entity_declaration->value_index], orso_type_size_bytes(conform_type));
         }
     }
 }

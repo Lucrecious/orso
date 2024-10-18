@@ -29,7 +29,7 @@ void vm_init(vm_t *vm, write_function_t write_fn, i32 stack_size) {
     vm->stack = arena_alloc(&vm->allocator, sizeof(slot_t)*stack_size_slot_count);
     vm->stack_top = vm->stack;
 
-    vm->globals.values = NULL;
+    vm->globals.values = (slots_t){.allocator=&vm->allocator};
 
 #ifdef DEBUG
     vm->stack_types = arena_alloc(&vm->allocator, sizeof(type_t*)*stack_size_slot_count);
@@ -52,8 +52,7 @@ void vm_free(vm_t* vm) {
     vm->globals.types.count = 0;
 #endif
 
-    sb_free(vm->globals.values);
-    vm->globals.values = NULL;
+    vm->globals.values.count = 0;
 }
 
 #ifdef DEBUG
@@ -248,7 +247,7 @@ bool vm_step(vm_t *vm) {
 
         case ORSO_OP_PUSH_GLOBAL_ADDRESS: {
             u32 index = READ_U32();
-            PUSH(ORSO_SLOT_P(((byte*)vm->globals.values) + index), &OrsoTypeInteger64);
+            PUSH(ORSO_SLOT_P(((byte*)vm->globals.values.items) + index), &OrsoTypeInteger64);
             break;
         }
 
@@ -311,7 +310,7 @@ memcpy(current_top, constant, size); \
 #define PUSH_GLOBAL() do { \
 slot_t* current_top = vm->stack_top; \
 RESERVE_STACK_SPACE(vm, orso_bytes_to_slots(size), (vm->globals.types.items[index / sizeof(slot_t)])); \
-byte* global = ((byte*)vm->globals.values) + index; \
+byte* global = ((byte*)vm->globals.values.items) + index; \
 memcpy(current_top, global, size); \
 } while(0)
 
