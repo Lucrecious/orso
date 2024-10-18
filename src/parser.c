@@ -1143,7 +1143,7 @@ i32 orso_zero_value(ast_t *ast, type_t *type, symbol_table_t *symbol_table) {
         }
 
         case ORSO_TYPE_STRUCT: {
-            for (i32 i = 0; i < orso_bytes_to_slots(type->data.struct_.total_bytes); i++) {
+            for (size_t i = 0; i < orso_bytes_to_slots(type->data.struct_.total_bytes); i++) {
                 value[i] = ORSO_SLOT_I(0);
             }
             break;

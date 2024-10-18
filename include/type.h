@@ -126,7 +126,7 @@ bool orso_union_has_integer(type_t *type, bool include_bool);
 
 bool orso_type_is_or_has_integer(type_t *type, bool include_bool);
 
-i32 orso_bytes_to_slots(i32 byte_count);
+size_t orso_bytes_to_slots(i32 byte_count);
 
 u32 orso_type_size_bytes(type_t *type);
 
@@ -134,7 +134,7 @@ struct_field_t *orso_type_struct_find_field(type_t *struct_, const char *name, s
 
 bool orso_integer_fit(type_t *storage_type, type_t *value_type, bool include_bool);
 
-i32 orso_type_slot_count(type_t *type);
+size_t orso_type_slot_count(type_t *type);
 
 bool orso_type_fits(type_t *storage_type, type_t *value_type);
 

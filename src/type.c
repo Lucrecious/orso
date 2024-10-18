@@ -258,7 +258,7 @@ bool orso_type_is_or_has_integer(type_t* type, bool include_bool) {
     }
 }
 
-i32 orso_bytes_to_slots(i32 byte_count) {
+size_t orso_bytes_to_slots(i32 byte_count) {
     if (byte_count == 0) {
         return 1;
     }
@@ -349,7 +349,7 @@ bool orso_integer_fit(type_t *storage_type, type_t *value_type, bool include_boo
     return orso_type_size_bytes(storage_type) >= orso_type_size_bytes(value_type);
 }
 
-i32 orso_type_slot_count(type_t* type) {
+size_t orso_type_slot_count(type_t *type) {
     return orso_bytes_to_slots(orso_type_size_bytes(type));
 }
 

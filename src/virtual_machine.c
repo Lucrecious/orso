@@ -298,20 +298,21 @@ bool vm_step(vm_t *vm) {
         }
 
         case ORSO_OP_POP_SCOPE: {
-            byte local_slot_count = READ_BYTE();
-            byte block_value_slots = READ_BYTE();
+            op_code_pop_scope_t *pop_scope = READ_CODE(op_code_pop_scope_t);
+            // byte local_slot_count = READ_BYTE();
+            // byte block_value_slots = READ_BYTE();
             u32 stack_size = vm->stack_top - vm->stack;
 
-            for (i32 i = 0; i < block_value_slots; i++) {
-                vm->stack[stack_size - (local_slot_count + block_value_slots) + i] = *(vm->stack_top - block_value_slots + i);
+            for (byte i = 0; i < pop_scope->value_size_slots; ++i) {
+                vm->stack[stack_size - (pop_scope->scope_size_slots + pop_scope->value_size_slots) + i] = *(vm->stack_top - pop_scope->value_size_slots + i);
         #ifdef DEBUG
-                u32 type_index = (vm->stack_top - block_value_slots + i) - vm->stack;
-                vm->stack_types[stack_size - (local_slot_count + block_value_slots) + i] = *(vm->stack_types + type_index);
+                u32 type_index = (vm->stack_top - pop_scope->value_size_slots + i) - vm->stack;
+                vm->stack_types[stack_size - (pop_scope->scope_size_slots + pop_scope->value_size_slots) + i] = *(vm->stack_types + type_index);
         #endif
 
             }
 
-            POPN(local_slot_count);
+            POPN(pop_scope->scope_size_slots);
             break;
         }
 

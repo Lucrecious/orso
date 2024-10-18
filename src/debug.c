@@ -44,15 +44,6 @@ static i32 index_instruction(const char *name, chunk_t *chunk, i32 offset, u32 i
     return offset + index_size_bytes + 2;
 }
 
-static i32 pop_scope_instruction(const char *name, chunk_t *chunk, i32 offset) {
-    byte stack_pop_count = chunk->code.items[offset + 1];
-    byte block_slot_count = chunk->code.items[offset + 2];
-    printf("%-16s %d %d", name, stack_pop_count, block_slot_count);
-    printf("\n");
-
-    return offset + 3;
-}
-
 static i32 instruction_arg(const char *name, chunk_t *chunk, i32 offset) {
     byte index = chunk->code.items[offset + 1];
     printf("%-16s %d", name, index);
@@ -111,7 +102,11 @@ i32 disassemble_instruction(chunk_t *chunk, i32 offset) {
             printf("OP_POPN n: %d\n", popn->n);
             return offset + sizeof(op_code_popn_t);
         };
-        case ORSO_OP_POP_SCOPE: return pop_scope_instruction("OP_POP_SCOPE", chunk, offset);
+        case ORSO_OP_POP_SCOPE: {
+            op_code_pop_scope_t *pop_scope = (op_code_pop_scope_t*)(chunk->code.items + offset) ;
+            printf("OP_POP_SCOPE scope_size_slots: %d, value_size_slots: %d\n", pop_scope->scope_size_slots, pop_scope->value_size_slots);
+            return offset + sizeof(op_code_pop_scope_t);
+        }
         case ORSO_OP_PUSH_0: return simple_instruction("OP_PUSH_0", offset);
         case ORSO_OP_PUSH_1: return simple_instruction("OP_PUSH_1", offset);
         case ORSO_OP_PUSH_LOCAL_ADDRESS: return index_instruction("OP_PUSH_LOCAL_ADDRESS", chunk, offset, 2, II_LOCAL) - 1;

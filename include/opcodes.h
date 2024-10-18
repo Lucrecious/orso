@@ -83,6 +83,13 @@ struct op_code_popn_t {
     byte n;
 };
 
+typedef struct op_code_pop_scope_t op_code_pop_scope_t;
+struct op_code_pop_scope_t {
+    op_code_t op;
+    byte scope_size_slots;
+    byte value_size_slots;
+};
+
 typedef struct op_code_jump_t op_code_jump_t;
 struct op_code_jump_t {
     op_code_t op;

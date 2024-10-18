@@ -101,6 +101,22 @@ static size_t emit_(compiler_t *compiler, chunk_t *chunk, i32 line, op_code_t *o
             stack_effect = 0;
             break;
         }
+        case ORSO_OP_POPN: {
+            op_code_popn_t *popn = (op_code_popn_t*)op_code;
+            stack_effect = -popn->n;
+            break;
+        }
+
+        case ORSO_OP_POP: {
+            stack_effect = -1;
+            break;
+        }
+
+        case ORSO_OP_POP_SCOPE: {
+            op_code_pop_scope_t *pop_scope = (op_code_pop_scope_t*)op_code;
+            stack_effect = -pop_scope->scope_size_slots;
+            break;
+        }
         default: break;
     }
 
@@ -627,7 +643,7 @@ static void end_scope(compiler_t *compiler, chunk_t *chunk, type_t *block_value_
     compiler->scope_depth--;
 
     // pop all local object markers
-    i32 total_local_slot_count = 0;
+    size_t total_local_slot_count = 0;
     while (compiler->locals_count > 0) {
         local_t *local = &compiler->locals.items[compiler->locals_count - 1];
         if (local->depth <= compiler->scope_depth) {
@@ -638,9 +654,23 @@ static void end_scope(compiler_t *compiler, chunk_t *chunk, type_t *block_value_
         compiler->locals_count--;
     }
 
-    i32 block_value_slots = orso_type_slot_count(block_value_type);
+    size_t block_value_slots = orso_type_slot_count(block_value_type);
 
-    emit(compiler, chunk, line, ORSO_OP_POP_SCOPE, (long)total_local_slot_count, (long)block_value_slots);
+    if (total_local_slot_count > UINT8_MAX || block_value_slots > UINT8_MAX) {
+        printf("TODO: need to create code gen error");
+        UNREACHABLE();
+        return;
+    }
+
+    {
+        op_code_pop_scope_t pop_scope = {
+            .op = ORSO_OP_POP_SCOPE,
+            .scope_size_slots = (byte)total_local_slot_count,
+            .value_size_slots = (byte)block_value_slots,
+        };
+        emit_(compiler, chunk, line, (op_code_t*)&pop_scope, sizeof(op_code_pop_scope_t));
+    }
+    // emit(compiler, chunk, line, ORSO_OP_POP_SCOPE, (long)total_local_slot_count, (long)block_value_slots);
 }
 
 static void declaration(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *declaration, chunk_t *chunk);
