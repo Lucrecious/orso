@@ -126,13 +126,13 @@ void vm_call(vm_t* vm, function_t* function) {
     call(vm, function, argument_slots);
 }
 
-static void call_object(vm_t* vm, object_t* callee, i32 argument_slots) {
+static void call_object(vm_t *vm, object_t *callee, i32 argument_slots) {
     if (ORSO_TYPE_IS_FUNCTION(callee->type)) {
-        function_t* function = (function_t*)callee;
+        function_t *function = (function_t*)callee;
         call(vm, function, argument_slots);
         return;
     } else if (callee->type->kind == ORSO_TYPE_NATIVE_FUNCTION) {
-        native_function_t* function_obj = (native_function_t*)callee;
+        native_function_t *function_obj = (native_function_t*)callee;
         native_function_interface_t function = function_obj->function;
         function(vm->stack_top - argument_slots, vm->stack_top);
 
