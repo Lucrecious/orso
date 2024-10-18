@@ -660,7 +660,7 @@ static void declare_local_function_definition(compiler_t* compiler, function_t* 
 static void function_expression(vm_t* vm, compiler_t* compiler, ast_t* ast, ast_node_t* function_defintion_expression, chunk_t* chunk) {
     ASSERT(ORSO_TYPE_IS_FUNCTION(function_defintion_expression->value_type), "must be function if calling this");
 
-    function_t* stored_function = (function_t*)ast->folded_constants[function_defintion_expression->value_index].as.p;
+    function_t* stored_function = (function_t*)ast->folded_constants.items[function_defintion_expression->value_index].as.p;
     if (!compiler->skip_function_definitions && stored_function->chunk.code.items == NULL /*is not compiled yet*/) {
         compile_function(vm, ast, stored_function, function_defintion_expression);
     }
@@ -671,7 +671,7 @@ static void function_expression(vm_t* vm, compiler_t* compiler, ast_t* ast, ast_
 static void gen_primary(compiler_t *compiler, chunk_t *chunk, ast_t *ast, type_t *value_type, i32 value_index, i32 line) {
     ASSERT(value_index >= 0, "must be pointing to a contant value...");
 
-    slot_t* value = &ast->folded_constants[value_index];
+    slot_t *value = &ast->folded_constants.items[value_index];
     switch (value_type->kind) {
         case ORSO_TYPE_BOOL:
         case ORSO_TYPE_INT32:
@@ -841,7 +841,7 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
         // TODO: for now going to do this super naively until I get a better hash table that is more generic that I can
         // use for more things. This is will be super slow but I just want to get it to work.
         if (!compiler->skip_function_definitions && ORSO_TYPE_IS_FUNCTION(expression_node->value_type)) {
-            function_t *function = (function_t*)ast->folded_constants[expression_node->value_index].as.p;
+            function_t *function = (function_t*)ast->folded_constants.items[expression_node->value_index].as.p;
             array_push(&compiler->functions_to_compile, function);
         }
 
@@ -1265,7 +1265,7 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
             type_t *type = get_folded_type(ast, expression_node->data.initiailizer.type->value_index);
 
             i32 index = orso_zero_value(ast, type, ast->symbols);
-            emit_constant(compiler, chunk, (byte*)&ast->folded_constants[index], expression_node->start.line, type);
+            emit_constant(compiler, chunk, (byte*)&ast->folded_constants.items[index], expression_node->start.line, type);
 
             if (ORSO_TYPE_IS_STRUCT(type)) {
                 int arg_count = sb_count(expression_node->data.initiailizer.arguments);
@@ -1322,7 +1322,7 @@ static void set_global_entity_default_value(vm_t* vm, ast_t* ast, ast_node_t* en
         } 
         
         for (u32 i = 0; i < slot_count; ++i) {
-            vm->globals.values.items[index + i] = ast->folded_constants[default_expression->value_index + i];
+            vm->globals.values.items[index + i] = ast->folded_constants.items[default_expression->value_index + i];
         }
     } else {
         if (ORSO_TYPE_IS_UNION(conform_type)) {
@@ -1330,7 +1330,7 @@ static void set_global_entity_default_value(vm_t* vm, ast_t* ast, ast_node_t* en
             vm->globals.values.items[global_index] = ORSO_SLOT_P(&OrsoTypeVoid);
             // no need to set any other value since they should be 0
         } else {
-            memcpy(&vm->globals.values.items[global_index], &ast->folded_constants[entity_declaration->value_index], orso_type_size_bytes(conform_type));
+            memcpy(&vm->globals.values.items[global_index], &ast->folded_constants.items[entity_declaration->value_index], orso_type_size_bytes(conform_type));
         }
     }
 }
@@ -1350,7 +1350,7 @@ static void set_local_entity_default_value(vm_t* vm, compiler_t* compiler, ast_t
             emit_put_in_union(compiler, chunk, entity_declaration->end.line, &OrsoTypeVoid);
         } else {
             ASSERT(entity_declaration->value_index >= 0, "if no expression, there must be an implicit value");
-            slot_t *default_value = &ast->folded_constants[entity_declaration->value_index];
+            slot_t *default_value = &ast->folded_constants.items[entity_declaration->value_index];
             emit_constant(compiler, chunk, (byte*)default_value, entity_declaration->end.line, conform_type);
         }
     }
@@ -1506,7 +1506,7 @@ function_t *generate_code(vm_t *vm, ast_t *ast) {
         ASSERT(declaration_->value_index >= 0, "must be folded and have a value");
 
         main_declaration = declaration_;
-        main_function = (function_t*)ast->folded_constants[declaration_->value_index].as.p;
+        main_function = (function_t*)ast->folded_constants.items[declaration_->value_index].as.p;
         break;
     }
 

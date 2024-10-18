@@ -541,7 +541,7 @@ static void resolve_foldable(
             // we should probably let the user know and also not allow them to fold something
             // that has an invalid thing.
             if (ORSO_TYPE_IS_FUNCTION(expression->data.call.callee->value_type)) {
-                function_t* function = (function_t*)ast->folded_constants[expression->data.call.callee->value_index].as.p;
+                function_t* function = (function_t*)ast->folded_constants.items[expression->data.call.callee->value_index].as.p;
                 ast_node_t* function_definition = NULL;
                 for (i32 i = 0; i < sb_count(ast->function_definition_pairs); i++) {
                     if (function == ast->function_definition_pairs[i].function) {
@@ -678,7 +678,7 @@ static void fold_constants_via_runtime(
     if (ORSO_TYPE_IS_UNION(expression->value_type)) {
         ASSERT(!ORSO_TYPE_IS_UNION(expression->value_type_narrowed), "narrowed value type must not be union");
 
-        type_t* narrowed_type = (type_t*)ast->folded_constants[value_index].as.p;
+        type_t *narrowed_type = get_folded_type(ast, value_index);
 
         if (state.mode & MODE_CONSTANT_TIME) {
 
@@ -724,7 +724,7 @@ static void fold_function_signature(analyzer_t *analyzer, ast_t *ast, ast_node_t
 
         i32 index = parameter->value_index + ORSO_TYPE_IS_UNION(parameter->value_type);
 
-        type_t *type = (type_t*)ast->folded_constants[index].as.p;
+        type_t *type = get_folded_type(ast, index);
         sb_push(parameter_types, type);
     }
 
@@ -744,7 +744,7 @@ static void fold_function_signature(analyzer_t *analyzer, ast_t *ast, ast_node_t
     {
         if (return_type_expression) {
             i32 index = return_type_expression->value_index + ORSO_TYPE_IS_UNION(return_type_expression->value_type);
-            return_type = (type_t*)ast->folded_constants[index].as.p;
+            return_type = get_folded_type(ast, index);
         } else {
             return_type = &OrsoTypeVoid;
         }
@@ -1791,7 +1791,7 @@ static void resolve_entity_declaration(analyzer_t* analyzer, ast_t* ast, Analysi
 
     unless (entity_declaration->data.declaration.is_mutable) {
         if (INITIAL_EXPRESSION != NULL && ORSO_TYPE_IS_FUNCTION(INITIAL_EXPRESSION->value_type_narrowed)) {
-            function_t* function = (function_t*)ast->folded_constants[INITIAL_EXPRESSION->value_index].as.p;
+            function_t* function = (function_t*)ast->folded_constants.items[INITIAL_EXPRESSION->value_index].as.p;
             if (function->binded_name == NULL) {
                 function->binded_name = name;
             }
@@ -2122,13 +2122,13 @@ static Entity *get_resolved_entity_by_identifier(
             *     [1] by analyzed I mean type checked, type flowed, constants folded, etc. i.e. getting the ast ready for codegen.
             */
 
-            function_t *function = (function_t*)ast->folded_constants[entity->node->data.declaration.initial_value_expression->value_index].as.p;
+            function_t *function = (function_t*)ast->folded_constants.items[entity->node->data.declaration.initial_value_expression->value_index].as.p;
             for (i32 i = 0; i < analyzer->dependencies.count; i++) {
                 i32 i_ = analyzer->dependencies.count - 1 - i;
                 analysis_dependency_t *dependency = &analyzer->dependencies.chain[i_];
                 ast_node_t *node = dependency->ast_node;
                 if (node->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION) {
-                    function_t *folded_function = (function_t*)ast->folded_constants[node->value_index].as.p;
+                    function_t *folded_function = (function_t*)ast->folded_constants.items[node->value_index].as.p;
                     if (folded_function == function && dependency->fold_level != state.fold_level) {
                         // TODO: Use better system to figure out whether function definition can be compiled or not
                         // In this case, it cannot because of the fold level circular dependency.
@@ -2537,7 +2537,7 @@ static void resolve_struct_definition(analyzer_t* analyzer, ast_t* ast, Analysis
                 bytes_to_copy -= sizeof(slot_t);
             }
 
-            byte* value_src = (byte*)&ast->folded_constants[declaration->value_index];
+            byte* value_src = (byte*)&ast->folded_constants.items[declaration->value_index];
             memcpy(struct_data + offset, value_src, bytes_to_copy);
         }
 

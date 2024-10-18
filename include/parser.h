@@ -234,8 +234,8 @@ typedef struct ast_t {
     ast_node_t **nodes;
 
     ast_node_t *root;
-    type_t **folded_constant_types;
-    slot_t *folded_constants;
+    types_t folded_constant_types;
+    slots_t folded_constants;
 
     table_t(ptr2i32) *type_to_zero_index;
     table_t(type2ns) *type_to_creation_node;

@@ -101,16 +101,16 @@ void ast_init(ast_t* ast, symbol_table_t* symbols) {
     ast->resolved = false;
     ast->root = NULL;
     ast->nodes = NULL;
-    ast->folded_constant_types = NULL;
-    ast->folded_constants = NULL;
+    ast->folded_constant_types = (types_t){.allocator=&ast->allocator};
+    ast->folded_constants = (slots_t){.allocator=&ast->allocator};
     ast->symbols = symbols;
     ast->function_definition_pairs = NULL;
     type_set_init(&ast->type_set, &ast->allocator);
 
     slot_t void_slot = ORSO_SLOT_I(0);
     slot_t bool_slot = ORSO_SLOT_I(1);
-    sb_push(ast->folded_constants, void_slot);
-    sb_push(ast->folded_constants, bool_slot);
+    array_push(&ast->folded_constants, void_slot);
+    array_push(&ast->folded_constants, bool_slot);
 
     ast->void_index = 0;
     ast->true_index = 1;
@@ -352,9 +352,9 @@ static type_t* value_to_integer_type(i64 value) {
 }
 
 static i32 add_constant_value(parser_t* parser, slot_t value, type_t* type) {
-    i32 index = sb_count(parser->ast->folded_constants);
-    sb_push(parser->ast->folded_constant_types, type);
-    sb_push(parser->ast->folded_constants, value);
+    i32 index = parser->ast->folded_constants.count;
+    array_push(&parser->ast->folded_constant_types, type);
+    array_push(&parser->ast->folded_constants, value);
     return index;
 }
 
@@ -1098,10 +1098,10 @@ bool parse(ast_t *ast, const char *source, error_function_t error_fn) {
 i32 add_value_to_ast_constant_stack(ast_t *ast, slot_t *value, type_t *type) {
     i32 slot_count = orso_type_slot_count(type);
     for (i32 i = 0; i < slot_count; i ++) {
-        sb_push(ast->folded_constants, value[i]);
+        array_push(&ast->folded_constants, value[i]);
     }
     
-    return sb_count(ast->folded_constants) - slot_count;
+    return ast->folded_constants.count - slot_count;
 }
 
 i32 orso_zero_value(ast_t *ast, type_t *type, symbol_table_t *symbol_table) {
@@ -1174,8 +1174,8 @@ type_t *get_folded_type(ast_t *ast, i32 index) {
         return &OrsoTypeInvalid;
     }
 
-    slot_t* type_slot = &ast->folded_constants[index];
-    type_t* type = (type_t*)type_slot->as.p;
+    slot_t *type_slot = &ast->folded_constants.items[index];
+    type_t *type = (type_t*)type_slot->as.p;
     return type;
 }
 
