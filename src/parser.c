@@ -103,7 +103,7 @@ void ast_init(ast_t* ast, symbol_table_t* symbols) {
     ast->folded_constant_types = (types_t){.allocator=&ast->allocator};
     ast->folded_constants = (slots_t){.allocator=&ast->allocator};
     ast->symbols = symbols;
-    ast->function_definition_pairs = NULL;
+    ast->function_definition_pairs = (fd_pairs_t){.allocator=&ast->allocator};
     type_set_init(&ast->type_set, &ast->allocator);
 
     slot_t void_slot = ORSO_SLOT_I(0);

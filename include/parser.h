@@ -218,6 +218,14 @@ typedef struct ast_node_and_scope_t {
 
 declare_table(type2ns, type_t*, ast_node_and_scope_t)
 
+typedef struct fd_pairs_t fd_pairs_t;
+struct fd_pairs_t {
+    function_definition_pair_t *items;
+    size_t count;
+    size_t capacity;
+    arena_t *allocator;
+};
+
 typedef struct ast_t {
     arena_t allocator;
 
@@ -229,7 +237,7 @@ typedef struct ast_t {
 
     symbol_table_t builtins;
 
-    function_definition_pair_t* function_definition_pairs;
+    fd_pairs_t function_definition_pairs;
 
     ast_node_t *root;
     types_t folded_constant_types;

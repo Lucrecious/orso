@@ -464,16 +464,16 @@ static function_t* compiler_end(vm_t* vm, compiler_t* compiler, ast_t* ast, chun
                 continue;
             }
 
-            for (i32 j = 0; j < sb_count(ast->function_definition_pairs); j++) {
-                if (ast->function_definition_pairs[j].function != function) {
+            for (size_t j = 0; j < ast->function_definition_pairs.count; ++j) {
+                if (ast->function_definition_pairs.items[j].function != function) {
                     continue;
                 }
 
-                if (!ast->function_definition_pairs[j].ast_defintion->data.function.compilable) {
+                if (!ast->function_definition_pairs.items[j].ast_defintion->data.function.compilable) {
                     break;
                 }
 
-                compile_function(vm, ast, function, ast->function_definition_pairs[j].ast_defintion);
+                compile_function(vm, ast, function, ast->function_definition_pairs.items[j].ast_defintion);
             }
         }
     }
@@ -1520,10 +1520,10 @@ function_t *generate_code(vm_t *vm, ast_t *ast) {
     compile_function(vm, ast, main_function, main_declaration->data.declaration.initial_value_expression);
 
     // TODO: Am I somehow missing an opertunity to warn for unused functions by doing this?
-    for (i32 i = 0; i < sb_count(ast->function_definition_pairs); i++) {
-        function_t *function = ast->function_definition_pairs[i].function;
+    for (size_t i = 0; i < ast->function_definition_pairs.count; ++i) {
+        function_t *function = ast->function_definition_pairs.items[i].function;
         if (function->chunk.code.items == NULL) {
-            compile_function(vm, ast, function, ast->function_definition_pairs[i].ast_defintion);
+            compile_function(vm, ast, function, ast->function_definition_pairs.items[i].ast_defintion);
         }
     }
 

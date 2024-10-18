@@ -543,9 +543,9 @@ static void resolve_foldable(
             if (ORSO_TYPE_IS_FUNCTION(expression->data.call.callee->value_type)) {
                 function_t* function = (function_t*)ast->folded_constants.items[expression->data.call.callee->value_index].as.p;
                 ast_node_t* function_definition = NULL;
-                for (i32 i = 0; i < sb_count(ast->function_definition_pairs); i++) {
-                    if (function == ast->function_definition_pairs[i].function) {
-                        function_definition = ast->function_definition_pairs[i].ast_defintion;
+                for (size_t i = 0; i < ast->function_definition_pairs.count; ++i) {
+                    if (function == ast->function_definition_pairs.items[i].function) {
+                        function_definition = ast->function_definition_pairs.items[i].ast_defintion;
                         break;
                     }
                 }
@@ -2236,7 +2236,7 @@ static void resolve_function_expression(
     function_t *function = orso_new_function(&analyzer->allocator);
     function->signature = function_type;
 
-    sb_push(ast->function_definition_pairs, ((function_definition_pair_t){
+    array_push(&ast->function_definition_pairs, ((function_definition_pair_t){
         .ast_defintion = function_definition_expression,
         .function = function
     }));
