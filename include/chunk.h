@@ -29,12 +29,20 @@ struct code_t {
     arena_t *allocator;
 };
 
+typedef struct i32s_t i32s_t;
+struct i32s_t {
+    i32 *items;
+    size_t count;
+    size_t capacity;
+    arena_t *allocator;
+};
+
 typedef struct chunk_t {
 #ifdef DEBUG
     types_t constant_types;
 #endif
     slots_t constants;
-    i32 *lines; // run-length encoded
+    i32s_t lines; // run-length encoded
     code_t code;
 } chunk_t;
 

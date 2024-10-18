@@ -36,7 +36,7 @@ void chunk_init(chunk_t *chunk, arena_t *allocator) {
 #endif
     chunk->constants = (slots_t){.allocator = allocator};
     chunk->code = (code_t){.allocator = allocator};
-    chunk->lines = NULL;
+    chunk->lines = (i32s_t){.allocator = allocator};
 }
 
 void chunk_free(chunk_t* chunk) {
@@ -46,22 +46,22 @@ void chunk_free(chunk_t* chunk) {
 void chunk_write(chunk_t* chunk, byte byte, i32 line) {
     array_push(&chunk->code, byte);
 
-    i32 lines_count = sb_count(chunk->lines);
-    if ((lines_count > 1 && chunk->lines[lines_count - 2] == line)) {
-        chunk->lines[lines_count - 1]++;
+    i32 lines_count = chunk->lines.count;
+    if ((lines_count > 1 && chunk->lines.items[lines_count - 2] == line)) {
+        chunk->lines.items[lines_count - 1]++;
     } else {
-        sb_push(chunk->lines, line);
-        sb_push(chunk->lines, 1);
+        array_push(&chunk->lines, line);
+        array_push(&chunk->lines, 1);
     }
 }
 
 i32 chunk_get_line(chunk_t* chunk, i32 offset) {
-    for (i32 i = 0; i < sb_count(chunk->lines); i += 2) {
-        if (offset < chunk->lines[i + 1]) {
-            return chunk->lines[i];
+    for (size_t i = 0; i < chunk->lines.count; i += 2) {
+        if (offset < chunk->lines.items[i + 1]) {
+            return chunk->lines.items[i];
         }
 
-        offset -= chunk->lines[i + 1];
+        offset -= chunk->lines.items[i + 1];
     }
 
     return -1;

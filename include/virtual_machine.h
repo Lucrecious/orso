@@ -26,7 +26,7 @@ typedef struct vm_t {
     struct {
         symbol_table_t name_to_index;
 #ifdef DEBUG
-        type_t **types;
+        types_t types;
 #endif
         slot_t *values;
     } globals;

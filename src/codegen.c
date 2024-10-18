@@ -18,12 +18,21 @@ typedef struct {
     i32 stack_position;
 } Local;
 
+
+typedef struct functions_t functions_t;
+struct functions_t {
+    function_t **items;
+    size_t count;
+    size_t capacity;
+    arena_t *allocator;
+};
+
 typedef struct compiler_t {
     function_t* function;
 
     bool skip_function_definitions;
 
-    function_t** functions_to_compile;
+    functions_t functions_to_compile;
 
     Local* locals;
     i32 locals_count;
@@ -42,7 +51,7 @@ static void compiler_init(compiler_t* compiler, vm_t* vm, function_t* function, 
     //   removed if possible, previously this was used to get the garbage collector but thats being removed
     (void)vm; 
 
-    compiler->functions_to_compile = NULL;
+    compiler->functions_to_compile = (functions_t){.allocator=&vm->allocator};
     compiler->function = NULL;
 
     compiler->locals = NULL;
@@ -64,8 +73,6 @@ static void compiler_free(compiler_t* compiler) {
 
     compiler->current_stack_size = 0;
     compiler->max_stack_size = 0;
-
-    sb_free(compiler->functions_to_compile);
 }
 
 static void apply_stack_effects(compiler_t* compiler, i32 stack_effects) {
@@ -437,16 +444,15 @@ static function_t* compiler_end(vm_t* vm, compiler_t* compiler, ast_t* ast, chun
     // faster. Or I need to figure out a way to decide whether or not i should compile a function
     // on the fly.
     {
-        function_t** functions_to_compile = NULL;
-        for (i32 i = 0; i < sb_count(compiler->functions_to_compile); i++) {
-            sb_push(functions_to_compile, compiler->functions_to_compile[i]);
+        functions_t functions_to_compile = {.allocator = &vm->allocator};
+        for (size_t i = 0; i < compiler->functions_to_compile.count; i++) {
+            array_push(&functions_to_compile, compiler->functions_to_compile.items[i]);
         }
 
-        sb_free(compiler->functions_to_compile);
-        compiler->functions_to_compile = NULL;
+        compiler->functions_to_compile = (functions_t){.allocator=&vm->allocator};
 
-        for (i32 i = 0; i < sb_count(functions_to_compile); i++) {
-            function_t* function = functions_to_compile[i];
+        for (size_t i = 0; i < functions_to_compile.count; i++) {
+            function_t *function = functions_to_compile.items[i];
             if (function->chunk.code.items != NULL) {
                 continue;
             }
@@ -492,7 +498,7 @@ static i32 add_global(vm_t* vm, token_t* name, i32 slot_count)
 
     for (i32 i = 0; i < slot_count; i++) {
 #ifdef DEBUG
-        sb_push(vm->globals.types, type);
+        array_push(&vm->globals.types, type);
 #endif
 
         sb_push(vm->globals.values, ORSO_SLOT_I(0));
@@ -829,7 +835,7 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
         // use for more things. This is will be super slow but I just want to get it to work.
         if (!compiler->skip_function_definitions && ORSO_TYPE_IS_FUNCTION(expression_node->value_type)) {
             function_t *function = (function_t*)ast->folded_constants[expression_node->value_index].as.p;
-            sb_push(compiler->functions_to_compile, function);
+            array_push(&compiler->functions_to_compile, function);
         }
 
         gen_primary(compiler, chunk, ast,

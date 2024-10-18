@@ -1,6 +1,10 @@
 #ifndef DEF_H_
 #define DEF_H_
 
+#ifndef DEBUG
+#define DEBUG
+#endif
+
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdint.h>

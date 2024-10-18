@@ -33,7 +33,7 @@ void vm_init(vm_t *vm, write_function_t write_fn, i32 stack_size) {
 
 #ifdef DEBUG
     vm->stack_types = arena_alloc(&vm->allocator, sizeof(type_t*)*stack_size_slot_count);
-    vm->globals.types = NULL;
+    vm->globals.types = (types_t){.allocator = &vm->allocator};
 #endif
 
     vm->write_fn = write_fn;
@@ -49,8 +49,7 @@ void vm_free(vm_t* vm) {
 
 #ifdef DEBUG
     vm->stack_types = NULL;
-    sb_free(vm->globals.types);
-    vm->globals.types = NULL;
+    vm->globals.types.count = 0;
 #endif
 
     sb_free(vm->globals.values);
@@ -311,7 +310,7 @@ memcpy(current_top, constant, size); \
 
 #define PUSH_GLOBAL() do { \
 slot_t* current_top = vm->stack_top; \
-RESERVE_STACK_SPACE(vm, orso_bytes_to_slots(size), (vm->globals.types[index / sizeof(slot_t)])); \
+RESERVE_STACK_SPACE(vm, orso_bytes_to_slots(size), (vm->globals.types.items[index / sizeof(slot_t)])); \
 byte* global = ((byte*)vm->globals.values) + index; \
 memcpy(current_top, global, size); \
 } while(0)
@@ -635,7 +634,7 @@ static void run(vm_t *vm, error_function_t error_fn) {
 //             u32 index = entry->value.as.u;
 //             printf("%s = ", entry->key->text);
 //             slot_t* value = vm->globals.values + index;
-//             orso_print_slot(value, vm->globals.types[index]);
+//             orso_print_slot(value, vm->globals.types.items[index]);
 //             printf("\n");
 //         }
 
