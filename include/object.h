@@ -75,7 +75,7 @@ bool is_function_compiled(function_t *function);
 
 native_function_t *orso_new_native_function(native_function_interface_t function, type_t *type, arena_t *allocator);
 
-struct_t *orso_new_struct(void);
+struct_t *orso_new_struct(arena_t *allocator);
 
 i64 cstrn_to_i64(const char *text, i32 length);
 f64 cstrn_to_f64(const char *text, i32 length);

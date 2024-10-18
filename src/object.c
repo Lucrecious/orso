@@ -22,8 +22,8 @@ OrsoString *orso_new_string_from_cstrn(const char *start, i32 length, arena_t *a
     return string;
 }
 
-char* cstrn_new(const char* start, i32 length) {
-    char* cstr = ORSO_ALLOCATE_N(char, length + 1);
+char *cstrn_new(const char *start, i32 length, arena_t *allocator) {
+    char *cstr = arena_alloc(allocator, sizeof(char)*(length+1));
     memcpy(cstr, start, length);
     cstr[length] = '\0';
 
@@ -164,13 +164,13 @@ native_function_t *orso_new_native_function(native_function_interface_t function
     return function_obj;
 }
 
-struct_t* orso_new_struct(void) {
-    struct_t* struct_ = ORSO_ALLOCATE(struct_t);
+struct_t *orso_new_struct(arena_t *allocator) {
+    struct_t *struct_ = arena_alloc(allocator, sizeof(struct_t));
     struct_->slots = NULL;
     return struct_;
 }
 
-void orso_free_struct(struct_t* struct_) {
+void orso_free_struct(struct_t *struct_) {
     free(struct_->slots);
 }
 

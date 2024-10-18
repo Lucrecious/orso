@@ -24,7 +24,6 @@
 [ ] Allow for "native" structs
 [ ] Unions as a native struct
 [ ] Write printf in orso itself
-[ ] Use arena allocator for everything instead of ORSO_ALLOCATE
 [ ] For debugging, instead of printing the disaseembly, write it in the file
 [ ] For debugging, instead of printing ast write it in a file instead
 [ ] Better error messages
