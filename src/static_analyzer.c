@@ -310,7 +310,7 @@ if (strlen(SYMBOL->text) == (sizeof(#TYPE_STRING) - 1) && \
 
 static bool is_builtin_function(ast_t* ast, symbol_t* identifier, native_function_t** function) {
     if (identifier->length == 5 && strncmp(identifier->text, "clock", 5) == 0) {
-        type_t* function_type = orso_type_set_fetch_native_function(&ast->type_set, &OrsoTypeFloat64, NULL, 0);
+        type_t *function_type = orso_type_set_fetch_native_function(&ast->type_set, &OrsoTypeFloat64, (types_t){0});
         *function = orso_new_native_function(clock_native, function_type);
         return true;
     }
@@ -321,13 +321,13 @@ static bool is_builtin_function(ast_t* ast, symbol_t* identifier, native_functio
 static bool can_call(type_t* type, ast_nodes_t arguments) {
     ASSERT(ORSO_TYPE_IS_FUNCTION(type), "must be a function type");
 
-    if (type->data.function.argument_count < 0 || (size_t)type->data.function.argument_count != arguments.count) {
+    if (type->data.function.argument_types.count != arguments.count) {
         return false;
     }
 
-    for (i32 i = 0; i < type->data.function.argument_count; i++) {
-        type_t* parameter_type = type->data.function.argument_types[i];
-        type_t* argument_type = arguments.items[i]->value_type_narrowed;
+    for (size_t i = 0; i < type->data.function.argument_types.count; ++i) {
+        type_t *parameter_type = type->data.function.argument_types.items[i];
+        type_t *argument_type = arguments.items[i]->value_type_narrowed;
         if (!orso_type_fits(parameter_type, argument_type)) {
             // TODO: error_range - argument is invalid
             return false;
@@ -706,7 +706,7 @@ static void fold_function_signature(analyzer_t *analyzer, ast_t *ast, ast_node_t
     }
 
     bool hit_error = false;
-    type_t **parameter_types = NULL;
+    types_t parameter_types = {.allocator=&ast->allocator};
 
     for (size_t i = 0; i < expression->data.function.parameter_nodes.count; i++) {
         ast_node_t *parameter = expression->data.function.parameter_nodes.items[i];
@@ -725,18 +725,16 @@ static void fold_function_signature(analyzer_t *analyzer, ast_t *ast, ast_node_t
         i32 index = parameter->value_index + ORSO_TYPE_IS_UNION(parameter->value_type);
 
         type_t *type = get_folded_type(ast, index);
-        sb_push(parameter_types, type);
+        array_push(&parameter_types, type);
     }
 
     if (hit_error) {
-        sb_free(parameter_types);
         return;
     }
 
     ast_node_t *return_type_expression = expression->data.function.return_type_expression;
     if (return_type_expression && return_type_expression->value_type_narrowed != &OrsoTypeType) {
         error_range(analyzer, return_type_expression->start, return_type_expression->end, "Invalid return type.");
-        sb_free(parameter_types);
         return;
     }
 
@@ -750,8 +748,7 @@ static void fold_function_signature(analyzer_t *analyzer, ast_t *ast, ast_node_t
         }
     }
 
-    type_t *function_type = orso_type_set_fetch_function(&ast->type_set, return_type, parameter_types, sb_count(parameter_types));
-    sb_free(parameter_types);
+    type_t *function_type = orso_type_set_fetch_function(&ast->type_set, return_type, parameter_types);
 
     slot_t function_type_slot = ORSO_SLOT_P(function_type);
     i32 index = add_value_to_ast_constant_stack(ast, &function_type_slot, &OrsoTypeType);
@@ -2191,20 +2188,21 @@ static void resolve_function_expression(
 
     scope_t function_parameter_scope;
     scope_init(&function_parameter_scope, &analyzer->allocator, SCOPE_TYPE_FUNCTION_PARAMETERS, state.scope, function_definition_expression);
-    type_t *parameter_types[parameter_count];
+    types_t parameter_types = {.allocator=&ast->allocator};
 
     forward_scan_declaration_names(analyzer, &function_parameter_scope, definition->parameter_nodes, parameter_count);
 
     bool parameter_invalid = false;
 
     // Resolves parameters for function type
-    for (i32 i = 0; i < parameter_count; i++) {
+    for (i32 i = 0; i < parameter_count; ++i) {
         AnalysisState new_state = state;
         // parameters look syntacticly like mutables, but their initial expressions should be constants
         new_state.mode = MODE_CONSTANT_TIME | (state.mode & MODE_FOLDING_TIME);
         new_state.scope = &function_parameter_scope;
         resolve_entity_declaration(analyzer, ast, new_state, definition->parameter_nodes.items[i]);
-        parameter_types[i] = definition->parameter_nodes.items[i]->value_type;
+        array_push(&parameter_types, definition->parameter_nodes.items[i]->value_type);
+        
 
         if (ORSO_TYPE_IS_INVALID(definition->parameter_nodes.items[i]->value_type)) {
             parameter_invalid = true;
@@ -2237,7 +2235,7 @@ static void resolve_function_expression(
         return;
     }
 
-    type_t *function_type = orso_type_set_fetch_function(&ast->type_set, return_type, parameter_types, parameter_count);
+    type_t *function_type = orso_type_set_fetch_function(&ast->type_set, return_type, parameter_types);
 
     function_t *function = orso_new_function(&analyzer->allocator);
     function->signature = function_type;

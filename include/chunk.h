@@ -13,14 +13,6 @@ struct slots_t {
     arena_t *allocator;
 };
 
-typedef struct types_t types_t;
-struct types_t {
-    type_t **items;
-    size_t count;
-    size_t capacity;
-    arena_t *allocator;
-};
-
 typedef struct code_t code_t;
 struct code_t {
     byte *items;

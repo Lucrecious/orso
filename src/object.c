@@ -67,7 +67,7 @@ string_t slot_to_string(slot_t *slot, type_t *type, arena_t *allocator) {
         case ORSO_TYPE_STRING: return cstrn2string(((OrsoString*)slot->as.p)->text, ((OrsoString*)slot->as.p)->length, allocator);
 
         case ORSO_TYPE_SYMBOL: {
-            symbol_t* symbol = (symbol_t*)slot->as.p;
+            symbol_t *symbol = (symbol_t*)slot->as.p;
             return string_format("'%s'", allocator, (char*)symbol->text);
         }
 
@@ -77,15 +77,15 @@ string_t slot_to_string(slot_t *slot, type_t *type, arena_t *allocator) {
             arena_t tmp_allocator = {0}; {
                 string_builder_t sb = {.allocator = &tmp_allocator};
 
-                function_t* function = (function_t*)slot->as.p;
+                function_t *function = (function_t*)slot->as.p;
                 sb_add_cstr(&sb, string_format("<%s :: (", &tmp_allocator,
                     function->binded_name ? function->binded_name->text : "<anonymous>").cstr);
 
-                for (i32 i = 0; i < function->signature->data.function.argument_count; i++) {
-                    string_t arg_type = type_to_string(function->signature->data.function.argument_types[i], &tmp_allocator);
+                for (size_t i = 0; i < function->signature->data.function.argument_types.count; ++i) {
+                    string_t arg_type = type_to_string(function->signature->data.function.argument_types.items[i], &tmp_allocator);
                     sb_add_cstr(&sb, arg_type.cstr);
 
-                    if (i < function->signature->data.function.argument_count - 1)  {
+                    if (i < function->signature->data.function.argument_types.count - 1)  {
                         sb_add_cstr(&sb, ", ");
                     }
                 }

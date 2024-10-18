@@ -322,8 +322,8 @@ static void emit(compiler_t* compiler, chunk_t* chunk, i32 line, const int op_co
             ASSERT(ORSO_TYPE_IS_FUNCTION(function_type), "must be function");
 
             i32 argument_slots = 0;
-            for (i32 i = 0; i < function_type->data.function.argument_count; i++) {
-                argument_slots += orso_type_slot_count(function_type->data.function.argument_types[i]);
+            for (size_t i = 0; i < function_type->data.function.argument_types.count; ++i) {
+                argument_slots += orso_type_slot_count(function_type->data.function.argument_types.items[i]);
             }
 
             byte a;
@@ -1214,7 +1214,7 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
                 ast_node_t *argument = expression_node->data.call.arguments.items[i];
                 expression(vm, compiler, ast, argument, chunk);
 
-                type_t *parameter_type = function_type->data.function.argument_types[i];
+                type_t *parameter_type = function_type->data.function.argument_types.items[i];
                 emit_storage_type_convert(compiler, chunk, argument->value_type, parameter_type, expression_node->end.line);
             }
 
@@ -1418,7 +1418,7 @@ void orso_code_builder_free(code_builder_t *builder) {
 
 function_t *orso_generate_expression_function(code_builder_t *builder, ast_node_t *expression_node, bool is_folding_time, arena_t *allocator) {
     compiler_t compiler;
-    type_t *function_type = orso_type_set_fetch_function(&builder->ast->type_set, expression_node->value_type, NULL, 0);
+    type_t *function_type = orso_type_set_fetch_function(&builder->ast->type_set, expression_node->value_type, (types_t){0});
 
     function_t *run_function = orso_new_function(allocator);
 
@@ -1501,7 +1501,7 @@ function_t *generate_code(vm_t *vm, ast_t *ast) {
             return NULL;
         }
 
-        if (function_type->data.function.argument_count != 0) {
+        if (function_type->data.function.argument_types.count != 0) {
             // TODO: allow code gen to throw error here, main must have 0 args for now
             return NULL;
         }

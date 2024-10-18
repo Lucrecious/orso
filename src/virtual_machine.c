@@ -120,8 +120,8 @@ static void call(vm_t* vm, function_t* function, i32 argument_slots) {
 
 void vm_call(vm_t* vm, function_t* function) {
     i32 argument_slots = 0;
-    for (i32 i = 0; i < function->signature->data.function.argument_count; i++) {
-        argument_slots += orso_type_slot_count(function->signature->data.function.argument_types[i]);
+    for (size_t i = 0; i < function->signature->data.function.argument_types.count; ++i) {
+        argument_slots += orso_type_slot_count(function->signature->data.function.argument_types.items[i]);
     }
     call(vm, function, argument_slots);
 }

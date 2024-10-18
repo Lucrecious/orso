@@ -29,7 +29,7 @@ typedef enum type_kind_t {
     ORSO_TYPE_STRUCT,           // used for both anonymous and named
 } type_kind_t;
 
-struct type_t;
+typedef struct types_t types_t;
 typedef struct type_t type_t;
 
 typedef struct struct_field_t {
@@ -45,36 +45,41 @@ typedef struct struct_constant_t {
     type_t* type;
 } struct_constant_t;
 
+struct types_t {
+    type_t **items;
+    size_t count;
+    size_t capacity;
+    arena_t *allocator;
+};
+
 struct type_t {
     type_kind_t kind;
     union {
         struct {
-            i32 count;
-            type_t** types;
+            types_t types;
         } union_;
 
         struct {
-            type_t* return_type;
-            i32 argument_count;
-            type_t** argument_types;
+            type_t *return_type;
+            types_t argument_types;
         } function;
 
         struct {
             // null if anonymous
-            char* name;
+            char *name;
 
             i32 field_count;
-            struct_field_t* fields;
+            struct_field_t *fields;
 
             i32 constant_count;
-            struct_constant_t* constants;
+            struct_constant_t *constants;
 
             // not relevant for hashing
             i32 total_bytes;
         } struct_;
 
         struct {
-            type_t* type;
+            type_t *type;
         } pointer;
     } data;
 };

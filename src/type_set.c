@@ -22,35 +22,33 @@ type_t OrsoTypeUndefined = (type_t) { .kind = ORSO_TYPE_UNDEFINED };
 
 type_t OrsoTypeEmptyFunction = (type_t) {
     .kind = ORSO_TYPE_FUNCTION,
-    .data.function.argument_count = 0,
-    .data.function.argument_types = NULL,
+    .data.function.argument_types = {0},
     .data.function.return_type = &OrsoTypeVoid,
 };
 
 #define ALLOC(TYPE) (TYPE*)arena_alloc(set->allocator, sizeof(TYPE))
 #define ALLOC_N(TYPE, N) (TYPE*)arena_alloc(set->allocator, sizeof(TYPE)*N)
 
-type_t* union_type_new(type_set_t* set, type_t** types, i32 count) {
+type_t *union_type_new(type_set_t *set, types_t types) {
     //ASSERT(count <= ORSO_UNION_NUM_MAX, "cannot create union type with more than 4 types"); // TODO: Add this in later, need codegen and runtime errors first
 
     type_t* union_type = ALLOC(type_t);
     union_type->kind = ORSO_TYPE_UNION;
-    union_type->data.union_.count = count;
-    union_type->data.union_.types = ALLOC_N(type_t*, count);
-    for (i32 i = 0; i < union_type->data.union_.count; i++) {
-        union_type->data.union_.types[i] = types[i];
+    union_type->data.union_.types = (types_t){.allocator=set->allocator};
+    for (size_t i = 0; i < union_type->data.union_.types.count; ++i) {
+        array_push(&union_type->data.union_.types, types.items[i]);
+        
     }
 
     return union_type;
 }
 
-type_t* function_type_new(type_set_t* set, type_t** arguments, i32 argument_count, type_t* return_type, bool is_native) {
-    type_t* function_type = ALLOC(type_t);
+type_t *function_type_new(type_set_t *set, types_t arguments, type_t *return_type, bool is_native) {
+    type_t *function_type = ALLOC(type_t);
     function_type->kind = is_native ? ORSO_TYPE_NATIVE_FUNCTION : ORSO_TYPE_FUNCTION;
-    function_type->data.function.argument_count = argument_count;
-    function_type->data.function.argument_types = ALLOC_N(type_t*, argument_count);
-    for (i32 i = 0; i < argument_count; i++) {
-        function_type->data.function.argument_types[i] = arguments[i];
+    function_type->data.function.argument_types = (types_t){.allocator=set->allocator};
+    for (size_t i = 0; i < arguments.count; ++i) {
+        array_push(&function_type->data.function.argument_types, arguments.items[i]);
     }
 
     function_type->data.function.return_type = return_type;
@@ -116,8 +114,7 @@ type_t* type_copy_new(type_set_t* set, type_t* type) {
     if (ORSO_TYPE_IS_UNION(type)) {
         return (type_t*)union_type_new(
             set,
-            (type_t**)type->data.union_.types,
-            type->data.union_.count
+            type->data.union_.types
         );
     }
 
@@ -125,7 +122,6 @@ type_t* type_copy_new(type_set_t* set, type_t* type) {
         return (type_t*)function_type_new(
             set,
             type->data.function.argument_types,
-            type->data.function.argument_count,
             type->data.function.return_type,
             type->kind == ORSO_TYPE_NATIVE_FUNCTION
         );
@@ -169,14 +165,14 @@ static u32 hash_type(type_t* type) {
     ADD_HASH(hash, type->kind);
 
     if (ORSO_TYPE_IS_UNION(type)) {
-        for (i32 i = 0; i < type->data.union_.count; i++) {
-            ADD_HASH(hash, (u64)(type->data.union_.types[i]));
+        for (size_t i = 0; i < type->data.union_.types.count; ++i) {
+            ADD_HASH(hash, (u64)(type->data.union_.types.items[i]));
         }
     } else if (ORSO_TYPE_IS_FUNCTION(type)) {
-        ADD_HASH(hash, type->data.function.argument_count);
+        ADD_HASH(hash, type->data.function.argument_types.count);
 
-        for (i32 i = 0; i < type->data.function.argument_count; i++) {
-            ADD_HASH(hash, (u64)(type->data.function.argument_types[i]));
+        for (size_t i = 0; i < type->data.function.argument_types.count; ++i) {
+            ADD_HASH(hash, (u64)(type->data.function.argument_types.items[i]));
         }
 
         ADD_HASH(hash, (u64)(type->data.function.return_type));
@@ -285,13 +281,13 @@ static i32 type_compare(const void* a, const void* b) {
             return -1;
         }
 
-        if (type_a->data.union_.count != type_b->data.union_.count) {
-            return type_b->data.union_.count - type_a->data.union_.count;
+        if (type_a->data.union_.types.count != type_b->data.union_.types.count) {
+            return type_b->data.union_.types.count - type_a->data.union_.types.count;
         }
 
-        for (i32 i = 0; i < type_a->data.union_.count; i++) {
-            type_t* single_a = type_a->data.union_.types[i];
-            type_t* single_b = type_b->data.union_.types[i];
+        for (size_t i = 0; i < type_a->data.union_.types.count; ++i) {
+            type_t *single_a = type_a->data.union_.types.items[i];
+            type_t *single_b = type_b->data.union_.types.items[i];
 
             i32 result = type_compare(single_a, single_b);
             if (result == 0) {
@@ -330,13 +326,13 @@ static i32 type_compare(const void* a, const void* b) {
             return type_compare(type_a->data.function.return_type, type_b->data.function.return_type);
         }
 
-        if (type_a->data.function.argument_count != type_b->data.function.argument_count) {
-            return type_b->data.function.argument_count - type_a->data.function.argument_count;
+        if (type_a->data.function.argument_types.count != type_b->data.function.argument_types.count) {
+            return type_b->data.function.argument_types.count - type_a->data.function.argument_types.count;
         }
 
-        for (i32 i = 0; i < type_a->data.function.argument_count; i++) {
-            type_t* argument_type_a = type_a->data.function.argument_types[i];
-            type_t* argument_type_b = type_b->data.function.argument_types[i];
+        for (size_t i = 0; i < type_a->data.function.argument_types.count; ++i) {
+            type_t *argument_type_a = type_a->data.function.argument_types.items[i];
+            type_t *argument_type_b = type_b->data.function.argument_types.items[i];
             i32 result = type_compare(argument_type_a, argument_type_b);
             if (result == 0) {
                 continue;
@@ -443,22 +439,17 @@ static i32 type_compare(const void* a, const void* b) {
     return ((i32)type_b->kind) - ((i32)type_a->kind);
 }
 
-type_t* orso_type_set_fetch_union(type_set_t* set, type_t** types, i32 count) {
+type_t *orso_type_set_fetch_union(type_set_t *set, types_t types) {
     type_t union_type = {
         .kind = ORSO_TYPE_UNION,
-        .data.union_.count = count,
-        .data.union_.types = ALLOC_N(type_t*, count)
+        .data.union_.types = {.allocator=set->allocator},
     };
 
-    for (i32 i = 0; i < count; i++) {
-        if (i < count) {
-            union_type.data.union_.types[i] = types[i];
-        } else {
-            union_type.data.union_.types[i] = NULL;
-        }
+    for (size_t i = 0; i < types.count; i++) {
+        array_push(&union_type.data.union_.types, types.items[i]);
     }
 
-    qsort(union_type.data.union_.types, count, sizeof(type_t*), type_compare);
+    qsort(union_type.data.union_.types.items, types.count, sizeof(type_t*), type_compare);
 
     if (set->capacity > 0) {
         type_t** entry = fetch_type(set->entries, set->capacity, &union_type);
@@ -494,11 +485,10 @@ type_t* orso_type_set_fetch_pointer(type_set_t* set, type_t* inner_type) {
     return type;
 }
 
-type_t* orso_type_set_fetch_function_(type_set_t* set, type_t* return_type, type_t** arguments, i32 argument_count, bool is_native) {
+type_t *orso_type_set_fetch_function_(type_set_t *set, type_t *return_type, types_t arguments, bool is_native) {
     type_t function_type = {
         .kind = is_native ? ORSO_TYPE_NATIVE_FUNCTION : ORSO_TYPE_FUNCTION,
         .data.function.argument_types = arguments,
-        .data.function.argument_count = argument_count,
         .data.function.return_type = return_type,
     };
 
@@ -517,15 +507,15 @@ type_t* orso_type_set_fetch_function_(type_set_t* set, type_t* return_type, type
     return type;
 }
 
-type_t* orso_type_set_fetch_function(type_set_t* set, type_t* return_type, type_t** arguments, i32 argument_count) {
-    return orso_type_set_fetch_function_(set, return_type, arguments, argument_count, false);
+type_t *orso_type_set_fetch_function(type_set_t *set, type_t *return_type, types_t arguments) {
+    return orso_type_set_fetch_function_(set, return_type, arguments, false);
 }
 
-type_t* orso_type_set_fetch_native_function(type_set_t* set, type_t* return_type, type_t** arguments, i32 argument_count) {
-    return orso_type_set_fetch_function_(set, return_type, arguments, argument_count, true);
+type_t *orso_type_set_fetch_native_function(type_set_t *set, type_t *return_type, types_t arguments) {
+    return orso_type_set_fetch_function_(set, return_type, arguments, true);
 }
 
-type_t* orso_type_set_fetch_anonymous_struct(type_set_t* set, i32 field_count, struct_field_t* fields, i32 constant_count, struct_constant_t* constants) {
+type_t* orso_type_set_fetch_anonymous_struct(type_set_t *set, i32 field_count, struct_field_t *fields, i32 constant_count, struct_constant_t* constants) {
     type_t struct_type = {
         .kind = ORSO_TYPE_STRUCT,
         .data.struct_.field_count = field_count,
