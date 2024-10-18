@@ -1208,17 +1208,17 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
             expression(vm, compiler, ast, expression_node->data.call.callee, chunk);
             emit_storage_type_convert(compiler, chunk, expression_node->value_type, expression_node->value_type_narrowed, expression_node->end.line);
 
-            type_t* function_type = expression_node->data.call.callee->value_type_narrowed;
+            type_t *function_type = expression_node->data.call.callee->value_type_narrowed;
 
-            for (i32 i = 0; i < sb_count(expression_node->data.call.arguments); i++) {
-                ast_node_t* argument = expression_node->data.call.arguments[i];
+            for (size_t i = 0; i < expression_node->data.call.arguments.count; ++i) {
+                ast_node_t *argument = expression_node->data.call.arguments.items[i];
                 expression(vm, compiler, ast, argument, chunk);
 
-                type_t* parameter_type = function_type->data.function.argument_types[i];
+                type_t *parameter_type = function_type->data.function.argument_types[i];
                 emit_storage_type_convert(compiler, chunk, argument->value_type, parameter_type, expression_node->end.line);
             }
 
-            type_t* overload_type = function_type;
+            type_t *overload_type = function_type;
             emit(compiler, chunk, expression_node->data.call.callee->start.line, ORSO_OP_CALL, (type_t*)overload_type);
             break;
         }
@@ -1271,9 +1271,9 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
             emit_constant(compiler, chunk, (byte*)&ast->folded_constants.items[index], expression_node->start.line, type);
 
             if (ORSO_TYPE_IS_STRUCT(type)) {
-                int arg_count = sb_count(expression_node->data.initiailizer.arguments);
-                for (int i = 0; i < arg_count; ++i) {
-                    ast_node_t *arg = expression_node->data.initiailizer.arguments[i];
+                size_t arg_count = expression_node->data.initiailizer.arguments.count;
+                for (size_t i = 0; i < arg_count; ++i) {
+                    ast_node_t *arg = expression_node->data.initiailizer.arguments.items[i];
                     unless (arg) continue;
 
                     expression(vm, compiler, ast, arg, chunk);

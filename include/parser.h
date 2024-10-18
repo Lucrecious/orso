@@ -113,7 +113,7 @@ typedef struct ast_struct_t {
 
 typedef struct ast_call_t {
     ast_node_t *callee;
-    ast_node_t **arguments;
+    ast_nodes_t arguments;
 } ast_call_t;
 
 typedef struct ast_branch_t {
@@ -150,7 +150,7 @@ typedef struct ast_declaration_t {
 typedef struct ast_type_initializer_t ast_type_initializer_t;
 struct ast_type_initializer_t {
     ast_node_t *type;
-    ast_node_t **arguments;
+    ast_nodes_t arguments;
 };
 
 struct ast_node_t {

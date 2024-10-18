@@ -318,16 +318,16 @@ static bool is_builtin_function(ast_t* ast, symbol_t* identifier, native_functio
     return false;
 }
 
-static bool can_call(type_t* type, ast_node_t** arguments) {
+static bool can_call(type_t* type, ast_nodes_t arguments) {
     ASSERT(ORSO_TYPE_IS_FUNCTION(type), "must be a function type");
 
-    if (type->data.function.argument_count != sb_count(arguments)) {
+    if (type->data.function.argument_count < 0 || (size_t)type->data.function.argument_count != arguments.count) {
         return false;
     }
 
     for (i32 i = 0; i < type->data.function.argument_count; i++) {
         type_t* parameter_type = type->data.function.argument_types[i];
-        type_t* argument_type = arguments[i]->value_type_narrowed;
+        type_t* argument_type = arguments.items[i]->value_type_narrowed;
         if (!orso_type_fits(parameter_type, argument_type)) {
             // TODO: error_range - argument is invalid
             return false;
@@ -418,15 +418,15 @@ static void resolve_foldable(
         }
 
         case ORSO_AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER: {
-            if (sb_count(expression->data.initiailizer.arguments) == 0) {
+            if (expression->data.initiailizer.arguments.count == 0) {
                 foldable = true;
                 type_t *type = get_folded_type(ast, expression->data.initiailizer.type->value_index);
                 i32 value_index = orso_zero_value(ast, type, ast->symbols);
                 folded_index = value_index;
             } else {
                 foldable = true;
-                for (int i = 0; i < sb_count(expression->data.initiailizer.arguments); ++i) {
-                    ast_node_t *arg = expression->data.initiailizer.arguments[i];
+                for (size_t i = 0; i < expression->data.initiailizer.arguments.count; ++i) {
+                    ast_node_t *arg = expression->data.initiailizer.arguments.items[i];
                     unless (arg) continue;
                     foldable &= arg->foldable;
                 }
@@ -565,8 +565,8 @@ static void resolve_foldable(
                 break;
             }
 
-            for (i32 i = 0; i < sb_count(expression->data.call.arguments); i++) {
-                foldable &= expression->data.call.arguments[i]->foldable;
+            for (size_t i = 0; i < expression->data.call.arguments.count; ++i) {
+                foldable &= expression->data.call.arguments.items[i]->foldable;
                 unless (foldable) {
                     break;
                 }
@@ -997,16 +997,16 @@ void orso_resolve_expression(
             type_t *type = get_folded_type(ast, expression->data.initiailizer.type->value_index);
 
             if (ORSO_TYPE_IS_STRUCT(type)) {
-                int arg_count = sb_count(expression->data.initiailizer.arguments);
+                int arg_count = expression->data.initiailizer.arguments.count;
                 if (type->data.struct_.field_count < arg_count) {
-                    error_range(analyzer, expression->data.initiailizer.arguments[0]->start, expression->data.initiailizer.arguments[arg_count-1]->end, "Too many arguments for struct");
+                    error_range(analyzer, expression->data.initiailizer.arguments.items[0]->start, expression->data.initiailizer.arguments.items[arg_count-1]->end, "Too many arguments for struct");
                     INVALIDATE(expression);
                     break;
                 }
 
                 bool is_invalidated = false;
                 for (int i = 0; i < arg_count; ++i) {
-                    ast_node_t *arg = expression->data.initiailizer.arguments[i];
+                    ast_node_t *arg = expression->data.initiailizer.arguments.items[i];
                     unless (arg) continue;
                     orso_resolve_expression(analyzer, ast, state, arg);
                     if (ORSO_TYPE_IS_INVALID(arg->value_type)) {
@@ -1021,7 +1021,7 @@ void orso_resolve_expression(
                             if (can_cast_implicit(arg_type, field_type)) {
                                 ast_node_t *casted = implicit_cast(ast, arg, field_type);
                                 fold_constants_via_runtime(analyzer, ast, state, casted);
-                                expression->data.initiailizer.arguments[i] = casted;
+                                expression->data.initiailizer.arguments.items[i] = casted;
                             } else {
                                 error_range(analyzer, arg->start, arg->end, "This argument is the wrong type");
                                 is_invalidated = true;
@@ -1559,8 +1559,8 @@ void orso_resolve_expression(
 
         case ORSO_AST_NODE_TYPE_EXPRESSION_CALL: {
             bool argument_invalid = false;
-            for (i32 i = 0; i < sb_count(expression->data.call.arguments); i++) {
-                ast_node_t* argument = expression->data.call.arguments[i];
+            for (size_t i = 0; i < expression->data.call.arguments.count; ++i) {
+                ast_node_t *argument = expression->data.call.arguments.items[i];
                 orso_resolve_expression(analyzer, ast, state, argument);
                 unless (ORSO_TYPE_IS_INVALID(argument->value_type)) {
                     continue;

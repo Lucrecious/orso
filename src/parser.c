@@ -175,7 +175,7 @@ ast_node_t *orso_ast_node_new(ast_t *ast, ast_node_type_t node_type, bool is_in_
         
         case ORSO_AST_NODE_TYPE_EXPRESSION_CALL: {
             node->data.call.callee = NULL;
-            node->data.call.arguments = NULL;
+            node->data.call.arguments = (ast_nodes_t){.allocator=&ast->allocator};
             break;
         }
         
@@ -193,7 +193,7 @@ ast_node_t *orso_ast_node_new(ast_t *ast, ast_node_type_t node_type, bool is_in_
 
         case ORSO_AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER: {
             node->data.initiailizer.type = NULL;
-            node->data.initiailizer.arguments = NULL;
+            node->data.initiailizer.arguments = (ast_nodes_t){.allocator=&ast->allocator};
             break;
         }
         
@@ -693,19 +693,19 @@ static ast_node_t *grouping_or_function_signature_or_definition(parser_t *parser
     return expression_node;
 }
 
-static ast_node_t **parse_arguments(parser_t* parser, bool is_in_type_context) {
-    ast_node_t **arguments = NULL;
+static ast_nodes_t parse_arguments(parser_t* parser, bool is_in_type_context) {
+    ast_nodes_t arguments = {.allocator = &parser->ast->allocator};
 
     if (!check(parser, TOKEN_PARENTHESIS_CLOSE)) {
         do {
             ast_node_t *argument = expression(parser, is_in_type_context);
-            sb_push(arguments, argument);
+            array_push(&arguments, argument);
         } while (match(parser, TOKEN_COMMA));
     }
 
     consume(parser, TOKEN_PARENTHESIS_CLOSE, "Expect ')' after arguments.");
 
-    if (sb_count(arguments) > MAX_PARAMETERS - 1) {
+    if (arguments.count > MAX_PARAMETERS - 1) {
         error(parser, "Cannot have more than 100 arguments");
     }
 
@@ -785,10 +785,10 @@ static ast_node_t *dot(parser_t* parser, bool is_in_type_context) {
         if (!match(parser, TOKEN_BRACE_CLOSE)) {
             do {
                 if (check(parser, TOKEN_COMMA) || check(parser, TOKEN_BRACE_CLOSE)) {
-                    sb_push(initiailizer->data.initiailizer.arguments, NULL);
+                    array_push(&initiailizer->data.initiailizer.arguments, NULL);
                 } else {
                     ast_node_t *argument = expression(parser, is_in_type_context);
-                    sb_push(initiailizer->data.initiailizer.arguments, argument);
+                    array_push(&initiailizer->data.initiailizer.arguments, argument);
                 }
 
             } while (match(parser, TOKEN_COMMA));
@@ -1228,8 +1228,8 @@ static void ast_print_ast_node(ast_node_t *node, u32 level) {
             print_indent(level + 1);
             print_line("type");
             ast_print_ast_node(node->data.initiailizer.type, level+2);
-            for (int i = 0; i < sb_count(node->data.initiailizer.arguments); ++i) {
-                ast_node_t *arg = node->data.initiailizer.arguments[i];
+            for (size_t i = 0; i < node->data.initiailizer.arguments.count; ++i) {
+                ast_node_t *arg = node->data.initiailizer.arguments.items[i];
                 print_indent(level + 1);
                 print_line("arg %llu", i);
                 if (arg) {
@@ -1330,8 +1330,8 @@ static void ast_print_ast_node(ast_node_t *node, u32 level) {
             print_indent(level+1);
             print_line("arguments");
 
-            for (int i = 0; i < sb_count(node->data.call.arguments); ++i) {
-                ast_node_t *arg = node->data.call.arguments[i];
+            for (size_t i = 0; i < node->data.call.arguments.count; ++i) {
+                ast_node_t *arg = node->data.call.arguments.items[i];
                 ast_print_ast_node(arg, level+2);
             }
             break;
