@@ -106,7 +106,11 @@ i32 disassemble_instruction(chunk_t *chunk, i32 offset) {
     switch(instruction) {
         case ORSO_OP_NO_OP: return simple_instruction("OP_NO_OP", offset);
         case ORSO_OP_POP: return simple_instruction("OP_POP", offset);
-        case ORSO_OP_POPN: return instruction_arg("OP_POPN", chunk, offset);
+        case ORSO_OP_POPN: {
+            op_code_popn_t *popn = (op_code_popn_t*)(chunk->code.items + offset);
+            printf("OP_POPN n: %d\n", popn->n);
+            return offset + sizeof(op_code_popn_t);
+        };
         case ORSO_OP_POP_SCOPE: return pop_scope_instruction("OP_POP_SCOPE", chunk, offset);
         case ORSO_OP_PUSH_0: return simple_instruction("OP_PUSH_0", offset);
         case ORSO_OP_PUSH_1: return simple_instruction("OP_PUSH_1", offset);

@@ -454,11 +454,17 @@ static void emit_pop(compiler_t* compiler, chunk_t* chunk, u32 pop_count, i32 li
     }
     
     if (pop_count == 1) {
-        emit(compiler, chunk, line, ORSO_OP_POP);
+        op_code_t op = ORSO_OP_POP;
+        emit_(compiler, chunk, line, &op, sizeof(op_code_t));
     } else {
         while (pop_count > 0) {
             byte batch = pop_count > UINT8_MAX ? UINT8_MAX : pop_count;
-            emit(compiler, chunk, line, ORSO_OP_POPN, (long)batch);
+
+            op_code_popn_t popn = {
+                .op = ORSO_OP_POPN,
+                .n = batch,
+            };
+            emit_(compiler, chunk, line, (op_code_t*)&popn, sizeof(op_code_popn_t));
             pop_count -= batch;
         }
     }

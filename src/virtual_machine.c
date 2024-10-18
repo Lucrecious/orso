@@ -207,6 +207,7 @@ void vm_begin(vm_t *vm, function_t *entry_point) {
 }
 
 #define READ_BYTE() *(frame->ip++)
+#define READ_CODE(type) ((frame->ip += sizeof(type)-1, (type*)(frame->ip-sizeof(type))))
 #define READ_U24() ORSO_u8s_to_u24(READ_BYTE(), READ_BYTE(), READ_BYTE())
 #define READ_U16() ORSO_u8s_to_u16(READ_BYTE(), READ_BYTE())
 #define READ_U32() ORSO_u8s_to_u32(READ_BYTE(), READ_BYTE(), READ_BYTE(), READ_BYTE())
@@ -315,7 +316,8 @@ bool vm_step(vm_t *vm) {
         }
 
         case ORSO_OP_POPN: {
-            POPN(READ_BYTE());
+            op_code_popn_t *popn = READ_CODE(op_code_popn_t);
+            POPN(popn->n);
             break;
         }
 
@@ -571,8 +573,6 @@ memcpy(current_top, local, size); \
             break;
         }
 
-        #define READ_CODE(type) ((frame->ip += sizeof(type)-1, (type*)(frame->ip-sizeof(type))))
-
         case ORSO_OP_JUMP_IF_FALSE: {
             op_code_jump_t *jump = READ_CODE(op_code_jump_t);
             if (orso_slot_is_falsey(*PEEK(0))) {
@@ -713,6 +713,7 @@ static void run(vm_t *vm, error_function_t error_fn) {
 }
 
 #undef PUSH
+#undef READ_CODE
 #undef POPN
 #undef POP
 #undef PEEK
