@@ -425,14 +425,14 @@ static ast_node_t *literal(parser_t *parser, bool is_in_type_context) {
         }
         case TOKEN_STRING: {
             expression_node->value_type = &OrsoTypeString;
-            OrsoString *value = orso_new_string_from_cstrn(expression_node->start.start + 1, expression_node->start.length - 2);
+            OrsoString *value = orso_new_string_from_cstrn(expression_node->start.start + 1, expression_node->start.length - 2, &parser->ast->allocator);
             expression_node->value_index = add_constant_value(parser, ORSO_SLOT_P(value), &OrsoTypeString);
             break;
         };
 
         case TOKEN_SYMBOL: {
             expression_node->value_type = &OrsoTypeSymbol;
-            symbol_t *value = orso_new_symbol_from_cstrn(expression_node->start.start + 1, expression_node->start.length - 2, parser->ast->symbols);
+            symbol_t *value = orso_new_symbol_from_cstrn(expression_node->start.start + 1, expression_node->start.length - 2, parser->ast->symbols, &parser->ast->allocator);
             expression_node->value_index = add_constant_value(parser, ORSO_SLOT_P(value), &OrsoTypeSymbol);
             break;
         }
@@ -1123,11 +1123,11 @@ i32 orso_zero_value(ast_t *ast, type_t *type, symbol_table_t *symbol_table) {
             break;
 
         case ORSO_TYPE_STRING:
-            value[0] = ORSO_SLOT_P(orso_new_string_from_cstrn("", 0));
+            value[0] = ORSO_SLOT_P(orso_new_string_from_cstrn("", 0, &ast->allocator));
             break;
 
         case ORSO_TYPE_SYMBOL:
-            value[0] = ORSO_SLOT_P(orso_new_symbol_from_cstrn("", 0, symbol_table));
+            value[0] = ORSO_SLOT_P(orso_new_symbol_from_cstrn("", 0, symbol_table, &ast->allocator));
             break;
         
         case ORSO_TYPE_UNION: {

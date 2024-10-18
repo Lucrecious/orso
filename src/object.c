@@ -5,27 +5,16 @@
 #include "symbol_table.h"
 #include "type_set.h"
 
-void* orso_object_reallocate(object_t* pointer, type_t* type, size_t old_size, size_t new_size) {
-    (void)old_size;
-
-    if (new_size == 0) {
-        // Should only be here when called by GC
-        free(pointer);
-        return NULL;
-    }
-
-    object_t* result = realloc(pointer, new_size);
-    if (result == NULL) {
-        exit(1);
-    }
-
-    result->type = type;
-
-    return result;
+static object_t *object_new(size_t byte_size, type_t *type, arena_t *allocator) {
+    void *object = arena_alloc(allocator, byte_size);
+    memset(object, 0, byte_size);
+    ((object_t*)object)->type = type;
+    return (object_t*)object;
 }
 
-OrsoString *orso_new_string_from_cstrn(const char* start, i32 length) {
-    OrsoString* string = ORSO_OBJECT_ALLOCATE_FLEX(OrsoString, &OrsoTypeString, length + 1);
+
+OrsoString *orso_new_string_from_cstrn(const char *start, i32 length, arena_t *allocator) {
+    OrsoString *string = (OrsoString*)object_new(sizeof(OrsoString) + (length+1)*sizeof(char), &OrsoTypeString, allocator);
     string->length = length;
     memcpy(string->text, start, length);
     string->text[length] = '\0';
@@ -133,32 +122,25 @@ string_t slot_to_string(slot_t *slot, type_t *type, arena_t *allocator) {
     }
 }
 
-OrsoString *orso_slot_to_string(slot_t* slot, type_t* type) {
+OrsoString *orso_slot_to_string(slot_t *slot, type_t *type, arena_t *allocator) {
     OrsoString *string;
 
     arena_t tmp = {0}; {
         string_t value = slot_to_string(slot, type, &tmp);
-        string = orso_new_string_from_cstrn(value.cstr, value.length);
+        string = orso_new_string_from_cstrn(value.cstr, value.length, allocator);
     } arena_free(&tmp);
 
     return string;
 }
 
-OrsoString *orso_string_concat(OrsoString *a, OrsoString *b) {
-    OrsoString *string = ORSO_OBJECT_ALLOCATE_FLEX(OrsoString, &OrsoTypeString, a->length + b->length + 1);
+OrsoString *orso_string_concat(OrsoString *a, OrsoString *b, arena_t *allocator) {
+    OrsoString *string = (OrsoString*)object_new(sizeof(OrsoString) + (a->length + b->length + 1)*sizeof(char), &OrsoTypeString, allocator);
     string->length = a->length + b->length;
     memcpy(string->text, a->text, a->length);
     memcpy(string->text + a->length, b->text, b->length);
     string->text[a->length + b->length] = '\0';
 
     return string;
-}
-
-static object_t *object_new(size_t byte_size, type_t *type, arena_t *allocator) {
-    void *object = arena_alloc(allocator, byte_size);
-    memset(object, 0, byte_size);
-    ((object_t*)object)->type = type;
-    return (object_t*)object;
 }
 
 function_t *orso_new_function(arena_t *allocator) {
@@ -174,8 +156,8 @@ bool is_function_compiled(function_t* function) {
     return function->chunk.code.items != NULL;
 }
 
-native_function_t* orso_new_native_function(native_function_interface_t function, type_t* type) {
-    native_function_t* function_obj = ORSO_OBJECT_ALLOCATE(native_function_t, type);
+native_function_t *orso_new_native_function(native_function_interface_t function, type_t* type, arena_t *allocator) {
+    native_function_t *function_obj = (native_function_t*)object_new(sizeof(native_function_t), type, allocator);
     function_obj->function = function;
     function_obj->signature = type;
 
@@ -243,15 +225,14 @@ f64 cstrn_to_f64(const char* text, i32 length) {
     return value * fact;
 }
 
-symbol_t* orso_unmanaged_symbol_from_cstrn(const char* start, i32 length, symbol_table_t* symbol_table) {
+symbol_t *orso_unmanaged_symbol_from_cstrn(const char *start, i32 length, symbol_table_t *symbol_table, arena_t *allocator) {
     u32 hash = orso_hash_cstrn(start, length);
-    symbol_t* symbol = symbol_table_find_cstrn(symbol_table, start, length, hash);
+    symbol_t *symbol = symbol_table_find_cstrn(symbol_table, start, length, hash);
     if (symbol != NULL) {
         return symbol;
     }
 
-    symbol = ORSO_ALLOCATE_FLEX(symbol_t, length + 1);
-    symbol->object.type = &OrsoTypeSymbol;
+    symbol = (symbol_t*)object_new(sizeof(symbol_t) + (length + 1)*sizeof(char), &OrsoTypeSymbol, allocator);
     symbol->hash = hash;
     symbol->length = length;
     memcpy(symbol->text, start, length);
@@ -263,14 +244,14 @@ symbol_t* orso_unmanaged_symbol_from_cstrn(const char* start, i32 length, symbol
     return symbol;
 }
 
-symbol_t* orso_new_symbol_from_cstrn(const char* start, i32 length, symbol_table_t* symbol_table) {
+symbol_t *orso_new_symbol_from_cstrn(const char *start, i32 length, symbol_table_t *symbol_table, arena_t *allocator) {
     u32 hash = orso_hash_cstrn(start, length);
     symbol_t* symbol = symbol_table_find_cstrn(symbol_table, start, length, hash);
     if (symbol != NULL) {
         return symbol;
     }
 
-    symbol = ORSO_OBJECT_ALLOCATE_FLEX(symbol_t, &OrsoTypeSymbol, length + 1);
+    symbol = (symbol_t*)object_new(sizeof(symbol_t) + (length+1)*sizeof(char), &OrsoTypeSymbol, allocator);
     symbol->hash = hash;
     symbol->length = length;
     memcpy(symbol->text, start, length);

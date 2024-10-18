@@ -493,7 +493,7 @@ static i32 add_global(vm_t *vm, token_t *name, i32 slot_count, type_t* type)
 static i32 add_global(vm_t *vm, token_t *name, i32 slot_count)
 #endif
 {
-    symbol_t* identifier = orso_new_symbol_from_cstrn(name->start, name->length, &vm->symbols);
+    symbol_t* identifier = orso_new_symbol_from_cstrn(name->start, name->length, &vm->symbols, &vm->allocator);
 
     slot_t index_slot;
     ASSERT(!symbol_table_get(&vm->globals.name_to_index, identifier, &index_slot), "double global definition");
@@ -546,7 +546,7 @@ static i32 declare_local_entity(compiler_t *compiler, token_t *name, i32 slot_co
 }
 
 static i32 retrieve_global_variable(vm_t *vm, token_t *name) {
-    symbol_t* identifier = orso_new_symbol_from_cstrn(name->start, name->length, &vm->symbols);
+    symbol_t *identifier = orso_new_symbol_from_cstrn(name->start, name->length, &vm->symbols, &vm->allocator);
     slot_t value;
     if (!symbol_table_get(&vm->globals.name_to_index, identifier, &value)) {
         return -1;
@@ -1238,7 +1238,7 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
             token_t start = expression_node->data.expression->start;
             token_t end = expression_node->data.expression->end;
 
-            OrsoString* expression_string = orso_new_string_from_cstrn(start.start, (end.start + end.length) - start.start);
+            OrsoString *expression_string = orso_new_string_from_cstrn(start.start, (end.start + end.length) - start.start, &vm->allocator);
 
             slot_t slot = ORSO_SLOT_P(expression_string);
             emit_constant(compiler, chunk, (byte*)&slot, start.line, &OrsoTypeString);

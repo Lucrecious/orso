@@ -307,10 +307,10 @@ if (strlen(SYMBOL->text) == (sizeof(#TYPE_STRING) - 1) && \
 #undef RETURN_IF_TYPE
 }
 
-static bool is_builtin_function(ast_t* ast, symbol_t* identifier, native_function_t** function) {
+static bool is_builtin_function(ast_t *ast, symbol_t *identifier, native_function_t **function) {
     if (identifier->length == 5 && strncmp(identifier->text, "clock", 5) == 0) {
         type_t *function_type = orso_type_set_fetch_native_function(&ast->type_set, &OrsoTypeFloat64, (types_t){0});
-        *function = orso_new_native_function(clock_native, function_type);
+        *function = orso_new_native_function(clock_native, function_type, &ast->allocator);
         return true;
     }
 
@@ -1645,7 +1645,7 @@ void orso_resolve_expression(
 }
 
 static void declare_entity(analyzer_t* analyzer, scope_t* scope, ast_node_t* entity) {
-    symbol_t* identifier = orso_unmanaged_symbol_from_cstrn(entity->start.start, entity->start.length, &analyzer->symbols);
+    symbol_t *identifier = orso_unmanaged_symbol_from_cstrn(entity->start.start, entity->start.length, &analyzer->symbols, &analyzer->allocator);
     slot_t slot_type_pair;
     if (symbol_table_get(&scope->named_entities, identifier, &slot_type_pair)) {
         const char message[126];
@@ -1718,7 +1718,7 @@ static void resolve_entity_declaration(analyzer_t* analyzer, ast_t* ast, Analysi
     }
 
     slot_t entity_slot;
-    symbol_t* name = orso_unmanaged_symbol_from_cstrn(entity_declaration->start.start, entity_declaration->start.length, &analyzer->symbols);
+    symbol_t *name = orso_unmanaged_symbol_from_cstrn(entity_declaration->start.start, entity_declaration->start.length, &analyzer->symbols, &ast->allocator);
 
     ASSERT(symbol_table_get(&state.scope->named_entities, name, &entity_slot), "should be forward_declared already");
 
@@ -1985,7 +1985,7 @@ static Entity *get_resolved_entity_by_identifier(
 
     bool passed_local_mutable_access_barrier = false;
 
-    symbol_t *identifier = orso_unmanaged_symbol_from_cstrn(identifier_token.start, identifier_token.length, &analyzer->symbols);
+    symbol_t *identifier = orso_unmanaged_symbol_from_cstrn(identifier_token.start, identifier_token.length, &analyzer->symbols, &ast->allocator);
     
     // early return if looking at a built in type
     {
@@ -2700,8 +2700,6 @@ void analyzer_free(analyzer_t* analyzer) {
         if (entry->key == NULL) {
             continue;
         }
-
-        orso_unmanaged_symbol_free(entry->key);
     }
 
     analyzer->dependencies.count = 0;

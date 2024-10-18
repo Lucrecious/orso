@@ -224,7 +224,7 @@ bool vm_step(vm_t *vm) {
         case ORSO_OP_EQUAL_SYMBOL: { i32 result = (PEEK(1)->as.p == PEEK(0)->as.p); POP(); POP(); PUSH(ORSO_SLOT_I(result), &OrsoTypeBool); break; }
 
         case ORSO_OP_EQUAL_STRING: { i32 result = orso_string_equal(PEEK(1)->as.p, PEEK(0)->as.p); POP(); POP(); PUSH(ORSO_SLOT_I(result), &OrsoTypeBool); break; }
-        case ORSO_OP_CONCAT_STRING: { PEEK(1)->as.p = orso_string_concat(PEEK(1)->as.p, PEEK(0)->as.p); POP(); break; } 
+        case ORSO_OP_CONCAT_STRING: { PEEK(1)->as.p = orso_string_concat(PEEK(1)->as.p, PEEK(0)->as.p, &vm->allocator); POP(); break; } 
 
         case ORSO_OP_LOGICAL_NOT: PEEK(0)->as.i = !PEEK(0)->as.i; SLOT_ADD_TYPE(PEEK(0), &OrsoTypeBool); break;
 
@@ -566,25 +566,25 @@ memcpy(current_top, local, size); \
             OrsoString *expression_string = (OrsoString*)(POP().as.p);
 
             byte size_slots = orso_type_slot_count(type);
-            OrsoString *value_string = orso_slot_to_string(PEEK(size_slots - 1), type);
+            arena_t tmp = {0}; {
+                OrsoString *value_string = orso_slot_to_string(PEEK(size_slots - 1), type, &tmp);
 
-            if (vm->write_fn != NULL) {
-                if (op_code == ORSO_OP_PRINT_EXPR) {
-                    vm->write_fn(expression_string->text);
-                    vm->write_fn(" (");
+                if (vm->write_fn != NULL) {
+                    if (op_code == ORSO_OP_PRINT_EXPR) {
+                        vm->write_fn(expression_string->text);
+                        vm->write_fn(" (");
 
-                    arena_t tmp = {0}; {
-                        string_t s = type_to_string(type, &tmp);
-                        vm->write_fn(s.cstr);
-                    } arena_free(&tmp);
-                    vm->write_fn(") => ");
-                    vm->write_fn(value_string->text);
-                    vm->write_fn("\n");
-                } else {
-                    vm->write_fn(value_string->text);
-                    vm->write_fn("\n");
+                            string_t s = type_to_string(type, &tmp);
+                            vm->write_fn(s.cstr);
+                        vm->write_fn(") => ");
+                        vm->write_fn(value_string->text);
+                        vm->write_fn("\n");
+                    } else {
+                        vm->write_fn(value_string->text);
+                        vm->write_fn("\n");
+                    }
                 }
-            }
+            } arena_free(&tmp);
 
             POPN(size_slots);
             break;
