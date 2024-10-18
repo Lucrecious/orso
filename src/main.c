@@ -12,6 +12,10 @@
 #include "arena.h"
 #undef ARENA_IMPLEMENTATION
 
+#define TMP_IMPLEMENTATION
+#include "tmp.h"
+#undef TMP_IMPLEMENTATION
+
 #include <libtcc.h>
 
 #define PROJECT_NAME "orso"
@@ -20,7 +24,7 @@
 
 /*
 
-[ ] Use tsoding-like arrays with allocators and replace sb
+[ ] Untangle allocators
 [ ] Allow for "native" structs
 [ ] Unions as a native struct
 [ ] Write printf in orso itself

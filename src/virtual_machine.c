@@ -9,6 +9,7 @@
 #include "static_analyzer.h"
 #include "type.h"
 #include "type_set.h"
+#include "tmp.h"
 
 #if defined(DEBUG)
 #include "debug.h"
@@ -566,15 +567,15 @@ memcpy(current_top, local, size); \
             OrsoString *expression_string = (OrsoString*)(POP().as.p);
 
             byte size_slots = orso_type_slot_count(type);
-            arena_t tmp = {0}; {
-                OrsoString *value_string = orso_slot_to_string(PEEK(size_slots - 1), type, &tmp);
+            tmp_arena_t *tmp = allocator_borrow(); {
+                OrsoString *value_string = orso_slot_to_string(PEEK(size_slots - 1), type, tmp->allocator);
 
                 if (vm->write_fn != NULL) {
                     if (op_code == ORSO_OP_PRINT_EXPR) {
                         vm->write_fn(expression_string->text);
                         vm->write_fn(" (");
 
-                            string_t s = type_to_string(type, &tmp);
+                            string_t s = type_to_string(type, tmp->allocator);
                             vm->write_fn(s.cstr);
                         vm->write_fn(") => ");
                         vm->write_fn(value_string->text);
@@ -584,7 +585,7 @@ memcpy(current_top, local, size); \
                         vm->write_fn("\n");
                     }
                 }
-            } arena_free(&tmp);
+            } allocator_return(tmp);
 
             POPN(size_slots);
             break;

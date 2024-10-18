@@ -2,6 +2,7 @@
 
 #include "symbol_table.h"
 #include "type_set.h"
+#include "tmp.h"
 
 bool orso_union_type_contains_type(type_t *union_, type_t *type) {
     if (!ORSO_TYPE_IS_UNION(type)) {
@@ -154,8 +155,8 @@ type_t *orso_type_merge(type_set_t *set, type_t *a, type_t *b) {
         return a;
     }
 
-    arena_t tmp_allocator={0};
-    types_t types = {.allocator=&tmp_allocator};
+    tmp_arena_t *tmp = allocator_borrow();
+    types_t types = {.allocator=tmp->allocator};
 
     if (ORSO_TYPE_IS_UNION(a)) {
         for (size_t i = 0; i < a->data.union_.types.count; ++i) {
@@ -181,7 +182,7 @@ type_t *orso_type_merge(type_set_t *set, type_t *a, type_t *b) {
 
     type_t *merged = orso_type_set_fetch_union(set, types);
 
-    arena_free(&tmp_allocator);
+    allocator_return(tmp);
 
     return merged;
 }

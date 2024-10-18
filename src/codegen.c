@@ -10,6 +10,8 @@
 #include "instructions.h"
 #include "type_set.h"
 
+#include "tmp.h"
+
 typedef struct {
     token_t name;
     i32 depth;
@@ -1118,11 +1120,12 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
         }
 
         case ORSO_AST_NODE_TYPE_EXPRESSION_STATEMENT: {
-            arena_t tmp_allocator = {0};
-            ast_nodes_t block = {.allocator=&tmp_allocator};
-            array_push(&block, expression_node->data.statement);
-            gen_block(vm, compiler, ast, chunk, block, 1, expression_node->start.line);
-            arena_free(&tmp_allocator);
+            tmp_arena_t *tmp = allocator_borrow(); {
+                ast_nodes_t block = {.allocator=tmp->allocator};
+                array_push(&block, expression_node->data.statement);
+                gen_block(vm, compiler, ast, chunk, block, 1, expression_node->start.line);
+            } allocator_return(tmp);
+            
             break;
         }
         

@@ -9,6 +9,7 @@
 #include "type.h"
 #include "type_set.h"
 #include "stringt.h"
+#include "tmp.h"
 
 /*
 program                  -> declaration* EOF
@@ -1193,13 +1194,13 @@ static void print_line(const cstr_t format, ...) {
 }
 
 static void ast_print_ast_node(ast_node_t *node, u32 level) {
-    static arena_t tmp_allocator = {0};
+    tmp_arena_t *tmp = allocator_borrow();
 
-    #define type2cstr(node) (type_to_string(node->value_type, &tmp_allocator).cstr)
+    #define type2cstr(node) (type_to_string(node->value_type, tmp->allocator).cstr)
 
     switch (node->node_type) {
         case ORSO_AST_NODE_TYPE_EXPRESSION_BINARY: {
-            string_t label = string_format("binary (%.*s): %s", &tmp_allocator, node->operator.length, node->operator.start, type2cstr(node));
+            string_t label = string_format("binary (%.*s): %s", tmp->allocator, node->operator.length, node->operator.start, type2cstr(node));
 
             print_indent(level);
             print_line("%s", label.cstr);
@@ -1420,7 +1421,7 @@ static void ast_print_ast_node(ast_node_t *node, u32 level) {
         }
     }
 
-    arena_reset(&tmp_allocator);
+    allocator_return(tmp);
 }
 
 void ast_print(ast_t* ast, const char* name) {

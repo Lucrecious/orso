@@ -4,6 +4,7 @@
 
 #include "def.h"
 #include "object.h"
+#include "tmp.h"
 
 #ifdef DEBUG
 u32 chunk_add_constant(chunk_t* chunk, byte* data, u32 size, type_t* type)
@@ -94,8 +95,8 @@ void orso_print_slot(slot_t *slot, type_t *type) {
         }
     }
     
-    arena_t tmp = {0}; {
-        string_t s = slot_to_string(slot, type, &tmp);
+    tmp_arena_t *tmp = allocator_borrow(); {
+        string_t s = slot_to_string(slot, type, tmp->allocator);
         printf("%s", s.cstr);
-    } arena_free(&tmp);
+    } allocator_return(tmp);
 }

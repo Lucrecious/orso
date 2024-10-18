@@ -4,6 +4,7 @@
 
 #include "symbol_table.h"
 #include "type_set.h"
+#include "tmp.h"
 
 static object_t *object_new(size_t byte_size, type_t *type, arena_t *allocator) {
     void *object = arena_alloc(allocator, byte_size);
@@ -62,15 +63,15 @@ string_t slot_to_string(slot_t *slot, type_t *type, arena_t *allocator) {
         case ORSO_TYPE_FUNCTION: {
             string_t string;
 
-            arena_t tmp_allocator = {0}; {
-                string_builder_t sb = {.allocator = &tmp_allocator};
+            tmp_arena_t *tmp = allocator_borrow(); {
+                string_builder_t sb = {.allocator = tmp->allocator};
 
                 function_t *function = (function_t*)slot->as.p;
-                sb_add_cstr(&sb, string_format("<%s :: (", &tmp_allocator,
+                sb_add_cstr(&sb, string_format("<%s :: (", tmp->allocator,
                     function->binded_name ? function->binded_name->text : "<anonymous>").cstr);
 
                 for (size_t i = 0; i < function->signature->data.function.argument_types.count; ++i) {
-                    string_t arg_type = type_to_string(function->signature->data.function.argument_types.items[i], &tmp_allocator);
+                    string_t arg_type = type_to_string(function->signature->data.function.argument_types.items[i], tmp->allocator);
                     sb_add_cstr(&sb, arg_type.cstr);
 
                     if (i < function->signature->data.function.argument_types.count - 1)  {
@@ -78,11 +79,11 @@ string_t slot_to_string(slot_t *slot, type_t *type, arena_t *allocator) {
                     }
                 }
 
-                string_t return_type_string = type_to_string(function->signature->data.function.return_type, &tmp_allocator);
-                sb_add_cstr(&sb, string_format(") -> %s>", &tmp_allocator, return_type_string.cstr).cstr);
+                string_t return_type_string = type_to_string(function->signature->data.function.return_type, tmp->allocator);
+                sb_add_cstr(&sb, string_format(") -> %s>", tmp->allocator, return_type_string.cstr).cstr);
 
                 string = sb_render(&sb, allocator);
-            } arena_free(&tmp_allocator);
+            } allocator_return(tmp);
 
             return string;
         }
@@ -108,11 +109,11 @@ string_t slot_to_string(slot_t *slot, type_t *type, arena_t *allocator) {
         case ORSO_TYPE_TYPE: {
             string_t result;
 
-            arena_t tmp_allocator = {0}; {
+            tmp_arena_t *tmp = allocator_borrow(); {
                 type_t *type = (type_t*)slot->as.p;
-                string_t type_string = type_to_string(type, &tmp_allocator);
+                string_t type_string = type_to_string(type, tmp->allocator);
                 result = string_format("<%s>", allocator, type_string.cstr);
-            } arena_free(&tmp_allocator);
+            } allocator_return(tmp);
 
             return result;
         }
@@ -125,10 +126,10 @@ string_t slot_to_string(slot_t *slot, type_t *type, arena_t *allocator) {
 OrsoString *orso_slot_to_string(slot_t *slot, type_t *type, arena_t *allocator) {
     OrsoString *string;
 
-    arena_t tmp = {0}; {
-        string_t value = slot_to_string(slot, type, &tmp);
+    tmp_arena_t *tmp = allocator_borrow(); {
+        string_t value = slot_to_string(slot, type, tmp->allocator);
         string = orso_new_string_from_cstrn(value.cstr, value.length, allocator);
-    } arena_free(&tmp);
+    } allocator_return(tmp);
 
     return string;
 }
