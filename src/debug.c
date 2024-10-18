@@ -135,11 +135,14 @@ i32 disassemble_instruction(chunk_t *chunk, i32 offset) {
         case ORSO_OP_EQUAL_SYMBOL: return simple_instruction("OP_EQUAL_SYMBOL", offset);
         case ORSO_OP_CONSTANT: {
             op_code_location_t *location = (op_code_location_t*)(chunk->code.items + offset);
-            printf("OP_CONSTANT index: %d, size: %d\n", location->index, location->size);
+            printf("OP_CONSTANT index: %d, size: %d\n", location->index_slots, location->size_bytes);
             return offset + sizeof(op_code_location_t);
         }
-        case ORSO_OP_GET_LOCAL_8BIT_ADDRESS: return index_instruction("OP_GET_LOCAL_8BIT_ADDRESS", chunk, offset, 1, II_LOCAL);
-        case ORSO_OP_GET_LOCAL_16BIT_ADDRESS: return index_instruction("OP_GET_LOCAL_16BIT_ADDRESS", chunk, offset, 2, II_LOCAL);
+        case ORSO_OP_LOCAL:  {
+            op_code_location_t *location = (op_code_location_t*)(chunk->code.items + offset);
+            printf("OP_LOCAL index: %d, size: %d\n", location->index_slots, location->size_bytes);
+            return offset + sizeof(op_code_location_t);
+        }
         case ORSO_OP_GET_GLOBAL_8BIT_ADDRESS: return index_instruction("OP_GET_GLOBAL_8BIT_ADDRESS", chunk, offset, 1, II_GLOBAL);
         case ORSO_OP_GET_GLOBAL_16BIT_ADDRESS: return index_instruction("OP_GET_GLOBAL_16BIT_ADDRESS", chunk, offset, 2, II_GLOBAL);
         case ORSO_OP_GET_GLOBAL_32BIT_ADDRESS: return index_instruction("OP_GET_GLOBAL_32BIT_ADDRESS", chunk, offset, 4, II_GLOBAL);

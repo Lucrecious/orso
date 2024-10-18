@@ -32,8 +32,7 @@ typedef enum op_code_t {
 
     ORSO_OP_CONSTANT,
 
-    ORSO_OP_GET_LOCAL_8BIT_ADDRESS,
-    ORSO_OP_GET_LOCAL_16BIT_ADDRESS,
+    ORSO_OP_LOCAL,
     ORSO_OP_GET_GLOBAL_8BIT_ADDRESS,
     ORSO_OP_GET_GLOBAL_16BIT_ADDRESS,
     ORSO_OP_GET_GLOBAL_32BIT_ADDRESS,
@@ -78,8 +77,8 @@ typedef enum op_code_t {
 typedef struct op_code_location_t op_code_location_t;
 struct op_code_location_t {
     op_code_t op;
-    u32 index;
-    u16 size;
+    u32 index_slots;
+    u16 size_bytes;
 };
 
 typedef struct op_code_popn_t op_code_popn_t;

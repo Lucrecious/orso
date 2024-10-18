@@ -117,9 +117,10 @@ static size_t emit_(compiler_t *compiler, chunk_t *chunk, i32 line, op_code_t *o
             stack_effect = -pop_scope->scope_size_slots;
             break;
         }
+        case ORSO_OP_LOCAL:
         case ORSO_OP_CONSTANT: {
             op_code_location_t *location = (op_code_location_t*)op_code;
-            stack_effect = orso_bytes_to_slots(location->size);
+            stack_effect = orso_bytes_to_slots(location->size_bytes);
             break;
         }
         default: break;
@@ -200,7 +201,7 @@ static void emit(compiler_t* compiler, chunk_t* chunk, i32 line, const int op_co
             break;
         }
 
-        case ORSO_OP_GET_LOCAL_8BIT_ADDRESS:
+        case ORSO_OP_LOCAL:
         case ORSO_OP_GET_GLOBAL_8BIT_ADDRESS:
         case ORSO_OP_CONSTANT: {
             byte index = (byte)va_arg(args, long);
@@ -213,7 +214,6 @@ static void emit(compiler_t* compiler, chunk_t* chunk, i32 line, const int op_co
             break;
         }
 
-        case ORSO_OP_GET_LOCAL_16BIT_ADDRESS:
         case ORSO_OP_GET_GLOBAL_16BIT_ADDRESS: {
             u32 index = va_arg(args, long);
             ASSERT(index < UINT16_MAX, "must be a short");
@@ -416,8 +416,8 @@ static void emit_constant(compiler_t *compiler, chunk_t *chunk, byte *data, i32 
 
     op_code_location_t location = {
         .op = ORSO_OP_CONSTANT,
-        .index = address,
-        .size = size,
+        .index_slots = address,
+        .size_bytes = size,
     };
 
     emit_(compiler, chunk, line, (op_code_t*)&location, sizeof(op_code_location_t));
@@ -440,11 +440,19 @@ static void patch_jump(chunk_t *chunk, size_t update_index) {
     jump_code->offset = (u32)jump;
 }
 
-static void emit_entity_get(compiler_t* compiler, u32 index, byte size_bytes, chunk_t* chunk, i32 line, bool is_local) {
+static void emit_entity_get(compiler_t *compiler, u32 index, u32 size_bytes, chunk_t *chunk, i32 line, bool is_local) {
     index *= sizeof(slot_t);
     if (is_local) {
-        ASSERT(index <= UINT16_MAX, "must be short");
-        emit(compiler, chunk, line, ORSO_OP_GET_LOCAL_16BIT_ADDRESS, (long)index, (long)size_bytes);
+        ASSERT(index <= UINT32_MAX, "must be short");
+        ASSERT(size_bytes <= UINT16_MAX, "must be short");
+        {
+            op_code_location_t location = {
+                .op = ORSO_OP_LOCAL,
+                .index_slots = index,
+                .size_bytes = size_bytes,
+            };
+            emit_(compiler, chunk, line, (op_code_t*)&location, sizeof(op_code_location_t));
+        }
     } else {
         emit(compiler, chunk, line, ORSO_OP_GET_GLOBAL_32BIT_ADDRESS, (long)index, (long)size_bytes);
     }
