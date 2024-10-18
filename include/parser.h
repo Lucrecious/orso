@@ -20,6 +20,14 @@ typedef enum return_guarentee_t {
 struct ast_node_t;
 typedef struct ast_node_t ast_node_t;
 
+typedef struct ast_nodes_t ast_nodes_t;
+struct ast_nodes_t {
+    ast_node_t *items;
+    size_t count;
+    size_t capacity;
+    arena_t *allocator;
+};
+
 typedef enum scope_type_t {
     SCOPE_TYPE_MODULE,
     SCOPE_TYPE_FUNCTION_PARAMETERS,
@@ -29,15 +37,15 @@ typedef enum scope_type_t {
 } scope_type_t;
 
 typedef struct scope_t {
-    ast_node_t* creator;
+    ast_node_t *creator;
     symbol_table_t named_entities;
     scope_type_t type;
-    struct scope_t* outer;
+    struct scope_t *outer;
 } scope_t;
 
 typedef struct function_definition_pair_t {
-    function_t* function;
-    ast_node_t* ast_defintion;
+    function_t *function;
+    ast_node_t *ast_defintion;
 } function_definition_pair_t;
 
 typedef enum ast_node_type_t {

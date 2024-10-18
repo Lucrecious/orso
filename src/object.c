@@ -155,10 +155,17 @@ OrsoString *orso_string_concat(OrsoString *a, OrsoString *b) {
     return string;
 }
 
-function_t* orso_new_function(void) {
-    function_t* function = ORSO_OBJECT_ALLOCATE(function_t, (type_t*)&OrsoTypeEmptyFunction);
+static OrsoObject *object_new(size_t byte_size, type_t *type, arena_t *allocator) {
+    void *object = arena_alloc(allocator, byte_size);
+    memset(object, 0, byte_size);
+    ((OrsoObject*)object)->type = type;
+    return (OrsoObject*)object;
+}
+
+function_t *orso_new_function(arena_t *allocator) {
+    function_t *function = (function_t*)object_new(sizeof(function_t), (type_t*)&OrsoTypeEmptyFunction, allocator);
     function->signature = &OrsoTypeEmptyFunction;
-    chunk_init(&function->chunk);
+    chunk_init(&function->chunk, allocator);
     function->binded_name = NULL;
 
     return function;

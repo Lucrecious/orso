@@ -348,7 +348,7 @@ static i32 evaluate_expression(analyzer_t* analyzer, ast_t* ast, bool is_folding
     code_builder_t builder;
     orso_code_builder_init(&builder, &vm, ast);
 
-    function_t* function = orso_generate_expression_function(&builder, expression, is_folding_time);
+    function_t* function = orso_generate_expression_function(&builder, expression, is_folding_time, &analyzer->allocator);
 
     orso_code_builder_free(&builder);
 
@@ -1897,12 +1897,12 @@ static void resolve_entity_declaration(analyzer_t* analyzer, ast_t* ast, Analysi
 #undef INITIAL_EXPRESSION
 }
 
-static Entity* get_builtin_entity(ast_t* ast, symbol_t* identifier) {
+static Entity *get_builtin_entity(ast_t *ast, symbol_t *identifier) {
     slot_t entity_slot;
     if (!symbol_table_get(&ast->builtins, identifier, &entity_slot)) {
-        type_t* type;
-        OrsoNativeFunction* function;
-        type_t* value_type = NULL;
+        type_t *type;
+        OrsoNativeFunction *function;
+        type_t *value_type = NULL;
         slot_t value_slot;
         if (is_builtin_type(identifier, &type)) {
             value_slot = ORSO_SLOT_P(type);
@@ -1914,14 +1914,14 @@ static Entity* get_builtin_entity(ast_t* ast, symbol_t* identifier) {
 
         if (value_type) {
             i32 index = add_value_to_ast_constant_stack(ast, &value_slot, value_type);
-            Entity* entity = add_builtin_entity(ast, identifier, value_type, index);
+            Entity *entity = add_builtin_entity(ast, identifier, value_type, index);
             return entity;
         }
 
         return NULL;
     }
 
-    Entity* entity = (Entity*)entity_slot.as.p;
+    Entity *entity = (Entity*)entity_slot.as.p;
     return entity;
 }
 
@@ -1983,21 +1983,21 @@ static Entity* get_builtin_entity(ast_t* ast, symbol_t* identifier) {
  * 
  * This function below is what does this recursive dependency thing.
 */
-static Entity* get_resolved_entity_by_identifier(
-        analyzer_t* analyzer,
-        ast_t* ast,
+static Entity *get_resolved_entity_by_identifier(
+        analyzer_t *analyzer,
+        ast_t *ast,
         AnalysisState state,
         token_t identifier_token,
-        EntityQuery* query,
-        scope_t** search_scope) { // TODO: consider removing search scope from params, check if it's actually used
+        EntityQuery *query,
+        scope_t **search_scope) { // TODO: consider removing search scope from params, check if it's actually used
 
     bool passed_local_mutable_access_barrier = false;
 
-    symbol_t* identifier = orso_unmanaged_symbol_from_cstrn(identifier_token.start, identifier_token.length, &analyzer->symbols);
+    symbol_t *identifier = orso_unmanaged_symbol_from_cstrn(identifier_token.start, identifier_token.length, &analyzer->symbols);
     
     // early return if looking at a built in type
     {
-        Entity* entity = get_builtin_entity(ast, identifier);
+        Entity *entity = get_builtin_entity(ast, identifier);
         if (entity) {
             search_scope = NULL;
             return entity;
@@ -2020,7 +2020,7 @@ static Entity* get_resolved_entity_by_identifier(
             continue;
         }
 
-        Entity* entity = (Entity*)entity_slot.as.p;
+        Entity *entity = (Entity*)entity_slot.as.p;
 
         if (query && query->skip_mutable && entity->node->data.declaration.is_mutable) {
             NEXT_SCOPE();
@@ -2122,13 +2122,13 @@ static Entity* get_resolved_entity_by_identifier(
             *     [1] by analyzed I mean type checked, type flowed, constants folded, etc. i.e. getting the ast ready for codegen.
             */
 
-            function_t* function = (function_t*)ast->folded_constants[entity->node->data.declaration.initial_value_expression->value_index].as.p;
+            function_t *function = (function_t*)ast->folded_constants[entity->node->data.declaration.initial_value_expression->value_index].as.p;
             for (i32 i = 0; i < analyzer->dependencies.count; i++) {
                 i32 i_ = analyzer->dependencies.count - 1 - i;
-                analysis_dependency_t* dependency = &analyzer->dependencies.chain[i_];
-                ast_node_t* node = dependency->ast_node;
+                analysis_dependency_t *dependency = &analyzer->dependencies.chain[i_];
+                ast_node_t *node = dependency->ast_node;
                 if (node->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION) {
-                    function_t* folded_function = (function_t*)ast->folded_constants[node->value_index].as.p;
+                    function_t *folded_function = (function_t*)ast->folded_constants[node->value_index].as.p;
                     if (folded_function == function && dependency->fold_level != state.fold_level) {
                         // TODO: Use better system to figure out whether function definition can be compiled or not
                         // In this case, it cannot because of the fold level circular dependency.
@@ -2149,7 +2149,7 @@ static Entity* get_resolved_entity_by_identifier(
             return entity;
         }
 
-        type_t* type = entity->node->value_type;
+        type_t *type = entity->node->value_type;
 
         if (query->flags & QUERY_FLAG_MATCH_TYPE && query->search_type == type) {
             return entity;
@@ -2170,10 +2170,10 @@ static Entity* get_resolved_entity_by_identifier(
 }
 
 static void resolve_function_expression(
-        analyzer_t* analyzer,
-        ast_t* ast,
+        analyzer_t *analyzer,
+        ast_t *ast,
         AnalysisState state,
-        ast_node_t* function_definition_expression) {
+        ast_node_t *function_definition_expression) {
     ASSERT(function_definition_expression->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION, "must be function declaration at this point");
 
     if (IS_FOLDED(function_definition_expression)) {
@@ -2191,7 +2191,7 @@ static void resolve_function_expression(
 
     scope_t function_parameter_scope;
     scope_init(&function_parameter_scope, &analyzer->allocator, SCOPE_TYPE_FUNCTION_PARAMETERS, state.scope, function_definition_expression);
-    type_t* parameter_types[parameter_count];
+    type_t *parameter_types[parameter_count];
 
     forward_scan_declaration_names(analyzer, &function_parameter_scope, definition->parameter_nodes, parameter_count);
 
@@ -2211,7 +2211,7 @@ static void resolve_function_expression(
         }
     }
 
-    type_t* return_type = &OrsoTypeVoid;
+    type_t *return_type = &OrsoTypeVoid;
     if (definition->return_type_expression) {
         bool pushed = push_dependency(analyzer, definition->return_type_expression, state.fold_level, is_value_circular_dependency);
         if (pushed) {
@@ -2237,9 +2237,9 @@ static void resolve_function_expression(
         return;
     }
 
-    type_t* function_type = orso_type_set_fetch_function(&ast->type_set, return_type, parameter_types, parameter_count);
+    type_t *function_type = orso_type_set_fetch_function(&ast->type_set, return_type, parameter_types, parameter_count);
 
-    function_t* function = orso_new_function();
+    function_t *function = orso_new_function(&analyzer->allocator);
     function->signature = function_type;
 
     sb_push(ast->function_definition_pairs, ((function_definition_pair_t){

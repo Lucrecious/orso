@@ -13,15 +13,15 @@ u32 chunk_add_constant(chunk_t* chunk, byte* data, u32 size)
 #endif
 {
     u32 slot_size = orso_bytes_to_slots(size);
-    u32 index = sb_count(chunk->constants);
+    u32 index = chunk->constants.count;
     for (size_t i = 0; i < slot_size; i++) {
-        sb_push(chunk->constants, (slot_t){ .as.i = 0 });
+        array_push(&chunk->constants, (slot_t){ .as.i = 0 });
 #ifdef DEBUG_TRACE_EXECUTION
         sb_push(chunk->constant_types, &OrsoTypeInvalid);
 #endif
     }
 
-    memcpy(chunk->constants + index, data, size);
+    memcpy(chunk->constants.items + index, data, size);
 
 #ifdef DEBUG_TRACE_EXECUTION
     chunk->constant_types[index] = type;
@@ -30,23 +30,22 @@ u32 chunk_add_constant(chunk_t* chunk, byte* data, u32 size)
     return index;
 }
 
-void chunk_init(chunk_t* chunk) {
+void chunk_init(chunk_t *chunk, arena_t *allocator) {
 #ifdef DEBUG_TRACE_EXECUTION
     chunk->constant_types = NULL;
 #endif
-    chunk->constants = NULL;
+    chunk->constants = (slots_t){.allocator = allocator};
     chunk->code = NULL;
     chunk->lines = NULL;
 }
 
 void chunk_free(chunk_t* chunk) {
-    sb_free(chunk->code);
-    sb_free(chunk->lines);
-    sb_free(chunk->constants);
-#ifdef DEBUG_TRACE_EXECUTION
-    sb_free(chunk->constant_types);
-#endif
-    chunk_init(chunk);
+    (void)chunk;
+//     sb_free(chunk->code);
+//     sb_free(chunk->lines);
+// #ifdef DEBUG_TRACE_EXECUTION
+//     sb_free(chunk->constant_types);
+// #endif
 }
 
 void chunk_write(chunk_t* chunk, byte byte, i32 line) {

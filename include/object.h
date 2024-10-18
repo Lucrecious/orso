@@ -76,7 +76,7 @@ OrsoString *orso_slot_to_string(slot_t *slot, type_t *type);
 
 OrsoString *orso_new_string_from_cstrn(const char *start, i32 length);
 
-function_t *orso_new_function(void);
+function_t *orso_new_function(arena_t *allocator);
 bool is_function_compiled(function_t *function);
 
 OrsoNativeFunction *orso_new_native_function(NativeFunction function, type_t *type);

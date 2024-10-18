@@ -4,17 +4,11 @@ vector2 :: struct {
 };
 
 main :: () {
-    left := vector2.{-1};
-    right := vector2.{1};
-    up := vector2.{,1};
-    down := vector2.{,-1};
+    x := 69.0;
+    y := 420.0;
 
-    print_expr left.x;
-    print_expr left.y;
-    print_expr right.x;
-    print_expr right.y;
-    print_expr up.x;
-    print_expr up.y;
-    print_expr down.x;
-    print_expr down.y;
+    xy := vector2.{x,y};
+
+    print_expr xy.x;
+    print_expr xy.y;
 };

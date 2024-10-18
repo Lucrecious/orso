@@ -1400,11 +1400,11 @@ void orso_code_builder_free(code_builder_t *builder) {
     (void)builder;
 }
 
-function_t *orso_generate_expression_function(code_builder_t *builder, ast_node_t *expression_node, bool is_folding_time) {
+function_t *orso_generate_expression_function(code_builder_t *builder, ast_node_t *expression_node, bool is_folding_time, arena_t *allocator) {
     compiler_t compiler;
     type_t *function_type = orso_type_set_fetch_function(&builder->ast->type_set, expression_node->value_type, NULL, 0);
 
-    function_t *run_function = orso_new_function();
+    function_t *run_function = orso_new_function(allocator);
 
     compiler_init(&compiler, builder->vm, run_function, (type_t*)function_type);
     compiler.skip_function_definitions = !is_folding_time;

@@ -279,7 +279,7 @@ bool vm_step(vm_t *vm) {
 #define PUSH_CONSTANT() do { \
 slot_t* current_top = vm->stack_top; \
 RESERVE_STACK_SPACE(vm, orso_bytes_to_slots(size), (frame->function->chunk.constant_types[index / sizeof(slot_t)])); \
-byte* constant = ((byte*)frame->function->chunk.constants) + index; \
+byte* constant = ((byte*)frame->function->chunk.constants.items) + index; \
 memcpy(current_top, constant, size); \
 } while(0)
 
