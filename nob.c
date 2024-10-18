@@ -22,7 +22,6 @@ typedef enum {
     ORSO_BUILD_MODE_NONE = 0x0,
     ORSO_BUILD_MODE_DEBUG = 0x1,
     ORSO_BUILD_MODE_RELEASE = 0x2,
-    ORSO_BUILD_MODE_DEBUG_TRACE = 0x4,
     ORSO_BUILD_MODE_TEST = 0x8,
 } build_mode_t;
 
@@ -44,10 +43,6 @@ bool build_program(build_mode_t build_mode, const char* output_name) {
     nob_cmd_append(&cmd, "-Wall", "-Wextra");
     nob_cmd_append(&cmd, "-fsanitize=address");
     nob_cmd_append(&cmd, "-std=c99");
-
-    if (build_mode & ORSO_BUILD_MODE_DEBUG_TRACE) {
-        nob_cmd_append(&cmd, "-DDEBUG_TRACE_EXECUTION");
-    }
 
     nob_cmd_append(&cmd, "-I./include");
 
@@ -89,7 +84,7 @@ int main(int argc, char** argv) {
     const char* output_name = "dorso";
 
     if (argc == 0) {
-        mode = ORSO_BUILD_MODE_DEBUG | ORSO_BUILD_MODE_DEBUG_TRACE;
+        mode = ORSO_BUILD_MODE_DEBUG;
     } else {
         while (argc > 0) {
             const char* option = nob_shift_args(&argc, &argv);
@@ -99,9 +94,6 @@ int main(int argc, char** argv) {
                 output_name = "orso";
             } else if (strcmp(option, "--debug") == 0 || strcmp(option, "-d") == 0) {
                 mode |= ORSO_BUILD_MODE_DEBUG;
-                output_name = "dorso";
-            } else if (strcmp(option, "--debug-trace") == 0 || strcmp(option, "-dt") == 0) {
-                mode |= ORSO_BUILD_MODE_DEBUG | ORSO_BUILD_MODE_DEBUG_TRACE;
                 output_name = "dorso";
             } else if (strcmp(option, "--test") == 0) {
                 mode |= ORSO_BUILD_MODE_TEST;

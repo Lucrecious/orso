@@ -473,7 +473,7 @@ static function_t* compiler_end(vm_t* vm, compiler_t* compiler, ast_t* ast, chun
     return compiler->function;
 }
 
-#ifdef DEBUG_TRACE_EXECUTION
+#ifdef DEBUG
 #define DECLARE_GLOBAL(vm, name, slot_count, type) add_global(vm, name, slot_count, type)
 static i32 add_global(vm_t* vm, token_t* name, i32 slot_count, type_t* type)
 #else
@@ -491,7 +491,7 @@ static i32 add_global(vm_t* vm, token_t* name, i32 slot_count)
     symbol_table_set(&vm->globals.name_to_index, identifier, index_slot);
 
     for (i32 i = 0; i < slot_count; i++) {
-#ifdef DEBUG_TRACE_EXECUTION
+#ifdef DEBUG
         sb_push(vm->globals.types, type);
 #endif
 

@@ -25,7 +25,7 @@ typedef struct vm_t {
 
     struct {
         symbol_table_t name_to_index;
-#ifdef DEBUG_TRACE_EXECUTION
+#ifdef DEBUG
         type_t **types;
 #endif
         slot_t *values;
@@ -33,7 +33,7 @@ typedef struct vm_t {
 
     symbol_table_t symbols;
 
-#ifdef DEBUG_TRACE_EXECUTION
+#ifdef DEBUG
     type_t **stack_types;
 #endif
     

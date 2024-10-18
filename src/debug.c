@@ -31,8 +31,8 @@ static i32 index_instruction(const char *name, chunk_t *chunk, i32 offset, u32 i
         case II_CONSTANT: {
             printf("%-16s %4llu => ", name, index);
             orso_print_slot(chunk->constants.items + (index / sizeof(slot_t)),
-        #ifdef DEBUG_TRACE_EXECUTION
-                chunk->constant_types[index / sizeof(slot_t)]
+        #ifdef DEBUG
+                chunk->constant_types.items[index / sizeof(slot_t)]
         #else
                 &OrsoTypeUnresolved
         #endif

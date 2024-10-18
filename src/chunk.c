@@ -6,7 +6,7 @@
 #include "object.h"
 #include "sb.h"
 
-#ifdef DEBUG_TRACE_EXECUTION
+#ifdef DEBUG
 u32 chunk_add_constant(chunk_t* chunk, byte* data, u32 size, type_t* type)
 #else
 u32 chunk_add_constant(chunk_t* chunk, byte* data, u32 size)
@@ -16,23 +16,23 @@ u32 chunk_add_constant(chunk_t* chunk, byte* data, u32 size)
     u32 index = chunk->constants.count;
     for (size_t i = 0; i < slot_size; i++) {
         array_push(&chunk->constants, (slot_t){ .as.i = 0 });
-#ifdef DEBUG_TRACE_EXECUTION
-        sb_push(chunk->constant_types, &OrsoTypeInvalid);
+#ifdef DEBUG
+        array_push(&chunk->constant_types, &OrsoTypeInvalid);
 #endif
     }
 
     memcpy(chunk->constants.items + index, data, size);
 
-#ifdef DEBUG_TRACE_EXECUTION
-    chunk->constant_types[index] = type;
+#ifdef DEBUG
+    chunk->constant_types.items[index] = type;
 #endif
 
     return index;
 }
 
 void chunk_init(chunk_t *chunk, arena_t *allocator) {
-#ifdef DEBUG_TRACE_EXECUTION
-    chunk->constant_types = NULL;
+#ifdef DEBUG
+    chunk->constant_types = (types_t){.allocator = allocator};
 #endif
     chunk->constants = (slots_t){.allocator = allocator};
     chunk->code = NULL;
@@ -41,11 +41,6 @@ void chunk_init(chunk_t *chunk, arena_t *allocator) {
 
 void chunk_free(chunk_t* chunk) {
     (void)chunk;
-//     sb_free(chunk->code);
-//     sb_free(chunk->lines);
-// #ifdef DEBUG_TRACE_EXECUTION
-//     sb_free(chunk->constant_types);
-// #endif
 }
 
 void chunk_write(chunk_t* chunk, byte byte, i32 line) {

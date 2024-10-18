@@ -11,7 +11,7 @@
 #include "type.h"
 #include "type_set.h"
 
-#if defined(DEBUG_TRACE_EXECUTION) || defined(DEBUG_PRINT_CODE)
+#if defined(DEBUG)
 #include "debug.h"
 #endif
 
@@ -31,8 +31,8 @@ void vm_init(vm_t *vm, write_function_t write_fn, i32 stack_size) {
 
     vm->globals.values = NULL;
 
-#ifdef DEBUG_TRACE_EXECUTION
-    vm->stack_types = arena_alloc(&vm->allocator, sizeof(OrsoType*)*stack_size_slot_count);
+#ifdef DEBUG
+    vm->stack_types = arena_alloc(&vm->allocator, sizeof(type_t*)*stack_size_slot_count);
     vm->globals.types = NULL;
 #endif
 
@@ -47,7 +47,7 @@ void vm_free(vm_t* vm) {
     vm->stack = NULL;
     vm->stack_top = NULL;
 
-#ifdef DEBUG_TRACE_EXECUTION
+#ifdef DEBUG
     vm->stack_types = NULL;
     sb_free(vm->globals.types);
     vm->globals.types = NULL;
@@ -57,21 +57,21 @@ void vm_free(vm_t* vm) {
     vm->globals.values = NULL;
 }
 
-#ifdef DEBUG_TRACE_EXECUTION
-static FORCE_INLINE void push_i64(vm_t* vm, slot_t value, OrsoType* type) {
+#ifdef DEBUG
+static FORCE_INLINE void push_i64(vm_t* vm, slot_t value, type_t* type) {
 #else
 static FORCE_INLINE void push_i64(vm_t* vm, slot_t value) {
 #endif
     *vm->stack_top = value;
-#ifdef DEBUG_TRACE_EXECUTION
+#ifdef DEBUG
     vm->stack_types[vm->stack_top - vm->stack] =  type;
 #endif
     vm->stack_top++;
 }
 
-#ifdef DEBUG_TRACE_EXECUTION
+#ifdef DEBUG
 #define RESERVE_STACK_SPACE(vm, slot_count, type) reserve_stack_space(vm, slot_count, type)
-static FORCE_INLINE void reserve_stack_space(vm_t* vm, u32 slot_count, OrsoType* type) {
+static FORCE_INLINE void reserve_stack_space(vm_t *vm, u32 slot_count, type_t *type) {
     for (u32 i = 0; i < slot_count; i++) {
         vm->stack_types[vm->stack_top - vm->stack + i] = &OrsoTypeInvalid;
     }
@@ -89,7 +89,7 @@ static FORCE_INLINE void reserve_stack_space(vm_t* vm, u32 slot_count) {
 
 void vm_push_object(vm_t* vm, object_t* object) {
     *vm->stack_top = ORSO_SLOT_P(object);
-#ifdef DEBUG_TRACE_EXECUTION
+#ifdef DEBUG
     vm->stack_types[vm->stack_top - vm->stack] =  object->type;
 #endif
     vm->stack_top++;
@@ -176,7 +176,7 @@ void vm_begin(vm_t *vm, function_t *entry_point) {
 #define PEEK(I) peek(vm, I)
 #define POP() pop(vm)
 #define POPN(N) pop_n(vm, N)
-#ifdef DEBUG_TRACE_EXECUTION
+#ifdef DEBUG
 #define PUSH(VALUE, TYPE) push_i64(vm, VALUE, TYPE)
 #define SLOT_ADD_TYPE(SLOT, TYPE) (vm->stack_types[(vm->stack_top - 1) - SLOT] = TYPE)
 #else
@@ -260,7 +260,7 @@ bool vm_step(vm_t *vm) {
 
             for (i32 i = 0; i < block_value_slots; i++) {
                 vm->stack[stack_size - (local_slot_count + block_value_slots) + i] = *(vm->stack_top - block_value_slots + i);
-        #ifdef DEBUG_TRACE_EXECUTION
+        #ifdef DEBUG
                 u32 type_index = (vm->stack_top - block_value_slots + i) - vm->stack;
                 vm->stack_types[stack_size - (local_slot_count + block_value_slots) + i] = *(vm->stack_types + type_index);
         #endif
@@ -278,7 +278,7 @@ bool vm_step(vm_t *vm) {
 
 #define PUSH_CONSTANT() do { \
 slot_t* current_top = vm->stack_top; \
-RESERVE_STACK_SPACE(vm, orso_bytes_to_slots(size), (frame->function->chunk.constant_types[index / sizeof(slot_t)])); \
+RESERVE_STACK_SPACE(vm, orso_bytes_to_slots(size), (frame->function->chunk.constant_types.items[index / sizeof(slot_t)])); \
 byte* constant = ((byte*)frame->function->chunk.constants.items) + index; \
 memcpy(current_top, constant, size); \
 } while(0)
@@ -365,7 +365,7 @@ memcpy(current_top, local, size); \
             break;
         }
 #undef PUSH_LOCAL
-        #ifdef DEBUG_TRACE_EXECUTION
+        #ifdef DEBUG
         #define GET_FIELD_TYPE_TRACE(TYPE) u32 index = vm->stack_top - vm->stack; vm->stack_types[index] = &OrsoType##TYPE;
         #else
         #define GET_FIELD_TYPE_TRACE(TYPE)
@@ -395,7 +395,7 @@ memcpy(current_top, local, size); \
 
             POPN(struct_slot_size - 1);
 
-        #ifdef DEBUG_TRACE_EXECUTION
+        #ifdef DEBUG
             u32 index = vm->stack_top - vm->stack;
             vm->stack_types[index] = &OrsoTypeVoid;
         #endif
@@ -412,7 +412,7 @@ memcpy(current_top, local, size); \
 
             POPN(struct_slot_size - 1);
 
-        #ifdef DEBUG_TRACE_EXECUTION
+        #ifdef DEBUG
             u32 index = vm->stack_top - vm->stack;
             vm->stack_types[index] = &OrsoTypeInvalid; // TODO: Use better system to debug types
         #endif
@@ -432,7 +432,7 @@ memcpy(current_top, local, size); \
             byte field_slot_size = orso_bytes_to_slots(field_size);
             POPN(struct_slot_size - field_slot_size);
 
-        #ifdef DEBUG_TRACE_EXECUTION
+        #ifdef DEBUG
             u32 index = vm->stack_top - vm->stack;
             for (u32 i = 0; i < field_slot_size; i++) {
                 vm->stack_types[index + i] = &OrsoTypeInvalid; // TODO: use better system to keep track of types in slots
@@ -494,7 +494,7 @@ memcpy(current_top, local, size); \
             // }
             PEEK(slot_size)->as.p = type;
 
-        #ifdef DEBUG_TRACE_EXECUTION
+        #ifdef DEBUG
             u32 stack_index = (vm->stack_top - slot_size - 1) - vm->stack;
             for (u32 i = 0; i < slot_size + 1; ++i) {
                 vm->stack_types[stack_index + i] = &OrsoTypeInvalid;
@@ -511,10 +511,10 @@ memcpy(current_top, local, size); \
             ASSERT(type_offset % sizeof(slot_t), "must be perfectly slot size");
             byte slot_offset = type_offset / sizeof(slot_t);
 
-        #ifdef DEBUG_TRACE_EXECUTION
+        #ifdef DEBUG
             u32 stack_index = (vm->stack_top - (slot_offset - 1)) - vm->stack;
 
-            vm->stack_types[stack_index] = (OrsoType*)vm->stack[stack_index].as.p;
+            vm->stack_types[stack_index] = (type_t*)vm->stack[stack_index].as.p;
         #endif
 
             memmove(PEEK(slot_offset - 1), PEEK(slot_offset - 2), type_offset - sizeof(slot_t));
@@ -596,7 +596,7 @@ memcpy(current_top, local, size); \
             byte result_size = READ_BYTE();
             for (i32 i = 0; i < result_size; i++) {
                 frame->slots[i] = *PEEK(result_size - i - 1);
-            #ifdef DEBUG_TRACE_EXECUTION
+            #ifdef DEBUG
                 vm->stack_types[(frame->slots + i) - vm->stack] = &OrsoTypeInvalid;
             #endif
             }
@@ -618,14 +618,14 @@ memcpy(current_top, local, size); \
 
 static void run(vm_t *vm, error_function_t error_fn) {
     (void)error_fn;
-#ifdef DEBUG_TRACE_EXECUTION
+#ifdef DEBUG
     printf("=== trace ===\n");
 #endif
 
 
      while (vm_step(vm));
 //     for (;;) {
-// #ifdef DEBUG_TRACE_EXECUTION
+// #ifdef DEBUG
 //         for (i32 i = 0; i < vm->globals.name_to_index.capacity; i++) {
 //             symbol_table_entry_t* entry = &vm->globals.name_to_index.entries[i];
 //             if (entry->key == NULL) {
