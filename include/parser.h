@@ -22,7 +22,7 @@ typedef struct ast_node_t ast_node_t;
 
 typedef struct ast_nodes_t ast_nodes_t;
 struct ast_nodes_t {
-    ast_node_t *items;
+    ast_node_t **items;
     size_t count;
     size_t capacity;
     arena_t *allocator;
@@ -99,7 +99,7 @@ case ORSO_AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER: \
 case ORSO_AST_NODE_TYPE_EXPRESSION_DOT
 
 typedef struct ast_function_t {
-    ast_node_t **parameter_nodes;
+    ast_nodes_t parameter_nodes;
     ast_node_t *return_type_expression;
 
     ast_node_t *block;
@@ -108,7 +108,7 @@ typedef struct ast_function_t {
 } ast_function_t;
 
 typedef struct ast_struct_t {
-    ast_node_t **declarations;
+    ast_nodes_t declarations;
 } ast_struct_t;
 
 typedef struct ast_call_t {
@@ -190,7 +190,7 @@ struct ast_node_t {
         ast_binary_t binary;
 
         // block (declarations or statements)
-        ast_node_t **block;
+        ast_nodes_t block;
 
         // branching (if, unless, while, until)
         ast_branch_t branch;
@@ -230,8 +230,6 @@ typedef struct ast_t {
     symbol_table_t builtins;
 
     function_definition_pair_t* function_definition_pairs;
-
-    ast_node_t **nodes;
 
     ast_node_t *root;
     types_t folded_constant_types;

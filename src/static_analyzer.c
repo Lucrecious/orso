@@ -368,9 +368,9 @@ static bool is_declaration_resolved(ast_node_t* entity) {
     return (entity->value_index >= 0 || (declaration->initial_value_expression && declaration->initial_value_expression->value_type != &OrsoTypeUnresolved)) && entity->value_type != &OrsoTypeUnresolved;
 }
 
-static bool is_block_compile_time_foldable(ast_node_t** block) {
-    for (i32 i = 0; i < sb_count(block); i++) {
-        ast_node_t* declaration = block[i];
+static bool is_block_compile_time_foldable(ast_nodes_t block) {
+    for (size_t i = 0; i < block.count; i++) {
+        ast_node_t *declaration = block.items[i];
         switch (declaration->node_type) {
             case ORSO_AST_NODE_TYPE_DECLARATION: {
                 if (!is_declaration_resolved(declaration)) {
@@ -708,8 +708,8 @@ static void fold_function_signature(analyzer_t *analyzer, ast_t *ast, ast_node_t
     bool hit_error = false;
     type_t **parameter_types = NULL;
 
-    for (i32 i = 0; i < sb_count(expression->data.function.parameter_nodes); i++) {
-        ast_node_t *parameter = expression->data.function.parameter_nodes[i];
+    for (size_t i = 0; i < expression->data.function.parameter_nodes.count; i++) {
+        ast_node_t *parameter = expression->data.function.parameter_nodes.items[i];
         unless (IS_FOLDED(parameter)) {
             hit_error = true;
             error_range(analyzer, parameter->start, parameter->end, "Parameter type must be resolved at compile time.");
@@ -885,10 +885,10 @@ static void pop_dependency(analyzer_t* analyzer) {
 }
 
 static void resolve_declarations(
-        analyzer_t* analyzer,
-        ast_t* ast,
+        analyzer_t *analyzer,
+        ast_t *ast,
         AnalysisState state,
-        ast_node_t** declarations,
+        ast_nodes_t declarations,
         i32 count);
 
 static void resolve_declaration(
@@ -917,9 +917,9 @@ static void resolve_struct_definition(
 
 static void declare_entity(analyzer_t* analyzer, scope_t* scope, ast_node_t* entity);
 
-static void forward_scan_declaration_names(analyzer_t* analyzer, scope_t* scope, ast_node_t** declarations, i32 count) {
+static void forward_scan_declaration_names(analyzer_t* analyzer, scope_t* scope, ast_nodes_t declarations, i32 count) {
     for (i32 i = 0; i < count; i++) {
-        ast_node_t* declaration = declarations[i];
+        ast_node_t* declaration = declarations.items[i];
         if (declaration->node_type != ORSO_AST_NODE_TYPE_DECLARATION) {
             continue;
         }
@@ -929,10 +929,10 @@ static void forward_scan_declaration_names(analyzer_t* analyzer, scope_t* scope,
 }
 
 void orso_resolve_expression(
-        analyzer_t* analyzer,
-        ast_t* ast,
+        analyzer_t *analyzer,
+        ast_t *ast,
         AnalysisState state,
-        ast_node_t* expression) {
+        ast_node_t *expression) {
     
     ASSERT(orso_ast_node_type_is_expression(expression->node_type), "should be only expressions");
 
@@ -941,7 +941,7 @@ void orso_resolve_expression(
     }
 
     if (expression->fold) {
-        state.fold_level++;
+        ++state.fold_level;
         state.mode |= MODE_FOLDING_TIME;
     }
 
@@ -1182,7 +1182,7 @@ void orso_resolve_expression(
                     break;
                 }
             } else {
-                type_t* new_type = resolve_unary_type(ast, expression->operator.type, expression->data.expression->value_type_narrowed);
+                type_t *new_type = resolve_unary_type(ast, expression->operator.type, expression->data.expression->value_type_narrowed);
                 expression->value_type = new_type;
                 expression->value_type_narrowed = new_type;
                 
@@ -1199,14 +1199,14 @@ void orso_resolve_expression(
         case ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY: {
             expression->lvalue_node = expression;
 
-            scope_t* entity_scope;
+            scope_t *entity_scope;
             EntityQuery query = {
                 .search_type = expression->is_in_type_context ? &OrsoTypeType : NULL,
                 .skip_mutable = (state.mode & MODE_CONSTANT_TIME),
                 .flags = expression->is_in_type_context ? QUERY_FLAG_MATCH_TYPE : QUERY_FLAG_MATCH_ANY,
             };
 
-            Entity* entity = get_resolved_entity_by_identifier(analyzer, ast, state, expression->data.dot.identifier, &query, &entity_scope);
+            Entity *entity = get_resolved_entity_by_identifier(analyzer, ast, state, expression->data.dot.identifier, &query, &entity_scope);
 
             if (entity == NULL) {
                 INVALIDATE(expression);
@@ -1227,7 +1227,7 @@ void orso_resolve_expression(
         }
 
         case ORSO_AST_NODE_TYPE_EXPRESSION_DOT: {
-            ast_node_t* left = expression->data.dot.lhs;
+            ast_node_t *left = expression->data.dot.lhs;
             ASSERT(left, "for now left must be present");
 
             if (expression->data.dot.referencing_declaration) {
@@ -1258,7 +1258,7 @@ void orso_resolve_expression(
             if (ORSO_TYPE_IS_STRUCT(left->value_type_narrowed)) {
                 table_get(type2ns, ast->type_to_creation_node, left->value_type_narrowed, &node_and_scope);
             } else if (left->value_type_narrowed == &OrsoTypeType && ORSO_TYPE_IS_STRUCT(get_folded_type(ast, left->value_index))) {
-                type_t* struct_type = get_folded_type(ast, left->value_index);
+                type_t *struct_type = get_folded_type(ast, left->value_index);
                 table_get(type2ns, ast->type_to_creation_node, struct_type, &node_and_scope);
                 skip_mutable = true;
             } else {
@@ -1267,9 +1267,9 @@ void orso_resolve_expression(
                 break;
             }
 
-            ast_node_t* referencing_declaration = NULL;
-            for (i32 i = 0; i < sb_count(node_and_scope.node->data.struct_.declarations); i++) {
-                ast_node_t* declaration = node_and_scope.node->data.struct_.declarations[i];
+            ast_node_t *referencing_declaration = NULL;
+            for (size_t i = 0; i < node_and_scope.node->data.struct_.declarations.count; ++i) {
+                ast_node_t *declaration = node_and_scope.node->data.struct_.declarations.items[i];
                 if (skip_mutable && declaration->data.declaration.is_mutable) {
                     continue;
                 }
@@ -1395,7 +1395,7 @@ void orso_resolve_expression(
             scope_t block_scope;
             scope_init(&block_scope, &analyzer->allocator, SCOPE_TYPE_BLOCK, state.scope, expression);
 
-            i32 declarations_count = sb_count(expression->data.block);
+            i32 declarations_count = expression->data.block.count;
             forward_scan_declaration_names(analyzer, &block_scope, expression->data.block, declarations_count);
 
             AnalysisState block_state = state;
@@ -1405,7 +1405,7 @@ void orso_resolve_expression(
 
             return_guarentee_t block_return_guarentee = ORSO_NO_RETURN_GUARENTEED;
             for (i32 i = 0; i < declarations_count; i++) {
-                ast_node_t* declaration = expression->data.block[i];
+                ast_node_t* declaration = expression->data.block.items[i];
                 if (declaration->node_type == ORSO_AST_NODE_TYPE_STATEMENT_RETURN) {
                     block_return_guarentee = ORSO_RETURN_GUARENTEED;
                 } else if (declaration->node_type == ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION) {
@@ -1429,7 +1429,7 @@ void orso_resolve_expression(
             } else {
                 ast_node_t* last_expression_statement = NULL;
                 if (declarations_count > 0) {
-                    ast_node_t* last_declaration = expression->data.block[declarations_count - 1];
+                    ast_node_t* last_declaration = expression->data.block.items[declarations_count - 1];
                     if (last_declaration->node_type == ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION) {
                         last_expression_statement = last_declaration;
                     }
@@ -1602,8 +1602,8 @@ void orso_resolve_expression(
         
          case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE: {
             bool invalid_parameter = false;
-            for (i32 i = 0; i < sb_count(expression->data.function.parameter_nodes); i++) {
-                ast_node_t* parameter = expression->data.function.parameter_nodes[i];
+            for (size_t i = 0; i < expression->data.function.parameter_nodes.count; i++) {
+                ast_node_t *parameter = expression->data.function.parameter_nodes.items[i];
                 orso_resolve_expression(analyzer, ast, state, parameter);
 
                 if (ORSO_TYPE_IS_INVALID(parameter->value_type)) {
@@ -2180,9 +2180,9 @@ static void resolve_function_expression(
         return;
     }
 
-    ast_function_t* definition = &function_definition_expression->data.function;
+    ast_function_t *definition = &function_definition_expression->data.function;
 
-    i32 parameter_count = sb_count(definition->parameter_nodes);
+    i32 parameter_count = definition->parameter_nodes.count;
     // TODO: use a code gen error instead for parameter limit
     // // TODO: instead of hardcoding the number of parameters, instead use the numbers of bytes the params take up
     // if (parameter_count > MAX_PARAMETERS - 1) {
@@ -2203,10 +2203,10 @@ static void resolve_function_expression(
         // parameters look syntacticly like mutables, but their initial expressions should be constants
         new_state.mode = MODE_CONSTANT_TIME | (state.mode & MODE_FOLDING_TIME);
         new_state.scope = &function_parameter_scope;
-        resolve_entity_declaration(analyzer, ast, new_state, definition->parameter_nodes[i]);
-        parameter_types[i] = definition->parameter_nodes[i]->value_type;
+        resolve_entity_declaration(analyzer, ast, new_state, definition->parameter_nodes.items[i]);
+        parameter_types[i] = definition->parameter_nodes.items[i]->value_type;
 
-        if (ORSO_TYPE_IS_INVALID(definition->parameter_nodes[i]->value_type)) {
+        if (ORSO_TYPE_IS_INVALID(definition->parameter_nodes.items[i]->value_type)) {
             parameter_invalid = true;
         }
     }
@@ -2421,9 +2421,9 @@ static void resolve_struct_definition(analyzer_t* analyzer, ast_t* ast, Analysis
     state.fold_level = MODE_CONSTANT_TIME;
     state.scope = &struct_scope;
 
-    forward_scan_declaration_names(analyzer, state.scope, struct_definition->data.struct_.declarations, sb_count(struct_definition->data.struct_.declarations));
+    forward_scan_declaration_names(analyzer, state.scope, struct_definition->data.struct_.declarations, struct_definition->data.struct_.declarations.count);
 
-    i32 declarations_count = sb_count(struct_definition->data.struct_.declarations);
+    i32 declarations_count = struct_definition->data.struct_.declarations.count;
 
     type_t* incomplete_struct = orso_type_unique_incomplete_struct_type(&ast->type_set);
     struct_definition->value_type = incomplete_struct;
@@ -2442,7 +2442,7 @@ static void resolve_struct_definition(analyzer_t* analyzer, ast_t* ast, Analysis
 
     bool invalid_struct = false;
     for (i32 i = 0; i < declarations_count; i++) {
-        ast_node_t* declaration = struct_definition->data.struct_.declarations[i];
+        ast_node_t* declaration = struct_definition->data.struct_.declarations.items[i];
         field_count += (declaration->data.declaration.is_mutable);
 
         resolve_entity_declaration(analyzer, ast, state, declaration);
@@ -2473,22 +2473,22 @@ static void resolve_struct_definition(analyzer_t* analyzer, ast_t* ast, Analysis
         i32 constant_counter = 0;
 
         for (i32 i = 0; i < declarations_count; i++) {
-            token_t identifier = struct_definition->data.struct_.declarations[i]->data.declaration.identifier;
+            token_t identifier = struct_definition->data.struct_.declarations.items[i]->data.declaration.identifier;
             char* name = arena_alloc(&analyzer->allocator, sizeof(char)*(identifier.length + 1));
 
             memcpy(name, identifier.start, identifier.length);
             
             name[identifier.length] = '\0';
 
-            if (struct_definition->data.struct_.declarations[i]->data.declaration.is_mutable) {
-                fields[field_counter].type = struct_definition->data.struct_.declarations[i]->value_type;
+            if (struct_definition->data.struct_.declarations.items[i]->data.declaration.is_mutable) {
+                fields[field_counter].type = struct_definition->data.struct_.declarations.items[i]->value_type;
                 fields[field_counter].name = name;
 
-                ast_fields[field_counter] = struct_definition->data.struct_.declarations[i];
+                ast_fields[field_counter] = struct_definition->data.struct_.declarations.items[i];
 
                 field_counter++;
             } else {
-                constants[constant_counter].type = struct_definition->data.struct_.declarations[i]->value_type;
+                constants[constant_counter].type = struct_definition->data.struct_.declarations.items[i]->value_type;
                 constants[constant_counter].name = name;
                 constant_counter++;
             }
@@ -2521,9 +2521,9 @@ static void resolve_struct_definition(analyzer_t* analyzer, ast_t* ast, Analysis
         }
 
         for (i32 i = 0; i < field_count; i++) {
-            type_t* field_type = complete_struct_type->data.struct_.fields[i].type;
+            type_t *field_type = complete_struct_type->data.struct_.fields[i].type;
             u32 offset = complete_struct_type->data.struct_.fields[i].offset;
-            ast_node_t* declaration = ast_fields[i];
+            ast_node_t *declaration = ast_fields[i];
 
             u32 bytes_to_copy = orso_type_size_bytes(field_type);
 
@@ -2548,12 +2548,12 @@ static void resolve_struct_definition(analyzer_t* analyzer, ast_t* ast, Analysis
     } else {
         INVALIDATE(struct_definition);
 
-        ast_node_t* incomplete_field = struct_definition->data.struct_.declarations[incomplete_index];
+        ast_node_t *incomplete_field = struct_definition->data.struct_.declarations.items[incomplete_index];
         error_range(analyzer, incomplete_field->start, incomplete_field->end, "Incomplete field");
     }
 }
 
-static scope_t* get_closest_outer_function_scope(scope_t* scope) {
+static scope_t *get_closest_outer_function_scope(scope_t *scope) {
     while (scope && scope->creator && !ORSO_TYPE_IS_FUNCTION(scope->creator->value_type)) {
         scope = scope->outer;
     }
@@ -2562,10 +2562,10 @@ static scope_t* get_closest_outer_function_scope(scope_t* scope) {
 }
 
 static void resolve_statement(
-        analyzer_t* analyzer,
-        ast_t* ast,
+        analyzer_t *analyzer,
+        ast_t *ast,
         AnalysisState state,
-        ast_node_t* statement) {
+        ast_node_t *statement) {
     switch (statement->node_type) {
         case ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION:
             orso_resolve_expression(analyzer, ast, state, statement->data.expression);
@@ -2613,9 +2613,9 @@ static void resolve_declaration(
     }
 }
 
-void resolve_declarations(analyzer_t* analyzer, ast_t* ast, AnalysisState state, ast_node_t** declarations, i32 count) {
+void resolve_declarations(analyzer_t* analyzer, ast_t* ast, AnalysisState state, ast_nodes_t declarations, i32 count) {
     for (i32 i = 0; i < count; i++) {
-        ast_node_t* declaration = declarations[i];
+        ast_node_t* declaration = declarations.items[i];
         // Constants are meant to be solved at compile time, which means they do not run during a particular state
         // of the program. Constants are only useful during runtime when things need to happen and they are accessed.
         // If they are never accessed they don't even need to be compiled into the running program.
@@ -2641,11 +2641,11 @@ void resolve_declarations(analyzer_t* analyzer, ast_t* ast, AnalysisState state,
             continue;
         }
 
-        resolve_declaration(analyzer, ast, state, declarations[i]);
+        resolve_declaration(analyzer, ast, state, declarations.items[i]);
     }
 
     for (i32 i = 0; i < count; i++) {
-        ast_node_t* declaration = declarations[i];
+        ast_node_t *declaration = declarations.items[i];
         if (declaration->node_type != ORSO_AST_NODE_TYPE_DECLARATION) {
             continue;
         }
@@ -2663,7 +2663,7 @@ void resolve_declarations(analyzer_t* analyzer, ast_t* ast, AnalysisState state,
 }
 
 bool resolve_ast(analyzer_t* analyzer, ast_t* ast) {
-    if (ast->root->data.block == NULL) {
+    if (ast->root->data.block.items == NULL) {
         ast->resolved = false;
         // error(analyzer, 0, "No code to run. Akin to having no main function.");
         return false;
@@ -2678,7 +2678,7 @@ bool resolve_ast(analyzer_t* analyzer, ast_t* ast) {
         .fold_level = 0,
     };
 
-    i32 declaration_count = sb_count(ast->root->data.block);
+    i32 declaration_count = ast->root->data.block.count;
     forward_scan_declaration_names(analyzer, &global_scope, ast->root->data.block, declaration_count);
     resolve_declarations(analyzer, ast, analysis_state, ast->root->data.block, declaration_count);
 

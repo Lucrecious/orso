@@ -100,7 +100,6 @@ void ast_init(ast_t* ast, symbol_table_t* symbols) {
 
     ast->resolved = false;
     ast->root = NULL;
-    ast->nodes = NULL;
     ast->folded_constant_types = (types_t){.allocator=&ast->allocator};
     ast->folded_constants = (slots_t){.allocator=&ast->allocator};
     ast->symbols = symbols;
@@ -121,15 +120,13 @@ void ast_init(ast_t* ast, symbol_table_t* symbols) {
     ast->type_to_creation_node = table_new(type2ns, &ast->allocator);
 }
 
-void orso_ast_free(ast_t* ast) {
+void orso_ast_free(ast_t *ast) {
     arena_free(&ast->allocator);
 }
 
-ast_node_t* orso_ast_node_new(ast_t* ast, ast_node_type_t node_type, bool is_in_type_context, token_t start) {
-    ast_node_t* node = (ast_node_t*)arena_alloc(&ast->allocator, sizeof(ast_node_t));
+ast_node_t *orso_ast_node_new(ast_t *ast, ast_node_type_t node_type, bool is_in_type_context, token_t start) {
+    ast_node_t *node = (ast_node_t*)arena_alloc(&ast->allocator, sizeof(ast_node_t));
     
-    sb_push(ast->nodes, node);
-
     node->node_type = node_type;
     node->start = start;
     node->end = start;
@@ -163,7 +160,7 @@ ast_node_t* orso_ast_node_new(ast_t* ast, ast_node_type_t node_type, bool is_in_
         }
         
         case ORSO_AST_NODE_TYPE_EXPRESSION_BLOCK: {
-            node->data.block = NULL;
+            node->data.block = (ast_nodes_t){.allocator=&ast->allocator};
             break;
         }
         
@@ -204,13 +201,13 @@ ast_node_t* orso_ast_node_new(ast_t* ast, ast_node_type_t node_type, bool is_in_
         case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION: {
             node->data.function.block = NULL;
             node->data.function.compilable = false;
-            node->data.function.parameter_nodes = NULL;
+            node->data.function.parameter_nodes = (ast_nodes_t){.allocator=&ast->allocator};
             node->data.function.return_type_expression = NULL;
             break;
         }
 
         case ORSO_AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION: {
-            node->data.struct_.declarations = NULL;
+            node->data.struct_.declarations = (ast_nodes_t){.allocator=&ast->allocator};
             break;
         }
         
@@ -465,8 +462,8 @@ static ast_node_t *convert_call_expression(ast_node_t *left_operand, ast_node_t 
 }
 
 static ast_node_t *convert_function_definition(parser_t *parser, ast_node_t *left_operand, ast_node_t *function_definition) {
-    for (i32 i = 0; i < sb_count(left_operand->data.function.parameter_nodes); i++) {
-        ast_node_t *parameter = left_operand->data.function.parameter_nodes[i];
+    for (size_t i = 0; i < left_operand->data.function.parameter_nodes.count; i++) {
+        ast_node_t *parameter = left_operand->data.function.parameter_nodes.items[i];
         if (parameter->node_type != ORSO_AST_NODE_TYPE_DECLARATION) {
             error_at(parser, &parameter->start, "Expect an entity declaration.");
             left_operand->node_type = ORSO_AST_NODE_TYPE_UNDEFINED;
@@ -483,7 +480,7 @@ static ast_node_t *convert_function_definition(parser_t *parser, ast_node_t *lef
     return function_definition;
 }
 
-static ast_node_t* assignment(parser_t* parser, bool is_in_type_context) {
+static ast_node_t *assignment(parser_t *parser, bool is_in_type_context) {
     ast_node_t* expression_node = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_EXPRESSION_ASSIGNMENT, is_in_type_context, parser->previous);
 
     expression_node->data.binary.rhs = expression(parser, is_in_type_context);
@@ -492,29 +489,29 @@ static ast_node_t* assignment(parser_t* parser, bool is_in_type_context) {
     return expression_node;
 }
 
-static ast_node_t* named_variable(parser_t* parser, bool is_in_type_context) {
+static ast_node_t* named_variable(parser_t *parser, bool is_in_type_context) {
     ast_node_t* expression_node = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY, is_in_type_context, parser->previous);
     expression_node->data.dot.identifier = parser->previous;
     return expression_node;
 }
 
-static ast_node_t* variable(parser_t* parser, bool is_in_type_context) {
+static ast_node_t* variable(parser_t *parser, bool is_in_type_context) {
     return named_variable(parser, is_in_type_context);
 }
 
-static void parse_block(parser_t* parser, ast_node_t* block) {
+static void parse_block(parser_t *parser, ast_node_t *block) {
     block->return_guarentee = ORSO_NO_RETURN_GUARENTEED;
-    block->data.block = NULL;
+    block->data.block = (ast_nodes_t){.allocator=&parser->ast->allocator};
 
     while (!check(parser, TOKEN_BRACE_CLOSE) && !check(parser, TOKEN_EOF)) {
-        ast_node_t* declaration_node = declaration(parser, false);
-        sb_push(block->data.block, declaration_node);
+        ast_node_t *declaration_node = declaration(parser, false);
+        array_push(&block->data.block, declaration_node);
     }
 
     consume(parser, TOKEN_BRACE_CLOSE, "Expect '}' after block.");
 }
 
-static ast_node_t* block(parser_t* parser, bool is_in_type_context) {
+static ast_node_t *block(parser_t *parser, bool is_in_type_context) {
     (void)is_in_type_context;
 
     ast_node_t* expression_node = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_EXPRESSION_BLOCK, is_in_type_context, parser->previous);
@@ -622,13 +619,13 @@ static bool is_incoming_declaration_declaration(parser_t* parser) {
 
 static ast_node_t* entity_declaration(parser_t* parser, bool as_parameter);
 
-static ast_node_t** parse_parameters(parser_t* parser) {
-    ast_node_t** parameters = NULL;
+static ast_nodes_t parse_parameters(parser_t *parser) {
+    ast_nodes_t parameters = {.allocator=&parser->ast->allocator};
     until (check(parser, TOKEN_PARENTHESIS_CLOSE)) {
         if (is_incoming_declaration_declaration(parser)) {
-            sb_push(parameters, entity_declaration(parser, true));
+            array_push(&parameters, entity_declaration(parser, true));
         } else {
-            sb_push(parameters, expression(parser, true));
+            array_push(&parameters, expression(parser, true));
         }
         if (match(parser, TOKEN_COMMA)) {
             continue;
@@ -640,7 +637,7 @@ static ast_node_t** parse_parameters(parser_t* parser) {
 
 static void parse_function_signature(parser_t *parser, ast_node_t *function_definition) {
     ASSERT(function_definition->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE, "must be a function signature");
-    function_definition->data.function.parameter_nodes = NULL;
+    function_definition->data.function.parameter_nodes = (ast_nodes_t){.allocator=&parser->ast->allocator};
     function_definition->data.function.return_type_expression = NULL;
 
     function_definition->data.function.parameter_nodes = parse_parameters(parser);
@@ -752,16 +749,16 @@ static ast_node_t* binary(parser_t* parser, bool is_in_type_context) {
     return expression_node;
 }
 
-static ast_node_t* struct_(parser_t* parser, bool is_in_type_context) {
+static ast_node_t *struct_(parser_t *parser, bool is_in_type_context) {
     (void)is_in_type_context;
 
-    ast_node_t* struct_definition = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION, is_in_type_context, parser->previous);
+    ast_node_t *struct_definition = orso_ast_node_new(parser->ast, ORSO_AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION, is_in_type_context, parser->previous);
 
     consume(parser, TOKEN_BRACE_OPEN, "Expect open brace.");
 
     while (!check(parser, TOKEN_BRACE_CLOSE) && !check(parser, TOKEN_EOF)) {
-        ast_node_t* declaration_node = entity_declaration(parser, false);
-        sb_push(struct_definition->data.block, declaration_node);
+        ast_node_t *declaration_node = entity_declaration(parser, false);
+        array_push(&struct_definition->data.block, declaration_node);
     }
 
     consume(parser, TOKEN_BRACE_CLOSE, "Expect close brace.");
@@ -771,9 +768,9 @@ static ast_node_t* struct_(parser_t* parser, bool is_in_type_context) {
     return struct_definition;
 }
 
-static ast_node_t* print_(parser_t* parser, bool is_in_type_context) {
+static ast_node_t *print_(parser_t *parser, bool is_in_type_context) {
     ast_node_type_t node_type = parser->previous.type == TOKEN_PRINT ? ORSO_AST_NODE_TYPE_EXPRESSION_PRINT : ORSO_AST_NODE_TYPE_EXPRESSION_PRINT_EXPR;
-    ast_node_t* print_expression = orso_ast_node_new(parser->ast, node_type, is_in_type_context, parser->previous);
+    ast_node_t *print_expression = orso_ast_node_new(parser->ast, node_type, is_in_type_context, parser->previous);
 
     print_expression->data.expression = expression(parser, is_in_type_context);
 
@@ -934,8 +931,8 @@ static ast_node_t* parse_precedence(parser_t* parser, bool is_in_type_context, P
      * restrictive grammar.
      */
     if (left_operand->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE) {
-        for (i32 i = 0; i < sb_count(left_operand->data.function.parameter_nodes); i++) {
-            ast_node_t* parameter = left_operand->data.function.parameter_nodes[i];
+        for (size_t i = 0; i < left_operand->data.function.parameter_nodes.count; ++i) {
+            ast_node_t *parameter = left_operand->data.function.parameter_nodes.items[i];
             if (!orso_ast_node_type_is_expression(parameter->node_type)) {
                 error_at(parser, &parameter->start, "Expect a type expression here.");
                 break;
@@ -946,11 +943,11 @@ static ast_node_t* parse_precedence(parser_t* parser, bool is_in_type_context, P
     return left_operand;
 }
 
-static ParseRule* get_rule(token_type_t type) {
+static ParseRule *get_rule(token_type_t type) {
     return &rules[type];
 }
 
-static ast_node_t* expression(parser_t* parser, bool is_in_type_context) {
+static ast_node_t *expression(parser_t *parser, bool is_in_type_context) {
     bool fold = false;
     if (match(parser, TOKEN_DIRECTIVE)) {
         token_t directive = parser->previous;
@@ -1086,7 +1083,7 @@ bool parse(ast_t *ast, const char *source, error_function_t error_fn) {
     while (!match(&parser, TOKEN_EOF)) {
         ast_node_t *declaration_node = declaration(&parser, true);
         if (declaration_node) {
-            sb_push(ast->root->data.block, declaration_node);
+            array_push(&ast->root->data.block, declaration_node);
         }
     }
 
@@ -1284,8 +1281,8 @@ static void ast_print_ast_node(ast_node_t *node, u32 level) {
         case ORSO_AST_NODE_TYPE_EXPRESSION_BLOCK: {
             print_indent(level);
             print_line("{...}: %s", type2cstr(node));
-            for (int i = 0; i < sb_count(node->data.block); ++i) {
-                ast_print_ast_node(node->data.block[i], level + 1);
+            for (size_t i = 0; i < node->data.block.count; ++i) {
+                ast_print_ast_node(node->data.block.items[i], level + 1);
             }
             break;
         }
@@ -1354,8 +1351,8 @@ static void ast_print_ast_node(ast_node_t *node, u32 level) {
 
             print_indent(level + 1);
             print_line("members");
-            for (int i = 0; i < sb_count(node->data.struct_.declarations); ++i) {
-                ast_node_t *declaration = node->data.struct_.declarations[i];
+            for (size_t i = 0; i < node->data.struct_.declarations.count; ++i) {
+                ast_node_t *declaration = node->data.struct_.declarations.items[i];
                 ast_print_ast_node(declaration, level + 2);
             }
             break;

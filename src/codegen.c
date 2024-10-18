@@ -575,7 +575,7 @@ static i64 retrieve_local_variable(compiler_t *compiler, token_t *name) {
     return -1;
 }
 
-static u32 retrieve_variable(vm_t* vm, compiler_t* compiler, token_t* name, bool* is_local) {
+static u32 retrieve_variable(vm_t *vm, compiler_t *compiler, token_t *name, bool* is_local) {
     i64 index = retrieve_local_variable(compiler, name);
     if (index < 0) {
         index = retrieve_global_variable(vm, name);
@@ -591,17 +591,17 @@ static u32 retrieve_variable(vm_t* vm, compiler_t* compiler, token_t* name, bool
     }
 }
 
-static void begin_scope(compiler_t* compiler) {
+static void begin_scope(compiler_t *compiler) {
     compiler->scope_depth++;
 }
 
-static void end_scope(compiler_t* compiler, chunk_t* chunk, type_t* block_value_type, i32 line) {
+static void end_scope(compiler_t *compiler, chunk_t *chunk, type_t *block_value_type, i32 line) {
     compiler->scope_depth--;
 
     // pop all local object markers
     i32 total_local_slot_count = 0;
     while (compiler->locals_count > 0) {
-        local_t* local = &compiler->locals.items[compiler->locals_count - 1];
+        local_t *local = &compiler->locals.items[compiler->locals_count - 1];
         if (local->depth <= compiler->scope_depth) {
             break;
         }
@@ -615,22 +615,22 @@ static void end_scope(compiler_t* compiler, chunk_t* chunk, type_t* block_value_
     emit(compiler, chunk, line, ORSO_OP_POP_SCOPE, (long)total_local_slot_count, (long)block_value_slots);
 }
 
-static void declaration(vm_t* vm, compiler_t* compiler, ast_t* ast, ast_node_t* declaration, chunk_t* chunk);
-static void expression(vm_t* vm, compiler_t* compiler, ast_t* ast, ast_node_t* expression_node, chunk_t* chunk);
+static void declaration(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *declaration, chunk_t *chunk);
+static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *expression_node, chunk_t *chunk);
 
-static type_t* gen_block(vm_t* vm, compiler_t* compiler, ast_t* ast, chunk_t* chunk, ast_node_t** block, i32 node_count, i32 end_line) {
-    ast_node_t* final_expression_statement = node_count > 0 ? block[node_count - 1] : NULL;
+static type_t *gen_block(vm_t *vm, compiler_t *compiler, ast_t *ast, chunk_t *chunk, ast_nodes_t block, i32 node_count, i32 end_line) {
+    ast_node_t *final_expression_statement = node_count > 0 ? block.items[node_count - 1] : NULL;
 
     final_expression_statement = final_expression_statement && final_expression_statement->node_type != ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION ?
             NULL : final_expression_statement;
 
     for (i32 i = 0; i < node_count - (final_expression_statement != NULL); i++) {
-        declaration(vm, compiler, ast, block[i], chunk);
+        declaration(vm, compiler, ast, block.items[i], chunk);
     }
 
-    type_t* return_value_type = &OrsoTypeInvalid;
+    type_t *return_value_type = &OrsoTypeInvalid;
     if (final_expression_statement) {
-        ast_node_t* final_expression = final_expression_statement->data.expression;
+        ast_node_t *final_expression = final_expression_statement->data.expression;
         return_value_type = final_expression->value_type;
         expression(vm, compiler, ast, final_expression, chunk);
     } else {
@@ -641,7 +641,7 @@ static type_t* gen_block(vm_t* vm, compiler_t* compiler, ast_t* ast, chunk_t* ch
     return return_value_type;
 }
 
-static u64 define_global_entity(vm_t* vm, token_t* name, type_t* type) {
+static u64 define_global_entity(vm_t *vm, token_t *name, type_t *type) {
     u32 slot_size = orso_type_slot_count(type);
     u32 index = DECLARE_GLOBAL(vm, name, slot_size, type);
     return index;
@@ -1110,8 +1110,8 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
         case ORSO_AST_NODE_TYPE_EXPRESSION_BLOCK: {
             begin_scope(compiler);
 
-            ast_node_t** block = expression_node->data.block;
-            i32 node_count = sb_count(block);
+            ast_nodes_t block = expression_node->data.block;
+            i32 node_count = block.count;
             type_t* return_value_type = gen_block(vm, compiler, ast, chunk, block, node_count, expression_node->end.line);
 
             end_scope(compiler, chunk, return_value_type, expression_node->end.line);
@@ -1119,8 +1119,11 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
         }
 
         case ORSO_AST_NODE_TYPE_EXPRESSION_STATEMENT: {
-            ast_node_t* block[1] = { expression_node->data.statement };
+            arena_t tmp_allocator = {0};
+            ast_nodes_t block = {.allocator=&tmp_allocator};
+            array_push(&block, expression_node->data.statement);
             gen_block(vm, compiler, ast, chunk, block, 1, expression_node->start.line);
+            arena_free(&tmp_allocator);
             break;
         }
         
@@ -1456,8 +1459,8 @@ void compile_function(vm_t *vm, ast_t *ast, function_t *function, ast_node_t *fu
 
     ast_function_t *function_definition = &function_definition_expression->data.function;
 
-    for (i32 i = 0; i < sb_count(function_definition->parameter_nodes); i++) {
-        ast_node_t *parameter = function_definition->parameter_nodes[i];
+    for (size_t i = 0; i < function_definition->parameter_nodes.count; i++) {
+        ast_node_t *parameter = function_definition->parameter_nodes.items[i];
         apply_stack_effects(&function_compiler, orso_type_slot_count(parameter->value_type));
         declare_local_entity(&function_compiler, &parameter->start, orso_type_slot_count(parameter->value_type));
     }
@@ -1473,8 +1476,8 @@ function_t *generate_code(vm_t *vm, ast_t *ast) {
     function_t *main_function = NULL;
     ast_node_t *main_declaration = NULL;
 
-    for (i32 i = 0; i < sb_count(ast->root->data.block); i++) {
-        ast_node_t* declaration_ = ast->root->data.block[i];
+    for (size_t i = 0; i < ast->root->data.block.count; i++) {
+        ast_node_t *declaration_ = ast->root->data.block.items[i];
         global_entity_declaration(vm, ast, declaration_);
         
         token_t identifier = declaration_->data.declaration.identifier;
