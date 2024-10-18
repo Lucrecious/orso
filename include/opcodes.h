@@ -30,9 +30,7 @@ typedef enum op_code_t {
     ORSO_OP_PUSH_1,
     ORSO_OP_PUSH_0,
 
-    ORSO_OP_CONSTANT_8BIT_ADDRESS,
-    ORSO_OP_CONSTANT_16BIT_ADDRESS,
-    ORSO_OP_CONSTANT_32BIT_ADDRESS,
+    ORSO_OP_CONSTANT,
 
     ORSO_OP_GET_LOCAL_8BIT_ADDRESS,
     ORSO_OP_GET_LOCAL_16BIT_ADDRESS,
@@ -76,6 +74,13 @@ typedef enum op_code_t {
     ORSO_OP_PRINT_EXPR,
     ORSO_OP_PRINT,
 } op_code_t;
+
+typedef struct op_code_location_t op_code_location_t;
+struct op_code_location_t {
+    op_code_t op;
+    u32 index;
+    u16 size;
+};
 
 typedef struct op_code_popn_t op_code_popn_t;
 struct op_code_popn_t {

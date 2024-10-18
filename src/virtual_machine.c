@@ -329,25 +329,10 @@ byte* constant = ((byte*)frame->function->chunk.constants.items) + index; \
 memcpy(current_top, constant, size); \
 } while(0)
 
-        case ORSO_OP_CONSTANT_8BIT_ADDRESS: {
-            byte index = READ_BYTE();
-            byte size = READ_BYTE();
-
-            PUSH_CONSTANT();
-            break;
-        }
-
-        case ORSO_OP_CONSTANT_16BIT_ADDRESS: {
-            u32 index = READ_U16();
-            byte size = READ_BYTE();
-
-            PUSH_CONSTANT();
-            break;
-        }
-
-        case ORSO_OP_CONSTANT_32BIT_ADDRESS: {
-            u32 index = READ_U32();
-            byte size = READ_BYTE();
+        case ORSO_OP_CONSTANT: {
+            op_code_location_t *location = READ_CODE(op_code_location_t);
+            u32 index = location->index;
+            u16 size = location->size;
 
             PUSH_CONSTANT();
             break;
