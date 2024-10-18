@@ -7,7 +7,7 @@
 #include <stdio.h>
 
 slot_t *orso_call_function(vm_t *vm, function_t *function, error_function_t error_fn) {
-    vm_push_object(vm, (OrsoObject*)function);
+    vm_push_object(vm, (object_t*)function);
     vm_call(vm, function);
 
     vm_interpret(vm, error_fn);

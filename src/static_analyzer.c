@@ -308,7 +308,7 @@ if (strlen(SYMBOL->text) == (sizeof(#TYPE_STRING) - 1) && \
 #undef RETURN_IF_TYPE
 }
 
-static bool is_builtin_function(ast_t* ast, symbol_t* identifier, OrsoNativeFunction** function) {
+static bool is_builtin_function(ast_t* ast, symbol_t* identifier, native_function_t** function) {
     if (identifier->length == 5 && strncmp(identifier->text, "clock", 5) == 0) {
         type_t* function_type = orso_type_set_fetch_native_function(&ast->type_set, &OrsoTypeFloat64, NULL, 0);
         *function = orso_new_native_function(clock_native, function_type);
@@ -1901,7 +1901,7 @@ static Entity *get_builtin_entity(ast_t *ast, symbol_t *identifier) {
     slot_t entity_slot;
     if (!symbol_table_get(&ast->builtins, identifier, &entity_slot)) {
         type_t *type;
-        OrsoNativeFunction *function;
+        native_function_t *function;
         type_t *value_type = NULL;
         slot_t value_slot;
         if (is_builtin_type(identifier, &type)) {

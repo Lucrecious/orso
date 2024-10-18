@@ -8,43 +8,43 @@
 #include "symbol_table.h"
 #include "arena.h"
 
-typedef struct OrsoObject {
+typedef struct object_t {
     type_t *type;
-} OrsoObject;
+} object_t;
 
 typedef struct OrsoString {
-    OrsoObject object;
+    object_t object;
     i32 length;
     char text[];
 } OrsoString;
 
 typedef struct symbol_t {
-    OrsoObject object;
+    object_t object;
     i32 length;
     u32 hash;
     char text[];
 } symbol_t;
 
 typedef struct function_t {
-    OrsoObject object;
+    object_t object;
     chunk_t chunk;
     type_t *signature;
     symbol_t *binded_name;
 } function_t;
 
-typedef struct OrsoStruct {
+typedef struct struct_t {
     slot_t *slots;
-} OrsoStruct;
+} struct_t;
 
-typedef void (*NativeFunction)(slot_t *arguments, slot_t *result);
+typedef void (*native_function_interface_t)(slot_t *arguments, slot_t *result);
 
-typedef struct OrsoNativeFunction {
-    OrsoObject object;
+typedef struct native_function_t {
+    object_t object;
     type_t* signature;
-    NativeFunction function;
-} OrsoNativeFunction;
+    native_function_interface_t function;
+} native_function_t;
 
-void* orso_object_reallocate(OrsoObject *pointer, type_t *type, size_t old_size, size_t new_size);
+void* orso_object_reallocate(object_t *pointer, type_t *type, size_t old_size, size_t new_size);
 
 #define ORSO_OBJECT_ALLOCATE_N(TYPE, ORSO_TYPE, N) (TYPE*)orso_object_reallocate(NULL, ORSO_TYPE, 0, sizeof(TYPE) * N)
 #define ORSO_OBJECT_ALLOCATE(TYPE, ORSO_TYPE) ORSO_OBJECT_ALLOCATE_N(TYPE, ORSO_TYPE, 1)
@@ -79,9 +79,9 @@ OrsoString *orso_new_string_from_cstrn(const char *start, i32 length);
 function_t *orso_new_function(arena_t *allocator);
 bool is_function_compiled(function_t *function);
 
-OrsoNativeFunction *orso_new_native_function(NativeFunction function, type_t *type);
+native_function_t *orso_new_native_function(native_function_interface_t function, type_t *type);
 
-OrsoStruct *orso_new_struct(void);
+struct_t *orso_new_struct(void);
 
 i64 cstrn_to_i64(const char *text, i32 length);
 f64 cstrn_to_f64(const char *text, i32 length);

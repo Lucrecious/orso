@@ -6,7 +6,7 @@
 #include "symbol_table.h"
 #include "type_set.h"
 
-void* orso_object_reallocate(OrsoObject* pointer, type_t* type, size_t old_size, size_t new_size) {
+void* orso_object_reallocate(object_t* pointer, type_t* type, size_t old_size, size_t new_size) {
     (void)old_size;
 
     if (new_size == 0) {
@@ -15,7 +15,7 @@ void* orso_object_reallocate(OrsoObject* pointer, type_t* type, size_t old_size,
         return NULL;
     }
 
-    OrsoObject* result = realloc(pointer, new_size);
+    object_t* result = realloc(pointer, new_size);
     if (result == NULL) {
         exit(1);
     }
@@ -155,11 +155,11 @@ OrsoString *orso_string_concat(OrsoString *a, OrsoString *b) {
     return string;
 }
 
-static OrsoObject *object_new(size_t byte_size, type_t *type, arena_t *allocator) {
+static object_t *object_new(size_t byte_size, type_t *type, arena_t *allocator) {
     void *object = arena_alloc(allocator, byte_size);
     memset(object, 0, byte_size);
-    ((OrsoObject*)object)->type = type;
-    return (OrsoObject*)object;
+    ((object_t*)object)->type = type;
+    return (object_t*)object;
 }
 
 function_t *orso_new_function(arena_t *allocator) {
@@ -175,21 +175,21 @@ bool is_function_compiled(function_t* function) {
     return function->chunk.code != NULL;
 }
 
-OrsoNativeFunction* orso_new_native_function(NativeFunction function, type_t* type) {
-    OrsoNativeFunction* function_obj = ORSO_OBJECT_ALLOCATE(OrsoNativeFunction, type);
+native_function_t* orso_new_native_function(native_function_interface_t function, type_t* type) {
+    native_function_t* function_obj = ORSO_OBJECT_ALLOCATE(native_function_t, type);
     function_obj->function = function;
     function_obj->signature = type;
 
     return function_obj;
 }
 
-OrsoStruct* orso_new_struct(void) {
-    OrsoStruct* struct_ = ORSO_ALLOCATE(OrsoStruct);
+struct_t* orso_new_struct(void) {
+    struct_t* struct_ = ORSO_ALLOCATE(struct_t);
     struct_->slots = NULL;
     return struct_;
 }
 
-void orso_free_struct(OrsoStruct* struct_) {
+void orso_free_struct(struct_t* struct_) {
     free(struct_->slots);
 }
 

@@ -47,7 +47,7 @@ void vm_init(vm_t *vm, write_function_t write_fn, i32 stack_size);
 void vm_free(vm_t *vm);
 
 void vm_call(vm_t *vm, function_t *function);
-void vm_push_object(vm_t *vm, OrsoObject *object);
+void vm_push_object(vm_t *vm, object_t *object);
 
 void vm_print_stack(vm_t *vm);
 void vm_disassemble_current_instruction(vm_t *vm);

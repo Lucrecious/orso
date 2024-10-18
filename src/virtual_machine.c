@@ -87,7 +87,7 @@ static FORCE_INLINE void reserve_stack_space(vm_t* vm, u32 slot_count) {
     }
 }
 
-void vm_push_object(vm_t* vm, OrsoObject* object) {
+void vm_push_object(vm_t* vm, object_t* object) {
     *vm->stack_top = ORSO_SLOT_P(object);
 #ifdef DEBUG_TRACE_EXECUTION
     vm->stack_types[vm->stack_top - vm->stack] =  object->type;
@@ -128,14 +128,14 @@ void vm_call(vm_t* vm, function_t* function) {
     call(vm, function, argument_slots);
 }
 
-static void call_object(vm_t* vm, OrsoObject* callee, i32 argument_slots) {
+static void call_object(vm_t* vm, object_t* callee, i32 argument_slots) {
     if (ORSO_TYPE_IS_FUNCTION(callee->type)) {
         function_t* function = (function_t*)callee;
         call(vm, function, argument_slots);
         return;
     } else if (callee->type->kind == ORSO_TYPE_NATIVE_FUNCTION) {
-        OrsoNativeFunction* function_obj = (OrsoNativeFunction*)callee;
-        NativeFunction function = function_obj->function;
+        native_function_t* function_obj = (native_function_t*)callee;
+        native_function_interface_t function = function_obj->function;
         function(vm->stack_top - argument_slots, vm->stack_top);
 
         i32 return_slot_size = orso_type_slot_count(function_obj->signature->data.function.return_type);
@@ -159,7 +159,7 @@ void vm_disassemble_current_instruction(vm_t *vm) {
 }
 
 void vm_begin(vm_t *vm, function_t *entry_point) {
-    vm_push_object(vm, (OrsoObject*)entry_point);
+    vm_push_object(vm, (object_t*)entry_point);
     vm_call(vm, entry_point);
 }
 
@@ -555,7 +555,7 @@ memcpy(current_top, local, size); \
 
         case ORSO_OP_CALL: {
             u16 argument_slots = READ_U16();
-            call_object(vm, (OrsoObject*)PEEK(argument_slots)->as.p, argument_slots);
+            call_object(vm, (object_t*)PEEK(argument_slots)->as.p, argument_slots);
 
             frame = &vm->frames[vm->frame_count - 1];
             break;
