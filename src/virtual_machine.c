@@ -347,25 +347,10 @@ byte* global = ((byte*)vm->globals.values.items) + index; \
 memcpy(current_top, global, size); \
 } while(0)
 
-        case ORSO_OP_GET_GLOBAL_8BIT_ADDRESS: {
-            u32 index = READ_BYTE();
-            byte size = READ_BYTE();
-
-            PUSH_GLOBAL();
-            break;
-        }
-
-        case ORSO_OP_GET_GLOBAL_16BIT_ADDRESS: {
-            u32 index = READ_U16();
-            byte size = READ_BYTE();
-
-            PUSH_GLOBAL();
-            break;
-        }
-
-        case ORSO_OP_GET_GLOBAL_32BIT_ADDRESS: {
-            u32 index = READ_U32();
-            byte size = READ_BYTE();
+        case ORSO_OP_GLOBAL: {
+            op_code_location_t *location = READ_CODE(op_code_location_t);
+            u32 index = location->index_slots;
+            u16 size = location->size_bytes;
 
             PUSH_GLOBAL();
             break;

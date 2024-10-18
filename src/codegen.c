@@ -117,6 +117,7 @@ static size_t emit_(compiler_t *compiler, chunk_t *chunk, i32 line, op_code_t *o
             stack_effect = -pop_scope->scope_size_slots;
             break;
         }
+        case ORSO_OP_GLOBAL:
         case ORSO_OP_LOCAL:
         case ORSO_OP_CONSTANT: {
             op_code_location_t *location = (op_code_location_t*)op_code;
@@ -202,46 +203,12 @@ static void emit(compiler_t* compiler, chunk_t* chunk, i32 line, const int op_co
         }
 
         case ORSO_OP_LOCAL:
-        case ORSO_OP_GET_GLOBAL_8BIT_ADDRESS:
+        case ORSO_OP_GLOBAL:
         case ORSO_OP_CONSTANT: {
             byte index = (byte)va_arg(args, long);
             byte size = (byte)va_arg(args, long);
 
             chunk_write(chunk, index, line);
-            chunk_write(chunk, size, line);
-
-            stack_effect = orso_bytes_to_slots(size);
-            break;
-        }
-
-        case ORSO_OP_GET_GLOBAL_16BIT_ADDRESS: {
-            u32 index = va_arg(args, long);
-            ASSERT(index < UINT16_MAX, "must be a short");
-
-            byte size = (u32)va_arg(args, long);
-
-            byte index1, index2;;
-            ORSO_u16_to_u8s(index, index1, index2);
-
-            chunk_write(chunk, index1, line);
-            chunk_write(chunk, index2, line);
-            chunk_write(chunk, size, line);
-
-            stack_effect = orso_bytes_to_slots(size);
-            break;
-        }
-
-        case ORSO_OP_GET_GLOBAL_32BIT_ADDRESS: {
-            u32 index = va_arg(args, long);
-            byte size = va_arg(args, long);
-
-            byte index1, index2, index3, index4;
-            ORSO_u32_to_u8s(index, index1, index2, index3, index4);
-
-            chunk_write(chunk, index1, line);
-            chunk_write(chunk, index2, line);
-            chunk_write(chunk, index3, line);
-            chunk_write(chunk, index4, line);
             chunk_write(chunk, size, line);
 
             stack_effect = orso_bytes_to_slots(size);
@@ -442,19 +409,15 @@ static void patch_jump(chunk_t *chunk, size_t update_index) {
 
 static void emit_entity_get(compiler_t *compiler, u32 index, u32 size_bytes, chunk_t *chunk, i32 line, bool is_local) {
     index *= sizeof(slot_t);
-    if (is_local) {
-        ASSERT(index <= UINT32_MAX, "must be short");
-        ASSERT(size_bytes <= UINT16_MAX, "must be short");
-        {
-            op_code_location_t location = {
-                .op = ORSO_OP_LOCAL,
-                .index_slots = index,
-                .size_bytes = size_bytes,
-            };
-            emit_(compiler, chunk, line, (op_code_t*)&location, sizeof(op_code_location_t));
-        }
-    } else {
-        emit(compiler, chunk, line, ORSO_OP_GET_GLOBAL_32BIT_ADDRESS, (long)index, (long)size_bytes);
+    ASSERT(index <= UINT32_MAX, "must be short");
+    ASSERT(size_bytes <= UINT16_MAX, "must be short");
+    {
+        op_code_location_t location = {
+            .op = is_local ? ORSO_OP_LOCAL : ORSO_OP_GLOBAL,
+            .index_slots = index,
+            .size_bytes = size_bytes,
+        };
+        emit_(compiler, chunk, line, (op_code_t*)&location, sizeof(op_code_location_t));
     }
 }
 

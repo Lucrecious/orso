@@ -143,9 +143,11 @@ i32 disassemble_instruction(chunk_t *chunk, i32 offset) {
             printf("OP_LOCAL index: %d, size: %d\n", location->index_slots, location->size_bytes);
             return offset + sizeof(op_code_location_t);
         }
-        case ORSO_OP_GET_GLOBAL_8BIT_ADDRESS: return index_instruction("OP_GET_GLOBAL_8BIT_ADDRESS", chunk, offset, 1, II_GLOBAL);
-        case ORSO_OP_GET_GLOBAL_16BIT_ADDRESS: return index_instruction("OP_GET_GLOBAL_16BIT_ADDRESS", chunk, offset, 2, II_GLOBAL);
-        case ORSO_OP_GET_GLOBAL_32BIT_ADDRESS: return index_instruction("OP_GET_GLOBAL_32BIT_ADDRESS", chunk, offset, 4, II_GLOBAL);
+        case ORSO_OP_GLOBAL: {
+            op_code_location_t *location = (op_code_location_t*)(chunk->code.items + offset);
+            printf("OP_GLOBAL index: %d, size: %d\n", location->index_slots, location->size_bytes);
+            return offset + sizeof(op_code_location_t);
+        }
         case ORSO_OP_GET_FIELD_VOID: return get_field_instruction("ORSO_OP_GET_FIELD_VOID", chunk, offset, false);
         case ORSO_OP_GET_FIELD_BOOL: return get_field_instruction("ORSO_OP_GET_FIELD_BOOL", chunk, offset, false);
         case ORSO_OP_GET_FIELD_I32: return get_field_instruction("ORSO_OP_GET_FIELD_I32", chunk, offset, false);
