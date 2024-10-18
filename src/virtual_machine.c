@@ -150,11 +150,55 @@ static void call_object(vm_t* vm, object_t* callee, i32 argument_slots) {
 }
 
 void vm_print_stack(vm_t *vm) {
-    (void)vm;
+    static const size_t limit = 10;
+    
+    size_t items_counted = 0;
+    size_t slots_size = 0;
+    size_t start_index = 0;
+    type_t *types[limit] = {0};
+    slot_t *slots[limit] = {0};
+    size_t stack_size = vm->stack_top - vm->stack;
+    for (size_t i = 0; i < stack_size;) {
+        slot_t *slot = (vm->stack + i);
+        if (slots_size >= limit) {
+            slots_size -= ((slots_size - limit) + 1);
+            ++start_index;
+        }
+        slots[(start_index+slots_size)%limit] = slot;
+        types[(start_index+slots_size)%limit] = &OrsoTypeUnresolved;
+
+        ++i;
+#ifdef DEBUG
+        --i;
+        type_t *type = vm->stack_types[i];
+        types[(start_index+slots_size)%limit] = type;
+        unless (ORSO_TYPE_IS_INVALID(type)) {
+            i += orso_type_slot_count(type);
+        } else {
+            ++i;
+        }
+#endif
+        ++slots_size;
+        ++items_counted;
+    }
+
+    tmp_arena_t *tmp = allocator_borrow(); {
+        printf("Slots Counted: %lu, Slots Showing: %lu\n", items_counted, slots_size);
+        for (size_t i = 0; i < slots_size; ++i) {
+            size_t i_ = (start_index + slots_size - i - 1) % limit;
+            size_t distance = slots[i_] - vm->stack;
+            slot_t *slot = slots[i_];
+            type_t *type = types[i_];
+            string_t value_string = slot_to_string(slot, type, tmp->allocator);
+            printf("@%lu -> %s: %s\n", distance, value_string.cstr, type_to_string(type, tmp->allocator).cstr);
+        }
+    } allocator_return(tmp);
+
 }
 
 void vm_disassemble_current_instruction(vm_t *vm) {
-    (void)vm;
+    call_frame_t *frame = &vm->frames[vm->frame_count-1];
+    disassemble_instruction(&frame->function->chunk, frame->ip - frame->function->chunk.code.items);
 }
 
 void vm_begin(vm_t *vm, function_t *entry_point) {

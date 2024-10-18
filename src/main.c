@@ -24,12 +24,13 @@
 
 /*
 
+[ ] Rewrite tracing logic and better disassembler log
+[ ] Rewrite casting system
+[ ] Look into and implement a better way of handling the op codes
 [ ] Untangle allocators
 [ ] Allow for "native" structs
 [ ] Unions as a native struct
 [ ] Write printf in orso itself
-[ ] For debugging, instead of printing the disaseembly, write it in the file
-[ ] For debugging, instead of printing ast write it in a file instead
 [ ] Better error messages
 
 [ ] Get DearImGui set up but only for debugging version, use macros and nob to make sure of this
@@ -184,13 +185,19 @@ int main(int argc, char **argv) {
         }
 
         if (trace) {
+            vm_print_stack(&vm);
             vm.type_set = &ast.type_set;
+            printf("\n");
+
             vm_begin(&vm, main);
-            do {
-                // printf("--- %d ---", vm.frames[vm.frame_count-1].ip);
-                vm_print_stack(&vm);
+            while(true) {
                 vm_disassemble_current_instruction(&vm);
-            } while (vm_step(&vm));
+                bool has_next = vm_step(&vm);
+                vm_print_stack(&vm);
+                printf("\n");
+
+                unless (has_next) break;
+            }
         }
     } else {
         vm_t vm;
