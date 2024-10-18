@@ -89,6 +89,30 @@ static void apply_stack_effects(compiler_t* compiler, i32 stack_effects) {
         ? compiler->current_stack_size : compiler->max_stack_size;
 }
 
+static size_t emit_(compiler_t *compiler, chunk_t *chunk, i32 line, op_code_t *op_code, size_t op_code_size_bytes) {
+    u32 stack_effect = 0;
+
+    switch (*op_code) {
+        case ORSO_OP_JUMP_IF_UNION_TRUE:
+        case ORSO_OP_JUMP_IF_UNION_FALSE:
+        case ORSO_OP_JUMP_IF_TRUE:
+        case ORSO_OP_JUMP_IF_FALSE:
+        case ORSO_OP_JUMP: {
+            stack_effect = 0;
+            break;
+        }
+        default: break;
+    }
+
+    for (size_t i = 0; i < op_code_size_bytes; ++i) {
+        chunk_write(chunk, ((byte*)op_code)[i], line);
+    }
+
+    apply_stack_effects(compiler, stack_effect);
+
+    return chunk->code.count - op_code_size_bytes;
+}
+
 static void emit(compiler_t* compiler, chunk_t* chunk, i32 line, const int op_code, ...) {
     va_list args;
     va_start(args, op_code);
@@ -363,8 +387,7 @@ static void emit(compiler_t* compiler, chunk_t* chunk, i32 line, const int op_co
 }
 
 // TODO: Remove compiler from the parameters... instead try to bubble up the stack effect somehow
-static void emit_constant(compiler_t* compiler, chunk_t* chunk, byte* data, i32 line, type_t* type)
-{
+static void emit_constant(compiler_t *compiler, chunk_t *chunk, byte *data, i32 line, type_t *type) {
     u32 size = orso_type_size_bytes(type);
     u32 address = CHUNK_ADD_CONSTANT(chunk, data, size, type);
     address *= sizeof(slot_t);
@@ -380,23 +403,21 @@ static void emit_constant(compiler_t* compiler, chunk_t* chunk, byte* data, i32 
     }
 }
 
-static void emit_put_in_union(compiler_t* compiler, chunk_t* chunk, i32 line, type_t* type) {
+static void emit_put_in_union(compiler_t *compiler, chunk_t *chunk, i32 line, type_t *type) {
     slot_t slot = ORSO_SLOT_P(type);
     emit_constant(compiler, chunk, (byte*)&slot, line, &OrsoTypeType);
     emit(compiler, chunk, line, ORSO_OP_PUT_IN_UNION, (type_t*)type);
 }
 
-static void patch_jump(chunk_t* chunk, i32 offset) {
-    i32 jump = chunk->code.count - offset - 2;
+static void patch_jump(chunk_t *chunk, size_t update_index) {
+    size_t jump = chunk->code.count - (update_index + sizeof(op_code_jump_t));
+    op_code_jump_t *jump_code = (op_code_jump_t*)(chunk->code.items + update_index);
 
-    if (jump > UINT16_MAX) {
+    if (jump > UINT32_MAX) {
         ASSERT(false, "TODO");
     }
 
-    byte b1, b2;
-    ORSO_u16_to_u8s(jump, b1, b2);
-    chunk->code.items[offset] = b1;
-    chunk->code.items[offset + 1] = b2;
+    jump_code->offset = (u32)jump;
 }
 
 static void emit_entity_get(compiler_t* compiler, u32 index, byte size_bytes, chunk_t* chunk, i32 line, bool is_local) {
@@ -863,8 +884,6 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
                 case TOKEN_AND: {
                     expression(vm, compiler, ast, left, chunk);
 
-                    emit_storage_type_convert(compiler, chunk, left->value_type, expression_node->value_type, left->end.line);
-
                     op_code_t jump_instruction;
                     if (ORSO_TYPE_IS_STRUCT(left->value_type)) {
                         jump_instruction = operator.type == TOKEN_AND ? ORSO_OP_NO_OP : ORSO_OP_JUMP;
@@ -874,9 +893,12 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
                         jump_instruction = operator.type == TOKEN_AND ? ORSO_OP_JUMP_IF_FALSE : ORSO_OP_JUMP_IF_TRUE;
                     }
 
-                    u64 jump_rest;
+                    size_t jump_rest;
                     unless (jump_instruction == ORSO_OP_NO_OP) {
-                        emit(compiler, chunk, operator.line, jump_instruction, (u64*)&jump_rest);
+                        op_code_jump_t jump = {
+                            .op = jump_instruction,
+                        };
+                        jump_rest = emit_(compiler, chunk, operator.line, (op_code_t*)&jump, sizeof(op_code_jump_t));
                     }
 
                     i32 previous_stack_count = compiler->current_stack_size;
@@ -885,8 +907,6 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
                     emit_pop(compiler, chunk, orso_type_slot_count(expression_node->value_type), right->start.line);
 
                     expression(vm, compiler, ast, right, chunk);
-
-                    emit_storage_type_convert(compiler, chunk, right->value_type, expression_node->value_type, right->end.line);
 
                     unless (jump_instruction == ORSO_OP_NO_OP) {
                         patch_jump(chunk, jump_rest);
@@ -1137,7 +1157,7 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
 
             u32 position_before_condition_evaluation = chunk->code.count;
 
-            ast_node_t* condition = expression_node->data.branch.condition;
+            ast_node_t *condition = expression_node->data.branch.condition;
             expression(vm, compiler, ast, condition, chunk);
 
             op_code_t jump_instruction = ORSO_OP_JUMP_IF_FALSE;
@@ -1145,8 +1165,13 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
                 jump_instruction = ORSO_OP_JUMP_IF_TRUE;
             }
 
-            u64 then_jump;
-            emit(compiler, chunk, condition->end.line, jump_instruction, (u64*)&then_jump);
+            size_t then_jump;
+            {
+                op_code_jump_t jump = {
+                    .op = jump_instruction,
+                };
+                then_jump = emit_(compiler, chunk, condition->end.line, (op_code_t*)&jump, sizeof(op_code_jump_t));
+            }
 
             /*
              * The then or else branch get ran once but during code-gen, both branches are processed
@@ -1168,8 +1193,13 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
                 emit(compiler, chunk, expression_node->data.branch.then_expression->end.line, ORSO_OP_LOOP, (u64)position_before_condition_evaluation);
             }
 
-            u64 else_jump;
-            emit(compiler, chunk, expression_node->data.branch.then_expression->end.line, ORSO_OP_JUMP, (u64*)(&else_jump));
+            size_t else_jump;
+            {
+                op_code_jump_t jump = {
+                    .op = ORSO_OP_JUMP,
+                };
+                else_jump = emit_(compiler, chunk, expression_node->data.branch.then_expression->end.line, (op_code_t*)&jump, sizeof(op_code_jump_t));
+            }
 
             patch_jump(chunk, then_jump);
 

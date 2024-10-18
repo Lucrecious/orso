@@ -566,27 +566,36 @@ memcpy(current_top, local, size); \
             break;
         }
 
-        case ORSO_OP_JUMP_IF_UNION_FALSE:
+        case ORSO_OP_JUMP_IF_UNION_FALSE: {
+            UNREACHABLE();
+            break;
+        }
+
+        #define READ_CODE(type) ((frame->ip += sizeof(type)-1, (type*)(frame->ip-sizeof(type))))
+
         case ORSO_OP_JUMP_IF_FALSE: {
-            u16 offset = READ_U16();
+            op_code_jump_t *jump = READ_CODE(op_code_jump_t);
             if (orso_slot_is_falsey(*PEEK(0))) {
-                frame->ip += offset;
+                frame->ip += jump->offset;
             }
             break;
         }
 
-        case ORSO_OP_JUMP_IF_UNION_TRUE:
+        case ORSO_OP_JUMP_IF_UNION_TRUE: {
+            UNREACHABLE();
+            break;
+        }
         case ORSO_OP_JUMP_IF_TRUE: {
-            u16 offset = READ_U16();
+            op_code_jump_t *jump = READ_CODE(op_code_jump_t);
             if (!orso_slot_is_falsey(*PEEK(0))) {
-                frame->ip += offset;
+                frame->ip += jump->offset;
             }
             break;
         }
 
         case ORSO_OP_JUMP: {
-            u16 offset = READ_U16();
-            frame->ip += offset;
+            op_code_jump_t *jump = READ_CODE(op_code_jump_t);
+            frame->ip += jump->offset;
             break;
         }
 

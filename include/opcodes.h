@@ -77,4 +77,10 @@ typedef enum op_code_t {
     ORSO_OP_PRINT,
 } op_code_t;
 
+typedef struct op_code_jump_t op_code_jump_t;
+struct op_code_jump_t {
+    op_code_t op;
+    u32 offset;
+};
+
 #endif

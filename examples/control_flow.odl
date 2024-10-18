@@ -1,0 +1,5 @@
+main :: () {
+    a := 69;
+    b := 0;
+    print_expr b or a;
+};
