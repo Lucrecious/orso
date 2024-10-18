@@ -21,13 +21,21 @@ struct types_t {
     arena_t *allocator;
 };
 
+typedef struct code_t code_t;
+struct code_t {
+    byte *items;
+    size_t count;
+    size_t capacity;
+    arena_t *allocator;
+};
+
 typedef struct chunk_t {
 #ifdef DEBUG
     types_t constant_types;
 #endif
     slots_t constants;
     i32 *lines; // run-length encoded
-    byte *code;
+    code_t code;
 } chunk_t;
 
 void chunk_init(chunk_t *chunk, arena_t *allocator);

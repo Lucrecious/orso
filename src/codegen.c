@@ -283,7 +283,7 @@ static void emit(compiler_t* compiler, chunk_t* chunk, i32 line, const int op_co
             chunk_write(chunk, 0xFF, line);
 
             u64* code_index = va_arg(args, u64*);
-            *code_index = (sb_count(chunk->code) - 2);
+            *code_index = chunk->code.count - 2;
 
             stack_effect = 0;
             break;
@@ -291,7 +291,7 @@ static void emit(compiler_t* compiler, chunk_t* chunk, i32 line, const int op_co
 
         case ORSO_OP_LOOP: {
             u32 loop_start = va_arg(args, u64);
-            u32 offset = sb_count(chunk->code) - loop_start + 2;
+            u32 offset = chunk->code.count - loop_start + 2;
             ASSERT(offset <= UINT16_MAX, "loop cant go back more than 2^16");
             byte a;
             byte b;
@@ -372,7 +372,7 @@ static void emit_put_in_union(compiler_t* compiler, chunk_t* chunk, i32 line, ty
 }
 
 static void patch_jump(chunk_t* chunk, i32 offset) {
-    i32 jump = sb_count(chunk->code) - offset - 2;
+    i32 jump = chunk->code.count - offset - 2;
 
     if (jump > UINT16_MAX) {
         ASSERT(false, "TODO");
@@ -380,8 +380,8 @@ static void patch_jump(chunk_t* chunk, i32 offset) {
 
     byte b1, b2;
     ORSO_u16_to_u8s(jump, b1, b2);
-    chunk->code[offset] = b1;
-    chunk->code[offset + 1] = b2;
+    chunk->code.items[offset] = b1;
+    chunk->code.items[offset + 1] = b2;
 }
 
 static void emit_entity_get(compiler_t* compiler, u32 index, byte size_bytes, chunk_t* chunk, i32 line, bool is_local) {
@@ -447,7 +447,7 @@ static function_t* compiler_end(vm_t* vm, compiler_t* compiler, ast_t* ast, chun
 
         for (i32 i = 0; i < sb_count(functions_to_compile); i++) {
             function_t* function = functions_to_compile[i];
-            if (function->chunk.code != NULL) {
+            if (function->chunk.code.items != NULL) {
                 continue;
             }
 
@@ -648,7 +648,7 @@ static void function_expression(vm_t* vm, compiler_t* compiler, ast_t* ast, ast_
     ASSERT(ORSO_TYPE_IS_FUNCTION(function_defintion_expression->value_type), "must be function if calling this");
 
     function_t* stored_function = (function_t*)ast->folded_constants[function_defintion_expression->value_index].as.p;
-    if (!compiler->skip_function_definitions && stored_function->chunk.code == NULL /*is not compiled yet*/) {
+    if (!compiler->skip_function_definitions && stored_function->chunk.code.items == NULL /*is not compiled yet*/) {
         compile_function(vm, ast, stored_function, function_defintion_expression);
     }
     slot_t function_value = ORSO_SLOT_P(stored_function);
@@ -1117,7 +1117,7 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
                 emit_storage_type_convert(compiler, chunk, &OrsoTypeVoid, expression_node->value_type, expression_node->start.line);
             }
 
-            u32 position_before_condition_evaluation = sb_count(chunk->code);
+            u32 position_before_condition_evaluation = chunk->code.count;
 
             ast_node_t* condition = expression_node->data.branch.condition;
             expression(vm, compiler, ast, condition, chunk);
@@ -1506,7 +1506,7 @@ function_t *generate_code(vm_t *vm, ast_t *ast) {
     // TODO: Am I somehow missing an opertunity to warn for unused functions by doing this?
     for (i32 i = 0; i < sb_count(ast->function_definition_pairs); i++) {
         function_t *function = ast->function_definition_pairs[i].function;
-        if (function->chunk.code == NULL) {
+        if (function->chunk.code.items == NULL) {
             compile_function(vm, ast, function, ast->function_definition_pairs[i].ast_defintion);
         }
     }

@@ -18,7 +18,7 @@ static i32 index_instruction(const char *name, chunk_t *chunk, i32 offset, u32 i
     u64 index = 0;
     for (size_t i = 0; i < index_size_bytes; i++) {
         index <<= 8;
-        index |= (byte)chunk->code[offset + 1 + i];
+        index |= (byte)chunk->code.items[offset + 1 + i];
     }
 
     switch (instruction) {
@@ -46,8 +46,8 @@ static i32 index_instruction(const char *name, chunk_t *chunk, i32 offset, u32 i
 }
 
 static i32 pop_scope_instruction(const char *name, chunk_t *chunk, i32 offset) {
-    byte stack_pop_count = chunk->code[offset + 1];
-    byte block_slot_count = chunk->code[offset + 2];
+    byte stack_pop_count = chunk->code.items[offset + 1];
+    byte block_slot_count = chunk->code.items[offset + 2];
     printf("%-16s %d %d", name, stack_pop_count, block_slot_count);
     printf("\n");
 
@@ -55,7 +55,7 @@ static i32 pop_scope_instruction(const char *name, chunk_t *chunk, i32 offset) {
 }
 
 static i32 instruction_arg(const char *name, chunk_t *chunk, i32 offset) {
-    byte index = chunk->code[offset + 1];
+    byte index = chunk->code.items[offset + 1];
     printf("%-16s %d", name, index);
     printf("\n");
 
@@ -63,7 +63,7 @@ static i32 instruction_arg(const char *name, chunk_t *chunk, i32 offset) {
 }
 
 static int jump_instruction(const char *name, int sign, chunk_t *chunk, int offset) {
-    u16 jump = ORSO_u8s_to_u16(chunk->code[offset + 1], chunk->code[offset + 2]);
+    u16 jump = ORSO_u8s_to_u16(chunk->code.items[offset + 1], chunk->code.items[offset + 2]);
     printf("%-16s %4d -> %d\n", name, offset, offset + 3 + sign * jump);
     return offset + 3;
 }
@@ -75,11 +75,10 @@ static i32 simple_instruction(const char *name, i32 offset) {
 
 
 static i32 get_field_instruction(const char *name, chunk_t *chunk, i32 offset, bool has_field_size) {
-    //byte total_struct_size = chunk->code[offset + 1];
-    byte field_offset = chunk->code[offset + 2];
+    byte field_offset = chunk->code.items[offset + 2];
 
     if (has_field_size) {
-        byte field_size = chunk->code[offset + 3];
+        byte field_size = chunk->code.items[offset + 3];
         printf("%-16s %4d (%d)\n", name, field_offset, field_size);
         return offset + 4;
     } else {
@@ -98,7 +97,7 @@ i32 disassemble_instruction(chunk_t *chunk, i32 offset) {
         printf("%4d ", chunk_get_line(chunk, offset));
     }
 
-    op_code_t instruction = chunk->code[offset];
+    op_code_t instruction = chunk->code.items[offset];
     switch(instruction) {
         case ORSO_OP_NO_OP: return simple_instruction("OP_NO_OP", offset);
         case ORSO_OP_POP: return simple_instruction("OP_POP", offset);
@@ -168,7 +167,7 @@ i32 disassemble_instruction(chunk_t *chunk, i32 offset) {
 void chunk_disassemble(chunk_t *chunk, const char *name) {
     printf("=== %s ===\n", name);
 
-    for (i32 offset = 0; offset < sb_count(chunk->code);) {
+    for (size_t offset = 0; offset < chunk->code.count;) {
         offset = disassemble_instruction(chunk, offset);
     }
 }

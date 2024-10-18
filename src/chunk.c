@@ -35,7 +35,7 @@ void chunk_init(chunk_t *chunk, arena_t *allocator) {
     chunk->constant_types = (types_t){.allocator = allocator};
 #endif
     chunk->constants = (slots_t){.allocator = allocator};
-    chunk->code = NULL;
+    chunk->code = (code_t){.allocator = allocator};
     chunk->lines = NULL;
 }
 
@@ -44,7 +44,7 @@ void chunk_free(chunk_t* chunk) {
 }
 
 void chunk_write(chunk_t* chunk, byte byte, i32 line) {
-    sb_push(chunk->code, byte);
+    array_push(&chunk->code, byte);
 
     i32 lines_count = sb_count(chunk->lines);
     if ((lines_count > 1 && chunk->lines[lines_count - 2] == line)) {

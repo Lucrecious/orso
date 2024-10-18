@@ -116,7 +116,7 @@ static void call(vm_t* vm, function_t* function, i32 argument_slots) {
 
     call_frame_t* frame = &vm->frames[vm->frame_count++];
     frame->function = function;
-    frame->ip = function->chunk.code;
+    frame->ip = function->chunk.code.items;
     frame->slots = vm->stack_top - argument_slots - 1;
 }
 

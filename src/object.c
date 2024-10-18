@@ -172,7 +172,7 @@ function_t *orso_new_function(arena_t *allocator) {
 }
 
 bool is_function_compiled(function_t* function) {
-    return function->chunk.code != NULL;
+    return function->chunk.code.items != NULL;
 }
 
 native_function_t* orso_new_native_function(native_function_interface_t function, type_t* type) {
