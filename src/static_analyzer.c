@@ -145,7 +145,7 @@ static void add_entity(scope_t* scope, arena_t *allocator, symbol_t* identifier,
     symbol_table_set(&scope->named_entities, identifier, ORSO_SLOT_P(entity));
 }
 
-static Entity* add_builtin_entity(ast_t* ast, symbol_t* identifier, type_t* type, i32 value_index) {
+static Entity* add_builtin_entity(ast_t *ast, symbol_t *identifier, type_t *type, i32 value_index) {
     Entity* entity = arena_alloc(&ast->allocator, sizeof(Entity));
     entity->declared_type = type;
     entity->narrowed_type = type;
@@ -157,10 +157,10 @@ static Entity* add_builtin_entity(ast_t* ast, symbol_t* identifier, type_t* type
     return entity;
 }
 
-static void function_dependencies_cannot_be_compiled(analyzer_t* analyzer) {
-    for (i32 i = 0; i < analyzer->dependencies.count; i++) {
-        analysis_dependency_t* dependency = &analyzer->dependencies.chain[i];
-        ast_node_t* node = dependency->ast_node;
+static void function_dependencies_cannot_be_compiled(analyzer_t *analyzer) {
+    for (size_t i = 0; i < analyzer->dependencies.count; ++i) {
+        analysis_dependency_t *dependency = &analyzer->dependencies.items[i];
+        ast_node_t *node = dependency->ast_node;
         if (node->node_type != ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION) {
             continue;
         }
@@ -837,8 +837,9 @@ static void fold_function_signature(analyzer_t *analyzer, ast_t *ast, ast_node_t
  * 
  */
 static bool is_value_circular_dependency(analyzer_t* analyzer, ast_node_t* new_dependency) {
-    for (i32 i = analyzer->dependencies.count - 1; i >= 0; i--) {
-        analysis_dependency_t* dependency = &analyzer->dependencies.chain[i];
+    for (size_t i_ = 0; i_ < analyzer->dependencies.count; ++i_) {
+        size_t i = analyzer->dependencies.count-i_-1;
+        analysis_dependency_t *dependency = &analyzer->dependencies.items[i];
 
         if (dependency->ast_node->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION) {
             return false;
@@ -867,18 +868,13 @@ static bool push_dependency(analyzer_t* analyzer, ast_node_t* node, int fold_lev
         .ast_node = node,
     };
 
-    if (sb_count(analyzer->dependencies.chain) <= analyzer->dependencies.count) {
-        sb_push(analyzer->dependencies.chain, dependency);
-        analyzer->dependencies.count = sb_count(analyzer->dependencies.chain);
-    } else {
-        analyzer->dependencies.chain[analyzer->dependencies.count++] = dependency;
-    }
+    array_push(&analyzer->dependencies, dependency);
 
     return true;
 }
 
-static void pop_dependency(analyzer_t* analyzer) {
-    analyzer->dependencies.count--;
+static void pop_dependency(analyzer_t *analyzer) {
+    --analyzer->dependencies.count;
 }
 
 static void resolve_declarations(
@@ -2120,9 +2116,9 @@ static Entity *get_resolved_entity_by_identifier(
             */
 
             function_t *function = (function_t*)ast->folded_constants.items[entity->node->data.declaration.initial_value_expression->value_index].as.p;
-            for (i32 i = 0; i < analyzer->dependencies.count; i++) {
+            for (size_t i = 0; i < analyzer->dependencies.count; ++i) {
                 i32 i_ = analyzer->dependencies.count - 1 - i;
-                analysis_dependency_t *dependency = &analyzer->dependencies.chain[i_];
+                analysis_dependency_t *dependency = &analyzer->dependencies.items[i_];
                 ast_node_t *node = dependency->ast_node;
                 if (node->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION) {
                     function_t *folded_function = (function_t*)ast->folded_constants.items[node->value_index].as.p;
@@ -2689,10 +2685,9 @@ void analyzer_init(analyzer_t* analyzer, write_function_t write_fn, error_functi
     analyzer->error_fn = error_fn;
     analyzer->had_error = false;
 
-    analyzer->dependencies.count = 0;
-    analyzer->dependencies.chain = NULL;
-
     analyzer->allocator = (arena_t){0};
+
+    analyzer->dependencies = (analysis_dependencies_t){.allocator=&analyzer->allocator};
 
     // TODO: fix
     (void)write_fn;
@@ -2710,8 +2705,6 @@ void analyzer_free(analyzer_t* analyzer) {
         orso_unmanaged_symbol_free(entry->key);
     }
 
-    sb_free(analyzer->dependencies.chain);
-    analyzer->dependencies.chain = NULL;
     analyzer->dependencies.count = 0;
 
     analyzer->ast = NULL;

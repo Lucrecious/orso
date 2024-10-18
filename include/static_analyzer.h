@@ -14,16 +14,21 @@ typedef struct analysis_dependency_t {
     ast_node_t* ast_node; 
 } analysis_dependency_t;
 
+typedef struct analysis_dependencies_t analysis_dependencies_t;
+struct analysis_dependencies_t {
+    analysis_dependency_t *items;
+    size_t count;
+    size_t capacity;
+    arena_t *allocator;
+};
+
 typedef struct analyzer_t {
     error_function_t error_fn;
     symbol_table_t symbols;
 
     ast_t* ast;
 
-    struct {
-        i32 count;
-        analysis_dependency_t* chain;
-    } dependencies;
+    analysis_dependencies_t dependencies;
 
     bool had_error;
 
