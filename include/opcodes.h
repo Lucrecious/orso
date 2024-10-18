@@ -31,16 +31,9 @@ typedef enum op_code_t {
     ORSO_OP_PUSH_0,
 
     ORSO_OP_CONSTANT,
-
     ORSO_OP_LOCAL,
     ORSO_OP_GLOBAL,
-
-    ORSO_OP_GET_FIELD_VOID,
-    ORSO_OP_GET_FIELD_BOOL,
-    ORSO_OP_GET_FIELD_I32,
-    ORSO_OP_GET_FIELD_F32,
-    ORSO_OP_GET_FIELD_SLOT,
-    ORSO_OP_GET_FIELD_BYTES,
+    ORSO_OP_FIELD,
 
     ORSO_OP_PUSH_GLOBAL_ADDRESS,
     ORSO_OP_PUSH_LOCAL_ADDRESS,
@@ -71,6 +64,14 @@ typedef enum op_code_t {
     ORSO_OP_PRINT_EXPR,
     ORSO_OP_PRINT,
 } op_code_t;
+
+typedef struct op_code_field_t op_code_field_t;
+struct op_code_field_t {
+    op_code_t op;
+    u16 value_size_bytes;
+    u16 offset_bytes;
+    u16 size_bytes;
+};
 
 typedef struct op_code_location_t op_code_location_t;
 struct op_code_location_t {

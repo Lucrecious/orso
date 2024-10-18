@@ -69,20 +69,6 @@ static i32 simple_instruction(const char *name, i32 offset) {
     return offset + 1;
 }
 
-
-static i32 get_field_instruction(const char *name, chunk_t *chunk, i32 offset, bool has_field_size) {
-    byte field_offset = chunk->code.items[offset + 2];
-
-    if (has_field_size) {
-        byte field_size = chunk->code.items[offset + 3];
-        printf("%-16s %4d (%d)\n", name, field_offset, field_size);
-        return offset + 4;
-    } else {
-        printf("%-16s %d\n", name, field_offset);
-        return offset + 3;
-    }
-}
-
 i32 disassemble_instruction(chunk_t *chunk, i32 offset) {
     printf("%04d ", offset);
 
@@ -140,20 +126,20 @@ i32 disassemble_instruction(chunk_t *chunk, i32 offset) {
         }
         case ORSO_OP_LOCAL:  {
             op_code_location_t *location = (op_code_location_t*)(chunk->code.items + offset);
-            printf("OP_LOCAL index: %d, size: %d\n", location->index_slots, location->size_bytes);
+            printf("OP_LOCAL(index: %d, size: %d)\n", location->index_slots, location->size_bytes);
             return offset + sizeof(op_code_location_t);
         }
         case ORSO_OP_GLOBAL: {
             op_code_location_t *location = (op_code_location_t*)(chunk->code.items + offset);
-            printf("OP_GLOBAL index: %d, size: %d\n", location->index_slots, location->size_bytes);
+            printf("OP_GLOBAL(index: %d, size: %d)\n", location->index_slots, location->size_bytes);
             return offset + sizeof(op_code_location_t);
         }
-        case ORSO_OP_GET_FIELD_VOID: return get_field_instruction("ORSO_OP_GET_FIELD_VOID", chunk, offset, false);
-        case ORSO_OP_GET_FIELD_BOOL: return get_field_instruction("ORSO_OP_GET_FIELD_BOOL", chunk, offset, false);
-        case ORSO_OP_GET_FIELD_I32: return get_field_instruction("ORSO_OP_GET_FIELD_I32", chunk, offset, false);
-        case ORSO_OP_GET_FIELD_F32: return get_field_instruction("ORSO_OP_GET_FIELD_F32", chunk, offset, false);
-        case ORSO_OP_GET_FIELD_SLOT: return get_field_instruction("ORSO_OP_GET_FIELD_SLOT", chunk, offset, false);
-        case ORSO_OP_GET_FIELD_BYTES: return get_field_instruction("ORSO_OP_GET_FIELD_BYTES", chunk, offset, true);
+        case ORSO_OP_FIELD: {
+            op_code_field_t *field = (op_code_field_t*)(chunk->code.items + offset);
+            printf("OP_FIELD(value size: %d, offset: %d, size: %d)\n", field->value_size_bytes, field->offset_bytes, field->size_bytes);
+            return offset + sizeof(op_code_location_t);
+            break;
+        }
         case ORSO_OP_SET_LVALUE_SLOT: return simple_instruction("OP_SET_LVALUE_SLOT", offset);
         case ORSO_OP_SET_LVALUE_I32: return simple_instruction  ("OP_SET_LVALUE_I32", offset);
         case ORSO_OP_SET_LVALUE_F32: return simple_instruction("OP_SET_LVALUE_F32", offset);

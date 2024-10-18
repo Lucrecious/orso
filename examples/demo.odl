@@ -1,10 +1,14 @@
-l := 10;
+vector2 :: struct {
+    x := 0.0;
+    b := true;
+    y := 42.0;
+};
 
 main :: () {
-    x := {
-        y := 2;
-        z := 1;
-        y + z + l;
-    };
-    print_expr x;
+    x := -100.0;
+    b := true;
+    y := 420.0;
+
+    v := vector2.{x, b, y};
+    print_expr v.y;
 };

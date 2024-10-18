@@ -379,69 +379,23 @@ memcpy(current_top, local, size); \
         #else
         #define GET_FIELD_TYPE_TRACE(TYPE)
         #endif
-        #define ORSO_OP_GET_FIELD(CASE_TYPE, CAST_TYPE, TRACE_TYPE, UNION_ID) ORSO_OP_GET_FIELD_##CASE_TYPE: { \
-            byte struct_size = READ_BYTE(); \
-            byte field_offset = READ_BYTE();  \
-            \
-            byte struct_slot_size = orso_bytes_to_slots(struct_size); \
-            slot_t* new_top = vm->stack_top - struct_slot_size; \
-            \
-            new_top->as.UNION_ID = *((CAST_TYPE*)((((byte*)new_top) + field_offset))); \
-            \
-            POPN(struct_slot_size - 1); \
-            \
-            GET_FIELD_TYPE_TRACE(TRACE_TYPE); \
-            break;\
-        } \
-        break
 
-        case ORSO_OP_GET_FIELD_VOID: {
-            byte struct_size = READ_BYTE();
+        case ORSO_OP_FIELD: {
+            op_code_field_t *field = READ_CODE(op_code_field_t);
+            u16 field_offset = field->offset_bytes;
+            u16 field_size = field->size_bytes;
+            u16 value_size = field->value_size_bytes;
+            ASSERT(value_size % sizeof(slot_t) == 0, "must be aligned to slots");
 
-            byte struct_slot_size = orso_bytes_to_slots(struct_size);
+            byte *start = ((byte*)vm->stack_top) - value_size;
+            memmove(start, start + field_offset, field_size);
+            memset(start+field_offset+1, 0, value_size - field_offset);
 
-            (vm->stack_top - struct_slot_size)->as.i = 0;
-
-            POPN(struct_slot_size - 1);
+            // TODO: needs to do these in batches
+            POPN(orso_bytes_to_slots(value_size) - orso_bytes_to_slots(field_size));
 
         #ifdef DEBUG
-            u32 index = vm->stack_top - vm->stack;
-            vm->stack_types[index] = &OrsoTypeVoid;
-        #endif
-            break;
-        }
-
-        case ORSO_OP_GET_FIELD_SLOT: {
-            byte struct_size = READ_BYTE();
-            byte field_offset = READ_BYTE();
-
-            byte struct_slot_size = orso_bytes_to_slots(struct_size);
-
-            memmove(vm->stack_top - struct_slot_size, ((byte*)(vm->stack_top - struct_slot_size)) + field_offset, sizeof(slot_t));
-
-            POPN(struct_slot_size - 1);
-
-        #ifdef DEBUG
-            u32 index = vm->stack_top - vm->stack;
-            vm->stack_types[index] = &OrsoTypeInvalid; // TODO: Use better system to debug types
-        #endif
-            break;
-        }
-
-        case ORSO_OP_GET_FIELD_BYTES: {
-            byte struct_size = READ_BYTE();
-            byte field_offset = READ_BYTE();
-            byte field_size = READ_BYTE();
-
-            byte struct_slot_size = orso_bytes_to_slots(struct_size);
-
-            ASSERT(field_size % sizeof(slot_t) == 0, "field size must be aligned to slots");
-            memmove(vm->stack_top - struct_slot_size, ((byte*)(vm->stack_top - struct_slot_size)) + field_offset, field_size);
-
-            byte field_slot_size = orso_bytes_to_slots(field_size);
-            POPN(struct_slot_size - field_slot_size);
-
-        #ifdef DEBUG
+            u16 field_slot_size = orso_bytes_to_slots(field_size);
             u32 index = vm->stack_top - vm->stack;
             for (u32 i = 0; i < field_slot_size; i++) {
                 vm->stack_types[index + i] = &OrsoTypeInvalid; // TODO: use better system to keep track of types in slots
@@ -449,12 +403,6 @@ memcpy(current_top, local, size); \
         #endif
             break;
         }
-
-        case ORSO_OP_GET_FIELD(BOOL, byte, Bool, i);
-
-        case ORSO_OP_GET_FIELD(I32, i32, Integer32, i);
-
-        case ORSO_OP_GET_FIELD(F32, f32, Float32, f);
 
         case ORSO_OP_SET_LVALUE_SLOT: {
             void* ptr = POP().as.p;

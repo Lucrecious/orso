@@ -124,6 +124,12 @@ static size_t emit_(compiler_t *compiler, chunk_t *chunk, i32 line, op_code_t *o
             stack_effect = orso_bytes_to_slots(location->size_bytes);
             break;
         }
+
+        case ORSO_OP_FIELD: {
+            op_code_field_t *field = (op_code_field_t*)op_code;
+            stack_effect = field->value_size_bytes - field->size_bytes;
+            break;
+        }
         default: break;
     }
 
@@ -232,23 +238,13 @@ static void emit(compiler_t* compiler, chunk_t* chunk, i32 line, const int op_co
             break;
         }
 
-        case ORSO_OP_GET_FIELD_VOID:
-        case ORSO_OP_GET_FIELD_BOOL:
-        case ORSO_OP_GET_FIELD_I32:
-        case ORSO_OP_GET_FIELD_F32:
-        case ORSO_OP_GET_FIELD_SLOT:
-        case ORSO_OP_GET_FIELD_BYTES: {
+        case ORSO_OP_FIELD: {
             byte item_size = (byte)va_arg(args, long);
-            byte field_offset = (byte)va_arg(args, long);
             byte field_size = (byte)va_arg(args, long);
 
             chunk_write(chunk, item_size, line);
 
-            if (op_code != ORSO_OP_GET_FIELD_VOID) {
-                chunk_write(chunk, field_offset, line);
-            }
-
-            if (op_code == ORSO_OP_GET_FIELD_BYTES) {
+            if (op_code == ORSO_OP_FIELD) {
                 chunk_write(chunk, field_size, line);
             }
 
@@ -1058,19 +1054,24 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
 
             ASSERT(ORSO_TYPE_IS_STRUCT(expression_node->data.dot.lhs->value_type), "LHS must be a struct for now");
 
-            byte struct_size = orso_type_size_bytes(expression_node->data.dot.lhs->value_type);
+            u32 struct_size = orso_type_size_bytes(expression_node->data.dot.lhs->value_type);
             struct_field_t* field = orso_type_struct_find_field(expression_node->data.dot.lhs->value_type, expression_node->data.dot.identifier.start, expression_node->data.dot.identifier.length);
             ASSERT(field, "this must exist, otherwise static analyzer would have caught it");
 
-            byte field_offset = field->offset;
-            op_code_t get_code = ORSO_OP_NO_OP;
+            u32 field_offset = field->offset;
+            size_t field_size = 0;
+
+            ASSERT(struct_size < UINT16_MAX, "TODO");
+            ASSERT(field_offset < UINT16_MAX, "TODO");
+            ASSERT(field_size < UINT16_MAX, "TODO");
+
             switch (expression_node->value_type->kind) {
                 case ORSO_TYPE_VOID: {
-                    get_code = ORSO_OP_GET_FIELD_VOID;
+                    field_size = 0;
                     break;
                 }
                 case ORSO_TYPE_BOOL: {
-                    get_code = ORSO_OP_GET_FIELD_BOOL;
+                    field_size = sizeof(bool);
                     break;
                 }
                 case ORSO_TYPE_FUNCTION:
@@ -1081,20 +1082,20 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
                 case ORSO_TYPE_TYPE:
                 case ORSO_TYPE_FLOAT64:
                 case ORSO_TYPE_INT64: {
-                    get_code = ORSO_OP_GET_FIELD_SLOT;
+                    field_size = sizeof(u64);
                     break;
                 }
                 case ORSO_TYPE_INT32: {
-                    get_code = ORSO_OP_GET_FIELD_I32;
+                    field_size = sizeof(i32);
                     break;
                 }
                 case ORSO_TYPE_FLOAT32: {
-                    get_code = ORSO_OP_GET_FIELD_F32;
+                    field_size = sizeof(f32);
                     break;
                 }
                 case ORSO_TYPE_UNION:
                 case ORSO_TYPE_STRUCT: {
-                    get_code = ORSO_OP_GET_FIELD_BYTES;
+                    field_size = orso_type_size_bytes(field->type);
                     break;
                 }
 
@@ -1103,8 +1104,16 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
                 case ORSO_TYPE_INVALID: UNREACHABLE();
             }
 
-            byte field_size = orso_type_size_bytes(field->type);
-            emit(compiler, chunk, expression_node->data.dot.identifier.line, get_code, (long)struct_size, (long)field_offset, (long)field_size);
+            {
+                op_code_field_t field = {
+                    .op = ORSO_OP_FIELD,
+                    .value_size_bytes = (u16)struct_size,
+                    .offset_bytes = (u16)field_offset,
+                    .size_bytes = (u16)field_size,
+                };
+
+                emit_(compiler, chunk, expression_node->data.dot.identifier.line, (op_code_t*)&field, sizeof(op_code_field_t));
+            }
             break;
         }
 
