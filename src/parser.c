@@ -106,8 +106,8 @@ void ast_init(ast_t* ast, symbol_table_t* symbols) {
     ast->function_definition_pairs = (fd_pairs_t){.allocator=&ast->allocator};
     type_set_init(&ast->type_set, &ast->allocator);
 
-    slot_t void_slot = ORSO_SLOT_I(0);
-    slot_t bool_slot = ORSO_SLOT_I(1);
+    slot_t void_slot = SLOT_I(0);
+    slot_t bool_slot = SLOT_I(1);
     array_push(&ast->folded_constants, void_slot);
     array_push(&ast->folded_constants, bool_slot);
 
@@ -388,13 +388,13 @@ static ast_node_t* number(parser_t* parser, bool is_in_type_context) {
         case TOKEN_INTEGER: {
             i64 value = cstrn_to_i64(parser->previous.start, parser->previous.length);
             expression_node->value_type = value_to_integer_type(value);
-            expression_node->value_index = add_constant_value(parser, ORSO_SLOT_I(value), expression_node->value_type);
+            expression_node->value_index = add_constant_value(parser, SLOT_I(value), expression_node->value_type);
             break;
         }
         case TOKEN_FLOAT: {
             f64 value = cstrn_to_f64(parser->previous.start, parser->previous.length);
             expression_node->value_type = &OrsoTypeFloat64;
-            expression_node->value_index = add_constant_value(parser, ORSO_SLOT_F(value), &OrsoTypeFloat64);
+            expression_node->value_index = add_constant_value(parser, SLOT_F(value), &OrsoTypeFloat64);
             break;
         }
         default: UNREACHABLE();
@@ -416,25 +416,25 @@ static ast_node_t *literal(parser_t *parser, bool is_in_type_context) {
             expression_node->value_type = &OrsoTypeBool;
 
             i64 is_true = (i64)(parser->previous.type == TOKEN_TRUE);
-            expression_node->value_index = add_constant_value(parser, ORSO_SLOT_I(is_true), &OrsoTypeBool);
+            expression_node->value_index = add_constant_value(parser, SLOT_I(is_true), &OrsoTypeBool);
             break;
         }
         case TOKEN_NULL: {
             expression_node->value_type = &OrsoTypeVoid;
-            expression_node->value_index = add_constant_value(parser, ORSO_SLOT_I(0), &OrsoTypeVoid);
+            expression_node->value_index = add_constant_value(parser, SLOT_I(0), &OrsoTypeVoid);
             break;
         }
         case TOKEN_STRING: {
             expression_node->value_type = &OrsoTypeString;
             OrsoString *value = orso_new_string_from_cstrn(expression_node->start.start + 1, expression_node->start.length - 2, &parser->ast->allocator);
-            expression_node->value_index = add_constant_value(parser, ORSO_SLOT_P(value), &OrsoTypeString);
+            expression_node->value_index = add_constant_value(parser, SLOT_P(value), &OrsoTypeString);
             break;
         };
 
         case TOKEN_SYMBOL: {
             expression_node->value_type = &OrsoTypeSymbol;
             symbol_t *value = orso_new_symbol_from_cstrn(expression_node->start.start + 1, expression_node->start.length - 2, parser->ast->symbols, &parser->ast->allocator);
-            expression_node->value_index = add_constant_value(parser, ORSO_SLOT_P(value), &OrsoTypeSymbol);
+            expression_node->value_index = add_constant_value(parser, SLOT_P(value), &OrsoTypeSymbol);
             break;
         }
         default:
@@ -1110,53 +1110,53 @@ i32 zero_value(ast_t *ast, type_t *type, symbol_table_t *symbol_table) {
     slot_t value[orso_bytes_to_slots(orso_type_size_bytes(type))];
 
     switch (type->kind) {
-        case ORSO_TYPE_POINTER:
-        case ORSO_TYPE_VOID:
-        case ORSO_TYPE_BOOL:
-        case ORSO_TYPE_INT32:
-        case ORSO_TYPE_INT64:
-            value[0] = ORSO_SLOT_I(0);
+        case TYPE_POINTER:
+        case TYPE_VOID:
+        case TYPE_BOOL:
+        case TYPE_INT32:
+        case TYPE_INT64:
+            value[0] = SLOT_I(0);
             break;
 
-        case ORSO_TYPE_FLOAT32:
-        case ORSO_TYPE_FLOAT64:
-            value[0] = ORSO_SLOT_F(0.0);
+        case TYPE_FLOAT32:
+        case TYPE_FLOAT64:
+            value[0] = SLOT_F(0.0);
             break;
 
-        case ORSO_TYPE_STRING:
-            value[0] = ORSO_SLOT_P(orso_new_string_from_cstrn("", 0, &ast->allocator));
+        case TYPE_STRING:
+            value[0] = SLOT_P(orso_new_string_from_cstrn("", 0, &ast->allocator));
             break;
 
-        case ORSO_TYPE_SYMBOL:
-            value[0] = ORSO_SLOT_P(orso_new_symbol_from_cstrn("", 0, symbol_table, &ast->allocator));
+        case TYPE_SYMBOL:
+            value[0] = SLOT_P(orso_new_symbol_from_cstrn("", 0, symbol_table, &ast->allocator));
             break;
         
-        case ORSO_TYPE_UNION: {
+        case TYPE_UNION: {
             ASSERT(orso_union_type_has_type(type, &OrsoTypeVoid), "must include void type if looking for zero value");
             
             u32 size_slots = orso_type_slot_count(type);
             for (u32 i = 0; i < size_slots; i++) {
-                value[i] = ORSO_SLOT_I(0);
+                value[i] = SLOT_I(0);
             }
-            value[0] = ORSO_SLOT_P(&OrsoTypeVoid);
+            value[0] = SLOT_P(&OrsoTypeVoid);
             break;
         }
 
-        case ORSO_TYPE_STRUCT: {
+        case TYPE_STRUCT: {
             for (size_t i = 0; i < orso_bytes_to_slots(type->data.struct_.total_bytes); i++) {
-                value[i] = ORSO_SLOT_I(0);
+                value[i] = SLOT_I(0);
             }
             break;
         }
 
-        case ORSO_TYPE_FUNCTION:
-        case ORSO_TYPE_NATIVE_FUNCTION:
-        case ORSO_TYPE_TYPE:
-        case ORSO_TYPE_INVALID:
-        case ORSO_TYPE_UNDEFINED:
-        case ORSO_TYPE_UNRESOLVED:
+        case TYPE_FUNCTION:
+        case TYPE_NATIVE_FUNCTION:
+        case TYPE_TYPE:
+        case TYPE_INVALID:
+        case TYPE_UNDEFINED:
+        case TYPE_UNRESOLVED:
             UNREACHABLE();
-            value[0] = ORSO_SLOT_I(0);
+            value[0] = SLOT_I(0);
             break;
     }
 

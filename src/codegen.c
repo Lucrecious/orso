@@ -326,7 +326,7 @@ static void emit(compiler_t* compiler, chunk_t* chunk, i32 line, const int op_co
 
         case OP_CALL: {
             type_t* function_type = va_arg(args, type_t*);
-            ASSERT(ORSO_TYPE_IS_FUNCTION(function_type), "must be function");
+            ASSERT(TYPE_IS_FUNCTION(function_type), "must be function");
 
             i32 argument_slots = 0;
             for (size_t i = 0; i < function_type->data.function.argument_types.count; ++i) {
@@ -387,7 +387,7 @@ static void emit_constant(compiler_t *compiler, chunk_t *chunk, byte *data, i32 
 }
 
 static void emit_put_in_union(compiler_t *compiler, chunk_t *chunk, i32 line, type_t *type) {
-    slot_t slot = ORSO_SLOT_P(type);
+    slot_t slot = SLOT_P(type);
     emit_constant(compiler, chunk, (byte*)&slot, line, &OrsoTypeType);
     emit(compiler, chunk, line, OP_PUT_IN_UNION, (type_t*)type);
 }
@@ -428,9 +428,9 @@ static void emit_type_convert(compiler_t* compiler, type_t* from_type, type_t* t
 }
 
 static void emit_storage_type_convert(compiler_t* compiler, chunk_t* chunk, type_t* source, type_t* destination, i32 line) {
-    if (ORSO_TYPE_IS_UNION(source) && !ORSO_TYPE_IS_UNION(destination)) {
+    if (TYPE_IS_UNION(source) && !TYPE_IS_UNION(destination)) {
         emit(compiler, chunk, line, OP_NARROW_UNION, orso_type_size_bytes(source));
-    } else if (!ORSO_TYPE_IS_UNION(source) && ORSO_TYPE_IS_UNION(destination)) {
+    } else if (!TYPE_IS_UNION(source) && TYPE_IS_UNION(destination)) {
         emit_put_in_union(compiler, chunk, line, (type_t*)source);
     }
 }
@@ -515,7 +515,7 @@ static i32 add_global(vm_t *vm, token_t *name, i32 slot_count)
     ASSERT(!symbol_table_get(&vm->globals.name_to_index, identifier, &index_slot), "double global definition");
 
     // Use the specific khash for this
-    index_slot = ORSO_SLOT_I(vm->globals.values.count);
+    index_slot = SLOT_I(vm->globals.values.count);
     symbol_table_set(&vm->globals.name_to_index, identifier, index_slot);
 
     for (i32 i = 0; i < slot_count; i++) {
@@ -523,7 +523,7 @@ static i32 add_global(vm_t *vm, token_t *name, i32 slot_count)
         array_push(&vm->globals.types, type);
 #endif
 
-        array_push(&vm->globals.values, ORSO_SLOT_I(0));
+        array_push(&vm->globals.values, SLOT_I(0));
     }
 
     i32 index = index_slot.as.i;
@@ -687,13 +687,13 @@ static void declare_local_function_definition(compiler_t* compiler, function_t* 
 }
 
 static void function_expression(vm_t* vm, compiler_t* compiler, ast_t* ast, ast_node_t* function_defintion_expression, chunk_t* chunk) {
-    ASSERT(ORSO_TYPE_IS_FUNCTION(function_defintion_expression->value_type), "must be function if calling this");
+    ASSERT(TYPE_IS_FUNCTION(function_defintion_expression->value_type), "must be function if calling this");
 
     function_t* stored_function = (function_t*)ast->folded_constants.items[function_defintion_expression->value_index].as.p;
     if (!compiler->skip_function_definitions && stored_function->chunk.code.items == NULL /*is not compiled yet*/) {
         compile_function(vm, ast, stored_function, function_defintion_expression);
     }
-    slot_t function_value = ORSO_SLOT_P(stored_function);
+    slot_t function_value = SLOT_P(stored_function);
     emit_constant(compiler, chunk, (byte*)&function_value, function_defintion_expression->start.line, stored_function->signature);
 }
 
@@ -702,12 +702,12 @@ static void gen_primary(compiler_t *compiler, chunk_t *chunk, ast_t *ast, type_t
 
     slot_t *value = &ast->folded_constants.items[value_index];
     switch (value_type->kind) {
-        case ORSO_TYPE_BOOL:
-        case ORSO_TYPE_INT32:
-        case ORSO_TYPE_INT64:
-        case ORSO_TYPE_FLOAT32:
-        case ORSO_TYPE_FLOAT64:
-        case ORSO_TYPE_VOID: {
+        case TYPE_BOOL:
+        case TYPE_INT32:
+        case TYPE_INT64:
+        case TYPE_FLOAT32:
+        case TYPE_FLOAT64:
+        case TYPE_VOID: {
             if (value->as.i == 0) {
                 emit(compiler, chunk, line, OP_PUSH_0);
             } else if (value->as.i == 1) {
@@ -718,13 +718,13 @@ static void gen_primary(compiler_t *compiler, chunk_t *chunk, ast_t *ast, type_t
             break;
         }
         
-        case ORSO_TYPE_TYPE:
-        case ORSO_TYPE_FUNCTION:
-        case ORSO_TYPE_NATIVE_FUNCTION:
-        case ORSO_TYPE_SYMBOL:
-        case ORSO_TYPE_STRING:
-        case ORSO_TYPE_UNION:
-        case ORSO_TYPE_STRUCT: {
+        case TYPE_TYPE:
+        case TYPE_FUNCTION:
+        case TYPE_NATIVE_FUNCTION:
+        case TYPE_SYMBOL:
+        case TYPE_STRING:
+        case TYPE_UNION:
+        case TYPE_STRUCT: {
             emit_constant(compiler, chunk, (byte*)value, line, value_type);
             break;
         }
@@ -740,7 +740,7 @@ static void expression_lvalue(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_no
 
             ast_node_t *referencing_declaration = lvalue_node->data.dot.referencing_declaration;
 
-            if (ORSO_TYPE_IS_STRUCT(lvalue_node->data.dot.lhs->value_type)) {
+            if (TYPE_IS_STRUCT(lvalue_node->data.dot.lhs->value_type)) {
                 type_t* struct_type = lvalue_node->data.dot.lhs->value_type;
                 token_t field_name = referencing_declaration->data.declaration.identifier;
                 struct_field_t *field = NULL;
@@ -754,7 +754,7 @@ static void expression_lvalue(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_no
                 ASSERT(field != NULL, "the field offset must be found at this point since it should have been found during analysis");
 
                 if (field->offset > 0) {
-                    slot_t offset = ORSO_SLOT_U(field->offset);
+                    slot_t offset = SLOT_U(field->offset);
                     emit_constant(compiler, chunk, (byte*)&offset, lvalue_node->data.dot.identifier.line, &OrsoTypeInteger64);
                     emit(compiler, chunk, lvalue_node->data.dot.identifier.line, OP_ADD_PTR_I64);
                 }
@@ -809,42 +809,42 @@ static void expression_lvalue(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_no
 static op_code_t get_lvalue_op_by_type(type_t *type) {
     op_code_t lvalue_set = OP_NO_OP;
     switch(type->kind) {
-        case ORSO_TYPE_VOID: {
+        case TYPE_VOID: {
             lvalue_set = OP_NO_OP;
             break;
         }
-        case ORSO_TYPE_BOOL: {
+        case TYPE_BOOL: {
             lvalue_set = OP_SET_LVALUE_BOOL;
             break;
         }
-        case ORSO_TYPE_FUNCTION:
-        case ORSO_TYPE_NATIVE_FUNCTION:
-        case ORSO_TYPE_POINTER:
-        case ORSO_TYPE_STRING:
-        case ORSO_TYPE_SYMBOL:
-        case ORSO_TYPE_TYPE:
-        case ORSO_TYPE_FLOAT64:
-        case ORSO_TYPE_INT64: {
+        case TYPE_FUNCTION:
+        case TYPE_NATIVE_FUNCTION:
+        case TYPE_POINTER:
+        case TYPE_STRING:
+        case TYPE_SYMBOL:
+        case TYPE_TYPE:
+        case TYPE_FLOAT64:
+        case TYPE_INT64: {
             lvalue_set = OP_SET_LVALUE_SLOT;
             break;
         }
-        case ORSO_TYPE_INT32: {
+        case TYPE_INT32: {
             lvalue_set = OP_SET_LVALUE_I32;
             break;
         }
-        case ORSO_TYPE_FLOAT32: {
+        case TYPE_FLOAT32: {
             lvalue_set = OP_SET_LVALUE_F32;
             break;
         }
-        case ORSO_TYPE_UNION:
-        case ORSO_TYPE_STRUCT: {
+        case TYPE_UNION:
+        case TYPE_STRUCT: {
             lvalue_set = OP_SET_LVALUE_BYTES;
             break;
         }
 
-        case ORSO_TYPE_UNRESOLVED:
-        case ORSO_TYPE_UNDEFINED:
-        case ORSO_TYPE_INVALID: UNREACHABLE();
+        case TYPE_UNRESOLVED:
+        case TYPE_UNDEFINED:
+        case TYPE_INVALID: UNREACHABLE();
     }
 
     return lvalue_set;
@@ -869,7 +869,7 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
     if (expression_node->value_index >= 0) {
         // TODO: for now going to do this super naively until I get a better hash table that is more generic that I can
         // use for more things. This is will be super slow but I just want to get it to work.
-        if (!compiler->skip_function_definitions && ORSO_TYPE_IS_FUNCTION(expression_node->value_type)) {
+        if (!compiler->skip_function_definitions && TYPE_IS_FUNCTION(expression_node->value_type)) {
             function_t *function = (function_t*)ast->folded_constants.items[expression_node->value_index].as.p;
             array_push(&compiler->functions_to_compile, function);
         }
@@ -892,9 +892,9 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
                     expression(vm, compiler, ast, left, chunk);
 
                     op_code_t jump_instruction;
-                    if (ORSO_TYPE_IS_STRUCT(left->value_type)) {
+                    if (TYPE_IS_STRUCT(left->value_type)) {
                         jump_instruction = operator.type == TOKEN_AND ? OP_NO_OP : OP_JUMP;
-                    } else if (ORSO_TYPE_IS_UNION(left->value_type)) {
+                    } else if (TYPE_IS_UNION(left->value_type)) {
                         jump_instruction = operator.type == TOKEN_AND ? OP_JUMP_IF_UNION_FALSE : OP_JUMP_IF_UNION_TRUE;
                     } else {
                         jump_instruction = operator.type == TOKEN_AND ? OP_JUMP_IF_FALSE : OP_JUMP_IF_TRUE;
@@ -926,13 +926,13 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
                 default: {
                     expression(vm, compiler, ast, left, chunk);
 
-                    if (ORSO_TYPE_IS_UNION(left->value_type)) {
+                    if (TYPE_IS_UNION(left->value_type)) {
                         emit(compiler, chunk, left->start.line, OP_NARROW_UNION, orso_type_size_bytes(left->value_type));
                     }
 
                     expression(vm, compiler, ast, right, chunk);
 
-                    if (ORSO_TYPE_IS_UNION(right->value_type)) {
+                    if (TYPE_IS_UNION(right->value_type)) {
                         emit(compiler, chunk, right->start.line, OP_NARROW_UNION, orso_type_size_bytes(right->value_type));;
                     }
 
@@ -1052,7 +1052,7 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
         case AST_NODE_TYPE_EXPRESSION_DOT: {
             expression(vm, compiler, ast, expression_node->data.dot.lhs, chunk);
 
-            ASSERT(ORSO_TYPE_IS_STRUCT(expression_node->data.dot.lhs->value_type), "LHS must be a struct for now");
+            ASSERT(TYPE_IS_STRUCT(expression_node->data.dot.lhs->value_type), "LHS must be a struct for now");
 
             u32 struct_size = orso_type_size_bytes(expression_node->data.dot.lhs->value_type);
             struct_field_t* field = orso_type_struct_find_field(expression_node->data.dot.lhs->value_type, expression_node->data.dot.identifier.start, expression_node->data.dot.identifier.length);
@@ -1066,42 +1066,42 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
             ASSERT(field_size < UINT16_MAX, "TODO");
 
             switch (expression_node->value_type->kind) {
-                case ORSO_TYPE_VOID: {
+                case TYPE_VOID: {
                     field_size = 0;
                     break;
                 }
-                case ORSO_TYPE_BOOL: {
+                case TYPE_BOOL: {
                     field_size = sizeof(bool);
                     break;
                 }
-                case ORSO_TYPE_FUNCTION:
-                case ORSO_TYPE_NATIVE_FUNCTION:
-                case ORSO_TYPE_POINTER:
-                case ORSO_TYPE_STRING:
-                case ORSO_TYPE_SYMBOL:
-                case ORSO_TYPE_TYPE:
-                case ORSO_TYPE_FLOAT64:
-                case ORSO_TYPE_INT64: {
+                case TYPE_FUNCTION:
+                case TYPE_NATIVE_FUNCTION:
+                case TYPE_POINTER:
+                case TYPE_STRING:
+                case TYPE_SYMBOL:
+                case TYPE_TYPE:
+                case TYPE_FLOAT64:
+                case TYPE_INT64: {
                     field_size = sizeof(u64);
                     break;
                 }
-                case ORSO_TYPE_INT32: {
+                case TYPE_INT32: {
                     field_size = sizeof(i32);
                     break;
                 }
-                case ORSO_TYPE_FLOAT32: {
+                case TYPE_FLOAT32: {
                     field_size = sizeof(f32);
                     break;
                 }
-                case ORSO_TYPE_UNION:
-                case ORSO_TYPE_STRUCT: {
+                case TYPE_UNION:
+                case TYPE_STRUCT: {
                     field_size = orso_type_size_bytes(field->type);
                     break;
                 }
 
-                case ORSO_TYPE_UNRESOLVED:
-                case ORSO_TYPE_UNDEFINED:
-                case ORSO_TYPE_INVALID: UNREACHABLE();
+                case TYPE_UNRESOLVED:
+                case TYPE_UNDEFINED:
+                case TYPE_INVALID: UNREACHABLE();
             }
 
             {
@@ -1127,7 +1127,7 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
             expression_lvalue(vm, compiler, ast, expression_node->lvalue_node, chunk);
 
             bool is_field = (expression_node->lvalue_node->node_type == AST_NODE_TYPE_EXPRESSION_DOT);
-            if (is_field || ORSO_TYPE_IS_STRUCT(expression_node->lvalue_node->value_type) || ORSO_TYPE_IS_UNION(expression_node->lvalue_node->value_type)) {
+            if (is_field || TYPE_IS_STRUCT(expression_node->lvalue_node->value_type) || TYPE_IS_UNION(expression_node->lvalue_node->value_type)) {
                 op_code_t lvalue_set = get_lvalue_op_by_type(expression_node->lvalue_node->value_type);
 
                 if (lvalue_set != OP_NO_OP) {
@@ -1284,7 +1284,7 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
         case AST_NODE_TYPE_EXPRESSION_PRINT_EXPR: {
             expression(vm, compiler, ast, expression_node->data.expression, chunk);
 
-            // if (!ORSO_TYPE_IS_UNION(expression_node->data.expression->value_type)) {
+            // if (!TYPE_IS_UNION(expression_node->data.expression->value_type)) {
             //     emit_put_in_union(compiler, chunk, expression_node->start.line, expression_node->data.expression->value_type);
             // }
 
@@ -1293,10 +1293,10 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
 
             OrsoString *expression_string = orso_new_string_from_cstrn(start.start, (end.start + end.length) - start.start, &vm->allocator);
 
-            slot_t slot = ORSO_SLOT_P(expression_string);
+            slot_t slot = SLOT_P(expression_string);
             emit_constant(compiler, chunk, (byte*)&slot, start.line, &OrsoTypeString);
 
-            slot_t value_type = ORSO_SLOT_P(expression_node->data.expression->value_type);
+            slot_t value_type = SLOT_P(expression_node->data.expression->value_type);
             emit_constant(compiler, chunk, (byte*)&value_type, start.line, &OrsoTypeType);
 
             if (expression_node->node_type == AST_NODE_TYPE_EXPRESSION_PRINT_EXPR) {
@@ -1322,7 +1322,7 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
             i32 index = zero_value(ast, type, ast->symbols);
             emit_constant(compiler, chunk, (byte*)&ast->folded_constants.items[index], expression_node->start.line, type);
 
-            if (ORSO_TYPE_IS_STRUCT(type)) {
+            if (TYPE_IS_STRUCT(type)) {
                 size_t arg_count = expression_node->data.initiailizer.arguments.count;
                 for (size_t i = 0; i < arg_count; ++i) {
                     ast_node_t *arg = expression_node->data.initiailizer.arguments.items[i];
@@ -1366,12 +1366,12 @@ static void set_global_entity_default_value(vm_t* vm, ast_t* ast, ast_node_t* en
     u32 slot_count = orso_type_slot_count(conform_type);
     if (entity_declaration->data.declaration.initial_value_expression != NULL) {
         ast_node_t* default_expression = entity_declaration->data.declaration.initial_value_expression;
-        ASSERT(!ORSO_TYPE_IS_UNION(default_expression->value_type), "this should be a concrete type since its foldable");
+        ASSERT(!TYPE_IS_UNION(default_expression->value_type), "this should be a concrete type since its foldable");
         ASSERT(default_expression->foldable && default_expression->value_index >= 0, "TODO: this needs to be caught and thrown");
 
         u32 index = global_index;
-        if (ORSO_TYPE_IS_UNION(conform_type)) {
-            vm->globals.values.items[index] = ORSO_SLOT_P(default_expression->value_type);
+        if (TYPE_IS_UNION(conform_type)) {
+            vm->globals.values.items[index] = SLOT_P(default_expression->value_type);
             index++;
             slot_count--;
         } 
@@ -1380,9 +1380,9 @@ static void set_global_entity_default_value(vm_t* vm, ast_t* ast, ast_node_t* en
             vm->globals.values.items[index + i] = ast->folded_constants.items[default_expression->value_index + i];
         }
     } else {
-        if (ORSO_TYPE_IS_UNION(conform_type)) {
+        if (TYPE_IS_UNION(conform_type)) {
             ASSERT(orso_type_fits(conform_type, &OrsoTypeVoid), "default type only allowed for void type unions.");
-            vm->globals.values.items[global_index] = ORSO_SLOT_P(&OrsoTypeVoid);
+            vm->globals.values.items[global_index] = SLOT_P(&OrsoTypeVoid);
             // no need to set any other value since they should be 0
         } else {
             memcpy(&vm->globals.values.items[global_index], &ast->folded_constants.items[entity_declaration->value_index], orso_type_size_bytes(conform_type));
@@ -1399,7 +1399,7 @@ static void set_local_entity_default_value(vm_t* vm, compiler_t* compiler, ast_t
         expression(vm, compiler, ast, default_expression, chunk);
         emit_storage_type_convert(compiler, chunk, default_expression->value_type, conform_type, default_expression->start.line);
     } else {
-        if (ORSO_TYPE_IS_UNION(conform_type)) {
+        if (TYPE_IS_UNION(conform_type)) {
             ASSERT(orso_type_fits(conform_type, &OrsoTypeVoid), "default type only allowed for void type unions.");
             emit(compiler, chunk, entity_declaration->end.line, OP_PUSH_0);
             emit_put_in_union(compiler, chunk, entity_declaration->end.line, &OrsoTypeVoid);
@@ -1470,7 +1470,7 @@ void code_builder_free(code_builder_t *builder) {
 
 function_t *generate_expression_function(code_builder_t *builder, ast_node_t *expression_node, bool is_folding_time, arena_t *allocator) {
     compiler_t compiler;
-    type_t *function_type = orso_type_set_fetch_function(&builder->ast->type_set, expression_node->value_type, (types_t){0});
+    type_t *function_type = type_set_fetch_function(&builder->ast->type_set, expression_node->value_type, (types_t){0});
 
     function_t *run_function = orso_new_function(allocator);
 
@@ -1541,14 +1541,14 @@ function_t *generate_code(vm_t *vm, ast_t *ast) {
             continue;
         }
             
-        if (!ORSO_TYPE_IS_FUNCTION(declaration_->value_type)) {
+        if (!TYPE_IS_FUNCTION(declaration_->value_type)) {
             // TODO: allow code generator to have errors, main must be a function type
             return NULL;
         }
 
         type_t *function_type = declaration_->value_type;
-        unless (function_type->data.function.return_type->kind == ORSO_TYPE_INT32
-         || function_type->data.function.return_type->kind == ORSO_TYPE_VOID) {
+        unless (function_type->data.function.return_type->kind == TYPE_INT32
+         || function_type->data.function.return_type->kind == TYPE_VOID) {
             // TODO: allow code generator to throw error here, main must return i32
             return NULL;
         }

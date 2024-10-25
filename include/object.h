@@ -44,7 +44,7 @@ typedef struct native_function_t {
     native_function_interface_t function;
 } native_function_t;
 
-FORCE_INLINE u32 orso_hash_cstrn(const char *start, i32 length) {
+FORCE_INLINE u32 hash_cstrn(const char *start, i32 length) {
     u32 hash = 2166136261u;
     for (i32 i = 0; i < length; i++) {
         hash ^= (byte)start[i];
@@ -54,7 +54,7 @@ FORCE_INLINE u32 orso_hash_cstrn(const char *start, i32 length) {
     return hash;
 }
 
-FORCE_INLINE bool orso_string_equal(OrsoString *a, OrsoString *b) {
+FORCE_INLINE bool string_equal(OrsoString *a, OrsoString *b) {
     if (a->length != b->length) {
         return false;
     }

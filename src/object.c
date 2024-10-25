@@ -33,34 +33,34 @@ char *cstrn_new(const char *start, i32 length, arena_t *allocator) {
 
 string_t slot_to_string(slot_t *slot, type_t *type, arena_t *allocator) {
     switch (type->kind) {
-        case ORSO_TYPE_BOOL: {
-            if (ORSO_SLOT_IS_FALSE((*slot))) {
+        case TYPE_BOOL: {
+            if (SLOT_IS_FALSE((*slot))) {
                 return str("false");
             } else {
                 return str("true");
             }
         }
 
-        case ORSO_TYPE_INT32:
-        case ORSO_TYPE_INT64: {
+        case TYPE_INT32:
+        case TYPE_INT64: {
             return string_format("%lld", allocator, slot->as.i);
         }
 
-        case ORSO_TYPE_FLOAT32:
-        case ORSO_TYPE_FLOAT64: {
+        case TYPE_FLOAT32:
+        case TYPE_FLOAT64: {
             return string_format("%.14f", allocator, slot->as.f);
         }
 
-        case ORSO_TYPE_VOID: return str("null");
+        case TYPE_VOID: return str("null");
 
-        case ORSO_TYPE_STRING: return cstrn2string(((OrsoString*)slot->as.p)->text, ((OrsoString*)slot->as.p)->length, allocator);
+        case TYPE_STRING: return cstrn2string(((OrsoString*)slot->as.p)->text, ((OrsoString*)slot->as.p)->length, allocator);
 
-        case ORSO_TYPE_SYMBOL: {
+        case TYPE_SYMBOL: {
             symbol_t *symbol = (symbol_t*)slot->as.p;
             return string_format("'%s'", allocator, (char*)symbol->text);
         }
 
-        case ORSO_TYPE_FUNCTION: {
+        case TYPE_FUNCTION: {
             string_t string;
 
             tmp_arena_t *tmp = allocator_borrow(); {
@@ -88,25 +88,25 @@ string_t slot_to_string(slot_t *slot, type_t *type, arena_t *allocator) {
             return string;
         }
 
-        case ORSO_TYPE_NATIVE_FUNCTION: {
+        case TYPE_NATIVE_FUNCTION: {
             return str("<native>");
         }
 
-        case ORSO_TYPE_POINTER: {
+        case TYPE_POINTER: {
             return str("<ptr>");
         }
 
-        case ORSO_TYPE_STRUCT: {
+        case TYPE_STRUCT: {
             u32 size = type->data.struct_.total_bytes;
             return string_format("<struct %d bytes>", allocator, size);
         }
 
-        case ORSO_TYPE_UNION: {
+        case TYPE_UNION: {
             type_t *type = (type_t*)slot->as.p;
             return slot_to_string(slot + 1, type, allocator);
         }
 
-        case ORSO_TYPE_TYPE: {
+        case TYPE_TYPE: {
             string_t result;
 
             tmp_arena_t *tmp = allocator_borrow(); {
@@ -117,9 +117,9 @@ string_t slot_to_string(slot_t *slot, type_t *type, arena_t *allocator) {
 
             return result;
         }
-        case ORSO_TYPE_UNDEFINED: return str("<undefined>");
-        case ORSO_TYPE_UNRESOLVED: return str("<unresolved>");
-        case ORSO_TYPE_INVALID: return str("<invalid>");
+        case TYPE_UNDEFINED: return str("<undefined>");
+        case TYPE_UNRESOLVED: return str("<unresolved>");
+        case TYPE_INVALID: return str("<invalid>");
     }
 }
 
@@ -227,7 +227,7 @@ f64 cstrn_to_f64(const char* text, i32 length) {
 }
 
 symbol_t *orso_unmanaged_symbol_from_cstrn(const char *start, i32 length, symbol_table_t *symbol_table, arena_t *allocator) {
-    u32 hash = orso_hash_cstrn(start, length);
+    u32 hash = hash_cstrn(start, length);
     symbol_t *symbol = symbol_table_find_cstrn(symbol_table, start, length, hash);
     if (symbol != NULL) {
         return symbol;
@@ -239,14 +239,14 @@ symbol_t *orso_unmanaged_symbol_from_cstrn(const char *start, i32 length, symbol
     memcpy(symbol->text, start, length);
     symbol->text[length] = '\0';
 
-    slot_t slot = ORSO_SLOT_I(0);
+    slot_t slot = SLOT_I(0);
     symbol_table_set(symbol_table, symbol, slot);
 
     return symbol;
 }
 
 symbol_t *orso_new_symbol_from_cstrn(const char *start, i32 length, symbol_table_t *symbol_table, arena_t *allocator) {
-    u32 hash = orso_hash_cstrn(start, length);
+    u32 hash = hash_cstrn(start, length);
     symbol_t* symbol = symbol_table_find_cstrn(symbol_table, start, length, hash);
     if (symbol != NULL) {
         return symbol;
@@ -258,7 +258,7 @@ symbol_t *orso_new_symbol_from_cstrn(const char *start, i32 length, symbol_table
     memcpy(symbol->text, start, length);
     symbol->text[length] = '\0';
 
-    slot_t slot = ORSO_SLOT_I(0);
+    slot_t slot = SLOT_I(0);
     symbol_table_set(symbol_table, symbol, slot);
 
     return symbol;

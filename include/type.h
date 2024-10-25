@@ -7,26 +7,26 @@
 #include "lexer.h"
 #include "stringt.h"
 
-#define ORSO_UNION_NUM_MAX 4
+#define UNION_NUM_MAX 4
 
 typedef enum type_kind_t {
-    ORSO_TYPE_INVALID = 0,      // error type
-    ORSO_TYPE_UNDEFINED,        // used for blocks with returns
-    ORSO_TYPE_UNRESOLVED,       // unresolved (not undefined, not error, not defined)
-    ORSO_TYPE_VOID,             // null
-    ORSO_TYPE_BOOL,             // true false
-    ORSO_TYPE_INT32,            // [-2^32, 2^32 - 1]
-    ORSO_TYPE_INT64,            // [-2^64, 2^64 - 1]
-    ORSO_TYPE_FLOAT32,          // single precision IEEE 754 float
-    ORSO_TYPE_FLOAT64,          // double precision IEEE 754 float
-    ORSO_TYPE_STRING,           // "anything in here"
-    ORSO_TYPE_SYMBOL,           // 'anything in here'
-    ORSO_TYPE_TYPE,             // i32, void, type, () -> void, etc
-    ORSO_TYPE_FUNCTION,         // (type1, type2, ..., typen) -> return_type OR (foo := 0, bar := "") -> return_type
-    ORSO_TYPE_NATIVE_FUNCTION,  // (type1, type2, ..., typen) -> return_type
-    ORSO_TYPE_POINTER,          // &type
-    ORSO_TYPE_UNION,            // type1|type2|...|typen
-    ORSO_TYPE_STRUCT,           // used for both anonymous and named
+    TYPE_INVALID = 0,      // error type
+    TYPE_UNDEFINED,        // used for blocks with returns
+    TYPE_UNRESOLVED,       // unresolved (not undefined, not error, not defined)
+    TYPE_VOID,             // null
+    TYPE_BOOL,             // true false
+    TYPE_INT32,            // [-2^32, 2^32 - 1]
+    TYPE_INT64,            // [-2^64, 2^64 - 1]
+    TYPE_FLOAT32,          // single precision IEEE 754 float
+    TYPE_FLOAT64,          // double precision IEEE 754 float
+    TYPE_STRING,           // "anything in here"
+    TYPE_SYMBOL,           // 'anything in here'
+    TYPE_TYPE,             // i32, void, type, () -> void, etc
+    TYPE_FUNCTION,         // (type1, type2, ..., typen) -> return_type OR (foo := 0, bar := "") -> return_type
+    TYPE_NATIVE_FUNCTION,  // (type1, type2, ..., typen) -> return_type
+    TYPE_POINTER,          // &type
+    TYPE_UNION,            // type1|type2|...|typen
+    TYPE_STRUCT,           // used for both anonymous and named
 } type_kind_t;
 
 typedef struct types_t types_t;
@@ -84,14 +84,14 @@ struct type_t {
     } data;
 };
 
-#define ORSO_TYPE_IS_UNION(TYPE) (TYPE->kind == ORSO_TYPE_UNION)
-#define ORSO_TYPE_IS_FUNCTION(TYPE) (TYPE->kind == ORSO_TYPE_FUNCTION)
-#define ORSO_TYPE_IS_NATIVE_FUNCTION(TYPE) (TYPE->kind == ORSO_TYPE_NATIVE_FUNCTION)
-#define ORSO_TYPE_IS_STRUCT(TYPE) (TYPE->kind == ORSO_TYPE_STRUCT)
-#define ORSO_TYPE_IS_POINTER(TYPE) (TYPE->kind == ORSO_TYPE_POINTER)
-#define ORSO_TYPE_IS_INVALID(TYPE) (TYPE->kind == ORSO_TYPE_INVALID)
-#define ORSO_TYPE_IS_UNDEFINED(TYPE) (TYPE->kind == ORSO_TYPE_UNDEFINED)
-#define ORSO_TYPE_IS_UNRESOLVED(TYPE) (TYPE->kind == ORSO_TYPE_UNRESOLVED)
+#define TYPE_IS_UNION(TYPE) (TYPE->kind == TYPE_UNION)
+#define TYPE_IS_FUNCTION(TYPE) (TYPE->kind == TYPE_FUNCTION)
+#define TYPE_IS_NATIVE_FUNCTION(TYPE) (TYPE->kind == TYPE_NATIVE_FUNCTION)
+#define TYPE_IS_STRUCT(TYPE) (TYPE->kind == TYPE_STRUCT)
+#define TYPE_IS_POINTER(TYPE) (TYPE->kind == TYPE_POINTER)
+#define TYPE_IS_INVALID(TYPE) (TYPE->kind == TYPE_INVALID)
+#define TYPE_IS_UNDEFINED(TYPE) (TYPE->kind == TYPE_UNDEFINED)
+#define TYPE_IS_UNRESOLVED(TYPE) (TYPE->kind == TYPE_UNRESOLVED)
 
 struct type_set_t;
 

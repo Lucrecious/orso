@@ -39,7 +39,7 @@ static void adjust_capacity(symbol_table_t* table, i32 capacity) {
     symbol_table_entry_t* entries = arena_alloc(table->allocator, sizeof(symbol_table_entry_t)*capacity);
     for (i32 i = 0; i < capacity; i++) {
         entries[i].key = NULL;
-        entries[i].value = ORSO_SLOT_I(0);
+        entries[i].value = SLOT_I(0);
     }
 
     table->count = 0;

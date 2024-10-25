@@ -69,24 +69,24 @@ i32 chunk_get_line(chunk_t* chunk, i32 offset) {
 
 void orso_print_slot(slot_t *slot, type_t *type) {
     switch (type->kind) {
-        case ORSO_TYPE_INVALID:
-        case ORSO_TYPE_UNDEFINED:
-        case ORSO_TYPE_UNRESOLVED:
-        case ORSO_TYPE_VOID:
-        case ORSO_TYPE_BOOL:
-        case ORSO_TYPE_INT32:
-        case ORSO_TYPE_INT64:
-        case ORSO_TYPE_FLOAT32:
-        case ORSO_TYPE_FLOAT64:
-        case ORSO_TYPE_TYPE:
-        case ORSO_TYPE_STRUCT: break;
+        case TYPE_INVALID:
+        case TYPE_UNDEFINED:
+        case TYPE_UNRESOLVED:
+        case TYPE_VOID:
+        case TYPE_BOOL:
+        case TYPE_INT32:
+        case TYPE_INT64:
+        case TYPE_FLOAT32:
+        case TYPE_FLOAT64:
+        case TYPE_TYPE:
+        case TYPE_STRUCT: break;
 
-        case ORSO_TYPE_STRING:
-        case ORSO_TYPE_SYMBOL:
-        case ORSO_TYPE_FUNCTION:
-        case ORSO_TYPE_NATIVE_FUNCTION:
-        case ORSO_TYPE_POINTER:
-        case ORSO_TYPE_UNION: {
+        case TYPE_STRING:
+        case TYPE_SYMBOL:
+        case TYPE_FUNCTION:
+        case TYPE_NATIVE_FUNCTION:
+        case TYPE_POINTER:
+        case TYPE_UNION: {
             if (slot->as.i == 0) {
                 slot = NULL;
                 type = &OrsoTypeUndefined;

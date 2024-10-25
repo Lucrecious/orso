@@ -86,7 +86,7 @@ static FORCE_INLINE void reserve_stack_space(vm_t* vm, u32 slot_count) {
 }
 
 void vm_push_object(vm_t* vm, object_t* object) {
-    *vm->stack_top = ORSO_SLOT_P(object);
+    *vm->stack_top = SLOT_P(object);
 #ifdef DEBUG
     vm->stack_types[vm->stack_top - vm->stack] =  object->type;
 #endif
@@ -127,11 +127,11 @@ void vm_call(vm_t* vm, function_t* function) {
 }
 
 static void call_object(vm_t *vm, object_t *callee, i32 argument_slots) {
-    if (ORSO_TYPE_IS_FUNCTION(callee->type)) {
+    if (TYPE_IS_FUNCTION(callee->type)) {
         function_t *function = (function_t*)callee;
         call(vm, function, argument_slots);
         return;
-    } else if (callee->type->kind == ORSO_TYPE_NATIVE_FUNCTION) {
+    } else if (callee->type->kind == TYPE_NATIVE_FUNCTION) {
         native_function_t *function_obj = (native_function_t*)callee;
         native_function_interface_t function = function_obj->function;
         function(vm->stack_top - argument_slots, vm->stack_top);
@@ -172,7 +172,7 @@ void vm_print_stack(vm_t *vm) {
         --i;
         type_t *type = vm->stack_types[i];
         types[(start_index+slots_size)%limit] = type;
-        unless (ORSO_TYPE_IS_INVALID(type)) {
+        unless (TYPE_IS_INVALID(type)) {
             i += orso_type_slot_count(type);
         } else {
             ++i;
@@ -237,8 +237,8 @@ bool vm_step(vm_t *vm) {
 
         case OP_POP: POP(); break;
 
-        case OP_I64_TO_F64: *PEEK(0) = ORSO_SLOT_F((f64)PEEK(0)->as.i); SLOT_ADD_TYPE(PEEK(0), &OrsoTypeFloat64); break;
-        case OP_F64_TO_I64: *PEEK(0) = ORSO_SLOT_I((i64)PEEK(0)->as.f); SLOT_ADD_TYPE(PEEK(0), &OrsoTypeInteger64); break;
+        case OP_I64_TO_F64: *PEEK(0) = SLOT_F((f64)PEEK(0)->as.i); SLOT_ADD_TYPE(PEEK(0), &OrsoTypeFloat64); break;
+        case OP_F64_TO_I64: *PEEK(0) = SLOT_I((i64)PEEK(0)->as.f); SLOT_ADD_TYPE(PEEK(0), &OrsoTypeInteger64); break;
 
         case OP_ADD_I64: { i64 b = POP().as.i; PEEK(0)->as.i = PEEK(0)->as.i + b; break; }
         case OP_SUBTRACT_I64: { i64 b = POP().as.i; PEEK(0)->as.i = PEEK(0)->as.i - b; break; }
@@ -267,33 +267,33 @@ bool vm_step(vm_t *vm) {
             break;
         }
 
-        case OP_EQUAL_SYMBOL: { i32 result = (PEEK(1)->as.p == PEEK(0)->as.p); POP(); POP(); PUSH(ORSO_SLOT_I(result), &OrsoTypeBool); break; }
+        case OP_EQUAL_SYMBOL: { i32 result = (PEEK(1)->as.p == PEEK(0)->as.p); POP(); POP(); PUSH(SLOT_I(result), &OrsoTypeBool); break; }
 
-        case OP_EQUAL_STRING: { i32 result = orso_string_equal(PEEK(1)->as.p, PEEK(0)->as.p); POP(); POP(); PUSH(ORSO_SLOT_I(result), &OrsoTypeBool); break; }
+        case OP_EQUAL_STRING: { i32 result = string_equal(PEEK(1)->as.p, PEEK(0)->as.p); POP(); POP(); PUSH(SLOT_I(result), &OrsoTypeBool); break; }
         case OP_CONCAT_STRING: { PEEK(1)->as.p = orso_string_concat(PEEK(1)->as.p, PEEK(0)->as.p, &vm->allocator); POP(); break; } 
 
         case OP_LOGICAL_NOT: PEEK(0)->as.i = !PEEK(0)->as.i; SLOT_ADD_TYPE(PEEK(0), &OrsoTypeBool); break;
 
         case OP_PUSH_0: {
-            const slot_t zero = ORSO_SLOT_I(0);
+            const slot_t zero = SLOT_I(0);
             PUSH(zero, &OrsoTypeInteger64);
             break;
         }
         case OP_PUSH_1: {
-            const slot_t one = ORSO_SLOT_I(1);
+            const slot_t one = SLOT_I(1);
             PUSH(one, &OrsoTypeInteger64);
             break;
         }
 
         case OP_PUSH_LOCAL_ADDRESS: {
             u16 index = READ_U16();
-            PUSH(ORSO_SLOT_P(((byte*)frame->slots) + index), &OrsoTypeInteger64);
+            PUSH(SLOT_P(((byte*)frame->slots) + index), &OrsoTypeInteger64);
             break;
         }
 
         case OP_PUSH_GLOBAL_ADDRESS: {
             u32 index = READ_U32();
-            PUSH(ORSO_SLOT_P(((byte*)vm->globals.values.items) + index), &OrsoTypeInteger64);
+            PUSH(SLOT_P(((byte*)vm->globals.values.items) + index), &OrsoTypeInteger64);
             break;
         }
 
@@ -487,7 +487,7 @@ memcpy(current_top, local, size); \
 
         case OP_JUMP_IF_FALSE: {
             op_code_jump_t *jump = READ_CODE(op_code_jump_t);
-            if (orso_slot_is_falsey(*PEEK(0))) {
+            if (SLOT_IS_FALSEy(*PEEK(0))) {
                 frame->ip += jump->offset;
             }
             break;
@@ -499,7 +499,7 @@ memcpy(current_top, local, size); \
         }
         case OP_JUMP_IF_TRUE: {
             op_code_jump_t *jump = READ_CODE(op_code_jump_t);
-            if (!orso_slot_is_falsey(*PEEK(0))) {
+            if (!SLOT_IS_FALSEy(*PEEK(0))) {
                 frame->ip += jump->offset;
             }
             break;
@@ -611,7 +611,7 @@ static void run(vm_t *vm, error_function_t error_fn) {
 //             printf("]");
 
 //             // TODO: push field bytes and slot do not record type
-//             if (!ORSO_TYPE_IS_INVALID(vm->stack_types[index])) {
+//             if (!TYPE_IS_INVALID(vm->stack_types[index])) {
 //                 index += orso_type_slot_count(vm->stack_types[index]);
 //             } else {
 //                 index++;

@@ -13,14 +13,14 @@ typedef struct slot_t {
     } as;
 } slot_t;
 
-#define ORSO_SLOT_IS_FALSE(SLOT) (SLOT.as.i == 0)
+#define SLOT_IS_FALSE(SLOT) (SLOT.as.i == 0)
 
-#define ORSO_SLOT_I(VALUE) ((slot_t){ .as.i = VALUE })
-#define ORSO_SLOT_U(VALUE) ((slot_t){ .as.u = VALUE })
-#define ORSO_SLOT_F(VALUE) ((slot_t){ .as.f = VALUE })
-#define ORSO_SLOT_P(VALUE) ((slot_t){ .as.p = VALUE })
+#define SLOT_I(VALUE) ((slot_t){ .as.i = VALUE })
+#define SLOT_U(VALUE) ((slot_t){ .as.u = VALUE })
+#define SLOT_F(VALUE) ((slot_t){ .as.f = VALUE })
+#define SLOT_P(VALUE) ((slot_t){ .as.p = VALUE })
 
-bool FORCE_INLINE orso_slot_is_falsey(slot_t slot) {
+bool FORCE_INLINE SLOT_IS_FALSEy(slot_t slot) {
     return slot.as.u == 0;
 }
 
