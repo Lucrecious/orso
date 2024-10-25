@@ -81,82 +81,82 @@ i32 disassemble_instruction(chunk_t *chunk, i32 offset) {
 
     op_code_t instruction = chunk->code.items[offset];
     switch(instruction) {
-        case ORSO_OP_NO_OP: return simple_instruction("OP_NO_OP", offset);
-        case ORSO_OP_POP: return simple_instruction("OP_POP", offset);
-        case ORSO_OP_POPN: {
+        case OP_NO_OP: return simple_instruction("OP_NO_OP", offset);
+        case OP_POP: return simple_instruction("OP_POP", offset);
+        case OP_POPN: {
             op_code_popn_t *popn = (op_code_popn_t*)(chunk->code.items + offset);
             printf("OP_POPN n: %d\n", popn->n);
             return offset + sizeof(op_code_popn_t);
         };
-        case ORSO_OP_POP_SCOPE: {
+        case OP_POP_SCOPE: {
             op_code_pop_scope_t *pop_scope = (op_code_pop_scope_t*)(chunk->code.items + offset) ;
             printf("OP_POP_SCOPE scope_size_slots: %d, value_size_slots: %d\n", pop_scope->scope_size_slots, pop_scope->value_size_slots);
             return offset + sizeof(op_code_pop_scope_t);
         }
-        case ORSO_OP_PUSH_0: return simple_instruction("OP_PUSH_0", offset);
-        case ORSO_OP_PUSH_1: return simple_instruction("OP_PUSH_1", offset);
-        case ORSO_OP_PUSH_LOCAL_ADDRESS: return index_instruction("OP_PUSH_LOCAL_ADDRESS", chunk, offset, 2, II_LOCAL) - 1;
-        case ORSO_OP_PUSH_GLOBAL_ADDRESS: return index_instruction("OP_PUSH_GLOBAL_ADDRESS", chunk, offset, 4, II_GLOBAL) - 1;
-        case ORSO_OP_NEGATE_I64: return simple_instruction("OP_NEGATE_I64", offset);
-        case ORSO_OP_NEGATE_F64: return simple_instruction("OP_NEGATE_F64", offset);
-        case ORSO_OP_ADD_I64: return simple_instruction("OP_ADD_I64", offset);
-        case ORSO_OP_ADD_F64: return simple_instruction("OP_ADD_F64", offset);
-        case ORSO_OP_ADD_PTR_I64: return simple_instruction("OP_ADD_PTR_I64", offset);
-        case ORSO_OP_SUBTRACT_I64: return simple_instruction("OP_SUBTRACT_I64", offset);
-        case ORSO_OP_SUBTRACT_F64: return simple_instruction("OP_SUBTRACT_F64", offset);
-        case ORSO_OP_MULTIPLY_I64: return simple_instruction("OP_MULTIPLY_I64", offset);
-        case ORSO_OP_MULTIPLY_F64: return simple_instruction("OP_MULTIPLY_F64", offset);
-        case ORSO_OP_DIVIDE_I64: return simple_instruction("OP_DIVIDE_I64", offset);
-        case ORSO_OP_DIVIDE_F64: return simple_instruction("OP_DIVIDE_F64", offset);
-        case ORSO_OP_I64_TO_F64: return simple_instruction("OP_I64_TO_F64", offset);
-        case ORSO_OP_F64_TO_I64: return simple_instruction("OP_F64_TO_I64", offset);
-        case ORSO_OP_LOGICAL_NOT: return simple_instruction("OP_LOGICAL_NOT", offset);
-        case ORSO_OP_EQUAL_I64: return simple_instruction("OP_EQUAL_I64", offset);
-        case ORSO_OP_EQUAL_F64: return simple_instruction("OP_EQUAL_F64", offset);
-        case ORSO_OP_LESS_I64: return simple_instruction("OP_LESS_I64", offset);
-        case ORSO_OP_LESS_F64: return simple_instruction("OP_LESS_F64", offset);
-        case ORSO_OP_GREATER_I64: return simple_instruction("OP_GREATER_I64", offset);
-        case ORSO_OP_GREATER_F64: return simple_instruction("OP_GREATER_F64", offset);
-        case ORSO_OP_EQUAL_STRING: return simple_instruction("OP_EQUAL_STRING", offset);
-        case ORSO_OP_EQUAL_SYMBOL: return simple_instruction("OP_EQUAL_SYMBOL", offset);
-        case ORSO_OP_CONSTANT: {
+        case OP_PUSH_0: return simple_instruction("OP_PUSH_0", offset);
+        case OP_PUSH_1: return simple_instruction("OP_PUSH_1", offset);
+        case OP_PUSH_LOCAL_ADDRESS: return index_instruction("OP_PUSH_LOCAL_ADDRESS", chunk, offset, 2, II_LOCAL) - 1;
+        case OP_PUSH_GLOBAL_ADDRESS: return index_instruction("OP_PUSH_GLOBAL_ADDRESS", chunk, offset, 4, II_GLOBAL) - 1;
+        case OP_NEGATE_I64: return simple_instruction("OP_NEGATE_I64", offset);
+        case OP_NEGATE_F64: return simple_instruction("OP_NEGATE_F64", offset);
+        case OP_ADD_I64: return simple_instruction("OP_ADD_I64", offset);
+        case OP_ADD_F64: return simple_instruction("OP_ADD_F64", offset);
+        case OP_ADD_PTR_I64: return simple_instruction("OP_ADD_PTR_I64", offset);
+        case OP_SUBTRACT_I64: return simple_instruction("OP_SUBTRACT_I64", offset);
+        case OP_SUBTRACT_F64: return simple_instruction("OP_SUBTRACT_F64", offset);
+        case OP_MULTIPLY_I64: return simple_instruction("OP_MULTIPLY_I64", offset);
+        case OP_MULTIPLY_F64: return simple_instruction("OP_MULTIPLY_F64", offset);
+        case OP_DIVIDE_I64: return simple_instruction("OP_DIVIDE_I64", offset);
+        case OP_DIVIDE_F64: return simple_instruction("OP_DIVIDE_F64", offset);
+        case OP_I64_TO_F64: return simple_instruction("OP_I64_TO_F64", offset);
+        case OP_F64_TO_I64: return simple_instruction("OP_F64_TO_I64", offset);
+        case OP_LOGICAL_NOT: return simple_instruction("OP_LOGICAL_NOT", offset);
+        case OP_EQUAL_I64: return simple_instruction("OP_EQUAL_I64", offset);
+        case OP_EQUAL_F64: return simple_instruction("OP_EQUAL_F64", offset);
+        case OP_LESS_I64: return simple_instruction("OP_LESS_I64", offset);
+        case OP_LESS_F64: return simple_instruction("OP_LESS_F64", offset);
+        case OP_GREATER_I64: return simple_instruction("OP_GREATER_I64", offset);
+        case OP_GREATER_F64: return simple_instruction("OP_GREATER_F64", offset);
+        case OP_EQUAL_STRING: return simple_instruction("OP_EQUAL_STRING", offset);
+        case OP_EQUAL_SYMBOL: return simple_instruction("OP_EQUAL_SYMBOL", offset);
+        case OP_CONSTANT: {
             op_code_location_t *location = (op_code_location_t*)(chunk->code.items + offset);
             printf("OP_CONSTANT index: %d, size: %d\n", location->index_slots, location->size_bytes);
             return offset + sizeof(op_code_location_t);
         }
-        case ORSO_OP_LOCAL:  {
+        case OP_LOCAL:  {
             op_code_location_t *location = (op_code_location_t*)(chunk->code.items + offset);
             printf("OP_LOCAL(index: %d, size: %d)\n", location->index_slots, location->size_bytes);
             return offset + sizeof(op_code_location_t);
         }
-        case ORSO_OP_GLOBAL: {
+        case OP_GLOBAL: {
             op_code_location_t *location = (op_code_location_t*)(chunk->code.items + offset);
             printf("OP_GLOBAL(index: %d, size: %d)\n", location->index_slots, location->size_bytes);
             return offset + sizeof(op_code_location_t);
         }
-        case ORSO_OP_FIELD: {
+        case OP_FIELD: {
             op_code_field_t *field = (op_code_field_t*)(chunk->code.items + offset);
             printf("OP_FIELD(value size: %d, offset: %d, size: %d)\n", field->value_size_bytes, field->offset_bytes, field->size_bytes);
             return offset + sizeof(op_code_location_t);
         }
-        case ORSO_OP_SET_LVALUE_SLOT: return simple_instruction("OP_SET_LVALUE_SLOT", offset);
-        case ORSO_OP_SET_LVALUE_I32: return simple_instruction  ("OP_SET_LVALUE_I32", offset);
-        case ORSO_OP_SET_LVALUE_F32: return simple_instruction("OP_SET_LVALUE_F32", offset);
-        case ORSO_OP_SET_LVALUE_BOOL: return simple_instruction("OP_SET_LVALUE_BOOL", offset);
-        case ORSO_OP_SET_LVALUE_BYTES: return instruction_arg("OP_SET_LVALUE", chunk, offset);
-        case ORSO_OP_JUMP_IF_UNION_FALSE: return jump_instruction("OP_JUMP_IF_UNION_FALSE", 1, chunk, offset);
-        case ORSO_OP_JUMP_IF_UNION_TRUE: return jump_instruction("OP_JUMP_IF_UNION_TRUE", 1, chunk, offset);
-        case ORSO_OP_JUMP_IF_FALSE: return jump_instruction("OP_JUMP_IF_FALSE", 1, chunk, offset);
-        case ORSO_OP_JUMP_IF_TRUE: return jump_instruction("OP_JUMP_IF_TRUE", 1, chunk, offset);
-        case ORSO_OP_JUMP: return jump_instruction("OP_JUMP", 1, chunk, offset);
-        case ORSO_OP_LOOP: return jump_instruction("OP_LOOP", -1, chunk, offset);
-        case ORSO_OP_CALL: return simple_instruction("OP_CALL", offset + 2);
-        case ORSO_OP_PUT_IN_UNION: return instruction_arg("OP_PUT_IN_UNION", chunk, offset);
-        case ORSO_OP_NARROW_UNION: return simple_instruction("OP_NARROW_UNION", offset);
-        case ORSO_OP_CONCAT_STRING: return simple_instruction("OP_CONCAT_STRING", offset);
-        case ORSO_OP_RETURN: return simple_instruction("OP_RETURN", offset + 1);
-        case ORSO_OP_PRINT_EXPR: return simple_instruction("OP_PRINT_EXPR", offset);
-        case ORSO_OP_PRINT: return simple_instruction("OP_PRINT", offset);
+        case OP_SET_LVALUE_SLOT: return simple_instruction("OP_SET_LVALUE_SLOT", offset);
+        case OP_SET_LVALUE_I32: return simple_instruction  ("OP_SET_LVALUE_I32", offset);
+        case OP_SET_LVALUE_F32: return simple_instruction("OP_SET_LVALUE_F32", offset);
+        case OP_SET_LVALUE_BOOL: return simple_instruction("OP_SET_LVALUE_BOOL", offset);
+        case OP_SET_LVALUE_BYTES: return instruction_arg("OP_SET_LVALUE", chunk, offset);
+        case OP_JUMP_IF_UNION_FALSE: return jump_instruction("OP_JUMP_IF_UNION_FALSE", 1, chunk, offset);
+        case OP_JUMP_IF_UNION_TRUE: return jump_instruction("OP_JUMP_IF_UNION_TRUE", 1, chunk, offset);
+        case OP_JUMP_IF_FALSE: return jump_instruction("OP_JUMP_IF_FALSE", 1, chunk, offset);
+        case OP_JUMP_IF_TRUE: return jump_instruction("OP_JUMP_IF_TRUE", 1, chunk, offset);
+        case OP_JUMP: return jump_instruction("OP_JUMP", 1, chunk, offset);
+        case OP_LOOP: return jump_instruction("OP_LOOP", -1, chunk, offset);
+        case OP_CALL: return simple_instruction("OP_CALL", offset + 2);
+        case OP_PUT_IN_UNION: return instruction_arg("OP_PUT_IN_UNION", chunk, offset);
+        case OP_NARROW_UNION: return simple_instruction("OP_NARROW_UNION", offset);
+        case OP_CONCAT_STRING: return simple_instruction("OP_CONCAT_STRING", offset);
+        case OP_RETURN: return simple_instruction("OP_RETURN", offset + 1);
+        case OP_PRINT_EXPR: return simple_instruction("OP_PRINT_EXPR", offset);
+        case OP_PRINT: return simple_instruction("OP_PRINT", offset);
     }
 }
 
