@@ -52,7 +52,7 @@ void log_fatal(cstr_t format, ...) {
 
 void myerror(error_t error) {
     switch (error.type) {
-        case ORSO_ERROR_COMPILE: {
+        case ERROR_COMPILE: {
             fprintf(stderr, "[line %d] %s\n", error.region.token.line + 1, error.message);
             break;
         }

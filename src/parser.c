@@ -264,8 +264,8 @@ static void error_at(parser_t* parser, token_t* token, const char* specific) {
     n += snprintf(msg + n, MESSAGE_SIZE - n, ": %s", specific);
 
     error_t error = {
-        .type = ORSO_ERROR_COMPILE,
-        .region_type = ORSO_ERROR_REGION_TYPE_TOKEN,
+        .type = ERROR_COMPILE,
+        .region_type = ERROR_REGION_TYPE_TOKEN,
         .message = message,
         .region.token = *token,
     };

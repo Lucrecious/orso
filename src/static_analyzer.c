@@ -173,8 +173,8 @@ static void error_token(analyzer_t* analyzer, token_t token, const char* message
 
     function_dependencies_cannot_be_compiled(analyzer);
     error_t error = {
-        .type = ORSO_ERROR_COMPILE,
-        .region_type = ORSO_ERROR_REGION_TYPE_TOKEN,
+        .type = ERROR_COMPILE,
+        .region_type = ERROR_REGION_TYPE_TOKEN,
         .region.token = token,
         .message = (char*)message
     };
@@ -187,8 +187,8 @@ static void error_range(analyzer_t* analyzer, token_t start, token_t end, const 
 
     function_dependencies_cannot_be_compiled(analyzer);
     error_t error = {
-        .type = ORSO_ERROR_COMPILE,
-        .region_type = ORSO_ERROR_REGION_TYPE_RANGE,
+        .type = ERROR_COMPILE,
+        .region_type = ERROR_REGION_TYPE_RANGE,
         .region.range.start = start,
         .region.range.end = end,
         .message = (char*)message,
@@ -202,8 +202,8 @@ static void error_range2(analyzer_t* analyzer, token_t start1, token_t end1, tok
 
     function_dependencies_cannot_be_compiled(analyzer);
     error_t error = {
-        .type = ORSO_ERROR_COMPILE,
-        .region_type = ORSO_ERROR_REGION_TYPE_RANGE2,
+        .type = ERROR_COMPILE,
+        .region_type = ERROR_REGION_TYPE_TWO_RANGES,
         .region.range2.start1 = start1,
         .region.range2.end1 = end1,
         .region.range2.start2 = start2,
