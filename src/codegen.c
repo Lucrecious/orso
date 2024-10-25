@@ -650,7 +650,7 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
 static type_t *gen_block(vm_t *vm, compiler_t *compiler, ast_t *ast, chunk_t *chunk, ast_nodes_t block, i32 node_count, i32 end_line) {
     ast_node_t *final_expression_statement = node_count > 0 ? block.items[node_count - 1] : NULL;
 
-    final_expression_statement = final_expression_statement && final_expression_statement->node_type != ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION ?
+    final_expression_statement = final_expression_statement && final_expression_statement->node_type != AST_NODE_TYPE_STATEMENT_EXPRESSION ?
             NULL : final_expression_statement;
 
     for (i32 i = 0; i < node_count - (final_expression_statement != NULL); i++) {
@@ -735,7 +735,7 @@ static void gen_primary(compiler_t *compiler, chunk_t *chunk, ast_t *ast, type_t
 
 static void expression_lvalue(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *lvalue_node, chunk_t *chunk) {
     switch (lvalue_node->node_type) {
-        case ORSO_AST_NODE_TYPE_EXPRESSION_DOT:
+        case AST_NODE_TYPE_EXPRESSION_DOT:
             expression_lvalue(vm, compiler, ast, lvalue_node->lvalue_node, chunk);
 
             ast_node_t *referencing_declaration = lvalue_node->data.dot.referencing_declaration;
@@ -763,7 +763,7 @@ static void expression_lvalue(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_no
             }
             break;
 
-        case ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY: {
+        case AST_NODE_TYPE_EXPRESSION_ENTITY: {
             bool is_local;
             u32 index;
 
@@ -778,29 +778,29 @@ static void expression_lvalue(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_no
             break;
         }
 
-        case ORSO_AST_NODE_TYPE_EXPRESSION_GROUPING:
+        case AST_NODE_TYPE_EXPRESSION_GROUPING:
             expression_lvalue(vm, compiler, ast, lvalue_node->lvalue_node, chunk);
             break;
 
-        case ORSO_AST_NODE_TYPE_UNDEFINED:
-        case ORSO_AST_NODE_TYPE_DECLARATION:
-        case ORSO_AST_NODE_TYPE_STATEMENT_RETURN:
-        case ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION:
-        case ORSO_AST_NODE_TYPE_EXPRESSION_PRINT:
-        case ORSO_AST_NODE_TYPE_EXPRESSION_PRINT_EXPR:
-        case ORSO_AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT:
-        case ORSO_AST_NODE_TYPE_EXPRESSION_BINARY:
-        case ORSO_AST_NODE_TYPE_EXPRESSION_UNARY:
-        case ORSO_AST_NODE_TYPE_EXPRESSION_CALL:
-        case ORSO_AST_NODE_TYPE_EXPRESSION_PRIMARY:
-        case ORSO_AST_NODE_TYPE_EXPRESSION_ASSIGNMENT:
-        case ORSO_AST_NODE_TYPE_EXPRESSION_BLOCK:
-        case ORSO_AST_NODE_TYPE_EXPRESSION_BRANCHING:
-        case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION:
-        case ORSO_AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION:
-        case ORSO_AST_NODE_TYPE_EXPRESSION_STATEMENT:
-        case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE:
-        case ORSO_AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER:
+        case AST_NODE_TYPE_UNDEFINED:
+        case AST_NODE_TYPE_DECLARATION:
+        case AST_NODE_TYPE_STATEMENT_RETURN:
+        case AST_NODE_TYPE_STATEMENT_EXPRESSION:
+        case AST_NODE_TYPE_EXPRESSION_PRINT:
+        case AST_NODE_TYPE_EXPRESSION_PRINT_EXPR:
+        case AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT:
+        case AST_NODE_TYPE_EXPRESSION_BINARY:
+        case AST_NODE_TYPE_EXPRESSION_UNARY:
+        case AST_NODE_TYPE_EXPRESSION_CALL:
+        case AST_NODE_TYPE_EXPRESSION_PRIMARY:
+        case AST_NODE_TYPE_EXPRESSION_ASSIGNMENT:
+        case AST_NODE_TYPE_EXPRESSION_BLOCK:
+        case AST_NODE_TYPE_EXPRESSION_BRANCHING:
+        case AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION:
+        case AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION:
+        case AST_NODE_TYPE_EXPRESSION_STATEMENT:
+        case AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE:
+        case AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER:
             UNREACHABLE();
             break;
     }
@@ -881,7 +881,7 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
     }
 
     switch(expression_node->node_type) {
-        case ORSO_AST_NODE_TYPE_EXPRESSION_BINARY: {
+        case AST_NODE_TYPE_EXPRESSION_BINARY: {
             token_t operator = expression_node->operator;
             ast_node_t* left = expression_node->data.binary.lhs;
             ast_node_t* right = expression_node->data.binary.rhs;
@@ -995,7 +995,7 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
             break;
         }
 
-        case ORSO_AST_NODE_TYPE_EXPRESSION_UNARY: {
+        case AST_NODE_TYPE_EXPRESSION_UNARY: {
             expression(vm, compiler, ast, expression_node->data.expression, chunk);
             emit_storage_type_convert(compiler, chunk, expression_node->data.expression->value_type, expression_node->value_type, expression_node->start.line);
 
@@ -1028,20 +1028,20 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
             break;
         }
 
-        case ORSO_AST_NODE_TYPE_EXPRESSION_GROUPING: {
+        case AST_NODE_TYPE_EXPRESSION_GROUPING: {
             expression(vm, compiler, ast, expression_node->data.expression, chunk);
             emit_storage_type_convert(compiler, chunk, expression_node->data.expression->value_type, expression_node->value_type, expression_node->end.line);
             break;
         }
         
-        case ORSO_AST_NODE_TYPE_EXPRESSION_PRIMARY: {
+        case AST_NODE_TYPE_EXPRESSION_PRIMARY: {
             gen_primary(compiler, chunk, ast,
                     expression_node->value_type,
                     expression_node->value_index, expression_node->start.line);
             break;
         }
 
-        case ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY: {
+        case AST_NODE_TYPE_EXPRESSION_ENTITY: {
             token_t identifier_token = expression_node->data.dot.identifier;
             bool is_local;
             u32 index = retrieve_variable(vm, compiler, &identifier_token, &is_local);
@@ -1049,7 +1049,7 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
             break;
         }
 
-        case ORSO_AST_NODE_TYPE_EXPRESSION_DOT: {
+        case AST_NODE_TYPE_EXPRESSION_DOT: {
             expression(vm, compiler, ast, expression_node->data.dot.lhs, chunk);
 
             ASSERT(ORSO_TYPE_IS_STRUCT(expression_node->data.dot.lhs->value_type), "LHS must be a struct for now");
@@ -1117,7 +1117,7 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
             break;
         }
 
-        case ORSO_AST_NODE_TYPE_EXPRESSION_ASSIGNMENT: {
+        case AST_NODE_TYPE_EXPRESSION_ASSIGNMENT: {
             expression(vm, compiler, ast, expression_node->data.binary.rhs, chunk);
             type_t* right_side_type = expression_node->data.binary.rhs->value_type;
 
@@ -1126,7 +1126,7 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
             ASSERT(expression_node->data.binary.lhs == expression_node->lvalue_node || expression_node->data.binary.lhs->lvalue_node == expression_node->lvalue_node, "the lvalue for an assignment is always the lhs or its lvalue of the binary by convention");
             expression_lvalue(vm, compiler, ast, expression_node->lvalue_node, chunk);
 
-            bool is_field = (expression_node->lvalue_node->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_DOT);
+            bool is_field = (expression_node->lvalue_node->node_type == AST_NODE_TYPE_EXPRESSION_DOT);
             if (is_field || ORSO_TYPE_IS_STRUCT(expression_node->lvalue_node->value_type) || ORSO_TYPE_IS_UNION(expression_node->lvalue_node->value_type)) {
                 op_code_t lvalue_set = get_lvalue_op_by_type(expression_node->lvalue_node->value_type);
 
@@ -1135,20 +1135,20 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
                     emit(compiler, chunk, expression_node->data.binary.lhs->end.line, lvalue_set, (long)orso_type_size_bytes(expression_node->value_type));
                 }
             } else {
-                ASSERT(expression_node->lvalue_node->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY, "at this point only expression entity is another option if not dot.");
+                ASSERT(expression_node->lvalue_node->node_type == AST_NODE_TYPE_EXPRESSION_ENTITY, "at this point only expression entity is another option if not dot.");
                 emit(compiler, chunk, expression_node->data.binary.lhs->end.line, OP_SET_LVALUE_SLOT);
             }
             break;
         }
 
-        case ORSO_AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT: {
+        case AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT: {
             ast_node_t* operand = expression_node->data.expression;
             expression(vm, compiler, ast, operand, chunk);
             emit_type_convert(compiler, operand->value_type, expression_node->value_type, chunk, operand->start.line);
             break;
         }
 
-        case ORSO_AST_NODE_TYPE_EXPRESSION_BLOCK: {
+        case AST_NODE_TYPE_EXPRESSION_BLOCK: {
             begin_scope(compiler);
 
             ast_nodes_t block = expression_node->data.block;
@@ -1159,7 +1159,7 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
             break;
         }
 
-        case ORSO_AST_NODE_TYPE_EXPRESSION_STATEMENT: {
+        case AST_NODE_TYPE_EXPRESSION_STATEMENT: {
             tmp_arena_t *tmp = allocator_borrow(); {
                 ast_nodes_t block = {.allocator=tmp->allocator};
                 array_push(&block, expression_node->data.statement);
@@ -1169,7 +1169,7 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
             break;
         }
         
-        case ORSO_AST_NODE_TYPE_EXPRESSION_BRANCHING: {
+        case AST_NODE_TYPE_EXPRESSION_BRANCHING: {
             if (expression_node->data.branch.looping) {
                 emit(compiler, chunk, expression_node->start.line, OP_PUSH_0);
                 emit_storage_type_convert(compiler, chunk, &OrsoTypeVoid, expression_node->value_type, expression_node->start.line);
@@ -1256,7 +1256,7 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
             ASSERT(then_stack_count == compiler->current_stack_size, "then and else branch should end up with the same stack size");
             break;
         }
-        case ORSO_AST_NODE_TYPE_EXPRESSION_CALL: {
+        case AST_NODE_TYPE_EXPRESSION_CALL: {
             expression(vm, compiler, ast, expression_node->data.call.callee, chunk);
             emit_storage_type_convert(compiler, chunk, expression_node->value_type, expression_node->value_type_narrowed, expression_node->end.line);
 
@@ -1275,13 +1275,13 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
             break;
         }
 
-        case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION: {
+        case AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION: {
             function_expression(vm, compiler, ast, expression_node, chunk);
             break;
         }
 
-        case ORSO_AST_NODE_TYPE_EXPRESSION_PRINT:
-        case ORSO_AST_NODE_TYPE_EXPRESSION_PRINT_EXPR: {
+        case AST_NODE_TYPE_EXPRESSION_PRINT:
+        case AST_NODE_TYPE_EXPRESSION_PRINT_EXPR: {
             expression(vm, compiler, ast, expression_node->data.expression, chunk);
 
             // if (!ORSO_TYPE_IS_UNION(expression_node->data.expression->value_type)) {
@@ -1299,7 +1299,7 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
             slot_t value_type = ORSO_SLOT_P(expression_node->data.expression->value_type);
             emit_constant(compiler, chunk, (byte*)&value_type, start.line, &OrsoTypeType);
 
-            if (expression_node->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_PRINT_EXPR) {
+            if (expression_node->node_type == AST_NODE_TYPE_EXPRESSION_PRINT_EXPR) {
                 emit(compiler, chunk, start.line, OP_PRINT_EXPR, expression_node->data.expression->value_type);
             } else {
                 emit(compiler, chunk, start.line, OP_PRINT, expression_node->data.expression->value_type);
@@ -1309,17 +1309,17 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
             break;
         }
 
-        case ORSO_AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION: {
+        case AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION: {
             ASSERT(false, "not implemented");
             break;
         }
 
-        case ORSO_AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER: {
+        case AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER: {
             i32 stack_position = compiler->current_stack_size*sizeof(slot_t);
 
             type_t *type = get_folded_type(ast, expression_node->data.initiailizer.type->value_index);
 
-            i32 index = orso_zero_value(ast, type, ast->symbols);
+            i32 index = zero_value(ast, type, ast->symbols);
             emit_constant(compiler, chunk, (byte*)&ast->folded_constants.items[index], expression_node->start.line, type);
 
             if (ORSO_TYPE_IS_STRUCT(type)) {
@@ -1346,12 +1346,12 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
         }
 
         // function signatures MUST be resolved at compile time ALWAYS
-        case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE: UNREACHABLE();
+        case AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE: UNREACHABLE();
 
-        case ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION:
-        case ORSO_AST_NODE_TYPE_STATEMENT_RETURN:
-        case ORSO_AST_NODE_TYPE_UNDEFINED:
-        case ORSO_AST_NODE_TYPE_DECLARATION: UNREACHABLE();
+        case AST_NODE_TYPE_STATEMENT_EXPRESSION:
+        case AST_NODE_TYPE_STATEMENT_RETURN:
+        case AST_NODE_TYPE_UNDEFINED:
+        case AST_NODE_TYPE_DECLARATION: UNREACHABLE();
     }
 
 #undef EMIT_NEGATE
@@ -1425,7 +1425,7 @@ static void local_entity_declaration(vm_t* vm, compiler_t* compiler, ast_t* ast,
 
 static void declaration(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *declaration, chunk_t *chunk) {
     switch (declaration->node_type) {
-        case ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION: {
+        case AST_NODE_TYPE_STATEMENT_EXPRESSION: {
             ast_node_t* expression_ = declaration->data.expression;
             expression(vm, compiler, ast, expression_, chunk);
 
@@ -1433,7 +1433,7 @@ static void declaration(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *
             break;
         }
         
-        case ORSO_AST_NODE_TYPE_STATEMENT_RETURN: {
+        case AST_NODE_TYPE_STATEMENT_RETURN: {
             if (declaration->data.expression) {
                 expression(vm, compiler, ast, declaration->data.expression, chunk);
                 emit_storage_type_convert(compiler, chunk, 
@@ -1448,13 +1448,13 @@ static void declaration(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *
             break;
         }
 
-        case ORSO_AST_NODE_TYPE_DECLARATION: {
+        case AST_NODE_TYPE_DECLARATION: {
             local_entity_declaration(vm, compiler, ast, declaration, chunk);
             break;
         }
 
-        case ORSO_AST_NODE_TYPE_UNDEFINED:
-        case ORSO_AST_NODE_TYPE_EXPRESSION_CASE:
+        case AST_NODE_TYPE_UNDEFINED:
+        case AST_NODE_TYPE_EXPRESSION_CASE:
             UNREACHABLE();
     }
 }

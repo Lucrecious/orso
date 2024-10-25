@@ -33,13 +33,13 @@ void vm_run_source(vm_t* vm, const char* source, error_function_t error_fn) {
     analyzer_init(&analyzer, vm->write_fn, error_fn);
 
     if (!parse(&ast, source, error_fn)) {
-        orso_ast_free(&ast);
+        ast_free(&ast);
         return;
     }
 
     bool resolved = resolve_ast(&analyzer, &ast);
     if (!resolved) {
-        orso_ast_free(&ast);
+        ast_free(&ast);
         return;
     }
 

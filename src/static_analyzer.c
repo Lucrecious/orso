@@ -160,7 +160,7 @@ static void function_dependencies_cannot_be_compiled(analyzer_t *analyzer) {
     for (size_t i = 0; i < analyzer->dependencies.count; ++i) {
         analysis_dependency_t *dependency = &analyzer->dependencies.items[i];
         ast_node_t *node = dependency->ast_node;
-        if (node->node_type != ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION) {
+        if (node->node_type != AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION) {
             continue;
         }
 
@@ -247,7 +247,7 @@ static type_t* resolve_unary_type(ast_t* ast, token_type_t operator, type_t* ope
 }
 
 static ast_node_t *implicit_cast(ast_t *ast, ast_node_t *operand, type_t *value_type) {
-    ast_node_t* implicit_cast = orso_ast_node_new(ast, ORSO_AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT, operand->is_in_type_context, operand->start);
+    ast_node_t* implicit_cast = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT, operand->is_in_type_context, operand->start);
     implicit_cast->end = operand->end;
 
     implicit_cast->value_type = value_type;
@@ -371,23 +371,23 @@ static bool is_block_compile_time_foldable(ast_nodes_t block) {
     for (size_t i = 0; i < block.count; i++) {
         ast_node_t *declaration = block.items[i];
         switch (declaration->node_type) {
-            case ORSO_AST_NODE_TYPE_DECLARATION: {
+            case AST_NODE_TYPE_DECLARATION: {
                 if (!is_declaration_resolved(declaration)) {
                     return false;
                 }
                 break;
             }
             
-            case ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION: {
+            case AST_NODE_TYPE_STATEMENT_EXPRESSION: {
                 if (!EXPRESSION_RESOLVED(declaration->data.expression) || declaration->data.expression->value_type == &OrsoTypeInvalid) {
                     return false;
                 }
                 break;
             }
             
-            case ORSO_AST_NODE_TYPE_STATEMENT_RETURN: return false;
-            case ORSO_AST_NODE_TYPE_UNDEFINED: return false;
-            case ORSO_AST_NODE_TYPE_EXPRESSION_CASE: UNREACHABLE();
+            case AST_NODE_TYPE_STATEMENT_RETURN: return false;
+            case AST_NODE_TYPE_UNDEFINED: return false;
+            case AST_NODE_TYPE_EXPRESSION_CASE: UNREACHABLE();
         }
     }
 
@@ -410,17 +410,17 @@ static void resolve_foldable(
     i32 folded_index = -1;
 
     switch (expression->node_type) {
-        case ORSO_AST_NODE_TYPE_EXPRESSION_GROUPING: {
+        case AST_NODE_TYPE_EXPRESSION_GROUPING: {
             foldable = expression->data.expression->foldable;
             folded_index = expression->data.expression->value_index;
             break;
         }
 
-        case ORSO_AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER: {
+        case AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER: {
             if (expression->data.initiailizer.arguments.count == 0) {
                 foldable = true;
                 type_t *type = get_folded_type(ast, expression->data.initiailizer.type->value_index);
-                i32 value_index = orso_zero_value(ast, type, ast->symbols);
+                i32 value_index = zero_value(ast, type, ast->symbols);
                 folded_index = value_index;
             } else {
                 foldable = true;
@@ -433,7 +433,7 @@ static void resolve_foldable(
             break;
         }
 
-        case ORSO_AST_NODE_TYPE_EXPRESSION_BINARY: {
+        case AST_NODE_TYPE_EXPRESSION_BINARY: {
             ast_node_t *left = expression->data.binary.lhs;
             ast_node_t *right = expression->data.binary.rhs;
             foldable = left->foldable && right->foldable;
@@ -451,7 +451,7 @@ static void resolve_foldable(
             break;
         }
 
-        case ORSO_AST_NODE_TYPE_EXPRESSION_BRANCHING: {
+        case AST_NODE_TYPE_EXPRESSION_BRANCHING: {
             bool condition_is_foldable = expression->data.branch.condition->foldable;
             bool then_is_foldable = expression->data.branch.then_expression->foldable;
             bool else_is_foldable = expression->data.branch.else_expression ? expression->data.branch.else_expression->foldable : true;
@@ -460,7 +460,7 @@ static void resolve_foldable(
             break;
         }
 
-        case ORSO_AST_NODE_TYPE_EXPRESSION_UNARY: {
+        case AST_NODE_TYPE_EXPRESSION_UNARY: {
             foldable = expression->data.expression->foldable;
 
             if (expression->operator.type == TOKEN_AMPERSAND) {
@@ -482,7 +482,7 @@ static void resolve_foldable(
             break;
         }
 
-        case ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY: {
+        case AST_NODE_TYPE_EXPRESSION_ENTITY: {
             ast_node_t* referencing_declaration = expression->data.dot.referencing_declaration;
 
             // this happens when the referencing declaration cannot be found OR for a builtin type
@@ -511,7 +511,7 @@ static void resolve_foldable(
             break;
         }
 
-        case ORSO_AST_NODE_TYPE_EXPRESSION_DOT: {
+        case AST_NODE_TYPE_EXPRESSION_DOT: {
             ASSERT(expression->data.dot.referencing_declaration, "referencing declaration must be present for dot expression");
 
             foldable = expression->foldable && expression->data.dot.referencing_declaration->foldable;
@@ -519,18 +519,18 @@ static void resolve_foldable(
             break;
         }
 
-        case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION: {
+        case AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION: {
             foldable = true;
             folded_index = expression->value_index;
             break;
         }
 
-        case ORSO_AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT: {
+        case AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT: {
             foldable = true;
             break;
         }
 
-        case ORSO_AST_NODE_TYPE_EXPRESSION_CALL: {
+        case AST_NODE_TYPE_EXPRESSION_CALL: {
             unless (state.mode & MODE_FOLDING_TIME) {
                 break;
             }
@@ -572,7 +572,7 @@ static void resolve_foldable(
             }
             break;
         }
-        case ORSO_AST_NODE_TYPE_EXPRESSION_BLOCK: {
+        case AST_NODE_TYPE_EXPRESSION_BLOCK: {
             unless (state.mode & MODE_FOLDING_TIME) {
                 break;
             }
@@ -580,7 +580,7 @@ static void resolve_foldable(
             foldable = is_block_compile_time_foldable(expression->data.block);
             break;
         }
-        case ORSO_AST_NODE_TYPE_EXPRESSION_ASSIGNMENT: {
+        case AST_NODE_TYPE_EXPRESSION_ASSIGNMENT: {
             unless (state.mode & MODE_FOLDING_TIME) {
                 break;
             }
@@ -589,38 +589,38 @@ static void resolve_foldable(
             break;
         }
 
-        case ORSO_AST_NODE_TYPE_EXPRESSION_STATEMENT: {
+        case AST_NODE_TYPE_EXPRESSION_STATEMENT: {
             switch (expression->data.statement->node_type) {
-                case ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION: {
+                case AST_NODE_TYPE_STATEMENT_EXPRESSION: {
                     foldable = expression->data.statement->data.expression->foldable;
                     break;
                 }
 
-                case ORSO_AST_NODE_TYPE_UNDEFINED:
-                case ORSO_AST_NODE_TYPE_STATEMENT_RETURN: foldable = false; break;
+                case AST_NODE_TYPE_UNDEFINED:
+                case AST_NODE_TYPE_STATEMENT_RETURN: foldable = false; break;
 
-                case ORSO_AST_NODE_TYPE_DECLARATION:
-                case ORSO_AST_NODE_TYPE_EXPRESSION_CASE: UNREACHABLE(); 
+                case AST_NODE_TYPE_DECLARATION:
+                case AST_NODE_TYPE_EXPRESSION_CASE: UNREACHABLE(); 
             }
             break;
         }
-        case ORSO_AST_NODE_TYPE_EXPRESSION_PRINT:
-        case ORSO_AST_NODE_TYPE_EXPRESSION_PRINT_EXPR: {
+        case AST_NODE_TYPE_EXPRESSION_PRINT:
+        case AST_NODE_TYPE_EXPRESSION_PRINT_EXPR: {
             break;
         }
 
-        case ORSO_AST_NODE_TYPE_EXPRESSION_PRIMARY:
-        case ORSO_AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION: {
+        case AST_NODE_TYPE_EXPRESSION_PRIMARY:
+        case AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION: {
             foldable = true;
             folded_index = expression->value_index;
             break;
         }
 
-        case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE:
-        case ORSO_AST_NODE_TYPE_DECLARATION:
-        case ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION:
-        case ORSO_AST_NODE_TYPE_STATEMENT_RETURN:
-        case ORSO_AST_NODE_TYPE_UNDEFINED:
+        case AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE:
+        case AST_NODE_TYPE_DECLARATION:
+        case AST_NODE_TYPE_STATEMENT_EXPRESSION:
+        case AST_NODE_TYPE_STATEMENT_RETURN:
+        case AST_NODE_TYPE_UNDEFINED:
             UNREACHABLE(); break;
     }
 
@@ -694,7 +694,7 @@ static void fold_constants_via_runtime(
 }
 
 static void fold_function_signature(analyzer_t *analyzer, ast_t *ast, ast_node_t *expression) {
-    ASSERT(expression->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE, "must be a function signature");
+    ASSERT(expression->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE, "must be a function signature");
 
     unless (!expression->data.function.return_type_expression || IS_FOLDED(expression->data.function.return_type_expression)) {
         error_range(analyzer,
@@ -840,11 +840,11 @@ static bool is_value_circular_dependency(analyzer_t* analyzer, ast_node_t* new_d
         size_t i = analyzer->dependencies.count-i_-1;
         analysis_dependency_t *dependency = &analyzer->dependencies.items[i];
 
-        if (dependency->ast_node->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION) {
+        if (dependency->ast_node->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION) {
             return false;
         }
 
-        if (dependency->ast_node->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION) {
+        if (dependency->ast_node->node_type == AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION) {
             return false;
         }
 
@@ -912,7 +912,7 @@ static void declare_entity(analyzer_t* analyzer, scope_t* scope, ast_node_t* ent
 static void forward_scan_declaration_names(analyzer_t* analyzer, scope_t* scope, ast_nodes_t declarations, i32 count) {
     for (i32 i = 0; i < count; i++) {
         ast_node_t* declaration = declarations.items[i];
-        if (declaration->node_type != ORSO_AST_NODE_TYPE_DECLARATION) {
+        if (declaration->node_type != AST_NODE_TYPE_DECLARATION) {
             continue;
         }
 
@@ -926,7 +926,7 @@ void orso_resolve_expression(
         AnalysisState state,
         ast_node_t *expression) {
     
-    ASSERT(orso_ast_node_type_is_expression(expression->node_type), "should be only expressions");
+    ASSERT(ast_node_type_is_expression(expression->node_type), "should be only expressions");
 
     if (expression->value_type != &OrsoTypeUnresolved) {
         return;
@@ -962,7 +962,7 @@ void orso_resolve_expression(
     // These are two independent checks that the analyzer makes.
 
     switch (expression->node_type) {
-        case ORSO_AST_NODE_TYPE_EXPRESSION_GROUPING: {
+        case AST_NODE_TYPE_EXPRESSION_GROUPING: {
             orso_resolve_expression(analyzer, ast, state, expression->data.expression);
             expression->lvalue_node = expression->data.expression->lvalue_node;
 
@@ -971,7 +971,7 @@ void orso_resolve_expression(
             break;
         }
 
-        case ORSO_AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER: {
+        case AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER: {
             orso_resolve_expression(analyzer, ast, state, expression->data.initiailizer.type);
 
             if (expression->data.initiailizer.type->value_type_narrowed != &OrsoTypeType) {
@@ -1039,12 +1039,12 @@ void orso_resolve_expression(
             }
         }
 
-        case ORSO_AST_NODE_TYPE_EXPRESSION_PRIMARY: {
+        case AST_NODE_TYPE_EXPRESSION_PRIMARY: {
             INVALIDATE(expression);
             break;
         }
 
-        case ORSO_AST_NODE_TYPE_EXPRESSION_BINARY: {
+        case AST_NODE_TYPE_EXPRESSION_BINARY: {
             ast_node_t *left = expression->data.binary.lhs;
             orso_resolve_expression(analyzer, ast, state, left);
 
@@ -1153,7 +1153,7 @@ void orso_resolve_expression(
             break;
         }
 
-        case ORSO_AST_NODE_TYPE_EXPRESSION_UNARY: {
+        case AST_NODE_TYPE_EXPRESSION_UNARY: {
             orso_resolve_expression(analyzer, ast, state, expression->data.expression);
 
             if (ORSO_TYPE_IS_INVALID(expression->data.expression->value_type)) {
@@ -1188,7 +1188,7 @@ void orso_resolve_expression(
             break;
         }
 
-        case ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY: {
+        case AST_NODE_TYPE_EXPRESSION_ENTITY: {
             expression->lvalue_node = expression;
 
             scope_t *entity_scope;
@@ -1218,7 +1218,7 @@ void orso_resolve_expression(
             break;
         }
 
-        case ORSO_AST_NODE_TYPE_EXPRESSION_DOT: {
+        case AST_NODE_TYPE_EXPRESSION_DOT: {
             ast_node_t *left = expression->data.dot.lhs;
             ASSERT(left, "for now left must be present");
 
@@ -1310,7 +1310,7 @@ void orso_resolve_expression(
             break;
         }
 
-        case ORSO_AST_NODE_TYPE_EXPRESSION_ASSIGNMENT: {
+        case AST_NODE_TYPE_EXPRESSION_ASSIGNMENT: {
             orso_resolve_expression(analyzer, ast, state, expression->data.binary.rhs);
 
             if (ORSO_TYPE_IS_INVALID(expression->data.binary.rhs->value_type)) {
@@ -1330,7 +1330,7 @@ void orso_resolve_expression(
             expression->lvalue_node = lvalue_node;
 
             // // TODO: Find a way to merge the fitting logic
-            if (lvalue_node->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_ENTITY) {
+            if (lvalue_node->node_type == AST_NODE_TYPE_EXPRESSION_ENTITY) {
                 scope_t* entity_scope;
                 Entity* entity;
                 token_t identifier = lvalue_node->data.dot.identifier;
@@ -1360,7 +1360,7 @@ void orso_resolve_expression(
                     entity->narrowed_type = expression->value_type_narrowed;
                 }
 
-            } else if (lvalue_node->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_DOT) {
+            } else if (lvalue_node->node_type == AST_NODE_TYPE_EXPRESSION_DOT) {
                 ast_node_t* dot_node = lvalue_node;
                 orso_resolve_expression(analyzer, ast, state, dot_node);
 
@@ -1383,7 +1383,7 @@ void orso_resolve_expression(
             break;
         }
 
-        case ORSO_AST_NODE_TYPE_EXPRESSION_BLOCK: {
+        case AST_NODE_TYPE_EXPRESSION_BLOCK: {
             scope_t block_scope;
             scope_init(&block_scope, &analyzer->allocator, SCOPE_TYPE_BLOCK, state.scope, expression);
 
@@ -1398,13 +1398,13 @@ void orso_resolve_expression(
             return_guarentee_t block_return_guarentee = ORSO_NO_RETURN_GUARENTEED;
             for (i32 i = 0; i < declarations_count; i++) {
                 ast_node_t* declaration = expression->data.block.items[i];
-                if (declaration->node_type == ORSO_AST_NODE_TYPE_STATEMENT_RETURN) {
+                if (declaration->node_type == AST_NODE_TYPE_STATEMENT_RETURN) {
                     block_return_guarentee = ORSO_RETURN_GUARENTEED;
-                } else if (declaration->node_type == ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION) {
+                } else if (declaration->node_type == AST_NODE_TYPE_STATEMENT_EXPRESSION) {
                     ast_node_t* statement = declaration->data.expression;
-                    if (statement->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_BLOCK && statement->return_guarentee != ORSO_NO_RETURN_GUARENTEED) {
+                    if (statement->node_type == AST_NODE_TYPE_EXPRESSION_BLOCK && statement->return_guarentee != ORSO_NO_RETURN_GUARENTEED) {
                         block_return_guarentee = statement->return_guarentee;
-                    } else if (statement->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_BRANCHING && statement->return_guarentee != ORSO_NO_RETURN_GUARENTEED) {
+                    } else if (statement->node_type == AST_NODE_TYPE_EXPRESSION_BRANCHING && statement->return_guarentee != ORSO_NO_RETURN_GUARENTEED) {
                         block_return_guarentee = statement->return_guarentee;
                     }
                 }
@@ -1422,7 +1422,7 @@ void orso_resolve_expression(
                 ast_node_t* last_expression_statement = NULL;
                 if (declarations_count > 0) {
                     ast_node_t* last_declaration = expression->data.block.items[declarations_count - 1];
-                    if (last_declaration->node_type == ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION) {
+                    if (last_declaration->node_type == AST_NODE_TYPE_STATEMENT_EXPRESSION) {
                         last_expression_statement = last_declaration;
                     }
                 }
@@ -1438,7 +1438,7 @@ void orso_resolve_expression(
             break;
         }
 
-        case ORSO_AST_NODE_TYPE_EXPRESSION_STATEMENT: {
+        case AST_NODE_TYPE_EXPRESSION_STATEMENT: {
             resolve_statement(analyzer, ast, state, expression->data.statement);
 
             if (ORSO_TYPE_IS_INVALID(expression->data.statement->data.expression->value_type)) {
@@ -1449,7 +1449,7 @@ void orso_resolve_expression(
             expression->return_guarentee = expression->data.statement->data.expression ? 
                     expression->data.statement->data.expression->return_guarentee : ORSO_NO_RETURN_GUARENTEED;
 
-            if (expression->data.statement->node_type == ORSO_AST_NODE_TYPE_STATEMENT_RETURN) {
+            if (expression->data.statement->node_type == AST_NODE_TYPE_STATEMENT_RETURN) {
                 if (expression->return_guarentee != ORSO_NO_RETURN_GUARENTEED) {
                     error_range(analyzer, expression->start, expression->end, "Cannot return within a return expression.");
                 } else {
@@ -1467,7 +1467,7 @@ void orso_resolve_expression(
             break;
         }
 
-        case ORSO_AST_NODE_TYPE_EXPRESSION_BRANCHING: {
+        case AST_NODE_TYPE_EXPRESSION_BRANCHING: {
             orso_resolve_expression(analyzer, ast, state, expression->data.branch.condition);
 
             scope_t* then_scope = scope_copy_new(state.scope, &analyzer->allocator);
@@ -1485,14 +1485,14 @@ void orso_resolve_expression(
             return_guarentee_t branch_return_guarentee;
             // resolve return guarentee first
             {
-                ASSERT(expression->data.branch.then_expression->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_BLOCK || expression->data.branch.then_expression->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_STATEMENT, "must be expression statement or block, not other choices");
+                ASSERT(expression->data.branch.then_expression->node_type == AST_NODE_TYPE_EXPRESSION_BLOCK || expression->data.branch.then_expression->node_type == AST_NODE_TYPE_EXPRESSION_STATEMENT, "must be expression statement or block, not other choices");
                 return_guarentee_t then_return_guarentee = expression->data.branch.then_expression->return_guarentee;
 
                 return_guarentee_t else_return_guarentee = ORSO_NO_RETURN_GUARENTEED;
                 if (expression->data.branch.else_expression) {
-                    if (expression->data.branch.else_expression->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_BLOCK
-                    || expression->data.branch.else_expression->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_BRANCHING
-                    || expression->data.branch.else_expression->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_STATEMENT) {
+                    if (expression->data.branch.else_expression->node_type == AST_NODE_TYPE_EXPRESSION_BLOCK
+                    || expression->data.branch.else_expression->node_type == AST_NODE_TYPE_EXPRESSION_BRANCHING
+                    || expression->data.branch.else_expression->node_type == AST_NODE_TYPE_EXPRESSION_STATEMENT) {
                         else_return_guarentee = expression->data.branch.else_expression->return_guarentee;
                     } else {
                         ASSERT(false, "only blocks and ifs allowed during elses for now");
@@ -1549,7 +1549,7 @@ void orso_resolve_expression(
             break;
         }
 
-        case ORSO_AST_NODE_TYPE_EXPRESSION_CALL: {
+        case AST_NODE_TYPE_EXPRESSION_CALL: {
             bool argument_invalid = false;
             for (size_t i = 0; i < expression->data.call.arguments.count; ++i) {
                 ast_node_t *argument = expression->data.call.arguments.items[i];
@@ -1579,12 +1579,12 @@ void orso_resolve_expression(
             break;
         }
 
-        case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION: {
+        case AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION: {
             resolve_function_expression(analyzer, ast, state, expression);
             break;
         }
 
-        case ORSO_AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION: {
+        case AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION: {
             // since structs are boundaries for circular dependencies, they will never be the cause of one.
             push_dependency(analyzer, expression, state.fold_level, is_value_circular_dependency);
             resolve_struct_definition(analyzer, ast, state, expression);
@@ -1592,7 +1592,7 @@ void orso_resolve_expression(
             break;
         }
         
-         case ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE: {
+         case AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE: {
             bool invalid_parameter = false;
             for (size_t i = 0; i < expression->data.function.parameter_nodes.count; i++) {
                 ast_node_t *parameter = expression->data.function.parameter_nodes.items[i];
@@ -1618,19 +1618,19 @@ void orso_resolve_expression(
             break;
         }
 
-        case ORSO_AST_NODE_TYPE_EXPRESSION_PRINT:
-        case ORSO_AST_NODE_TYPE_EXPRESSION_PRINT_EXPR: {
+        case AST_NODE_TYPE_EXPRESSION_PRINT:
+        case AST_NODE_TYPE_EXPRESSION_PRINT_EXPR: {
             orso_resolve_expression(analyzer, ast, state, expression->data.expression);
             expression->value_type = &OrsoTypeVoid;
             expression->value_type_narrowed = &OrsoTypeVoid;
             break;
         }
 
-        case ORSO_AST_NODE_TYPE_UNDEFINED:
-        case ORSO_AST_NODE_TYPE_DECLARATION:
-        case ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION:
-        case ORSO_AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT:
-        case ORSO_AST_NODE_TYPE_STATEMENT_RETURN: {
+        case AST_NODE_TYPE_UNDEFINED:
+        case AST_NODE_TYPE_DECLARATION:
+        case AST_NODE_TYPE_STATEMENT_EXPRESSION:
+        case AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT:
+        case AST_NODE_TYPE_STATEMENT_RETURN: {
             UNREACHABLE();
             break;
         }
@@ -1747,7 +1747,7 @@ static void resolve_entity_declaration(analyzer_t* analyzer, ast_t* ast, Analysi
         }
 
         ast_node_t* cast_node = entity_declaration->data.declaration.initial_value_expression;
-        ASSERT(cast_node->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT, "must be implicit casting node");
+        ASSERT(cast_node->node_type == AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT, "must be implicit casting node");
         
         type_t* completed_struct_type = cast_node->data.expression->value_type_narrowed;
         
@@ -1792,7 +1792,7 @@ static void resolve_entity_declaration(analyzer_t* analyzer, ast_t* ast, Analysi
         if (INITIAL_EXPRESSION != NULL
         && ORSO_TYPE_IS_STRUCT(INITIAL_EXPRESSION->value_type_narrowed)
         && (ORSO_TYPE_IS_UNRESOLVED(declaration_type) || declaration_type->kind == ORSO_TYPE_TYPE)) {
-            ast_node_t* to_struct_type = orso_ast_node_new(ast, ORSO_AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT, INITIAL_EXPRESSION->is_in_type_context, INITIAL_EXPRESSION->start);
+            ast_node_t* to_struct_type = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT, INITIAL_EXPRESSION->is_in_type_context, INITIAL_EXPRESSION->start);
             to_struct_type->value_type = &OrsoTypeType;
             to_struct_type->value_type_narrowed = &OrsoTypeType;
             to_struct_type->data.expression = INITIAL_EXPRESSION;
@@ -1868,7 +1868,7 @@ static void resolve_entity_declaration(analyzer_t* analyzer, ast_t* ast, Analysi
         if (ORSO_TYPE_IS_UNION(entity_declaration->value_type) && !orso_type_fits(entity_declaration->value_type, &OrsoTypeVoid)) {
             error_range(analyzer, entity_declaration->end, entity_declaration->end, "Non-void union types must have a default value.");
         } else unless (ORSO_TYPE_IS_INVALID(entity->node->value_type)) {
-            value_index = orso_zero_value(ast, entity->node->value_type, &analyzer->symbols);
+            value_index = zero_value(ast, entity->node->value_type, &analyzer->symbols);
         }
 
         entity->node->value_index = value_index;
@@ -2119,7 +2119,7 @@ static Entity *get_resolved_entity_by_identifier(
                 i32 i_ = analyzer->dependencies.count - 1 - i;
                 analysis_dependency_t *dependency = &analyzer->dependencies.items[i_];
                 ast_node_t *node = dependency->ast_node;
-                if (node->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION) {
+                if (node->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION) {
                     function_t *folded_function = (function_t*)ast->folded_constants.items[node->value_index].as.p;
                     if (folded_function == function && dependency->fold_level != state.fold_level) {
                         // TODO: Use better system to figure out whether function definition can be compiled or not
@@ -2166,7 +2166,7 @@ static void resolve_function_expression(
         ast_t *ast,
         AnalysisState state,
         ast_node_t *function_definition_expression) {
-    ASSERT(function_definition_expression->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION, "must be function declaration at this point");
+    ASSERT(function_definition_expression->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION, "must be function declaration at this point");
 
     if (IS_FOLDED(function_definition_expression)) {
         return;
@@ -2250,7 +2250,7 @@ static void resolve_function_expression(
     function_definition_expression->value_type = (type_t*)function_type;
     function_definition_expression->value_type_narrowed = (type_t*)function_type;
 
-    ASSERT(definition->block->node_type == ORSO_AST_NODE_TYPE_EXPRESSION_BLOCK, "must be block expression");
+    ASSERT(definition->block->node_type == AST_NODE_TYPE_EXPRESSION_BLOCK, "must be block expression");
 
     bool pushed = push_dependency(analyzer, function_definition_expression, state.fold_level, is_value_circular_dependency);
     if (pushed) {
@@ -2560,11 +2560,11 @@ static void resolve_statement(
         AnalysisState state,
         ast_node_t *statement) {
     switch (statement->node_type) {
-        case ORSO_AST_NODE_TYPE_STATEMENT_EXPRESSION:
+        case AST_NODE_TYPE_STATEMENT_EXPRESSION:
             orso_resolve_expression(analyzer, ast, state, statement->data.expression);
             break;
 
-        case ORSO_AST_NODE_TYPE_STATEMENT_RETURN: {
+        case AST_NODE_TYPE_STATEMENT_RETURN: {
             type_t* return_expression_type = &OrsoTypeVoid;
 
             if (statement->data.expression) {
@@ -2583,9 +2583,9 @@ static void resolve_statement(
             break;
         }
 
-        case ORSO_AST_NODE_TYPE_UNDEFINED: break;
-        case ORSO_AST_NODE_TYPE_DECLARATION:
-        case ORSO_AST_NODE_TYPE_EXPRESSION_CASE: UNREACHABLE();
+        case AST_NODE_TYPE_UNDEFINED: break;
+        case AST_NODE_TYPE_DECLARATION:
+        case AST_NODE_TYPE_EXPRESSION_CASE: UNREACHABLE();
     }
 }
 
@@ -2598,7 +2598,7 @@ static void resolve_declaration(
     // TODO: eventually this will be resolved, everything will be a declaration entity
     // there will only be two types: anonymous declarations and named declarations
     // print_expr, print and statement expressions will be all me anonymous declarations
-    if (declaration_node->node_type == ORSO_AST_NODE_TYPE_DECLARATION) {
+    if (declaration_node->node_type == AST_NODE_TYPE_DECLARATION) {
         resolve_entity_declaration(analyzer, ast, state, declaration_node);
     } else {
         resolve_statement(analyzer,ast, state, declaration_node);
@@ -2630,7 +2630,7 @@ void resolve_declarations(analyzer_t* analyzer, ast_t* ast, AnalysisState state,
         // the body of its own function regardless, it's something that I need to check for anyways to make sure they are no
         // circular dependencies.
         // Anyways, that's why constants are skipped and resolved only when they are accessed
-        if (declaration->node_type == ORSO_AST_NODE_TYPE_DECLARATION && !declaration->data.declaration.is_mutable) {
+        if (declaration->node_type == AST_NODE_TYPE_DECLARATION && !declaration->data.declaration.is_mutable) {
             continue;
         }
 
@@ -2639,7 +2639,7 @@ void resolve_declarations(analyzer_t* analyzer, ast_t* ast, AnalysisState state,
 
     for (i32 i = 0; i < count; i++) {
         ast_node_t *declaration = declarations.items[i];
-        if (declaration->node_type != ORSO_AST_NODE_TYPE_DECLARATION) {
+        if (declaration->node_type != AST_NODE_TYPE_DECLARATION) {
             continue;
         }
 
