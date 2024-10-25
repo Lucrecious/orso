@@ -138,7 +138,6 @@ i32 disassemble_instruction(chunk_t *chunk, i32 offset) {
             op_code_field_t *field = (op_code_field_t*)(chunk->code.items + offset);
             printf("OP_FIELD(value size: %d, offset: %d, size: %d)\n", field->value_size_bytes, field->offset_bytes, field->size_bytes);
             return offset + sizeof(op_code_location_t);
-            break;
         }
         case ORSO_OP_SET_LVALUE_SLOT: return simple_instruction("OP_SET_LVALUE_SLOT", offset);
         case ORSO_OP_SET_LVALUE_I32: return simple_instruction  ("OP_SET_LVALUE_I32", offset);
