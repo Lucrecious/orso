@@ -12,7 +12,7 @@ u32 chunk_add_constant(chunk_t* chunk, byte* data, u32 size, type_t* type)
 u32 chunk_add_constant(chunk_t* chunk, byte* data, u32 size)
 #endif
 {
-    u32 slot_size = orso_bytes_to_slots(size);
+    u32 slot_size = bytes_to_slots(size);
     u32 index = chunk->constants.count;
     for (size_t i = 0; i < slot_size; i++) {
         array_push(&chunk->constants, (slot_t){ .as.i = 0 });

@@ -12,9 +12,9 @@
 #include "table.h"
 
 typedef enum return_guarentee_t {
-    ORSO_NO_RETURN_GUARENTEED,
-    ORSO_MAYBE_RETURNS,
-    ORSO_RETURN_GUARENTEED,
+    RETURN_GUARENTEE_NONE,
+    RETURN_GUARENTEE_MAYBE,
+    RETURN_GUARENTEE_YES,
 } return_guarentee_t;
 
 struct ast_node_t;

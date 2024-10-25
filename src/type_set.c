@@ -209,7 +209,7 @@ static type_t** fetch_type(type_t** types, i32 capacity, type_t* type) {
             break;
         }
 
-        if (orso_type_equal(*entry, type)) {
+        if (type_equal(*entry, type)) {
             return entry;
         }
 
@@ -484,7 +484,7 @@ type_t* type_set_fetch_pointer(type_set_t* set, type_t* inner_type) {
     return type;
 }
 
-type_t *orso_type_set_fetch_function_(type_set_t *set, type_t *return_type, types_t arguments, bool is_native) {
+type_t *type_set_fetch_function_(type_set_t *set, type_t *return_type, types_t arguments, bool is_native) {
     type_t function_type = {
         .kind = is_native ? TYPE_NATIVE_FUNCTION : TYPE_FUNCTION,
         .data.function.argument_types = arguments,
@@ -507,11 +507,11 @@ type_t *orso_type_set_fetch_function_(type_set_t *set, type_t *return_type, type
 }
 
 type_t *type_set_fetch_function(type_set_t *set, type_t *return_type, types_t arguments) {
-    return orso_type_set_fetch_function_(set, return_type, arguments, false);
+    return type_set_fetch_function_(set, return_type, arguments, false);
 }
 
 type_t *type_set_fetch_native_function(type_set_t *set, type_t *return_type, types_t arguments) {
-    return orso_type_set_fetch_function_(set, return_type, arguments, true);
+    return type_set_fetch_function_(set, return_type, arguments, true);
 }
 
 type_t* type_set_fetch_anonymous_struct(type_set_t *set, i32 field_count, struct_field_t *fields, i32 constant_count, struct_constant_t* constants) {
@@ -552,11 +552,11 @@ type_t* type_set_fetch_anonymous_struct(type_set_t *set, i32 field_count, struct
             i32 previous_offset = type->data.struct_.fields[i - 1].offset;
             type_t* previous_type = fields[i - 1].type;
 
-            i32 bytes = orso_bytes_to_slots(orso_type_size_bytes(previous_type)) * sizeof(slot_t);
+            i32 bytes = bytes_to_slots(type_size_bytes(previous_type)) * sizeof(slot_t);
             type->data.struct_.fields[i].offset = previous_offset + bytes;
         }
 
-        i32 size_of_final = orso_bytes_to_slots(orso_type_size_bytes(type->data.struct_.fields[field_count - 1].type)) * sizeof(slot_t);
+        i32 size_of_final = bytes_to_slots(type_size_bytes(type->data.struct_.fields[field_count - 1].type)) * sizeof(slot_t);
         i32 total_size = type->data.struct_.fields[field_count - 1].offset + size_of_final;
 
         type->data.struct_.total_bytes = total_size;

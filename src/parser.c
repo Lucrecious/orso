@@ -131,7 +131,7 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool is_in_type_
     node->start = start;
     node->end = start;
     node->operator = start;
-    node->return_guarentee = ORSO_NO_RETURN_GUARENTEED;
+    node->return_guarentee = RETURN_GUARENTEE_NONE;
     node->value_type = &OrsoTypeUnresolved;
     node->value_type_narrowed = &OrsoTypeUnresolved;
 
@@ -500,7 +500,7 @@ static ast_node_t* variable(parser_t *parser, bool is_in_type_context) {
 }
 
 static void parse_block(parser_t *parser, ast_node_t *block) {
-    block->return_guarentee = ORSO_NO_RETURN_GUARENTEED;
+    block->return_guarentee = RETURN_GUARENTEE_NONE;
     block->data.block = (ast_nodes_t){.allocator=&parser->ast->allocator};
 
     while (!check(parser, TOKEN_BRACE_CLOSE) && !check(parser, TOKEN_EOF)) {
@@ -535,7 +535,7 @@ static ast_node_t* ifelse(parser_t* parser, bool is_in_type_context) {
         expression_node->data.branch.looping = true;
     }
 
-    expression_node->return_guarentee = ORSO_NO_RETURN_GUARENTEED;
+    expression_node->return_guarentee = RETURN_GUARENTEE_NONE;
 
     expression_node->data.branch.condition = expression(parser, is_in_type_context);
     if (match(parser, TOKEN_BRACE_OPEN)) {
@@ -1093,7 +1093,7 @@ bool parse(ast_t *ast, const char *source, error_function_t error_fn) {
 }
 
 i32 add_value_to_ast_constant_stack(ast_t *ast, slot_t *value, type_t *type) {
-    i32 slot_count = orso_type_slot_count(type);
+    i32 slot_count = type_slot_count(type);
     for (i32 i = 0; i < slot_count; i ++) {
         array_push(&ast->folded_constants, value[i]);
     }
@@ -1107,7 +1107,7 @@ i32 zero_value(ast_t *ast, type_t *type, symbol_table_t *symbol_table) {
         return result;
     }
 
-    slot_t value[orso_bytes_to_slots(orso_type_size_bytes(type))];
+    slot_t value[bytes_to_slots(type_size_bytes(type))];
 
     switch (type->kind) {
         case TYPE_POINTER:
@@ -1132,9 +1132,9 @@ i32 zero_value(ast_t *ast, type_t *type, symbol_table_t *symbol_table) {
             break;
         
         case TYPE_UNION: {
-            ASSERT(orso_union_type_has_type(type, &OrsoTypeVoid), "must include void type if looking for zero value");
+            ASSERT(union_type_has_type(type, &OrsoTypeVoid), "must include void type if looking for zero value");
             
-            u32 size_slots = orso_type_slot_count(type);
+            u32 size_slots = type_slot_count(type);
             for (u32 i = 0; i < size_slots; i++) {
                 value[i] = SLOT_I(0);
             }
@@ -1143,7 +1143,7 @@ i32 zero_value(ast_t *ast, type_t *type, symbol_table_t *symbol_table) {
         }
 
         case TYPE_STRUCT: {
-            for (size_t i = 0; i < orso_bytes_to_slots(type->data.struct_.total_bytes); i++) {
+            for (size_t i = 0; i < bytes_to_slots(type->data.struct_.total_bytes); i++) {
                 value[i] = SLOT_I(0);
             }
             break;
