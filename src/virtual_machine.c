@@ -60,18 +60,8 @@ static FORCE_INLINE void push_i64(vm_t* vm, slot_t value) {
     vm->stack_top++;
 }
 
-#ifdef DEBUG
-#define RESERVE_STACK_SPACE(vm, slot_count, type) reserve_stack_space(vm, slot_count, type)
-static FORCE_INLINE void reserve_stack_space(vm_t *vm, u32 slot_count, type_t *type) {
-    for (u32 i = 0; i < slot_count; i++) {
-        vm->stack_types[vm->stack_top - vm->stack + i] = &OrsoTypeInvalid;
-    }
-    vm->stack_types[vm->stack_top - vm->stack] = type;
-#else
 #define RESERVE_STACK_SPACE(vm, slot_count, type) reserve_stack_space(vm, slot_count)
 static FORCE_INLINE void reserve_stack_space(vm_t* vm, u32 slot_count) {
-#endif
-
     for (u32 i = 0; i < slot_count; i++) {
         vm->stack_top->as.i = 0;
         vm->stack_top++;
@@ -283,11 +273,6 @@ bool vm_step(vm_t *vm) {
 
             for (byte i = 0; i < pop_scope->value_size_slots; ++i) {
                 vm->stack[stack_size - (pop_scope->scope_size_slots + pop_scope->value_size_slots) + i] = *(vm->stack_top - pop_scope->value_size_slots + i);
-        #ifdef DEBUG
-                u32 type_index = (vm->stack_top - pop_scope->value_size_slots + i) - vm->stack;
-                vm->stack_types[stack_size - (pop_scope->scope_size_slots + pop_scope->value_size_slots) + i] = *(vm->stack_types + type_index);
-        #endif
-
             }
 
             POPN(pop_scope->scope_size_slots);
@@ -352,12 +337,6 @@ memcpy(current_top, local, size); \
             break;
         }
 #undef PUSH_LOCAL
-        #ifdef DEBUG
-        #define GET_FIELD_TYPE_TRACE(TYPE) u32 index = vm->stack_top - vm->stack; vm->stack_types[index] = &OrsoType##TYPE;
-        #else
-        #define GET_FIELD_TYPE_TRACE(TYPE)
-        #endif
-
         case OP_FIELD: {
             op_field_t *field = READ_CODE(op_field_t);
             u16 field_offset = field->offset_bytes;
@@ -371,14 +350,6 @@ memcpy(current_top, local, size); \
 
             // TODO: needs to do these in batches
             POPN(bytes_to_slots(value_size) - bytes_to_slots(field_size));
-
-        #ifdef DEBUG
-            u16 field_slot_size = bytes_to_slots(field_size);
-            u32 index = vm->stack_top - vm->stack;
-            for (u32 i = 0; i < field_slot_size; i++) {
-                vm->stack_types[index + i] = &OrsoTypeInvalid; // TODO: use better system to keep track of types in slots
-            }
-        #endif
             break;
         }
 
