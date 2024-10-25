@@ -55,15 +55,8 @@ void vm_free(vm_t* vm) {
     vm->globals.values.count = 0;
 }
 
-#ifdef DEBUG
-static FORCE_INLINE void push_i64(vm_t* vm, slot_t value, type_t* type) {
-#else
 static FORCE_INLINE void push_i64(vm_t* vm, slot_t value) {
-#endif
     *vm->stack_top = value;
-#ifdef DEBUG
-    vm->stack_types[vm->stack_top - vm->stack] =  type;
-#endif
     vm->stack_top++;
 }
 
@@ -220,13 +213,7 @@ void vm_begin(vm_t *vm, function_t *entry_point) {
 #define PEEK(I) peek(vm, I)
 #define POP() pop(vm)
 #define POPN(N) pop_n(vm, N)
-#ifdef DEBUG
-#define PUSH(VALUE, TYPE) push_i64(vm, VALUE, TYPE)
-#define SLOT_ADD_TYPE(SLOT, TYPE) (vm->stack_types[(vm->stack_top - 1) - SLOT] = TYPE)
-#else
-#define PUSH(VALUE, TYPE) push_i64(vm, VALUE)
-#define SLOT_ADD_TYPE(SLOT, TYPE)
-#endif
+#define PUSH(VALUE) push_i64(vm, VALUE)
 
 bool vm_step(vm_t *vm) {
     call_frame_t* frame = &vm->frames[vm->frame_count - 1];
@@ -237,8 +224,8 @@ bool vm_step(vm_t *vm) {
 
         case OP_POP: POP(); break;
 
-        case OP_I64_TO_F64: *PEEK(0) = SLOT_F((f64)PEEK(0)->as.i); SLOT_ADD_TYPE(PEEK(0), &OrsoTypeFloat64); break;
-        case OP_F64_TO_I64: *PEEK(0) = SLOT_I((i64)PEEK(0)->as.f); SLOT_ADD_TYPE(PEEK(0), &OrsoTypeInteger64); break;
+        case OP_I64_TO_F64: *PEEK(0) = SLOT_F((f64)PEEK(0)->as.i); break;
+        case OP_F64_TO_I64: *PEEK(0) = SLOT_I((i64)PEEK(0)->as.f); break;
 
         case OP_ADD_I64: { i64 b = POP().as.i; PEEK(0)->as.i = PEEK(0)->as.i + b; break; }
         case OP_SUBTRACT_I64: { i64 b = POP().as.i; PEEK(0)->as.i = PEEK(0)->as.i - b; break; }
@@ -253,13 +240,13 @@ bool vm_step(vm_t *vm) {
         case OP_NEGATE_I64: PEEK(0)->as.i = -PEEK(0)->as.i; break;
         case OP_NEGATE_F64: PEEK(0)->as.f = -PEEK(0)->as.f; break;
 
-        case OP_EQUAL_I64: { i64 b = POP().as.i; PEEK(0)->as.i = (PEEK(0)->as.i == b); SLOT_ADD_TYPE(PEEK(0), &OrsoTypeBool); break; }
-        case OP_LESS_I64: { i64 b = POP().as.i; PEEK(0)->as.i = (PEEK(0)->as.i < b); SLOT_ADD_TYPE(PEEK(0), &OrsoTypeBool); break; }
-        case OP_GREATER_I64: { i64 b = POP().as.i; PEEK(0)->as.i = (PEEK(0)->as.i > b); SLOT_ADD_TYPE(PEEK(0), &OrsoTypeBool); break; }
+        case OP_EQUAL_I64: { i64 b = POP().as.i; PEEK(0)->as.i = (PEEK(0)->as.i == b); break; }
+        case OP_LESS_I64: { i64 b = POP().as.i; PEEK(0)->as.i = (PEEK(0)->as.i < b); break; }
+        case OP_GREATER_I64: { i64 b = POP().as.i; PEEK(0)->as.i = (PEEK(0)->as.i > b); break; }
 
-        case OP_EQUAL_F64: { f64 b = POP().as.f; PEEK(0)->as.i = (PEEK(0)->as.f == b); SLOT_ADD_TYPE(PEEK(0), &OrsoTypeBool); break; }
-        case OP_LESS_F64: { f64 b = POP().as.f; PEEK(0)->as.i = (PEEK(0)->as.f < b); SLOT_ADD_TYPE(PEEK(0), &OrsoTypeBool); break; }
-        case OP_GREATER_F64: { f64 b = POP().as.f; PEEK(0)->as.i = (PEEK(0)->as.f > b); SLOT_ADD_TYPE(PEEK(0), &OrsoTypeBool); break; }
+        case OP_EQUAL_F64: { f64 b = POP().as.f; PEEK(0)->as.i = (PEEK(0)->as.f == b); break; }
+        case OP_LESS_F64: { f64 b = POP().as.f; PEEK(0)->as.i = (PEEK(0)->as.f < b); break; }
+        case OP_GREATER_F64: { f64 b = POP().as.f; PEEK(0)->as.i = (PEEK(0)->as.f > b); break; }
 
         case OP_ADD_PTR_I64: {
             i64 b = POP().as.i;
@@ -267,38 +254,40 @@ bool vm_step(vm_t *vm) {
             break;
         }
 
-        case OP_EQUAL_SYMBOL: { i32 result = (PEEK(1)->as.p == PEEK(0)->as.p); POP(); POP(); PUSH(SLOT_I(result), &OrsoTypeBool); break; }
+        case OP_EQUAL_SYMBOL: { i32 result = (PEEK(1)->as.p == PEEK(0)->as.p); POP(); POP(); PUSH(SLOT_I(result)); break; }
 
-        case OP_EQUAL_STRING: { i32 result = string_equal(PEEK(1)->as.p, PEEK(0)->as.p); POP(); POP(); PUSH(SLOT_I(result), &OrsoTypeBool); break; }
+        case OP_EQUAL_STRING: { i32 result = string_equal(PEEK(1)->as.p, PEEK(0)->as.p); POP(); POP(); PUSH(SLOT_I(result)); break; }
         case OP_CONCAT_STRING: { PEEK(1)->as.p = orso_string_concat(PEEK(1)->as.p, PEEK(0)->as.p, &vm->allocator); POP(); break; } 
 
-        case OP_LOGICAL_NOT: PEEK(0)->as.i = !PEEK(0)->as.i; SLOT_ADD_TYPE(PEEK(0), &OrsoTypeBool); break;
+        case OP_LOGICAL_NOT: PEEK(0)->as.i = !PEEK(0)->as.i; break;
 
         case OP_PUSH_0: {
             const slot_t zero = SLOT_I(0);
-            PUSH(zero, &OrsoTypeInteger64);
+            PUSH(zero);
             break;
         }
         case OP_PUSH_1: {
             const slot_t one = SLOT_I(1);
-            PUSH(one, &OrsoTypeInteger64);
+            PUSH(one);
             break;
         }
 
         case OP_PUSH_LOCAL_ADDRESS: {
-            u16 index = READ_U16();
-            PUSH(SLOT_P(((byte*)frame->slots) + index), &OrsoTypeInteger64);
+            op_push_address_t *push_address = READ_CODE(op_push_address_t);
+            u16 index = push_address->index;
+            PUSH(SLOT_P(((byte*)frame->slots) + index));
             break;
         }
 
         case OP_PUSH_GLOBAL_ADDRESS: {
-            u32 index = READ_U32();
-            PUSH(SLOT_P(((byte*)vm->globals.values.items) + index), &OrsoTypeInteger64);
+            op_push_address_t *push_address = READ_CODE(op_push_address_t);
+            u16 index = push_address->index;
+            PUSH(SLOT_P(((byte*)vm->globals.values.items) + index));
             break;
         }
 
         case OP_POP_SCOPE: {
-            op_code_pop_scope_t *pop_scope = READ_CODE(op_code_pop_scope_t);
+            op_pop_scope_t *pop_scope = READ_CODE(op_pop_scope_t);
             // byte local_slot_count = READ_BYTE();
             // byte block_value_slots = READ_BYTE();
             u32 stack_size = vm->stack_top - vm->stack;
@@ -317,7 +306,7 @@ bool vm_step(vm_t *vm) {
         }
 
         case OP_POPN: {
-            op_code_popn_t *popn = READ_CODE(op_code_popn_t);
+            op_popn_t *popn = READ_CODE(op_popn_t);
             POPN(popn->n);
             break;
         }
@@ -330,7 +319,7 @@ memcpy(current_top, constant, size); \
 } while(0)
 
         case OP_CONSTANT: {
-            op_code_location_t *location = READ_CODE(op_code_location_t);
+            op_location_t *location = READ_CODE(op_location_t);
             u32 index = location->index_slots;
             u16 size = location->size_bytes;
 
@@ -348,7 +337,7 @@ memcpy(current_top, global, size); \
 } while(0)
 
         case OP_GLOBAL: {
-            op_code_location_t *location = READ_CODE(op_code_location_t);
+            op_location_t *location = READ_CODE(op_location_t);
             u32 index = location->index_slots;
             u16 size = location->size_bytes;
 
@@ -366,7 +355,7 @@ memcpy(current_top, local, size); \
 } while(0)
 
         case OP_LOCAL: {
-            op_code_location_t *location = READ_CODE(op_code_location_t);
+            op_location_t *location = READ_CODE(op_location_t);
             u32 index = location->index_slots;
             u16 size = location->size_bytes;
 
@@ -381,7 +370,7 @@ memcpy(current_top, local, size); \
         #endif
 
         case OP_FIELD: {
-            op_code_field_t *field = READ_CODE(op_code_field_t);
+            op_field_t *field = READ_CODE(op_field_t);
             u16 field_offset = field->offset_bytes;
             u16 field_size = field->size_bytes;
             u16 value_size = field->value_size_bytes;
@@ -404,75 +393,59 @@ memcpy(current_top, local, size); \
             break;
         }
 
+        case OP_SET_LVALUE_BYTES:
+        case OP_SET_LVALUE_F32:
+        case OP_SET_LVALUE_I32:
+        case OP_SET_LVALUE_BOOL:
         case OP_SET_LVALUE_SLOT: {
+            op_set_lvalue_t *set_lvalue = READ_CODE(op_set_lvalue_t);
             void* ptr = POP().as.p;
-            slot_t value = *PEEK(0);
-            *((slot_t*)ptr) = value;
-            break;
-        }
-        case OP_SET_LVALUE_BOOL: {
-            void* ptr = POP().as.p;
-            byte value = (byte)PEEK(0)->as.u;
-            *((byte*)ptr) = value;
-            break;
-        }
-
-        case OP_SET_LVALUE_I32: {
-            void* ptr = POP().as.p;
-            i32 value = (i32)PEEK(0)->as.i;
-            *((i32*)ptr) = value;
-            break;
-        }
-
-        case OP_SET_LVALUE_F32: {
-            void* ptr = POP().as.p;
-            f32 value  = (f32)PEEK(0)->as.f;
-            *((f32*)ptr) = value;
-            break;
-        }
-
-        case OP_SET_LVALUE_BYTES: {
-            byte size = READ_BYTE();
-            void* ptr = POP().as.p;
-            byte slots = bytes_to_slots(size);
-
-            memcpy(ptr, PEEK(slots - 1), size);
+            switch (set_lvalue->op) {
+                case OP_SET_LVALUE_BYTES: {
+                    byte size = set_lvalue->size_bytes;
+                    byte slots = bytes_to_slots(size);
+                    memcpy(ptr, PEEK(slots - 1), size);
+                    break;
+                }
+                case OP_SET_LVALUE_F32: {
+                    f32 value  = (f32)PEEK(0)->as.f;
+                    *((f32*)ptr) = value;
+                    break;
+                }
+                case OP_SET_LVALUE_I32: {
+                    i32 value = (i32)PEEK(0)->as.i;
+                    *((i32*)ptr) = value;
+                    break;
+                }
+                case OP_SET_LVALUE_BOOL: {
+                    byte value = (byte)PEEK(0)->as.u;
+                    *((byte*)ptr) = value;
+                }
+                case OP_SET_LVALUE_SLOT: {
+                    slot_t value = *PEEK(0);
+                    *((slot_t*)ptr) = value;
+                }
+                default: UNREACHABLE();
+            }
             break;
         }
 
         case OP_PUT_IN_UNION: {
-            byte size = READ_BYTE();
+            op_put_in_union_t *put_in_union = READ_CODE(op_put_in_union_t);
+            byte size = put_in_union->size_bytes;
 
             type_t* type = (type_t*)(PEEK(0)->as.p);
             byte slot_size = bytes_to_slots(size);
             memmove(PEEK(slot_size-1), PEEK(slot_size), slot_size * sizeof(slot_t));
-            // for (u32 i = 0; i < slot_size; ++i) {
-            //     *PEEK(i) = *PEEK(i + 1);
-            // }
             PEEK(slot_size)->as.p = type;
-
-        #ifdef DEBUG
-            u32 stack_index = (vm->stack_top - slot_size - 1) - vm->stack;
-            for (u32 i = 0; i < slot_size + 1; ++i) {
-                vm->stack_types[stack_index + i] = &OrsoTypeInvalid;
-            }
-
-            vm->stack_types[stack_index] = &OrsoTypeType;
-            vm->stack_types[stack_index + 1] = type;
-        #endif
             break;
         }
 
         case OP_NARROW_UNION: {
-            byte type_offset = READ_BYTE();
+            op_narrow_union_t *narrow_union = READ_CODE(op_narrow_union_t);
+            byte type_offset = narrow_union->offset_bytes;
             ASSERT(type_offset % sizeof(slot_t), "must be perfectly slot size");
             byte slot_offset = type_offset / sizeof(slot_t);
-
-        #ifdef DEBUG
-            u32 stack_index = (vm->stack_top - (slot_offset - 1)) - vm->stack;
-
-            vm->stack_types[stack_index] = (type_t*)vm->stack[stack_index].as.p;
-        #endif
 
             memmove(PEEK(slot_offset - 1), PEEK(slot_offset - 2), type_offset - sizeof(slot_t));
 
@@ -486,7 +459,7 @@ memcpy(current_top, local, size); \
         }
 
         case OP_JUMP_IF_FALSE: {
-            op_code_jump_t *jump = READ_CODE(op_code_jump_t);
+            op_jump_t *jump = READ_CODE(op_jump_t);
             if (SLOT_IS_FALSEy(*PEEK(0))) {
                 frame->ip += jump->offset;
             }
@@ -498,7 +471,7 @@ memcpy(current_top, local, size); \
             break;
         }
         case OP_JUMP_IF_TRUE: {
-            op_code_jump_t *jump = READ_CODE(op_code_jump_t);
+            op_jump_t *jump = READ_CODE(op_jump_t);
             if (!SLOT_IS_FALSEy(*PEEK(0))) {
                 frame->ip += jump->offset;
             }
@@ -506,19 +479,21 @@ memcpy(current_top, local, size); \
         }
 
         case OP_JUMP: {
-            op_code_jump_t *jump = READ_CODE(op_code_jump_t);
+            op_jump_t *jump = READ_CODE(op_jump_t);
             frame->ip += jump->offset;
             break;
         }
 
         case OP_LOOP: {
-            u16 offset = READ_U16();
+            op_loop_t *loop = READ_CODE(op_loop_t);
+            u16 offset = loop->offset;
             frame->ip -= offset;
             break;
         }
 
         case OP_CALL: {
-            u16 argument_slots = READ_U16();
+            op_call_t *call = READ_CODE(op_call_t);
+            u16 argument_slots = call->argument_slots;
             call_object(vm, (object_t*)PEEK(argument_slots)->as.p, argument_slots);
 
             frame = &vm->frames[vm->frame_count - 1];
@@ -527,6 +502,7 @@ memcpy(current_top, local, size); \
 
         case OP_PRINT:
         case OP_PRINT_EXPR: {
+            // op_code_print_t *print = READ_CODE(op_code_print_t);
             type_t *type = (type_t*)POP().as.p; // pop expression type
 
             OrsoString *expression_string = (OrsoString*)(POP().as.p);
@@ -557,7 +533,9 @@ memcpy(current_top, local, size); \
         }
         
         case OP_RETURN: {
-            byte result_size = READ_BYTE();
+            op_return_t *return_ = READ_CODE(op_return_t);
+
+            byte result_size = return_->size_slots;
             for (i32 i = 0; i < result_size; i++) {
                 frame->slots[i] = *PEEK(result_size - i - 1);
             #ifdef DEBUG
@@ -575,6 +553,21 @@ memcpy(current_top, local, size); \
             frame = &vm->frames[vm->frame_count - 1];
             break;
         }
+#ifdef DEBUG
+        case OP_POP_TYPE_N: {
+            op_push_pop_type_t *push_pop_type = READ_CODE(op_push_pop_type_t);
+            (void)push_pop_type;
+            // TODO
+            break;
+        }
+        
+        case OP_PUSH_TYPE: {
+            op_push_pop_type_t *push_pop_type = READ_CODE(op_push_pop_type_t);
+            (void)push_pop_type;
+            // TODO
+            break;
+        }
+#endif
     }
 
     return true;

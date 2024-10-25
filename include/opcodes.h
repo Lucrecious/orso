@@ -79,38 +79,96 @@ typedef enum op_code_t {
     // builtin
     OP_PRINT_EXPR,
     OP_PRINT,
+
+#ifdef DEBUG
+    OP_POP_TYPE_N,
+    OP_PUSH_TYPE,
+#endif
 } op_code_t;
 
-typedef struct op_code_field_t op_code_field_t;
-struct op_code_field_t {
+#ifdef DEBUG
+typedef struct op_push_pop_type_t op_push_pop_type_t;
+struct op_push_pop_type_t {
+    op_code_t op;
+    union {
+        type_t *type;
+        u64 n;
+    };
+};
+#endif
+
+typedef struct op_return_t op_return_t;
+struct op_return_t {
+    op_code_t op;
+    byte size_slots;
+};
+
+typedef struct op_call_t op_call_t;
+struct op_call_t {
+    op_code_t op;
+    u16 argument_slots;
+};
+
+typedef struct op_loop_t op_loop_t;
+struct op_loop_t {
+    op_code_t op;
+    u16 offset;
+};
+
+typedef struct op_narrow_union_t op_narrow_union_t;
+struct op_narrow_union_t {
+    op_code_t op;
+    byte offset_bytes;
+};
+
+typedef struct op_put_in_union_t op_put_in_union_t;
+struct op_put_in_union_t {
+    op_code_t op;
+    byte size_bytes;
+};
+
+typedef struct op_set_lvalue_t op_set_lvalue_t;
+struct op_set_lvalue_t {
+    op_code_t op;
+    byte size_bytes;
+};
+
+typedef struct op_push_address_t op_push_address_t;
+struct op_push_address_t {
+    op_code_t op;
+    u16 index;
+};
+
+typedef struct op_field_t op_field_t;
+struct op_field_t {
     op_code_t op;
     u16 value_size_bytes;
     u16 offset_bytes;
     u16 size_bytes;
 };
 
-typedef struct op_code_location_t op_code_location_t;
-struct op_code_location_t {
+typedef struct op_location_t op_location_t;
+struct op_location_t {
     op_code_t op;
     u32 index_slots;
     u16 size_bytes;
 };
 
-typedef struct op_code_popn_t op_code_popn_t;
-struct op_code_popn_t {
+typedef struct op_popn_t op_popn_t;
+struct op_popn_t {
     op_code_t op;
     byte n;
 };
 
-typedef struct op_code_pop_scope_t op_code_pop_scope_t;
-struct op_code_pop_scope_t {
+typedef struct op_pop_scope_t op_pop_scope_t;
+struct op_pop_scope_t {
     op_code_t op;
     byte scope_size_slots;
     byte value_size_slots;
 };
 
-typedef struct op_code_jump_t op_code_jump_t;
-struct op_code_jump_t {
+typedef struct op_jump_t op_jump_t;
+struct op_jump_t {
     op_code_t op;
     u32 offset;
 };

@@ -58,9 +58,9 @@ static int jump_instruction(const char *name, int sign, chunk_t *chunk, int offs
         printf("%-16s %4d -> %d\n", name, offset, offset + 3 + sign * jump);
         return offset + 3;
     } else {
-        op_code_jump_t *jump = (op_code_jump_t*)(chunk->code.items+offset);
-        printf("%-16s %d -> %lu\n", name, offset, offset + sizeof(op_code_jump_t) + jump->offset);
-        return offset + sizeof(op_code_jump_t);
+        op_jump_t *jump = (op_jump_t*)(chunk->code.items+offset);
+        printf("%-16s %d -> %lu\n", name, offset, offset + sizeof(op_jump_t) + jump->offset);
+        return offset + sizeof(op_jump_t);
     }
 }
 
@@ -84,14 +84,14 @@ i32 disassemble_instruction(chunk_t *chunk, i32 offset) {
         case OP_NO_OP: return simple_instruction("OP_NO_OP", offset);
         case OP_POP: return simple_instruction("OP_POP", offset);
         case OP_POPN: {
-            op_code_popn_t *popn = (op_code_popn_t*)(chunk->code.items + offset);
+            op_popn_t *popn = (op_popn_t*)(chunk->code.items + offset);
             printf("OP_POPN n: %d\n", popn->n);
-            return offset + sizeof(op_code_popn_t);
+            return offset + sizeof(op_popn_t);
         };
         case OP_POP_SCOPE: {
-            op_code_pop_scope_t *pop_scope = (op_code_pop_scope_t*)(chunk->code.items + offset) ;
+            op_pop_scope_t *pop_scope = (op_pop_scope_t*)(chunk->code.items + offset) ;
             printf("OP_POP_SCOPE scope_size_slots: %d, value_size_slots: %d\n", pop_scope->scope_size_slots, pop_scope->value_size_slots);
-            return offset + sizeof(op_code_pop_scope_t);
+            return offset + sizeof(op_pop_scope_t);
         }
         case OP_PUSH_0: return simple_instruction("OP_PUSH_0", offset);
         case OP_PUSH_1: return simple_instruction("OP_PUSH_1", offset);
@@ -120,24 +120,24 @@ i32 disassemble_instruction(chunk_t *chunk, i32 offset) {
         case OP_EQUAL_STRING: return simple_instruction("OP_EQUAL_STRING", offset);
         case OP_EQUAL_SYMBOL: return simple_instruction("OP_EQUAL_SYMBOL", offset);
         case OP_CONSTANT: {
-            op_code_location_t *location = (op_code_location_t*)(chunk->code.items + offset);
+            op_location_t *location = (op_location_t*)(chunk->code.items + offset);
             printf("OP_CONSTANT index: %d, size: %d\n", location->index_slots, location->size_bytes);
-            return offset + sizeof(op_code_location_t);
+            return offset + sizeof(op_location_t);
         }
         case OP_LOCAL:  {
-            op_code_location_t *location = (op_code_location_t*)(chunk->code.items + offset);
+            op_location_t *location = (op_location_t*)(chunk->code.items + offset);
             printf("OP_LOCAL(index: %d, size: %d)\n", location->index_slots, location->size_bytes);
-            return offset + sizeof(op_code_location_t);
+            return offset + sizeof(op_location_t);
         }
         case OP_GLOBAL: {
-            op_code_location_t *location = (op_code_location_t*)(chunk->code.items + offset);
+            op_location_t *location = (op_location_t*)(chunk->code.items + offset);
             printf("OP_GLOBAL(index: %d, size: %d)\n", location->index_slots, location->size_bytes);
-            return offset + sizeof(op_code_location_t);
+            return offset + sizeof(op_location_t);
         }
         case OP_FIELD: {
-            op_code_field_t *field = (op_code_field_t*)(chunk->code.items + offset);
+            op_field_t *field = (op_field_t*)(chunk->code.items + offset);
             printf("OP_FIELD(value size: %d, offset: %d, size: %d)\n", field->value_size_bytes, field->offset_bytes, field->size_bytes);
-            return offset + sizeof(op_code_location_t);
+            return offset + sizeof(op_location_t);
         }
         case OP_SET_LVALUE_SLOT: return simple_instruction("OP_SET_LVALUE_SLOT", offset);
         case OP_SET_LVALUE_I32: return simple_instruction  ("OP_SET_LVALUE_I32", offset);
@@ -157,6 +157,13 @@ i32 disassemble_instruction(chunk_t *chunk, i32 offset) {
         case OP_RETURN: return simple_instruction("OP_RETURN", offset + 1);
         case OP_PRINT_EXPR: return simple_instruction("OP_PRINT_EXPR", offset);
         case OP_PRINT: return simple_instruction("OP_PRINT", offset);
+
+#ifdef DEBUG
+        case OP_PUSH_TYPE:
+        case OP_POP_TYPE_N: {
+            return simple_instruction("OP_DEBUG", offset);
+        }
+#endif
     }
 }
 
