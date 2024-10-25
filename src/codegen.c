@@ -1459,16 +1459,16 @@ static void declaration(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *
     }
 }
 
-void orso_code_builder_init(code_builder_t *builder, vm_t *vm, ast_t *ast) {
+void code_builder_init(code_builder_t *builder, vm_t *vm, ast_t *ast) {
     builder->vm = vm;
     builder->ast = ast;
 }
 
-void orso_code_builder_free(code_builder_t *builder) { 
+void code_builder_free(code_builder_t *builder) { 
     (void)builder;
 }
 
-function_t *orso_generate_expression_function(code_builder_t *builder, ast_node_t *expression_node, bool is_folding_time, arena_t *allocator) {
+function_t *generate_expression_function(code_builder_t *builder, ast_node_t *expression_node, bool is_folding_time, arena_t *allocator) {
     compiler_t compiler;
     type_t *function_type = orso_type_set_fetch_function(&builder->ast->type_set, expression_node->value_type, (types_t){0});
 

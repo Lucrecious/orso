@@ -345,11 +345,11 @@ static i32 evaluate_expression(analyzer_t* analyzer, ast_t* ast, bool is_folding
     vm.type_set = &ast->type_set;
 
     code_builder_t builder;
-    orso_code_builder_init(&builder, &vm, ast);
+    code_builder_init(&builder, &vm, ast);
 
-    function_t* function = orso_generate_expression_function(&builder, expression, is_folding_time, &analyzer->allocator);
+    function_t* function = generate_expression_function(&builder, expression, is_folding_time, &analyzer->allocator);
 
-    orso_code_builder_free(&builder);
+    code_builder_free(&builder);
 
     slot_t* value = orso_call_function(&vm, function, analyzer->error_fn);
 
