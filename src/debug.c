@@ -54,7 +54,7 @@ static i32 instruction_arg(const char *name, chunk_t *chunk, i32 offset) {
 
 static int jump_instruction(const char *name, int sign, chunk_t *chunk, int offset) {
     if (sign < 0) {
-        u16 jump = ORSO_u8s_to_u16(chunk->code.items[offset + 1], chunk->code.items[offset + 2]);
+        u16 jump = u8s_to_u16(chunk->code.items[offset + 1], chunk->code.items[offset + 2]);
         printf("%-16s %4d -> %d\n", name, offset, offset + 3 + sign * jump);
         return offset + 3;
     } else {

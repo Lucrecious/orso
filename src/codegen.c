@@ -257,7 +257,7 @@ static void emit(compiler_t* compiler, chunk_t* chunk, i32 line, const int op_co
             ASSERT(size < UINT16_MAX, "must be short");
 
             byte a, b;
-            ORSO_u16_to_u8s(size, a, b);
+            u16_to_u8s(size, a, b);
 
             chunk_write(chunk, a, line);
             chunk_write(chunk, b, line);
@@ -269,7 +269,7 @@ static void emit(compiler_t* compiler, chunk_t* chunk, i32 line, const int op_co
             u32 size = (u32)va_arg(args, long);
 
             byte a, b, c, d;
-            ORSO_u32_to_u8s(size, a, b, c, d);
+            u32_to_u8s(size, a, b, c, d);
 
             chunk_write(chunk, a, line);
             chunk_write(chunk, b, line);
@@ -316,7 +316,7 @@ static void emit(compiler_t* compiler, chunk_t* chunk, i32 line, const int op_co
             ASSERT(offset <= UINT16_MAX, "loop cant go back more than 2^16");
             byte a;
             byte b;
-            ORSO_u16_to_u8s(offset, a, b);
+            u16_to_u8s(offset, a, b);
             chunk_write(chunk, a, line);
             chunk_write(chunk, b, line);
 
@@ -335,7 +335,7 @@ static void emit(compiler_t* compiler, chunk_t* chunk, i32 line, const int op_co
 
             byte a;
             byte b;
-            ORSO_u16_to_u8s(argument_slots, a, b);
+            u16_to_u8s(argument_slots, a, b);
             chunk_write(chunk, a, line);
             chunk_write(chunk, b, line);
 

@@ -208,12 +208,12 @@ void vm_begin(vm_t *vm, function_t *entry_point) {
 
 #define READ_BYTE() *(frame->ip++)
 #define READ_CODE(type) ((frame->ip += sizeof(type)-1, (type*)(frame->ip-sizeof(type))))
-#define READ_U24() ORSO_u8s_to_u24(READ_BYTE(), READ_BYTE(), READ_BYTE())
-#define READ_U16() ORSO_u8s_to_u16(READ_BYTE(), READ_BYTE())
-#define READ_U32() ORSO_u8s_to_u32(READ_BYTE(), READ_BYTE(), READ_BYTE(), READ_BYTE())
-#define READ_TYPE_KIND() ORSO_u8s_to_TypeKind(READ_BYTE(), READ_BYTE())
+#define READ_U24() u8s_to_u24(READ_BYTE(), READ_BYTE(), READ_BYTE())
+#define READ_U16() u8s_to_u16(READ_BYTE(), READ_BYTE())
+#define READ_U32() u8s_to_u32(READ_BYTE(), READ_BYTE(), READ_BYTE(), READ_BYTE())
+#define READ_TYPE_KIND() u8s_to_type_kind(READ_BYTE(), READ_BYTE())
 #define READ_TYPE() ORSO_TYPE_SINGLE(\
-    ORSO_u8s_to_u64(\
+    u8s_to_u64(\
         READ_BYTE(), READ_BYTE(), READ_BYTE(), READ_BYTE(),\
         READ_BYTE(), READ_BYTE(), READ_BYTE(), READ_BYTE()))
 
