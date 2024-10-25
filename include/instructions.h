@@ -5,23 +5,6 @@
 #include "chunk.h"
 #include "opcodes.h"
 
-#define u24_to_u8s(BIG, A, B, C)\
-    A = (byte)((BIG >> 16) & 0xFF);\
-    B = (byte)((BIG >> 8) & 0xFF);\
-    C = (byte)((BIG) & 0xFF)
-
-#define u32_to_u8s(BIG, A, B, C, D)\
-    A = (byte)((BIG >> 24) & 0xFF);\
-    B = (byte)((BIG >> 16) & 0xFF);\
-    C = (byte)((BIG >> 8) & 0xFF);\
-    D = (byte)((BIG) & 0xFF)
-
-#define u8s_to_u24(A, B, C) (A << 16) | (B << 8) | (C)
-
-#define u16_to_u8s(BIG, A, B)\
-    A = (byte)((BIG >> 8) & 0xFF);\
-    B = (byte)((BIG) & 0xFF)
-
 #define u8s_to_u16(A, B) (A << 8) | (B)
 
 #define u8s_to_u32(A, B, C, D) (((u32)(A<<24)) | ((u32)(B<<16)) | ((u32)(C<<8)) | (D))

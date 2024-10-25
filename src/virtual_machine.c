@@ -201,15 +201,6 @@ void vm_begin(vm_t *vm, function_t *entry_point) {
 
 #define READ_BYTE() *(frame->ip++)
 #define READ_CODE(type) ((frame->ip += sizeof(type)-1, (type*)(frame->ip-sizeof(type))))
-#define READ_U24() u8s_to_u24(READ_BYTE(), READ_BYTE(), READ_BYTE())
-#define READ_U16() u8s_to_u16(READ_BYTE(), READ_BYTE())
-#define READ_U32() u8s_to_u32(READ_BYTE(), READ_BYTE(), READ_BYTE(), READ_BYTE())
-#define READ_TYPE_KIND() u8s_to_type_kind(READ_BYTE(), READ_BYTE())
-#define READ_TYPE() ORSO_TYPE_SINGLE(\
-    u8s_to_u64(\
-        READ_BYTE(), READ_BYTE(), READ_BYTE(), READ_BYTE(),\
-        READ_BYTE(), READ_BYTE(), READ_BYTE(), READ_BYTE()))
-
 #define PEEK(I) peek(vm, I)
 #define POP() pop(vm)
 #define POPN(N) pop_n(vm, N)
@@ -288,8 +279,6 @@ bool vm_step(vm_t *vm) {
 
         case OP_POP_SCOPE: {
             op_pop_scope_t *pop_scope = READ_CODE(op_pop_scope_t);
-            // byte local_slot_count = READ_BYTE();
-            // byte block_value_slots = READ_BYTE();
             u32 stack_size = vm->stack_top - vm->stack;
 
             for (byte i = 0; i < pop_scope->value_size_slots; ++i) {
@@ -575,46 +564,7 @@ memcpy(current_top, local, size); \
 
 static void run(vm_t *vm, error_function_t error_fn) {
     (void)error_fn;
-#ifdef DEBUG
-    printf("=== trace ===\n");
-#endif
-
-
      while (vm_step(vm));
-//     for (;;) {
-// #ifdef DEBUG
-//         for (i32 i = 0; i < vm->globals.name_to_index.capacity; i++) {
-//             symbol_table_entry_t* entry = &vm->globals.name_to_index.entries[i];
-//             if (entry->key == NULL) {
-//                 continue;
-//             }
-
-//             u32 index = entry->value.as.u;
-//             printf("%s = ", entry->key->text);
-//             slot_t* value = vm->globals.values + index;
-//             orso_print_slot(value, vm->globals.types.items[index]);
-//             printf("\n");
-//         }
-
-//         printf("SLOTS = { ");
-//         i32 stack_size = vm->stack_top - vm->stack;
-//         for (i32 index = 0; index < stack_size;) {
-//             printf("[");
-//             orso_print_slot(vm->stack + index, vm->stack_types[index]);
-//             printf("]");
-
-//             // TODO: push field bytes and slot do not record type
-//             if (!TYPE_IS_INVALID(vm->stack_types[index])) {
-//                 index += type_slot_count(vm->stack_types[index]);
-//             } else {
-//                 index++;
-//             }
-//         }
-//         printf(" }\n");
-//         disassemble_instruction(&frame->function->chunk, frame->ip - frame->function->chunk.code);
-//         printf("\n");
-// #endif
-    // }
 }
 
 #undef PUSH
@@ -622,11 +572,6 @@ static void run(vm_t *vm, error_function_t error_fn) {
 #undef POPN
 #undef POP
 #undef PEEK
-#undef READ_TYPE
-#undef READ_TYPE_KIND
-#undef READ_U16
-#undef READ_U24
-#undef READ_U32
 #undef READ_BYTE
 
 
