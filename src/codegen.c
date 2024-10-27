@@ -164,6 +164,7 @@ static void emit_debug_instructions(compiler_t *compiler, chunk_t *chunk, i32 li
         case OP_NEGATE_F64:
         case OP_NEGATE_I64: {
             NOT_NULL(debug);
+
             emit_pop_type(1);
             emit_push_type(debug->type);
             break;
@@ -177,18 +178,14 @@ static void emit_debug_instructions(compiler_t *compiler, chunk_t *chunk, i32 li
         case OP_PUSH_0:
         case OP_PUSH_1: {
             NOT_NULL(debug);
+
             emit_push_type(debug->type);
             break;
         }
 
+        case OP_POPN:
         case OP_POP: {
             emit_pop_type(1);
-            break;
-        }
-
-        case OP_POPN: {
-            op_popn_t *popn = (op_popn_t*)op_code;
-            emit_pop_type(popn->n);
             break;
         }
 
@@ -210,6 +207,7 @@ static void emit_debug_instructions(compiler_t *compiler, chunk_t *chunk, i32 li
         case OP_DIVIDE_F64:
         case OP_ADD_PTR_I64: {
             NOT_NULL(debug);
+
             emit_pop_type(2);
             emit_push_type(debug->type);
             break;
@@ -236,6 +234,7 @@ static void emit_debug_instructions(compiler_t *compiler, chunk_t *chunk, i32 li
 
         case OP_FIELD: {
             NOT_NULL(debug);
+
             emit_pop_type(1);
             emit_push_type(debug->type);
             break;
@@ -243,6 +242,7 @@ static void emit_debug_instructions(compiler_t *compiler, chunk_t *chunk, i32 li
 
         case OP_CALL: {
             NOT_NULL(debug);
+
             op_call_t *call = (op_call_t*)op_code;
             emit_pop_type(call->argument_slots + 1);
             emit_push_type(debug->type);
@@ -490,7 +490,9 @@ static void emit_storage_type_convert(compiler_t *compiler, chunk_t *chunk, type
     }
 }
 
-static void emit_pop(compiler_t* compiler, chunk_t* chunk, u32 pop_count, i32 line) {
+static void emit_pop_value(compiler_t* compiler, chunk_t* chunk, type_t *type, i32 line) {
+    size_t pop_count = type_slot_count(type);
+
     if (pop_count < 1) {
         return;
     }
@@ -979,7 +981,7 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
                     i32 previous_stack_count = compiler->current_stack_size;
                     (void)previous_stack_count;
 
-                    emit_pop(compiler, chunk, type_slot_count(expression_node->value_type), right->start.line);
+                    emit_pop_value(compiler, chunk, expression_node->value_type, right->start.line);
 
                     expression(vm, compiler, ast, right, chunk);
 
@@ -1288,9 +1290,9 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
             */
             i32 stack_count = compiler->current_stack_size;
 
-            emit_pop(compiler, chunk, type_slot_count(condition->value_type), condition->end.line);
+            emit_pop_value(compiler, chunk, condition->value_type, condition->end.line);
             if (expression_node->data.branch.looping) {
-                emit_pop(compiler, chunk, type_slot_count(expression_node->value_type), condition->start.line);
+                emit_pop_value(compiler, chunk, expression_node->value_type, condition->start.line);
             }
 
             expression(vm, compiler, ast, expression_node->data.branch.then_expression, chunk);
@@ -1325,9 +1327,9 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
             */
             compiler->current_stack_size = stack_count;
 
-            emit_pop(compiler, chunk, type_slot_count(condition->value_type), condition->end.line);
+            emit_pop_value(compiler, chunk, condition->value_type, condition->end.line);
             if (expression_node->data.branch.looping) {
-                emit_pop(compiler, chunk, type_slot_count(expression_node->value_type), expression_node->data.branch.then_expression->end.line);
+                emit_pop_value(compiler, chunk, expression_node->value_type, expression_node->data.branch.then_expression->end.line);
             }
 
             if (expression_node->data.branch.else_expression) {
@@ -1380,7 +1382,7 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
                 debug_info_t debug = {.type=overload_type->data.function.return_type};
                 emit(compiler, chunk, expression_node->data.call.callee->start.line, &call, sizeof(op_call_t), &debug);
 
-                emit_pop(compiler, chunk, type_slot_count(overload_type->data.function.return_type), expression_node->data.call.callee->start.line);
+                emit_pop_value(compiler, chunk, overload_type->data.function.return_type, expression_node->data.call.callee->start.line);
             }
             break;
         }
@@ -1459,7 +1461,7 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
                         emit(compiler, chunk, arg->start.line, &set_lvalue, sizeof(op_set_lvalue_t), NULL);
                     }
 
-                    emit_pop(compiler, chunk, type_slot_count(field->type), arg->start.line);
+                    emit_pop_value(compiler, chunk, field->type, arg->start.line);
                 }
             } else {
                 UNREACHABLE();
@@ -1552,7 +1554,7 @@ static void declaration(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *
             ast_node_t* expression_ = declaration->data.expression;
             expression(vm, compiler, ast, expression_, chunk);
 
-            emit_pop(compiler, chunk, type_slot_count(expression_->value_type), declaration->end.line);
+            emit_pop_value(compiler, chunk, expression_->value_type, declaration->end.line);
             break;
         }
         
