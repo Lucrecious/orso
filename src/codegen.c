@@ -1405,11 +1405,13 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
             slot_t value_type = SLOT_P(expression_node->data.expression->value_type);
             emit_constant(compiler, chunk, (byte*)&value_type, start.line, &OrsoTypeType);
 
-            debug_info_t debug = {.type=expression_node->value_type};
-            if (expression_node->node_type == AST_NODE_TYPE_EXPRESSION_PRINT_EXPR) {
-                emit1(compiler, chunk, start.line, OP_PRINT_EXPR, NULL);
-            } else {
-                emit1(compiler, chunk, start.line, OP_PRINT, NULL);
+            {
+                debug_info_t debug = {.type=expression_node->value_type};
+                if (expression_node->node_type == AST_NODE_TYPE_EXPRESSION_PRINT_EXPR) {
+                    emit1(compiler, chunk, start.line, OP_PRINT_EXPR, &debug);
+                } else {
+                    emit1(compiler, chunk, start.line, OP_PRINT, &debug);
+                }
             }
 
             debug_info_t debug = {.type=&OrsoTypeVoid};
