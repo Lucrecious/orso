@@ -2562,6 +2562,7 @@ static void resolve_statement(
     switch (statement->node_type) {
         case AST_NODE_TYPE_STATEMENT_EXPRESSION:
             resolve_expression(analyzer, ast, state, statement->data.expression);
+            statement->value_type = statement->data.expression->value_type;
             break;
 
         case AST_NODE_TYPE_STATEMENT_RETURN: {

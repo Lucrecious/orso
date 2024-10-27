@@ -102,9 +102,6 @@ struct debug_info_t {
 static size_t emit(compiler_t *compiler, chunk_t *chunk, i32 line, void *op_code_, size_t op_code_size_bytes, debug_info_t *debug);
 
 static void emit_pop_type(compiler_t *compiler, chunk_t *chunk, i32 line, u64 amount) {
-    if (amount == 0) {
-        size_t x = 10;
-    }
     op_push_pop_type_t push_pop_type = {
         .op = OP_POP_TYPE_N,
         .data.n = amount
@@ -198,7 +195,6 @@ static void emit_debug_instructions(compiler_t *compiler, chunk_t *chunk, i32 li
         case OP_POP_SCOPE: {
             NOT_NULL(debug);
 
-            op_pop_scope_t *pop_scope = (op_pop_scope_t*)op_code;
             emit_pop_type(debug->local_count);
             emit_push_type(debug->type);
             break;
@@ -283,7 +279,9 @@ static size_t emit(compiler_t *compiler, chunk_t *chunk, i32 line, void *op_code
     u32 stack_effect = 0;
 
     switch (*op_code) {
-        case OP_NO_OP:
+        case OP_NO_OP: {
+            break;
+        }
         case OP_I64_TO_F64:
         case OP_F64_TO_I64:
         case OP_NEGATE_I64:
@@ -403,7 +401,7 @@ static size_t emit(compiler_t *compiler, chunk_t *chunk, i32 line, void *op_code
 }
 
 static void emit1(compiler_t *compiler, chunk_t *chunk, i32 line, const op_code_t op_code, debug_info_t *debug) {
-    emit(compiler, chunk, line, (void*)&op_code, sizeof(op_code_t), debug);
+    emit(compiler, chunk, line, (void*)&op_code, 1, debug);
 }
 
 static void emit_constant(compiler_t *compiler, chunk_t *chunk, byte *data, i32 line, type_t *type) {
