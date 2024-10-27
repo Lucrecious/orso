@@ -25,17 +25,15 @@ typedef struct vm_t {
 
     struct {
         symbol_table_t name_to_index;
-#ifdef DEBUG
+
         types_t types;
-#endif
         slots_t values;
     } globals;
 
     symbol_table_t symbols;
 
-#ifdef DEBUG
-    type_t **stack_types;
-#endif
+    size_t stack_types_slot_count;
+    types_t stack_types;
     
     slot_t *stack;
     slot_t *stack_top;

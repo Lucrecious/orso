@@ -31,10 +31,10 @@ void vm_init(vm_t *vm, write_function_t write_fn, i32 stack_size) {
 
     vm->globals.values = (slots_t){.allocator=&vm->allocator};
 
-#ifdef DEBUG
-    vm->stack_types = arena_alloc(&vm->allocator, sizeof(type_t*)*stack_size_slot_count);
+    vm->stack_types_slot_count = 0;
+    vm->stack_types = (types_t){.allocator = &vm->allocator};
+
     vm->globals.types = (types_t){.allocator = &vm->allocator};
-#endif
 
     vm->write_fn = write_fn;
 
@@ -47,10 +47,8 @@ void vm_free(vm_t* vm) {
     vm->stack = NULL;
     vm->stack_top = NULL;
 
-#ifdef DEBUG
-    vm->stack_types = NULL;
+    vm->stack_types.count = 0;
     vm->globals.types.count = 0;
-#endif
 
     vm->globals.values.count = 0;
 }
@@ -60,7 +58,6 @@ static FORCE_INLINE void push_i64(vm_t* vm, slot_t value) {
     vm->stack_top++;
 }
 
-#define RESERVE_STACK_SPACE(vm, slot_count, type) reserve_stack_space(vm, slot_count)
 static FORCE_INLINE void reserve_stack_space(vm_t* vm, u32 slot_count) {
     for (u32 i = 0; i < slot_count; i++) {
         vm->stack_top->as.i = 0;
@@ -68,16 +65,28 @@ static FORCE_INLINE void reserve_stack_space(vm_t* vm, u32 slot_count) {
     }
 }
 
+static void pop_type_n(vm_t *vm, size_t amount) {
+    amount = amount < vm->stack_types.count ? amount : vm->stack_types.count;
+    for (size_t i = vm->stack_types.count - amount; i < vm->stack_types.count; ++i) {
+        vm->stack_types_slot_count -= type_slot_count(vm->stack_types.items[i]);
+    }
+    vm->stack_types.count -= amount;
+}
+
+static void push_type(vm_t *vm, type_t *type) {
+    array_push(&vm->stack_types, type);
+    vm->stack_types_slot_count += type_slot_count(type);
+}
+
 void vm_push_object(vm_t* vm, object_t* object) {
     *vm->stack_top = SLOT_P(object);
-#ifdef DEBUG
-    vm->stack_types[vm->stack_top - vm->stack] =  object->type;
-#endif
-    vm->stack_top++;
+    ++vm->stack_top;
+
+    push_type(vm, object->type);
 }
 
 static FORCE_INLINE slot_t pop(vm_t* vm) {
-    vm->stack_top--;
+    --vm->stack_top;
     return *vm->stack_top;
 }
 
@@ -133,45 +142,51 @@ static void call_object(vm_t *vm, object_t *callee, i32 argument_slots) {
 }
 
 void vm_print_stack(vm_t *vm) {
+    i64 untracked_slots = 0;
+    size_t effective_stack_type_count = vm->stack_types.count;
+    size_t slot_count = (size_t)(vm->stack_top - vm->stack);
+    if (vm->stack_types_slot_count > slot_count) {
+        for (size_t i = vm->stack_types.count-1; i != 0; --i) {
+            untracked_slots -= type_slot_count(vm->stack_types.items[i]);
+            --effective_stack_type_count;
+            if (vm->stack_types_slot_count + untracked_slots <= slot_count) {
+                break;
+            }
+        }
+
+        ASSERT(vm->stack_types_slot_count + untracked_slots == slot_count, "must be exact");
+    } else {
+        untracked_slots = (vm->stack_top - vm->stack) - vm->stack_types_slot_count;
+    }
+
     static const size_t limit = 10;
     
     size_t items_counted = 0;
     size_t slots_size = 0;
-    size_t start_index = 0;
     type_t *types[limit] = {0};
     slot_t *slots[limit] = {0};
-    size_t stack_size = vm->stack_top - vm->stack;
-    for (size_t i = 0; i < stack_size;) {
-        slot_t *slot = (vm->stack + i);
-        if (slots_size >= limit) {
-            slots_size -= ((slots_size - limit) + 1);
-            ++start_index;
-        }
-        slots[(start_index+slots_size)%limit] = slot;
-        types[(start_index+slots_size)%limit] = &OrsoTypeUnresolved;
 
-        ++i;
-#ifdef DEBUG
-        --i;
-        type_t *type = vm->stack_types[i];
-        types[(start_index+slots_size)%limit] = type;
-        unless (TYPE_IS_INVALID(type)) {
-            i += type_slot_count(type);
-        } else {
-            ++i;
-        }
-#endif
-        ++slots_size;
+    size_t amount = limit;
+    size_t offset = untracked_slots > 0 ? untracked_slots : 0;
+    if (effective_stack_type_count < amount) amount = effective_stack_type_count;
+    for (size_t i_ = 0; i_ < amount; ++i_) {
+        size_t i = effective_stack_type_count - i_ - 1;
+        type_t *type = vm->stack_types.items[i];
+        size_t size_slots = type_slot_count(type);
+
+        slots_size += size_slots;
+        slot_t *value_slot = vm->stack_top - slots_size - offset;
+        slots[items_counted] = value_slot;
+        types[items_counted] = type;
         ++items_counted;
     }
 
     tmp_arena_t *tmp = allocator_borrow(); {
-        printf("Slots Counted: %lu, Slots Showing: %lu\n", items_counted, slots_size);
-        for (size_t i = 0; i < slots_size; ++i) {
-            size_t i_ = (start_index + slots_size - i - 1) % limit;
-            size_t distance = slots[i_] - vm->stack;
-            slot_t *slot = slots[i_];
-            type_t *type = types[i_];
+        printf("Slots Counted: %lu, Slots Showing: %lu, Untracked Slots: %lld\n", items_counted, slots_size, untracked_slots);
+        for (size_t i = 0; i < items_counted; ++i) {
+            slot_t *slot = slots[i];
+            type_t *type = types[i];
+            size_t distance = slot - vm->stack;
             string_t value_string = slot_to_string(slot, type, tmp->allocator);
             printf("@%lu -> %s: %s\n", distance, value_string.cstr, type_to_string(type, tmp->allocator).cstr);
         }
@@ -285,58 +300,42 @@ bool vm_step(vm_t *vm) {
             break;
         }
 
-#define PUSH_CONSTANT() do { \
-slot_t* current_top = vm->stack_top; \
-RESERVE_STACK_SPACE(vm, bytes_to_slots(size), (frame->function->chunk.constant_types.items[index / sizeof(slot_t)])); \
-byte* constant = ((byte*)frame->function->chunk.constants.items) + index; \
-memcpy(current_top, constant, size); \
-} while(0)
-
         case OP_CONSTANT: {
             op_location_t *location = READ_CODE(op_location_t);
             u32 index = location->index_slots;
             u16 size = location->size_bytes;
 
-            PUSH_CONSTANT();
+            slot_t* current_top = vm->stack_top;
+            reserve_stack_space(vm, bytes_to_slots(size));
+            byte* constant = ((byte*)frame->function->chunk.constants.items) + index;
+            memcpy(current_top, constant, size);
             break;
         }
-#undef PUSH_CONSTANT
-
-
-#define PUSH_GLOBAL() do { \
-slot_t* current_top = vm->stack_top; \
-RESERVE_STACK_SPACE(vm, bytes_to_slots(size), (vm->globals.types.items[index / sizeof(slot_t)])); \
-byte* global = ((byte*)vm->globals.values.items) + index; \
-memcpy(current_top, global, size); \
-} while(0)
 
         case OP_GLOBAL: {
             op_location_t *location = READ_CODE(op_location_t);
             u32 index = location->index_slots;
             u16 size = location->size_bytes;
 
-            PUSH_GLOBAL();
+            slot_t* current_top = vm->stack_top;
+            reserve_stack_space(vm, bytes_to_slots(size));
+            byte* global = ((byte*)vm->globals.values.items) + index;
+            memcpy(current_top, global, size);
             break;
         }
-#undef PUSH_GLOBAL
-
-#define PUSH_LOCAL() do { \
-slot_t* current_top = vm->stack_top; \
-RESERVE_STACK_SPACE(vm, bytes_to_slots(size), \
-    vm->stack_types[(frame->slots + (index / sizeof(slot_t))) - vm->stack]); \
-byte* local = ((byte*)frame->slots) + index; \
-memcpy(current_top, local, size); \
-} while(0)
 
         case OP_LOCAL: {
             op_location_t *location = READ_CODE(op_location_t);
             u32 index = location->index_slots;
             u16 size = location->size_bytes;
 
-            PUSH_LOCAL();
+            slot_t* current_top = vm->stack_top;
+            reserve_stack_space(vm, bytes_to_slots(size));
+            byte* local = ((byte*)frame->slots) + index;
+            memcpy(current_top, local, size);
             break;
         }
-#undef PUSH_LOCAL
+
         case OP_FIELD: {
             op_field_t *field = READ_CODE(op_field_t);
             u16 field_offset = field->offset_bytes;
@@ -462,7 +461,6 @@ memcpy(current_top, local, size); \
 
         case OP_PRINT:
         case OP_PRINT_EXPR: {
-            // op_code_print_t *print = READ_CODE(op_code_print_t);
             type_t *type = (type_t*)POP().as.p; // pop expression type
 
             OrsoString *expression_string = (OrsoString*)(POP().as.p);
@@ -498,9 +496,6 @@ memcpy(current_top, local, size); \
             byte result_size = return_->size_slots;
             for (i32 i = 0; i < result_size; i++) {
                 frame->slots[i] = *PEEK(result_size - i - 1);
-            #ifdef DEBUG
-                vm->stack_types[(frame->slots + i) - vm->stack] = &OrsoTypeInvalid;
-            #endif
             }
 
             vm->frame_count--;
@@ -513,21 +508,17 @@ memcpy(current_top, local, size); \
             frame = &vm->frames[vm->frame_count - 1];
             break;
         }
-#ifdef DEBUG
         case OP_POP_TYPE_N: {
             op_push_pop_type_t *push_pop_type = READ_CODE(op_push_pop_type_t);
-            (void)push_pop_type;
-            // TODO
+            pop_type_n(vm, push_pop_type->data.n);
             break;
         }
         
         case OP_PUSH_TYPE: {
             op_push_pop_type_t *push_pop_type = READ_CODE(op_push_pop_type_t);
-            (void)push_pop_type;
-            // TODO
+            push_type(vm, push_pop_type->data.type);
             break;
         }
-#endif
     }
 
     return true;

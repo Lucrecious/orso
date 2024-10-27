@@ -193,10 +193,10 @@ int main(int argc, char **argv) {
             while(true) {
                 vm_disassemble_current_instruction(&vm);
                 bool has_next = vm_step(&vm);
-                vm_print_stack(&vm);
-                printf("\n");
 
                 unless (has_next) break;
+                vm_print_stack(&vm);
+                printf("\n");
             }
         }
     } else {

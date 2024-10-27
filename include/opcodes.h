@@ -93,7 +93,7 @@ struct op_push_pop_type_t {
     union {
         type_t *type;
         u64 n;
-    };
+    } data;
 };
 #endif
 

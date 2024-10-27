@@ -5,6 +5,7 @@
 #include "def.h"
 #include "instructions.h"
 #include "opcodes.h"
+#include "tmp.h"
 #include "type_set.h"
 
 static i32 instruction(const char *name, i32 offset) {
@@ -170,14 +171,19 @@ i32 disassemble_instruction(chunk_t *chunk, i32 offset) {
         case OP_PRINT_EXPR:
         case OP_PRINT: return instruction("OP_PRINT", offset);
 
-#ifdef DEBUG
-        case OP_PUSH_TYPE:
-        case OP_POP_TYPE_N: {
+        case OP_PUSH_TYPE: {
             op_push_pop_type_t *push_pop = (op_push_pop_type_t*)(chunk->code.items + offset);
-            (void)push_pop;
+            tmp_arena_t *tmp = allocator_borrow(); {
+                printf("OP_PUSH_TYPE(type: %s)\n", type_to_string(push_pop->data.type, tmp->allocator).cstr);
+            } allocator_return(tmp);
             return offset + sizeof(op_push_pop_type_t);
         }
-#endif
+
+        case OP_POP_TYPE_N: {
+            op_push_pop_type_t *push_pop = (op_push_pop_type_t*)(chunk->code.items + offset);
+            printf("OP_POP_TYPE_N(n: %llu)\n", push_pop->data.n);
+            return offset + sizeof(op_push_pop_type_t);
+        }
     }
 }
 
