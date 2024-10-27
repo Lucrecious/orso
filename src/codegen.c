@@ -376,7 +376,9 @@ static size_t emit(compiler_t *compiler, chunk_t *chunk, i32 line, void *op_code
 
         case OP_PRINT:
         case OP_PRINT_EXPR: {
-            stack_effect -= 2;
+            NOT_NULL(debug);
+            stack_effect = -2;
+            stack_effect -= type_slot_count(debug->type);
             break;
         }
 
@@ -1392,10 +1394,6 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
         case AST_NODE_TYPE_EXPRESSION_PRINT_EXPR: {
             expression(vm, compiler, ast, expression_node->data.expression, chunk);
 
-            // if (!TYPE_IS_UNION(expression_node->data.expression->value_type)) {
-            //     emit_put_in_union(compiler, chunk, expression_node->start.line, expression_node->data.expression->value_type);
-            // }
-
             token_t start = expression_node->data.expression->start;
             token_t end = expression_node->data.expression->end;
 
@@ -1407,6 +1405,7 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
             slot_t value_type = SLOT_P(expression_node->data.expression->value_type);
             emit_constant(compiler, chunk, (byte*)&value_type, start.line, &OrsoTypeType);
 
+            debug_info_t debug = {.type=expression_node->value_type};
             if (expression_node->node_type == AST_NODE_TYPE_EXPRESSION_PRINT_EXPR) {
                 emit1(compiler, chunk, start.line, OP_PRINT_EXPR, NULL);
             } else {

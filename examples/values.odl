@@ -1,0 +1,10 @@
+main :: () {
+    block := {
+        x := 5;
+        y := 6;
+        print_expr x + y;
+        x + y;
+    };
+
+    print_expr block;
+};
