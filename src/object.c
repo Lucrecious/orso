@@ -97,8 +97,47 @@ string_t slot_to_string(slot_t *slot, type_t *type, arena_t *allocator) {
         }
 
         case TYPE_STRUCT: {
-            u32 size = type->data.struct_.total_bytes;
-            return string_format("<struct %d bytes>", allocator, size);
+            tmp_arena_t *tmp = allocator_borrow();
+            string_builder_t sb = {.allocator=tmp->allocator};
+
+            sb_add_cstr(&sb, "{");
+
+            slots_t slots = {.allocator=tmp->allocator};
+
+            for (i32 i = 0; i < type->data.struct_.field_count; ++i) {
+                struct_field_t *field = &type->data.struct_.fields[i];
+                
+                sb_add_cstr(&sb, field->name);
+
+                sb_add_cstr(&sb, "=");
+
+                byte *value = ((byte*)slot) + field->offset;
+
+                size_t field_slot_size = type_slot_count(field->type);
+                until (slots.count >= field_slot_size) {
+                    array_push(&slots, (slot_t){0});
+                }
+
+                size_t field_size = type_size_bytes(field->type);
+
+                memcpy(slots.items, value, field_size);
+
+                string_t field_value = slot_to_string(slots.items, field->type, tmp->allocator);
+
+                sb_add_cstr(&sb, field_value.cstr);
+
+                if (i < type->data.struct_.field_count - 1) {
+                    sb_add_cstr(&sb, ", ");
+                }
+            }
+
+            sb_add_cstr(&sb, "}");
+
+            string_t result = sb_render(&sb, allocator);
+
+            allocator_return(tmp);
+
+            return  result;
         }
 
         case TYPE_UNION: {

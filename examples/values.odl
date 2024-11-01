@@ -7,4 +7,12 @@ main :: () {
     };
 
     print_expr block;
+
+    vector2 :: struct {
+        x := 0;
+        y := 0;
+    };
+
+    v := vector2.{};
+    print_expr v;
 };
