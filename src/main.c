@@ -193,8 +193,9 @@ int main(int argc, char **argv) {
             while(true) {
                 vm_disassemble_current_instruction(&vm);
                 bool has_next = vm_step(&vm);
-
                 unless (has_next) break;
+                if (vm_is_on_debug_instruction(&vm)) continue;
+
                 vm_print_stack(&vm);
                 printf("\n");
             }

@@ -50,6 +50,8 @@ void vm_push_object(vm_t *vm, object_t *object);
 void vm_print_stack(vm_t *vm);
 void vm_disassemble_current_instruction(vm_t *vm);
 
+bool vm_is_on_debug_instruction(vm_t *vm);
+
 void vm_begin(vm_t *vm, function_t *entry_point);
 bool vm_step(vm_t *vm);
 

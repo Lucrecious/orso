@@ -192,7 +192,7 @@ static void emit_debug_instructions(compiler_t *compiler, chunk_t *chunk, i32 li
         case OP_POP_SCOPE: {
             NOT_NULL(debug);
 
-            emit_pop_type(debug->local_count);
+            emit_pop_type(debug->local_count + 1);
             emit_push_type(debug->type);
             break;
        }
@@ -243,15 +243,13 @@ static void emit_debug_instructions(compiler_t *compiler, chunk_t *chunk, i32 li
         case OP_CALL: {
             NOT_NULL(debug);
 
-            op_call_t *call = (op_call_t*)op_code;
-            emit_pop_type(call->argument_slots + 1);
-            emit_push_type(debug->type);
+            // pop the function signature and the argument types off the stack
+            emit_pop_type(debug->type->data.function.argument_types.count + 1);
+            emit_push_type(debug->type->data.function.return_type);
             break;
         }
 
         case OP_RETURN: {
-            op_return_t *return_ = (op_return_t*)op_code;
-            emit_pop_type(return_->size_slots);
             break;
         }
 
@@ -1379,7 +1377,7 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
                     .argument_slots = argument_slots,
                 };
 
-                debug_info_t debug = {.type=overload_type->data.function.return_type};
+                debug_info_t debug = {.type=overload_type};
                 emit(compiler, chunk, expression_node->data.call.callee->start.line, &call, sizeof(op_call_t), &debug);
 
                 emit_pop_value(compiler, chunk, overload_type->data.function.return_type, expression_node->data.call.callee->start.line);

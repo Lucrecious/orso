@@ -182,7 +182,21 @@ void vm_print_stack(vm_t *vm) {
     }
 
     tmp_arena_t *tmp = allocator_borrow(); {
-        printf("Slots Counted: %lu, Slots Showing: %lu, Untracked Slots: %lld\n", items_counted, slots_size, untracked_slots);
+        if (vm->stack_types.count > effective_stack_type_count) {
+            printf("Unaccounted Types: ");
+            for (size_t i = effective_stack_type_count; i < vm->stack_types.count; ++i) {
+                type_t *type = vm->stack_types.items[i];
+                string_t type_str = type_to_string(type, tmp->allocator);
+                printf("%s", type_str.cstr);
+                if (i < vm->stack_types.count-1) {
+                    printf(",");
+                }
+            }
+
+            printf("\n");
+        }
+
+        printf("Types Counted: %lu, Slots Showing: %lu, Untracked Slots: %lld\n", items_counted, slots_size, untracked_slots);
         for (size_t i = 0; i < items_counted; ++i) {
             slot_t *slot = slots[i];
             type_t *type = types[i];
@@ -197,6 +211,20 @@ void vm_print_stack(vm_t *vm) {
 void vm_disassemble_current_instruction(vm_t *vm) {
     call_frame_t *frame = &vm->frames[vm->frame_count-1];
     disassemble_instruction(&frame->function->chunk, frame->ip - frame->function->chunk.code.items);
+}
+
+bool vm_is_on_debug_instruction(vm_t *vm) {
+    call_frame_t *frame = &vm->frames[vm->frame_count-1];
+    size_t offset = frame->ip - frame->function->chunk.code.items;
+    op_code_t op = frame->function->chunk.code.items[offset];
+    switch (op) {
+        case OP_PUSH_TYPE:
+        case OP_POP_TYPE_N: {
+            return true;
+        }
+        default: break;
+    }
+    return false;
 }
 
 void vm_begin(vm_t *vm, function_t *entry_point) {
@@ -494,11 +522,11 @@ bool vm_step(vm_t *vm) {
             op_return_t *return_ = READ_CODE(op_return_t);
 
             byte result_size = return_->size_slots;
-            for (i32 i = 0; i < result_size; i++) {
+            for (i32 i = 0; i < result_size; ++i) {
                 frame->slots[i] = *PEEK(result_size - i - 1);
             }
 
-            vm->frame_count--;
+            --vm->frame_count;
 
             if (vm->frame_count == 0) {
                 return false;
