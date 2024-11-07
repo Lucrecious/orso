@@ -364,18 +364,56 @@ bool vm_step(vm_t *vm) {
             break;
         }
 
-        case OP_FIELD: {
+        case OP_FIELD_BYTE:
+        case OP_FIELD_I32:
+        case OP_FIELD_F32:
+        case OP_FIELD_SLOT:
+        case OP_FIELD_BYTES: {
             op_field_t *field = READ_CODE(op_field_t);
             u16 field_offset = field->offset_bytes;
             u16 field_size = field->size_bytes;
             u16 value_size = field->value_size_bytes;
             ASSERT(value_size % sizeof(slot_t) == 0, "must be aligned to slots");
 
-            byte *start = ((byte*)vm->stack_top) - value_size;
-            memmove(start, start + field_offset, field_size);
-            memset(start+field_offset+1, 0, value_size - field_offset);
+            byte *start = ((byte*)vm->stack_top) - bytes_to_slots(value_size)*sizeof(slot_t);
 
-            // TODO: needs to do these in batches
+            switch (op_code) {
+                default: UNREACHABLE(); break;
+                case OP_FIELD_BYTE: {
+                    byte field_value = start[field_offset];
+                    ((slot_t*)start)->as.u = field_value;
+                    break;
+                }
+
+                case OP_FIELD_I32: {
+                    i32 field_value = *((i32*)(start + field_offset));
+                    ((slot_t*)start)->as.i = field_value;
+                    break;
+                }
+
+                case OP_FIELD_F32: {
+                    f32 field_value = *((f32*)(start + field_offset));
+                    ((slot_t*)start)->as.f = field_value;
+                    break;
+                }
+                case OP_FIELD_SLOT: {
+                    *((slot_t*)start) = *((slot_t*)(start + field_offset));
+                    break;
+                }
+
+                case OP_FIELD_BYTES: {
+                    for (size_t i = 0; i < field_size; i += sizeof(slot_t)) {
+                        if (i + sizeof(slot_t) <= field_size) {
+                            ((slot_t*)start)[i/sizeof(slot_t)] = ((slot_t*)(start + field_offset))[i/sizeof(slot_t)];
+                        } else {
+                            ((slot_t*)start)[i/sizeof(slot_t)].as.i = 0;
+                            memcpy(start + i, start + field_offset + i, field_size-i);
+                        }
+                    }
+                    break;
+                }
+            }
+
             POPN(bytes_to_slots(value_size) - bytes_to_slots(field_size));
             break;
         }
@@ -407,10 +445,12 @@ bool vm_step(vm_t *vm) {
                 case OP_SET_LVALUE_BOOL: {
                     byte value = (byte)PEEK(0)->as.u;
                     *((byte*)ptr) = value;
+                    break;
                 }
                 case OP_SET_LVALUE_SLOT: {
                     slot_t value = *PEEK(0);
                     *((slot_t*)ptr) = value;
+                    break;
                 }
                 default: UNREACHABLE();
             }

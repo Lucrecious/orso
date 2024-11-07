@@ -232,7 +232,11 @@ static void emit_debug_instructions(compiler_t *compiler, chunk_t *chunk, i32 li
             break;
         }
 
-        case OP_FIELD: {
+        case OP_FIELD_BYTE:
+        case OP_FIELD_I32:
+        case OP_FIELD_F32:
+        case OP_FIELD_SLOT:
+        case OP_FIELD_BYTES: {
             NOT_NULL(debug);
 
             emit_pop_type(1);
@@ -274,7 +278,7 @@ static void emit_debug_instructions(compiler_t *compiler, chunk_t *chunk, i32 li
 
 static size_t emit(compiler_t *compiler, chunk_t *chunk, i32 line, void *op_code_, size_t op_code_size_bytes, debug_info_t *debug) {
     op_code_t *op_code = (op_code_t*)op_code_;
-    u32 stack_effect = 0;
+    i32 stack_effect = 0;
 
     switch (*op_code) {
         case OP_NO_OP: {
@@ -352,7 +356,11 @@ static size_t emit(compiler_t *compiler, chunk_t *chunk, i32 line, void *op_code
             break;
         }
 
-        case OP_FIELD: {
+        case OP_FIELD_BYTE:
+        case OP_FIELD_I32:
+        case OP_FIELD_F32:
+        case OP_FIELD_SLOT:
+        case OP_FIELD_BYTES: {
             op_field_t *field = (op_field_t*)op_code;
             stack_effect = field->value_size_bytes - field->size_bytes;
             break;
@@ -815,7 +823,8 @@ static void expression_lvalue(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_no
                 if (field->offset > 0) {
                     slot_t offset = SLOT_U(field->offset);
                     emit_constant(compiler, chunk, (byte*)&offset, lvalue_node->data.dot.identifier.line, &OrsoTypeInteger64);
-                    emit1(compiler, chunk, lvalue_node->data.dot.identifier.line, OP_ADD_PTR_I64, NULL);
+                    debug_info_t debug = {.type=field->type};
+                    emit1(compiler, chunk, lvalue_node->data.dot.identifier.line, OP_ADD_PTR_I64, &debug);
                 }
             } else {
                 UNREACHABLE();
@@ -1143,12 +1152,16 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
             ASSERT(field_offset < UINT16_MAX, "TODO");
             ASSERT(field_size < UINT16_MAX, "TODO");
 
+            op_code_t field_op_code = OP_FIELD_SLOT;
+
             switch (expression_node->value_type->kind) {
                 case TYPE_VOID: {
+                    field_op_code = OP_FIELD_BYTE;
                     field_size = 0;
                     break;
                 }
                 case TYPE_BOOL: {
+                    field_op_code = OP_FIELD_BYTE;
                     field_size = sizeof(bool);
                     break;
                 }
@@ -1161,19 +1174,23 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
                 case TYPE_FLOAT64:
                 case TYPE_INT64: {
                     field_size = sizeof(u64);
+                    field_op_code = OP_FIELD_SLOT;
                     break;
                 }
                 case TYPE_INT32: {
                     field_size = sizeof(i32);
+                    field_op_code = OP_FIELD_I32;
                     break;
                 }
                 case TYPE_FLOAT32: {
                     field_size = sizeof(f32);
+                    field_op_code = OP_FIELD_F32;
                     break;
                 }
                 case TYPE_UNION:
                 case TYPE_STRUCT: {
                     field_size = type_size_bytes(field->type);
+                    field_op_code = OP_FIELD_BYTES;
                     break;
                 }
 
@@ -1184,7 +1201,7 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
 
             {
                 op_field_t op_field = {
-                    .op = OP_FIELD,
+                    .op = field_op_code,
                     .value_size_bytes = (u16)struct_size,
                     .offset_bytes = (u16)field_offset,
                     .size_bytes = (u16)field_size,
@@ -1406,7 +1423,7 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
             emit_constant(compiler, chunk, (byte*)&value_type, start.line, &OrsoTypeType);
 
             {
-                debug_info_t debug = {.type=expression_node->value_type};
+                debug_info_t debug = {.type=expression_node->data.expression->value_type};
                 if (expression_node->node_type == AST_NODE_TYPE_EXPRESSION_PRINT_EXPR) {
                     emit1(compiler, chunk, start.line, OP_PRINT_EXPR, &debug);
                 } else {

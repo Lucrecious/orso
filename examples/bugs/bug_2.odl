@@ -1,0 +1,15 @@
+main :: () {
+    vector2 :: struct {
+        x := 0.0;
+        y := 0.0;
+    };
+
+    v := vector2.{420.0,69.0};
+    print_expr v.x;
+    print_expr v.y;
+
+    v.x = 69.0;
+    v.y = 420.0;
+    print_expr v.x;
+    print_expr v.y;
+};
