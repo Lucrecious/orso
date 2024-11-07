@@ -87,33 +87,10 @@ i32 disassemble_instruction(chunk_t *chunk, i32 offset) {
             printf("OP_GLOBAL(index: %d, size: %d)\n", location->index_slots, location->size_bytes);
             return offset + sizeof(op_location_t);
         }
-        case OP_FIELD_BYTE: {
-            op_field_t *field = (op_field_t*)(chunk->code.items + offset);
-            printf("OP_FIELD_I32(value size: %d, offset: %d, size: %d)\n", field->value_size_bytes, field->offset_bytes, field->size_bytes);
-            return offset + sizeof(op_field_t);
-        }
 
-        case OP_FIELD_I32: {
+        case OP_FIELD: {
             op_field_t *field = (op_field_t*)(chunk->code.items + offset);
-            printf("OP_FIELD_I32(value size: %d, offset: %d, size: %d)\n", field->value_size_bytes, field->offset_bytes, field->size_bytes);
-            return offset + sizeof(op_field_t);
-        }
-
-        case OP_FIELD_F32: {
-            op_field_t *field = (op_field_t*)(chunk->code.items + offset);
-            printf("OP_FIELD_F32(value size: %d, offset: %d, size: %d)\n", field->value_size_bytes, field->offset_bytes, field->size_bytes);
-            return offset + sizeof(op_field_t);
-        }
-
-        case OP_FIELD_SLOT: { 
-            op_field_t *field = (op_field_t*)(chunk->code.items + offset);
-            printf("OP_FIELD_SLOT(value size: %d, offset: %d, size: %d)\n", field->value_size_bytes, field->offset_bytes, field->size_bytes);
-            return offset + sizeof(op_field_t);
-        }
-
-        case OP_FIELD_BYTES: {
-            op_field_t *field = (op_field_t*)(chunk->code.items + offset);
-            printf("OP_FIELD_BYTES(value size: %d, offset: %d, size: %d)\n", field->value_size_bytes, field->offset_bytes, field->size_bytes);
+            printf("OP_FIELD(value size: %d, offset: %d, size: %d)\n", field->value_size_bytes, field->offset_bytes, field->size_bytes);
             return offset + sizeof(op_field_t);
         }
 

@@ -173,6 +173,60 @@ OrsoString *orso_slot_to_string(slot_t *slot, type_t *type, arena_t *allocator) 
     return string;
 }
 
+void copy_bytes_to_slots(void *destination, void *source, type_kind_t type_kind, u64 size_bytes) {
+    switch (type_kind) {
+        case TYPE_INVALID:
+        case TYPE_UNDEFINED:
+        case TYPE_UNRESOLVED: {
+            UNREACHABLE();
+            break;
+        }
+        case TYPE_VOID:
+        case TYPE_BOOL: {
+            byte field_value = *(byte*)source;
+            ((slot_t*)destination)->as.u = field_value;
+            break;
+        }
+
+        case TYPE_INT32: {
+            i32 field_value = *((i32*)(source));
+            ((slot_t*)destination)->as.i = field_value;
+            break;
+        }
+
+        case TYPE_FLOAT32: {
+            f32 field_value = *((f32*)(source));
+            ((slot_t*)destination)->as.f = field_value;
+            break;
+        }
+        
+        case TYPE_TYPE:
+        case TYPE_SYMBOL:
+        case TYPE_STRING:
+        case TYPE_FUNCTION:
+        case TYPE_NATIVE_FUNCTION:
+        case TYPE_POINTER:
+        case TYPE_INT64:
+        case TYPE_FLOAT64: {
+            *((slot_t*)destination) = *((slot_t*)(source));
+            break;
+        }
+
+        case TYPE_UNION:
+        case TYPE_STRUCT: {
+            for (size_t i = 0; i < size_bytes; i += sizeof(slot_t)) {
+                if (i + sizeof(slot_t) <= size_bytes) {
+                    ((slot_t*)destination)[i/sizeof(slot_t)] = ((slot_t*)(source))[i/sizeof(slot_t)];
+                } else {
+                    ((slot_t*)destination)[i/sizeof(slot_t)].as.i = 0;
+                    memcpy((byte*)destination + i, (byte*)source + i, size_bytes-i);
+                }
+            }
+            break;
+        }
+    }
+}
+
 OrsoString *orso_string_concat(OrsoString *a, OrsoString *b, arena_t *allocator) {
     OrsoString *string = (OrsoString*)object_new(sizeof(OrsoString) + (a->length + b->length + 1)*sizeof(char), &OrsoTypeString, allocator);
     string->length = a->length + b->length;

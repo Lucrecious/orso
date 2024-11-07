@@ -50,11 +50,7 @@ typedef enum op_code_t {
     OP_LOCAL,
     OP_GLOBAL,
 
-    OP_FIELD_BYTE,
-    OP_FIELD_I32,
-    OP_FIELD_F32,
-    OP_FIELD_SLOT,
-    OP_FIELD_BYTES,
+    OP_FIELD,
 
     OP_PUSH_GLOBAL_ADDRESS,
     OP_PUSH_LOCAL_ADDRESS,
@@ -145,6 +141,7 @@ struct op_push_address_t {
 typedef struct op_field_t op_field_t;
 struct op_field_t {
     byte op;
+    byte type_kind;
     u16 value_size_bytes;
     u16 offset_bytes;
     u16 size_bytes; // op_field_size_t

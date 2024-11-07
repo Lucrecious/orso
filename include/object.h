@@ -68,6 +68,8 @@ string_t slot_to_string(slot_t *slot, type_t *type, arena_t *allocator);
 
 OrsoString *orso_slot_to_string(slot_t *slot, type_t *type, arena_t *allocator);
 
+void copy_bytes_to_slots(void *destination, void *source, type_kind_t type_kind, u64 size_bytes);
+
 OrsoString *orso_new_string_from_cstrn(const char *start, i32 length, arena_t *allocator);
 
 function_t *orso_new_function(arena_t *allocator);
