@@ -13,6 +13,8 @@ main :: () {
     };
 
     foo := foo_t.{};
+    foo.a = true;
+    foo.b = false;
     print_expr foo;
     print_expr foo.a;
     print_expr foo.b;

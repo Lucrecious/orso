@@ -133,9 +133,9 @@ i32 disassemble_instruction(chunk_t *chunk, i32 offset) {
             printf("OP_SET_LVALUE_F32\n");
             return offset + sizeof(op_set_lvalue_t);
         }
-        case OP_SET_LVALUE_BOOL: {
+        case OP_SET_LVALUE_BYTE: {
             // op_set_lvalue_t *set_lvalue = (op_set_lvalue_t*)(chunk->code.items + offset);
-            printf("OP_SET_LVALUE_BOOL\n");
+            printf("OP_SET_LVALUE_BYTE\n");
             return offset + sizeof(op_set_lvalue_t);
         }
         case OP_SET_LVALUE_BYTES: {

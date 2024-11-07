@@ -421,7 +421,7 @@ bool vm_step(vm_t *vm) {
         case OP_SET_LVALUE_BYTES:
         case OP_SET_LVALUE_F32:
         case OP_SET_LVALUE_I32:
-        case OP_SET_LVALUE_BOOL:
+        case OP_SET_LVALUE_BYTE:
         case OP_SET_LVALUE_SLOT: {
             op_set_lvalue_t *set_lvalue = READ_CODE(op_set_lvalue_t);
             void* ptr = POP().as.p;
@@ -442,7 +442,7 @@ bool vm_step(vm_t *vm) {
                     *((i32*)ptr) = value;
                     break;
                 }
-                case OP_SET_LVALUE_BOOL: {
+                case OP_SET_LVALUE_BYTE: {
                     byte value = (byte)PEEK(0)->as.u;
                     *((byte*)ptr) = value;
                     break;

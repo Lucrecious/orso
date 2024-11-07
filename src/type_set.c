@@ -548,7 +548,7 @@ type_t* type_set_fetch_anonymous_struct(type_set_t *set, i32 field_count, struct
     // properly for this struct type to be created
     if (field_count > 0) {
         type->data.struct_.fields[0].offset = 0;
-        for (i32 i = 1; i < field_count; i++) {
+        for (i32 i = 1; i < field_count; ++i) {
             i32 previous_offset = type->data.struct_.fields[i - 1].offset;
             type_t* previous_type = fields[i - 1].type;
 

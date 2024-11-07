@@ -126,11 +126,6 @@ static void emit_debug_instructions(compiler_t *compiler, chunk_t *chunk, i32 li
     #define emit_push_type(TYPE) emit_push_type(compiler, chunk, line, (TYPE))
 
     switch (*op_code) {
-        case OP_SET_LVALUE_BOOL:
-        case OP_SET_LVALUE_I32:
-        case OP_SET_LVALUE_F32:
-        case OP_SET_LVALUE_SLOT:
-        case OP_SET_LVALUE_BYTES:
         case OP_JUMP_IF_UNION_TRUE:
         case OP_JUMP_IF_UNION_FALSE:
         case OP_JUMP_IF_TRUE:
@@ -180,6 +175,15 @@ static void emit_debug_instructions(compiler_t *compiler, chunk_t *chunk, i32 li
             NOT_NULL(debug);
 
             emit_push_type(debug->type);
+            break;
+        }
+
+        case OP_SET_LVALUE_BYTE:
+        case OP_SET_LVALUE_I32:
+        case OP_SET_LVALUE_F32:
+        case OP_SET_LVALUE_SLOT:
+        case OP_SET_LVALUE_BYTES: {
+            emit_pop_type(1);
             break;
         }
 
@@ -328,7 +332,7 @@ static size_t emit(compiler_t *compiler, chunk_t *chunk, i32 line, void *op_code
         case OP_EQUAL_STRING:
         case OP_CONCAT_STRING:
         case OP_SET_LVALUE_BYTES:
-        case OP_SET_LVALUE_BOOL:
+        case OP_SET_LVALUE_BYTE:
         case OP_SET_LVALUE_I32:
         case OP_SET_LVALUE_F32:
         case OP_SET_LVALUE_SLOT:
@@ -847,7 +851,8 @@ static void expression_lvalue(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_no
                 .index = (u16)index,
             };
 
-            debug_info_t debug = {.type=lvalue_node->value_type};
+            type_t *ptr_type = type_set_fetch_pointer(&ast->type_set, lvalue_node->value_type);
+            debug_info_t debug = {.type=ptr_type};
             emit(compiler, chunk, identifier_token.line, &push_address, sizeof(op_push_address_t), &debug);
             break;
         }
@@ -888,7 +893,7 @@ static op_code_t get_lvalue_op_by_type(type_t *type) {
             break;
         }
         case TYPE_BOOL: {
-            lvalue_set = OP_SET_LVALUE_BOOL;
+            lvalue_set = OP_SET_LVALUE_BYTE;
             break;
         }
         case TYPE_FUNCTION:
@@ -1153,16 +1158,15 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
             ASSERT(field_size < UINT16_MAX, "TODO");
 
             op_code_t field_op_code = OP_FIELD_SLOT;
+            field_size = type_size_bytes(expression_node->value_type);
 
             switch (expression_node->value_type->kind) {
                 case TYPE_VOID: {
                     field_op_code = OP_FIELD_BYTE;
-                    field_size = 0;
                     break;
                 }
                 case TYPE_BOOL: {
                     field_op_code = OP_FIELD_BYTE;
-                    field_size = sizeof(bool);
                     break;
                 }
                 case TYPE_FUNCTION:
@@ -1173,23 +1177,19 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
                 case TYPE_TYPE:
                 case TYPE_FLOAT64:
                 case TYPE_INT64: {
-                    field_size = sizeof(u64);
                     field_op_code = OP_FIELD_SLOT;
                     break;
                 }
                 case TYPE_INT32: {
-                    field_size = sizeof(i32);
                     field_op_code = OP_FIELD_I32;
                     break;
                 }
                 case TYPE_FLOAT32: {
-                    field_size = sizeof(f32);
                     field_op_code = OP_FIELD_F32;
                     break;
                 }
                 case TYPE_UNION:
                 case TYPE_STRUCT: {
-                    field_size = type_size_bytes(field->type);
                     field_op_code = OP_FIELD_BYTES;
                     break;
                 }
