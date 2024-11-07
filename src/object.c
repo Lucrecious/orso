@@ -119,8 +119,7 @@ string_t slot_to_string(slot_t *slot, type_t *type, arena_t *allocator) {
                 }
 
                 size_t field_size = type_size_bytes(field->type);
-
-                memcpy(slots.items, value, field_size);
+                copy_bytes_to_slots(slots.items, value, field->type->kind, field_size);
 
                 string_t field_value = slot_to_string(slots.items, field->type, tmp->allocator);
 
