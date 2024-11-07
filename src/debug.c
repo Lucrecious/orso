@@ -94,32 +94,13 @@ i32 disassemble_instruction(chunk_t *chunk, i32 offset) {
             return offset + sizeof(op_field_t);
         }
 
-        case OP_SET_LVALUE_SLOT: {
-            // op_set_lvalue_t *set_lvalue = (op_set_lvalue_t*)(chunk->code.items + offset);
-            printf("OP_SET_LVALUE_SLOT\n");
+
+        case OP_SET_LVALUE: {
+            op_set_lvalue_t *set_lvalue = (op_set_lvalue_t*)(chunk->code.items + offset);
+            printf("OP_SET_LVALUE(size_bytes: %d)\n", set_lvalue->size_bytes);
             return offset + sizeof(op_set_lvalue_t);
         }
 
-        case OP_SET_LVALUE_I32: {
-            // op_set_lvalue_t *set_lvalue = (op_set_lvalue_t*)(chunk->code.items + offset);
-            printf("OP_SET_LVALUE_I32\n");
-            return offset + sizeof(op_set_lvalue_t);
-        }
-        case OP_SET_LVALUE_F32: {
-            // op_set_lvalue_t *set_lvalue = (op_set_lvalue_t*)(chunk->code.items + offset);
-            printf("OP_SET_LVALUE_F32\n");
-            return offset + sizeof(op_set_lvalue_t);
-        }
-        case OP_SET_LVALUE_BYTE: {
-            // op_set_lvalue_t *set_lvalue = (op_set_lvalue_t*)(chunk->code.items + offset);
-            printf("OP_SET_LVALUE_BYTE\n");
-            return offset + sizeof(op_set_lvalue_t);
-        }
-        case OP_SET_LVALUE_BYTES: {
-            op_set_lvalue_t *set_lvalue = (op_set_lvalue_t*)(chunk->code.items + offset);
-            printf("OP_SET_LVALUE_BYTES(size_bytes: %d)\n", set_lvalue->size_bytes);
-            return offset + sizeof(op_set_lvalue_t);
-        }
         case OP_JUMP_IF_UNION_FALSE: {
             op_jump_t *jump = (op_jump_t*)(chunk->code.items + offset);
             printf("OP_JUMP_IF_UNION_FALSE(offset: %d)\n", jump->offset);

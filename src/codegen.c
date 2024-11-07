@@ -178,11 +178,7 @@ static void emit_debug_instructions(compiler_t *compiler, chunk_t *chunk, i32 li
             break;
         }
 
-        case OP_SET_LVALUE_BYTE:
-        case OP_SET_LVALUE_I32:
-        case OP_SET_LVALUE_F32:
-        case OP_SET_LVALUE_SLOT:
-        case OP_SET_LVALUE_BYTES: {
+        case OP_SET_LVALUE: {
             emit_pop_type(1);
             break;
         }
@@ -328,11 +324,7 @@ static size_t emit(compiler_t *compiler, chunk_t *chunk, i32 line, void *op_code
         case OP_EQUAL_SYMBOL:
         case OP_EQUAL_STRING:
         case OP_CONCAT_STRING:
-        case OP_SET_LVALUE_BYTES:
-        case OP_SET_LVALUE_BYTE:
-        case OP_SET_LVALUE_I32:
-        case OP_SET_LVALUE_F32:
-        case OP_SET_LVALUE_SLOT:
+        case OP_SET_LVALUE:
         case OP_NARROW_UNION: {
             stack_effect = -1;
             break;
@@ -877,50 +869,6 @@ static void expression_lvalue(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_no
     }
 }
 
-static op_code_t get_lvalue_op_by_type(type_t *type) {
-    op_code_t lvalue_set = OP_NO_OP;
-    switch(type->kind) {
-        case TYPE_VOID: {
-            lvalue_set = OP_NO_OP;
-            break;
-        }
-        case TYPE_BOOL: {
-            lvalue_set = OP_SET_LVALUE_BYTE;
-            break;
-        }
-        case TYPE_FUNCTION:
-        case TYPE_NATIVE_FUNCTION:
-        case TYPE_POINTER:
-        case TYPE_STRING:
-        case TYPE_SYMBOL:
-        case TYPE_TYPE:
-        case TYPE_FLOAT64:
-        case TYPE_INT64: {
-            lvalue_set = OP_SET_LVALUE_SLOT;
-            break;
-        }
-        case TYPE_INT32: {
-            lvalue_set = OP_SET_LVALUE_I32;
-            break;
-        }
-        case TYPE_FLOAT32: {
-            lvalue_set = OP_SET_LVALUE_F32;
-            break;
-        }
-        case TYPE_UNION:
-        case TYPE_STRUCT: {
-            lvalue_set = OP_SET_LVALUE_BYTES;
-            break;
-        }
-
-        case TYPE_UNRESOLVED:
-        case TYPE_UNDEFINED:
-        case TYPE_INVALID: UNREACHABLE();
-    }
-
-    return lvalue_set;
-}
-
 static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *expression_node, chunk_t *chunk) {
 #define EMIT_BINARY_OP(OP, TYPE) do { \
     debug_info_t debug = {.type=expression_node->value_type}; \
@@ -1178,19 +1126,17 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
 
             debug_info_t debug = {.type=expression_node->value_type};
             if (is_field || TYPE_IS_STRUCT(expression_node->lvalue_node->value_type) || TYPE_IS_UNION(expression_node->lvalue_node->value_type)) {
-                op_code_t lvalue_set = get_lvalue_op_by_type(expression_node->lvalue_node->value_type);
-
-                if (lvalue_set != OP_NO_OP) {
-                    op_set_lvalue_t set_lvalue = {
-                        .op = lvalue_set,
-                        .size_bytes = type_size_bytes(expression_node->value_type)
-                    };
-                    // only lvalue bytes takes argument, but it'll just be ignored for the other op codes.
-                    emit(compiler, chunk, expression_node->data.binary.lhs->end.line, &set_lvalue, sizeof(op_set_lvalue_t), &debug);
-                }
+                op_set_lvalue_t set_lvalue = {
+                    .op = OP_SET_LVALUE,
+                    .type_kind = expression_node->value_type->kind,
+                    .size_bytes = type_size_bytes(expression_node->value_type)
+                };
+                // only lvalue bytes takes argument, but it'll just be ignored for the other op codes.
+                emit(compiler, chunk, expression_node->data.binary.lhs->end.line, &set_lvalue, sizeof(op_set_lvalue_t), &debug);
             } else {
                 op_set_lvalue_t set_lvalue = {
-                    .op = OP_SET_LVALUE_SLOT,
+                    .op = OP_SET_LVALUE,
+                    .type_kind = expression_node->value_type->kind,
                     .size_bytes = type_size_bytes(expression_node->value_type)
                 };
                 emit(compiler, chunk, expression_node->data.binary.lhs->end.line, &set_lvalue, sizeof(op_set_lvalue_t), &debug);
@@ -1422,7 +1368,8 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
 
                     {
                         op_set_lvalue_t set_lvalue = {
-                            .op = get_lvalue_op_by_type(field->type),
+                            .op = OP_SET_LVALUE,
+                            .type_kind = field->type->kind,
                             .size_bytes = type_size_bytes(type),
                         };
                         emit(compiler, chunk, arg->start.line, &set_lvalue, sizeof(op_set_lvalue_t), NULL);

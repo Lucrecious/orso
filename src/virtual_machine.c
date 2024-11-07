@@ -380,41 +380,57 @@ bool vm_step(vm_t *vm) {
             break;
         }
 
-        case OP_SET_LVALUE_BYTES:
-        case OP_SET_LVALUE_F32:
-        case OP_SET_LVALUE_I32:
-        case OP_SET_LVALUE_BYTE:
-        case OP_SET_LVALUE_SLOT: {
+        case OP_SET_LVALUE: {
             op_set_lvalue_t *set_lvalue = READ_CODE(op_set_lvalue_t);
+            type_kind_t type_kind = set_lvalue->type_kind;
             void* ptr = POP().as.p;
-            switch (set_lvalue->op) {
-                case OP_SET_LVALUE_BYTES: {
+            switch (type_kind) {
+                case TYPE_UNION:
+                case TYPE_STRUCT: {
                     byte size = set_lvalue->size_bytes;
                     byte slots = bytes_to_slots(size);
                     memcpy(ptr, PEEK(slots - 1), size);
                     break;
                 }
-                case OP_SET_LVALUE_F32: {
+
+                case TYPE_FLOAT32: {
                     f32 value  = (f32)PEEK(0)->as.f;
                     *((f32*)ptr) = value;
                     break;
                 }
-                case OP_SET_LVALUE_I32: {
+
+                case TYPE_INT32: {
                     i32 value = (i32)PEEK(0)->as.i;
                     *((i32*)ptr) = value;
                     break;
                 }
-                case OP_SET_LVALUE_BYTE: {
+
+                case TYPE_VOID:
+                case TYPE_BOOL: {
                     byte value = (byte)PEEK(0)->as.u;
                     *((byte*)ptr) = value;
                     break;
                 }
-                case OP_SET_LVALUE_SLOT: {
+
+                case TYPE_TYPE:
+                case TYPE_FLOAT64:
+                case TYPE_INT64:
+                case TYPE_NATIVE_FUNCTION:
+                case TYPE_FUNCTION:
+                case TYPE_SYMBOL:
+                case TYPE_STRING:
+                case TYPE_POINTER: {
                     slot_t value = *PEEK(0);
                     *((slot_t*)ptr) = value;
                     break;
                 }
-                default: UNREACHABLE();
+
+                case TYPE_INVALID:
+                case TYPE_UNDEFINED:
+                case TYPE_UNRESOLVED: {
+                    UNREACHABLE();
+                    break;
+                }
             }
             break;
         }

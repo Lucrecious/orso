@@ -55,11 +55,7 @@ typedef enum op_code_t {
     OP_PUSH_GLOBAL_ADDRESS,
     OP_PUSH_LOCAL_ADDRESS,
 
-    OP_SET_LVALUE_BYTE,
-    OP_SET_LVALUE_I32,
-    OP_SET_LVALUE_F32,
-    OP_SET_LVALUE_SLOT,
-    OP_SET_LVALUE_BYTES,
+    OP_SET_LVALUE,
 
     // union stack manip
     OP_PUT_IN_UNION,
@@ -129,6 +125,7 @@ struct op_put_in_union_t {
 typedef struct op_set_lvalue_t op_set_lvalue_t;
 struct op_set_lvalue_t {
     byte op;
+    byte type_kind;
     byte size_bytes;
 };
 
