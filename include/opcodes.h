@@ -93,7 +93,7 @@ typedef enum op_code_t {
 
 typedef struct op_push_pop_type_t op_push_pop_type_t;
 struct op_push_pop_type_t {
-    op_code_t op;
+    byte op;
     union {
         type_t *type;
         u64 n;
@@ -102,49 +102,49 @@ struct op_push_pop_type_t {
 
 typedef struct op_return_t op_return_t;
 struct op_return_t {
-    op_code_t op;
+    byte op;
     byte size_slots;
 };
 
 typedef struct op_call_t op_call_t;
 struct op_call_t {
-    op_code_t op;
+    byte op;
     u16 argument_slots;
 };
 
 typedef struct op_loop_t op_loop_t;
 struct op_loop_t {
-    op_code_t op;
+    byte op;
     u16 offset;
 };
 
 typedef struct op_narrow_union_t op_narrow_union_t;
 struct op_narrow_union_t {
-    op_code_t op;
+    byte op;
     byte offset_bytes;
 };
 
 typedef struct op_put_in_union_t op_put_in_union_t;
 struct op_put_in_union_t {
-    op_code_t op;
+    byte op;
     byte size_bytes;
 };
 
 typedef struct op_set_lvalue_t op_set_lvalue_t;
 struct op_set_lvalue_t {
-    op_code_t op;
+    byte op;
     byte size_bytes;
 };
 
 typedef struct op_push_address_t op_push_address_t;
 struct op_push_address_t {
-    op_code_t op;
+    byte op;
     u16 index;
 };
 
 typedef struct op_field_t op_field_t;
 struct op_field_t {
-    op_code_t op;
+    byte op;
     u16 value_size_bytes;
     u16 offset_bytes;
     u16 size_bytes; // op_field_size_t
@@ -152,27 +152,27 @@ struct op_field_t {
 
 typedef struct op_location_t op_location_t;
 struct op_location_t {
-    op_code_t op;
+    byte op;
     u32 index_slots;
     u16 size_bytes;
 };
 
 typedef struct op_popn_t op_popn_t;
 struct op_popn_t {
-    op_code_t op;
+    byte op;
     byte n;
 };
 
 typedef struct op_pop_scope_t op_pop_scope_t;
 struct op_pop_scope_t {
-    op_code_t op;
+    byte op;
     byte scope_size_slots;
     byte value_size_slots;
 };
 
 typedef struct op_jump_t op_jump_t;
 struct op_jump_t {
-    op_code_t op;
+    byte op;
     u32 offset;
 };
 

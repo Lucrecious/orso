@@ -120,12 +120,12 @@ static void emit_push_type(compiler_t *compiler, chunk_t *chunk, i32 line, type_
 }
 
 static void emit_debug_instructions(compiler_t *compiler, chunk_t *chunk, i32 line, void *op_code_, debug_info_t *debug) {
-    op_code_t *op_code = (op_code_t*)op_code_;
+    op_code_t op_code = *(byte*)op_code_;
 
     #define emit_pop_type(AMOUNT) emit_pop_type(compiler, chunk, line, (AMOUNT))
     #define emit_push_type(TYPE) emit_push_type(compiler, chunk, line, (TYPE))
 
-    switch (*op_code) {
+    switch (op_code) {
         case OP_JUMP_IF_UNION_TRUE:
         case OP_JUMP_IF_UNION_FALSE:
         case OP_JUMP_IF_TRUE:
@@ -281,10 +281,11 @@ static void emit_debug_instructions(compiler_t *compiler, chunk_t *chunk, i32 li
 }
 
 static size_t emit(compiler_t *compiler, chunk_t *chunk, i32 line, void *op_code_, size_t op_code_size_bytes, debug_info_t *debug) {
-    op_code_t *op_code = (op_code_t*)op_code_;
+    op_code_t op_code = *(byte*)op_code_;
     i32 stack_effect = 0;
 
-    switch (*op_code) {
+
+    switch (op_code) {
         case OP_NO_OP: {
             break;
         }
@@ -342,20 +343,20 @@ static size_t emit(compiler_t *compiler, chunk_t *chunk, i32 line, void *op_code
         }
 
         case OP_POPN: {
-            op_popn_t *popn = (op_popn_t*)op_code;
+            op_popn_t *popn = (op_popn_t*)op_code_;
             stack_effect = -popn->n;
             break;
         }
 
         case OP_POP_SCOPE: {
-            op_pop_scope_t *pop_scope = (op_pop_scope_t*)op_code;
+            op_pop_scope_t *pop_scope = (op_pop_scope_t*)op_code_;
             stack_effect = -pop_scope->scope_size_slots;
             break;
         }
         case OP_GLOBAL:
         case OP_LOCAL:
         case OP_CONSTANT: {
-            op_location_t *location = (op_location_t*)op_code;
+            op_location_t *location = (op_location_t*)op_code_;
             stack_effect = bytes_to_slots(location->size_bytes);
             break;
         }
@@ -365,13 +366,13 @@ static size_t emit(compiler_t *compiler, chunk_t *chunk, i32 line, void *op_code
         case OP_FIELD_F32:
         case OP_FIELD_SLOT:
         case OP_FIELD_BYTES: {
-            op_field_t *field = (op_field_t*)op_code;
+            op_field_t *field = (op_field_t*)op_code_;
             stack_effect = field->value_size_bytes - field->size_bytes;
             break;
         }
 
         case OP_CALL: {
-            op_call_t *call = (op_call_t*)op_code;
+            op_call_t *call = (op_call_t*)op_code_;
             u16 argument_slots = call->argument_slots;
 
             stack_effect = -argument_slots - 1;
@@ -379,7 +380,7 @@ static size_t emit(compiler_t *compiler, chunk_t *chunk, i32 line, void *op_code
         }
 
         case OP_RETURN: {
-            op_return_t *return_ = (op_return_t*)op_code;
+            op_return_t *return_ = (op_return_t*)op_code_;
             stack_effect = -return_->size_slots;
             break;
         }
@@ -400,7 +401,7 @@ static size_t emit(compiler_t *compiler, chunk_t *chunk, i32 line, void *op_code
     }
 
     for (size_t i = 0; i < op_code_size_bytes; ++i) {
-        chunk_write(chunk, ((byte*)op_code)[i], line);
+        chunk_write(chunk, ((byte*)op_code_)[i], line);
     }
 
     apply_stack_effects(compiler, stack_effect);
