@@ -91,7 +91,6 @@ typedef enum op_code_t {
 #endif
 } op_code_t;
 
-#ifdef DEBUG
 typedef struct op_push_pop_type_t op_push_pop_type_t;
 struct op_push_pop_type_t {
     op_code_t op;
@@ -100,7 +99,6 @@ struct op_push_pop_type_t {
         u64 n;
     } data;
 };
-#endif
 
 typedef struct op_return_t op_return_t;
 struct op_return_t {

@@ -508,8 +508,7 @@ static void emit_pop_value(compiler_t* compiler, chunk_t* chunk, type_t *type, i
     }
     
     if (pop_count == 1) {
-        op_code_t op = OP_POP;
-        emit(compiler, chunk, line, &op, sizeof(op_code_t), NULL);
+        emit1(compiler, chunk, line, OP_POP, NULL);
     } else {
         while (pop_count > 0) {
             byte batch = pop_count > UINT8_MAX ? UINT8_MAX : pop_count;
