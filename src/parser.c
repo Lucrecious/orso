@@ -133,7 +133,6 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool is_in_type_
     node->operator = start;
     node->return_guarentee = RETURN_GUARENTEE_NONE;
     node->value_type = &OrsoTypeUnresolved;
-    node->value_type_narrowed = &OrsoTypeUnresolved;
 
     node->fold = false;
     node->foldable = false;
@@ -400,8 +399,6 @@ static ast_node_t* number(parser_t* parser, bool is_in_type_context) {
         default: UNREACHABLE();
     }
 
-    expression_node->value_type_narrowed = expression_node->value_type;
-
     expression_node->foldable = true;
 
     return expression_node;
@@ -440,8 +437,6 @@ static ast_node_t *literal(parser_t *parser, bool is_in_type_context) {
         default:
             UNREACHABLE();
     }
-
-    expression_node->value_type_narrowed = expression_node->value_type;
 
     expression_node->foldable = true;
 
@@ -672,7 +667,6 @@ static ast_node_t *grouping_or_function_signature_or_definition(parser_t *parser
         parse_function_signature(parser, expression_node);
 
         expression_node->value_type = &OrsoTypeUnresolved;
-        expression_node->value_type_narrowed = &OrsoTypeUnresolved;
         expression_node->end = parser->previous;
 
         if (match(parser, TOKEN_BRACE_OPEN)) {
@@ -685,7 +679,6 @@ static ast_node_t *grouping_or_function_signature_or_definition(parser_t *parser
         consume(parser, TOKEN_PARENTHESIS_CLOSE, "Expect ')' after expression.");
 
         expression_node->value_type = expression_node->data.expression->value_type;
-        expression_node->value_type_narrowed = expression_node->value_type;
     }
 
     expression_node->end = parser->previous;

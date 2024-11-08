@@ -968,7 +968,7 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
                         emit(compiler, chunk, right->start.line, &narrow_union, sizeof(op_narrow_union_t), &debug);
                     }
 
-                    if (type_is_integer(left->value_type_narrowed, true)) {
+                    if (type_is_integer(left->value_type, true)) {
                         switch (operator.type) {
                             case TOKEN_PLUS: EMIT_BINARY_OP_I64(ADD); break;
                             case TOKEN_MINUS: EMIT_BINARY_OP_I64(SUBTRACT); break;
@@ -983,7 +983,7 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
                             default: UNREACHABLE();
                         }
 
-                    } else if (type_is_float(left->value_type_narrowed)) {
+                    } else if (type_is_float(left->value_type)) {
                         switch (operator.type) {
                             case TOKEN_PLUS: EMIT_BINARY_OP_F64(ADD); break;
                             case TOKEN_MINUS: EMIT_BINARY_OP_F64(SUBTRACT); break;
@@ -998,7 +998,7 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
                             default: UNREACHABLE();
                         }
 
-                    } else if (left->value_type_narrowed == &OrsoTypeString) {
+                    } else if (left->value_type == &OrsoTypeString) {
                         switch (operator.type) {
                             case TOKEN_PLUS: EMIT_BINARY_OP(CONCAT, STRING); break;
                             case TOKEN_BANG_EQUAL: EMIT_BINARY_OP(EQUAL, STRING); EMIT_NOT(); break;
@@ -1006,13 +1006,13 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
                             default: UNREACHABLE();
                         }
 
-                    } else if (left->value_type_narrowed == &OrsoTypeSymbol) {
+                    } else if (left->value_type == &OrsoTypeSymbol) {
                         switch (operator.type) {
                             case TOKEN_EQUAL_EQUAL: EMIT_BINARY_OP(EQUAL, SYMBOL); break;
                             case TOKEN_BANG_EQUAL: EMIT_BINARY_OP(EQUAL, SYMBOL); EMIT_NOT(); break;
                             default: UNREACHABLE();
                         }
-                    } else if (left->value_type_narrowed == &OrsoTypeType) {
+                    } else if (left->value_type == &OrsoTypeType) {
                         switch (operator.type) {
                             case TOKEN_EQUAL_EQUAL: EMIT_BINARY_OP_I64(EQUAL); break;
                             case TOKEN_BANG_EQUAL: EMIT_BINARY_OP_I64(EQUAL); EMIT_NOT(); break;
@@ -1267,9 +1267,9 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
         }
         case AST_NODE_TYPE_EXPRESSION_CALL: {
             expression(vm, compiler, ast, expression_node->data.call.callee, chunk);
-            emit_storage_type_convert(compiler, chunk, expression_node->value_type, expression_node->value_type_narrowed, expression_node->end.line);
+            emit_storage_type_convert(compiler, chunk, expression_node->value_type, expression_node->value_type, expression_node->end.line);
 
-            type_t *function_type = expression_node->data.call.callee->value_type_narrowed;
+            type_t *function_type = expression_node->data.call.callee->value_type;
 
             for (size_t i = 0; i < expression_node->data.call.arguments.count; ++i) {
                 ast_node_t *argument = expression_node->data.call.arguments.items[i];

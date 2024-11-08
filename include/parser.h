@@ -160,7 +160,7 @@ struct ast_node_t {
 
     // expressions TODO: Fill this in for *everything*, declarations, statements included
     // TODO: only use value type
-    type_t *value_type, *value_type_narrowed;
+    type_t *value_type;
     //AccessIdentifiers *value_type_identifiers, *value_type_narrowed_identifiers;
 
     // branching, blocks
