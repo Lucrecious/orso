@@ -146,18 +146,20 @@ type_t* type_copy_new(type_set_t* set, type_t* type) {
     return NULL;
 }
 
-static bool add_type(type_set_t* set, type_t* type);
-
-void type_set_init(type_set_t* set, arena_t *allocator) {
-    set->capacity = 0;
-    set->count = 0;
-    set->entries = NULL;
-    set->allocator = allocator;
-
-    add_type(set, (type_t*)&OrsoTypeEmptyFunction);
+static void add_type(type_set_t *set, type_t *type) {
+    array_push(&set->types, type);
+    table_put(type2u64, set->types2index, type, set->types.count-1);
 }
 
-static u32 hash_type(type_t* type) {
+void type_set_init(type_set_t* set, arena_t *allocator) {
+    set->allocator = allocator;
+    set->types2index = table_new(type2u64, allocator);
+    set->types = (types_t){.allocator=allocator};
+
+    add_type(set, &OrsoTypeEmptyFunction);
+}
+
+static u64 hash_type(type_t* type) {
 #define ADD_HASH(HASH, APPEND) HASH ^= APPEND; HASH *= 16777619
 
     u32 hash = 2166136261u;
@@ -199,68 +201,7 @@ static u32 hash_type(type_t* type) {
 #undef ADD_HASH
 }
 
-static type_t** fetch_type(type_t** types, i32 capacity, type_t* type) {
-    u32 hash = hash_type(type);
-    u32 index = hash & (capacity - 1);
-
-    for (;;) {
-        type_t** entry = &types[index];
-        if (*entry == NULL) {
-            break;
-        }
-
-        if (type_equal(*entry, type)) {
-            return entry;
-        }
-
-        index = (index + 1) & (capacity - 1);
-    }
-
-    return &types[index];
-}
-
-static void adjust_capacity(type_set_t* set, i32 capacity) {
-    type_t** entries = ALLOC_N(type_t*, capacity);
-
-    for (i32 i = 0; i < capacity; i++) {
-        entries[i] = NULL;
-    }
-
-    set->count = 0;
-    for (i32 i = 0; i < set->capacity; i++) {
-        type_t** entry = &set->entries[i];
-        if (*entry == NULL) {
-            continue;
-        }
-
-        type_t** destination = fetch_type(entries, capacity, *entry);
-        *destination = *entry;
-        set->count++;
-    }
-
-    set->entries = entries;
-    set->capacity = capacity;
-}
-
-static bool add_type(type_set_t* set, type_t* type) {
-    if (set->count + 1 > set->capacity * ORSO_TYPE_SET_MAX_LOAD) {
-        i32 capacity = GROW_CAPACITY(set->capacity);
-        adjust_capacity(set, capacity);
-    }
-
-    type_t** entry = fetch_type(set->entries, set->capacity, type);
-    bool is_new_type = (*entry == NULL);
-
-    if (!is_new_type) {
-        return false;
-    }
-
-    set->count++;
-
-    *entry = type;
-
-    return true;
-}
+implement_table(type2u64, type_t*, u64, hash_type, type_equal);
 
 static i32 type_compare(const void* a, const void* b) {
     type_t* type_a = *((type_t**)a);
@@ -450,15 +391,12 @@ type_t *type_set_fetch_union(type_set_t *set, types_t types) {
 
     qsort(union_type.data.union_.types.items, types.count, sizeof(type_t*), type_compare);
 
-    if (set->capacity > 0) {
-        type_t** entry = fetch_type(set->entries, set->capacity, &union_type);
-
-        if (*entry != NULL) {
-            return *entry;
-        }
+    u64 index;
+    if (table_get(type2u64, set->types2index, &union_type, &index)) {
+        return set->types.items[index];
     }
 
-    type_t* type = type_copy_new(set, &union_type);
+    type_t *type = type_copy_new(set, &union_type);
     add_type(set, type);
 
     return type;
@@ -470,15 +408,12 @@ type_t* type_set_fetch_pointer(type_set_t* set, type_t* inner_type) {
         .data.pointer.type = inner_type,
     };
 
-    if (set->capacity > 0) {
-        type_t** entry = fetch_type(set->entries, set->capacity, &pointer_type);
-
-        if (*entry != NULL) {
-            return *entry;
-        }
+    u64 index;
+    if (table_get(type2u64, set->types2index, &pointer_type, &index)) {
+        return set->types.items[index];
     }
 
-    type_t* type = type_copy_new(set, &pointer_type);
+    type_t *type = type_copy_new(set, &pointer_type);
     add_type(set, type);
 
     return type;
@@ -491,16 +426,12 @@ type_t *type_set_fetch_function_(type_set_t *set, type_t *return_type, types_t a
         .data.function.return_type = return_type,
     };
 
-    if (set->capacity > 0) {
-        type_t** entry = fetch_type(set->entries, set->capacity, &function_type);
-
-        if (*entry != NULL) {
-            return *entry;
-        }
+    u64 index;
+    if (table_get(type2u64, set->types2index, &function_type, &index)) {
+        return set->types.items[index];
     }
 
-
-    type_t* type = type_copy_new(set, (type_t*)&function_type);
+    type_t *type = type_copy_new(set, (type_t*)&function_type);
     add_type(set, type);
 
     return type;
@@ -528,12 +459,9 @@ type_t* type_set_fetch_anonymous_struct(type_set_t *set, i32 field_count, struct
 
     type_t* type;
     if (constant_count == 0) {
-        if (set->capacity > 0) {
-            type_t** entry = fetch_type(set->entries, set->capacity, &struct_type);
-
-            if (*entry != NULL) {
-                return *entry;
-            }
+        u64 index;
+        if (table_get(type2u64, set->types2index, &struct_type, &index)) {
+            return set->types.items[index];
         }
 
         type = type_copy_new(set, &struct_type);

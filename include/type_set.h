@@ -4,11 +4,13 @@
 #include "def.h"
 #include "type.h"
 #include "arena.h"
+#include "table.h"
+
+declare_table(type2u64, type_t*, u64);
 
 typedef struct type_set_t {
-    i32 count;
-    i32 capacity;
-    type_t** entries;
+    types_t types;
+    table_t(type2u64) *types2index;
     arena_t *allocator;
 } type_set_t;
 
