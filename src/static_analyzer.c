@@ -2387,7 +2387,8 @@ static void resolve_struct_definition(analyzer_t* analyzer, ast_t* ast, Analysis
 
     i32 declarations_count = struct_definition->data.struct_.declarations.count;
 
-    type_t* incomplete_struct = type_unique_incomplete_struct_type(&ast->type_set);
+    type_id_t incomplete_struct_id = type_unique_incomplete_struct_type(&ast->type_set);
+    type_t *incomplete_struct = ast->type_set.types.items[incomplete_struct_id];
     struct_definition->value_type = incomplete_struct;
 
     struct_definition->foldable = true;
