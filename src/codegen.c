@@ -1518,7 +1518,8 @@ void code_builder_free(code_builder_t *builder) {
 
 function_t *generate_expression_function(code_builder_t *builder, ast_node_t *expression_node, bool is_folding_time, arena_t *allocator) {
     compiler_t compiler;
-    type_t *function_type = type_set_fetch_function(&builder->ast->type_set, expression_node->value_type, (types_t){0});
+    type_id_t function_type_id = type_set_fetch_function(&builder->ast->type_set, expression_node->value_type, (types_t){0});
+    type_t *function_type = builder->ast->type_set.types.items[function_type_id];
 
     function_t *run_function = orso_new_function(allocator);
 

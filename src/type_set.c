@@ -146,9 +146,10 @@ type_t* type_copy_new(type_set_t* set, type_t* type) {
     return NULL;
 }
 
-static void add_type(type_set_t *set, type_t *type) {
+static type_id_t add_type(type_set_t *set, type_t *type) {
     array_push(&set->types, type);
     table_put(type2u64, set->types2index, type, set->types.count-1);
+    return set->types.count-1;
 }
 
 void type_set_init(type_set_t* set, arena_t *allocator) {
@@ -201,7 +202,7 @@ static u64 hash_type(type_t* type) {
 #undef ADD_HASH
 }
 
-implement_table(type2u64, type_t*, u64, hash_type, type_equal);
+implement_table(type2u64, type_t*, type_id_t, hash_type, type_equal);
 
 static i32 type_compare(const void* a, const void* b) {
     type_t* type_a = *((type_t**)a);
@@ -379,7 +380,7 @@ static i32 type_compare(const void* a, const void* b) {
     return ((i32)type_b->kind) - ((i32)type_a->kind);
 }
 
-type_t *type_set_fetch_union(type_set_t *set, types_t types) {
+type_id_t type_set_fetch_union(type_set_t *set, types_t types) {
     type_t union_type = {
         .kind = TYPE_UNION,
         .data.union_.types = {.allocator=set->allocator},
@@ -391,15 +392,15 @@ type_t *type_set_fetch_union(type_set_t *set, types_t types) {
 
     qsort(union_type.data.union_.types.items, types.count, sizeof(type_t*), type_compare);
 
-    u64 index;
+    type_id_t index;
     if (table_get(type2u64, set->types2index, &union_type, &index)) {
-        return set->types.items[index];
+        return index;
     }
 
     type_t *type = type_copy_new(set, &union_type);
-    add_type(set, type);
+    type_id_t type_id = add_type(set, type);
 
-    return type;
+    return type_id;
 }
 
 type_t* type_set_fetch_pointer(type_set_t* set, type_t* inner_type) {
@@ -419,29 +420,29 @@ type_t* type_set_fetch_pointer(type_set_t* set, type_t* inner_type) {
     return type;
 }
 
-type_t *type_set_fetch_function_(type_set_t *set, type_t *return_type, types_t arguments, bool is_native) {
+type_id_t type_set_fetch_function_(type_set_t *set, type_t *return_type, types_t arguments, bool is_native) {
     type_t function_type = {
         .kind = is_native ? TYPE_NATIVE_FUNCTION : TYPE_FUNCTION,
         .data.function.argument_types = arguments,
         .data.function.return_type = return_type,
     };
 
-    u64 index;
-    if (table_get(type2u64, set->types2index, &function_type, &index)) {
-        return set->types.items[index];
+    type_id_t type_id;
+    if (table_get(type2u64, set->types2index, &function_type, &type_id)) {
+        return type_id;
     }
 
     type_t *type = type_copy_new(set, (type_t*)&function_type);
-    add_type(set, type);
+    type_id = add_type(set, type);
 
-    return type;
+    return type_id;
 }
 
-type_t *type_set_fetch_function(type_set_t *set, type_t *return_type, types_t arguments) {
+type_id_t type_set_fetch_function(type_set_t *set, type_t *return_type, types_t arguments) {
     return type_set_fetch_function_(set, return_type, arguments, false);
 }
 
-type_t *type_set_fetch_native_function(type_set_t *set, type_t *return_type, types_t arguments) {
+type_id_t type_set_fetch_native_function(type_set_t *set, type_t *return_type, types_t arguments) {
     return type_set_fetch_function_(set, return_type, arguments, true);
 }
 

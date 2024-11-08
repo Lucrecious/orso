@@ -6,7 +6,9 @@
 #include "arena.h"
 #include "table.h"
 
-declare_table(type2u64, type_t*, u64);
+typedef u64 type_id_t;
+
+declare_table(type2u64, type_t*, type_id_t);
 
 typedef struct type_set_t {
     types_t types;
@@ -31,14 +33,14 @@ extern type_t OrsoTypeEmptyFunction;
 
 void type_set_init(type_set_t *set, arena_t *allocator);
 
-type_t *type_set_fetch_union(type_set_t *set, types_t types);
+type_id_t type_set_fetch_union(type_set_t *set, types_t types);
 
-type_t *type_set_fetch_function(
+type_id_t type_set_fetch_function(
     type_set_t *set,
     type_t *return_type,
     types_t arguments);
 
-type_t *type_set_fetch_native_function(
+type_id_t type_set_fetch_native_function(
     type_set_t* set,
     type_t *return_type,
     types_t arguments);

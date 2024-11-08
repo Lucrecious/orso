@@ -180,7 +180,8 @@ type_t *type_merge(type_set_t *set, type_t *a, type_t *b) {
         }
     }
 
-    type_t *merged = type_set_fetch_union(set, types);
+    type_id_t merged_id = type_set_fetch_union(set, types);
+    type_t *merged = set->types.items[merged_id];
 
     allocator_return(tmp);
 

@@ -307,7 +307,8 @@ if (strlen(SYMBOL->text) == (sizeof(#TYPE_STRING) - 1) && \
 
 static bool is_builtin_function(ast_t *ast, symbol_t *identifier, native_function_t **function) {
     if (identifier->length == 5 && strncmp(identifier->text, "clock", 5) == 0) {
-        type_t *function_type = type_set_fetch_native_function(&ast->type_set, &OrsoTypeFloat64, (types_t){0});
+        type_id_t function_type_id = type_set_fetch_native_function(&ast->type_set, &OrsoTypeFloat64, (types_t){0});
+        type_t *function_type = ast->type_set.types.items[function_type_id];
         *function = orso_new_native_function(clock_native, function_type, &ast->allocator);
         return true;
     }
@@ -742,7 +743,8 @@ static void fold_function_signature(analyzer_t *analyzer, ast_t *ast, ast_node_t
         }
     }
 
-    type_t *function_type = type_set_fetch_function(&ast->type_set, return_type, parameter_types);
+    type_id_t function_type_id = type_set_fetch_function(&ast->type_set, return_type, parameter_types);
+    type_t *function_type = ast->type_set.types.items[function_type_id];
 
     slot_t function_type_slot = SLOT_P(function_type);
     i32 index = add_value_to_ast_constant_stack(ast, &function_type_slot, &OrsoTypeType);
@@ -2192,7 +2194,8 @@ static void resolve_function_expression(
         return;
     }
 
-    type_t *function_type = type_set_fetch_function(&ast->type_set, return_type, parameter_types);
+    type_id_t function_type_id = type_set_fetch_function(&ast->type_set, return_type, parameter_types);
+    type_t *function_type = ast->type_set.types.items[function_type_id];
 
     function_t *function = orso_new_function(&analyzer->allocator);
     function->signature = function_type;
