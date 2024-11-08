@@ -233,7 +233,7 @@ typedef struct ast_t {
     i32 true_index;
 
     bool resolved;
-    type_set_t type_set;
+    type_table_t type_set;
 
     symbol_table_t builtins;
 

@@ -18,7 +18,7 @@ typedef struct {
 typedef struct vm_t {
     write_function_t write_fn;
 
-    type_set_t *type_set;
+    type_table_t *type_set;
 
     call_frame_t frames[FRAMES_MAX];
     i32 frame_count;

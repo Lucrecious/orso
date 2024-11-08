@@ -93,7 +93,7 @@ struct type_t {
 #define TYPE_IS_UNDEFINED(TYPE) (TYPE->kind == TYPE_UNDEFINED)
 #define TYPE_IS_UNRESOLVED(TYPE) (TYPE->kind == TYPE_UNRESOLVED)
 
-struct type_set_t;
+struct type_table_t;
 
 bool union_type_has_type(type_t *type, type_t *subtype);
 
@@ -105,7 +105,7 @@ bool type_equal(type_t *a, type_t *b);
 bool union_type_has_type(type_t *type, type_t *subtype);
 bool union_type_contains_type(type_t *union_, type_t *type);
 
-type_t* type_merge(struct type_set_t *set, type_t *a, type_t *b);
+type_t* type_merge(struct type_table_t *set, type_t *a, type_t *b);
 
 bool type_is_float(type_t *type);
 bool type_is_integer(type_t *type, bool include_bool);

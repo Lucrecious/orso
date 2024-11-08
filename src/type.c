@@ -150,7 +150,7 @@ bool type_in_list(types_t list, type_t* find) {
 }
 
 // TODO: make this faster... Preferably type_in_list should be O(1)
-type_t *type_merge(type_set_t *set, type_t *a, type_t *b) {
+type_t *type_merge(type_table_t *set, type_t *a, type_t *b) {
     if (a == b) {
         return a;
     }

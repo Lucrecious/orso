@@ -80,7 +80,7 @@ static scope_t *scope_copy_new(scope_t *scope, arena_t *allocator) {
     return scope_copy;
 }
 
-static void scope_merge(type_set_t* set, scope_t* scope, scope_t* a, scope_t* b) {
+static void scope_merge(type_table_t* set, scope_t* scope, scope_t* a, scope_t* b) {
     if (!scope) {
         ASSERT(!a && !b, "if no more scopes then all should be no more");
         return;
