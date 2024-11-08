@@ -52,7 +52,7 @@ type_id_t type_set_fetch_anonymous_struct(
 
 type_id_t type_set_fetch_pointer(type_set_t *set, type_t *type);
 
-type_t *type_create_struct(type_set_t *set, char *name, i32 name_length, type_t* anonymous_struct);
+type_id_t type_create_struct(type_set_t *set, char *name, i32 name_length, type_t* anonymous_struct);
 
 type_t *type_unique_incomplete_struct_type(type_set_t *set);
 

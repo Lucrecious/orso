@@ -470,7 +470,8 @@ type_id_t type_set_fetch_anonymous_struct(type_set_t *set, i32 field_count, stru
     } else {
         // anonymous structs with constants must be unique
         type = type_copy_new(set, &struct_type);
-        type_id = add_type(set, type);
+        array_push(&set->types, &struct_type);
+        type_id = set->types.count-1;
     }
 
     // put the layout in a hash table separate from type
@@ -495,27 +496,33 @@ type_id_t type_set_fetch_anonymous_struct(type_set_t *set, i32 field_count, stru
     return type_id;
 }
 
-type_t* type_create_struct(type_set_t* set, char* name, i32 name_length, type_t* anonymous_struct) {
+type_id_t type_create_struct(type_set_t *set, char *name, i32 name_length, type_t *anonymous_struct) {
     ASSERT(TYPE_IS_STRUCT(anonymous_struct) && anonymous_struct->data.struct_.name == NULL, "can only create struct from anonymous struct");
 
     if (anonymous_struct->data.struct_.constant_count == 0) {
-        type_t* new_type = type_copy_new(set, anonymous_struct);
+        type_t *new_type = type_copy_new(set, anonymous_struct);
         new_type->data.struct_.name = ALLOC_N(char, name_length + 1);
         memcpy(new_type->data.struct_.name, name, name_length);
         new_type->data.struct_.name[name_length] = '\0';
 
-        return new_type;
+        array_push(&set->types, new_type);
+        type_id_t new_type_id = set->types.count-1;
+
+        return new_type_id;
     } else {
         // here we know that the anonymous struct is unique because it has constants, and those are never shared
-        type_t* new_type = type_copy_new(NULL, anonymous_struct);
+        type_t *new_type = type_copy_new(set, anonymous_struct);
 
-        anonymous_struct->data.struct_ = new_type->data.struct_;
+        // anonymous_struct->data.struct_ = new_type->data.struct_;
 
-        anonymous_struct->data.struct_.name = ALLOC_N(char, name_length + 1);
-        memcpy(anonymous_struct->data.struct_.name, name, name_length);
-        anonymous_struct->data.struct_.name[name_length] = '\0';
+        // anonymous_struct->data.struct_.name = ALLOC_N(char, name_length + 1);
+        // memcpy(anonymous_struct->data.struct_.name, name, name_length);
+        // anonymous_struct->data.struct_.name[name_length] = '\0';
 
-        return anonymous_struct;
+        array_push(&set->types, new_type);
+        type_id_t new_type_id = set->types.count-1;
+
+        return new_type_id;
     }
 }
 

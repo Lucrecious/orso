@@ -1763,17 +1763,18 @@ static void resolve_entity_declaration(analyzer_t* analyzer, ast_t* ast, Analysi
         if (INITIAL_EXPRESSION != NULL
         && TYPE_IS_STRUCT(INITIAL_EXPRESSION->value_type)
         && (TYPE_IS_UNRESOLVED(declaration_type) || declaration_type->kind == TYPE_TYPE)) {
-            ast_node_t* to_struct_type = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT, INITIAL_EXPRESSION->is_in_type_context, INITIAL_EXPRESSION->start);
+            ast_node_t *to_struct_type = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT, INITIAL_EXPRESSION->is_in_type_context, INITIAL_EXPRESSION->start);
             to_struct_type->value_type = &OrsoTypeType;
             to_struct_type->data.expression = INITIAL_EXPRESSION;
 
             to_struct_type->fold = false;
             to_struct_type->foldable = true;
-            type_t* named_struct = type_create_struct(&ast->type_set, entity_declaration->start.start, entity_declaration->start.length, INITIAL_EXPRESSION->value_type);
+            type_id_t named_struct_id = type_create_struct(&ast->type_set, entity_declaration->start.start, entity_declaration->start.length, INITIAL_EXPRESSION->value_type);
+            type_t *named_struct = ast->type_set.types.items[named_struct_id];
             slot_t struct_type_slot = SLOT_P(named_struct);
             to_struct_type->value_index = add_value_to_ast_constant_stack(ast, &struct_type_slot, &OrsoTypeType);
 
-            type_t* initial_expression_type = INITIAL_EXPRESSION->value_type;
+            type_t *initial_expression_type = INITIAL_EXPRESSION->value_type;
 
             ast_node_and_scope_t node_and_scope;
             bool found = table_get(type2ns, ast->type_to_creation_node, initial_expression_type, &node_and_scope);
