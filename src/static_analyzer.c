@@ -238,8 +238,11 @@ static type_t* resolve_unary_type(ast_t* ast, token_type_t operator, type_t* ope
         }
         case TOKEN_NOT:
             return &OrsoTypeBool;
-        case TOKEN_AMPERSAND:
-            return type_set_fetch_pointer(&ast->type_set, operand);
+        case TOKEN_AMPERSAND: {
+            type_id_t type_id = type_set_fetch_pointer(&ast->type_set, operand);
+            type_t *type = ast->type_set.types.items[type_id];
+            return type;
+        }
 
         default: return &OrsoTypeInvalid;
     }
@@ -466,7 +469,8 @@ static void resolve_foldable(
                 if (expression->is_in_type_context) {
                     type_t* type = get_folded_type(ast, expression->data.expression->value_index);
 
-                    type_t* pointer_type = type_set_fetch_pointer(&ast->type_set, type);
+                    type_id_t pointer_type_id = type_set_fetch_pointer(&ast->type_set, type);
+                    type_t *pointer_type = ast->type_set.types.items[pointer_type_id];
 
                     expression->value_type = &OrsoTypeType;
 

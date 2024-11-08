@@ -50,7 +50,7 @@ type_t *type_set_fetch_anonymous_struct(
     i32 field_count, struct_field_t *fields,
     i32 constant_count, struct_constant_t *constants);
 
-type_t *type_set_fetch_pointer(type_set_t *set, type_t *type);
+type_id_t type_set_fetch_pointer(type_set_t *set, type_t *type);
 
 type_t *type_create_struct(type_set_t *set, char *name, i32 name_length, type_t* anonymous_struct);
 

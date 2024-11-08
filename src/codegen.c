@@ -835,7 +835,8 @@ static void expression_lvalue(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_no
                 .index = (u16)index,
             };
 
-            type_t *ptr_type = type_set_fetch_pointer(&ast->type_set, lvalue_node->value_type);
+            type_id_t ptr_type_id = type_set_fetch_pointer(&ast->type_set, lvalue_node->value_type);
+            type_t *ptr_type = ast->type_set.types.items[ptr_type_id];
             debug_info_t debug = {.type=ptr_type};
             emit(compiler, chunk, identifier_token.line, &push_address, sizeof(op_push_address_t), &debug);
             break;
@@ -1361,7 +1362,9 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
                             .op = OP_PUSH_LOCAL_ADDRESS,
                             .index = stack_position + field->offset,
                         };
-                        type_t *field_ptr = type_set_fetch_pointer(vm->type_set, field->type);
+                        type_id_t field_ptr_id = type_set_fetch_pointer(vm->type_set, field->type);
+                        type_t *field_ptr = vm->type_set->types.items[field_ptr_id];
+
                         debug_info_t debug = {.type=field_ptr};
                         emit(compiler, chunk, arg->start.line, &push_address, sizeof(op_push_address_t), &debug);
                     }

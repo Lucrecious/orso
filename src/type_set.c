@@ -403,21 +403,21 @@ type_id_t type_set_fetch_union(type_set_t *set, types_t types) {
     return type_id;
 }
 
-type_t* type_set_fetch_pointer(type_set_t* set, type_t* inner_type) {
+type_id_t type_set_fetch_pointer(type_set_t* set, type_t* inner_type) {
     type_t pointer_type = {
         .kind = TYPE_POINTER,
         .data.pointer.type = inner_type,
     };
 
-    u64 index;
-    if (table_get(type2u64, set->types2index, &pointer_type, &index)) {
-        return set->types.items[index];
+    type_id_t type_id;
+    if (table_get(type2u64, set->types2index, &pointer_type, &type_id)) {
+        return type_id;
     }
 
     type_t *type = type_copy_new(set, &pointer_type);
-    add_type(set, type);
+    type_id = add_type(set, type);
 
-    return type;
+    return type_id;
 }
 
 type_id_t type_set_fetch_function_(type_set_t *set, type_t *return_type, types_t arguments, bool is_native) {
