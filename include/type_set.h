@@ -45,7 +45,7 @@ type_id_t type_set_fetch_native_function(
     type_t *return_type,
     types_t arguments);
 
-type_t *type_set_fetch_anonymous_struct(
+type_id_t type_set_fetch_anonymous_struct(
     type_set_t *set,
     i32 field_count, struct_field_t *fields,
     i32 constant_count, struct_constant_t *constants);

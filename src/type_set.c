@@ -446,7 +446,7 @@ type_id_t type_set_fetch_native_function(type_set_t *set, type_t *return_type, t
     return type_set_fetch_function_(set, return_type, arguments, true);
 }
 
-type_t* type_set_fetch_anonymous_struct(type_set_t *set, i32 field_count, struct_field_t *fields, i32 constant_count, struct_constant_t* constants) {
+type_id_t type_set_fetch_anonymous_struct(type_set_t *set, i32 field_count, struct_field_t *fields, i32 constant_count, struct_constant_t* constants) {
     type_t struct_type = {
         .kind = TYPE_STRUCT,
         .data.struct_.field_count = field_count,
@@ -458,18 +458,19 @@ type_t* type_set_fetch_anonymous_struct(type_set_t *set, i32 field_count, struct
         .data.struct_.total_bytes = 0,
     };
 
-    type_t* type;
+    type_t *type;
+    type_id_t type_id;
     if (constant_count == 0) {
-        u64 index;
-        if (table_get(type2u64, set->types2index, &struct_type, &index)) {
-            return set->types.items[index];
+        if (table_get(type2u64, set->types2index, &struct_type, &type_id)) {
+            return type_id;
         }
 
         type = type_copy_new(set, &struct_type);
-        add_type(set, type);
+        type_id = add_type(set, type);
     } else {
         // anonymous structs with constants must be unique
         type = type_copy_new(set, &struct_type);
+        type_id = add_type(set, type);
     }
 
     // put the layout in a hash table separate from type
@@ -491,7 +492,7 @@ type_t* type_set_fetch_anonymous_struct(type_set_t *set, i32 field_count, struct
         type->data.struct_.total_bytes = total_size;
     }
 
-    return type;
+    return type_id;
 }
 
 type_t* type_create_struct(type_set_t* set, char* name, i32 name_length, type_t* anonymous_struct) {

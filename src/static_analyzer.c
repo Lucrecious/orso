@@ -2455,9 +2455,10 @@ static void resolve_struct_definition(analyzer_t* analyzer, ast_t* ast, Analysis
         }
     }
 
-    type_t* complete_struct_type;
+    type_t *complete_struct_type;
 
-    complete_struct_type = type_set_fetch_anonymous_struct(&ast->type_set, field_count, fields, constant_count, constants);
+    type_id_t complete_struct_type_id = type_set_fetch_anonymous_struct(&ast->type_set, field_count, fields, constant_count, constants);
+    complete_struct_type = ast->type_set.types.items[complete_struct_type_id];
 
     i32 incomplete_index = -1;
     for (i32 i = 0; i < complete_struct_type->data.struct_.field_count; i++) {
