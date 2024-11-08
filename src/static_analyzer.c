@@ -1712,15 +1712,15 @@ static void resolve_entity_declaration(analyzer_t* analyzer, ast_t* ast, Analysi
         }
 
         // This must be available at compile time
-        type_t* struct_type = get_folded_type(ast, entity_declaration->value_index);
+        type_t *struct_type = get_folded_type(ast, entity_declaration->value_index);
         unless (struct_type_is_incomplete(struct_type) && struct_type->data.struct_.name) {
             return;
         }
 
-        ast_node_t* cast_node = entity_declaration->data.declaration.initial_value_expression;
+        ast_node_t *cast_node = entity_declaration->data.declaration.initial_value_expression;
         ASSERT(cast_node->node_type == AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT, "must be implicit casting node");
         
-        type_t* completed_struct_type = cast_node->data.expression->value_type;
+        type_t *completed_struct_type = cast_node->data.expression->value_type;
         
         // this means that we found out later that the struct this was supposed to be was actually invalid, so we need to fix the ast
         if (TYPE_IS_INVALID(completed_struct_type)) {
@@ -2376,7 +2376,7 @@ static void resolve_function_expression(
 * 
 * 
 */
-static void resolve_struct_definition(analyzer_t* analyzer, ast_t* ast, AnalysisState state, ast_node_t* struct_definition) {
+static void resolve_struct_definition(analyzer_t *analyzer, ast_t *ast, AnalysisState state, ast_node_t *struct_definition) {
     scope_t struct_scope;
     scope_init(&struct_scope, &analyzer->allocator, SCOPE_TYPE_STRUCT, state.scope, struct_definition);
 
@@ -2434,7 +2434,7 @@ static void resolve_struct_definition(analyzer_t* analyzer, ast_t* ast, Analysis
         i32 field_counter = 0;
         i32 constant_counter = 0;
 
-        for (i32 i = 0; i < declarations_count; i++) {
+        for (i32 i = 0; i < declarations_count; ++i) {
             token_t identifier = struct_definition->data.struct_.declarations.items[i]->data.declaration.identifier;
             char* name = arena_alloc(&analyzer->allocator, sizeof(char)*(identifier.length + 1));
 
@@ -2448,11 +2448,11 @@ static void resolve_struct_definition(analyzer_t* analyzer, ast_t* ast, Analysis
 
                 ast_fields[field_counter] = struct_definition->data.struct_.declarations.items[i];
 
-                field_counter++;
+                ++field_counter;
             } else {
                 constants[constant_counter].type = struct_definition->data.struct_.declarations.items[i]->value_type;
                 constants[constant_counter].name = name;
-                constant_counter++;
+                ++constant_counter;
             }
         }
     }

@@ -101,15 +101,15 @@ type_t* struct_type_new(type_set_t* set, struct_field_t* fields, i32 field_count
     return struct_type;
 }
 
-type_t* pointer_type_new(type_set_t* set, type_t* type) {
-    type_t* pointer = ALLOC(type_t);
+type_t *pointer_type_new(type_set_t *set, type_t *type) {
+    type_t *pointer = ALLOC(type_t);
     pointer->kind = TYPE_POINTER;
     pointer->data.pointer.type = type;
 
     return pointer;
 }
 
-type_t* type_copy_new(type_set_t* set, type_t* type) {
+type_t *type_copy_new(type_set_t *set, type_t *type) {
     if (TYPE_IS_UNION(type)) {
         return (type_t*)union_type_new(
             set,
@@ -533,7 +533,7 @@ type_id_t type_unique_incomplete_struct_type(type_set_t *set) {
 }
 
 void named_struct_copy_data_from_completed_struct_type(type_t* incomplete_named_struct, type_t* complete_anonymous_struct) {
-    type_t* copied_type = type_copy_new(NULL, complete_anonymous_struct);
+    type_t *copied_type = type_copy_new(NULL, complete_anonymous_struct);
 
     incomplete_named_struct->data.struct_.field_count = copied_type->data.struct_.field_count;
     incomplete_named_struct->data.struct_.fields = copied_type->data.struct_.fields;
