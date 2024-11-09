@@ -8,11 +8,11 @@ bool union_type_contains_type(types_t types, type_id_t union_id, type_id_t type_
     type_t *union_ = types.items[union_id.i];
     type_t *type = types.items[type_id.i];
     if (!type_is_union(types, type_id)) {
-        return union_type_has_type(types, union_id, type_id);
+        return union_type_has_type(union_, type_id);
     }
 
     for (size_t i = 0; i < type->data.union_.types.count; ++i){
-        if (!union_type_has_type(types, union_id, type->data.union_.types.items[i])) {
+        if (!union_type_has_type(union_, type->data.union_.types.items[i])) {
             return false;
         }
     }
@@ -20,8 +20,7 @@ bool union_type_contains_type(types_t types, type_id_t union_id, type_id_t type_
     return true;
 }
 
-bool union_type_has_type(types_t types, type_id_t type_id, type_id_t subtype_id) {
-    type_t *type = types.items[type_id.i];
+bool union_type_has_type(type_t *type, type_id_t subtype_id) {
     ASSERT(type->kind == TYPE_UNION, "must be a union type");
 
     for (size_t i = 0; i < type->data.union_.types.count; ++i) {
@@ -36,9 +35,7 @@ bool struct_type_is_incomplete(type_t *type) {
     return type->kind == TYPE_STRUCT && type->data.struct_.field_count < 0;
 }
 
-bool type_equal(types_t types, type_id_t a_id, type_id_t b_id) {
-    type_t *a = types.items[a_id.i];
-    type_t *b = types.items[b_id.i];
+bool type_equal(type_t *a, type_t *b) {
     if (a->kind != b->kind) {
         return false;
     }
@@ -50,11 +47,11 @@ bool type_equal(types_t types, type_id_t a_id, type_id_t b_id) {
             }
 
             for (size_t i = 0; i < a->data.union_.types.count; ++i) {
-                if (!union_type_has_type(types, a_id, b->data.union_.types.items[i])) {
+                if (!union_type_has_type(a, b->data.union_.types.items[i])) {
                     return false;
                 }
 
-                if (!union_type_has_type(types, b_id, a->data.union_.types.items[i])) {
+                if (!union_type_has_type(b, a->data.union_.types.items[i])) {
                     return false;
                 }
             }
@@ -68,12 +65,12 @@ bool type_equal(types_t types, type_id_t a_id, type_id_t b_id) {
                 return false;
             }
 
-            unless (typeid_equal(a->data.function.return_type, b->data.function.return_type)) {
+            unless (typeid_eq(a->data.function.return_type, b->data.function.return_type)) {
                 return false;
             }
 
             for (size_t i = 0; i < a->data.function.argument_types.count; ++i) {
-                unless (typeid_equal(a->data.function.argument_types.items[i], b->data.function.argument_types.items[i])) {
+                unless (typeid_eq(a->data.function.argument_types.items[i], b->data.function.argument_types.items[i])) {
                     return false;
                 }
             }
@@ -96,7 +93,7 @@ bool type_equal(types_t types, type_id_t a_id, type_id_t b_id) {
             }
 
             for (i32 i = 0; i < a->data.struct_.field_count; i++) {
-                unless (typeid_equal(a->data.struct_.fields[i].type, b->data.struct_.fields[i].type)) {
+                unless (typeid_eq(a->data.struct_.fields[i].type, b->data.struct_.fields[i].type)) {
                     return false;
                 }
 
@@ -115,7 +112,7 @@ bool type_equal(types_t types, type_id_t a_id, type_id_t b_id) {
         }
 
         case TYPE_POINTER: {
-            return typeid_equal(a->data.pointer.type, b->data.pointer.type);
+            return typeid_eq(a->data.pointer.type, b->data.pointer.type);
         }
 
         case TYPE_BOOL:
@@ -128,6 +125,7 @@ bool type_equal(types_t types, type_id_t a_id, type_id_t b_id) {
         case TYPE_TYPE:
         case TYPE_SYMBOL: return true;
 
+        case TYPE_COUNT:
         case TYPE_INVALID:
         case TYPE_UNDEFINED:
         case TYPE_UNRESOLVED: UNREACHABLE(); return false;
@@ -137,7 +135,7 @@ bool type_equal(types_t types, type_id_t a_id, type_id_t b_id) {
 
 bool type_id_in_list(type_ids_t list, type_id_t find_id) {
     for (size_t i = 0; i < list.count; i++) {
-        if (typeid_equal(list.items[i], find_id)) {
+        if (typeid_eq(list.items[i], find_id)) {
             return true;
         }
     }
@@ -147,7 +145,7 @@ bool type_id_in_list(type_ids_t list, type_id_t find_id) {
 
 // TODO: make this faster... Preferably type_in_list should be O(1)
 type_id_t type_merge(type_table_t *set, type_id_t a_id, type_id_t b_id) {
-    if (typeid_equal(a_id, b_id)) {
+    if (typeid_eq(a_id, b_id)) {
         return a_id;
     }
 
@@ -180,7 +178,6 @@ type_id_t type_merge(type_table_t *set, type_id_t a_id, type_id_t b_id) {
     }
 
     type_id_t merged_id = type_set_fetch_union(set, type_ids);
-    type_t *merged = set->types.items[merged_id.i];
 
     allocator_return(tmp);
 
@@ -269,6 +266,7 @@ u32 type_size_bytes(type_t* type) {
             return type->data.struct_.total_bytes;
         }
 
+        case TYPE_COUNT:
         case TYPE_INVALID:
         case TYPE_UNDEFINED:
         case TYPE_UNRESOLVED:
@@ -276,26 +274,6 @@ u32 type_size_bytes(type_t* type) {
     }
 
     return 0;
-}
-
-bool orso_integer_fit(type_t *storage_type, type_t *value_type, bool include_bool) {
-    if (TYPE_IS_UNION(storage_type)) {
-        return false;
-    }
-
-    if (TYPE_IS_UNION(value_type)) {
-        return false;
-    }
-
-    if (!type_is_integer(storage_type, include_bool)) {
-        return false;
-    }
-
-    if (!type_is_integer(value_type, include_bool)) {
-        return false;
-    }
-
-    return type_size_bytes(storage_type) >= type_size_bytes(value_type);
 }
 
 size_t type_slot_count(type_t *type) {
@@ -394,6 +372,7 @@ string_t type_to_string_toplevel(types_t types, type_id_t type_id, arena_t *allo
             case TYPE_UNRESOLVED: type_name = "<unresolved>"; break;
             case TYPE_UNDEFINED: type_name = "<undefined>"; break;
             
+            case TYPE_COUNT:
             case TYPE_STRUCT:
             case TYPE_FUNCTION:
             case TYPE_NATIVE_FUNCTION:

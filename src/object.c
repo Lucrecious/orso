@@ -127,7 +127,7 @@ string_t slot_to_string(slot_t *slot, types_t *types, type_id_t type_id, arena_t
                 size_t field_size = type_size_bytes(field_type);
                 copy_bytes_to_slots(slots.items, value, field_type->kind, field_size);
 
-                string_t field_value = slot_to_string(types, slots.items, field->type, tmp->allocator);
+                string_t field_value = slot_to_string(slots.items, types, field->type, tmp->allocator);
 
                 sb_add_cstr(&sb, field_value.cstr);
 
@@ -147,20 +147,21 @@ string_t slot_to_string(slot_t *slot, types_t *types, type_id_t type_id, arena_t
 
         case TYPE_UNION: {
             type_id_t type_id = (type_id_t){.i=slot->as.u};
-            return slot_to_string(types, slot + 1, type_id, allocator);
+            return slot_to_string(slot + 1, types, type_id, allocator);
         }
 
         case TYPE_TYPE: {
             string_t result;
 
             tmp_arena_t *tmp = allocator_borrow(); {
-                type_t *type = (type_t*)slot->as.p;
-                string_t type_string = type_to_string(*types, type, tmp->allocator);
+                type_id_t type_id = (type_id_t){.i=slot->as.u};
+                string_t type_string = type_to_string(*types, type_id, tmp->allocator);
                 result = string_format("<%s>", allocator, type_string.cstr);
             } allocator_return(tmp);
 
             return result;
         }
+        case TYPE_COUNT: return str("<enum count>");
         case TYPE_UNDEFINED: return str("<undefined>");
         case TYPE_UNRESOLVED: return str("<unresolved>");
         case TYPE_INVALID: return str("<invalid>");
@@ -180,6 +181,7 @@ OrsoString *orso_slot_to_string(slot_t *slot, types_t *types, type_id_t type_id,
 
 void copy_bytes_to_slots(void *destination, void *source, type_kind_t type_kind, u64 size_bytes) {
     switch (type_kind) {
+        case TYPE_COUNT:
         case TYPE_INVALID:
         case TYPE_UNDEFINED:
         case TYPE_UNRESOLVED: {

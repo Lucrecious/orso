@@ -7,7 +7,21 @@
 #include "lexer.h"
 #include "stringt.h"
 
-#define UNION_NUM_MAX 4
+typedef struct type_id_t type_id_t;
+struct type_id_t {
+    u64 i;
+};
+
+typedef struct type_ids_t type_ids_t;
+struct type_ids_t {
+    type_id_t *items;
+    size_t count;
+    size_t capacity;
+    arena_t *allocator;
+};
+
+typedef struct types_t types_t;
+typedef struct type_t type_t;
 
 typedef enum type_kind_t {
     TYPE_INVALID = 0,      // error type
@@ -30,9 +44,6 @@ typedef enum type_kind_t {
 
     TYPE_COUNT,
 } type_kind_t;
-
-typedef struct types_t types_t;
-typedef struct type_t type_t;
 
 typedef struct struct_field_t {
     char* name;
@@ -86,14 +97,6 @@ struct type_t {
     } data;
 };
 
-typedef struct type_ids_t type_ids_t;
-struct type_ids_t {
-    type_id_t *items;
-    size_t count;
-    size_t capacity;
-    arena_t *allocator;
-};
-
 #define TYPE_IS_VOID(TYPE) ((TYPE).i == TYPE_VOID)
 #define TYPE_IS_TYPE(TYPE) ((TYPE).i == TYPE_TYPE)
 #define TYPE_IS_INVALID(TYPE) ((TYPE).i == TYPE_INVALID)
@@ -107,7 +110,7 @@ bool struct_type_is_incomplete(type_t *type);
 bool type_equal(type_t *a, type_t *b);
 
 // orso_type_has_type_kind
-bool union_type_has_type(types_t types, type_id_t type, type_id_t subtype);
+bool union_type_has_type(type_t *type, type_id_t subtype);
 bool union_type_contains_type(types_t types, type_id_t union_, type_id_t type);
 
 type_id_t type_merge(struct type_table_t *set, type_id_t a, type_id_t b);
@@ -126,8 +129,6 @@ size_t bytes_to_slots(i32 byte_count);
 u32 type_size_bytes(type_t *type);
 
 struct_field_t *type_struct_find_field(type_t *struct_, const char *name, size_t name_length);
-
-bool orso_integer_fit(type_t *storage_type, type_t *value_type, bool include_bool);
 
 size_t type_slot_count(type_t *type);
 

@@ -55,39 +55,3 @@ i32 chunk_get_line(chunk_t* chunk, i32 offset) {
 
     return -1;
 }
-
-void orso_print_slot(slot_t *slot, types_t *types, type_id_t type_id) {
-    type_t *type = get_type_info(types, type_id);
-
-    switch (type->kind) {
-        case TYPE_INVALID:
-        case TYPE_UNDEFINED:
-        case TYPE_UNRESOLVED:
-        case TYPE_VOID:
-        case TYPE_BOOL:
-        case TYPE_INT32:
-        case TYPE_INT64:
-        case TYPE_FLOAT32:
-        case TYPE_FLOAT64:
-        case TYPE_TYPE:
-        case TYPE_STRUCT: break;
-
-        case TYPE_STRING:
-        case TYPE_SYMBOL:
-        case TYPE_FUNCTION:
-        case TYPE_NATIVE_FUNCTION:
-        case TYPE_POINTER:
-        case TYPE_UNION: {
-            if (slot->as.i == 0) {
-                slot = NULL;
-                type = &OrsoTypeUndefined;
-            }
-            break;
-        }
-    }
-    
-    tmp_arena_t *tmp = allocator_borrow(); {
-        string_t s = slot_to_string(slot, types, type_id, tmp->allocator);
-        printf("%s", s.cstr);
-    } allocator_return(tmp);
-}

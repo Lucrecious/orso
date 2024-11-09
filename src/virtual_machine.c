@@ -434,6 +434,7 @@ bool vm_step(vm_t *vm) {
                     break;
                 }
 
+                case TYPE_COUNT:
                 case TYPE_INVALID:
                 case TYPE_UNDEFINED:
                 case TYPE_UNRESOLVED: {
@@ -530,7 +531,7 @@ bool vm_step(vm_t *vm) {
                         vm->write_fn(expression_string->text);
                         vm->write_fn(" (");
 
-                            string_t s = type_to_string(vm->type_set->types, type, tmp->allocator);
+                            string_t s = type_to_string(vm->type_set->types, type_id, tmp->allocator);
                             vm->write_fn(s.cstr);
                         vm->write_fn(") => ");
                         vm->write_fn(value_string->text);

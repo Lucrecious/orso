@@ -42,8 +42,6 @@ i32 chunk_get_line(chunk_t *chunk, i32 offset);
 
 u32 chunk_add_constant(chunk_t *chunk, byte* data, u32 size, type_id_t type_id);
 
-void orso_print_slot(slot_t *slot, types_t *types, type_id_t type_id);
-
 void chunk_free(chunk_t *chunk);
 
 #endif

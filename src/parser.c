@@ -48,20 +48,12 @@ struct_definition        -> `struct` `{` entity_declaration* `}`
 type_init                ->  logic_or`{` `}`
 */
 
-static int ptr_hash(void* ptr) {
-    return kh_int64_hash_func((khint64_t)ptr);
-}
-
-static int ptr_equal(void* a, void* b) {
-    return kh_int64_hash_equal((khint64_t)a, (khint64_t)b);
-}
-
 static int type_id_hash(type_id_t id) {
     return kh_int64_hash_func((khint64_t)id.i);
 }
 
 static int type_id_equal(type_id_t a, type_id_t b) {
-    return typeid_equal(a, b);
+    return typeid_eq(a, b);
 }
 
 implement_table(ptr2i32, type_id_t, i32, type_id_hash, type_id_equal)
@@ -1137,7 +1129,7 @@ i32 zero_value(ast_t *ast, type_id_t type_id, symbol_table_t *symbol_table) {
             break;
         
         case TYPE_UNION: {
-            ASSERT(union_type_has_type(ast->type_set.types, type, typeid(TYPE_VOID)), "must include void type if looking for zero value");
+            ASSERT(union_type_has_type(type, typeid(TYPE_VOID)), "must include void type if looking for zero value");
             
             u32 size_slots = type_slot_count(type);
             for (u32 i = 0; i < size_slots; i++) {
@@ -1154,6 +1146,7 @@ i32 zero_value(ast_t *ast, type_id_t type_id, symbol_table_t *symbol_table) {
             break;
         }
 
+        case TYPE_COUNT:
         case TYPE_FUNCTION:
         case TYPE_NATIVE_FUNCTION:
         case TYPE_TYPE:

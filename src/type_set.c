@@ -23,8 +23,6 @@ type_t OrsoTypeUndefined = (type_t) { .kind = TYPE_UNDEFINED };
 #define ALLOC_N(TYPE, N) (TYPE*)arena_alloc(set->allocator, sizeof(TYPE)*N)
 
 static type_t *union_type_new(type_table_t *set, type_ids_t type_ids) {
-    //ASSERT(count <= UNION_NUM_MAX, "cannot create union type with more than 4 types"); // TODO: Add this in later, need codegen and runtime errors first
-
     type_t* union_type = ALLOC(type_t);
     union_type->kind = TYPE_UNION;
     union_type->data.union_.types = (type_ids_t){.allocator=set->allocator};
@@ -104,14 +102,14 @@ type_t *pointer_type_new(type_table_t *set, type_id_t type_id) {
 }
 
 type_t *type_copy_new(type_table_t *set, type_t *type) {
-    if (TYPE_IS_UNION(type)) {
+    if (type->kind == TYPE_UNION) {
         return (type_t*)union_type_new(
             set,
             type->data.union_.types
         );
     }
 
-    if (TYPE_IS_FUNCTION(type) || type->kind == TYPE_NATIVE_FUNCTION) {
+    if (type->kind == TYPE_FUNCTION || type->kind == TYPE_NATIVE_FUNCTION) {
         return (type_t*)function_type_new(
             set,
             type->data.function.argument_types,
@@ -120,7 +118,7 @@ type_t *type_copy_new(type_table_t *set, type_t *type) {
         );
     }
 
-    if (TYPE_IS_STRUCT(type)) {
+    if (type->kind == TYPE_STRUCT) {
         return struct_type_new(
             set,
             type->data.struct_.fields,
@@ -130,7 +128,7 @@ type_t *type_copy_new(type_table_t *set, type_t *type) {
             type->data.struct_.total_bytes);
     }
 
-    if (TYPE_IS_POINTER(type)) {
+    if (type->kind == TYPE_POINTER) {
         return pointer_type_new(
             set,
             type->data.pointer.type);
@@ -155,21 +153,23 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
         array_push(&set->types, NULL);
     }
 
-    static const type_t type_bool = {.kind=TYPE_BOOL};
-    static const type_t type_f32 = {.kind=TYPE_FLOAT32};
-    static const type_t type_f64 = {.kind=TYPE_FLOAT64};
-    static const type_t type_i32 = {.kind=TYPE_INT32};
-    static const type_t type_i64 = {.kind=TYPE_INT64};
-    static const type_t type_string = {.kind=TYPE_STRING};
-    static const type_t type_symbol = {.kind=TYPE_SYMBOL};
-    static const type_t type_invalid = {.kind=TYPE_INVALID};
-    static const type_t type_unresolved = {.kind=TYPE_UNRESOLVED};
-    static const type_t type_undefined = {.kind=TYPE_UNDEFINED};
-    static const type_t type_type = {.kind=TYPE_TYPE};
-    static const type_t empty_function = {.kind = TYPE_FUNCTION, .data.function.return_type = typeid(TYPE_VOID)};
+    static type_t type_void = {.kind=TYPE_VOID};
+    static type_t type_bool = {.kind=TYPE_BOOL};
+    static type_t type_f32 = {.kind=TYPE_FLOAT32};
+    static type_t type_f64 = {.kind=TYPE_FLOAT64};
+    static type_t type_i32 = {.kind=TYPE_INT32};
+    static type_t type_i64 = {.kind=TYPE_INT64};
+    static type_t type_string = {.kind=TYPE_STRING};
+    static type_t type_symbol = {.kind=TYPE_SYMBOL};
+    static type_t type_invalid = {.kind=TYPE_INVALID};
+    static type_t type_unresolved = {.kind=TYPE_UNRESOLVED};
+    static type_t type_undefined = {.kind=TYPE_UNDEFINED};
+    static type_t type_type = {.kind=TYPE_TYPE};
+    static type_t empty_function = {.kind = TYPE_FUNCTION, .data.function.return_type = typeid(TYPE_VOID)};
 
     for (size_t i = 0; i < TYPE_COUNT; ++i) {
         switch ((type_kind_t)i) {
+            case TYPE_VOID: set->types.items[i] = &type_void; break;
             case TYPE_BOOL: set->types.items[i] = &type_bool; break;
             case TYPE_FLOAT32: set->types.items[i] = &type_f32; break;
             case TYPE_FLOAT64: set->types.items[i] = &type_f64; break;
@@ -192,17 +192,41 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
     }
 }
 
+type_t *get_type_info(types_t *types, type_id_t type_id) {
+    return types->items[type_id.i];
+}
+
+bool type_is_union(types_t types, type_id_t type_id) {
+    return types.items[type_id.i]->kind == TYPE_UNION;
+}
+
+bool type_is_function(types_t types, type_id_t type_id) {
+    return types.items[type_id.i]->kind == TYPE_FUNCTION;
+}
+
+bool type_is_native_function(types_t types, type_id_t type_id) {
+    return types.items[type_id.i]->kind == TYPE_NATIVE_FUNCTION;
+}
+
+bool type_is_struct(types_t types, type_id_t type_id) {
+    return types.items[type_id.i]->kind == TYPE_STRUCT;
+}
+
+bool type_is_pointer(types_t types, type_id_t type_id) {
+    return types.items[type_id.i]->kind == TYPE_POINTER;
+}
+
 static u64 hash_type(type_t *type) {
 #define ADD_HASH(HASH, APPEND) HASH ^= APPEND; HASH *= 16777619
 
     u32 hash = 2166136261u;
     ADD_HASH(hash, type->kind);
 
-    if (TYPE_IS_UNION(type)) {
+    if (type->kind == TYPE_UNION) {
         for (size_t i = 0; i < type->data.union_.types.count; ++i) {
             ADD_HASH(hash, (u64)(type->data.union_.types.items[i].i));
         }
-    } else if (TYPE_IS_FUNCTION(type)) {
+    } else if (type->kind == TYPE_FUNCTION) {
         ADD_HASH(hash, type->data.function.argument_types.count);
 
         for (size_t i = 0; i < type->data.function.argument_types.count; ++i) {
@@ -210,7 +234,7 @@ static u64 hash_type(type_t *type) {
         }
 
         ADD_HASH(hash, (u64)(type->data.function.return_type.i));
-    } else if (TYPE_IS_STRUCT(type)) {
+    } else if (type->kind == TYPE_STRUCT) {
         ASSERT(type->data.struct_.name == NULL, "only anonymous structs are hashed");
         ASSERT(type->data.struct_.constant_count == 0, "only anonymous structs without constants can be hashed");
 
@@ -225,7 +249,7 @@ static u64 hash_type(type_t *type) {
             
             ADD_HASH(hash, (u64)(type->data.struct_.fields[i].type.i));
         }
-    } else if (TYPE_IS_POINTER(type)) {
+    } else if (type->kind == TYPE_POINTER) {
         ADD_HASH(hash, (u64)(type->data.pointer.type.i));
     }
 
@@ -363,7 +387,7 @@ type_id_t type_set_fetch_anonymous_struct(type_table_t *set, i32 field_count, st
 }
 
 type_id_t type_create_struct(type_table_t *set, char *name, i32 name_length, type_t *anonymous_struct) {
-    ASSERT(TYPE_IS_STRUCT(anonymous_struct) && anonymous_struct->data.struct_.name == NULL, "can only create struct from anonymous struct");
+    ASSERT(anonymous_struct->kind == TYPE_STRUCT && anonymous_struct->data.struct_.name == NULL, "can only create struct from anonymous struct");
 
     if (anonymous_struct->data.struct_.constant_count == 0) {
         type_t *new_type = type_copy_new(set, anonymous_struct);
