@@ -767,9 +767,10 @@ static void function_expression(vm_t* vm, compiler_t* compiler, ast_t* ast, ast_
 
 static void gen_primary(compiler_t *compiler, chunk_t *chunk, ast_t *ast, type_id_t value_type_id, i32 value_index, i32 line) {
     ASSERT(value_index >= 0, "must be pointing to a contant value...");
+    type_t *value_type = get_type_info(compiler->types, value_type_id);
 
     slot_t *value = &ast->folded_constants.items[value_index];
-    switch (value_type_id.i) {
+    switch (value_type->kind) {
         case TYPE_BOOL:
         case TYPE_INT32:
         case TYPE_INT64:
@@ -1621,6 +1622,7 @@ void compile_function(vm_t *vm, ast_t *ast, function_t *function, ast_node_t *fu
 function_t *generate_code(vm_t *vm, ast_t *ast) {
     function_t *main_function = NULL;
     ast_node_t *main_declaration = NULL;
+    vm->type_set = &ast->type_set;
 
     for (size_t i = 0; i < ast->root->data.block.count; i++) {
         ast_node_t *declaration_ = ast->root->data.block.items[i];

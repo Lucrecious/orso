@@ -1820,7 +1820,7 @@ static void resolve_entity_declaration(analyzer_t* analyzer, ast_t* ast, Analysi
             type_id_t expression_type_id = INITIAL_EXPRESSION->value_type;
 
             if (expression_type_id.i == TYPE_BOOL || expression_type_id.i == TYPE_INT32) {
-                entity_declaration->value_type = typeid(TYPE_INT32);
+                entity_declaration->value_type = expression_type_id;
             } else {
                 entity_declaration->value_type = expression_type_id;
             }
@@ -2250,7 +2250,7 @@ static void resolve_function_expression(
         pop_dependency(analyzer);
     }
 
-    if (TYPE_IS_VOID(return_type) && definition->block->return_guarentee != RETURN_GUARENTEE_YES) {
+    if (!TYPE_IS_VOID(return_type) && definition->block->return_guarentee != RETURN_GUARENTEE_YES) {
         error_range(analyzer, function_definition_expression->start, function_definition_expression->end, "Function definition does not return on all branches.");
     }
 }

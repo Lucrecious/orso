@@ -796,7 +796,7 @@ static ast_node_t *dot(parser_t* parser, bool is_in_type_context) {
         ast_node_t *dot_expression = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_DOT, is_in_type_context, parser->previous);
         consume(parser, TOKEN_IDENTIFIER, "dot can only have identifiers on the right for now.");
         dot_expression->data.dot.identifier = parser->previous;
-        dot_expression->end = parser->previous;
+        dot_expression->end = parser->current;
 
         return dot_expression;
     }
