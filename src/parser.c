@@ -48,16 +48,16 @@ struct_definition        -> `struct` `{` entity_declaration* `}`
 type_init                ->  logic_or`{` `}`
 */
 
-static int type_id_hash(type_id_t id) {
+static int type_id_hash(type_t id) {
     return kh_int64_hash_func((khint64_t)id.i);
 }
 
-static int type_id_equal(type_id_t a, type_id_t b) {
+static int type_id_equal(type_t a, type_t b) {
     return typeid_eq(a, b);
 }
 
-implement_table(ptr2i32, type_id_t, i32, type_id_hash, type_id_equal)
-implement_table(type2ns, type_id_t, ast_node_and_scope_t, type_id_hash, type_id_equal)
+implement_table(ptr2i32, type_t, i32, type_id_hash, type_id_equal)
+implement_table(type2ns, type_t, ast_node_and_scope_t, type_id_hash, type_id_equal)
 
 typedef struct parser_t {
     error_function_t error_fn;
@@ -100,7 +100,7 @@ void ast_init(ast_t* ast, symbol_table_t* symbols) {
 
     ast->resolved = false;
     ast->root = NULL;
-    ast->folded_constant_types = (type_ids_t){.allocator=&ast->allocator};
+    ast->folded_constant_types = (types_t){.allocator=&ast->allocator};
     ast->folded_constants = (slots_t){.allocator=&ast->allocator};
     ast->symbols = symbols;
     ast->function_definition_pairs = (fd_pairs_t){.allocator=&ast->allocator};
@@ -340,14 +340,14 @@ static ParseRule* get_rule(token_type_t type);
 static bool check_expression(parser_t* parser);
 static ast_node_t* parse_precedence(parser_t* parser, bool is_in_type_context, Precedence precedence);
 
-static type_id_t value_to_integer_type(i64 value) {
+static type_t value_to_integer_type(i64 value) {
     if (value >= INT32_MIN && value <= INT32_MAX) {
         return typeid(TYPE_INT32);
     }
     return typeid(TYPE_INT64);
 }
 
-static i32 add_constant_value(parser_t* parser, slot_t value, type_id_t type_id) {
+static i32 add_constant_value(parser_t* parser, slot_t value, type_t type_id) {
     i32 index = parser->ast->folded_constants.count;
     array_push(&parser->ast->folded_constant_types, type_id);
     array_push(&parser->ast->folded_constants, value);
@@ -1085,8 +1085,8 @@ bool parse(ast_t *ast, const char *source, error_function_t error_fn) {
     return !parser.had_error;
 }
 
-i32 add_value_to_ast_constant_stack(ast_t *ast, slot_t *value, type_id_t type_id) {
-    type_t *type = ast->type_set.types.items[type_id.i];
+i32 add_value_to_ast_constant_stack(ast_t *ast, slot_t *value, type_t type_id) {
+    type_info_t *type = ast->type_set.types.items[type_id.i];
 
     i32 slot_count = type_slot_count(type);
     for (i32 i = 0; i < slot_count; i ++) {
@@ -1096,13 +1096,13 @@ i32 add_value_to_ast_constant_stack(ast_t *ast, slot_t *value, type_id_t type_id
     return ast->folded_constants.count - slot_count;
 }
 
-i32 zero_value(ast_t *ast, type_id_t type_id, symbol_table_t *symbol_table) {
+i32 zero_value(ast_t *ast, type_t type_id, symbol_table_t *symbol_table) {
     i32 result = -1;
     if (table_get(ptr2i32, ast->type_to_zero_index, type_id, &result)) {
         return result;
     }
 
-    type_t *type = ast->type_set.types.items[type_id.i];
+    type_info_t *type = ast->type_set.types.items[type_id.i];
 
     slot_t value[bytes_to_slots(type_size_bytes(type))];
 
@@ -1163,13 +1163,13 @@ i32 zero_value(ast_t *ast, type_id_t type_id, symbol_table_t *symbol_table) {
     return zero_index;
 }
 
-type_id_t get_folded_type(ast_t *ast, i32 index) {
+type_t get_folded_type(ast_t *ast, i32 index) {
     if (index < 0) {
         return typeid(TYPE_INVALID);
     }
 
     slot_t *type_slot = &ast->folded_constants.items[index];
-    type_id_t type_id = (type_id_t){.i=type_slot->as.u};
+    type_t type_id = (type_t){.i=type_slot->as.u};
     return type_id;
 }
 
@@ -1190,7 +1190,7 @@ static void print_line(const cstr_t format, ...) {
 	printf("\n");
 }
 
-static void ast_print_ast_node(types_t types, ast_node_t *node, u32 level) {
+static void ast_print_ast_node(type_infos_t types, ast_node_t *node, u32 level) {
     tmp_arena_t *tmp = allocator_borrow();
 
     #define type2cstr(node) (type_to_string(types, node->value_type, tmp->allocator).cstr)

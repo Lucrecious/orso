@@ -6,26 +6,26 @@
 #define ORSO_TYPE_SET_MAX_LOAD 0.75
 #define GROW_CAPACITY(capacity) capacity == 0 ? 8 : capacity * 2
 
-type_t OrsoTypeVoid = (type_t) { .kind = TYPE_VOID };
-type_t OrsoTypeBool = (type_t) { .kind = TYPE_BOOL };
-type_t OrsoTypeInteger32 = (type_t) { .kind = TYPE_INT32 };
-type_t OrsoTypeInteger64 = (type_t) { .kind = TYPE_INT64 };
-type_t OrsoTypeFloat32 = (type_t){ .kind = TYPE_FLOAT32 };
-type_t OrsoTypeFloat64 = (type_t){ .kind = TYPE_FLOAT64 };
-type_t OrsoTypeString = (type_t) { .kind = TYPE_STRING };
-type_t OrsoTypeSymbol = (type_t) { .kind = TYPE_SYMBOL };
-type_t OrsoTypeType = (type_t) { .kind = TYPE_TYPE };
-type_t OrsoTypeInvalid = (type_t){ .kind = TYPE_INVALID  };
-type_t OrsoTypeUnresolved = (type_t) { .kind = TYPE_UNRESOLVED };
-type_t OrsoTypeUndefined = (type_t) { .kind = TYPE_UNDEFINED };
+type_info_t OrsoTypeVoid = (type_info_t) { .kind = TYPE_VOID };
+type_info_t OrsoTypeBool = (type_info_t) { .kind = TYPE_BOOL };
+type_info_t OrsoTypeInteger32 = (type_info_t) { .kind = TYPE_INT32 };
+type_info_t OrsoTypeInteger64 = (type_info_t) { .kind = TYPE_INT64 };
+type_info_t OrsoTypeFloat32 = (type_info_t){ .kind = TYPE_FLOAT32 };
+type_info_t OrsoTypeFloat64 = (type_info_t){ .kind = TYPE_FLOAT64 };
+type_info_t OrsoTypeString = (type_info_t) { .kind = TYPE_STRING };
+type_info_t OrsoTypeSymbol = (type_info_t) { .kind = TYPE_SYMBOL };
+type_info_t OrsoTypeType = (type_info_t) { .kind = TYPE_TYPE };
+type_info_t OrsoTypeInvalid = (type_info_t){ .kind = TYPE_INVALID  };
+type_info_t OrsoTypeUnresolved = (type_info_t) { .kind = TYPE_UNRESOLVED };
+type_info_t OrsoTypeUndefined = (type_info_t) { .kind = TYPE_UNDEFINED };
 
 #define ALLOC(TYPE) (TYPE*)arena_alloc(set->allocator, sizeof(TYPE))
 #define ALLOC_N(TYPE, N) (TYPE*)arena_alloc(set->allocator, sizeof(TYPE)*N)
 
-static type_t *union_type_new(type_table_t *set, type_ids_t type_ids) {
-    type_t* union_type = ALLOC(type_t);
+static type_info_t *union_type_new(type_table_t *set, types_t type_ids) {
+    type_info_t* union_type = ALLOC(type_info_t);
     union_type->kind = TYPE_UNION;
-    union_type->data.union_.types = (type_ids_t){.allocator=set->allocator};
+    union_type->data.union_.types = (types_t){.allocator=set->allocator};
     for (size_t i = 0; i < union_type->data.union_.types.count; ++i) {
         array_push(&union_type->data.union_.types, type_ids.items[i]);
         
@@ -34,10 +34,10 @@ static type_t *union_type_new(type_table_t *set, type_ids_t type_ids) {
     return union_type;
 }
 
-type_t *function_type_new(type_table_t *set, type_ids_t arguments, type_id_t return_type, bool is_native) {
-    type_t *function_type = ALLOC(type_t);
+type_info_t *function_type_new(type_table_t *set, types_t arguments, type_t return_type, bool is_native) {
+    type_info_t *function_type = ALLOC(type_info_t);
     function_type->kind = is_native ? TYPE_NATIVE_FUNCTION : TYPE_FUNCTION;
-    function_type->data.function.argument_types = (type_ids_t){.allocator=set->allocator};
+    function_type->data.function.argument_types = (types_t){.allocator=set->allocator};
     for (size_t i = 0; i < arguments.count; ++i) {
         array_push(&function_type->data.function.argument_types, arguments.items[i]);
     }
@@ -48,8 +48,8 @@ type_t *function_type_new(type_table_t *set, type_ids_t arguments, type_id_t ret
 }
 
 // only anonymous structs can be looked up in the type set
-type_t *struct_type_new(type_table_t *set, struct_field_t *fields, i32 field_count, struct_constant_t *constants, i32 constant_count, i32 total_size) {
-    type_t* struct_type = ALLOC(type_t);
+type_info_t *struct_type_new(type_table_t *set, struct_field_t *fields, i32 field_count, struct_constant_t *constants, i32 constant_count, i32 total_size) {
+    type_info_t* struct_type = ALLOC(type_info_t);
     struct_type->kind = TYPE_STRUCT;
 
     struct_type->data.struct_.name = NULL;
@@ -93,24 +93,24 @@ type_t *struct_type_new(type_table_t *set, struct_field_t *fields, i32 field_cou
     return struct_type;
 }
 
-type_t *pointer_type_new(type_table_t *set, type_id_t type_id) {
-    type_t *pointer = ALLOC(type_t);
+type_info_t *pointer_type_new(type_table_t *set, type_t type_id) {
+    type_info_t *pointer = ALLOC(type_info_t);
     pointer->kind = TYPE_POINTER;
     pointer->data.pointer.type = type_id;
 
     return pointer;
 }
 
-type_t *type_copy_new(type_table_t *set, type_t *type) {
+type_info_t *type_copy_new(type_table_t *set, type_info_t *type) {
     if (type->kind == TYPE_UNION) {
-        return (type_t*)union_type_new(
+        return (type_info_t*)union_type_new(
             set,
             type->data.union_.types
         );
     }
 
     if (type->kind == TYPE_FUNCTION || type->kind == TYPE_NATIVE_FUNCTION) {
-        return (type_t*)function_type_new(
+        return (type_info_t*)function_type_new(
             set,
             type->data.function.argument_types,
             type->data.function.return_type,
@@ -138,7 +138,7 @@ type_t *type_copy_new(type_table_t *set, type_t *type) {
     return NULL;
 }
 
-static type_id_t track_type(type_table_t *set, type_t *type) {
+static type_t track_type(type_table_t *set, type_info_t *type) {
     array_push(&set->types, type);
     table_put(type2u64, set->types2index, type, typeid(set->types.count-1));
     return typeid(set->types.count-1);
@@ -147,25 +147,25 @@ static type_id_t track_type(type_table_t *set, type_t *type) {
 void type_set_init(type_table_t* set, arena_t *allocator) {
     set->allocator = allocator;
     set->types2index = table_new(type2u64, allocator);
-    set->types = (types_t){.allocator=allocator};
+    set->types = (type_infos_t){.allocator=allocator};
 
     for (size_t i = 0; i < TYPE_COUNT; ++i) {
         array_push(&set->types, NULL);
     }
 
-    static type_t type_void = {.kind=TYPE_VOID};
-    static type_t type_bool = {.kind=TYPE_BOOL};
-    static type_t type_f32 = {.kind=TYPE_FLOAT32};
-    static type_t type_f64 = {.kind=TYPE_FLOAT64};
-    static type_t type_i32 = {.kind=TYPE_INT32};
-    static type_t type_i64 = {.kind=TYPE_INT64};
-    static type_t type_string = {.kind=TYPE_STRING};
-    static type_t type_symbol = {.kind=TYPE_SYMBOL};
-    static type_t type_invalid = {.kind=TYPE_INVALID};
-    static type_t type_unresolved = {.kind=TYPE_UNRESOLVED};
-    static type_t type_undefined = {.kind=TYPE_UNDEFINED};
-    static type_t type_type = {.kind=TYPE_TYPE};
-    static type_t empty_function = {.kind = TYPE_FUNCTION, .data.function.return_type = typeid(TYPE_VOID)};
+    static type_info_t type_void = {.kind=TYPE_VOID};
+    static type_info_t type_bool = {.kind=TYPE_BOOL};
+    static type_info_t type_f32 = {.kind=TYPE_FLOAT32};
+    static type_info_t type_f64 = {.kind=TYPE_FLOAT64};
+    static type_info_t type_i32 = {.kind=TYPE_INT32};
+    static type_info_t type_i64 = {.kind=TYPE_INT64};
+    static type_info_t type_string = {.kind=TYPE_STRING};
+    static type_info_t type_symbol = {.kind=TYPE_SYMBOL};
+    static type_info_t type_invalid = {.kind=TYPE_INVALID};
+    static type_info_t type_unresolved = {.kind=TYPE_UNRESOLVED};
+    static type_info_t type_undefined = {.kind=TYPE_UNDEFINED};
+    static type_info_t type_type = {.kind=TYPE_TYPE};
+    static type_info_t empty_function = {.kind = TYPE_FUNCTION, .data.function.return_type = typeid(TYPE_VOID)};
 
     for (size_t i = 0; i < TYPE_COUNT; ++i) {
         switch ((type_kind_t)i) {
@@ -192,31 +192,31 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
     }
 }
 
-type_t *get_type_info(types_t *types, type_id_t type_id) {
+type_info_t *get_type_info(type_infos_t *types, type_t type_id) {
     return types->items[type_id.i];
 }
 
-bool type_is_union(types_t types, type_id_t type_id) {
+bool type_is_union(type_infos_t types, type_t type_id) {
     return types.items[type_id.i]->kind == TYPE_UNION;
 }
 
-bool type_is_function(types_t types, type_id_t type_id) {
+bool type_is_function(type_infos_t types, type_t type_id) {
     return types.items[type_id.i]->kind == TYPE_FUNCTION;
 }
 
-bool type_is_native_function(types_t types, type_id_t type_id) {
+bool type_is_native_function(type_infos_t types, type_t type_id) {
     return types.items[type_id.i]->kind == TYPE_NATIVE_FUNCTION;
 }
 
-bool type_is_struct(types_t types, type_id_t type_id) {
+bool type_is_struct(type_infos_t types, type_t type_id) {
     return types.items[type_id.i]->kind == TYPE_STRUCT;
 }
 
-bool type_is_pointer(types_t types, type_id_t type_id) {
+bool type_is_pointer(type_infos_t types, type_t type_id) {
     return types.items[type_id.i]->kind == TYPE_POINTER;
 }
 
-static u64 hash_type(type_t *type) {
+static u64 hash_type(type_info_t *type) {
 #define ADD_HASH(HASH, APPEND) HASH ^= APPEND; HASH *= 16777619
 
     u32 hash = 2166136261u;
@@ -258,17 +258,17 @@ static u64 hash_type(type_t *type) {
 #undef ADD_HASH
 }
 
-implement_table(type2u64, type_t*, type_id_t, hash_type, type_equal);
+implement_table(type2u64, type_info_t*, type_t, hash_type, type_equal);
 
 static i32 type_compare(const void *a, const void *b) {
-    type_id_t *type_a = *((type_id_t**)a);
-    type_id_t *type_b = *((type_id_t**)b);
+    type_t *type_a = *((type_t**)a);
+    type_t *type_b = *((type_t**)b);
     return type_a->i == type_b->i ? 0 : (type_a->i < type_b->i ? -1 : 1);
 
 }
 
-type_id_t type_set_fetch_union(type_table_t *set, type_ids_t types) {
-    type_t union_type = {
+type_t type_set_fetch_union(type_table_t *set, types_t types) {
+    type_info_t union_type = {
         .kind = TYPE_UNION,
         .data.union_.types = {.allocator=set->allocator},
     };
@@ -277,64 +277,64 @@ type_id_t type_set_fetch_union(type_table_t *set, type_ids_t types) {
         array_push(&union_type.data.union_.types, types.items[i]);
     }
 
-    qsort(union_type.data.union_.types.items, types.count, sizeof(type_id_t), type_compare);
+    qsort(union_type.data.union_.types.items, types.count, sizeof(type_t), type_compare);
 
-    type_id_t index;
+    type_t index;
     if (table_get(type2u64, set->types2index, &union_type, &index)) {
         return index;
     }
 
-    type_t *type = type_copy_new(set, &union_type);
-    type_id_t type_id = track_type(set, type);
+    type_info_t *type = type_copy_new(set, &union_type);
+    type_t type_id = track_type(set, type);
 
     return type_id;
 }
 
-type_id_t type_set_fetch_pointer(type_table_t* set, type_id_t inner_type_id) {
-    type_t pointer_type = {
+type_t type_set_fetch_pointer(type_table_t* set, type_t inner_type_id) {
+    type_info_t pointer_type = {
         .kind = TYPE_POINTER,
         .data.pointer.type = inner_type_id,
     };
 
-    type_id_t type_id;
+    type_t type_id;
     if (table_get(type2u64, set->types2index, &pointer_type, &type_id)) {
         return type_id;
     }
 
-    type_t *type = type_copy_new(set, &pointer_type);
+    type_info_t *type = type_copy_new(set, &pointer_type);
     type_id = track_type(set, type);
 
     return type_id;
 }
 
-type_id_t type_set_fetch_function_(type_table_t *set, type_id_t return_type, type_ids_t arguments, bool is_native) {
-    type_t function_type = {
+type_t type_set_fetch_function_(type_table_t *set, type_t return_type, types_t arguments, bool is_native) {
+    type_info_t function_type = {
         .kind = is_native ? TYPE_NATIVE_FUNCTION : TYPE_FUNCTION,
         .data.function.argument_types = arguments,
         .data.function.return_type = return_type,
     };
 
-    type_id_t type_id;
+    type_t type_id;
     if (table_get(type2u64, set->types2index, &function_type, &type_id)) {
         return type_id;
     }
 
-    type_t *type = type_copy_new(set, (type_t*)&function_type);
+    type_info_t *type = type_copy_new(set, (type_info_t*)&function_type);
     type_id = track_type(set, type);
 
     return type_id;
 }
 
-type_id_t type_set_fetch_function(type_table_t *set, type_id_t return_type, type_ids_t arguments) {
+type_t type_set_fetch_function(type_table_t *set, type_t return_type, types_t arguments) {
     return type_set_fetch_function_(set, return_type, arguments, false);
 }
 
-type_id_t type_set_fetch_native_function(type_table_t *set, type_id_t return_type, type_ids_t arguments) {
+type_t type_set_fetch_native_function(type_table_t *set, type_t return_type, types_t arguments) {
     return type_set_fetch_function_(set, return_type, arguments, true);
 }
 
-type_id_t type_set_fetch_anonymous_struct(type_table_t *set, i32 field_count, struct_field_t *fields, i32 constant_count, struct_constant_t* constants) {
-    type_t struct_type = {
+type_t type_set_fetch_anonymous_struct(type_table_t *set, i32 field_count, struct_field_t *fields, i32 constant_count, struct_constant_t* constants) {
+    type_info_t struct_type = {
         .kind = TYPE_STRUCT,
         .data.struct_.field_count = field_count,
         .data.struct_.fields = fields,
@@ -345,8 +345,8 @@ type_id_t type_set_fetch_anonymous_struct(type_table_t *set, i32 field_count, st
         .data.struct_.total_bytes = 0,
     };
 
-    type_t *type;
-    type_id_t type_id;
+    type_info_t *type;
+    type_t type_id;
     if (constant_count == 0) {
         if (table_get(type2u64, set->types2index, &struct_type, &type_id)) {
             return type_id;
@@ -368,15 +368,15 @@ type_id_t type_set_fetch_anonymous_struct(type_table_t *set, i32 field_count, st
         type->data.struct_.fields[0].offset = 0;
         for (i32 i = 1; i < field_count; ++i) {
             i32 previous_offset = type->data.struct_.fields[i - 1].offset;
-            type_id_t previous_type_id = fields[i - 1].type;
-            type_t *previous_type = set->types.items[previous_type_id.i];
+            type_t previous_type_id = fields[i - 1].type;
+            type_info_t *previous_type = set->types.items[previous_type_id.i];
 
             i32 bytes = bytes_to_slots(type_size_bytes(previous_type)) * sizeof(slot_t);
             type->data.struct_.fields[i].offset = previous_offset + bytes;
         }
 
-        type_id_t field_type_id= type->data.struct_.fields[field_count-1].type;
-        type_t *field_type = set->types.items[field_type_id.i];
+        type_t field_type_id= type->data.struct_.fields[field_count-1].type;
+        type_info_t *field_type = set->types.items[field_type_id.i];
         i32 size_of_final = bytes_to_slots(type_size_bytes(field_type)) * sizeof(slot_t);
         i32 total_size = type->data.struct_.fields[field_count - 1].offset + size_of_final;
 
@@ -386,22 +386,22 @@ type_id_t type_set_fetch_anonymous_struct(type_table_t *set, i32 field_count, st
     return type_id; 
 }
 
-type_id_t type_create_struct(type_table_t *set, char *name, i32 name_length, type_t *anonymous_struct) {
+type_t type_create_struct(type_table_t *set, char *name, i32 name_length, type_info_t *anonymous_struct) {
     ASSERT(anonymous_struct->kind == TYPE_STRUCT && anonymous_struct->data.struct_.name == NULL, "can only create struct from anonymous struct");
 
     if (anonymous_struct->data.struct_.constant_count == 0) {
-        type_t *new_type = type_copy_new(set, anonymous_struct);
+        type_info_t *new_type = type_copy_new(set, anonymous_struct);
         new_type->data.struct_.name = ALLOC_N(char, name_length + 1);
         memcpy(new_type->data.struct_.name, name, name_length);
         new_type->data.struct_.name[name_length] = '\0';
 
         array_push(&set->types, new_type);
-        type_id_t new_type_id = typeid(set->types.count-1);
+        type_t new_type_id = typeid(set->types.count-1);
 
         return new_type_id;
     } else {
         // here we know that the anonymous struct is unique because it has constants, and those are never shared
-        type_t *new_type = type_copy_new(set, anonymous_struct);
+        type_info_t *new_type = type_copy_new(set, anonymous_struct);
 
         // anonymous_struct->data.struct_ = new_type->data.struct_;
 
@@ -410,23 +410,23 @@ type_id_t type_create_struct(type_table_t *set, char *name, i32 name_length, typ
         // anonymous_struct->data.struct_.name[name_length] = '\0';
 
         array_push(&set->types, new_type);
-        type_id_t new_type_id = typeid(set->types.count-1);
+        type_t new_type_id = typeid(set->types.count-1);
 
         return new_type_id;
     }
 }
 
-type_id_t type_unique_incomplete_struct_type(type_table_t *set) {
-    type_t *new_type = struct_type_new(set, NULL, -1, NULL, -1, 0);
+type_t type_unique_incomplete_struct_type(type_table_t *set) {
+    type_info_t *new_type = struct_type_new(set, NULL, -1, NULL, -1, 0);
     array_push(&set->types, new_type);
     return typeid(set->types.count-1);
 }
 
-void named_struct_copy_data_from_completed_struct_type(type_table_t *set, type_id_t incomplete_named_struct_id, type_id_t complete_anonymous_struct_id) {
-    type_t *incomplete_named_struct = set->types.items[incomplete_named_struct_id.i];
-    type_t *complete_anonymous_struct = set->types.items[complete_anonymous_struct_id.i];
+void named_struct_copy_data_from_completed_struct_type(type_table_t *set, type_t incomplete_named_struct_id, type_t complete_anonymous_struct_id) {
+    type_info_t *incomplete_named_struct = set->types.items[incomplete_named_struct_id.i];
+    type_info_t *complete_anonymous_struct = set->types.items[complete_anonymous_struct_id.i];
 
-    type_t *copied_type = type_copy_new(NULL, complete_anonymous_struct);
+    type_info_t *copied_type = type_copy_new(NULL, complete_anonymous_struct);
 
     incomplete_named_struct->data.struct_.field_count = copied_type->data.struct_.field_count;
     incomplete_named_struct->data.struct_.fields = copied_type->data.struct_.fields;

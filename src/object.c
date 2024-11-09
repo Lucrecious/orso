@@ -6,7 +6,7 @@
 #include "type_set.h"
 #include "tmp.h"
 
-static object_t *object_new(size_t byte_size, type_id_t type_id, arena_t *allocator) {
+static object_t *object_new(size_t byte_size, type_t type_id, arena_t *allocator) {
     void *object = arena_alloc(allocator, byte_size);
     memset(object, 0, byte_size);
     ((object_t*)object)->type_id = type_id;
@@ -31,8 +31,8 @@ char *cstrn_new(const char *start, i32 length, arena_t *allocator) {
     return cstr;
 }
 
-string_t slot_to_string(slot_t *slot, types_t *types, type_id_t type_id, arena_t *allocator) {
-    type_t *type = get_type_info(types, type_id);
+string_t slot_to_string(slot_t *slot, type_infos_t *types, type_t type_id, arena_t *allocator) {
+    type_info_t *type = get_type_info(types, type_id);
 
     switch (type->kind) {
         case TYPE_BOOL: {
@@ -72,7 +72,7 @@ string_t slot_to_string(slot_t *slot, types_t *types, type_id_t type_id, arena_t
                 sb_add_cstr(&sb, string_format("<%s :: (", tmp->allocator,
                     function->binded_name ? function->binded_name->text : "<anonymous>").cstr);
                 
-                type_t *signature = get_type_info(types, function->signature);
+                type_info_t *signature = get_type_info(types, function->signature);
 
                 for (size_t i = 0; i < signature->data.function.argument_types.count; ++i) {
                     string_t arg_type = type_to_string(*types, signature->data.function.argument_types.items[i], tmp->allocator);
@@ -117,7 +117,7 @@ string_t slot_to_string(slot_t *slot, types_t *types, type_id_t type_id, arena_t
 
                 byte *value = ((byte*)slot) + field->offset;
 
-                type_t *field_type = get_type_info(types, field->type);
+                type_info_t *field_type = get_type_info(types, field->type);
 
                 size_t field_slot_size = type_slot_count(field_type);
                 until (slots.count >= field_slot_size) {
@@ -146,7 +146,7 @@ string_t slot_to_string(slot_t *slot, types_t *types, type_id_t type_id, arena_t
         }
 
         case TYPE_UNION: {
-            type_id_t type_id = (type_id_t){.i=slot->as.u};
+            type_t type_id = (type_t){.i=slot->as.u};
             return slot_to_string(slot + 1, types, type_id, allocator);
         }
 
@@ -154,7 +154,7 @@ string_t slot_to_string(slot_t *slot, types_t *types, type_id_t type_id, arena_t
             string_t result;
 
             tmp_arena_t *tmp = allocator_borrow(); {
-                type_id_t type_id = (type_id_t){.i=slot->as.u};
+                type_t type_id = (type_t){.i=slot->as.u};
                 string_t type_string = type_to_string(*types, type_id, tmp->allocator);
                 result = string_format("<%s>", allocator, type_string.cstr);
             } allocator_return(tmp);
@@ -168,7 +168,7 @@ string_t slot_to_string(slot_t *slot, types_t *types, type_id_t type_id, arena_t
     }
 }
 
-OrsoString *orso_slot_to_string(slot_t *slot, types_t *types, type_id_t type_id, arena_t *allocator) {
+OrsoString *orso_slot_to_string(slot_t *slot, type_infos_t *types, type_t type_id, arena_t *allocator) {
     OrsoString *string;
 
     tmp_arena_t *tmp = allocator_borrow(); {
@@ -257,7 +257,7 @@ bool is_function_compiled(function_t* function) {
     return function->chunk.code.items != NULL;
 }
 
-native_function_t *orso_new_native_function(native_function_interface_t function, type_id_t type_id, arena_t *allocator) {
+native_function_t *orso_new_native_function(native_function_interface_t function, type_t type_id, arena_t *allocator) {
     native_function_t *function_obj = (native_function_t*)object_new(sizeof(native_function_t), type_id, allocator);
     function_obj->function = function;
     function_obj->signature = type_id;

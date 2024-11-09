@@ -51,13 +51,13 @@ typedef struct compiler_t {
 
     bool debug;
 
-    types_t *types;
+    type_infos_t *types;
 } compiler_t;
 
 static i32 add_local(compiler_t* compiler, token_t name, i32 slot_count);
 
 // A token_t* is passed in instead of symbol_t* because token_t* cant be garbage collected and symbol_t* can and would be.
-static void compiler_init(compiler_t *compiler, vm_t *vm, function_t *function, type_id_t creator_type_id) {
+static void compiler_init(compiler_t *compiler, vm_t *vm, function_t *function, type_t creator_type_id) {
     ASSERT(function, "must be not null");
 
     // TODO: remove if possible, previously this was used to get the garbage collector but thats being
@@ -98,7 +98,7 @@ static void apply_stack_effects(compiler_t* compiler, i32 stack_effects) {
 
 typedef struct debug_info_t debug_info_t;
 struct debug_info_t {
-    type_id_t type_id;
+    type_t type_id;
     size_t local_count;
 };
 
@@ -113,7 +113,7 @@ static void emit_pop_type(compiler_t *compiler, chunk_t *chunk, i32 line, u64 am
     emit(compiler, chunk, line, &push_pop_type, sizeof(op_push_pop_type_t), NULL);
 }
 
-static void emit_push_type(compiler_t *compiler, chunk_t *chunk, i32 line, type_id_t type_id) {
+static void emit_push_type(compiler_t *compiler, chunk_t *chunk, i32 line, type_t type_id) {
     op_push_pop_type_t push_pop_type = {
         .op = OP_PUSH_TYPE,
         .data.type_id = type_id,
@@ -245,7 +245,7 @@ static void emit_debug_instructions(compiler_t *compiler, chunk_t *chunk, i32 li
 
         case OP_CALL: {
             NOT_NULL(debug);
-            type_t *type = compiler->types->items[debug->type_id.i];
+            type_info_t *type = compiler->types->items[debug->type_id.i];
 
             // pop the function signature and the argument types off the stack
             emit_pop_type(type->data.function.argument_types.count + 1);
@@ -378,7 +378,7 @@ static size_t emit(compiler_t *compiler, chunk_t *chunk, i32 line, void *op_code
             NOT_NULL(debug);
             stack_effect = -2;
 
-            type_t *type = compiler->types->items[debug->type_id.i];
+            type_info_t *type = compiler->types->items[debug->type_id.i];
             stack_effect -= type_slot_count(type);
             break;
         }
@@ -407,8 +407,8 @@ static void emit1(compiler_t *compiler, chunk_t *chunk, i32 line, const op_code_
     emit(compiler, chunk, line, (void*)&op_code, 1, debug);
 }
 
-static void emit_constant(compiler_t *compiler, chunk_t *chunk, byte *data, i32 line, type_id_t type_id) {
-    type_t *type = compiler->types->items[type_id.i];
+static void emit_constant(compiler_t *compiler, chunk_t *chunk, byte *data, i32 line, type_t type_id) {
+    type_info_t *type = compiler->types->items[type_id.i];
 
     u32 size = type_size_bytes(type);
     u32 address = chunk_add_constant(chunk, data, size, type_id);
@@ -427,10 +427,10 @@ static void emit_constant(compiler_t *compiler, chunk_t *chunk, byte *data, i32 
     emit(compiler, chunk, line, (op_code_t*)&location, sizeof(op_location_t), &debug);
 }
 
-static void emit_put_in_union(compiler_t *compiler, chunk_t *chunk, i32 line, type_id_t type_id) {
+static void emit_put_in_union(compiler_t *compiler, chunk_t *chunk, i32 line, type_t type_id) {
     slot_t slot = SLOT_U(type_id.i);
     emit_constant(compiler, chunk, (byte*)&slot, line, typeid(TYPE_TYPE)); {
-        type_t *type = compiler->types->items[type_id.i];
+        type_info_t *type = compiler->types->items[type_id.i];
         op_put_in_union_t put_in_union = {
             .op = OP_PUT_IN_UNION,
             .size_bytes = type_size_bytes(type)
@@ -452,10 +452,10 @@ static void patch_jump(chunk_t *chunk, size_t update_index) {
     jump_code->offset = (u32)jump;
 }
 
-static void emit_entity_get(compiler_t *compiler, u32 index, type_id_t type_id, chunk_t *chunk, i32 line, bool is_local) {
+static void emit_entity_get(compiler_t *compiler, u32 index, type_t type_id, chunk_t *chunk, i32 line, bool is_local) {
     index *= sizeof(slot_t);
     ASSERT(index <= UINT32_MAX, "must be short");
-    type_t *type = compiler->types->items[type_id.i];
+    type_info_t *type = compiler->types->items[type_id.i];
     u32 size_bytes = type_size_bytes(type);
     ASSERT(size_bytes <= UINT16_MAX, "must be short");
     {
@@ -470,7 +470,7 @@ static void emit_entity_get(compiler_t *compiler, u32 index, type_id_t type_id, 
     }
 }
 
-static void emit_type_convert(compiler_t *compiler, type_t* from_type, type_t* to_type, chunk_t* chunk, i32 line) {
+static void emit_type_convert(compiler_t *compiler, type_info_t* from_type, type_info_t* to_type, chunk_t* chunk, i32 line) {
     bool include_bool = true;
     ASSERT(type_is_number(from_type, include_bool) && type_is_number(to_type, include_bool), "Implicit type conversion only works for number types right now.");
     if (type_is_float(from_type) && type_is_integer(to_type, include_bool)) {
@@ -480,9 +480,9 @@ static void emit_type_convert(compiler_t *compiler, type_t* from_type, type_t* t
     } 
 }
 
-static void emit_storage_type_convert(compiler_t *compiler, chunk_t *chunk, type_id_t source_id, type_id_t destination_id, i32 line) {
+static void emit_storage_type_convert(compiler_t *compiler, chunk_t *chunk, type_t source_id, type_t destination_id, i32 line) {
     if (type_is_union(*compiler->types, source_id) && !type_is_union(*compiler->types, destination_id)) {
-        type_t *source = compiler->types->items[source_id.i];
+        type_info_t *source = compiler->types->items[source_id.i];
         op_narrow_union_t narrow_union = {
             .op = OP_NARROW_UNION,
             .offset_bytes = type_size_bytes(source),
@@ -495,8 +495,8 @@ static void emit_storage_type_convert(compiler_t *compiler, chunk_t *chunk, type
     }
 }
 
-static void emit_pop_value(compiler_t* compiler, chunk_t* chunk, type_id_t type_id, i32 line) {
-    type_t *type = compiler->types->items[type_id.i];
+static void emit_pop_value(compiler_t* compiler, chunk_t* chunk, type_t type_id, i32 line) {
+    type_info_t *type = compiler->types->items[type_id.i];
     size_t pop_count = type_slot_count(type);
 
     if (pop_count < 1) {
@@ -571,7 +571,7 @@ static function_t* compiler_end(vm_t* vm, compiler_t* compiler, ast_t* ast, chun
 }
 
 #define DECLARE_GLOBAL(vm, name, slot_count, type) add_global(vm, name, slot_count, type)
-static i32 add_global(vm_t *vm, token_t *name, i32 slot_count, type_id_t type_id)
+static i32 add_global(vm_t *vm, token_t *name, i32 slot_count, type_t type_id)
 {
     symbol_t* identifier = orso_new_symbol_from_cstrn(name->start, name->length, &vm->symbols, &vm->allocator);
 
@@ -671,8 +671,8 @@ static void begin_scope(compiler_t *compiler) {
     compiler->scope_depth++;
 }
 
-static void end_scope(compiler_t *compiler, chunk_t *chunk, type_id_t block_value_type_id, i32 line) {
-    type_t *block_value_type = compiler->types->items[block_value_type_id.i];
+static void end_scope(compiler_t *compiler, chunk_t *chunk, type_t block_value_type_id, i32 line) {
+    type_info_t *block_value_type = compiler->types->items[block_value_type_id.i];
 
     --compiler->scope_depth;
 
@@ -713,7 +713,7 @@ static void end_scope(compiler_t *compiler, chunk_t *chunk, type_id_t block_valu
 static void declaration(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *declaration, chunk_t *chunk);
 static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *expression_node, chunk_t *chunk);
 
-static type_id_t gen_block(vm_t *vm, compiler_t *compiler, ast_t *ast, chunk_t *chunk, ast_nodes_t block, i32 node_count, i32 end_line) {
+static type_t gen_block(vm_t *vm, compiler_t *compiler, ast_t *ast, chunk_t *chunk, ast_nodes_t block, i32 node_count, i32 end_line) {
     ast_node_t *final_expression_statement = node_count > 0 ? block.items[node_count - 1] : NULL;
 
     final_expression_statement = final_expression_statement && final_expression_statement->node_type != AST_NODE_TYPE_STATEMENT_EXPRESSION ?
@@ -723,7 +723,7 @@ static type_id_t gen_block(vm_t *vm, compiler_t *compiler, ast_t *ast, chunk_t *
         declaration(vm, compiler, ast, block.items[i], chunk);
     }
 
-    type_id_t return_value_type_id = typeid(TYPE_INVALID);
+    type_t return_value_type_id = typeid(TYPE_INVALID);
     if (final_expression_statement) {
         ast_node_t *final_expression = final_expression_statement->data.expression;
         return_value_type_id = final_expression->value_type;
@@ -737,8 +737,8 @@ static type_id_t gen_block(vm_t *vm, compiler_t *compiler, ast_t *ast, chunk_t *
     return return_value_type_id;
 }
 
-static u64 define_global_entity(vm_t *vm, token_t *name, type_id_t type_id) {
-    type_t *type = get_type_info(&vm->type_set->types, type_id);
+static u64 define_global_entity(vm_t *vm, token_t *name, type_t type_id) {
+    type_info_t *type = get_type_info(&vm->type_set->types, type_id);
     u32 slot_size = type_slot_count(type);
     u32 index = DECLARE_GLOBAL(vm, name, slot_size, type_id);
     return index;
@@ -765,9 +765,9 @@ static void function_expression(vm_t* vm, compiler_t* compiler, ast_t* ast, ast_
     emit_constant(compiler, chunk, (byte*)&function_value, function_defintion_expression->start.line, stored_function->signature);
 }
 
-static void gen_primary(compiler_t *compiler, chunk_t *chunk, ast_t *ast, type_id_t value_type_id, i32 value_index, i32 line) {
+static void gen_primary(compiler_t *compiler, chunk_t *chunk, ast_t *ast, type_t value_type_id, i32 value_index, i32 line) {
     ASSERT(value_index >= 0, "must be pointing to a contant value...");
-    type_t *value_type = get_type_info(compiler->types, value_type_id);
+    type_info_t *value_type = get_type_info(compiler->types, value_type_id);
 
     slot_t *value = &ast->folded_constants.items[value_index];
     switch (value_type->kind) {
@@ -811,10 +811,10 @@ static void expression_lvalue(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_no
             ast_node_t *referencing_declaration = lvalue_node->data.dot.referencing_declaration;
 
             if (type_is_struct(*compiler->types, lvalue_node->data.dot.lhs->value_type)) {
-                type_id_t struct_type_id = lvalue_node->data.dot.lhs->value_type;
+                type_t struct_type_id = lvalue_node->data.dot.lhs->value_type;
                 token_t field_name = referencing_declaration->data.declaration.identifier;
                 struct_field_t *field = NULL;
-                type_t *struct_type = compiler->types->items[struct_type_id.i];
+                type_info_t *struct_type = compiler->types->items[struct_type_id.i];
                 for (i32 i = 0; i < struct_type->data.struct_.field_count; ++i) {
                     field = &struct_type->data.struct_.fields[i];
                     if ((size_t)field_name.length == strlen(field->name) && strncmp(field->name, field_name.start, field_name.length) == 0) {
@@ -851,7 +851,7 @@ static void expression_lvalue(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_no
                 .index = (u16)index,
             };
 
-            type_id_t ptr_type_id = type_set_fetch_pointer(&ast->type_set, lvalue_node->value_type);
+            type_t ptr_type_id = type_set_fetch_pointer(&ast->type_set, lvalue_node->value_type);
             debug_info_t debug = {.type_id=ptr_type_id};
             emit(compiler, chunk, identifier_token.line, &push_address, sizeof(op_push_address_t), &debug);
             break;
@@ -964,11 +964,11 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
                 default: {
                     expression(vm, compiler, ast, left, chunk);
 
-                    type_id_t left_type_id = left->value_type;
-                    type_t *left_type = compiler->types->items[left_type_id.i];
+                    type_t left_type_id = left->value_type;
+                    type_info_t *left_type = compiler->types->items[left_type_id.i];
 
-                    type_id_t right_type_id = right->value_type;
-                    type_t *right_type = compiler->types->items[right_type_id.i];
+                    type_t right_type_id = right->value_type;
+                    type_info_t *right_type = compiler->types->items[right_type_id.i];
 
                     if (type_is_union(*compiler->types, left_type_id)) {
                         op_narrow_union_t narrow_union = {
@@ -1056,7 +1056,7 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
             ast_node_t* unary = expression_node->data.expression;
             token_t operator = expression_node->operator;
 
-            type_t *unary_type = compiler->types->items[unary->value_type.i];
+            type_info_t *unary_type = compiler->types->items[unary->value_type.i];
             switch (operator.type) {
                 case TOKEN_MINUS: {
                     if (type_is_integer(unary_type, true)) {
@@ -1109,7 +1109,7 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
 
             ASSERT(type_is_struct(*compiler->types, expression_node->data.dot.lhs->value_type), "LHS must be a struct for now");
 
-            type_t *lhs_value_type = get_type_info(compiler->types, expression_node->data.dot.lhs->value_type);
+            type_info_t *lhs_value_type = get_type_info(compiler->types, expression_node->data.dot.lhs->value_type);
             u32 struct_size = type_size_bytes(lhs_value_type);
             struct_field_t* field = type_struct_find_field(lhs_value_type, expression_node->data.dot.identifier.start, expression_node->data.dot.identifier.length);
             ASSERT(field, "this must exist, otherwise static analyzer would have caught it");
@@ -1121,7 +1121,7 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
             ASSERT(field_offset < UINT16_MAX, "TODO");
             ASSERT(field_size < UINT16_MAX, "TODO");
 
-            type_t *expression_node_value_type = get_type_info(compiler->types, expression_node->value_type);
+            type_info_t *expression_node_value_type = get_type_info(compiler->types, expression_node->value_type);
             field_size = type_size_bytes(expression_node_value_type);
             {
                 op_field_t op_field = {
@@ -1140,7 +1140,7 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
 
         case AST_NODE_TYPE_EXPRESSION_ASSIGNMENT: {
             expression(vm, compiler, ast, expression_node->data.binary.rhs, chunk);
-            type_id_t right_side_type_id = expression_node->data.binary.rhs->value_type;
+            type_t right_side_type_id = expression_node->data.binary.rhs->value_type;
 
             emit_storage_type_convert(compiler, chunk, right_side_type_id, expression_node->value_type, expression_node->start.line);
 
@@ -1150,7 +1150,7 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
             bool is_field = (expression_node->lvalue_node->node_type == AST_NODE_TYPE_EXPRESSION_DOT);
 
             debug_info_t debug = {.type_id=expression_node->value_type};
-            type_t *expression_type = get_type_info(compiler->types, expression_node->value_type);
+            type_info_t *expression_type = get_type_info(compiler->types, expression_node->value_type);
             if (is_field || type_is_struct(*compiler->types, expression_node->lvalue_node->value_type) || type_is_union(*compiler->types, expression_node->lvalue_node->value_type)) {
                 op_set_lvalue_t set_lvalue = {
                     .op = OP_SET_LVALUE,
@@ -1173,8 +1173,8 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
         case AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT: {
             ast_node_t *operand = expression_node->data.expression;
             expression(vm, compiler, ast, operand, chunk);
-            type_t *operand_type = get_type_info(compiler->types, operand->value_type);
-            type_t *expression_type = get_type_info(compiler->types, expression_node->value_type);
+            type_info_t *operand_type = get_type_info(compiler->types, operand->value_type);
+            type_info_t *expression_type = get_type_info(compiler->types, expression_node->value_type);
             emit_type_convert(compiler, operand_type, expression_type, chunk, operand->start.line);
             break;
         }
@@ -1184,7 +1184,7 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
 
             ast_nodes_t block = expression_node->data.block;
             i32 node_count = block.count;
-            type_id_t return_value_type_id = gen_block(vm, compiler, ast, chunk, block, node_count, expression_node->end.line);
+            type_t return_value_type_id = gen_block(vm, compiler, ast, chunk, block, node_count, expression_node->end.line);
 
             end_scope(compiler, chunk, return_value_type_id, expression_node->end.line);
             break;
@@ -1297,24 +1297,24 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
             expression(vm, compiler, ast, expression_node->data.call.callee, chunk);
             emit_storage_type_convert(compiler, chunk, expression_node->value_type, expression_node->value_type, expression_node->end.line);
 
-            type_id_t function_type_id = expression_node->data.call.callee->value_type;
-            type_t *function_type = get_type_info(compiler->types, function_type_id);
+            type_t function_type_id = expression_node->data.call.callee->value_type;
+            type_info_t *function_type = get_type_info(compiler->types, function_type_id);
 
             for (size_t i = 0; i < expression_node->data.call.arguments.count; ++i) {
                 ast_node_t *argument = expression_node->data.call.arguments.items[i];
                 expression(vm, compiler, ast, argument, chunk);
 
-                type_id_t parameter_type = function_type->data.function.argument_types.items[i];
+                type_t parameter_type = function_type->data.function.argument_types.items[i];
                 emit_storage_type_convert(compiler, chunk, argument->value_type, parameter_type, expression_node->end.line);
             }
 
-            type_id_t overload_type_id = function_type_id;
-            type_t *overload_type = get_type_info(compiler->types, overload_type_id);
+            type_t overload_type_id = function_type_id;
+            type_info_t *overload_type = get_type_info(compiler->types, overload_type_id);
             {
                 u16 argument_slots = 0;
                 for (size_t i = 0; i < overload_type->data.function.argument_types.count; ++i) {
-                    type_id_t arg_type_id = overload_type->data.function.argument_types.items[i];
-                    type_t *arg_type = get_type_info(compiler->types, arg_type_id);
+                    type_t arg_type_id = overload_type->data.function.argument_types.items[i];
+                    type_info_t *arg_type = get_type_info(compiler->types, arg_type_id);
                     argument_slots += type_slot_count(arg_type);
                 }
 
@@ -1373,8 +1373,8 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
         case AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER: {
             i32 stack_position = compiler->current_stack_size*sizeof(slot_t);
 
-            type_id_t type_id = get_folded_type(ast, expression_node->data.initiailizer.type->value_index);
-            type_t *type = get_type_info(compiler->types, type_id);
+            type_t type_id = get_folded_type(ast, expression_node->data.initiailizer.type->value_index);
+            type_info_t *type = get_type_info(compiler->types, type_id);
 
             i32 index = zero_value(ast, type_id, ast->symbols);
             emit_constant(compiler, chunk, (byte*)&ast->folded_constants.items[index], expression_node->start.line, type_id);
@@ -1393,13 +1393,13 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
                             .op = OP_PUSH_LOCAL_ADDRESS,
                             .index = stack_position + field->offset,
                         };
-                        type_id_t field_ptr_id = type_set_fetch_pointer(vm->type_set, field->type);
+                        type_t field_ptr_id = type_set_fetch_pointer(vm->type_set, field->type);
                         debug_info_t debug = {.type_id=field_ptr_id};
                         emit(compiler, chunk, arg->start.line, &push_address, sizeof(op_push_address_t), &debug);
                     }
 
                     {
-                        type_t *field_type = get_type_info(compiler->types, field->type);
+                        type_info_t *field_type = get_type_info(compiler->types, field->type);
                         op_set_lvalue_t set_lvalue = {
                             .op = OP_SET_LVALUE,
                             .type_kind = field_type->kind,
@@ -1433,8 +1433,8 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
 }
 
 static void set_global_entity_default_value(vm_t *vm, ast_t *ast, ast_node_t *entity_declaration, u32 global_index) {
-    type_id_t conform_type_id = entity_declaration->value_type;
-    type_t *conform_type = get_type_info(&ast->type_set.types, conform_type_id);
+    type_t conform_type_id = entity_declaration->value_type;
+    type_info_t *conform_type = get_type_info(&ast->type_set.types, conform_type_id);
     u32 slot_count = type_slot_count(conform_type);
     if (entity_declaration->data.declaration.initial_value_expression != NULL) {
         ast_node_t* default_expression = entity_declaration->data.declaration.initial_value_expression;
@@ -1463,7 +1463,7 @@ static void set_global_entity_default_value(vm_t *vm, ast_t *ast, ast_node_t *en
 }
 
 static void set_local_entity_default_value(vm_t *vm, compiler_t *compiler, ast_t *ast, chunk_t *chunk, ast_node_t *entity_declaration) {
-    type_id_t conform_type_id = entity_declaration->value_type;
+    type_t conform_type_id = entity_declaration->value_type;
 
     if (entity_declaration->data.declaration.initial_value_expression != NULL) {
         ast_node_t* default_expression = entity_declaration->data.declaration.initial_value_expression;
@@ -1492,7 +1492,7 @@ static void global_entity_declaration(vm_t *vm, ast_t *ast, ast_node_t *entity_d
 
 static void local_entity_declaration(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *variable_declaration, chunk_t *chunk) {
     ASSERT(!TYPE_IS_UNRESOLVED(variable_declaration->value_type), "all declarations must be resolved");
-    type_t *variable_type = get_type_info(compiler->types, variable_declaration->value_type);
+    type_info_t *variable_type = get_type_info(compiler->types, variable_declaration->value_type);
     set_local_entity_default_value(vm, compiler, ast, chunk, variable_declaration);
     declare_local_entity(compiler, &variable_declaration->start, type_slot_count(variable_type));
 }
@@ -1508,7 +1508,7 @@ static void declaration(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *
         }
         
         case AST_NODE_TYPE_STATEMENT_RETURN: {
-            type_t *function_signature = get_type_info(compiler->types, compiler->function->signature);
+            type_info_t *function_signature = get_type_info(compiler->types, compiler->function->signature);
             if (declaration->data.expression) {
                 expression(vm, compiler, ast, declaration->data.expression, chunk);
                 emit_storage_type_convert(compiler, chunk, 
@@ -1521,7 +1521,7 @@ static void declaration(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *
             }
             
             {
-                type_t *return_type = get_type_info(compiler->types, function_signature->data.function.return_type);
+                type_info_t *return_type = get_type_info(compiler->types, function_signature->data.function.return_type);
                 op_return_t return_ = {
                     .op = OP_RETURN,
                     .size_slots = type_slot_count(return_type),
@@ -1555,7 +1555,7 @@ void code_builder_free(code_builder_t *builder) {
 
 function_t *generate_expression_function(code_builder_t *builder, ast_node_t *expression_node, bool is_folding_time, arena_t *allocator) {
     compiler_t compiler;
-    type_id_t function_type_id = type_set_fetch_function(&builder->ast->type_set, expression_node->value_type, (type_ids_t){0});
+    type_t function_type_id = type_set_fetch_function(&builder->ast->type_set, expression_node->value_type, (types_t){0});
 
     function_t *run_function = orso_new_function(allocator);
 
@@ -1571,7 +1571,7 @@ function_t *generate_expression_function(code_builder_t *builder, ast_node_t *ex
     expression(builder->vm, &compiler, builder->ast, expression_node, top_chunk);
 
     {
-        type_t *expression_type = get_type_info(&builder->ast->type_set.types, expression_node->value_type);
+        type_info_t *expression_type = get_type_info(&builder->ast->type_set.types, expression_node->value_type);
         op_return_t return_ = {
             .op = OP_RETURN,
             .size_slots = type_slot_count(expression_type),
@@ -1607,7 +1607,7 @@ void compile_function(vm_t *vm, ast_t *ast, function_t *function, ast_node_t *fu
 
     for (size_t i = 0; i < function_definition->parameter_nodes.count; i++) {
         ast_node_t *parameter = function_definition->parameter_nodes.items[i];
-        type_t *parameter_type = get_type_info(&ast->type_set.types, parameter->value_type);
+        type_info_t *parameter_type = get_type_info(&ast->type_set.types, parameter->value_type);
         apply_stack_effects(&function_compiler, type_slot_count(parameter_type));
         declare_local_entity(&function_compiler, &parameter->start, type_slot_count(parameter_type));
     }
@@ -1642,8 +1642,8 @@ function_t *generate_code(vm_t *vm, ast_t *ast) {
             return NULL;
         }
 
-        type_id_t function_type_id = declaration_->value_type;
-        type_t *function_type = get_type_info(&ast->type_set.types, function_type_id);
+        type_t function_type_id = declaration_->value_type;
+        type_info_t *function_type = get_type_info(&ast->type_set.types, function_type_id);
         unless (typeid_eq(function_type->data.function.return_type, typeid(TYPE_INT32))
          || TYPE_IS_VOID(function_type->data.function.return_type)) {
             // TODO: allow code generator to throw error here, main must return i32

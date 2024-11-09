@@ -3,8 +3,8 @@
 
 #include "chunk.h"
 
-void chunk_disassemble(types_t *types, chunk_t *chunk, const char *name);
+void chunk_disassemble(type_infos_t *types, chunk_t *chunk, const char *name);
 
-i32 disassemble_instruction(types_t *types, chunk_t *chunk, i32 offset);
+i32 disassemble_instruction(type_infos_t *types, chunk_t *chunk, i32 offset);
 
 #endif

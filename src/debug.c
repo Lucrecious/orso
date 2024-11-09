@@ -13,7 +13,7 @@ static i32 instruction(const char *name, i32 offset) {
     return offset + 1;
 }
 
-i32 disassemble_instruction(types_t *types, chunk_t *chunk, i32 offset) {
+i32 disassemble_instruction(type_infos_t *types, chunk_t *chunk, i32 offset) {
     printf("%04d ", offset);
 
 
@@ -171,7 +171,7 @@ i32 disassemble_instruction(types_t *types, chunk_t *chunk, i32 offset) {
     }
 }
 
-void chunk_disassemble(types_t *types, chunk_t *chunk, const char *name) {
+void chunk_disassemble(type_infos_t *types, chunk_t *chunk, const char *name) {
     printf("=== %s ===\n", name);
 
     for (size_t offset = 0; offset < chunk->code.count;) {

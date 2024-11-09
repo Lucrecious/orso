@@ -160,7 +160,7 @@ struct ast_node_t {
 
     // expressions TODO: Fill this in for *everything*, declarations, statements included
     // TODO: only use value type
-    type_id_t value_type;
+    type_t value_type;
     //AccessIdentifiers *value_type_identifiers, *value_type_narrowed_identifiers;
 
     // branching, blocks
@@ -209,14 +209,14 @@ struct ast_node_t {
     } data;
 };
 
-declare_table(ptr2i32, type_id_t, i32)
+declare_table(ptr2i32, type_t, i32)
 
 typedef struct ast_node_and_scope_t {
     ast_node_t *node;
     scope_t *scope;
 } ast_node_and_scope_t;
 
-declare_table(type2ns, type_id_t, ast_node_and_scope_t)
+declare_table(type2ns, type_t, ast_node_and_scope_t)
 
 typedef struct fd_pairs_t fd_pairs_t;
 struct fd_pairs_t {
@@ -240,7 +240,7 @@ typedef struct ast_t {
     fd_pairs_t function_definition_pairs;
 
     ast_node_t *root;
-    type_ids_t folded_constant_types;
+    types_t folded_constant_types;
     slots_t folded_constants;
 
     table_t(ptr2i32) *type_to_zero_index;
@@ -251,9 +251,9 @@ typedef struct ast_t {
 
 void ast_print(ast_t *ast, const char *name);
 
-i32 add_value_to_ast_constant_stack(ast_t *ast, slot_t *value, type_id_t type_id);
+i32 add_value_to_ast_constant_stack(ast_t *ast, slot_t *value, type_t type_id);
 bool parse(ast_t *ast, const char *source, error_function_t error_fn);
-type_id_t get_folded_type(ast_t *ast, i32 index);
+type_t get_folded_type(ast_t *ast, i32 index);
 
 void ast_init(ast_t *ast, symbol_table_t* symbols);
 void ast_free(ast_t *ast);
@@ -263,6 +263,6 @@ ast_node_t* ast_node_new(ast_t *ast, ast_node_type_t node_type, bool is_in_type_
 bool ast_node_type_is_decl_or_stmt(ast_node_type_t node_type);
 bool ast_node_type_is_expression(ast_node_type_t node_type);
 
-i32 zero_value(ast_t *ast, type_id_t type, symbol_table_t *symbol_table);
+i32 zero_value(ast_t *ast, type_t type, symbol_table_t *symbol_table);
 
 #endif

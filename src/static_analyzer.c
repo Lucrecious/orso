@@ -40,8 +40,8 @@ typedef struct AnalysisState {
 
 typedef struct Entity {
     // TODO: instead of using declarad type just use narrowed type and the type of the decalrtion node
-    type_id_t declared_type;
-    type_id_t narrowed_type;
+    type_t declared_type;
+    type_t narrowed_type;
 
     ast_node_t* node;
     i32 value_index;
@@ -102,8 +102,8 @@ static void scope_merge(type_table_t* set, scope_t* scope, scope_t* a, scope_t* 
         Entity* entity_a = (Entity*)entity_a_slot.as.p;
         Entity* entity_b = (Entity*)entity_b_slot.as.p;
 
-        type_id_t anded_type_id;
-        type_id_t anded_narrowed_id;
+        type_t anded_type_id;
+        type_t anded_narrowed_id;
         if (TYPE_IS_UNRESOLVED(entity_a->declared_type) || TYPE_IS_UNRESOLVED(entity_b->declared_type)) {
             if (typeid_eq(entity_a->declared_type, entity_b->declared_type)) {
                 continue;
@@ -143,7 +143,7 @@ static void add_entity(scope_t* scope, arena_t *allocator, symbol_t* identifier,
     symbol_table_set(&scope->named_entities, identifier, SLOT_P(entity));
 }
 
-static Entity* add_builtin_entity(ast_t *ast, symbol_t *identifier, type_id_t type_id, i32 value_index) {
+static Entity* add_builtin_entity(ast_t *ast, symbol_t *identifier, type_t type_id, i32 value_index) {
     Entity* entity = arena_alloc(&ast->allocator, sizeof(Entity));
     entity->declared_type = type_id;
     entity->narrowed_type = type_id;
@@ -213,7 +213,7 @@ static void error_range2(analyzer_t* analyzer, token_t start1, token_t end1, tok
     analyzer->error_fn(error);
 }
 
-static type_id_t resolve_unary_type(ast_t* ast, token_type_t operator, type_id_t operand_id) {
+static type_t resolve_unary_type(ast_t* ast, token_type_t operator, type_t operand_id) {
     if (TYPE_IS_INVALID(operand_id)) {
         return typeid(TYPE_INVALID);
     }
@@ -222,7 +222,7 @@ static type_id_t resolve_unary_type(ast_t* ast, token_type_t operator, type_id_t
         return typeid(TYPE_UNRESOLVED);
     }
 
-    type_t *operand = ast->type_set.types.items[operand_id.i];
+    type_info_t *operand = ast->type_set.types.items[operand_id.i];
 
     switch (operator) {
         case TOKEN_MINUS: {
@@ -241,7 +241,7 @@ static type_id_t resolve_unary_type(ast_t* ast, token_type_t operator, type_id_t
         case TOKEN_NOT:
             return typeid(TYPE_BOOL);
         case TOKEN_AMPERSAND: {
-            type_id_t type_id = type_set_fetch_pointer(&ast->type_set, operand_id);
+            type_t type_id = type_set_fetch_pointer(&ast->type_set, operand_id);
             return type_id;
         }
 
@@ -249,7 +249,7 @@ static type_id_t resolve_unary_type(ast_t* ast, token_type_t operator, type_id_t
     }
 }
 
-static ast_node_t *implicit_cast(ast_t *ast, ast_node_t *operand, type_id_t value_type) {
+static ast_node_t *implicit_cast(ast_t *ast, ast_node_t *operand, type_t value_type) {
     ast_node_t* implicit_cast = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT, operand->is_in_type_context, operand->start);
     implicit_cast->end = operand->end;
 
@@ -273,7 +273,7 @@ typedef enum {
 
 typedef struct EntityQuery  {
     QueryFlags flags;
-    type_id_t search_type;
+    type_t search_type;
     bool skip_mutable;
 } EntityQuery;
 
@@ -285,7 +285,7 @@ static Entity* get_resolved_entity_by_identifier(
         EntityQuery* query,
         scope_t** found_scope);
 
-static bool is_builtin_type(symbol_t* identifier, type_id_t *type_id) {
+static bool is_builtin_type(symbol_t* identifier, type_t *type_id) {
 #define RETURN_IF_TYPE(SYMBOL, TYPE_STRING, TYPE_ID) \
 if (strlen(SYMBOL->text) == (sizeof(#TYPE_STRING) - 1) && \
     memcmp(SYMBOL->text, #TYPE_STRING, (sizeof(#TYPE_STRING) - 1)) == 0) { \
@@ -310,7 +310,7 @@ if (strlen(SYMBOL->text) == (sizeof(#TYPE_STRING) - 1) && \
 
 static bool is_builtin_function(ast_t *ast, symbol_t *identifier, native_function_t **function) {
     if (identifier->length == 5 && strncmp(identifier->text, "clock", 5) == 0) {
-        type_id_t function_type_id = type_set_fetch_native_function(&ast->type_set, typeid(TYPE_INT64), (type_ids_t){0});
+        type_t function_type_id = type_set_fetch_native_function(&ast->type_set, typeid(TYPE_INT64), (types_t){0});
         *function = orso_new_native_function(clock_native, function_type_id, &ast->allocator);
         return true;
     }
@@ -318,18 +318,18 @@ static bool is_builtin_function(ast_t *ast, symbol_t *identifier, native_functio
     return false;
 }
 
-static bool can_call(types_t types, type_id_t type_id, ast_nodes_t arguments) {
+static bool can_call(type_infos_t types, type_t type_id, ast_nodes_t arguments) {
     ASSERT(type_is_function(types, type_id), "must be a function type");
 
-    type_t *type = types.items[type_id.i];
+    type_info_t *type = types.items[type_id.i];
 
     if (type->data.function.argument_types.count != arguments.count) {
         return false;
     }
 
     for (size_t i = 0; i < type->data.function.argument_types.count; ++i) {
-        type_id_t parameter_type_id = type->data.function.argument_types.items[i];
-        type_id_t argument_type_id = arguments.items[i]->value_type;
+        type_t parameter_type_id = type->data.function.argument_types.items[i];
+        type_t argument_type_id = arguments.items[i]->value_type;
         unless (typeid_eq(parameter_type_id, argument_type_id)) {
             return false;
         }
@@ -339,6 +339,18 @@ static bool can_call(types_t types, type_id_t type_id, ast_nodes_t arguments) {
 }
 
 static i32 evaluate_expression(analyzer_t* analyzer, ast_t* ast, bool is_folding_time, ast_node_t* expression) {
+    // vm_t *vm = &analyzer->vm;
+
+    // compile_expression_to_vm(vm, expression);
+
+    // vm_run(vm);
+
+    // void *result = vm_get_global(vm, "__result");
+    
+    // i32 index = add_value_to_ast_constant_stack(ast, result, expression->value_type);
+
+    // return index;
+
     vm_t vm;
     // TODO: Make sure this uses the same writing function as the vm that runs the code at the end.
     vm_init(&vm, NULL, 256);
@@ -421,7 +433,7 @@ static void resolve_foldable(
         case AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER: {
             if (expression->data.initiailizer.arguments.count == 0) {
                 foldable = true;
-                type_id_t type_id = get_folded_type(ast, expression->data.initiailizer.type->value_index);
+                type_t type_id = get_folded_type(ast, expression->data.initiailizer.type->value_index);
                 i32 value_index = zero_value(ast, type_id, ast->symbols);
                 folded_index = value_index;
             } else {
@@ -442,10 +454,10 @@ static void resolve_foldable(
 
             if (expression->operator.type == TOKEN_BAR) {
                 ASSERT(TYPE_IS_TYPE(left->value_type) && TYPE_IS_TYPE(right->value_type), "both left and right must be types");
-                type_id_t lhs_folded_type_id = get_folded_type(ast, left->value_index);
-                type_id_t rhs_folded_type_id = get_folded_type(ast, right->value_index);
+                type_t lhs_folded_type_id = get_folded_type(ast, left->value_index);
+                type_t rhs_folded_type_id = get_folded_type(ast, right->value_index);
 
-                type_id_t merged_type_id = type_merge(&ast->type_set, lhs_folded_type_id, rhs_folded_type_id);
+                type_t merged_type_id = type_merge(&ast->type_set, lhs_folded_type_id, rhs_folded_type_id);
                 slot_t merged_type_slot = SLOT_U(merged_type_id.i);
 
                 folded_index = add_value_to_ast_constant_stack(ast, &merged_type_slot, typeid(TYPE_TYPE));
@@ -467,9 +479,9 @@ static void resolve_foldable(
 
             if (expression->operator.type == TOKEN_AMPERSAND) {
                 if (expression->is_in_type_context) {
-                    type_id_t type = get_folded_type(ast, expression->data.expression->value_index);
+                    type_t type = get_folded_type(ast, expression->data.expression->value_index);
 
-                    type_id_t pointer_type_id = type_set_fetch_pointer(&ast->type_set, type);
+                    type_t pointer_type_id = type_set_fetch_pointer(&ast->type_set, type);
 
                     expression->value_type = typeid(TYPE_TYPE);
 
@@ -677,7 +689,7 @@ static void fold_constants_via_runtime(
     */
     if (type_is_union(ast->type_set.types, expression->value_type)) {
 
-        type_id_t narrowed_type_id = get_folded_type(ast, value_index);
+        type_t narrowed_type_id = get_folded_type(ast, value_index);
 
         if (state.mode & MODE_CONSTANT_TIME) {
 
@@ -704,7 +716,7 @@ static void fold_function_signature(analyzer_t *analyzer, ast_t *ast, ast_node_t
     }
 
     bool hit_error = false;
-    type_ids_t parameter_types = {.allocator=&ast->allocator};
+    types_t parameter_types = {.allocator=&ast->allocator};
 
     for (size_t i = 0; i < expression->data.function.parameter_nodes.count; i++) {
         ast_node_t *parameter = expression->data.function.parameter_nodes.items[i];
@@ -722,7 +734,7 @@ static void fold_function_signature(analyzer_t *analyzer, ast_t *ast, ast_node_t
 
         i32 index = parameter->value_index + type_is_union(ast->type_set.types, parameter->value_type);
 
-        type_id_t type_id = get_folded_type(ast, index);
+        type_t type_id = get_folded_type(ast, index);
         array_push(&parameter_types, type_id);
     }
 
@@ -736,7 +748,7 @@ static void fold_function_signature(analyzer_t *analyzer, ast_t *ast, ast_node_t
         return;
     }
 
-    type_id_t return_type;
+    type_t return_type;
     {
         if (return_type_expression) {
             i32 index = return_type_expression->value_index + type_is_union(ast->type_set.types, return_type_expression->value_type);
@@ -746,7 +758,7 @@ static void fold_function_signature(analyzer_t *analyzer, ast_t *ast, ast_node_t
         }
     }
 
-    type_id_t function_type_id = type_set_fetch_function(&ast->type_set, return_type, parameter_types);
+    type_t function_type_id = type_set_fetch_function(&ast->type_set, return_type, parameter_types);
 
     slot_t function_type_slot = SLOT_U(function_type_id.i);
     i32 index = add_value_to_ast_constant_stack(ast, &function_type_slot, typeid(TYPE_TYPE));
@@ -984,8 +996,8 @@ void resolve_expression(
                 break;
             }
 
-            type_id_t type_id = get_folded_type(ast, expression->data.initiailizer.type->value_index);
-            type_t *type = get_type_info(&ast->type_set.types, type_id);
+            type_t type_id = get_folded_type(ast, expression->data.initiailizer.type->value_index);
+            type_info_t *type = get_type_info(&ast->type_set.types, type_id);
 
             if (type->kind == TYPE_STRUCT) {
                 int arg_count = expression->data.initiailizer.arguments.count;
@@ -1006,8 +1018,8 @@ void resolve_expression(
                     }
 
                     if (i < type->data.struct_.field_count) {
-                        type_id_t field_type_id = type->data.struct_.fields[i].type;
-                        type_id_t arg_type_id = arg->value_type;
+                        type_t field_type_id = type->data.struct_.fields[i].type;
+                        type_t arg_type_id = arg->value_type;
                         unless (typeid_eq(field_type_id, arg_type_id)) {
                             if (can_cast_implicit(ast->type_set.types, arg_type_id, field_type_id)) {
                                 ast_node_t *casted = implicit_cast(ast, arg, field_type_id);
@@ -1027,7 +1039,7 @@ void resolve_expression(
                     break;
                 }
 
-                type_id_t type_id = get_folded_type(ast, expression->data.initiailizer.type->value_index);
+                type_t type_id = get_folded_type(ast, expression->data.initiailizer.type->value_index);
                 expression->value_type = type_id;
                 break;
             } else {
@@ -1058,8 +1070,8 @@ void resolve_expression(
             //   if it's arthimetic, or comparisons, then let them merge at the end
             //   if it's logical, then you need to do special things
 
-            type_id_t cast_left = typeid(TYPE_INVALID);
-            type_id_t cast_right = typeid(TYPE_INVALID);
+            type_t cast_left = typeid(TYPE_INVALID);
+            type_t cast_right = typeid(TYPE_INVALID);
 
             expression->value_type = typeid(TYPE_UNRESOLVED);
 
@@ -1070,7 +1082,7 @@ void resolve_expression(
                 case TOKEN_MINUS:
                 case TOKEN_STAR:
                 case TOKEN_SLASH: {
-                    type_id_t combined_type = typeid(TYPE_INVALID);
+                    type_t combined_type = typeid(TYPE_INVALID);
                     if (typeid_eq(left->value_type, right->value_type)) {
                         combined_type = left->value_type;
                     }
@@ -1129,7 +1141,7 @@ void resolve_expression(
                     cast_left = left->value_type;
                     cast_right = right->value_type;
 
-                    type_id_t merged_type = type_merge(&ast->type_set, left->value_type, right->value_type);
+                    type_t merged_type = type_merge(&ast->type_set, left->value_type, right->value_type);
                     expression->value_type = merged_type;
                     break;
                 }
@@ -1179,7 +1191,7 @@ void resolve_expression(
                     break;
                 }
             } else {
-                type_id_t new_type_id = resolve_unary_type(ast, expression->operator.type, expression->data.expression->value_type);
+                type_t new_type_id = resolve_unary_type(ast, expression->operator.type, expression->data.expression->value_type);
                 expression->value_type = new_type_id;
                 
                 // TODO: Must negate the new type implications if the unary operation is NOT
@@ -1252,7 +1264,7 @@ void resolve_expression(
             if (type_is_struct(ast->type_set.types, left->value_type)) {
                 table_get(type2ns, ast->type_to_creation_node, left->value_type, &node_and_scope);
             } else if (TYPE_IS_TYPE(left->value_type) && type_is_struct(ast->type_set.types, get_folded_type(ast, left->value_index))) {
-                type_id_t struct_type_id = get_folded_type(ast, left->value_index);
+                type_t struct_type_id = get_folded_type(ast, left->value_index);
                 table_get(type2ns, ast->type_to_creation_node, struct_type_id, &node_and_scope);
                 skip_mutable = true;
             } else {
@@ -1344,7 +1356,7 @@ void resolve_expression(
 
                 expression->value_type = entity->declared_type;
 
-                type_id_t right_side_narrowed_type_id = expression->data.binary.rhs->value_type;
+                type_t right_side_narrowed_type_id = expression->data.binary.rhs->value_type;
                 unless (typeid_eq(entity->declared_type, right_side_narrowed_type_id)) {
                     error_range(analyzer, expression->start, expression->end, "Explicit cast required to assign to variable.");
                     break;
@@ -1520,7 +1532,7 @@ void resolve_expression(
             }
 
             if (branch_return_guarentee == RETURN_GUARENTEE_NONE) {
-                type_id_t else_block_type = typeid(TYPE_VOID);
+                type_t else_block_type = typeid(TYPE_VOID);
                 if (expression->data.branch.else_expression) {
                     else_block_type = expression->data.branch.else_expression->value_type;
                 }
@@ -1554,13 +1566,13 @@ void resolve_expression(
                 break;
             }
 
-            type_id_t narrowed_callee_type_id = expression->data.call.callee->value_type;
+            type_t narrowed_callee_type_id = expression->data.call.callee->value_type;
             if ((!type_is_function(ast->type_set.types, narrowed_callee_type_id) && !type_is_native_function(ast->type_set.types, narrowed_callee_type_id)) || !can_call(ast->type_set.types, narrowed_callee_type_id, expression->data.call.arguments)) {
                 error_range(analyzer, expression->data.call.callee->start, expression->data.call.callee->end, "Cannot call this value.");
                 break;
             }
 
-            type_t *narrowed_callee_type = ast->type_set.types.items[narrowed_callee_type_id.i];
+            type_info_t *narrowed_callee_type = ast->type_set.types.items[narrowed_callee_type_id.i];
             expression->value_type = narrowed_callee_type->data.function.return_type;
             break;
         }
@@ -1646,7 +1658,7 @@ static void resolve_entity_declaration(analyzer_t* analyzer, ast_t* ast, Analysi
 // this is simply a safer way of accessing the initial value expression
 #define INITIAL_EXPRESSION (entity_declaration->data.declaration.initial_value_expression)
 
-    type_id_t declaration_type_id = typeid(TYPE_UNRESOLVED);
+    type_t declaration_type_id = typeid(TYPE_UNRESOLVED);
     if (TYPE_IS_UNRESOLVED(entity_declaration->value_type) && entity_declaration->data.declaration.type_expression) {
         bool pushed = push_dependency(analyzer, entity_declaration->data.declaration.type_expression, state.fold_level, is_value_circular_dependency);
         if (pushed) {
@@ -1725,8 +1737,8 @@ static void resolve_entity_declaration(analyzer_t* analyzer, ast_t* ast, Analysi
         }
 
         // This must be available at compile time
-        type_id_t struct_type_id = get_folded_type(ast, entity_declaration->value_index);
-        type_t *struct_type = ast->type_set.types.items[struct_type_id.i];
+        type_t struct_type_id = get_folded_type(ast, entity_declaration->value_index);
+        type_info_t *struct_type = ast->type_set.types.items[struct_type_id.i];
         unless (struct_type_is_incomplete(struct_type) && struct_type->data.struct_.name) {
             return;
         }
@@ -1734,7 +1746,7 @@ static void resolve_entity_declaration(analyzer_t* analyzer, ast_t* ast, Analysi
         ast_node_t *cast_node = entity_declaration->data.declaration.initial_value_expression;
         ASSERT(cast_node->node_type == AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT, "must be implicit casting node");
         
-        type_id_t completed_struct_type_id = cast_node->data.expression->value_type;
+        type_t completed_struct_type_id = cast_node->data.expression->value_type;
         
         // this means that we found out later that the struct this was supposed to be was actually invalid, so we need to fix the ast
         if (TYPE_IS_INVALID(completed_struct_type_id)) {
@@ -1745,7 +1757,7 @@ static void resolve_entity_declaration(analyzer_t* analyzer, ast_t* ast, Analysi
 
         ASSERT(type_is_struct(ast->type_set.types, completed_struct_type_id), "casted expression must be a struct type");
 
-        type_t *completed_struct_type = ast->type_set.types.items[completed_struct_type_id.i];
+        type_info_t *completed_struct_type = ast->type_set.types.items[completed_struct_type_id.i];
         if (struct_type_is_incomplete(completed_struct_type)) {
             return;
         }
@@ -1784,12 +1796,12 @@ static void resolve_entity_declaration(analyzer_t* analyzer, ast_t* ast, Analysi
 
             to_struct_type->fold = false;
             to_struct_type->foldable = true;
-            type_t *initial_expression_type = get_type_info(&ast->type_set.types, INITIAL_EXPRESSION->value_type);
-            type_id_t named_struct_id = type_create_struct(&ast->type_set, entity_declaration->start.start, entity_declaration->start.length, initial_expression_type);
+            type_info_t *initial_expression_type = get_type_info(&ast->type_set.types, INITIAL_EXPRESSION->value_type);
+            type_t named_struct_id = type_create_struct(&ast->type_set, entity_declaration->start.start, entity_declaration->start.length, initial_expression_type);
             slot_t struct_type_slot = SLOT_U(named_struct_id.i);
             to_struct_type->value_index = add_value_to_ast_constant_stack(ast, &struct_type_slot, typeid(TYPE_TYPE));
 
-            type_id_t initial_expression_type_id = INITIAL_EXPRESSION->value_type;
+            type_t initial_expression_type_id = INITIAL_EXPRESSION->value_type;
 
             ast_node_and_scope_t node_and_scope;
             bool found = table_get(type2ns, ast->type_to_creation_node, initial_expression_type_id, &node_and_scope);
@@ -1817,7 +1829,7 @@ static void resolve_entity_declaration(analyzer_t* analyzer, ast_t* ast, Analysi
         if (TYPE_IS_UNRESOLVED(entity_declaration->value_type)) {
             ASSERT(INITIAL_EXPRESSION != NULL, "this should be a parsing error.");
 
-            type_id_t expression_type_id = INITIAL_EXPRESSION->value_type;
+            type_t expression_type_id = INITIAL_EXPRESSION->value_type;
 
             if (expression_type_id.i == TYPE_BOOL || expression_type_id.i == TYPE_INT32) {
                 entity_declaration->value_type = expression_type_id;
@@ -1861,7 +1873,7 @@ static void resolve_entity_declaration(analyzer_t* analyzer, ast_t* ast, Analysi
         entity->narrowed_type = INITIAL_EXPRESSION->value_type;
         if (IS_FOLDED(INITIAL_EXPRESSION)) {
             if (type_is_union(ast->type_set.types, INITIAL_EXPRESSION->value_type)) {
-                type_id_t folded_value_type_id = get_folded_type(ast, INITIAL_EXPRESSION->value_index);
+                type_t folded_value_type_id = get_folded_type(ast, INITIAL_EXPRESSION->value_index);
                 entity->narrowed_type = folded_value_type_id;
             }
 
@@ -1876,10 +1888,10 @@ static void resolve_entity_declaration(analyzer_t* analyzer, ast_t* ast, Analysi
 static Entity *get_builtin_entity(ast_t *ast, symbol_t *identifier) {
     slot_t entity_slot;
     if (!symbol_table_get(&ast->builtins, identifier, &entity_slot)) {
-        type_id_t type_id;
+        type_t type_id;
         native_function_t *function;
         bool has_value = false;
-        type_id_t value_type;
+        type_t value_type;
         slot_t value_slot;
         if (is_builtin_type(identifier, &type_id)) {
             has_value = true;
@@ -2128,7 +2140,7 @@ static Entity *get_resolved_entity_by_identifier(
             return entity;
         }
 
-        type_id_t type = entity->node->value_type;
+        type_t type = entity->node->value_type;
 
         if (query->flags & QUERY_FLAG_MATCH_TYPE && typeid_eq(query->search_type, type)) {
             return entity;
@@ -2170,7 +2182,7 @@ static void resolve_function_expression(
 
     scope_t function_parameter_scope;
     scope_init(&function_parameter_scope, &analyzer->allocator, SCOPE_TYPE_FUNCTION_PARAMETERS, state.scope, function_definition_expression);
-    type_ids_t parameter_types = {.allocator=&ast->allocator};
+    types_t parameter_types = {.allocator=&ast->allocator};
 
     forward_scan_declaration_names(analyzer, &function_parameter_scope, definition->parameter_nodes, parameter_count);
 
@@ -2191,7 +2203,7 @@ static void resolve_function_expression(
         }
     }
 
-    type_id_t return_type = typeid(TYPE_VOID);
+    type_t return_type = typeid(TYPE_VOID);
     if (definition->return_type_expression) {
         bool pushed = push_dependency(analyzer, definition->return_type_expression, state.fold_level, is_value_circular_dependency);
         if (pushed) {
@@ -2208,7 +2220,7 @@ static void resolve_function_expression(
         }
     } else {
         if (!TYPE_IS_UNRESOLVED(function_definition_expression->value_type)) {
-            type_t *signature = ast->type_set.types.items[function_definition_expression->value_type.i];
+            type_info_t *signature = ast->type_set.types.items[function_definition_expression->value_type.i];
             return_type = signature->data.function.return_type;
         }
     }
@@ -2218,7 +2230,7 @@ static void resolve_function_expression(
         return;
     }
 
-    type_id_t function_type_id = type_set_fetch_function(&ast->type_set, return_type, parameter_types);
+    type_t function_type_id = type_set_fetch_function(&ast->type_set, return_type, parameter_types);
     function_t *function = orso_new_function(&analyzer->allocator);
     function->signature = function_type_id;
 
@@ -2404,7 +2416,7 @@ static void resolve_struct_definition(analyzer_t *analyzer, ast_t *ast, Analysis
 
     i32 declarations_count = struct_definition->data.struct_.declarations.count;
 
-    type_id_t incomplete_struct_id = type_unique_incomplete_struct_type(&ast->type_set);
+    type_t incomplete_struct_id = type_unique_incomplete_struct_type(&ast->type_set);
     struct_definition->value_type = incomplete_struct_id;
 
     struct_definition->foldable = true;
@@ -2473,15 +2485,15 @@ static void resolve_struct_definition(analyzer_t *analyzer, ast_t *ast, Analysis
         }
     }
 
-    type_t *complete_struct_type;
+    type_info_t *complete_struct_type;
 
-    type_id_t complete_struct_type_id = type_set_fetch_anonymous_struct(&ast->type_set, field_count, fields, constant_count, constants);
+    type_t complete_struct_type_id = type_set_fetch_anonymous_struct(&ast->type_set, field_count, fields, constant_count, constants);
     complete_struct_type = ast->type_set.types.items[complete_struct_type_id.i];
 
     i32 incomplete_index = -1;
     for (i32 i = 0; i < complete_struct_type->data.struct_.field_count; i++) {
-        type_id_t field_type_id = complete_struct_type->data.struct_.fields[i].type;
-        type_t *field_type = ast->type_set.types.items[field_type_id.i];
+        type_t field_type_id = complete_struct_type->data.struct_.fields[i].type;
+        type_info_t *field_type = ast->type_set.types.items[field_type_id.i];
         if (struct_type_is_incomplete(field_type)) {
             incomplete_index = i;
             break;
@@ -2500,16 +2512,16 @@ static void resolve_struct_definition(analyzer_t *analyzer, ast_t *ast, Analysis
         }
 
         for (i32 i = 0; i < field_count; i++) {
-            type_id_t field_type_id = complete_struct_type->data.struct_.fields[i].type;
+            type_t field_type_id = complete_struct_type->data.struct_.fields[i].type;
             u32 offset = complete_struct_type->data.struct_.fields[i].offset;
             ast_node_t *declaration = ast_fields[i];
 
-            type_t *field_type = ast->type_set.types.items[field_type_id.i];
+            type_info_t *field_type = ast->type_set.types.items[field_type_id.i];
 
             u32 bytes_to_copy = type_size_bytes(field_type);
 
             if (type_is_union(ast->type_set.types, field_type_id)) {
-                type_id_t value_expression_type_id = declaration->data.declaration.initial_value_expression == NULL ?
+                type_t value_expression_type_id = declaration->data.declaration.initial_value_expression == NULL ?
                     typeid(TYPE_TYPE) : declaration->data.declaration.initial_value_expression->value_type;
                 ASSERT(!type_is_union(ast->type_set.types, value_expression_type_id), "initial expression cannot be a union.");
 
@@ -2534,7 +2546,7 @@ static void resolve_struct_definition(analyzer_t *analyzer, ast_t *ast, Analysis
     }
 }
 
-static scope_t *get_closest_outer_function_scope(types_t *types, scope_t *scope) {
+static scope_t *get_closest_outer_function_scope(type_infos_t *types, scope_t *scope) {
     while (scope && scope->creator && !type_is_function(*types, scope->creator->value_type)) {
         scope = scope->outer;
     }
@@ -2554,7 +2566,7 @@ static void resolve_statement(
             break;
 
         case AST_NODE_TYPE_STATEMENT_RETURN: {
-            type_id_t return_expression_type = typeid(TYPE_VOID);
+            type_t return_expression_type = typeid(TYPE_VOID);
 
             if (statement->data.expression) {
                 resolve_expression(analyzer, ast, state, statement->data.expression);
@@ -2564,10 +2576,10 @@ static void resolve_statement(
             scope_t *function_scope = get_closest_outer_function_scope(&ast->type_set.types, state.scope);
             ASSERT(function_scope, "right now all scopes should be under a function scope");
 
-            type_id_t function_type_id = function_scope->creator->value_type;
-            type_t *function_type = ast->type_set.types.items[function_type_id.i];
+            type_t function_type_id = function_scope->creator->value_type;
+            type_info_t *function_type = ast->type_set.types.items[function_type_id.i];
 
-            type_id_t function_return_type_id = function_scope ? function_type->data.function.return_type : typeid(TYPE_VOID);
+            type_t function_return_type_id = function_scope ? function_type->data.function.return_type : typeid(TYPE_VOID);
             unless (TYPE_IS_INVALID(return_expression_type) || typeid_eq(function_return_type_id, return_expression_type)) {
                 error_range(analyzer, statement->data.expression->start, statement->data.expression->end, "Requires explict cast to return.");
             }

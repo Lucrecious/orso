@@ -6,7 +6,7 @@
 #include "object.h"
 #include "tmp.h"
 
-u32 chunk_add_constant(chunk_t* chunk, byte* data, u32 size, type_id_t type_id) {
+u32 chunk_add_constant(chunk_t* chunk, byte* data, u32 size, type_t type_id) {
     u32 slot_size = bytes_to_slots(size);
     u32 index = chunk->constants.count;
     for (size_t i = 0; i < slot_size; i++) {
@@ -22,7 +22,7 @@ u32 chunk_add_constant(chunk_t* chunk, byte* data, u32 size, type_id_t type_id) 
 }
 
 void chunk_init(chunk_t *chunk, arena_t *allocator) {
-    chunk->constant_types = (type_ids_t){.allocator = allocator};
+    chunk->constant_types = (types_t){.allocator = allocator};
     chunk->constants = (slots_t){.allocator = allocator};
     chunk->code = (code_t){.allocator = allocator};
     chunk->lines = (i32s_t){.allocator = allocator};

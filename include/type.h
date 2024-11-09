@@ -7,21 +7,21 @@
 #include "lexer.h"
 #include "stringt.h"
 
-typedef struct type_id_t type_id_t;
-struct type_id_t {
+typedef struct type_t type_t;
+struct type_t {
     u64 i;
 };
 
-typedef struct type_ids_t type_ids_t;
-struct type_ids_t {
-    type_id_t *items;
+typedef struct types_t types_t;
+struct types_t {
+    type_t *items;
     size_t count;
     size_t capacity;
     arena_t *allocator;
 };
 
-typedef struct types_t types_t;
-typedef struct type_t type_t;
+typedef struct type_infos_t type_infos_t;
+typedef struct type_info_t type_info_t;
 
 typedef enum type_kind_t {
     TYPE_INVALID = 0,      // error type
@@ -47,7 +47,7 @@ typedef enum type_kind_t {
 
 typedef struct struct_field_t {
     char* name;
-    type_id_t type;
+    type_t type;
 
     // not relevant for hashing
     i32 offset;
@@ -55,26 +55,26 @@ typedef struct struct_field_t {
 
 typedef struct struct_constant_t {
     char *name;
-    type_id_t type;
+    type_t type;
 } struct_constant_t;
 
-struct types_t {
-    type_t **items;
+struct type_infos_t {
+    type_info_t **items;
     size_t count;
     size_t capacity;
     arena_t *allocator;
 };
 
-struct type_t {
+struct type_info_t {
     type_kind_t kind;
     union {
         struct {
-            type_ids_t types;
+            types_t types;
         } union_;
 
         struct {
-            type_id_t return_type;
-            type_ids_t argument_types;
+            type_t return_type;
+            types_t argument_types;
         } function;
 
         struct {
@@ -92,7 +92,7 @@ struct type_t {
         } struct_;
 
         struct {
-            type_id_t type;
+            type_t type;
         } pointer;
     } data;
 };
@@ -105,20 +105,20 @@ struct type_t {
 
 struct type_table_t;
 
-bool struct_type_is_incomplete(type_t *type);
+bool struct_type_is_incomplete(type_info_t *type);
 
-bool type_equal(type_t *a, type_t *b);
+bool type_equal(type_info_t *a, type_info_t *b);
 
 // orso_type_has_type_kind
-bool union_type_has_type(type_t *type, type_id_t subtype);
-bool union_type_contains_type(types_t types, type_id_t union_, type_id_t type);
+bool union_type_has_type(type_info_t *type, type_t subtype);
+bool union_type_contains_type(type_infos_t types, type_t union_, type_t type);
 
-type_id_t type_merge(struct type_table_t *set, type_id_t a, type_id_t b);
+type_t type_merge(struct type_table_t *set, type_t a, type_t b);
 
-bool type_is_float(type_t *type);
-bool type_is_integer(type_t *type, bool include_bool);
-bool type_is_number(type_t *type, bool include_bool);
-FORCE_INLINE bool orso_type_is_unsigned_integer_type(type_t *type, bool include_bool){
+bool type_is_float(type_info_t *type);
+bool type_is_integer(type_info_t *type, bool include_bool);
+bool type_is_number(type_info_t *type, bool include_bool);
+FORCE_INLINE bool orso_type_is_unsigned_integer_type(type_info_t *type, bool include_bool){
     (void)type;
     (void)include_bool;
     return false;
@@ -126,18 +126,18 @@ FORCE_INLINE bool orso_type_is_unsigned_integer_type(type_t *type, bool include_
 
 size_t bytes_to_slots(i32 byte_count);
 
-u32 type_size_bytes(type_t *type);
+u32 type_size_bytes(type_info_t *type);
 
-struct_field_t *type_struct_find_field(type_t *struct_, const char *name, size_t name_length);
+struct_field_t *type_struct_find_field(type_info_t *struct_, const char *name, size_t name_length);
 
-size_t type_slot_count(type_t *type);
+size_t type_slot_count(type_info_t *type);
 
-bool type_fits(type_t *storage_type, type_t *value_type);
+bool type_fits(type_info_t *storage_type, type_info_t *value_type);
 
-string_t type_to_string(types_t types, type_id_t type_id, arena_t *allocator);
+string_t type_to_string(type_infos_t types, type_t type_id, arena_t *allocator);
 
-bool orso_is_gc_type(type_t *type);
+bool orso_is_gc_type(type_info_t *type);
 
-bool can_cast_implicit(types_t types, type_id_t type_id_to_cast, type_id_t type_id);
+bool can_cast_implicit(type_infos_t types, type_t type_id_to_cast, type_t type_id);
 
 #endif

@@ -26,14 +26,14 @@ typedef struct vm_t {
     struct {
         symbol_table_t name_to_index;
 
-        type_ids_t types;
+        types_t types;
         slots_t values;
     } globals;
 
     symbol_table_t symbols;
 
     size_t stack_types_slot_count;
-    type_ids_t stack_types;
+    types_t stack_types;
     
     slot_t *stack;
     slot_t *stack_top;
