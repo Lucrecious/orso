@@ -57,7 +57,7 @@ typedef struct compiler_t {
 static i32 add_local(compiler_t* compiler, token_t name, i32 slot_count);
 
 // A token_t* is passed in instead of symbol_t* because token_t* cant be garbage collected and symbol_t* can and would be.
-static void compiler_init(compiler_t* compiler, vm_t* vm, function_t* function, type_id_t creator_type_id) {
+static void compiler_init(compiler_t *compiler, vm_t *vm, function_t *function, type_id_t creator_type_id) {
     ASSERT(function, "must be not null");
 
     // TODO: remove if possible, previously this was used to get the garbage collector but thats being
@@ -79,6 +79,7 @@ static void compiler_init(compiler_t* compiler, vm_t* vm, function_t* function, 
     compiler->function = function;
     compiler->function->signature = creator_type_id;
     compiler->skip_function_definitions = false;
+    compiler->types = &vm->type_set->types;
 }
 
 static void compiler_free(compiler_t* compiler) {

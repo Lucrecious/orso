@@ -234,7 +234,7 @@ struct_field_t *type_struct_find_field(type_t *struct_, const char *name, size_t
     return NULL;
 }
 
-u32 type_size_bytes(type_t* type) {
+u32 type_size_bytes(type_t *type) {
     switch (type->kind) {
         case TYPE_UNION: {
             return 1;

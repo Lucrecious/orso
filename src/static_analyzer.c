@@ -985,7 +985,7 @@ void resolve_expression(
             }
 
             type_id_t type_id = get_folded_type(ast, expression->data.initiailizer.type->value_index);
-            type_t *type = ast->type_set.types.items[type_id.i];
+            type_t *type = get_type_info(&ast->type_set.types, type_id);
 
             if (type->kind == TYPE_STRUCT) {
                 int arg_count = expression->data.initiailizer.arguments.count;
