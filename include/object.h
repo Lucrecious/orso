@@ -9,7 +9,7 @@
 #include "arena.h"
 
 typedef struct object_t {
-    type_t *type;
+    type_id_t type_id;
 } object_t;
 
 typedef struct OrsoString {
@@ -28,7 +28,7 @@ typedef struct symbol_t {
 typedef struct function_t {
     object_t object;
     chunk_t chunk;
-    type_t *signature;
+    type_id_t signature;
     symbol_t *binded_name;
 } function_t;
 
@@ -40,7 +40,7 @@ typedef void (*native_function_interface_t)(slot_t *arguments, slot_t *result);
 
 typedef struct native_function_t {
     object_t object;
-    type_t* signature;
+    type_id_t signature;
     native_function_interface_t function;
 } native_function_t;
 
@@ -64,9 +64,9 @@ FORCE_INLINE bool string_equal(OrsoString *a, OrsoString *b) {
 
 OrsoString *orso_string_concat(OrsoString *a, OrsoString *b, arena_t *allocator);
 
-string_t slot_to_string(slot_t *slot, type_t *type, arena_t *allocator);
+string_t slot_to_string(slot_t *slot, types_t *types, type_id_t type_id, arena_t *allocator);
 
-OrsoString *orso_slot_to_string(slot_t *slot, type_t *type, arena_t *allocator);
+OrsoString *orso_slot_to_string(slot_t *slot, types_t *types, type_id_t type_id, arena_t *allocator);
 
 void copy_bytes_to_slots(void *destination, void *source, type_kind_t type_kind, u64 size_bytes);
 

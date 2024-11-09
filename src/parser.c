@@ -56,8 +56,16 @@ static int ptr_equal(void* a, void* b) {
     return kh_int64_hash_equal((khint64_t)a, (khint64_t)b);
 }
 
-implement_table(ptr2i32, void*, i32, ptr_hash, ptr_equal)
-implement_table(type2ns, type_t*, ast_node_and_scope_t, ptr_hash, ptr_equal)
+static int type_id_hash(type_id_t id) {
+    return kh_int64_hash_func((khint64_t)id.i);
+}
+
+static int type_id_equal(type_id_t a, type_id_t b) {
+    return typeid_equal(a, b);
+}
+
+implement_table(ptr2i32, type_id_t, i32, type_id_hash, type_id_equal)
+implement_table(type2ns, type_id_t, ast_node_and_scope_t, type_id_hash, type_id_equal)
 
 typedef struct parser_t {
     error_function_t error_fn;
@@ -100,7 +108,7 @@ void ast_init(ast_t* ast, symbol_table_t* symbols) {
 
     ast->resolved = false;
     ast->root = NULL;
-    ast->folded_constant_types = (types_t){.allocator=&ast->allocator};
+    ast->folded_constant_types = (type_ids_t){.allocator=&ast->allocator};
     ast->folded_constants = (slots_t){.allocator=&ast->allocator};
     ast->symbols = symbols;
     ast->function_definition_pairs = (fd_pairs_t){.allocator=&ast->allocator};
@@ -132,7 +140,7 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool is_in_type_
     node->end = start;
     node->operator = start;
     node->return_guarentee = RETURN_GUARENTEE_NONE;
-    node->value_type = &OrsoTypeUnresolved;
+    node->value_type.i = TYPE_UNRESOLVED;
 
     node->fold = false;
     node->foldable = false;
@@ -340,16 +348,16 @@ static ParseRule* get_rule(token_type_t type);
 static bool check_expression(parser_t* parser);
 static ast_node_t* parse_precedence(parser_t* parser, bool is_in_type_context, Precedence precedence);
 
-static type_t* value_to_integer_type(i64 value) {
+static type_id_t value_to_integer_type(i64 value) {
     if (value >= INT32_MIN && value <= INT32_MAX) {
-        return &OrsoTypeInteger32;
+        return typeid(TYPE_INT32);
     }
-    return &OrsoTypeInteger64;
+    return typeid(TYPE_INT64);
 }
 
-static i32 add_constant_value(parser_t* parser, slot_t value, type_t* type) {
+static i32 add_constant_value(parser_t* parser, slot_t value, type_id_t type_id) {
     i32 index = parser->ast->folded_constants.count;
-    array_push(&parser->ast->folded_constant_types, type);
+    array_push(&parser->ast->folded_constant_types, type_id);
     array_push(&parser->ast->folded_constants, value);
     return index;
 }
@@ -392,8 +400,8 @@ static ast_node_t* number(parser_t* parser, bool is_in_type_context) {
         }
         case TOKEN_FLOAT: {
             f64 value = cstrn_to_f64(parser->previous.start, parser->previous.length);
-            expression_node->value_type = &OrsoTypeFloat64;
-            expression_node->value_index = add_constant_value(parser, SLOT_F(value), &OrsoTypeFloat64);
+            expression_node->value_type = typeid(TYPE_FLOAT64);
+            expression_node->value_index = add_constant_value(parser, SLOT_F(value), typeid(TYPE_FLOAT64));
             break;
         }
         default: UNREACHABLE();
@@ -410,28 +418,28 @@ static ast_node_t *literal(parser_t *parser, bool is_in_type_context) {
     switch (parser->previous.type) {
         case TOKEN_FALSE:
         case TOKEN_TRUE: {
-            expression_node->value_type = &OrsoTypeBool;
+            expression_node->value_type = typeid(TYPE_BOOL);
 
             i64 is_true = (i64)(parser->previous.type == TOKEN_TRUE);
-            expression_node->value_index = add_constant_value(parser, SLOT_I(is_true), &OrsoTypeBool);
+            expression_node->value_index = add_constant_value(parser, SLOT_I(is_true), typeid(TYPE_BOOL));
             break;
         }
         case TOKEN_NULL: {
-            expression_node->value_type = &OrsoTypeVoid;
-            expression_node->value_index = add_constant_value(parser, SLOT_I(0), &OrsoTypeVoid);
+            expression_node->value_type = typeid(TYPE_VOID);
+            expression_node->value_index = add_constant_value(parser, SLOT_I(0), typeid(TYPE_VOID));
             break;
         }
         case TOKEN_STRING: {
-            expression_node->value_type = &OrsoTypeString;
+            expression_node->value_type = typeid(TYPE_STRING);
             OrsoString *value = orso_new_string_from_cstrn(expression_node->start.start + 1, expression_node->start.length - 2, &parser->ast->allocator);
-            expression_node->value_index = add_constant_value(parser, SLOT_P(value), &OrsoTypeString);
+            expression_node->value_index = add_constant_value(parser, SLOT_P(value), typeid(TYPE_STRING));
             break;
         };
 
         case TOKEN_SYMBOL: {
-            expression_node->value_type = &OrsoTypeSymbol;
+            expression_node->value_type = typeid(TYPE_SYMBOL);
             symbol_t *value = orso_new_symbol_from_cstrn(expression_node->start.start + 1, expression_node->start.length - 2, parser->ast->symbols, &parser->ast->allocator);
-            expression_node->value_index = add_constant_value(parser, SLOT_P(value), &OrsoTypeSymbol);
+            expression_node->value_index = add_constant_value(parser, SLOT_P(value), typeid(TYPE_SYMBOL));
             break;
         }
         default:
@@ -666,7 +674,7 @@ static ast_node_t *grouping_or_function_signature_or_definition(parser_t *parser
     if (node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE) {
         parse_function_signature(parser, expression_node);
 
-        expression_node->value_type = &OrsoTypeUnresolved;
+        expression_node->value_type = typeid(TYPE_UNRESOLVED);
         expression_node->end = parser->previous;
 
         if (match(parser, TOKEN_BRACE_OPEN)) {
@@ -995,7 +1003,7 @@ static ast_node_t *entity_declaration(parser_t* parser, bool as_parameter) {
 
     advance(parser);
 
-    entity_declaration_node->value_type = &OrsoTypeUnresolved;
+    entity_declaration_node->value_type = typeid(TYPE_UNRESOLVED);
 
     entity_declaration_node->data.declaration.type_expression = NULL;
     entity_declaration_node->data.declaration.initial_value_expression = NULL;
@@ -1085,7 +1093,9 @@ bool parse(ast_t *ast, const char *source, error_function_t error_fn) {
     return !parser.had_error;
 }
 
-i32 add_value_to_ast_constant_stack(ast_t *ast, slot_t *value, type_t *type) {
+i32 add_value_to_ast_constant_stack(ast_t *ast, slot_t *value, type_id_t type_id) {
+    type_t *type = ast->type_set.types.items[type_id.i];
+
     i32 slot_count = type_slot_count(type);
     for (i32 i = 0; i < slot_count; i ++) {
         array_push(&ast->folded_constants, value[i]);
@@ -1094,11 +1104,13 @@ i32 add_value_to_ast_constant_stack(ast_t *ast, slot_t *value, type_t *type) {
     return ast->folded_constants.count - slot_count;
 }
 
-i32 zero_value(ast_t *ast, type_t *type, symbol_table_t *symbol_table) {
+i32 zero_value(ast_t *ast, type_id_t type_id, symbol_table_t *symbol_table) {
     i32 result = -1;
-    if (table_get(ptr2i32, ast->type_to_zero_index, type, &result)) {
+    if (table_get(ptr2i32, ast->type_to_zero_index, type_id, &result)) {
         return result;
     }
+
+    type_t *type = ast->type_set.types.items[type_id.i];
 
     slot_t value[bytes_to_slots(type_size_bytes(type))];
 
@@ -1125,7 +1137,7 @@ i32 zero_value(ast_t *ast, type_t *type, symbol_table_t *symbol_table) {
             break;
         
         case TYPE_UNION: {
-            ASSERT(union_type_has_type(type, &OrsoTypeVoid), "must include void type if looking for zero value");
+            ASSERT(union_type_has_type(ast->type_set.types, type, typeid(TYPE_VOID)), "must include void type if looking for zero value");
             
             u32 size_slots = type_slot_count(type);
             for (u32 i = 0; i < size_slots; i++) {
@@ -1153,20 +1165,19 @@ i32 zero_value(ast_t *ast, type_t *type, symbol_table_t *symbol_table) {
             break;
     }
 
-    i32 zero_index = add_value_to_ast_constant_stack(ast, value, type);
-
-    table_put(ptr2i32, ast->type_to_zero_index, type, zero_index);
+    i32 zero_index = add_value_to_ast_constant_stack(ast, value, type_id);
+    table_put(ptr2i32, ast->type_to_zero_index, type_id, zero_index);
     return zero_index;
 }
 
-type_t *get_folded_type(ast_t *ast, i32 index) {
+type_id_t get_folded_type(ast_t *ast, i32 index) {
     if (index < 0) {
-        return &OrsoTypeInvalid;
+        return typeid(TYPE_INVALID);
     }
 
     slot_t *type_slot = &ast->folded_constants.items[index];
-    type_t *type = (type_t*)type_slot->as.p;
-    return type;
+    type_id_t type_id = *(type_id_t*)(type_slot);
+    return type_id;
 }
 
 static void print_indent(u32 level) {
@@ -1186,10 +1197,10 @@ static void print_line(const cstr_t format, ...) {
 	printf("\n");
 }
 
-static void ast_print_ast_node(ast_node_t *node, u32 level) {
+static void ast_print_ast_node(types_t types, ast_node_t *node, u32 level) {
     tmp_arena_t *tmp = allocator_borrow();
 
-    #define type2cstr(node) (type_to_string(node->value_type, tmp->allocator).cstr)
+    #define type2cstr(node) (type_to_string(types, node->value_type, tmp->allocator).cstr)
 
     switch (node->node_type) {
         case AST_NODE_TYPE_EXPRESSION_BINARY: {
@@ -1200,17 +1211,17 @@ static void ast_print_ast_node(ast_node_t *node, u32 level) {
 
             print_indent(level + 1);
             print_line("left");
-            ast_print_ast_node(node->data.binary.lhs, level+2);
+            ast_print_ast_node(types, node->data.binary.lhs, level+2);
 
             print_indent(level + 1);
             print_line("right");
-            ast_print_ast_node(node->data.binary.rhs, level+2);
+            ast_print_ast_node(types, node->data.binary.rhs, level+2);
             break;
         }
         case AST_NODE_TYPE_EXPRESSION_GROUPING: {
             print_indent(level);
             print_line("group (...): %s", type2cstr(node));
-            ast_print_ast_node(node->data.expression, level + 1);
+            ast_print_ast_node(types, node->data.expression, level + 1);
             break;
         }
 
@@ -1220,13 +1231,13 @@ static void ast_print_ast_node(ast_node_t *node, u32 level) {
 
             print_indent(level + 1);
             print_line("type");
-            ast_print_ast_node(node->data.initiailizer.type, level+2);
+            ast_print_ast_node(types, node->data.initiailizer.type, level+2);
             for (size_t i = 0; i < node->data.initiailizer.arguments.count; ++i) {
                 ast_node_t *arg = node->data.initiailizer.arguments.items[i];
                 print_indent(level + 1);
                 print_line("arg %llu", i);
                 if (arg) {
-                    ast_print_ast_node(arg, level + 2);
+                    ast_print_ast_node(types, arg, level + 2);
                 } else {
                     print_indent(level+2);
                     print_line("<default>");
@@ -1239,13 +1250,13 @@ static void ast_print_ast_node(ast_node_t *node, u32 level) {
             print_indent(level);
             print_line("implicit cast: %s", type2cstr(node));
 
-            ast_print_ast_node(node->data.expression, level + 1);
+            ast_print_ast_node(types, node->data.expression, level + 1);
             break;
         }
         case AST_NODE_TYPE_EXPRESSION_UNARY: {
             print_indent(level);
             print_line("unary (%.*s): %s", node->operator.length, node->operator.start, type2cstr(node));
-            ast_print_ast_node(node->data.expression, level + 1);
+            ast_print_ast_node(types, node->data.expression, level + 1);
             break;
         }
         case AST_NODE_TYPE_EXPRESSION_PRIMARY: {
@@ -1264,18 +1275,18 @@ static void ast_print_ast_node(ast_node_t *node, u32 level) {
 
             print_indent(level + 1);
             print_line("lvalue");
-            ast_print_ast_node(node->data.binary.lhs, level + 2);
+            ast_print_ast_node(types, node->data.binary.lhs, level + 2);
 
             print_indent(level + 1);
             print_line("rhs");
-            ast_print_ast_node(node->data.binary.rhs, level + 2);
+            ast_print_ast_node(types, node->data.binary.rhs, level + 2);
             break;
         }
         case AST_NODE_TYPE_EXPRESSION_BLOCK: {
             print_indent(level);
             print_line("{...}: %s", type2cstr(node));
             for (size_t i = 0; i < node->data.block.count; ++i) {
-                ast_print_ast_node(node->data.block.items[i], level + 1);
+                ast_print_ast_node(types, node->data.block.items[i], level + 1);
             }
             break;
         }
@@ -1299,16 +1310,16 @@ static void ast_print_ast_node(ast_node_t *node, u32 level) {
 
             print_indent(level + 1);
             print_line("condition");
-            ast_print_ast_node(node->data.branch.condition, level + 2);
+            ast_print_ast_node(types, node->data.branch.condition, level + 2);
 
             print_indent(level + 1);
             print_line("then");
-            ast_print_ast_node(node->data.branch.then_expression, level + 2);
+            ast_print_ast_node(types, node->data.branch.then_expression, level + 2);
 
             if (node->data.branch.else_expression) {
                 print_indent(level + 1);
                 print_line("else");
-                ast_print_ast_node(node->data.branch.else_expression, level + 2);
+                ast_print_ast_node(types, node->data.branch.else_expression, level + 2);
             }
             break;
         }
@@ -1318,14 +1329,14 @@ static void ast_print_ast_node(ast_node_t *node, u32 level) {
 
             print_indent(level+1);
             print_line("callee");
-            ast_print_ast_node(node->data.call.callee, level + 2);
+            ast_print_ast_node(types, node->data.call.callee, level + 2);
             
             print_indent(level+1);
             print_line("arguments");
 
             for (size_t i = 0; i < node->data.call.arguments.count; ++i) {
                 ast_node_t *arg = node->data.call.arguments.items[i];
-                ast_print_ast_node(arg, level+2);
+                ast_print_ast_node(types, arg, level+2);
             }
             break;
         }
@@ -1335,7 +1346,7 @@ static void ast_print_ast_node(ast_node_t *node, u32 level) {
 
             print_indent(level + 1);
             print_line("definition");
-            ast_print_ast_node(node->data.function.block, level + 2);
+            ast_print_ast_node(types, node->data.function.block, level + 2);
             break;
         }
         case AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION: {
@@ -1346,7 +1357,7 @@ static void ast_print_ast_node(ast_node_t *node, u32 level) {
             print_line("members");
             for (size_t i = 0; i < node->data.struct_.declarations.count; ++i) {
                 ast_node_t *declaration = node->data.struct_.declarations.items[i];
-                ast_print_ast_node(declaration, level + 2);
+                ast_print_ast_node(types, declaration, level + 2);
             }
             break;
         }
@@ -1358,7 +1369,7 @@ static void ast_print_ast_node(ast_node_t *node, u32 level) {
         case AST_NODE_TYPE_EXPRESSION_STATEMENT: {
             print_indent(level);
             print_line("expression statement: %s", type2cstr(node));
-            ast_print_ast_node(node->data.expression, level + 1);
+            ast_print_ast_node(types, node->data.expression, level + 1);
             break;
         }
         case AST_NODE_TYPE_EXPRESSION_PRINT_EXPR: {
@@ -1374,14 +1385,14 @@ static void ast_print_ast_node(ast_node_t *node, u32 level) {
         case AST_NODE_TYPE_STATEMENT_EXPRESSION: {
             print_indent(level);
             print_line("statement expression: %s", type2cstr(node));
-            ast_print_ast_node(node->data.expression, level + 1);
+            ast_print_ast_node(types, node->data.expression, level + 1);
             break;
         }
         case AST_NODE_TYPE_STATEMENT_RETURN: {
             print_indent(level);
             print_line("return");
 
-            ast_print_ast_node(node->data.expression, level + 1);
+            ast_print_ast_node(types, node->data.expression, level + 1);
             break;
         }
         case AST_NODE_TYPE_EXPRESSION_DOT: {
@@ -1390,7 +1401,7 @@ static void ast_print_ast_node(ast_node_t *node, u32 level) {
 
             print_indent(level+1);
             print_line("item");
-            ast_print_ast_node(node->data.dot.lhs, level+2);
+            ast_print_ast_node(types, node->data.dot.lhs, level+2);
 
             print_indent(level + 1);
             print_line("accessor (%.*s)", node->data.dot.identifier.length, node->data.dot.identifier.start);
@@ -1403,7 +1414,7 @@ static void ast_print_ast_node(ast_node_t *node, u32 level) {
             if (node->data.declaration.initial_value_expression) {
                 print_indent(level+1);
                 print_line("initial value");
-                ast_print_ast_node(node->data.declaration.initial_value_expression, level+2);
+                ast_print_ast_node(types, node->data.declaration.initial_value_expression, level+2);
             }
             break;
         }
@@ -1419,5 +1430,5 @@ static void ast_print_ast_node(ast_node_t *node, u32 level) {
 
 void ast_print(ast_t* ast, const char* name) {
     printf("=== %s ===\n", name);
-    ast_print_ast_node(ast->root, 0);
+    ast_print_ast_node(ast->type_set.types, ast->root, 0);
 }

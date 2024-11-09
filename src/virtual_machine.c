@@ -32,9 +32,9 @@ void vm_init(vm_t *vm, write_function_t write_fn, i32 stack_size) {
     vm->globals.values = (slots_t){.allocator=&vm->allocator};
 
     vm->stack_types_slot_count = 0;
-    vm->stack_types = (types_t){.allocator = &vm->allocator};
+    vm->stack_types = (type_ids_t){.allocator = &vm->allocator};
 
-    vm->globals.types = (types_t){.allocator = &vm->allocator};
+    vm->globals.types = (type_ids_t){.allocator = &vm->allocator};
 
     vm->write_fn = write_fn;
 
@@ -68,13 +68,15 @@ static FORCE_INLINE void reserve_stack_space(vm_t* vm, u32 slot_count) {
 static void pop_type_n(vm_t *vm, size_t amount) {
     amount = amount < vm->stack_types.count ? amount : vm->stack_types.count;
     for (size_t i = vm->stack_types.count - amount; i < vm->stack_types.count; ++i) {
-        vm->stack_types_slot_count -= type_slot_count(vm->stack_types.items[i]);
+        type_t *stack_type = get_type_info(&vm->type_set->types, vm->stack_types.items[i]);
+        vm->stack_types_slot_count -= type_slot_count(stack_type);
     }
     vm->stack_types.count -= amount;
 }
 
-static void push_type(vm_t *vm, type_t *type) {
-    array_push(&vm->stack_types, type);
+static void push_type(vm_t *vm, type_id_t type_id) {
+    array_push(&vm->stack_types, type_id);
+    type_t *type = get_type_info(&vm->type_set->types, type_id);
     vm->stack_types_slot_count += type_slot_count(type);
 }
 
@@ -82,7 +84,7 @@ void vm_push_object(vm_t* vm, object_t* object) {
     *vm->stack_top = SLOT_P(object);
     ++vm->stack_top;
 
-    push_type(vm, object->type);
+    push_type(vm, object->type_id);
 }
 
 static FORCE_INLINE slot_t pop(vm_t* vm) {
@@ -110,25 +112,30 @@ static void call(vm_t* vm, function_t* function, i32 argument_slots) {
     frame->slots = vm->stack_top - argument_slots - 1;
 }
 
-void vm_call(vm_t* vm, function_t* function) {
+void vm_call(vm_t *vm, function_t *function) {
     i32 argument_slots = 0;
-    for (size_t i = 0; i < function->signature->data.function.argument_types.count; ++i) {
-        argument_slots += type_slot_count(function->signature->data.function.argument_types.items[i]);
+    type_t *function_type = get_type_info(&vm->type_set->types, function->signature);
+    for (size_t i = 0; i < function_type->data.function.argument_types.count; ++i) {
+        type_t *arg_type = get_type_info(&vm->type_set->types, function_type->data.function.argument_types.items[i]);
+        argument_slots += type_slot_count(arg_type);
     }
     call(vm, function, argument_slots);
 }
 
 static void call_object(vm_t *vm, object_t *callee, i32 argument_slots) {
-    if (TYPE_IS_FUNCTION(callee->type)) {
+    if (type_is_function(vm->type_set->types, callee->type_id)) {
         function_t *function = (function_t*)callee;
         call(vm, function, argument_slots);
         return;
-    } else if (callee->type->kind == TYPE_NATIVE_FUNCTION) {
+    } else if (type_is_native_function(vm->type_set->types, callee->type_id)) {
         native_function_t *function_obj = (native_function_t*)callee;
         native_function_interface_t function = function_obj->function;
         function(vm->stack_top - argument_slots, vm->stack_top);
 
-        i32 return_slot_size = type_slot_count(function_obj->signature->data.function.return_type);
+        type_t *function_type = get_type_info(&vm->type_set->types, function_obj->signature);
+        type_t *return_type = get_type_info(&vm->type_set->types, function_type->data.function.return_type);
+
+        i32 return_slot_size = type_slot_count(return_type);
         for (i32 i = 0; i < return_slot_size; i++) {
             vm->stack_top[-(argument_slots + 1) + i] = vm->stack_top[i];
         }
@@ -147,7 +154,8 @@ void vm_print_stack(vm_t *vm) {
     size_t slot_count = (size_t)(vm->stack_top - vm->stack);
     if (vm->stack_types_slot_count > slot_count) {
         for (size_t i = vm->stack_types.count-1; i != 0; --i) {
-            untracked_slots -= type_slot_count(vm->stack_types.items[i]);
+            type_t *stack_type = get_type_info(&vm->type_set->types, vm->stack_types.items[i]);
+            untracked_slots -= type_slot_count(stack_type);
             --effective_stack_type_count;
             if (vm->stack_types_slot_count + untracked_slots <= slot_count) {
                 break;
@@ -163,7 +171,7 @@ void vm_print_stack(vm_t *vm) {
     
     size_t items_counted = 0;
     size_t slots_size = 0;
-    type_t *types[limit] = {0};
+    type_id_t types[limit] = {0};
     slot_t *slots[limit] = {0};
 
     size_t amount = limit;
@@ -171,13 +179,14 @@ void vm_print_stack(vm_t *vm) {
     if (effective_stack_type_count < amount) amount = effective_stack_type_count;
     for (size_t i_ = 0; i_ < amount; ++i_) {
         size_t i = effective_stack_type_count - i_ - 1;
-        type_t *type = vm->stack_types.items[i];
+        type_id_t type_id = vm->stack_types.items[i];
+        type_t *type = get_type_info(&vm->type_set->types, type_id);
         size_t size_slots = type_slot_count(type);
 
         slots_size += size_slots;
         slot_t *value_slot = vm->stack_top - slots_size - offset;
         slots[items_counted] = value_slot;
-        types[items_counted] = type;
+        types[items_counted] = type_id;
         ++items_counted;
     }
 
@@ -185,8 +194,8 @@ void vm_print_stack(vm_t *vm) {
         if (vm->stack_types.count > effective_stack_type_count) {
             printf("Unaccounted Types: ");
             for (size_t i = effective_stack_type_count; i < vm->stack_types.count; ++i) {
-                type_t *type = vm->stack_types.items[i];
-                string_t type_str = type_to_string(type, tmp->allocator);
+                type_id_t type_id = vm->stack_types.items[i];
+                string_t type_str = type_to_string(vm->type_set->types, type_id, tmp->allocator);
                 printf("%s", type_str.cstr);
                 if (i < vm->stack_types.count-1) {
                     printf(",");
@@ -199,10 +208,10 @@ void vm_print_stack(vm_t *vm) {
         printf("Types Counted: %lu, Slots Showing: %lu, Untracked Slots: %lld\n", items_counted, slots_size, untracked_slots);
         for (size_t i = 0; i < items_counted; ++i) {
             slot_t *slot = slots[i];
-            type_t *type = types[i];
+            type_id_t type_id = types[i];
             size_t distance = slot - vm->stack;
-            string_t value_string = slot_to_string(slot, type, tmp->allocator);
-            printf("@%lu -> %s: %s\n", distance, value_string.cstr, type_to_string(type, tmp->allocator).cstr);
+            string_t value_string = slot_to_string(slot, &vm->type_set->types, type_id, tmp->allocator);
+            printf("@%lu -> %s: %s\n", distance, value_string.cstr, type_to_string(vm->type_set->types, type_id, tmp->allocator).cstr);
         }
     } allocator_return(tmp);
 
@@ -210,7 +219,7 @@ void vm_print_stack(vm_t *vm) {
 
 void vm_disassemble_current_instruction(vm_t *vm) {
     call_frame_t *frame = &vm->frames[vm->frame_count-1];
-    disassemble_instruction(&frame->function->chunk, frame->ip - frame->function->chunk.code.items);
+    disassemble_instruction(&vm->type_set->types, &frame->function->chunk, frame->ip - frame->function->chunk.code.items);
 }
 
 bool vm_is_on_debug_instruction(vm_t *vm) {
@@ -507,20 +516,21 @@ bool vm_step(vm_t *vm) {
 
         case OP_PRINT:
         case OP_PRINT_EXPR: {
-            type_t *type = (type_t*)POP().as.p; // pop expression type
+            type_id_t type_id = (type_id_t){.i = POP().as.u}; // pop expression type
+            type_t *type = get_type_info(&vm->type_set->types, type_id);
 
             OrsoString *expression_string = (OrsoString*)(POP().as.p);
 
             byte size_slots = type_slot_count(type);
             tmp_arena_t *tmp = allocator_borrow(); {
-                OrsoString *value_string = orso_slot_to_string(PEEK(size_slots - 1), type, tmp->allocator);
+                OrsoString *value_string = orso_slot_to_string(PEEK(size_slots - 1), &vm->type_set->types, type_id, tmp->allocator);
 
                 if (vm->write_fn != NULL) {
                     if (op_code == OP_PRINT_EXPR) {
                         vm->write_fn(expression_string->text);
                         vm->write_fn(" (");
 
-                            string_t s = type_to_string(type, tmp->allocator);
+                            string_t s = type_to_string(vm->type_set->types, type, tmp->allocator);
                             vm->write_fn(s.cstr);
                         vm->write_fn(") => ");
                         vm->write_fn(value_string->text);
@@ -562,7 +572,7 @@ bool vm_step(vm_t *vm) {
         
         case OP_PUSH_TYPE: {
             op_push_pop_type_t *push_pop_type = READ_CODE(op_push_pop_type_t);
-            push_type(vm, push_pop_type->data.type);
+            push_type(vm, push_pop_type->data.type_id);
             break;
         }
     }

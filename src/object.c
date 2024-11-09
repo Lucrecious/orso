@@ -6,16 +6,16 @@
 #include "type_set.h"
 #include "tmp.h"
 
-static object_t *object_new(size_t byte_size, type_t *type, arena_t *allocator) {
+static object_t *object_new(size_t byte_size, type_id_t type_id, arena_t *allocator) {
     void *object = arena_alloc(allocator, byte_size);
     memset(object, 0, byte_size);
-    ((object_t*)object)->type = type;
+    ((object_t*)object)->type_id = type_id;
     return (object_t*)object;
 }
 
 
 OrsoString *orso_new_string_from_cstrn(const char *start, i32 length, arena_t *allocator) {
-    OrsoString *string = (OrsoString*)object_new(sizeof(OrsoString) + (length+1)*sizeof(char), &OrsoTypeString, allocator);
+    OrsoString *string = (OrsoString*)object_new(sizeof(OrsoString) + (length+1)*sizeof(char), typeid(TYPE_STRING), allocator);
     string->length = length;
     memcpy(string->text, start, length);
     string->text[length] = '\0';
@@ -31,7 +31,9 @@ char *cstrn_new(const char *start, i32 length, arena_t *allocator) {
     return cstr;
 }
 
-string_t slot_to_string(slot_t *slot, type_t *type, arena_t *allocator) {
+string_t slot_to_string(slot_t *slot, types_t *types, type_id_t type_id, arena_t *allocator) {
+    type_t *type = get_type_info(types, type_id);
+
     switch (type->kind) {
         case TYPE_BOOL: {
             if (SLOT_IS_FALSE((*slot))) {
@@ -69,17 +71,19 @@ string_t slot_to_string(slot_t *slot, type_t *type, arena_t *allocator) {
                 function_t *function = (function_t*)slot->as.p;
                 sb_add_cstr(&sb, string_format("<%s :: (", tmp->allocator,
                     function->binded_name ? function->binded_name->text : "<anonymous>").cstr);
+                
+                type_t *signature = get_type_info(types, function->signature);
 
-                for (size_t i = 0; i < function->signature->data.function.argument_types.count; ++i) {
-                    string_t arg_type = type_to_string(function->signature->data.function.argument_types.items[i], tmp->allocator);
+                for (size_t i = 0; i < signature->data.function.argument_types.count; ++i) {
+                    string_t arg_type = type_to_string(*types, signature->data.function.argument_types.items[i], tmp->allocator);
                     sb_add_cstr(&sb, arg_type.cstr);
 
-                    if (i < function->signature->data.function.argument_types.count - 1)  {
+                    if (i < signature->data.function.argument_types.count - 1)  {
                         sb_add_cstr(&sb, ", ");
                     }
                 }
 
-                string_t return_type_string = type_to_string(function->signature->data.function.return_type, tmp->allocator);
+                string_t return_type_string = type_to_string(*types, signature->data.function.return_type, tmp->allocator);
                 sb_add_cstr(&sb, string_format(") -> %s>", tmp->allocator, return_type_string.cstr).cstr);
 
                 string = sb_render(&sb, allocator);
@@ -113,15 +117,17 @@ string_t slot_to_string(slot_t *slot, type_t *type, arena_t *allocator) {
 
                 byte *value = ((byte*)slot) + field->offset;
 
-                size_t field_slot_size = type_slot_count(field->type);
+                type_t *field_type = get_type_info(types, field->type);
+
+                size_t field_slot_size = type_slot_count(field_type);
                 until (slots.count >= field_slot_size) {
                     array_push(&slots, (slot_t){0});
                 }
 
-                size_t field_size = type_size_bytes(field->type);
-                copy_bytes_to_slots(slots.items, value, field->type->kind, field_size);
+                size_t field_size = type_size_bytes(field_type);
+                copy_bytes_to_slots(slots.items, value, field_type->kind, field_size);
 
-                string_t field_value = slot_to_string(slots.items, field->type, tmp->allocator);
+                string_t field_value = slot_to_string(types, slots.items, field->type, tmp->allocator);
 
                 sb_add_cstr(&sb, field_value.cstr);
 
@@ -140,8 +146,8 @@ string_t slot_to_string(slot_t *slot, type_t *type, arena_t *allocator) {
         }
 
         case TYPE_UNION: {
-            type_t *type = (type_t*)slot->as.p;
-            return slot_to_string(slot + 1, type, allocator);
+            type_id_t type_id = (type_id_t){.i=slot->as.u};
+            return slot_to_string(types, slot + 1, type_id, allocator);
         }
 
         case TYPE_TYPE: {
@@ -149,7 +155,7 @@ string_t slot_to_string(slot_t *slot, type_t *type, arena_t *allocator) {
 
             tmp_arena_t *tmp = allocator_borrow(); {
                 type_t *type = (type_t*)slot->as.p;
-                string_t type_string = type_to_string(type, tmp->allocator);
+                string_t type_string = type_to_string(*types, type, tmp->allocator);
                 result = string_format("<%s>", allocator, type_string.cstr);
             } allocator_return(tmp);
 
@@ -161,11 +167,11 @@ string_t slot_to_string(slot_t *slot, type_t *type, arena_t *allocator) {
     }
 }
 
-OrsoString *orso_slot_to_string(slot_t *slot, type_t *type, arena_t *allocator) {
+OrsoString *orso_slot_to_string(slot_t *slot, types_t *types, type_id_t type_id, arena_t *allocator) {
     OrsoString *string;
 
     tmp_arena_t *tmp = allocator_borrow(); {
-        string_t value = slot_to_string(slot, type, tmp->allocator);
+        string_t value = slot_to_string(slot, types, type_id, tmp->allocator);
         string = orso_new_string_from_cstrn(value.cstr, value.length, allocator);
     } allocator_return(tmp);
 
@@ -227,7 +233,7 @@ void copy_bytes_to_slots(void *destination, void *source, type_kind_t type_kind,
 }
 
 OrsoString *orso_string_concat(OrsoString *a, OrsoString *b, arena_t *allocator) {
-    OrsoString *string = (OrsoString*)object_new(sizeof(OrsoString) + (a->length + b->length + 1)*sizeof(char), &OrsoTypeString, allocator);
+    OrsoString *string = (OrsoString*)object_new(sizeof(OrsoString) + (a->length + b->length + 1)*sizeof(char), typeid(TYPE_STRING), allocator);
     string->length = a->length + b->length;
     memcpy(string->text, a->text, a->length);
     memcpy(string->text + a->length, b->text, b->length);
@@ -237,8 +243,8 @@ OrsoString *orso_string_concat(OrsoString *a, OrsoString *b, arena_t *allocator)
 }
 
 function_t *orso_new_function(arena_t *allocator) {
-    function_t *function = (function_t*)object_new(sizeof(function_t), (type_t*)&OrsoTypeEmptyFunction, allocator);
-    function->signature = &OrsoTypeEmptyFunction;
+    function_t *function = (function_t*)object_new(sizeof(function_t), typeid(TYPE_FUNCTION), allocator);
+    function->signature = typeid(TYPE_FUNCTION);
     chunk_init(&function->chunk, allocator);
     function->binded_name = NULL;
 
@@ -249,10 +255,10 @@ bool is_function_compiled(function_t* function) {
     return function->chunk.code.items != NULL;
 }
 
-native_function_t *orso_new_native_function(native_function_interface_t function, type_t* type, arena_t *allocator) {
-    native_function_t *function_obj = (native_function_t*)object_new(sizeof(native_function_t), type, allocator);
+native_function_t *orso_new_native_function(native_function_interface_t function, type_id_t type_id, arena_t *allocator) {
+    native_function_t *function_obj = (native_function_t*)object_new(sizeof(native_function_t), type_id, allocator);
     function_obj->function = function;
-    function_obj->signature = type;
+    function_obj->signature = type_id;
 
     return function_obj;
 }
@@ -325,7 +331,7 @@ symbol_t *orso_unmanaged_symbol_from_cstrn(const char *start, i32 length, symbol
         return symbol;
     }
 
-    symbol = (symbol_t*)object_new(sizeof(symbol_t) + (length + 1)*sizeof(char), &OrsoTypeSymbol, allocator);
+    symbol = (symbol_t*)object_new(sizeof(symbol_t) + (length + 1)*sizeof(char), typeid(TYPE_SYMBOL), allocator);
     symbol->hash = hash;
     symbol->length = length;
     memcpy(symbol->text, start, length);
@@ -344,7 +350,7 @@ symbol_t *orso_new_symbol_from_cstrn(const char *start, i32 length, symbol_table
         return symbol;
     }
 
-    symbol = (symbol_t*)object_new(sizeof(symbol_t) + (length+1)*sizeof(char), &OrsoTypeSymbol, allocator);
+    symbol = (symbol_t*)object_new(sizeof(symbol_t) + (length+1)*sizeof(char), typeid(TYPE_SYMBOL), allocator);
     symbol->hash = hash;
     symbol->length = length;
     memcpy(symbol->text, start, length);

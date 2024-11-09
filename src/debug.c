@@ -13,7 +13,7 @@ static i32 instruction(const char *name, i32 offset) {
     return offset + 1;
 }
 
-i32 disassemble_instruction(chunk_t *chunk, i32 offset) {
+i32 disassemble_instruction(types_t *types, chunk_t *chunk, i32 offset) {
     printf("%04d ", offset);
 
 
@@ -158,7 +158,7 @@ i32 disassemble_instruction(chunk_t *chunk, i32 offset) {
         case OP_PUSH_TYPE: {
             op_push_pop_type_t *push_pop = (op_push_pop_type_t*)(chunk->code.items + offset);
             tmp_arena_t *tmp = allocator_borrow(); {
-                printf("OP_PUSH_TYPE(type: %s)\n", type_to_string(push_pop->data.type, tmp->allocator).cstr);
+                printf("OP_PUSH_TYPE(type: %s)\n", type_to_string(*types, push_pop->data.type_id, tmp->allocator).cstr);
             } allocator_return(tmp);
             return offset + sizeof(op_push_pop_type_t);
         }
@@ -171,10 +171,10 @@ i32 disassemble_instruction(chunk_t *chunk, i32 offset) {
     }
 }
 
-void chunk_disassemble(chunk_t *chunk, const char *name) {
+void chunk_disassemble(types_t *types, chunk_t *chunk, const char *name) {
     printf("=== %s ===\n", name);
 
     for (size_t offset = 0; offset < chunk->code.count;) {
-        offset = disassemble_instruction(chunk, offset);
+        offset = disassemble_instruction(types, chunk, offset);
     }
 }

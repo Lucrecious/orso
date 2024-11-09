@@ -181,7 +181,7 @@ int main(int argc, char **argv) {
         }
 
         if (print_byte_code) {
-            chunk_disassemble(&main->chunk, "main");
+            chunk_disassemble(&ast.type_set.types, &main->chunk, "main");
         }
 
         if (trace) {

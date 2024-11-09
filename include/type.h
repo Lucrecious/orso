@@ -27,6 +27,8 @@ typedef enum type_kind_t {
     TYPE_POINTER,          // &type
     TYPE_UNION,            // type1|type2|...|typen
     TYPE_STRUCT,           // used for both anonymous and named
+
+    TYPE_COUNT,
 } type_kind_t;
 
 typedef struct types_t types_t;
@@ -34,7 +36,7 @@ typedef struct type_t type_t;
 
 typedef struct struct_field_t {
     char* name;
-    type_t* type;
+    type_id_t type;
 
     // not relevant for hashing
     i32 offset;
@@ -42,7 +44,7 @@ typedef struct struct_field_t {
 
 typedef struct struct_constant_t {
     char *name;
-    type_t* type;
+    type_id_t type;
 } struct_constant_t;
 
 struct types_t {
@@ -56,12 +58,12 @@ struct type_t {
     type_kind_t kind;
     union {
         struct {
-            types_t types;
+            type_ids_t types;
         } union_;
 
         struct {
-            type_t *return_type;
-            types_t argument_types;
+            type_id_t return_type;
+            type_ids_t argument_types;
         } function;
 
         struct {
@@ -79,33 +81,36 @@ struct type_t {
         } struct_;
 
         struct {
-            type_t *type;
+            type_id_t type;
         } pointer;
     } data;
 };
 
-#define TYPE_IS_UNION(TYPE) (TYPE->kind == TYPE_UNION)
-#define TYPE_IS_FUNCTION(TYPE) (TYPE->kind == TYPE_FUNCTION)
-#define TYPE_IS_NATIVE_FUNCTION(TYPE) (TYPE->kind == TYPE_NATIVE_FUNCTION)
-#define TYPE_IS_STRUCT(TYPE) (TYPE->kind == TYPE_STRUCT)
-#define TYPE_IS_POINTER(TYPE) (TYPE->kind == TYPE_POINTER)
-#define TYPE_IS_INVALID(TYPE) (TYPE->kind == TYPE_INVALID)
-#define TYPE_IS_UNDEFINED(TYPE) (TYPE->kind == TYPE_UNDEFINED)
-#define TYPE_IS_UNRESOLVED(TYPE) (TYPE->kind == TYPE_UNRESOLVED)
+typedef struct type_ids_t type_ids_t;
+struct type_ids_t {
+    type_id_t *items;
+    size_t count;
+    size_t capacity;
+    arena_t *allocator;
+};
+
+#define TYPE_IS_VOID(TYPE) ((TYPE).i == TYPE_VOID)
+#define TYPE_IS_TYPE(TYPE) ((TYPE).i == TYPE_TYPE)
+#define TYPE_IS_INVALID(TYPE) ((TYPE).i == TYPE_INVALID)
+#define TYPE_IS_UNDEFINED(TYPE) ((TYPE).i == TYPE_UNDEFINED)
+#define TYPE_IS_UNRESOLVED(TYPE) ((TYPE).i == TYPE_UNRESOLVED)
 
 struct type_table_t;
-
-bool union_type_has_type(type_t *type, type_t *subtype);
 
 bool struct_type_is_incomplete(type_t *type);
 
 bool type_equal(type_t *a, type_t *b);
 
 // orso_type_has_type_kind
-bool union_type_has_type(type_t *type, type_t *subtype);
-bool union_type_contains_type(type_t *union_, type_t *type);
+bool union_type_has_type(types_t types, type_id_t type, type_id_t subtype);
+bool union_type_contains_type(types_t types, type_id_t union_, type_id_t type);
 
-type_t* type_merge(struct type_table_t *set, type_t *a, type_t *b);
+type_id_t type_merge(struct type_table_t *set, type_id_t a, type_id_t b);
 
 bool type_is_float(type_t *type);
 bool type_is_integer(type_t *type, bool include_bool);
@@ -115,16 +120,6 @@ FORCE_INLINE bool orso_type_is_unsigned_integer_type(type_t *type, bool include_
     (void)include_bool;
     return false;
 }
-
-// orso_has_float_type
-bool union_has_float(type_t *type);
-
-bool type_is_or_has_float(type_t *type);
-
-// orso_has_integer_type
-bool union_has_integer(type_t *type, bool include_bool);
-
-bool type_is_or_has_integer(type_t *type, bool include_bool);
 
 size_t bytes_to_slots(i32 byte_count);
 
@@ -138,18 +133,10 @@ size_t type_slot_count(type_t *type);
 
 bool type_fits(type_t *storage_type, type_t *value_type);
 
-string_t type_to_string(type_t *type, arena_t *allocator);
+string_t type_to_string(types_t types, type_id_t type_id, arena_t *allocator);
 
 bool orso_is_gc_type(type_t *type);
 
-bool can_cast_implicit(type_t *type_to_cast, type_t *type);
-
-type_t *binary_arithmetic_cast(type_t *a, type_t *b, token_type_t operation);
-
-void binary_comparison_casts(type_t *a, type_t *b, type_t **a_cast, type_t **b_cast);
-
-void binary_equality_casts(type_t *a, type_t *b, type_t **a_cast, type_t **b_cast);
-
-//void generate_struct_layout()
+bool can_cast_implicit(types_t types, type_id_t type_id_to_cast, type_id_t type_id);
 
 #endif

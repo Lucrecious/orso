@@ -48,6 +48,8 @@ FORCE_INLINE u32 maxu32(i32 a, i32 b) {
 #ifdef DEBUG
 
   #include <stdio.h>
+  
+  #define UNUSED(THING) ((void)(THING))
 
   #define ASSERT(condition, message)                                           \
       do                                                                       \
@@ -78,6 +80,8 @@ FORCE_INLINE u32 maxu32(i32 a, i32 b) {
       } while (false)
 
 #else
+
+  #define UNUSED(THING)
 
   #define ASSERT(condition, message) do { } while (false)
 

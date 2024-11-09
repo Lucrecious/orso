@@ -6,34 +6,23 @@
 #include "object.h"
 #include "tmp.h"
 
-#ifdef DEBUG
-u32 chunk_add_constant(chunk_t* chunk, byte* data, u32 size, type_t* type)
-#else
-u32 chunk_add_constant(chunk_t* chunk, byte* data, u32 size)
-#endif
-{
+u32 chunk_add_constant(chunk_t* chunk, byte* data, u32 size, type_id_t type_id) {
     u32 slot_size = bytes_to_slots(size);
     u32 index = chunk->constants.count;
     for (size_t i = 0; i < slot_size; i++) {
         array_push(&chunk->constants, (slot_t){ .as.i = 0 });
-#ifdef DEBUG
-        array_push(&chunk->constant_types, &OrsoTypeInvalid);
-#endif
+        array_push(&chunk->constant_types, typeid(TYPE_INVALID));
     }
 
     memcpy(chunk->constants.items + index, data, size);
 
-#ifdef DEBUG
-    chunk->constant_types.items[index] = type;
-#endif
+    chunk->constant_types.items[index] = type_id;
 
     return index;
 }
 
 void chunk_init(chunk_t *chunk, arena_t *allocator) {
-#ifdef DEBUG
-    chunk->constant_types = (types_t){.allocator = allocator};
-#endif
+    chunk->constant_types = (type_ids_t){.allocator = allocator};
     chunk->constants = (slots_t){.allocator = allocator};
     chunk->code = (code_t){.allocator = allocator};
     chunk->lines = (i32s_t){.allocator = allocator};
@@ -67,7 +56,9 @@ i32 chunk_get_line(chunk_t* chunk, i32 offset) {
     return -1;
 }
 
-void orso_print_slot(slot_t *slot, type_t *type) {
+void orso_print_slot(slot_t *slot, types_t *types, type_id_t type_id) {
+    type_t *type = get_type_info(types, type_id);
+
     switch (type->kind) {
         case TYPE_INVALID:
         case TYPE_UNDEFINED:
@@ -96,7 +87,7 @@ void orso_print_slot(slot_t *slot, type_t *type) {
     }
     
     tmp_arena_t *tmp = allocator_borrow(); {
-        string_t s = slot_to_string(slot, type, tmp->allocator);
+        string_t s = slot_to_string(slot, types, type_id, tmp->allocator);
         printf("%s", s.cstr);
     } allocator_return(tmp);
 }
