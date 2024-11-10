@@ -1297,18 +1297,18 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
             expression(vm, compiler, ast, expression_node->data.call.callee, chunk);
             emit_storage_type_convert(compiler, chunk, expression_node->value_type, expression_node->value_type, expression_node->end.line);
 
-            type_t function_type_id = expression_node->data.call.callee->value_type;
-            type_info_t *function_type = get_type_info(compiler->types, function_type_id);
+            type_t function_type = expression_node->data.call.callee->value_type;
+            type_info_t *function_type_info = get_type_info(compiler->types, function_type);
 
             for (size_t i = 0; i < expression_node->data.call.arguments.count; ++i) {
                 ast_node_t *argument = expression_node->data.call.arguments.items[i];
                 expression(vm, compiler, ast, argument, chunk);
 
-                type_t parameter_type = function_type->data.function.argument_types.items[i];
+                type_t parameter_type = function_type_info->data.function.argument_types.items[i];
                 emit_storage_type_convert(compiler, chunk, argument->value_type, parameter_type, expression_node->end.line);
             }
 
-            type_t overload_type_id = function_type_id;
+            type_t overload_type_id = function_type;
             type_info_t *overload_type = get_type_info(compiler->types, overload_type_id);
             {
                 u16 argument_slots = 0;
