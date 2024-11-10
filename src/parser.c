@@ -1169,8 +1169,8 @@ type_t get_folded_type(ast_t *ast, i32 index) {
     }
 
     slot_t *type_slot = &ast->folded_constants.items[index];
-    type_t type_id = (type_t){.i=type_slot->as.u};
-    return type_id;
+    type_t type = (type_t){.i=type_slot->as.u};
+    return type;
 }
 
 static void print_indent(u32 level) {
