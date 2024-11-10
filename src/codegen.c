@@ -245,11 +245,11 @@ static void emit_debug_instructions(compiler_t *compiler, chunk_t *chunk, i32 li
 
         case OP_CALL: {
             NOT_NULL(debug);
-            type_info_t *type = compiler->types->items[debug->type_id.i];
+            type_info_t *type_info = get_type_info(compiler->types, debug->type_id);
 
             // pop the function signature and the argument types off the stack
-            emit_pop_type(type->data.function.argument_types.count + 1);
-            emit_push_type(type->data.function.return_type);
+            emit_pop_type(type_info->data.function.argument_types.count + 1);
+            emit_push_type(type_info->data.function.return_type);
             break;
         }
 
@@ -378,8 +378,8 @@ static size_t emit(compiler_t *compiler, chunk_t *chunk, i32 line, void *op_code
             NOT_NULL(debug);
             stack_effect = -2;
 
-            type_info_t *type = compiler->types->items[debug->type_id.i];
-            stack_effect -= type_slot_count(type);
+            type_info_t *type_info = get_type_info(compiler->types, debug->type_id);
+            stack_effect -= type_slot_count(type_info);
             break;
         }
 
@@ -408,9 +408,9 @@ static void emit1(compiler_t *compiler, chunk_t *chunk, i32 line, const op_code_
 }
 
 static void emit_constant(compiler_t *compiler, chunk_t *chunk, byte *data, i32 line, type_t type_id) {
-    type_info_t *type = compiler->types->items[type_id.i];
+    type_info_t *type_info = get_type_info(compiler->types, type_id);
 
-    u32 size = type_size_bytes(type);
+    u32 size = type_size_bytes(type_info);
     u32 address = chunk_add_constant(chunk, data, size, type_id);
     address *= sizeof(slot_t);
 
@@ -430,10 +430,10 @@ static void emit_constant(compiler_t *compiler, chunk_t *chunk, byte *data, i32 
 static void emit_put_in_union(compiler_t *compiler, chunk_t *chunk, i32 line, type_t type_id) {
     slot_t slot = SLOT_U(type_id.i);
     emit_constant(compiler, chunk, (byte*)&slot, line, typeid(TYPE_TYPE)); {
-        type_info_t *type = compiler->types->items[type_id.i];
+        type_info_t *type_info = get_type_info(compiler->types, type_id);
         op_put_in_union_t put_in_union = {
             .op = OP_PUT_IN_UNION,
-            .size_bytes = type_size_bytes(type)
+            .size_bytes = type_size_bytes(type_info)
         };
 
         debug_info_t debug = {.type_id=type_id};
@@ -455,8 +455,8 @@ static void patch_jump(chunk_t *chunk, size_t update_index) {
 static void emit_entity_get(compiler_t *compiler, u32 index, type_t type_id, chunk_t *chunk, i32 line, bool is_local) {
     index *= sizeof(slot_t);
     ASSERT(index <= UINT32_MAX, "must be short");
-    type_info_t *type = compiler->types->items[type_id.i];
-    u32 size_bytes = type_size_bytes(type);
+    type_info_t *type_info = get_type_info(compiler->types, type_id);
+    u32 size_bytes = type_size_bytes(type_info);
     ASSERT(size_bytes <= UINT16_MAX, "must be short");
     {
         op_location_t location = {
@@ -470,12 +470,14 @@ static void emit_entity_get(compiler_t *compiler, u32 index, type_t type_id, chu
     }
 }
 
-static void emit_type_convert(compiler_t *compiler, type_info_t* from_type, type_info_t* to_type, chunk_t* chunk, i32 line) {
+static void emit_type_convert(compiler_t *compiler, type_t from_type, type_t to_type, chunk_t *chunk, i32 line) {
+    type_info_t *from_type_info = get_type_info(compiler->types, from_type);
+    type_info_t *to_type_info = get_type_info(compiler->types, to_type);
     bool include_bool = true;
-    ASSERT(type_is_number(from_type, include_bool) && type_is_number(to_type, include_bool), "Implicit type conversion only works for number types right now.");
-    if (type_is_float(from_type) && type_is_integer(to_type, include_bool)) {
+    ASSERT(type_is_number(from_type_info, include_bool) && type_is_number(to_type_info, include_bool), "Implicit type conversion only works for number types right now.");
+    if (type_is_float(from_type_info) && type_is_integer(to_type_info, include_bool)) {
         emit1(compiler, chunk, line, OP_F64_TO_I64, NULL);
-    } else if (type_is_integer(from_type, include_bool) && type_is_float(to_type)) {
+    } else if (type_is_integer(from_type_info, include_bool) && type_is_float(to_type_info)) {
         emit1(compiler, chunk, line, OP_I64_TO_F64, NULL);
     } 
 }
@@ -1173,9 +1175,7 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
         case AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT: {
             ast_node_t *operand = expression_node->data.expression;
             expression(vm, compiler, ast, operand, chunk);
-            type_info_t *operand_type = get_type_info(compiler->types, operand->value_type);
-            type_info_t *expression_type = get_type_info(compiler->types, expression_node->value_type);
-            emit_type_convert(compiler, operand_type, expression_type, chunk, operand->start.line);
+            emit_type_convert(compiler, operand->value_type, expression_node->value_type, chunk, operand->start.line);
             break;
         }
 
