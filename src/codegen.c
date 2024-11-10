@@ -1376,7 +1376,7 @@ static void expression(vm_t *vm, compiler_t *compiler, ast_t *ast, ast_node_t *e
             type_t type = get_folded_type(ast, expression_node->data.initiailizer.type->value_index);
             type_info_t *type_info = get_type_info(compiler->types, type);
 
-            i32 index = zero_value(ast, type, ast->symbols);
+            i32 index = zero_value(ast, type, &ast->symbols);
             emit_constant(compiler, chunk, (byte*)&ast->folded_constants.items[index], expression_node->start.line, type);
 
             if (type_is_struct(*compiler->types, type)) {
@@ -1624,6 +1624,8 @@ function_t *generate_code(vm_t *vm, ast_t *ast) {
     ast_node_t *main_declaration = NULL;
     vm->type_set = &ast->type_set;
 
+    symbol_table_add_all(&ast->symbols, &vm->symbols);
+
     for (size_t i = 0; i < ast->root->data.block.count; i++) {
         ast_node_t *declaration_ = ast->root->data.block.items[i];
         global_entity_declaration(vm, ast, declaration_);
@@ -1675,6 +1677,8 @@ function_t *generate_code(vm_t *vm, ast_t *ast) {
             compile_function(vm, ast, function, ast->function_definition_pairs.items[i].ast_defintion);
         }
     }
+
+    vm->entry_point = main_function;
 
     return main_function;
 }

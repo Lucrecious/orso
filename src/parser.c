@@ -94,15 +94,16 @@ typedef struct {
     Precedence precedence;
 } ParseRule;
 
-void ast_init(ast_t* ast, symbol_table_t* symbols) {
-    ASSERT(symbols, "cannot be null");
+void ast_init(ast_t* ast) {
     ast->allocator = (arena_t){0};
 
     ast->resolved = false;
     ast->root = NULL;
     ast->folded_constant_types = (types_t){.allocator=&ast->allocator};
     ast->folded_constants = (slots_t){.allocator=&ast->allocator};
-    ast->symbols = symbols;
+
+    symbol_table_init(&ast->symbols, &ast->allocator);
+
     ast->function_definition_pairs = (fd_pairs_t){.allocator=&ast->allocator};
     type_set_init(&ast->type_set, &ast->allocator);
 
@@ -430,7 +431,7 @@ static ast_node_t *literal(parser_t *parser, bool is_in_type_context) {
 
         case TOKEN_SYMBOL: {
             expression_node->value_type = typeid(TYPE_SYMBOL);
-            symbol_t *value = orso_new_symbol_from_cstrn(expression_node->start.start + 1, expression_node->start.length - 2, parser->ast->symbols, &parser->ast->allocator);
+            symbol_t *value = orso_new_symbol_from_cstrn(expression_node->start.start + 1, expression_node->start.length - 2, &parser->ast->symbols, &parser->ast->allocator);
             expression_node->value_index = add_constant_value(parser, SLOT_P(value), typeid(TYPE_SYMBOL));
             break;
         }

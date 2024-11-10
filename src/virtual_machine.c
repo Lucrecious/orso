@@ -17,7 +17,7 @@
 
 #include <time.h>
 
-void vm_init(vm_t *vm, write_function_t write_fn, i32 stack_size) {
+void vm_init(vm_t *vm, write_function_t write_fn, error_function_t error_fn, i32 stack_size) {
     vm->allocator = (arena_t){0};
 
     vm->frame_count = 0;
@@ -37,6 +37,8 @@ void vm_init(vm_t *vm, write_function_t write_fn, i32 stack_size) {
     vm->globals.types = (types_t){.allocator = &vm->allocator};
 
     vm->write_fn = write_fn;
+    vm->error_fn = error_fn;
+    vm->entry_point = NULL;
 
     symbol_table_init(&vm->symbols, &vm->allocator);
     symbol_table_init(&vm->globals.name_to_index, &vm->allocator);

@@ -246,7 +246,7 @@ typedef struct ast_t {
     table_t(ptr2i32) *type_to_zero_index;
     table_t(type2ns) *type_to_creation_node;
 
-    symbol_table_t *symbols;
+    symbol_table_t symbols;
 } ast_t;
 
 void ast_print(ast_t *ast, const char *name);
@@ -255,7 +255,7 @@ i32 add_value_to_ast_constant_stack(ast_t *ast, slot_t *value, type_t type);
 bool parse(ast_t *ast, const char *source, error_function_t error_fn);
 type_t get_folded_type(ast_t *ast, i32 index);
 
-void ast_init(ast_t *ast, symbol_table_t* symbols);
+void ast_init(ast_t *ast);
 void ast_free(ast_t *ast);
 
 ast_node_t* ast_node_new(ast_t *ast, ast_node_type_t node_type, bool is_in_type_context, token_t start);

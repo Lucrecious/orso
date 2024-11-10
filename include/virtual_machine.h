@@ -17,6 +17,9 @@ typedef struct {
 
 typedef struct vm_t {
     write_function_t write_fn;
+    error_function_t error_fn;
+
+    function_t *entry_point;
 
     type_table_t *type_set;
 
@@ -41,7 +44,7 @@ typedef struct vm_t {
     arena_t allocator;
 } vm_t;
 
-void vm_init(vm_t *vm, write_function_t write_fn, i32 stack_size);
+void vm_init(vm_t *vm, write_function_t write_fn, error_function_t error_fn, i32 stack_size);
 void vm_free(vm_t *vm);
 
 void vm_call(vm_t *vm, function_t *function);

@@ -27,7 +27,7 @@ function_t *compile_ast(vm_t *vm, ast_t *ast) {
 
 void vm_run_source(vm_t* vm, const char* source, error_function_t error_fn) {
     ast_t ast;
-    ast_init(&ast, &vm->symbols);
+    ast_init(&ast);
 
     analyzer_t analyzer;
     analyzer_init(&analyzer, vm->write_fn, error_fn);

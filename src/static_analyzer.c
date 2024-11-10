@@ -338,7 +338,7 @@ static bool can_call(type_infos_t types, type_t type, ast_nodes_t arguments) {
     return true;
 }
 
-static i32 evaluate_expression(analyzer_t* analyzer, ast_t* ast, bool is_folding_time, ast_node_t* expression) {
+static i32 evaluate_expression(analyzer_t *analyzer, ast_t *ast, bool is_folding_time, ast_node_t *expression) {
     // vm_t *vm = &analyzer->vm;
 
     // compile_expression_to_vm(vm, expression);
@@ -349,11 +349,13 @@ static i32 evaluate_expression(analyzer_t* analyzer, ast_t* ast, bool is_folding
     
     // i32 index = add_value_to_ast_constant_stack(ast, result, expression->value_type);
 
+    // vm_reset(vm);
+
     // return index;
 
     vm_t vm;
     // TODO: Make sure this uses the same writing function as the vm that runs the code at the end.
-    vm_init(&vm, NULL, 256);
+    vm_init(&vm, NULL, NULL, 256);
     
     // TODO: try to set this in a more reobust place
     vm.type_set = &ast->type_set;
@@ -365,7 +367,7 @@ static i32 evaluate_expression(analyzer_t* analyzer, ast_t* ast, bool is_folding
 
     code_builder_free(&builder);
 
-    slot_t* value = orso_call_function(&vm, function, analyzer->error_fn);
+    slot_t *value = orso_call_function(&vm, function, analyzer->error_fn);
 
     i32 value_index = add_value_to_ast_constant_stack(ast, value, expression->value_type);
 
@@ -434,7 +436,7 @@ static void resolve_foldable(
             if (expression->data.initiailizer.arguments.count == 0) {
                 foldable = true;
                 type_t type = get_folded_type(ast, expression->data.initiailizer.type->value_index);
-                i32 value_index = zero_value(ast, type, ast->symbols);
+                i32 value_index = zero_value(ast, type, &ast->symbols);
                 folded_index = value_index;
             } else {
                 foldable = true;

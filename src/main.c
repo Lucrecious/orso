@@ -66,53 +66,64 @@ void mywrite(const char* chars) {
 
 typedef int (*int_getter)(void*);
 
+static bool compile_program(vm_t *vm, ast_t *ast) {
+    function_t *main = generate_code(vm, ast);
+    return main != NULL;
+}
+
+static void vm_run(vm_t *vm) {
+    orso_call_function(vm, vm->entry_point, vm->error_fn);
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) {
-        printf("Usage: \n");
-        printf("    orso [-[baAt]] <path/to/file.odl>        without any option, simply runs orso file in the interpreter\n");
-        printf("                                             with options:\n");
-        printf("                                                   -b prints the byte code of the given source\n");
-        printf("                                                   -a prints the ast of the given source before static analysis\n");
-        printf("                                                   -A prints the ast of the given source after static analysis\n");
-        printf("                                                   -t runs the source in the interpreter, and prints the running byte code\n");
-        printf("Examples:\n");
-        printf("orso -t examples/hello_world.odl        runs and prints the byte code as the program runs\n");
-        printf("orso -ab examples/hello_world.odl       prints the byte code and ast of the program without running \n");
-        printf("orso examples/hello_world.odl           runs the program in the interpreter\n");
+        printf("demo.");
         exit(1);
+        // printf("Usage: \n");
+        // printf("    orso [-[baAt]] <path/to/file.odl>        without any option, simply runs orso file in the interpreter\n");
+        // printf("                                             with options:\n");
+        // printf("                                                   -b prints the byte code of the given source\n");
+        // printf("                                                   -a prints the ast of the given source before static analysis\n");
+        // printf("                                                   -A prints the ast of the given source after static analysis\n");
+        // printf("                                                   -t runs the source in the interpreter, and prints the running byte code\n");
+        // printf("Examples:\n");
+        // printf("orso -t examples/hello_world.odl        runs and prints the byte code as the program runs\n");
+        // printf("orso -ab examples/hello_world.odl       prints the byte code and ast of the program without running \n");
+        // printf("orso examples/hello_world.odl           runs the program in the interpreter\n");
+        // exit(1);
     }
 
     arena_t allocator = {0};
 
-    bool print_ast_before = false;
-    bool print_ast_after = false;
-    bool print_byte_code = false;
-    bool trace = false;
+    // bool print_ast_before = false;
+    // bool print_ast_after = false;
+    // bool print_byte_code = false;
+    // bool trace = false;
     string_t path;
-    if (argc == 2) {
+    // if (argc == 2) {
         path = cstr2string(argv[1], &allocator);
-    } else if (argc == 3) {
-        char *options = argv[1];
-        size_t options_len = strlen(options);
+    // } else if (argc == 3) {
+        // char *options = argv[1];
+        // size_t options_len = strlen(options);
 
-        if (options_len < 2 || options[0] != '-') {
-            log_fatal("Invalid argument. Check usage: ./orso");
-            exit(1);
-        }
+        // if (options_len < 2 || options[0] != '-') {
+        //     log_fatal("Invalid argument. Check usage: ./orso");
+        //     exit(1);
+        // }
 
-        for (size_t i = 1; i < options_len; ++i) {
-            if (options[i] == 't') trace = true;
-            else if (options[i] == 'a') print_ast_before = true;
-            else if (options[i] == 'A') print_ast_after = true;
-            else if (options[i] == 'b') print_byte_code = true;
-            else {
-                log_fatal("Unknown option: %c. Check usage: ./orso", options[i]);
-                exit(1);
-            }
-        }
+        // for (size_t i = 1; i < options_len; ++i) {
+        //     if (options[i] == 't') trace = true;
+        //     else if (options[i] == 'a') print_ast_before = true;
+        //     else if (options[i] == 'A') print_ast_after = true;
+        //     else if (options[i] == 'b') print_byte_code = true;
+        //     else {
+        //         log_fatal("Unknown option: %c. Check usage: ./orso", options[i]);
+        //         exit(1);
+        //     }
+        // }
 
-        path = cstr2string(argv[2], &allocator);
-    }
+    //     path = cstr2string(argv[2], &allocator);
+    // }
 
     FILE* file;
     file = fopen(path.cstr, "r");
@@ -143,69 +154,98 @@ int main(int argc, char **argv) {
         source = cstr2string(source_, &allocator);
     }
 
+    ast_t ast = {0};
+    ast_init(&ast);
 
-    unless (!print_ast_before && !print_ast_after && !print_byte_code && !trace) {
-        vm_t vm;
-        vm_init(&vm, mywrite, 1000);
-
-        ast_t ast;
-        ast_init(&ast, &vm.symbols);
-        bool success = parse(&ast, source.cstr, myerror);
-
-        if (print_ast_before) {
-            if (!success) {
-                log_fatal("Unable to parse ast. Cannot print.");
-                exit(1);
-            }
-
-            ast_print(&ast, "before static analysis");
-        }
-
-        analyzer_t analyzer;
-        analyzer_init(&analyzer, mywrite, myerror);
-        success = resolve_ast(&analyzer, &ast);
-
-        if (print_ast_after) {
-            ast_print(&ast, "after static analysis");
-        }
-
-        if ((print_byte_code || trace) && !success) {
-            log_fatal("unable to resolve ast, and cannot trace nor generate the byte code");
-            exit(1);
-        }
-
-        function_t *main = generate_code(&vm, &ast);
-        unless (main) {
-            log_fatal("no main function. cannot trace nor generate the byte code");
-            exit(1);
-        }
-
-        if (print_byte_code) {
-            chunk_disassemble(&ast.type_set.types, &main->chunk, "main");
-        }
-
-        if (trace) {
-            vm_print_stack(&vm);
-            vm.type_set = &ast.type_set;
-            printf("\n");
-
-            vm_begin(&vm, main);
-            while(true) {
-                vm_disassemble_current_instruction(&vm);
-                bool has_next = vm_step(&vm);
-                unless (has_next) break;
-                if (vm_is_on_debug_instruction(&vm)) continue;
-
-                vm_print_stack(&vm);
-                printf("\n");
-            }
-        }
-    } else {
-        vm_t vm;
-        vm_init(&vm, mywrite, 1000);
-        vm_run_source(&vm, source.cstr, myerror);
-        vm_free(&vm);
+    bool success = parse(&ast, source.cstr, myerror);
+    unless (success) {
+        log_fatal("Unable to parse source.");
+        exit(1);
     }
+
+    analyzer_t analyzer = {0};
+    analyzer_init(&analyzer, mywrite, myerror);
+    success = resolve_ast(&analyzer, &ast);
+
+    unless (success) {
+        log_fatal("Unable to statically analyze.");
+        exit(1);
+    }
+
+    vm_t vm = {0};
+    vm_init(&vm, mywrite, myerror, 1000*1000);
+
+    success = compile_program(&vm, &ast);
+
+    unless (success) {
+        log_fatal("Unable to compile program.");
+        exit(1);
+    }
+
+    vm_run(&vm);
+
+    // unless (!print_ast_before && !print_ast_after && !print_byte_code && !trace) {
+    //     vm_t vm;
+    //     vm_init(&vm, mywrite, 1000);
+
+    //     ast_t ast;
+    //     ast_init(&ast, &vm.symbols);
+    //     bool success = parse(&ast, source.cstr, myerror);
+
+    //     if (print_ast_before) {
+    //         if (!success) {
+    //             log_fatal("Unable to parse ast. Cannot print.");
+    //             exit(1);
+    //         }
+
+    //         ast_print(&ast, "before static analysis");
+    //     }
+
+    //     analyzer_t analyzer;
+    //     analyzer_init(&analyzer, mywrite, myerror);
+    //     success = resolve_ast(&analyzer, &ast);
+
+    //     if (print_ast_after) {
+    //         ast_print(&ast, "after static analysis");
+    //     }
+
+    //     if ((print_byte_code || trace) && !success) {
+    //         log_fatal("unable to resolve ast, and cannot trace nor generate the byte code");
+    //         exit(1);
+    //     }
+
+    //     function_t *main = generate_code(&vm, &ast);
+    //     unless (main) {
+    //         log_fatal("no main function. cannot trace nor generate the byte code");
+    //         exit(1);
+    //     }
+
+    //     if (print_byte_code) {
+    //         chunk_disassemble(&ast.type_set.types, &main->chunk, "main");
+    //     }
+
+    //     if (trace) {
+    //         vm_print_stack(&vm);
+    //         vm.type_set = &ast.type_set;
+    //         printf("\n");
+
+    //         vm_begin(&vm, main);
+    //         while(true) {
+    //             vm_disassemble_current_instruction(&vm);
+    //             bool has_next = vm_step(&vm);
+    //             unless (has_next) break;
+    //             if (vm_is_on_debug_instruction(&vm)) continue;
+
+    //             vm_print_stack(&vm);
+    //             printf("\n");
+    //         }
+    //     }
+    // } else {
+    //     vm_t vm;
+    //     vm_init(&vm, mywrite, 1000);
+    //     vm_run_source(&vm, source.cstr, myerror);
+    //     vm_free(&vm);
+    // }
 
     return 0;
 }
