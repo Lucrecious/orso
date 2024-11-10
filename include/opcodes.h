@@ -87,7 +87,7 @@ typedef struct op_push_pop_type_t op_push_pop_type_t;
 struct op_push_pop_type_t {
     byte op;
     union {
-        type_t type_id;
+        type_t type;
         u64 n;
     } data;
 };

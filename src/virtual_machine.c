@@ -573,7 +573,7 @@ bool vm_step(vm_t *vm) {
         
         case OP_PUSH_TYPE: {
             op_push_pop_type_t *push_pop_type = READ_CODE(op_push_pop_type_t);
-            push_type(vm, push_pop_type->data.type_id);
+            push_type(vm, push_pop_type->data.type);
             break;
         }
     }

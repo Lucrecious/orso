@@ -158,7 +158,7 @@ i32 disassemble_instruction(type_infos_t *types, chunk_t *chunk, i32 offset) {
         case OP_PUSH_TYPE: {
             op_push_pop_type_t *push_pop = (op_push_pop_type_t*)(chunk->code.items + offset);
             tmp_arena_t *tmp = allocator_borrow(); {
-                printf("OP_PUSH_TYPE(type: %s)\n", type_to_string(*types, push_pop->data.type_id, tmp->allocator).cstr);
+                printf("OP_PUSH_TYPE(type: %s)\n", type_to_string(*types, push_pop->data.type, tmp->allocator).cstr);
             } allocator_return(tmp);
             return offset + sizeof(op_push_pop_type_t);
         }
