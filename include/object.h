@@ -9,7 +9,7 @@
 #include "arena.h"
 
 typedef struct object_t {
-    type_t type_id;
+    type_t type;
 } object_t;
 
 typedef struct OrsoString {
@@ -64,9 +64,9 @@ FORCE_INLINE bool string_equal(OrsoString *a, OrsoString *b) {
 
 OrsoString *orso_string_concat(OrsoString *a, OrsoString *b, arena_t *allocator);
 
-string_t slot_to_string(slot_t *slot, type_infos_t *types, type_t type_id, arena_t *allocator);
+string_t slot_to_string(slot_t *slot, type_infos_t *types, type_t type, arena_t *allocator);
 
-OrsoString *orso_slot_to_string(slot_t *slot, type_infos_t *types, type_t type_id, arena_t *allocator);
+OrsoString *orso_slot_to_string(slot_t *slot, type_infos_t *types, type_t type, arena_t *allocator);
 
 void copy_bytes_to_slots(void *destination, void *source, type_kind_t type_kind, u64 size_bytes);
 
@@ -75,7 +75,7 @@ OrsoString *orso_new_string_from_cstrn(const char *start, i32 length, arena_t *a
 function_t *orso_new_function(arena_t *allocator);
 bool is_function_compiled(function_t *function);
 
-native_function_t *orso_new_native_function(native_function_interface_t function, type_t type_id, arena_t *allocator);
+native_function_t *orso_new_native_function(native_function_interface_t function, type_t type, arena_t *allocator);
 
 struct_t *orso_new_struct(arena_t *allocator);
 

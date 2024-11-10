@@ -6,7 +6,7 @@
 #include "object.h"
 #include "tmp.h"
 
-u32 chunk_add_constant(chunk_t* chunk, byte* data, u32 size, type_t type_id) {
+u32 chunk_add_constant(chunk_t* chunk, byte* data, u32 size, type_t type) {
     u32 slot_size = bytes_to_slots(size);
     u32 index = chunk->constants.count;
     for (size_t i = 0; i < slot_size; i++) {
@@ -16,7 +16,7 @@ u32 chunk_add_constant(chunk_t* chunk, byte* data, u32 size, type_t type_id) {
 
     memcpy(chunk->constants.items + index, data, size);
 
-    chunk->constant_types.items[index] = type_id;
+    chunk->constant_types.items[index] = type;
 
     return index;
 }

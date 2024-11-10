@@ -48,16 +48,16 @@ struct_definition        -> `struct` `{` entity_declaration* `}`
 type_init                ->  logic_or`{` `}`
 */
 
-static int type_id_hash(type_t id) {
+static int type_hash(type_t id) {
     return kh_int64_hash_func((khint64_t)id.i);
 }
 
-static int type_id_equal(type_t a, type_t b) {
+static int type_equal_(type_t a, type_t b) {
     return typeid_eq(a, b);
 }
 
-implement_table(ptr2i32, type_t, i32, type_id_hash, type_id_equal)
-implement_table(type2ns, type_t, ast_node_and_scope_t, type_id_hash, type_id_equal)
+implement_table(ptr2i32, type_t, i32, type_hash, type_equal_)
+implement_table(type2ns, type_t, ast_node_and_scope_t, type_hash, type_equal_)
 
 typedef struct parser_t {
     error_function_t error_fn;
@@ -347,9 +347,9 @@ static type_t value_to_integer_type(i64 value) {
     return typeid(TYPE_INT64);
 }
 
-static i32 add_constant_value(parser_t* parser, slot_t value, type_t type_id) {
+static i32 add_constant_value(parser_t* parser, slot_t value, type_t type) {
     i32 index = parser->ast->folded_constants.count;
-    array_push(&parser->ast->folded_constant_types, type_id);
+    array_push(&parser->ast->folded_constant_types, type);
     array_push(&parser->ast->folded_constants, value);
     return index;
 }
@@ -1085,10 +1085,10 @@ bool parse(ast_t *ast, const char *source, error_function_t error_fn) {
     return !parser.had_error;
 }
 
-i32 add_value_to_ast_constant_stack(ast_t *ast, slot_t *value, type_t type_id) {
-    type_info_t *type = ast->type_set.types.items[type_id.i];
+i32 add_value_to_ast_constant_stack(ast_t *ast, slot_t *value, type_t type) {
+    type_info_t *type_info = get_type_info(&ast->type_set.types, type);
 
-    i32 slot_count = type_slot_count(type);
+    i32 slot_count = type_slot_count(type_info);
     for (i32 i = 0; i < slot_count; i ++) {
         array_push(&ast->folded_constants, value[i]);
     }
@@ -1096,17 +1096,17 @@ i32 add_value_to_ast_constant_stack(ast_t *ast, slot_t *value, type_t type_id) {
     return ast->folded_constants.count - slot_count;
 }
 
-i32 zero_value(ast_t *ast, type_t type_id, symbol_table_t *symbol_table) {
+i32 zero_value(ast_t *ast, type_t type, symbol_table_t *symbol_table) {
     i32 result = -1;
-    if (table_get(ptr2i32, ast->type_to_zero_index, type_id, &result)) {
+    if (table_get(ptr2i32, ast->type_to_zero_index, type, &result)) {
         return result;
     }
 
-    type_info_t *type = ast->type_set.types.items[type_id.i];
+    type_info_t *type_info = ast->type_set.types.items[type.i];
 
-    slot_t value[bytes_to_slots(type_size_bytes(type))];
+    slot_t value[bytes_to_slots(type_size_bytes(type_info))];
 
-    switch (type->kind) {
+    switch (type_info->kind) {
         case TYPE_POINTER:
         case TYPE_VOID:
         case TYPE_BOOL:
@@ -1129,9 +1129,9 @@ i32 zero_value(ast_t *ast, type_t type_id, symbol_table_t *symbol_table) {
             break;
         
         case TYPE_UNION: {
-            ASSERT(union_type_has_type(type, typeid(TYPE_VOID)), "must include void type if looking for zero value");
+            ASSERT(union_type_has_type(type_info, typeid(TYPE_VOID)), "must include void type if looking for zero value");
             
-            u32 size_slots = type_slot_count(type);
+            u32 size_slots = type_slot_count(type_info);
             for (u32 i = 0; i < size_slots; i++) {
                 value[i] = SLOT_I(0);
             }
@@ -1140,7 +1140,7 @@ i32 zero_value(ast_t *ast, type_t type_id, symbol_table_t *symbol_table) {
         }
 
         case TYPE_STRUCT: {
-            for (size_t i = 0; i < bytes_to_slots(type->data.struct_.total_bytes); i++) {
+            for (size_t i = 0; i < bytes_to_slots(type_info->data.struct_.total_bytes); i++) {
                 value[i] = SLOT_I(0);
             }
             break;
@@ -1158,8 +1158,8 @@ i32 zero_value(ast_t *ast, type_t type_id, symbol_table_t *symbol_table) {
             break;
     }
 
-    i32 zero_index = add_value_to_ast_constant_stack(ast, value, type_id);
-    table_put(ptr2i32, ast->type_to_zero_index, type_id, zero_index);
+    i32 zero_index = add_value_to_ast_constant_stack(ast, value, type);
+    table_put(ptr2i32, ast->type_to_zero_index, type, zero_index);
     return zero_index;
 }
 

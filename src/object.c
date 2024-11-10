@@ -6,10 +6,10 @@
 #include "type_set.h"
 #include "tmp.h"
 
-static object_t *object_new(size_t byte_size, type_t type_id, arena_t *allocator) {
+static object_t *object_new(size_t byte_size, type_t type, arena_t *allocator) {
     void *object = arena_alloc(allocator, byte_size);
     memset(object, 0, byte_size);
-    ((object_t*)object)->type_id = type_id;
+    ((object_t*)object)->type = type;
     return (object_t*)object;
 }
 
@@ -31,10 +31,10 @@ char *cstrn_new(const char *start, i32 length, arena_t *allocator) {
     return cstr;
 }
 
-string_t slot_to_string(slot_t *slot, type_infos_t *types, type_t type_id, arena_t *allocator) {
-    type_info_t *type = get_type_info(types, type_id);
+string_t slot_to_string(slot_t *slot, type_infos_t *types, type_t type, arena_t *allocator) {
+    type_info_t *type_info = get_type_info(types, type);
 
-    switch (type->kind) {
+    switch (type_info->kind) {
         case TYPE_BOOL: {
             if (SLOT_IS_FALSE((*slot))) {
                 return str("false");
@@ -108,8 +108,8 @@ string_t slot_to_string(slot_t *slot, type_infos_t *types, type_t type_id, arena
 
             slots_t slots = {.allocator=tmp->allocator};
 
-            for (i32 i = 0; i < type->data.struct_.field_count; ++i) {
-                struct_field_t *field = &type->data.struct_.fields[i];
+            for (i32 i = 0; i < type_info->data.struct_.field_count; ++i) {
+                struct_field_t *field = &type_info->data.struct_.fields[i];
                 
                 sb_add_cstr(&sb, field->name);
 
@@ -131,7 +131,7 @@ string_t slot_to_string(slot_t *slot, type_infos_t *types, type_t type_id, arena
 
                 sb_add_cstr(&sb, field_value.cstr);
 
-                if (i < type->data.struct_.field_count - 1) {
+                if (i < type_info->data.struct_.field_count - 1) {
                     sb_add_cstr(&sb, ", ");
                 }
             }
@@ -146,16 +146,16 @@ string_t slot_to_string(slot_t *slot, type_infos_t *types, type_t type_id, arena
         }
 
         case TYPE_UNION: {
-            type_t type_id = (type_t){.i=slot->as.u};
-            return slot_to_string(slot + 1, types, type_id, allocator);
+            type_t type = (type_t){.i=slot->as.u};
+            return slot_to_string(slot + 1, types, type, allocator);
         }
 
         case TYPE_TYPE: {
             string_t result;
 
             tmp_arena_t *tmp = allocator_borrow(); {
-                type_t type_id = (type_t){.i=slot->as.u};
-                string_t type_string = type_to_string(*types, type_id, tmp->allocator);
+                type_t type = (type_t){.i=slot->as.u};
+                string_t type_string = type_to_string(*types, type, tmp->allocator);
                 result = string_format("<%s>", allocator, type_string.cstr);
             } allocator_return(tmp);
 
@@ -168,11 +168,11 @@ string_t slot_to_string(slot_t *slot, type_infos_t *types, type_t type_id, arena
     }
 }
 
-OrsoString *orso_slot_to_string(slot_t *slot, type_infos_t *types, type_t type_id, arena_t *allocator) {
+OrsoString *orso_slot_to_string(slot_t *slot, type_infos_t *types, type_t type, arena_t *allocator) {
     OrsoString *string;
 
     tmp_arena_t *tmp = allocator_borrow(); {
-        string_t value = slot_to_string(slot, types, type_id, tmp->allocator);
+        string_t value = slot_to_string(slot, types, type, tmp->allocator);
         string = orso_new_string_from_cstrn(value.cstr, value.length, allocator);
     } allocator_return(tmp);
 
@@ -257,10 +257,10 @@ bool is_function_compiled(function_t* function) {
     return function->chunk.code.items != NULL;
 }
 
-native_function_t *orso_new_native_function(native_function_interface_t function, type_t type_id, arena_t *allocator) {
-    native_function_t *function_obj = (native_function_t*)object_new(sizeof(native_function_t), type_id, allocator);
+native_function_t *orso_new_native_function(native_function_interface_t function, type_t type, arena_t *allocator) {
+    native_function_t *function_obj = (native_function_t*)object_new(sizeof(native_function_t), type, allocator);
     function_obj->function = function;
-    function_obj->signature = type_id;
+    function_obj->signature = type;
 
     return function_obj;
 }

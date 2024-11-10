@@ -32,12 +32,12 @@ extern type_info_t OrsoTypeUndefined;
 
 void type_set_init(type_table_t *set, arena_t *allocator);
 
-type_info_t *get_type_info(type_infos_t *types, type_t type_id);
-bool type_is_union(type_infos_t types, type_t type_id);
-bool type_is_function(type_infos_t types, type_t type_id);
-bool type_is_native_function(type_infos_t types, type_t type_id);
-bool type_is_struct(type_infos_t types, type_t type_id);
-bool type_is_pointer(type_infos_t types, type_t type_id);
+type_info_t *get_type_info(type_infos_t *types, type_t type);
+bool type_is_union(type_infos_t types, type_t type);
+bool type_is_function(type_infos_t types, type_t type);
+bool type_is_native_function(type_infos_t types, type_t type);
+bool type_is_struct(type_infos_t types, type_t type);
+bool type_is_pointer(type_infos_t types, type_t type);
 
 type_t type_set_fetch_union(type_table_t *set, types_t types);
 

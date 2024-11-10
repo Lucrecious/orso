@@ -4,15 +4,15 @@
 #include "type_set.h"
 #include "tmp.h"
 
-bool union_type_contains_type(type_infos_t types, type_t union_id, type_t type_id) {
-    type_info_t *union_ = types.items[union_id.i];
-    type_info_t *type = types.items[type_id.i];
-    if (!type_is_union(types, type_id)) {
-        return union_type_has_type(union_, type_id);
+bool union_type_contains_type(type_infos_t types, type_t union_id, type_t type) {
+    type_info_t *union_type_info = types.items[union_id.i];
+    type_info_t *type_info = get_type_info(&types, type);
+    if (!type_is_union(types, type)) {
+        return union_type_has_type(union_type_info, type);
     }
 
-    for (size_t i = 0; i < type->data.union_.types.count; ++i){
-        if (!union_type_has_type(union_, type->data.union_.types.items[i])) {
+    for (size_t i = 0; i < type_info->data.union_.types.count; ++i){
+        if (!union_type_has_type(union_type_info, type_info->data.union_.types.items[i])) {
             return false;
         }
     }
@@ -20,11 +20,11 @@ bool union_type_contains_type(type_infos_t types, type_t union_id, type_t type_i
     return true;
 }
 
-bool union_type_has_type(type_info_t *type, type_t subtype_id) {
-    ASSERT(type->kind == TYPE_UNION, "must be a union type");
+bool union_type_has_type(type_info_t *type_info, type_t subtype) {
+    ASSERT(type_info->kind == TYPE_UNION, "must be a union type");
 
-    for (size_t i = 0; i < type->data.union_.types.count; ++i) {
-        if (typeid_eq(type->data.union_.types.items[i], subtype_id)) {
+    for (size_t i = 0; i < type_info->data.union_.types.count; ++i) {
+        if (typeid_eq(type_info->data.union_.types.items[i], subtype)) {
             return true;
         }
     }
@@ -133,9 +133,9 @@ bool type_equal(type_info_t *a, type_info_t *b) {
     }
 }
 
-bool type_id_in_list(types_t list, type_t find_id) {
+bool type_in_list(types_t list, type_t find) {
     for (size_t i = 0; i < list.count; i++) {
-        if (typeid_eq(list.items[i], find_id)) {
+        if (typeid_eq(list.items[i], find)) {
             return true;
         }
     }
@@ -153,31 +153,31 @@ type_t type_merge(type_table_t *set, type_t a_id, type_t b_id) {
     type_info_t *b = set->types.items[b_id.i];
 
     tmp_arena_t *tmp = allocator_borrow();
-    types_t type_ids = {.allocator=tmp->allocator};
+    types_t types = {.allocator=tmp->allocator};
 
     if (type_is_union(set->types, a_id)) {
         for (size_t i = 0; i < a->data.union_.types.count; ++i) {
-            array_push(&type_ids, a->data.union_.types.items[i]);
+            array_push(&types, a->data.union_.types.items[i]);
         }
     } else {
-        array_push(&type_ids, a_id);
+        array_push(&types, a_id);
     }
 
     if (type_is_union(set->types, b_id)) {
         for (size_t i = 0; i < b->data.union_.types.count; ++i) {
-            if (type_id_in_list(type_ids, b->data.union_.types.items[i])) {
+            if (type_in_list(types, b->data.union_.types.items[i])) {
                 continue;
             }
 
-            array_push(&type_ids, b->data.union_.types.items[i]);
+            array_push(&types, b->data.union_.types.items[i]);
         }
     } else {
-        unless (type_id_in_list(type_ids, b_id)) {
-            array_push(&type_ids, b_id);
+        unless (type_in_list(types, b_id)) {
+            array_push(&types, b_id);
         }
     }
 
-    type_t merged_id = type_set_fetch_union(set, type_ids);
+    type_t merged_id = type_set_fetch_union(set, types);
 
     allocator_return(tmp);
 
@@ -286,49 +286,49 @@ bool type_fits(type_info_t* storage_type, type_info_t* value_type) {
     return false;
 }
 
-string_t type_to_string_toplevel(type_infos_t types, type_t type_id, arena_t *allocator, bool is_toplevel) {
+string_t type_to_string_toplevel(type_infos_t types, type_t type, arena_t *allocator, bool is_toplevel) {
     string_builder_t sb = {.allocator = allocator};
 
-    type_info_t *type = types.items[type_id.i];
+    type_info_t *type_info = get_type_info(&types, type);
 
     // type1|type2|type3|type4
-    if (type_is_union(types, type_id)) {
-        for (size_t i = 0; i < type->data.union_.types.count; ++i) {
+    if (type_is_union(types, type)) {
+        for (size_t i = 0; i < type_info->data.union_.types.count; ++i) {
             if (i != 0) {
                 sb_add_char(&sb, '|');
             }
 
-            if (type_is_function(types, type->data.union_.types.items[i]) || type_is_native_function(types, type->data.union_.types.items[i])) {
+            if (type_is_function(types, type_info->data.union_.types.items[i]) || type_is_native_function(types, type_info->data.union_.types.items[i])) {
                 sb_add_char(&sb, '(');
             }
 
-            string_t inner_type = type_to_string_toplevel(types, type->data.union_.types.items[i], allocator, false);
+            string_t inner_type = type_to_string_toplevel(types, type_info->data.union_.types.items[i], allocator, false);
             sb_add_cstr(&sb, inner_type.cstr);
 
-            if (type_is_function(types, type->data.union_.types.items[i]) || type_is_native_function(types, type->data.union_.types.items[i])) {
+            if (type_is_function(types, type_info->data.union_.types.items[i]) || type_is_native_function(types, type_info->data.union_.types.items[i])) {
                 sb_add_char(&sb, ')');
             }
         }
     // (arg1_type, arg2_type, ..., argn_type) -> return_type
-    } else if (type_is_function(types, type_id) || type_is_native_function(types, type_id)) {
+    } else if (type_is_function(types, type) || type_is_native_function(types, type)) {
         sb_add_char(&sb, '(');
 
-        for (size_t i = 0; i < type->data.function.argument_types.count; ++i) {
+        for (size_t i = 0; i < type_info->data.function.argument_types.count; ++i) {
             if (i != 0) {
                 sb_add_char(&sb, ',');
             }
 
-            string_t arg_type = type_to_string_toplevel(types, type->data.function.argument_types.items[i], allocator, false);
+            string_t arg_type = type_to_string_toplevel(types, type_info->data.function.argument_types.items[i], allocator, false);
             sb_add_cstr(&sb, arg_type.cstr);
         }
 
         sb_add_cstr(&sb, ") -> ");
 
-        string_t return_type = type_to_string_toplevel(types, type->data.function.return_type, allocator, false);
+        string_t return_type = type_to_string_toplevel(types, type_info->data.function.return_type, allocator, false);
         sb_add_cstr(&sb, return_type.cstr);
-    } else if (type_is_struct(types, type_id)) {
-        if (type->data.struct_.name) {
-            sb_add_cstr(&sb, type->data.struct_.name);
+    } else if (type_is_struct(types, type)) {
+        if (type_info->data.struct_.name) {
+            sb_add_cstr(&sb, type_info->data.struct_.name);
         } else {
             sb_add_cstr(&sb, "struct");
         }
@@ -336,14 +336,14 @@ string_t type_to_string_toplevel(type_infos_t types, type_t type_id, arena_t *al
         if (is_toplevel) {
             sb_add_cstr(&sb, " { ");
 
-            for (i32 i = 0; i < type->data.struct_.field_count; i++) {
-                char *name = type->data.struct_.fields[i].name;
+            for (i32 i = 0; i < type_info->data.struct_.field_count; i++) {
+                char *name = type_info->data.struct_.fields[i].name;
 
                 sb_add_cstr(&sb, name);
                 sb_add_cstr(&sb, ": ");
 
-                type_t field_type_id = type->data.struct_.fields[i].type;
-                string_t type_string = type_to_string_toplevel(types, field_type_id, allocator, false);
+                type_t field_type = type_info->data.struct_.fields[i].type;
+                string_t type_string = type_to_string_toplevel(types, field_type, allocator, false);
                 sb_add_cstr(&sb, type_string.cstr);
 
                 sb_add_cstr(&sb, "; ");
@@ -351,14 +351,14 @@ string_t type_to_string_toplevel(type_infos_t types, type_t type_id, arena_t *al
 
             sb_add_char(&sb, '}');
         }
-    } else if (type_is_pointer(types, type_id)) {
+    } else if (type_is_pointer(types, type)) {
         sb_add_char(&sb, '&');
 
-        string_t type_string = type_to_string_toplevel(types, type->data.pointer.type, allocator, false);
+        string_t type_string = type_to_string_toplevel(types, type_info->data.pointer.type, allocator, false);
         sb_add_cstr(&sb, type_string.cstr);
     } else {
         char *type_name;
-        switch (type->kind) {
+        switch (type_info->kind) {
             case TYPE_BOOL: type_name = "bool"; break;
             case TYPE_FLOAT32: type_name = "f32"; break;
             case TYPE_FLOAT64: type_name = "f64"; break;
@@ -389,8 +389,8 @@ string_t type_to_string_toplevel(type_infos_t types, type_t type_id, arena_t *al
     return string;
 }
 
-string_t type_to_string(type_infos_t types, type_t type_id, arena_t *allocator) {
-    return type_to_string_toplevel(types, type_id, allocator, true);
+string_t type_to_string(type_infos_t types, type_t type, arena_t *allocator) {
+    return type_to_string_toplevel(types, type, allocator, true);
 }
 
 bool orso_is_gc_type(type_info_t *type) {
@@ -398,26 +398,26 @@ bool orso_is_gc_type(type_info_t *type) {
     return false;
 }
 
-bool can_cast_implicit(type_infos_t types, type_t type_id_to_cast, type_t type_id) {
+bool can_cast_implicit(type_infos_t types, type_t type_to_cast, type_t type) {
 
-    if (TYPE_IS_INVALID(type_id_to_cast)) return false;
-    if (TYPE_IS_INVALID(type_id)) return false;
+    if (TYPE_IS_INVALID(type_to_cast)) return false;
+    if (TYPE_IS_INVALID(type)) return false;
 
-    if (typeid_eq(type_id_to_cast, type_id)) return true;
+    if (typeid_eq(type_to_cast, type)) return true;
 
-    type_info_t *type_to_cast = types.items[type_id_to_cast.i];
-    type_info_t *type = types.items[type_id.i];
+    type_info_t *type_info_to_cast = get_type_info(&types, type_to_cast);
+    type_info_t *type_info = get_type_info(&types, type);
 
-    if (type_is_union(types, type_id)) {
-        return union_type_contains_type(types, type_id, type_id_to_cast);
+    if (type_is_union(types, type)) {
+        return union_type_contains_type(types, type, type_to_cast);
     }
 
-    if (type_is_union(types, type_id_to_cast)) return false;
+    if (type_is_union(types, type_to_cast)) return false;
 
-    u32 type_to_cast_size = type_size_bytes(type_to_cast);
-    u32 type_size = type_size_bytes(type);
-    if (type_is_number(type_to_cast, true) && type_is_number(type, true) && type_to_cast_size <= type_size) {
-        if (type_is_integer(type_to_cast, true) || (type_is_float(type_to_cast) && type_is_float(type))) {
+    u32 type_to_cast_size = type_size_bytes(type_info_to_cast);
+    u32 type_size = type_size_bytes(type_info);
+    if (type_is_number(type_info_to_cast, true) && type_is_number(type_info, true) && type_to_cast_size <= type_size) {
+        if (type_is_integer(type_info_to_cast, true) || (type_is_float(type_info_to_cast) && type_is_float(type_info))) {
             return true;
         }
     }
