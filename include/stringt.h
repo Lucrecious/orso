@@ -9,8 +9,6 @@
 #include <stdio.h>
 #include <string.h>
 
-typedef const char* cstr_t;
-
 typedef struct string_t string_t;
 struct string_t {
     cstr_t cstr;

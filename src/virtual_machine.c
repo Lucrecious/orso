@@ -583,6 +583,23 @@ bool vm_step(vm_t *vm) {
     return true;
 }
 
+bool vm_find_source_location(vm_t *vm, source_location_t *source_location) {
+    if (vm->frame_count == 0) return false;
+    call_frame_t *frame = &vm->frames[vm->frame_count-1];
+    i32 offset = frame->ip - frame->function->chunk.code.items;
+    i32 line = chunk_get_line(&frame->function->chunk, offset);
+
+    if (line < 0) return false;
+
+    source_location->file_path = frame->function->file_defined_in;
+    source_location->line = (size_t)line;
+
+    // TODO: do column as well
+    source_location->column = 0;
+
+    return true;
+}
+
 static void run(vm_t *vm, error_function_t error_fn) {
     (void)error_fn;
      while (vm_step(vm));

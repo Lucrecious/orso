@@ -25,14 +25,14 @@ function_t *compile_ast(vm_t *vm, ast_t *ast) {
     return main_function;
 }
 
-void vm_run_source(vm_t* vm, const char* source, error_function_t error_fn) {
+void vm_run_source(vm_t *vm, cstr_t file_path, cstr_t source, error_function_t error_fn) {
     ast_t ast;
     ast_init(&ast);
 
     analyzer_t analyzer;
     analyzer_init(&analyzer, vm->write_fn, error_fn);
 
-    if (!parse(&ast, source, error_fn)) {
+    if (!parse(&ast, file_path, source, error_fn)) {
         ast_free(&ast);
         return;
     }

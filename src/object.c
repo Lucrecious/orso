@@ -244,11 +244,12 @@ OrsoString *orso_string_concat(OrsoString *a, OrsoString *b, arena_t *allocator)
     return string;
 }
 
-function_t *orso_new_function(arena_t *allocator) {
+function_t *orso_new_function(cstr_t file_defined_in, arena_t *allocator) {
     function_t *function = (function_t*)object_new(sizeof(function_t), typeid(TYPE_FUNCTION), allocator);
     function->signature = typeid(TYPE_FUNCTION);
     chunk_init(&function->chunk, allocator);
     function->binded_name = NULL;
+    function->file_defined_in = file_defined_in;
 
     return function;
 }

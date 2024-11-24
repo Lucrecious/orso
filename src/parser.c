@@ -228,8 +228,8 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool is_in_type_
     return node;
 }
 
-static void parser_init(parser_t* parser, ast_t* ast, const char* source, error_function_t error_fn) {
-    lexer_init(&parser->lexer, source);
+static void parser_init(parser_t *parser, ast_t *ast, cstr_t file_path, cstr_t source, error_function_t error_fn) {
+    lexer_init(&parser->lexer, file_path, source);
     parser->ast = ast;
     parser->error_fn = error_fn;
     parser->had_error = false;
@@ -1066,9 +1066,9 @@ static ast_node_t *declaration(parser_t *parser, bool is_top_level) {
     return node;
 }
 
-bool parse(ast_t *ast, const char *source, error_function_t error_fn) {
+bool parse(ast_t *ast, cstr_t file_path, cstr_t source, error_function_t error_fn) {
     parser_t parser;
-    parser_init(&parser, ast, source, error_fn);
+    parser_init(&parser, ast, file_path, source, error_fn);
 
     advance(&parser);
 

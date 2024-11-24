@@ -5,7 +5,8 @@
 #include <string.h>
 #include <stdlib.h>
 
-void lexer_init(lexer_t* lexer, const char* code) {
+void lexer_init(lexer_t *lexer, cstr_t file_path, const char* code) {
+    lexer->file_path = file_path;
     lexer->previous_token = (token_t){ .length = 0, .line = 0, .start = 0, .type = TOKEN_ERROR };
     lexer->line = 0;
     lexer->start = (char*)code;
@@ -26,8 +27,9 @@ static bool is_at_end(lexer_t* lexer) {
     return *lexer->current == '\0';
 }
 
-static token_t create_token(lexer_t* lexer, token_type_t type) {
+static token_t create_token(lexer_t *lexer, token_type_t type) {
     token_t token = { 
+        .file_path = lexer->file_path,
         .type = type,
         .start = lexer->start,
         .length = lexer->current - lexer->start,
@@ -37,8 +39,9 @@ static token_t create_token(lexer_t* lexer, token_type_t type) {
     return token;
 }
 
-static token_t error_token(lexer_t* lexer, const char* message) {
+static token_t error_token(lexer_t *lexer, const char *message) {
     token_t token = {
+        .file_path = lexer->file_path,
         .type = TOKEN_ERROR,
         .start = (char*)message,
         .length = (i32)(strlen(message)),

@@ -125,7 +125,7 @@ int main(int argc, char **argv) {
     ast_t ast = {0};
     ast_init(&ast);
 
-    bool success = parse(&ast, source.cstr, myerror);
+    bool success = parse(&ast, path.cstr, source.cstr, myerror);
     unless (success) {
         log_fatal("Unable to parse source.");
         exit(1);
@@ -168,6 +168,13 @@ int main(int argc, char **argv) {
         string_t command = command_n_args.items[0];
         if (cstr_eq(command.cstr, "quit") || cstr_eq(command.cstr, "q")) {
             break;
+        } else if (cstr_eq(command.cstr, "show")) {
+            source_location_t source_location = {0};
+            if (vm_find_source_location(&vm, &source_location)) {
+                printf("%s:%zu:%zu\n", source_location.file_path, source_location.line, source_location.column);
+            } else {
+                printf("could not find source location.");
+            }
         } else if (cstr_eq(command.cstr, "run")) {
             if (vm.frame_count > 0) {
                 do {

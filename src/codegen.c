@@ -1557,7 +1557,7 @@ function_t *generate_expression_function(code_builder_t *builder, ast_node_t *ex
     compiler_t compiler;
     type_t function_type = type_set_fetch_function(&builder->ast->type_set, expression_node->value_type, (types_t){0});
 
-    function_t *run_function = orso_new_function(allocator);
+    function_t *run_function = orso_new_function(expression_node->start.file_path, allocator);
 
     compiler_init(&compiler, builder->vm, run_function, function_type);
     compiler.skip_function_definitions = !is_folding_time;

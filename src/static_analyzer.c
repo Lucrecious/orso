@@ -2233,7 +2233,7 @@ static void resolve_function_expression(
     }
 
     type_t function_type = type_set_fetch_function(&ast->type_set, return_type, parameter_types);
-    function_t *function = orso_new_function(&analyzer->allocator);
+    function_t *function = orso_new_function(function_definition_expression->start.file_path, &analyzer->allocator);
     function->signature = function_type;
 
     array_push(&ast->function_definition_pairs, ((function_definition_pair_t){
