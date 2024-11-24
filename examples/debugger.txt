@@ -1,0 +1,22 @@
+./debugger [file]
+
+if given a file, automatically opens it in debugger
+if not given a file, then it must be done in the command line program.
+
+commands:
+open <file> - puts odl file into memory but doesn't run it
+run - runs the currently opened file, terminimates the vm if it was running (give a warning)
+stepo - steps by line and skip over calls
+step - steps by line and does not skip over calls
+stepi - steps by instruction
+show [number=5] - prints `number` amount of lines above and below current stopped point
+
+globals - prints all globals and their values
+global <name> - prints string value of the global
+locals - prints all locals
+local <name> - pints string value of local
+dumpstack - dumps stack memory
+print <address> [type=slot] - prints string value of given address of given type 
+
+break <line> - puts a breakpoint at the given line
+break rm <line> - removes the breakpoint at given line
