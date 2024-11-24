@@ -145,14 +145,14 @@ int main(int argc, char **argv) {
     vm_t vm = {0};
     vm_init(&vm, mywrite, myerror, 1000*1000);
 
-    success = compile_program(&vm, &ast);
+    function_t *main = generate_code(&vm, &ast);
 
-    unless (success) {
+    unless (main) {
         log_fatal("Unable to compile program.");
         exit(1);
     }
 
-    vm_run(&vm);
+    vm_begin(&vm, main);
 
     return 0;
 }
