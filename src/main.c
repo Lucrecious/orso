@@ -171,9 +171,29 @@ int main(int argc, char **argv) {
         } else if (cstr_eq(command.cstr, "show")) {
             source_location_t source_location = {0};
             if (vm_find_source_location(&vm, &source_location)) {
-                printf("%s:%zu:%zu\n", source_location.file_path, source_location.line, source_location.column);
+                printf("%s:%zu:%zu\n", source_location.file_path, source_location.line+1, source_location.column);
             } else {
-                printf("could not find source location.");
+                printf("could not find source location.\n");
+            }
+        } else if (cstr_eq(command.cstr, "stepo")) {
+            source_location_t source_location;
+            unless (vm_find_source_location(&vm, &source_location)) {
+                printf("could not find source_locaion.\n");
+                continue;
+            }
+
+            source_location_t next_location;
+            while (true) {
+                if (vm.frame_count > 0) {
+                    vm_step(&vm);
+                    bool success = vm_find_source_location(&vm, &next_location);
+                    // TODO: must do file check as well (if file changes between steps)
+                    if (!success || next_location.line != source_location.line) {
+                        break;
+                    }
+                } else {
+                    break;
+                }
             }
         } else if (cstr_eq(command.cstr, "run")) {
             if (vm.frame_count > 0) {
