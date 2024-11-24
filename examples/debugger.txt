@@ -11,12 +11,12 @@ step - steps by line and does not skip over calls
 stepi - steps by instruction
 show [number=5] - prints `number` amount of lines above and below current stopped point
 
+break <line> - puts a breakpoint at the given line
+break rm <line> - removes the breakpoint at given line
+
 globals - prints all globals and their values
 global <name> - prints string value of the global
 locals - prints all locals
 local <name> - pints string value of local
 dumpstack - dumps stack memory
 print <address> [type=slot] - prints string value of given address of given type 
-
-break <line> - puts a breakpoint at the given line
-break rm <line> - removes the breakpoint at given line

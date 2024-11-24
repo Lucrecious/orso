@@ -115,6 +115,14 @@ static bool try_vm_step(vm_t *vm) {
     return false;
 }
 
+typedef struct breakpoints_t breakpoints_t;
+struct breakpoints_t {
+    source_location_t *items;
+    size_t count;
+    size_t capacity;
+    arena_t *allocator;
+};
+
 int main(int argc, char **argv) {
     if (argc < 2) {
         println("must have a file as input");
@@ -181,6 +189,8 @@ int main(int argc, char **argv) {
     }
 
     vm_begin(&vm, main);
+
+    breakpoints_t breakpoints = {.allocator=&allocator};
 
     arena_t frame_allocator = {0};
 

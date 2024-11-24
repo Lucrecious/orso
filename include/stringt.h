@@ -15,6 +15,12 @@ struct string_t {
     size_t length;
 };
 
+typedef struct string_view_t string_view_t;
+struct string_view_t {
+    cstr_t data;
+    size_t length;
+};
+
 typedef struct strings_t strings_t;
 struct strings_t {
     string_t *items;
@@ -36,6 +42,10 @@ string_t cstrn2string(cstr_t cstr, size_t n, arena_t *allocator);
 string_t cstr2string(cstr_t cstr, arena_t *allocator);
 string_t string_format(cstr_t format, arena_t *allocator, ...);
 strings_t string_split(cstr_t cstr, cstr_t delimiters, arena_t *allocator);
+
+string_view_t string2sv(string_t string);
+string_t sv2string(string_view_t sv, arena_t *allocator);
+string_view_t sv_filename(string_view_t sv);
 
 void sb_add_char(string_builder_t *builder, char c);
 void sb_add_cstr(string_builder_t *builder, cstr_t cstr);
@@ -116,6 +126,33 @@ strings_t string_split(cstr_t cstr, cstr_t delimiters, arena_t *allocator) {
     allocator_return(tmp);
 
     return split;
+}
+
+string_view_t string2sv(string_t string) {
+    return (string_view_t){.data=string.cstr, .length=string.length};
+}
+
+string_t sv2string(string_view_t sv, arena_t *allocator) {
+    char *s = arena_alloc(allocator, sizeof(char)*sv.length+1);
+    strncpy(s, sv.data, sv.length);
+    s[sv.length] = '\0';
+
+    string_t result = {.cstr=s, .length=sv.length};
+    return result;
+}
+
+string_view_t sv_filename(string_view_t sv) {
+    if (sv.length == 0) return sv;
+    size_t begin = 0;
+
+    for (size_t i = sv.length-1; i >= 0; --i) {
+        if (sv.data[i] == '\\' || sv.data[i] == '/') {
+            begin = i+1;
+            break;
+        }
+    }
+
+    return (string_view_t){.data=sv.data+begin, .length=sv.length-begin};
 }
 
 void sb_add_char(string_builder_t *builder, char c) {
