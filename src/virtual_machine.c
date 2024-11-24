@@ -564,7 +564,7 @@ bool vm_step(vm_t *vm) {
             }
 
             vm->stack_top = frame->slots + result_size;
-            frame = &vm->frames[vm->frame_count - 1];
+            frame = &vm->frames[vm->frame_count-1];
             break;
         }
         case OP_POP_TYPE_N: {

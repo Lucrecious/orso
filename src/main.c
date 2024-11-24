@@ -77,7 +77,9 @@ static void vm_run(vm_t *vm) {
 
 static string_t get_input(arena_t *allocator) {
     char input[256] = {0};
-    scanf("%255[^\n]", input);
+
+    fgets(input, 256, stdin);
+    // scanf("%255[^\n]", input);
 
     string_t s = cstr2string(input, allocator);
     return s;
@@ -150,16 +152,35 @@ int main(int argc, char **argv) {
 
     vm_begin(&vm, main);
 
-    bool has_next = false;
-    do {
-        printf(">> ");
-        string_t input = get_input(&allocator);
-        printf("i just typed this in: %s\n", input.cstr);
-        exit(1);
-        
+    arena_t frame_allocator = {0};
 
-        has_next = vm_step(&vm);
-    } while (has_next);
+    bool has_next = true;
+    do {
+        arena_reset(&frame_allocator);
+
+        printf(">> ");
+        string_t input = get_input(&frame_allocator);
+        strings_t command_n_args = string_split(input.cstr, " \n", &frame_allocator);
+        if (command_n_args.count == 0) {
+            continue;
+        }
+
+        string_t command = command_n_args.items[0];
+        if (cstr_eq(command.cstr, "quit") || cstr_eq(command.cstr, "q")) {
+            break;
+        } else if (cstr_eq(command.cstr, "run")) {
+            if (vm.frame_count > 0) {
+                do {
+                    has_next = vm_step(&vm);
+                } while (has_next);
+            } else {
+                printf("no more code to run.\n");
+            }
+        } else {
+            printf("unknown command: %s\n", command.cstr);
+        }
+
+    } while (true);
 
     return 0;
 }
