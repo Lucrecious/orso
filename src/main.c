@@ -198,7 +198,12 @@ int main(int argc, char **argv) {
         if (cstr_eq(command.cstr, "quit") || cstr_eq(command.cstr, "q")) {
             break;
         } else if (cstr_eq(command.cstr, "show")) {
-            show_line(&vm, 0);
+            size_t amount = 0;
+            if (command_n_args.count > 1) {
+                string_t arg = command_n_args.items[1];
+                amount = strtoul(arg.cstr, NULL, 10);
+            }
+            show_line(&vm, amount);
         } else if (cstr_eq(command.cstr, "stepo")) {
             source_location_t source_location = vm_find_source_location(&vm);
 
