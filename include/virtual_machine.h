@@ -11,7 +11,7 @@
 
 typedef struct source_location_t source_location_t;
 struct source_location_t {
-    cstr_t file_path;
+    string_t file_path;
     size_t line;
     size_t column;
 };

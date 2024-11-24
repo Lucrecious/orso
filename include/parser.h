@@ -252,7 +252,7 @@ typedef struct ast_t {
 void ast_print(ast_t *ast, const char *name);
 
 i32 add_value_to_ast_constant_stack(ast_t *ast, slot_t *value, type_t type);
-bool parse(ast_t *ast, cstr_t file_path, cstr_t source, error_function_t error_fn);
+bool parse(ast_t *ast, string_t file_path, cstr_t source, error_function_t error_fn);
 type_t get_folded_type(ast_t *ast, i32 index);
 
 void ast_init(ast_t *ast);

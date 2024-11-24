@@ -87,10 +87,10 @@ static string_t get_input(arena_t *allocator) {
 
 static void show_line(vm_t *vm, size_t bytecode_around) {
     source_location_t source_location = vm_find_source_location(vm);
-    if (cstr_eq(source_location.file_path, "")) {
+    if (cstr_eq(source_location.file_path.cstr, "")) {
         println("no more frames");
     } else {
-        printfln("%s:%zu:%zu", source_location.file_path, source_location.line+1, source_location.column);
+        printfln("%s:%zu:%zu", source_location.file_path.cstr, source_location.line+1, source_location.column);
     }
 
     call_frame_t *frame = &vm->frames[vm->frame_count-1];
@@ -163,7 +163,7 @@ int main(int argc, char **argv) {
     ast_t ast = {0};
     ast_init(&ast);
 
-    bool success = parse(&ast, path.cstr, source.cstr, myerror);
+    bool success = parse(&ast, path, source.cstr, myerror);
     unless (success) {
         log_fatal("Unable to parse source.");
         exit(1);
@@ -214,12 +214,21 @@ int main(int argc, char **argv) {
                 amount = strtoul(arg.cstr, NULL, 10);
             }
             show_line(&vm, amount);
+        } else if (cstr_eq(command.cstr, "break")) {
+            if (command_n_args.count != 3) {
+                printfln("expected 2 arguments (file and line) but got %zu", command_n_args.count-1);
+                continue;
+            }
+
+            string_t file_path = command_n_args.items[1];
+            string_t line_number = command_n_args.items[2];
+            size_t line = strtoul(line_number.cstr, NULL, 10);
         } else if (cstr_eq(command.cstr, "stepo")) {
             source_location_t source_location = vm_find_source_location(&vm);
 
             while (try_vm_step(&vm)) {
                 source_location_t new_location = vm_find_source_location(&vm);
-                if (new_location.line != source_location.line || !cstr_eq(source_location.file_path, new_location.file_path)) {
+                if (new_location.line != source_location.line || !string_eq(source_location.file_path, new_location.file_path)) {
                     show_line(&vm, 3);
                     break;
                 }

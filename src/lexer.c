@@ -5,7 +5,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-void lexer_init(lexer_t *lexer, cstr_t file_path, const char* code) {
+void lexer_init(lexer_t *lexer, string_t file_path, const char* code) {
     lexer->file_path = file_path;
     lexer->previous_token = (token_t){ .length = 0, .line = 0, .start = 0, .type = TOKEN_ERROR };
     lexer->line = 0;

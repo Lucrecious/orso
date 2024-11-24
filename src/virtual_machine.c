@@ -584,7 +584,7 @@ bool vm_step(vm_t *vm) {
 }
 
 source_location_t vm_find_source_location(vm_t *vm) {
-    source_location_t source_location = {.file_path="", .line=0, .column=0};
+    source_location_t source_location = {.file_path=STRING_EMPTY, .line=0, .column=0};
 
     if (vm->frame_count == 0) return source_location;
     call_frame_t *frame = &vm->frames[vm->frame_count-1];

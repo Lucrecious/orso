@@ -3,6 +3,7 @@
 
 #include "common.h"
 #include "def.h"
+#include "stringt.h"
 
 typedef enum token_type_t token_type_t;
 enum token_type_t {
@@ -38,7 +39,7 @@ enum token_type_t {
 
 typedef struct token_t token_t;
 struct token_t {
-    cstr_t file_path;
+    string_t file_path;
     char *start;
     i32 length;
     i32 line;
@@ -49,13 +50,13 @@ typedef struct lexer_t lexer_t;
 struct lexer_t {
     token_t previous_token;
     error_function_t error_fn;
-    cstr_t file_path;
+    string_t file_path;
     i32 line;
     char *start;
     char *current;
 };
 
-void lexer_init(lexer_t *state, cstr_t file_path, cstr_t code);
+void lexer_init(lexer_t *state, string_t file_path, cstr_t code);
 token_t lexer_next_token(lexer_t *state);
 
 #endif

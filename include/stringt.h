@@ -37,7 +37,9 @@ struct string_builder_t {
     arena_t *allocator;
 };
 
-#define  cstr_eq(a, b) (strcmp(a, b) == 0)
+#define cstr_eq(a, b) (strcmp(a, b) == 0)
+#define string_eq(a, b) cstr_eq(a.cstr, b.cstr)
+#define STRING_EMPTY (string_t){.cstr="", .length=0}
 string_t cstrn2string(cstr_t cstr, size_t n, arena_t *allocator);
 string_t cstr2string(cstr_t cstr, arena_t *allocator);
 string_t string_format(cstr_t format, arena_t *allocator, ...);
