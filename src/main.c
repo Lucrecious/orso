@@ -75,17 +75,13 @@ static void vm_run(vm_t *vm) {
     orso_call_function(vm, vm->entry_point, vm->error_fn);
 }
 
-#define static_assert(cond, msg) typedef char static_assertion_##msg[(cond) ? 1 : -1]
+static string_t get_input(arena_t *allocator) {
+    char input[256] = {0};
+    scanf("%255[^\n]", input);
 
-typedef struct box1 box1;
-struct box1 {
-    float x, y;
-};
-
-typedef struct box2 box2;
-struct box2 {
-    float x, y;
-};
+    string_t s = cstr2string(input, allocator);
+    return s;
+}
 
 int main(int argc, char **argv) {
     if (argc < 2) {
@@ -153,6 +149,17 @@ int main(int argc, char **argv) {
     }
 
     vm_begin(&vm, main);
+
+    bool has_next = false;
+    do {
+        printf(">> ");
+        string_t input = get_input(&allocator);
+        printf("i just typed this in: %s\n", input.cstr);
+        exit(1);
+        
+
+        has_next = vm_step(&vm);
+    } while (has_next);
 
     return 0;
 }
