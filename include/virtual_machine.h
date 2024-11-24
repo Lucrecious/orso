@@ -64,7 +64,7 @@ bool vm_is_on_debug_instruction(vm_t *vm);
 
 void vm_begin(vm_t *vm, function_t *entry_point);
 bool vm_step(vm_t *vm);
-bool vm_find_source_location(vm_t *vm, source_location_t *source_location);
+source_location_t vm_find_source_location(vm_t *vm);
 
 void vm_interpret(vm_t *vm, error_function_t error_fn);
 

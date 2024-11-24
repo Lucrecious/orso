@@ -85,9 +85,39 @@ static string_t get_input(arena_t *allocator) {
     return s;
 }
 
+static void show_line(vm_t *vm, size_t bytecode_around) {
+    source_location_t source_location = vm_find_source_location(vm);
+    if (cstr_eq(source_location.file_path, "")) {
+        println("no more frames");
+    } else {
+        printfln("%s:%zu:%zu", source_location.file_path, source_location.line+1, source_location.column);
+    }
+
+    call_frame_t *frame = &vm->frames[vm->frame_count-1];
+    chunk_t *chunk = &frame->function->chunk;
+    i32 offset = frame->ip - chunk->code.items;
+    assert(offset >= 0);
+    size_t offset_ = (size_t)offset;
+
+    size_t begin = bytecode_around > offset_ ? 0 : offset_ - bytecode_around;
+    size_t end = ((offset_+1+bytecode_around) > chunk->code.count) ? chunk->code.count : (offset_+1+bytecode_around);
+
+    for (size_t i = begin; i < end; ++i) {
+        if (i == offset_) {
+            printf(">>>> ");
+        }
+        disassemble_instruction(&vm->type_set->types, chunk, i);
+    }
+}
+
+static bool try_vm_step(vm_t *vm) {
+    if (vm->frame_count > 0) return vm_step(vm);
+    return false;
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) {
-        printf("must have a file as input");
+        println("must have a file as input");
         exit(1);
     }
 
@@ -154,7 +184,6 @@ int main(int argc, char **argv) {
 
     arena_t frame_allocator = {0};
 
-    bool has_next = true;
     do {
         arena_reset(&frame_allocator);
 
@@ -169,42 +198,25 @@ int main(int argc, char **argv) {
         if (cstr_eq(command.cstr, "quit") || cstr_eq(command.cstr, "q")) {
             break;
         } else if (cstr_eq(command.cstr, "show")) {
-            source_location_t source_location = {0};
-            if (vm_find_source_location(&vm, &source_location)) {
-                printf("%s:%zu:%zu\n", source_location.file_path, source_location.line+1, source_location.column);
-            } else {
-                printf("could not find source location.\n");
-            }
+            show_line(&vm, 0);
         } else if (cstr_eq(command.cstr, "stepo")) {
-            source_location_t source_location;
-            unless (vm_find_source_location(&vm, &source_location)) {
-                printf("could not find source_locaion.\n");
-                continue;
-            }
+            source_location_t source_location = vm_find_source_location(&vm);
 
-            source_location_t next_location;
-            while (true) {
-                if (vm.frame_count > 0) {
-                    vm_step(&vm);
-                    bool success = vm_find_source_location(&vm, &next_location);
-                    // TODO: must do file check as well (if file changes between steps)
-                    if (!success || next_location.line != source_location.line) {
-                        break;
-                    }
-                } else {
+            while (try_vm_step(&vm)) {
+                source_location_t new_location = vm_find_source_location(&vm);
+                if (new_location.line != source_location.line || !cstr_eq(source_location.file_path, new_location.file_path)) {
+                    show_line(&vm, 3);
                     break;
                 }
             }
-        } else if (cstr_eq(command.cstr, "run")) {
-            if (vm.frame_count > 0) {
-                do {
-                    has_next = vm_step(&vm);
-                } while (has_next);
-            } else {
-                printf("no more code to run.\n");
+        } else if (cstr_eq(command.cstr, "stepi")) {
+            if (try_vm_step(&vm)) {
+                show_line(&vm, 0);
             }
+        } else if (cstr_eq(command.cstr, "run")) {
+            while(try_vm_step(&vm));
         } else {
-            printf("unknown command: %s\n", command.cstr);
+            printfln("unknown command: %s", command.cstr);
         }
 
     } while (true);
