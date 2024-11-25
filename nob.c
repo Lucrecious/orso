@@ -68,7 +68,7 @@ bool build_program(build_mode_t build_mode, const char* output_name) {
     if (build_mode & BUILD_MODE_TEST)  {
         nob_cmd_append(&cmd, "./test/test.c");
     } else {
-        nob_cmd_append(&cmd, "./src/main.c");
+        nob_cmd_append(&cmd, "./src/main2.c");
     }
 
     return nob_cmd_run_sync(cmd);

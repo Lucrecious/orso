@@ -9,13 +9,6 @@
 #define FRAMES_MAX 64
 #define STACK_MAX (FRAMES_MAX * UINT8_COUNT)
 
-typedef struct source_location_t source_location_t;
-struct source_location_t {
-    string_t file_path;
-    size_t line;
-    size_t column;
-};
-
 typedef struct {
     function_t *function;
     byte *ip;
@@ -64,7 +57,6 @@ bool vm_is_on_debug_instruction(vm_t *vm);
 
 void vm_begin(vm_t *vm, function_t *entry_point);
 bool vm_step(vm_t *vm);
-source_location_t vm_find_source_location(vm_t *vm);
 
 void vm_interpret(vm_t *vm, error_function_t error_fn);
 
