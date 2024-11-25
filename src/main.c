@@ -211,18 +211,27 @@ int main(int argc, char **argv) {
             size_t amount = 0;
             if (command_n_args.count > 1) {
                 string_t arg = command_n_args.items[1];
-                amount = strtoul(arg.cstr, NULL, 10);
+                amount = string2size(arg);
             }
             show_line(&vm, amount);
+        } else if (cstr_eq(command.cstr, "breaks")) {
+            printfln("breakpoint count: %zu", breakpoints.count);
+            for (size_t i = 0; i < breakpoints.count; ++i) {
+                source_location_t bp = breakpoints.items[i];
+                printfln("breakpoint #%zu: %s:%zu", i, bp.file_path.cstr, bp.line);
+            }
+            println("");
         } else if (cstr_eq(command.cstr, "break")) {
             if (command_n_args.count != 3) {
                 printfln("expected 2 arguments (file and line) but got %zu", command_n_args.count-1);
                 continue;
             }
 
-            string_t file_path = command_n_args.items[1];
+            string_t file_path = string_copy(command_n_args.items[1], &allocator);
             string_t line_number = command_n_args.items[2];
-            size_t line = strtoul(line_number.cstr, NULL, 10);
+            size_t line = string2size(line_number);
+
+            array_push(&breakpoints, ((source_location_t){.file_path=file_path, .line=line, .column=0 }));
         } else if (cstr_eq(command.cstr, "stepo")) {
             source_location_t source_location = vm_find_source_location(&vm);
 

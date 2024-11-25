@@ -44,6 +44,9 @@ string_t cstrn2string(cstr_t cstr, size_t n, arena_t *allocator);
 string_t cstr2string(cstr_t cstr, arena_t *allocator);
 string_t string_format(cstr_t format, arena_t *allocator, ...);
 strings_t string_split(cstr_t cstr, cstr_t delimiters, arena_t *allocator);
+string_t string_copy(string_t s, arena_t *allocator);
+
+size_t string2size(string_t s);
 
 string_view_t string2sv(string_t string);
 string_t sv2string(string_view_t sv, arena_t *allocator);
@@ -130,12 +133,26 @@ strings_t string_split(cstr_t cstr, cstr_t delimiters, arena_t *allocator) {
     return split;
 }
 
+string_t string_copy(string_t s, arena_t *allocator) {
+    char *copy = arena_alloc(allocator, sizeof(char)*(s.length+1));
+    strncpy(copy, s.cstr, s.length);
+    copy[s.length] = '\0';
+
+    string_t result = {.cstr=copy, .length=s.length};
+    return result;
+}
+
+size_t string2size(string_t s) {
+    size_t size = strtoul(s.cstr, NULL, 10);
+    return size;
+}
+
 string_view_t string2sv(string_t string) {
     return (string_view_t){.data=string.cstr, .length=string.length};
 }
 
 string_t sv2string(string_view_t sv, arena_t *allocator) {
-    char *s = arena_alloc(allocator, sizeof(char)*sv.length+1);
+    char *s = arena_alloc(allocator, sizeof(char)*(sv.length+1));
     strncpy(s, sv.data, sv.length);
     s[sv.length] = '\0';
 
