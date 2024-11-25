@@ -148,11 +148,10 @@ int main(int argc, char **argv) {
     vm2_init(&vm);
 
     generate_code_for_vm2(&vm, &ast);
+    exit(0);
 
     debugger_t debugger = {0};
     debugger_init(&debugger, &allocator);
-
-    arena_t frame_allocator = {0};
 
     do {
         bool success = debugger_step(&debugger, &vm);

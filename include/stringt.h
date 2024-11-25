@@ -40,6 +40,8 @@ struct string_builder_t {
 #define cstr_eq(a, b) (strcmp(a, b) == 0)
 #define string_eq(a, b) cstr_eq(a.cstr, b.cstr)
 #define STRING_EMPTY (string_t){.cstr="", .length=0}
+
+bool sv_eq(string_view_t a, string_view_t b);
 string_t cstrn2string(cstr_t cstr, size_t n, arena_t *allocator);
 string_t cstr2string(cstr_t cstr, arena_t *allocator);
 string_t string_format(cstr_t format, arena_t *allocator, ...);
@@ -48,6 +50,7 @@ string_t string_copy(string_t s, arena_t *allocator);
 
 size_t string2size(string_t s);
 
+#define cstr2sv(cstr) (string_view_t){.data=(cstr), .length=strlen(cstr)}
 string_view_t string2sv(string_t string);
 string_t sv2string(string_view_t sv, arena_t *allocator);
 string_view_t sv_filename(string_view_t sv);
@@ -63,6 +66,11 @@ string_t sb_render(string_builder_t *builder, arena_t *allocator);
 #ifdef STRINGT_IMPLEMENTATION
 
 #include "tmp.h"
+
+bool sv_eq(string_view_t a, string_view_t b) {
+    if (a.length != b.length) return false;
+    return strncmp(a.data, b.data, a.length) == 0;
+}
 
 string_t cstrn2string(const cstr_t cstr, size_t n, arena_t *allocator) {
     char *new_cstr = (char*)arena_alloc(allocator, (n + 1)*sizeof(char));

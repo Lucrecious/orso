@@ -17,6 +17,7 @@ static string_t get_input(arena_t *allocator) {
 
 static void show_line(vm2_t *vm, size_t bytecode_around) {
     UNUSED(vm);
+    UNUSED(bytecode_around);
 }
 
 static bool try_vm_step(vm2_t *vm) {
@@ -82,6 +83,8 @@ bool debugger_step(debugger_t *debugger, vm2_t *vm) {
     } else {
         printfln("unknown command: %s", command.cstr);
     }
+
+    return true;
 }
 
 source_location_t vm_find_source_location(vm2_t *vm) {

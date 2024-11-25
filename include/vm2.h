@@ -8,6 +8,7 @@ enum op_type_t {
 
 typedef struct vm2_t vm2_t;
 struct vm2_t {
+    byte *memory;
 };
 
 void vm2_init(vm2_t *vm);
@@ -18,7 +19,7 @@ void vm2_init(vm2_t *vm);
 #ifdef VM2_IMPLEMENTATION
 
 void vm2_init(vm2_t *vm) {
-    *vm = (vm2_t){0};
+    (void)vm;
 }
 
 #endif
