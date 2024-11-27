@@ -79,16 +79,6 @@ void mywrite(const char* chars) {
 
 typedef int (*int_getter)(void*);
 
-static bool compile_program(vm2_t *vm, ast_t *ast) {
-    UNUSED(vm);
-    UNUSED(ast);
-    return false;
-}
-
-static void vm_run(vm2_t *vm) {
-    UNUSED(vm);
-}
-
 int main(int argc, char **argv) {
     if (argc < 2) {
         println("must have a file as input");

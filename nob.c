@@ -4,9 +4,7 @@
 
 const char* SOURCES[] = {
     "./src/chunk.c",
-    "./src/codegen.c",
     "./src/debug.c",
-    "./src/interpreter.c",
     "./src/lexer.c",
     "./src/object.c",
     "./src/parser.c",
@@ -15,7 +13,6 @@ const char* SOURCES[] = {
     "./src/symbol_table.c",
     "./src/type.c",
     "./src/type_set.c",
-    "./src/virtual_machine.c",
 };
 
 typedef enum {

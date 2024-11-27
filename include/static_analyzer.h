@@ -4,7 +4,6 @@
 #include "parser.h"
 #include "common.h"
 #include "type_set.h"
-#include "virtual_machine.h"
 #include "arena.h"
 
 struct interpreter_t;
@@ -25,8 +24,6 @@ struct analysis_dependencies_t {
 typedef struct analyzer_t {
     error_function_t error_fn;
     symbol_table_t symbols;
-    vm_t vm;
-
     ast_t* ast;
 
     analysis_dependencies_t dependencies;

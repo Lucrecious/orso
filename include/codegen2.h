@@ -12,14 +12,11 @@ bool generate_code_for_vm2(vm2_t *vm, ast_t *ast);
 
 typedef struct vm2_builder_t vm2_builder_t;
 struct vm2_builder_t {
-    size_t stack_size;
-    size_t memory_size;
+    instructions_t code;
 };
 
 static vm2_builder_t default_builder(void) {
     vm2_builder_t builder = {0};
-    builder.memory_size = megabytes(10);
-    builder.stack_size = megabytes(1);
 
     return builder;
 }
@@ -31,12 +28,17 @@ static string_view_t token2sv(token_t t) {
     };
 }
 
+void gen_block(vm2_builder_t *builder, ast_node_t *block) {
+    UNUSED(builder);
+    UNUSED(block);
+}
+
 bool generate_code_for_vm2(vm2_t *vm, ast_t *ast) {
     UNUSED(vm);
 
     tmp_arena_t *tmp = allocator_borrow();
 
-    // vm2_builder_t builder = default_builder();
+    vm2_builder_t builder = default_builder();
 
     ast_node_t *root = ast->root;
     assert(root->node_type == AST_NODE_TYPE_EXPRESSION_BLOCK);
@@ -71,7 +73,9 @@ bool generate_code_for_vm2(vm2_t *vm, ast_t *ast) {
 
     assert(initial_expression->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION);
 
-    printfln("ast node value %d", main_node->value_index);
+    //size_t instruction_index = builder.code.count;
+
+    gen_block(&builder, initial_expression->data.function.block);
 
     allocator_return(tmp);
 

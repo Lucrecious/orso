@@ -2,7 +2,6 @@
 
 #include <stdio.h>
 
-#include "interpreter.h"
 #include "mathutils.h"
 #include "type_set.h"
 #include "error.h"
@@ -339,39 +338,11 @@ static bool can_call(type_infos_t types, type_t type, ast_nodes_t arguments) {
 }
 
 static i32 evaluate_expression(analyzer_t *analyzer, ast_t *ast, bool is_folding_time, ast_node_t *expression) {
-    // vm_t *vm = &analyzer->vm;
-
-    // compile_expression_to_vm(vm, expression);
-
-    // vm_run(vm);
-
-    // void *result = vm_get_global(vm, "__result");
-    
-    // i32 index = add_value_to_ast_constant_stack(ast, result, expression->value_type);
-
-    // vm_reset(vm);
-
-    // return index;
-
-    vm_t vm;
-    // TODO: Make sure this uses the same writing function as the vm that runs the code at the end.
-    vm_init(&vm, NULL, NULL, 256);
-    
-    // TODO: try to set this in a more reobust place
-    vm.type_set = &ast->type_set;
-
-    code_builder_t builder;
-    code_builder_init(&builder, &vm, ast);
-
-    function_t* function = generate_expression_function(&builder, expression, is_folding_time, &analyzer->allocator);
-
-    code_builder_free(&builder);
-
-    slot_t *value = orso_call_function(&vm, function, analyzer->error_fn);
-
-    i32 value_index = add_value_to_ast_constant_stack(ast, value, expression->value_type);
-
-    return value_index;
+    UNUSED(analyzer);
+    UNUSED(ast);
+    UNUSED(is_folding_time);
+    UNUSED(expression);
+    return -1;
 }
 
 static bool is_declaration_resolved(ast_node_t* entity) {
