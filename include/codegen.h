@@ -2,9 +2,9 @@
 #define CODEGEN2_H_
 
 #include "parser.h"
-#include "vm2.h"
+#include "vm.h"
 
-bool generate_code_for_vm2(vm2_t *vm, ast_t *ast);
+bool generate_code_for_vm2(vm_t *vm, ast_t *ast);
 
 #endif
 
@@ -33,7 +33,7 @@ void gen_block(vm2_builder_t *builder, ast_node_t *block) {
     UNUSED(block);
 }
 
-bool generate_code_for_vm2(vm2_t *vm, ast_t *ast) {
+bool generate_code_for_vm2(vm_t *vm, ast_t *ast) {
     UNUSED(vm);
 
     tmp_arena_t *tmp = allocator_borrow();

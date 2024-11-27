@@ -3,7 +3,7 @@
 
 #include "arena.h"
 #include "stringt.h"
-#include "vm2.h"
+#include "vm.h"
 #include "def.h"
 
 typedef struct source_location_t source_location_t;
@@ -29,8 +29,8 @@ struct debugger_t {
 };
 
 void debugger_init(debugger_t *debugger, arena_t *allocator);
-bool debugger_step(debugger_t *debugger, vm2_t *vm);
+bool debugger_step(debugger_t *debugger, vm_t *vm);
 
-source_location_t vm_find_source_location(vm2_t *vm);
+source_location_t vm_find_source_location(vm_t *vm);
 
 #endif

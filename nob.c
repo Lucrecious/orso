@@ -4,7 +4,6 @@
 
 const char* SOURCES[] = {
     "./src/chunk.c",
-    "./src/debug.c",
     "./src/lexer.c",
     "./src/object.c",
     "./src/parser.c",
@@ -19,7 +18,6 @@ typedef enum {
     BUILD_MODE_NONE = 0x0,
     BUILD_MODE_DEBUG = 0x1,
     BUILD_MODE_RELEASE = 0x2,
-    BUILD_MODE_TEST = 0x8,
 } build_mode_t;
 
 void print_usage() {
@@ -50,9 +48,6 @@ bool build_program(build_mode_t build_mode, const char* output_name) {
     } else if (build_mode & BUILD_MODE_RELEASE) {
         nob_cmd_append(&cmd, "-O3");
         nob_cmd_append(&cmd, "-o", nob_temp_sprintf("./bin/%s", output_name));
-    } else if (build_mode & BUILD_MODE_TEST) {
-        nob_cmd_append(&cmd, "-ggdb");
-        nob_cmd_append(&cmd, "-o", nob_temp_sprintf("./bin/%s", output_name));
     } else {
         NOB_ASSERT(false && "Unreachable");
         return 1;
@@ -62,11 +57,7 @@ bool build_program(build_mode_t build_mode, const char* output_name) {
         nob_cmd_append(&cmd, SOURCES[i]);
     }
 
-    if (build_mode & BUILD_MODE_TEST)  {
-        nob_cmd_append(&cmd, "./test/test.c");
-    } else {
-        nob_cmd_append(&cmd, "./src/main2.c");
-    }
+    nob_cmd_append(&cmd, "./src/main.c");
 
     return nob_cmd_run_sync(cmd);
 }
@@ -92,9 +83,6 @@ int main(int argc, char** argv) {
             } else if (strcmp(option, "--debug") == 0 || strcmp(option, "-d") == 0) {
                 mode |= BUILD_MODE_DEBUG;
                 output_name = "dorso";
-            } else if (strcmp(option, "--test") == 0) {
-                mode |= BUILD_MODE_TEST;
-                output_name = "test";
             } else {
                 nob_log(NOB_ERROR, nob_temp_sprintf("unknown option: %s", option));
                 print_usage();
@@ -103,10 +91,10 @@ int main(int argc, char** argv) {
         }
     }
 
-    nob_log(NOB_INFO, "building compiler/interpreter");
+    nob_log(NOB_INFO, "building compiler");
 
     if (!build_program(mode, output_name)) {
-        nob_log(NOB_ERROR, "unable to compile compiler/interpreter.");
+        nob_log(NOB_ERROR, "unable to compile compiler");
         return 1;
     }
 

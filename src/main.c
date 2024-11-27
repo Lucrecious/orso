@@ -19,17 +19,15 @@
 
 #define PROJECT_NAME "orso"
 
-#include "debug.h"
-
 #include "parser.h"
 #include "static_analyzer.h"
 
 #define CODEGEN2_IMPLEMENTATION
-#include "codegen2.h"
+#include "codegen.h"
 #undef CODEGEN2_IMPLEMENTATION
 
 #define VM2_IMPLEMENTATION
-#include "vm2.h"
+#include "vm.h"
 #undef VM2_IMPLEMENTATION
 
 #include "debugger.h"
@@ -134,8 +132,8 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
-    vm2_t vm = {0};
-    vm2_init(&vm);
+    vm_t vm = {0};
+    vm_init(&vm);
 
     generate_code_for_vm2(&vm, &ast);
     exit(0);

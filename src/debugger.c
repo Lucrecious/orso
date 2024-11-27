@@ -15,17 +15,17 @@ static string_t get_input(arena_t *allocator) {
     return s;
 }
 
-static void show_line(vm2_t *vm, size_t bytecode_around) {
+static void show_line(vm_t *vm, size_t bytecode_around) {
     UNUSED(vm);
     UNUSED(bytecode_around);
 }
 
-static bool try_vm_step(vm2_t *vm) {
+static bool try_vm_step(vm_t *vm) {
     UNUSED(vm);
     return false;
 }
 
-bool debugger_step(debugger_t *debugger, vm2_t *vm) {
+bool debugger_step(debugger_t *debugger, vm_t *vm) {
     arena_t *tmp = &debugger->step_allocator;
     arena_reset(tmp);
 
@@ -87,7 +87,7 @@ bool debugger_step(debugger_t *debugger, vm2_t *vm) {
     return true;
 }
 
-source_location_t vm_find_source_location(vm2_t *vm) {
+source_location_t vm_find_source_location(vm_t *vm) {
     UNUSED(vm);
     return (source_location_t){0};
 }

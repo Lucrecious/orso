@@ -1,5 +1,5 @@
-#ifndef VM2_H_
-#define VM2_H_
+#ifndef VM_H_
+#define VM_H_
 
 typedef enum op_type_t op_type_t;
 enum op_type_t {
@@ -17,19 +17,18 @@ struct instructions_t {
     size_t count;
 };
 
-typedef struct vm2_t vm2_t;
-struct vm2_t {
+typedef struct vm_t vm_t;
+struct vm_t {
     byte *memory;
 };
 
-void vm2_init(vm2_t *vm);
-
+void vm_init(vm_t *vm);
 
 #endif
 
 #ifdef VM2_IMPLEMENTATION
 
-void vm2_init(vm2_t *vm) {
+void vm_init(vm_t *vm) {
     (void)vm;
 }
 
