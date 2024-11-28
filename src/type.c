@@ -234,50 +234,8 @@ struct_field_t *type_struct_find_field(type_info_t *struct_, const char *name, s
     return NULL;
 }
 
-u32 type_size_bytes(type_info_t *type) {
-    switch (type->kind) {
-        case TYPE_UNION: {
-            return 1;
-        }
-
-        case TYPE_VOID:
-            return 0;
-
-        case TYPE_BOOL:
-            return 1;
-
-        case TYPE_INT64:
-        case TYPE_FLOAT64:
-            return 8;
-
-        case TYPE_FLOAT32:
-        case TYPE_INT32:
-            return 4;
-
-        case TYPE_STRING:
-        case TYPE_SYMBOL:
-        case TYPE_TYPE:
-        case TYPE_FUNCTION:
-        case TYPE_NATIVE_FUNCTION:
-        case TYPE_POINTER:
-            return 8;
-        
-        case TYPE_STRUCT: {
-            return type->data.struct_.total_bytes;
-        }
-
-        case TYPE_COUNT:
-        case TYPE_INVALID:
-        case TYPE_UNDEFINED:
-        case TYPE_UNRESOLVED:
-            UNREACHABLE();
-    }
-
-    return 0;
-}
-
 size_t type_slot_count(type_info_t *type) {
-    return bytes_to_slots(type_size_bytes(type));
+    return bytes_to_slots(type->size);
 }
 
 bool type_fits(type_info_t* storage_type, type_info_t* value_type) {
@@ -414,8 +372,8 @@ bool can_cast_implicit(type_infos_t types, type_t type_to_cast, type_t type) {
 
     if (type_is_union(types, type_to_cast)) return false;
 
-    u32 type_to_cast_size = type_size_bytes(type_info_to_cast);
-    u32 type_size = type_size_bytes(type_info);
+    u32 type_to_cast_size = type_info_to_cast->size;
+    u32 type_size = type_info->size;
     if (type_is_number(type_info_to_cast, true) && type_is_number(type_info, true) && type_to_cast_size <= type_size) {
         if (type_is_integer(type_info_to_cast, true) || (type_is_float(type_info_to_cast) && type_is_float(type_info))) {
             return true;

@@ -87,9 +87,6 @@ struct type_info_t {
 
             i32 constant_count;
             struct_constant_t *constants;
-
-            // not relevant for hashing
-            i32 total_bytes;
         } struct_;
 
         struct {
@@ -126,8 +123,6 @@ FORCE_INLINE bool orso_type_is_unsigned_integer_type(type_info_t *type, bool inc
 }
 
 size_t bytes_to_slots(i32 byte_count);
-
-u32 type_size_bytes(type_info_t *type);
 
 struct_field_t *type_struct_find_field(type_info_t *struct_, const char *name, size_t name_length);
 

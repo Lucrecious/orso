@@ -6,19 +6,6 @@
 #define ORSO_TYPE_SET_MAX_LOAD 0.75
 #define GROW_CAPACITY(capacity) capacity == 0 ? 8 : capacity * 2
 
-type_info_t OrsoTypeVoid = (type_info_t) { .kind = TYPE_VOID };
-type_info_t OrsoTypeBool = (type_info_t) { .kind = TYPE_BOOL };
-type_info_t OrsoTypeInteger32 = (type_info_t) { .kind = TYPE_INT32 };
-type_info_t OrsoTypeInteger64 = (type_info_t) { .kind = TYPE_INT64 };
-type_info_t OrsoTypeFloat32 = (type_info_t){ .kind = TYPE_FLOAT32 };
-type_info_t OrsoTypeFloat64 = (type_info_t){ .kind = TYPE_FLOAT64 };
-type_info_t OrsoTypeString = (type_info_t) { .kind = TYPE_STRING };
-type_info_t OrsoTypeSymbol = (type_info_t) { .kind = TYPE_SYMBOL };
-type_info_t OrsoTypeType = (type_info_t) { .kind = TYPE_TYPE };
-type_info_t OrsoTypeInvalid = (type_info_t){ .kind = TYPE_INVALID  };
-type_info_t OrsoTypeUnresolved = (type_info_t) { .kind = TYPE_UNRESOLVED };
-type_info_t OrsoTypeUndefined = (type_info_t) { .kind = TYPE_UNDEFINED };
-
 #define ALLOC(TYPE) (TYPE*)arena_alloc(set->allocator, sizeof(TYPE))
 #define ALLOC_N(TYPE, N) (TYPE*)arena_alloc(set->allocator, sizeof(TYPE)*N)
 
@@ -26,10 +13,15 @@ static type_info_t *union_type_new(type_table_t *set, types_t types) {
     type_info_t* union_type = ALLOC(type_info_t);
     union_type->kind = TYPE_UNION;
     union_type->data.union_.types = (types_t){.allocator=set->allocator};
+
+    size_t total_size = 0;
     for (size_t i = 0; i < union_type->data.union_.types.count; ++i) {
         array_push(&union_type->data.union_.types, types.items[i]);
-        
+        type_info_t *info = get_type_info(&set->types, types.items[i]);
+        total_size = total_size < info->size ? info->size : total_size;
     }
+
+    union_type->size = total_size;
 
     return union_type;
 }
@@ -43,6 +35,8 @@ type_info_t *function_type_new(type_table_t *set, types_t arguments, type_t retu
     }
 
     function_type->data.function.return_type = return_type;
+
+    function_type->size = sizeof(void*);
 
     return function_type;
 }
@@ -58,7 +52,7 @@ type_info_t *struct_type_new(type_table_t *set, struct_field_t *fields, i32 fiel
     struct_type->data.struct_.fields = NULL;
     struct_type->data.struct_.constant_count = constant_count;
     struct_type->data.struct_.constants = NULL;
-    struct_type->data.struct_.total_bytes = total_size;
+    struct_type->size = (size_t)total_size;
 
     if (field_count > 0) {
         struct_type->data.struct_.fields = ALLOC_N(struct_field_t, field_count);
@@ -97,6 +91,7 @@ type_info_t *pointer_type_new(type_table_t *set, type_t type) {
     type_info_t *pointer = ALLOC(type_info_t);
     pointer->kind = TYPE_POINTER;
     pointer->data.pointer.type = type;
+    pointer->size = sizeof(void*);
 
     return pointer;
 }
@@ -125,7 +120,7 @@ type_info_t *type_copy_new(type_table_t *set, type_info_t *type) {
             type->data.struct_.field_count,
             type->data.struct_.constants,
             type->data.struct_.constant_count,
-            type->data.struct_.total_bytes);
+            type->size);
     }
 
     if (type->kind == TYPE_POINTER) {
@@ -153,19 +148,19 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
         array_push(&set->types, NULL);
     }
 
-    static type_info_t type_void = {.kind=TYPE_VOID};
-    static type_info_t type_bool = {.kind=TYPE_BOOL};
-    static type_info_t type_f32 = {.kind=TYPE_FLOAT32};
-    static type_info_t type_f64 = {.kind=TYPE_FLOAT64};
-    static type_info_t type_i32 = {.kind=TYPE_INT32};
-    static type_info_t type_i64 = {.kind=TYPE_INT64};
-    static type_info_t type_string = {.kind=TYPE_STRING};
-    static type_info_t type_symbol = {.kind=TYPE_SYMBOL};
-    static type_info_t type_invalid = {.kind=TYPE_INVALID};
-    static type_info_t type_unresolved = {.kind=TYPE_UNRESOLVED};
-    static type_info_t type_undefined = {.kind=TYPE_UNDEFINED};
-    static type_info_t type_type = {.kind=TYPE_TYPE};
-    static type_info_t empty_function = {.kind = TYPE_FUNCTION, .data.function.return_type = typeid(TYPE_VOID)};
+    static type_info_t type_void = {.kind=TYPE_VOID, .size=0};
+    static type_info_t type_bool = {.kind=TYPE_BOOL, .size=sizeof(byte)};
+    static type_info_t type_f32 = {.kind=TYPE_FLOAT32, .size=sizeof(f32)};
+    static type_info_t type_f64 = {.kind=TYPE_FLOAT64, .size=sizeof(f64)};
+    static type_info_t type_i32 = {.kind=TYPE_INT32, .size=sizeof(i32)};
+    static type_info_t type_i64 = {.kind=TYPE_INT64, .size=sizeof(i64)};
+    static type_info_t type_string = {.kind=TYPE_STRING, .size=sizeof(void*)};
+    static type_info_t type_symbol = {.kind=TYPE_SYMBOL, .size=sizeof(void*)};
+    static type_info_t type_invalid = {.kind=TYPE_INVALID, .size=0};
+    static type_info_t type_unresolved = {.kind=TYPE_UNRESOLVED, .size=0};
+    static type_info_t type_undefined = {.kind=TYPE_UNDEFINED, .size=0};
+    static type_info_t type_type = {.kind=TYPE_TYPE, .size=sizeof(type_t)};
+    static type_info_t empty_function = {.kind = TYPE_FUNCTION, .size = sizeof(void*), .data.function.return_type = typeid(TYPE_VOID)};
 
     for (size_t i = 0; i < TYPE_COUNT; ++i) {
         switch ((type_kind_t)i) {
@@ -294,6 +289,7 @@ type_t type_set_fetch_pointer(type_table_t* set, type_t inner_type) {
     type_info_t pointer_type = {
         .kind = TYPE_POINTER,
         .data.pointer.type = inner_type,
+        .size = sizeof(void*)
     };
 
     type_t type;
@@ -342,7 +338,7 @@ type_t type_set_fetch_anonymous_struct(type_table_t *set, i32 field_count, struc
         .data.struct_.constant_count = constant_count,
         .data.struct_.constants = constants,
 
-        .data.struct_.total_bytes = 0,
+        .size = 0,
     };
 
     type_info_t *type_info;
@@ -371,16 +367,16 @@ type_t type_set_fetch_anonymous_struct(type_table_t *set, i32 field_count, struc
             type_t previous_type = fields[i - 1].type;
             type_info_t *previous_type_info = get_type_info(&set->types, previous_type);
 
-            i32 bytes = bytes_to_slots(type_size_bytes(previous_type_info)) * sizeof(slot_t);
+            i32 bytes = bytes_to_slots(previous_type_info->size) * sizeof(slot_t);
             type_info->data.struct_.fields[i].offset = previous_offset + bytes;
         }
 
         type_t field_type= type_info->data.struct_.fields[field_count-1].type;
         type_info_t *field_type_info = get_type_info(&set->types, field_type);
-        i32 size_of_final = bytes_to_slots(type_size_bytes(field_type_info)) * sizeof(slot_t);
+        i32 size_of_final = bytes_to_slots(field_type_info->size) * sizeof(slot_t);
         i32 total_size = type_info->data.struct_.fields[field_count - 1].offset + size_of_final;
 
-        type_info->data.struct_.total_bytes = total_size;
+        type_info->size = total_size;
     }
 
     return type; 
@@ -434,5 +430,5 @@ void named_struct_copy_data_from_completed_struct_type(type_table_t *set, type_t
     incomplete_named_struct->data.struct_.constant_count = copied_type->data.struct_.constant_count;
     incomplete_named_struct->data.struct_.constants = copied_type->data.struct_.constants;
 
-    incomplete_named_struct->data.struct_.total_bytes = copied_type->data.struct_.total_bytes;
+    incomplete_named_struct->size = copied_type->size;
 }

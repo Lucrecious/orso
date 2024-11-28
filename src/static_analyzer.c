@@ -225,7 +225,7 @@ static type_t resolve_unary_type(ast_t* ast, token_type_t operator, type_t opera
             if (!type_is_union(ast->type_set.types, operand_id)) {
                 if (type_is_number(operand, false)) {
                     return operand_id;
-                } else if (operand == &OrsoTypeBool) {
+                } else if (operand_id.i == TYPE_BOOL) {
                     return typeid(TYPE_INT32);
                 } else {
                     return typeid(TYPE_INVALID);
@@ -2476,7 +2476,7 @@ static void resolve_struct_definition(analyzer_t *analyzer, ast_t *ast, Analysis
 
         ASSERT(complete_struct_type_info->data.struct_.field_count == field_count, "completed struct must have the same number as fields as ast field declaration nodes");
 
-        u64 size_in_slots = bytes_to_slots(complete_struct_type_info->data.struct_.total_bytes);
+        u64 size_in_slots = bytes_to_slots(complete_struct_type_info->size);
         byte struct_data[size_in_slots * sizeof(slot_t)];
         for (u64 i = 0; i < size_in_slots * sizeof(slot_t); i++) {
             struct_data[i] = 0;
@@ -2489,7 +2489,7 @@ static void resolve_struct_definition(analyzer_t *analyzer, ast_t *ast, Analysis
 
             type_info_t *field_type_info = get_type_info(&ast->type_set.types, field_type);
 
-            u32 bytes_to_copy = type_size_bytes(field_type_info);
+            u32 bytes_to_copy = field_type_info->size;
 
             if (type_is_union(ast->type_set.types, field_type)) {
                 type_t value_expression_type = declaration->as.declaration.initial_value_expression == NULL ?

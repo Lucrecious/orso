@@ -1126,7 +1126,7 @@ i32 zero_value(ast_t *ast, type_t type, symbol_table_t *symbol_table) {
 
     type_info_t *type_info = ast->type_set.types.items[type.i];
 
-    slot_t value[bytes_to_slots(type_size_bytes(type_info))];
+    slot_t value[bytes_to_slots(type_info->size)];
 
     switch (type_info->kind) {
         case TYPE_POINTER:
@@ -1157,12 +1157,12 @@ i32 zero_value(ast_t *ast, type_t type, symbol_table_t *symbol_table) {
             for (u32 i = 0; i < size_slots; i++) {
                 value[i] = SLOT_I(0);
             }
-            value[0] = SLOT_P(&OrsoTypeVoid);
+            value[0] = SLOT_U(TYPE_VOID);
             break;
         }
 
         case TYPE_STRUCT: {
-            for (size_t i = 0; i < bytes_to_slots(type_info->data.struct_.total_bytes); i++) {
+            for (size_t i = 0; i < bytes_to_slots(type_info->size); i++) {
                 value[i] = SLOT_I(0);
             }
             break;

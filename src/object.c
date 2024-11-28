@@ -124,7 +124,7 @@ string_t slot_to_string(slot_t *slot, type_infos_t *types, type_t type, arena_t 
                     array_push(&slots, (slot_t){0});
                 }
 
-                size_t field_size = type_size_bytes(field_type);
+                size_t field_size = field_type->size;
                 copy_bytes_to_slots(slots.items, value, field_type->kind, field_size);
 
                 string_t field_value = slot_to_string(slots.items, types, field->type, tmp->allocator);

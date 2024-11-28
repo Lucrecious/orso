@@ -17,19 +17,6 @@ typedef struct type_table_t {
     arena_t *allocator;
 } type_table_t;
 
-extern type_info_t OrsoTypeVoid;
-extern type_info_t OrsoTypeBool;
-extern type_info_t OrsoTypeInteger32;
-extern type_info_t OrsoTypeInteger64;
-extern type_info_t OrsoTypeFloat32;
-extern type_info_t OrsoTypeFloat64;
-extern type_info_t OrsoTypeString;
-extern type_info_t OrsoTypeSymbol;
-extern type_info_t OrsoTypeType;
-extern type_info_t OrsoTypeInvalid;
-extern type_info_t OrsoTypeUnresolved;
-extern type_info_t OrsoTypeUndefined;
-
 void type_set_init(type_table_t *set, arena_t *allocator);
 
 type_info_t *get_type_info(type_infos_t *types, type_t type);
