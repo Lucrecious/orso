@@ -21,8 +21,8 @@ static void show_line(vm_t *vm, size_t bytecode_around) {
 }
 
 static bool try_vm_step(vm_t *vm) {
-    UNUSED(vm);
-    return false;
+    vm_step(vm);
+    return vm->halted;
 }
 
 bool debugger_step(debugger_t *debugger, vm_t *vm) {

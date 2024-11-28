@@ -22,13 +22,13 @@
 #include "parser.h"
 #include "static_analyzer.h"
 
-#define CODEGEN2_IMPLEMENTATION
+#define CODEGEN_IMPLEMENTATION
 #include "codegen.h"
-#undef CODEGEN2_IMPLEMENTATION
+#undef CODEGEN_IMPLEMENTATION
 
-#define VM2_IMPLEMENTATION
+#define VM_IMPLEMENTATION
 #include "vm.h"
-#undef VM2_IMPLEMENTATION
+#undef VM_IMPLEMENTATION
 
 #include "debugger.h"
 #include "debugger.c"
@@ -62,13 +62,7 @@ void log_fatal(cstr_t format, ...) {
 }
 
 void myerror(error_t error) {
-    switch (error.type) {
-        case ERROR_COMPILE: {
-            fprintf(stderr, "[line %d] %s\n", error.region.token.line + 1, error.message);
-            break;
-        }
-        default: break;
-    }
+    fprintf(stderr, "[line %d] %s\n", error.region.token.line + 1, error_messages[error.type]);
 }
 
 void mywrite(const char* chars) {
@@ -133,9 +127,7 @@ int main(int argc, char **argv) {
     }
 
     vm_t vm = {0};
-    vm_init(&vm);
-
-    generate_code_for_vm2(&vm, &ast);
+    compile_program(&vm, &ast);
     exit(0);
 
     debugger_t debugger = {0};

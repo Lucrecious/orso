@@ -67,6 +67,7 @@ struct type_infos_t {
 
 struct type_info_t {
     type_kind_t kind;
+    size_t size; // not serialized
     union {
         struct {
             types_t types;

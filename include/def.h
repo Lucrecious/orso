@@ -89,7 +89,7 @@ FORCE_INLINE u32 maxu32(i32 a, i32 b) {
 
   #define UNUSED(THING)
 
-  #define ASSERT(condition, message) do { } while (false)
+  #define ASSERT(condition, message)
 
   // Tell the compiler that this part of the code will never be reached.
   #if defined( _MSC_VER )

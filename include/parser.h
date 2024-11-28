@@ -206,7 +206,7 @@ struct ast_node_t {
 
         // type initializer
         ast_type_initializer_t initiailizer;
-    } data;
+    } as;
 };
 
 declare_table(ptr2i32, type_t, i32)

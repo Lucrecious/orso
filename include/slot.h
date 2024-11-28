@@ -4,6 +4,18 @@
 #include "def.h"
 #include "type.h"
 
+typedef struct word_t word_t;
+struct word_t {
+    union {
+        i64 i;
+        f64 d;
+        ptr p;
+        u64 u;
+    } as;
+};
+
+#define WORD_SIZE sizeof(word_t)
+
 typedef struct slot_t {
     union {
         i64 i;
