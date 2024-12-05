@@ -86,6 +86,55 @@ cstr_t const error_messages[] = {
     [ERROR_CODEGEN_MEMORY_SIZE_TOO_BIG] = "memory size is too large to index. the max is 2^32",
 };
 
+size_t arena_array_push(arena_array_t *array, void *data, size_t size) {
+    void *space = arena_alloc(&array->data, size);
+    memcpy(space, data, size);
+
+    size_t new_count = 0;
+    size_t index = 0;
+    
+    // find index
+    {
+        Region *last_region = array->data.end;
+        ASSERT((space >= (void*)last_region->data) && (space < ((void*)last_region->data+last_region->count)), "expected that the reserved space is in the last region");
+
+        size_t region_index = (byte*)space - (byte*)last_region->data;
+
+        Region *r = array->data.begin;
+        while (r) {
+            new_count += r->count;
+            r = r->next;
+        }
+
+        // remove over counting since last region is not filled yet
+        index = new_count;
+
+        // remove over counting
+        index -= last_region->count;
+        index += region_index;
+    }
+
+    array->count = new_count;
+
+    return index;
+}
+
+void *arena_array_get(arena_array_t *array, size_t index) {
+    Region *r = array->data.begin;
+    size_t bottom = 0;
+    while (r) {
+        if ((index >= bottom) && (index < (bottom + r->count))) {
+            size_t local_index = index - bottom;
+            return r->data+local_index;
+        }
+        bottom += r->count;
+        r = r->next;
+    }
+
+    UNREACHABLE();
+    return NULL;
+}
+
 
 static int type_hash(type_t id) {
     return kh_int64_hash_func((khint64_t)id.i);
@@ -138,21 +187,17 @@ void ast_init(ast_t* ast) {
 
     ast->resolved = false;
     ast->root = NULL;
-    ast->folded_constant_types = (types_t){.allocator=&ast->allocator};
-    ast->folded_constants = (slots_t){.allocator=&ast->allocator};
+    ast->constants = (arena_array_t){0};
+
+    {
+        u64 zero = 0;
+        arena_array_push_t(&ast->constants, &zero, sizeof(u64));
+    }
 
     symbol_table_init(&ast->symbols, &ast->allocator);
 
     ast->function_definition_pairs = (fd_pairs_t){.allocator=&ast->allocator};
     type_set_init(&ast->type_set, &ast->allocator);
-
-    slot_t void_slot = SLOT_I(0);
-    slot_t bool_slot = SLOT_I(1);
-    array_push(&ast->folded_constants, void_slot);
-    array_push(&ast->folded_constants, bool_slot);
-
-    ast->void_index = 0;
-    ast->true_index = 1;
 
     symbol_table_init(&ast->builtins, &ast->allocator);
 
@@ -363,20 +408,6 @@ static ParseRule* get_rule(token_type_t type);
 static bool check_expression(parser_t* parser);
 static ast_node_t* parse_precedence(parser_t* parser, bool is_in_type_context, Precedence precedence);
 
-static type_t value_to_integer_type(i64 value) {
-    if (value >= INT32_MIN && value <= INT32_MAX) {
-        return typeid(TYPE_INT32);
-    }
-    return typeid(TYPE_INT64);
-}
-
-static i32 add_constant_value(parser_t* parser, slot_t value, type_t type) {
-    i32 index = parser->ast->folded_constants.count;
-    array_push(&parser->ast->folded_constant_types, type);
-    array_push(&parser->ast->folded_constants, value);
-    return index;
-}
-
 bool ast_node_type_is_decl_or_stmt(ast_node_type_t node_type) {
     switch (node_type) {
         case AST_NODE_TYPE_EXPRESSION_CASE:
@@ -409,14 +440,14 @@ static ast_node_t* number(parser_t* parser, bool is_in_type_context) {
     switch (parser->previous.type)  {
         case TOKEN_INTEGER: {
             i64 value = cstrn_to_i64(parser->previous.start, parser->previous.length);
-            expression_node->value_type = value_to_integer_type(value);
-            expression_node->value_index = add_constant_value(parser, SLOT_I(value), expression_node->value_type);
+            expression_node->value_type = typeid(TYPE_INT64);
+            expression_node->value_index = arena_array_push_t(&parser->ast->constants, &value, i64);
             break;
         }
         case TOKEN_FLOAT: {
             f64 value = cstrn_to_f64(parser->previous.start, parser->previous.length);
             expression_node->value_type = typeid(TYPE_FLOAT64);
-            expression_node->value_index = add_constant_value(parser, SLOT_F(value), typeid(TYPE_FLOAT64));
+            expression_node->value_index = arena_array_push_t(&parser->ast->constants, &value, f64);
             break;
         }
         default: UNREACHABLE();
@@ -435,26 +466,27 @@ static ast_node_t *literal(parser_t *parser, bool is_in_type_context) {
         case TOKEN_TRUE: {
             expression_node->value_type = typeid(TYPE_BOOL);
 
-            i64 is_true = (i64)(parser->previous.type == TOKEN_TRUE);
-            expression_node->value_index = add_constant_value(parser, SLOT_I(is_true), typeid(TYPE_BOOL));
+            bool is_true = parser->previous.type == TOKEN_TRUE;
+            byte value = (byte)is_true;
+            expression_node->value_index = arena_array_push_t(&parser->ast->constants, &value, byte);
             break;
         }
         case TOKEN_NULL: {
             expression_node->value_type = typeid(TYPE_VOID);
-            expression_node->value_index = add_constant_value(parser, SLOT_I(0), typeid(TYPE_VOID));
+            expression_node->value_index = 0;
             break;
         }
         case TOKEN_STRING: {
             expression_node->value_type = typeid(TYPE_STRING);
             OrsoString *value = orso_new_string_from_cstrn(expression_node->start.start + 1, expression_node->start.length - 2, &parser->ast->allocator);
-            expression_node->value_index = add_constant_value(parser, SLOT_P(value), typeid(TYPE_STRING));
+            expression_node->value_index = arena_array_push_t(&parser->ast->constants, &value, OrsoString*);
             break;
         };
 
         case TOKEN_SYMBOL: {
             expression_node->value_type = typeid(TYPE_SYMBOL);
             symbol_t *value = orso_new_symbol_from_cstrn(expression_node->start.start + 1, expression_node->start.length - 2, &parser->ast->symbols, &parser->ast->allocator);
-            expression_node->value_index = add_constant_value(parser, SLOT_P(value), typeid(TYPE_SYMBOL));
+            expression_node->value_index = arena_array_push_t(&parser->ast->constants, &value, symbol_t*);
             break;
         }
         default:
@@ -1107,15 +1139,11 @@ bool parse(ast_t *ast, string_t file_path, cstr_t source, error_function_t error
     return !parser.had_error;
 }
 
-i32 add_value_to_ast_constant_stack(ast_t *ast, slot_t *value, type_t type) {
+size_t add_value_to_ast_constant_stack(ast_t *ast, void *data, type_t type) {
     type_info_t *type_info = get_type_info(&ast->type_set.types, type);
-
-    i32 slot_count = type_slot_count(type_info);
-    for (i32 i = 0; i < slot_count; i ++) {
-        array_push(&ast->folded_constants, value[i]);
-    }
-    
-    return ast->folded_constants.count - slot_count;
+    size_t size = type_info->size;
+    size_t index = arena_array_push(&ast->constants, data, size);
+    return index;
 }
 
 i32 zero_value(ast_t *ast, type_t type, symbol_table_t *symbol_table) {
@@ -1185,13 +1213,9 @@ i32 zero_value(ast_t *ast, type_t type, symbol_table_t *symbol_table) {
     return zero_index;
 }
 
-type_t get_folded_type(ast_t *ast, i32 index) {
-    if (index < 0) {
-        return typeid(TYPE_INVALID);
-    }
-
-    slot_t *type_slot = &ast->folded_constants.items[index];
-    type_t type = (type_t){.i=type_slot->as.u};
+type_t get_folded_type(ast_t *ast, size_t index) {
+    void *type_data = arena_array_get(&ast->constants, index);
+    type_t type = *((type_t*)type_data);
     return type;
 }
 

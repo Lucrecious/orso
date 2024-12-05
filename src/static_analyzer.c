@@ -523,7 +523,8 @@ static void resolve_foldable(
             // we should probably let the user know and also not allow them to fold something
             // that has an invalid thing.
             if (type_is_function(ast->type_set.types, expression->as.call.callee->value_type)) {
-                function_t* function = (function_t*)ast->folded_constants.items[expression->as.call.callee->value_index].as.p;
+                size_t value_index = expression->as.call.callee->value_index;
+                function_t* function = arena_array_get_t(&ast->constants, value_index, function_t*);
                 ast_node_t* function_definition = NULL;
                 for (size_t i = 0; i < ast->function_definition_pairs.count; ++i) {
                     if (function == ast->function_definition_pairs.items[i].function) {
@@ -1751,7 +1752,7 @@ static void resolve_entity_declaration(analyzer_t* analyzer, ast_t* ast, Analysi
 
     unless (entity_declaration->as.declaration.is_mutable) {
         if (INITIAL_EXPRESSION != NULL && type_is_function(ast->type_set.types, INITIAL_EXPRESSION->value_type)) {
-            function_t* function = (function_t*)ast->folded_constants.items[INITIAL_EXPRESSION->value_index].as.p;
+            function_t *function = arena_array_get_t(&ast->constants, INITIAL_EXPRESSION->value_index, function_t*);
             if (function->binded_name == NULL) {
                 function->binded_name = name;
             }
@@ -2084,13 +2085,13 @@ static Entity *get_resolved_entity_by_identifier(
             *     [1] by analyzed I mean type checked, type flowed, constants folded, etc. i.e. getting the ast ready for codegen.
             */
 
-            function_t *function = (function_t*)ast->folded_constants.items[entity->node->as.declaration.initial_value_expression->value_index].as.p;
+            function_t *function = arena_array_get_t(&ast->constants, entity->node->as.declaration.initial_value_expression->value_index, function_t*);
             for (size_t i = 0; i < analyzer->dependencies.count; ++i) {
                 i32 i_ = analyzer->dependencies.count - 1 - i;
                 analysis_dependency_t *dependency = &analyzer->dependencies.items[i_];
                 ast_node_t *node = dependency->ast_node;
                 if (node->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION) {
-                    function_t *folded_function = (function_t*)ast->folded_constants.items[node->value_index].as.p;
+                    function_t *folded_function = arena_array_get_t(&ast->constants, node->value_index, function_t*);
                     if (folded_function == function && dependency->fold_level != state.fold_level) {
                         // TODO: Use better system to figure out whether function definition can be compiled or not
                         // In this case, it cannot because of the fold level circular dependency.
@@ -2391,7 +2392,7 @@ static void resolve_struct_definition(analyzer_t *analyzer, ast_t *ast, Analysis
     struct_definition->value_type = incomplete_struct_id;
 
     struct_definition->foldable = true;
-    struct_definition->value_index = ast->true_index;
+    struct_definition->value_index = 0;
 
     ast_node_and_scope_t node_and_scope = {
         .node = struct_definition,
@@ -2501,7 +2502,7 @@ static void resolve_struct_definition(analyzer_t *analyzer, ast_t *ast, Analysis
                 bytes_to_copy -= sizeof(slot_t);
             }
 
-            byte* value_src = (byte*)&ast->folded_constants.items[declaration->value_index];
+            byte *value_src = (byte*)arena_array_get(&ast->constants, declaration->value_index);
             memcpy(struct_data + offset, value_src, bytes_to_copy);
         }
 

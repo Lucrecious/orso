@@ -3,6 +3,7 @@
 
 #include "stddef.h"
 #include "arena.h"
+#include "def.h"
 
 #define array_push(array, item) do { \
     if ((array)->count >= (array)->capacity) {\
@@ -16,5 +17,13 @@
     } \
     (array)->items[(array)->count++] = (item); \
 } while(0)
+
+typedef struct bytes_t bytes_t;
+struct bytes_t {
+    byte *items;
+    size_t count;
+    size_t capacity;
+    arena_t *allocator;
+};
 
 #endif

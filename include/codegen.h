@@ -16,45 +16,6 @@ enum reg_t {
     REG_OPERAND1,
 };
 
-typedef struct arena_array_t arena_array_t;
-struct arena_array_t {
-    arena_t data;
-    size_t count;
-};
-
-static size_t arena_array_push(arena_array_t *array, void *data, size_t size) {
-    void *space = arena_alloc(&array->data, size);
-    memcpy(space, data, size);
-
-    size_t new_count = 0;
-    size_t index = 0;
-    
-    // find index
-    {
-        Region *last_region = array->data.end;
-        ASSERT((space >= (void*)last_region->data) && (space < ((void*)last_region->data+last_region->count)), "expected that the reserved space is in the last region");
-
-        size_t region_index = (byte*)space - (byte*)last_region->data;
-
-        Region *r = array->data.begin;
-        while (r) {
-            new_count += r->count;
-            r = r->next;
-        }
-
-        // remove over counting since last region is not filled yet
-        index = new_count;
-
-        // remove over counting
-        index -= last_region->count;
-        index += region_index;
-    }
-
-    array->count = new_count;
-
-    return index;
-}
-
 typedef struct builder_t builder_t;
 struct builder_t {
     ast_t *ast;
@@ -85,8 +46,8 @@ static void builder2vm(vm_t *vm, builder_t *builder) {
     size_t index = 0;
     while (r) {
         memcpy(vm->memory+index, r->data, r->count);
-        r = r->next;
         index += r->count;
+        r = r->next;
     }
 
     memcpy(vm->program, builder->instructions.items, builder->instructions.count*sizeof(instruction_t));
@@ -178,7 +139,7 @@ static void gen_primary(builder_t *builder, ast_node_t *primary) {
         }
     }
 
-    void *data = &builder->ast->folded_constants.items[primary->value_index];
+    void *data = arena_array_get(&builder->ast->constants, primary->value_index);
     gen_constant(builder, data, type_info);
 }
 
@@ -230,6 +191,10 @@ static void gen_block(builder_t *builder, ast_node_t *block) {
     }
 }
 
+static void error_fn(error_t error) {
+    UNUSED(error);
+}
+
 bool compile_program(vm_t *vm, ast_t *ast) {
     tmp_arena_t *tmp = allocator_borrow();
 
@@ -269,6 +234,9 @@ bool compile_program(vm_t *vm, ast_t *ast) {
     //size_t instruction_index = builder.code.count;
 
     builder_t builder = {0};
+    builder.ast = ast;
+    builder.error_fn = error_fn;
+    builder.instructions.allocator = tmp->allocator;
     gen_block(&builder, initial_expression->as.function.block);
 
     builder2vm(vm, &builder);

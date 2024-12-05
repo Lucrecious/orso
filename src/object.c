@@ -31,36 +31,29 @@ char *cstrn_new(const char *start, i32 length, arena_t *allocator) {
     return cstr;
 }
 
-string_t slot_to_string(slot_t *slot, type_infos_t *types, type_t type, arena_t *allocator) {
+string_t bytes_to_string(byte *data, type_infos_t *types, type_t type, arena_t *allocator) {
     type_info_t *type_info = get_type_info(types, type);
 
     switch (type_info->kind) {
         case TYPE_BOOL: {
-            if (SLOT_IS_FALSE((*slot))) {
+            if (*data) {
                 return str("false");
             } else {
                 return str("true");
             }
         }
 
-        case TYPE_INT32:
-        case TYPE_INT64: {
-            return string_format("%lld", allocator, slot->as.i);
-        }
+        case TYPE_INT32: return string_format("%d", allocator, cast(data, i32));
+        case TYPE_INT64: return string_format("%lld", allocator, cast(data, i64));
 
-        case TYPE_FLOAT32:
-        case TYPE_FLOAT64: {
-            return string_format("%.14f", allocator, slot->as.f);
-        }
+        case TYPE_FLOAT32: return string_format("%.14f", allocator, cast(data, f32));
+        case TYPE_FLOAT64: return string_format("%.14f", allocator, cast(data, f64));
 
         case TYPE_VOID: return str("null");
 
-        case TYPE_STRING: return cstrn2string(((OrsoString*)slot->as.p)->text, ((OrsoString*)slot->as.p)->length, allocator);
+        case TYPE_STRING: return cstrn2string(cast(data, OrsoString*)->text, cast(data, OrsoString*)->length, allocator);
 
-        case TYPE_SYMBOL: {
-            symbol_t *symbol = (symbol_t*)slot->as.p;
-            return string_format("'%s'", allocator, (char*)symbol->text);
-        }
+        case TYPE_SYMBOL: return string_format("'%s'", allocator, (char*)cast(data, symbol_t*)->text);
 
         case TYPE_FUNCTION: {
             string_t string;
@@ -68,7 +61,7 @@ string_t slot_to_string(slot_t *slot, type_infos_t *types, type_t type, arena_t 
             tmp_arena_t *tmp = allocator_borrow(); {
                 string_builder_t sb = {.allocator = tmp->allocator};
 
-                function_t *function = (function_t*)slot->as.p;
+                function_t *function = cast(data, function_t*);
                 sb_add_cstr(&sb, string_format("<%s :: (", tmp->allocator,
                     function->binded_name ? function->binded_name->text : "<anonymous>").cstr);
                 
@@ -106,8 +99,6 @@ string_t slot_to_string(slot_t *slot, type_infos_t *types, type_t type, arena_t 
 
             sb_add_cstr(&sb, "{");
 
-            slots_t slots = {.allocator=tmp->allocator};
-
             for (i32 i = 0; i < type_info->data.struct_.field_count; ++i) {
                 struct_field_t *field = &type_info->data.struct_.fields[i];
                 
@@ -115,19 +106,7 @@ string_t slot_to_string(slot_t *slot, type_infos_t *types, type_t type, arena_t 
 
                 sb_add_cstr(&sb, "=");
 
-                byte *value = ((byte*)slot) + field->offset;
-
-                type_info_t *field_type = get_type_info(types, field->type);
-
-                size_t field_slot_size = type_slot_count(field_type);
-                until (slots.count >= field_slot_size) {
-                    array_push(&slots, (slot_t){0});
-                }
-
-                size_t field_size = field_type->size;
-                copy_bytes_to_slots(slots.items, value, field_type->kind, field_size);
-
-                string_t field_value = slot_to_string(slots.items, types, field->type, tmp->allocator);
+                string_t field_value = bytes_to_string(data+field->offset, types, field->type, tmp->allocator);
 
                 sb_add_cstr(&sb, field_value.cstr);
 
@@ -146,15 +125,15 @@ string_t slot_to_string(slot_t *slot, type_infos_t *types, type_t type, arena_t 
         }
 
         case TYPE_UNION: {
-            type_t type = (type_t){.i=slot->as.u};
-            return slot_to_string(slot + 1, types, type, allocator);
+            type_t type = cast(data, type_t);
+            return bytes_to_string(data + sizeof(type), types, type, allocator);
         }
 
         case TYPE_TYPE: {
             string_t result;
 
             tmp_arena_t *tmp = allocator_borrow(); {
-                type_t type = (type_t){.i=slot->as.u};
+                type_t type = cast(data, type_t);
                 string_t type_string = type_to_string(*types, type, tmp->allocator);
                 result = string_format("<%s>", allocator, type_string.cstr);
             } allocator_return(tmp);
@@ -165,72 +144,6 @@ string_t slot_to_string(slot_t *slot, type_infos_t *types, type_t type, arena_t 
         case TYPE_UNDEFINED: return str("<undefined>");
         case TYPE_UNRESOLVED: return str("<unresolved>");
         case TYPE_INVALID: return str("<invalid>");
-    }
-}
-
-OrsoString *orso_slot_to_string(slot_t *slot, type_infos_t *types, type_t type, arena_t *allocator) {
-    OrsoString *string;
-
-    tmp_arena_t *tmp = allocator_borrow(); {
-        string_t value = slot_to_string(slot, types, type, tmp->allocator);
-        string = orso_new_string_from_cstrn(value.cstr, value.length, allocator);
-    } allocator_return(tmp);
-
-    return string;
-}
-
-void copy_bytes_to_slots(void *destination, void *source, type_kind_t type_kind, u64 size_bytes) {
-    switch (type_kind) {
-        case TYPE_COUNT:
-        case TYPE_INVALID:
-        case TYPE_UNDEFINED:
-        case TYPE_UNRESOLVED: {
-            UNREACHABLE();
-            break;
-        }
-        case TYPE_VOID:
-        case TYPE_BOOL: {
-            byte field_value = *(byte*)source;
-            ((slot_t*)destination)->as.u = field_value;
-            break;
-        }
-
-        case TYPE_INT32: {
-            i32 field_value = *((i32*)(source));
-            ((slot_t*)destination)->as.i = field_value;
-            break;
-        }
-
-        case TYPE_FLOAT32: {
-            f32 field_value = *((f32*)(source));
-            ((slot_t*)destination)->as.f = field_value;
-            break;
-        }
-        
-        case TYPE_TYPE:
-        case TYPE_SYMBOL:
-        case TYPE_STRING:
-        case TYPE_FUNCTION:
-        case TYPE_NATIVE_FUNCTION:
-        case TYPE_POINTER:
-        case TYPE_INT64:
-        case TYPE_FLOAT64: {
-            *((slot_t*)destination) = *((slot_t*)(source));
-            break;
-        }
-
-        case TYPE_UNION:
-        case TYPE_STRUCT: {
-            for (size_t i = 0; i < size_bytes; i += sizeof(slot_t)) {
-                if (i + sizeof(slot_t) <= size_bytes) {
-                    ((slot_t*)destination)[i/sizeof(slot_t)] = ((slot_t*)(source))[i/sizeof(slot_t)];
-                } else {
-                    ((slot_t*)destination)[i/sizeof(slot_t)].as.i = 0;
-                    memcpy((byte*)destination + i, (byte*)source + i, size_bytes-i);
-                }
-            }
-            break;
-        }
     }
 }
 
@@ -247,7 +160,6 @@ OrsoString *orso_string_concat(OrsoString *a, OrsoString *b, arena_t *allocator)
 function_t *orso_new_function(string_t file_defined_in, arena_t *allocator) {
     function_t *function = (function_t*)object_new(sizeof(function_t), typeid(TYPE_FUNCTION), allocator);
     function->signature = typeid(TYPE_FUNCTION);
-    chunk_init(&function->chunk, allocator);
     function->binded_name = NULL;
     function->file_defined_in = file_defined_in;
 
@@ -255,7 +167,8 @@ function_t *orso_new_function(string_t file_defined_in, arena_t *allocator) {
 }
 
 bool is_function_compiled(function_t* function) {
-    return function->chunk.code.items != NULL;
+    UNUSED(function);
+    return false;
 }
 
 native_function_t *orso_new_native_function(native_function_interface_t function, type_t type, arena_t *allocator) {

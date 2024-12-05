@@ -1,7 +1,6 @@
 #ifndef OBJECT_H_
 #define OBJECT_H_
 
-#include "chunk.h"
 #include "def.h"
 #include "type_set.h"
 #include "slot.h"
@@ -27,7 +26,6 @@ typedef struct symbol_t {
 
 typedef struct function_t {
     object_t object;
-    chunk_t chunk;
     type_t signature;
     symbol_t *binded_name;
     string_t file_defined_in;
@@ -65,9 +63,7 @@ FORCE_INLINE bool string_equal(OrsoString *a, OrsoString *b) {
 
 OrsoString *orso_string_concat(OrsoString *a, OrsoString *b, arena_t *allocator);
 
-string_t slot_to_string(slot_t *slot, type_infos_t *types, type_t type, arena_t *allocator);
-
-OrsoString *orso_slot_to_string(slot_t *slot, type_infos_t *types, type_t type, arena_t *allocator);
+string_t bytes_to_string(byte *data, type_infos_t *types, type_t type, arena_t *allocator);
 
 void copy_bytes_to_slots(void *destination, void *source, type_kind_t type_kind, u64 size_bytes);
 

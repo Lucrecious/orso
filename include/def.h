@@ -29,6 +29,8 @@ typedef double f64;
 typedef void* ptr;
 typedef const char* cstr_t;
 
+#define cast(void_ptr, type) (*((type*)void_ptr))
+
 #define unless(condition) if (!(condition))
 #define until(condition) while (!(condition))
 

@@ -1,7 +1,6 @@
 #ifndef PARSER_H_
 #define PARSER_H_
 
-#include "chunk.h"
 #include "lexer.h"
 #include "object.h"
 #include "symbol_table.h"
@@ -10,6 +9,17 @@
 #include "arena.h"
 
 #include "table.h"
+
+typedef struct arena_array_t arena_array_t;
+struct arena_array_t {
+    arena_t data;
+    size_t count;
+};
+
+size_t arena_array_push(arena_array_t *array, void *data, size_t size);
+void *arena_array_get(arena_array_t *array, size_t index);
+#define arena_array_push_t(array, data, type) arena_array_push(array, data, sizeof(type))
+#define arena_array_get_t(array, index, type) ((type)((type*)arena_array_get(array, index)))
 
 typedef enum return_guarentee_t {
     RETURN_GUARENTEE_NONE,
@@ -229,9 +239,6 @@ struct fd_pairs_t {
 typedef struct ast_t {
     arena_t allocator;
 
-    i32 void_index;
-    i32 true_index;
-
     bool resolved;
     type_table_t type_set;
 
@@ -240,8 +247,7 @@ typedef struct ast_t {
     fd_pairs_t function_definition_pairs;
 
     ast_node_t *root;
-    types_t folded_constant_types;
-    slots_t folded_constants;
+    arena_array_t constants;
 
     table_t(ptr2i32) *type_to_zero_index;
     table_t(type2ns) *type_to_creation_node;
@@ -251,9 +257,9 @@ typedef struct ast_t {
 
 void ast_print(ast_t *ast, const char *name);
 
-i32 add_value_to_ast_constant_stack(ast_t *ast, slot_t *value, type_t type);
+size_t add_value_to_ast_constant_stack(ast_t *ast, void *data, type_t type);
 bool parse(ast_t *ast, string_t file_path, cstr_t source, error_function_t error_fn);
-type_t get_folded_type(ast_t *ast, i32 index);
+type_t get_folded_type(ast_t *ast, size_t index);
 
 void ast_init(ast_t *ast);
 void ast_free(ast_t *ast);

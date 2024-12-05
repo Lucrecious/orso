@@ -3,7 +3,6 @@
 
 
 const char* SOURCES[] = {
-    "./src/chunk.c",
     "./src/lexer.c",
     "./src/object.c",
     "./src/parser.c",
