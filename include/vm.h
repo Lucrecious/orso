@@ -10,6 +10,7 @@ enum op_code_t {
 
     OP_MOVU8_MEM_TO_REG,
     OP_MOVI32_MEM_TO_REG,
+    OP_MOVU32_MEM_TO_REG,
     OP_MOVF32_MEM_TO_REG,
     OP_MOVWORD_MEM_TO_REG,
 
@@ -138,6 +139,16 @@ void vm_step(vm_t *vm) {
             memaddr_t memaddr = instruction.as.mov_mem_to_reg.mem_address;
             byte reg = instruction.as.mov_mem_to_reg.reg_result;
             i32 value = *((i32*)(MEMORY->data + memaddr));
+            vm->registers[reg].as.i = value;
+
+            IP_ADV(1);
+            break;
+        }
+
+        case OP_MOVU32_MEM_TO_REG: {
+            memaddr_t memaddr = instruction.as.mov_mem_to_reg.mem_address;
+            byte reg = instruction.as.mov_mem_to_reg.reg_result;
+            u32 value = *((u32*)(MEMORY->data + memaddr));
             vm->registers[reg].as.i = value;
 
             IP_ADV(1);

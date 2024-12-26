@@ -13,16 +13,6 @@ static object_t *object_new(size_t byte_size, type_t type, arena_t *allocator) {
     return (object_t*)object;
 }
 
-
-OrsoString *orso_new_string_from_cstrn(const char *start, i32 length, arena_t *allocator) {
-    OrsoString *string = (OrsoString*)object_new(sizeof(OrsoString) + (length+1)*sizeof(char), typeid(TYPE_STRING), allocator);
-    string->length = length;
-    memcpy(string->text, start, length);
-    string->text[length] = '\0';
-
-    return string;
-}
-
 char *cstrn_new(const char *start, i32 length, arena_t *allocator) {
     char *cstr = arena_alloc(allocator, sizeof(char)*(length+1));
     memcpy(cstr, start, length);
@@ -43,11 +33,37 @@ string_t bytes_to_string(byte *data, type_infos_t *types, type_t type, arena_t *
             }
         }
 
-        case TYPE_INT32: return string_format("%d", allocator, cast(data, i32));
-        case TYPE_INT64: return string_format("%lld", allocator, cast(data, i64));
+        case TYPE_NUMBER: {
+            switch (type_info->size) {
+                case 1: {
+                    ASSERT(false, "not impleneted");
+                    break;
+                }
 
-        case TYPE_FLOAT32: return string_format("%.14f", allocator, cast(data, f32));
-        case TYPE_FLOAT64: return string_format("%.14f", allocator, cast(data, f64));
+                case 2: {
+                    ASSERT(false, "not impleneted");
+                    break;
+                }
+
+                case 4: {
+                    switch (type_info->data.num) {
+                        case NUM_TYPE_SIGNED: return string_format("%d", allocator, cast(data, i32));
+                        case NUM_TYPE_UNSIGNED: return string_format("%lu", allocator, cast(data, u32));
+                        case NUM_TYPE_FLOAT: return string_format("%.14f", allocator, cast(data, f32));
+                    }
+                }
+
+                case 8: {
+                    switch (type_info->data.num) {
+                        case NUM_TYPE_SIGNED: return string_format("%lld", allocator, cast(data, i64));
+                        case NUM_TYPE_UNSIGNED: return string_format("%lu", allocator, cast(data, u64));
+                        case NUM_TYPE_FLOAT: return string_format("%.14f", allocator, cast(data, f64));
+                    }
+                }
+
+                default: UNREACHABLE();
+            }
+        }
 
         case TYPE_VOID: return str("null");
 
@@ -179,16 +195,6 @@ native_function_t *orso_new_native_function(native_function_interface_t function
     return function_obj;
 }
 
-struct_t *orso_new_struct(arena_t *allocator) {
-    struct_t *struct_ = arena_alloc(allocator, sizeof(struct_t));
-    struct_->slots = NULL;
-    return struct_;
-}
-
-void orso_free_struct(struct_t *struct_) {
-    free(struct_->slots);
-}
-
 i64 cstrn_to_i64(const char* text, i32 length) {
     i64 integer = 0;
 
@@ -253,8 +259,8 @@ symbol_t *orso_unmanaged_symbol_from_cstrn(const char *start, i32 length, symbol
     memcpy(symbol->text, start, length);
     symbol->text[length] = '\0';
 
-    slot_t slot = SLOT_I(0);
-    symbol_table_set(symbol_table, symbol, slot);
+    word_t word = WORDI(0);
+    symbol_table_set(symbol_table, symbol, word);
 
     return symbol;
 }
@@ -272,8 +278,8 @@ symbol_t *orso_new_symbol_from_cstrn(const char *start, i32 length, symbol_table
     memcpy(symbol->text, start, length);
     symbol->text[length] = '\0';
 
-    slot_t slot = SLOT_I(0);
-    symbol_table_set(symbol_table, symbol, slot);
+    word_t word = WORDI(0);
+    symbol_table_set(symbol_table, symbol, word);
 
     return symbol;
 }

@@ -47,40 +47,29 @@ static void emit_read_memory_to_reg(function_t *function, reg_t destination, mem
     instruction_t instruction;
     instruction.op = OP_MOVWORD_MEM_TO_REG;
 
-    if (type_is_number(type_info, true) && type_info->size < WORD_SIZE) {
-        switch (type_info->kind) {
-            case TYPE_BOOL: {
-                instruction.op = OP_MOVU8_MEM_TO_REG;
+    if (type_info->kind == TYPE_BOOL) {
+        instruction.op = OP_MOVU8_MEM_TO_REG;
+
+    } else if (type_info->kind == TYPE_NUMBER) {
+        switch (type_info->size) {
+            case 1: UNREACHABLE(); break;
+            case 2: UNREACHABLE(); break;
+
+            case 4: {
+                switch (type_info->data.num) {
+                    case NUM_TYPE_FLOAT: instruction.op = OP_MOVF32_MEM_TO_REG; break;
+                    case NUM_TYPE_SIGNED: instruction.op = OP_MOVF32_MEM_TO_REG; break;
+                    case NUM_TYPE_UNSIGNED: instruction.op = OP_MOVU32_MEM_TO_REG; break;
+                }
                 break;
             }
 
-            case TYPE_INT32: {
-                instruction.op = OP_MOVI32_MEM_TO_REG;
-                break;
-            }
+            case 8: instruction.op = OP_MOVWORD_MEM_TO_REG; break;
 
-            case TYPE_FLOAT32: {
-                instruction.op = OP_MOVF32_MEM_TO_REG;
-                break;
-            }
-
-            case TYPE_INVALID:
-            case TYPE_UNDEFINED:
-            case TYPE_UNRESOLVED:
-            case TYPE_VOID:
-            case TYPE_INT64:
-            case TYPE_FLOAT64:
-            case TYPE_STRING:
-            case TYPE_SYMBOL:
-            case TYPE_TYPE:
-            case TYPE_FUNCTION:
-            case TYPE_NATIVE_FUNCTION:
-            case TYPE_POINTER:
-            case TYPE_UNION:
-            case TYPE_STRUCT:
-            case TYPE_COUNT: UNREACHABLE(); break;
+            default: UNREACHABLE();
         }
-
+    } else {
+        UNREACHABLE();
     }
 
     instruction.as.mov_mem_to_reg.mem_address = address;

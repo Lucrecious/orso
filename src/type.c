@@ -36,9 +36,9 @@ bool struct_type_is_incomplete(type_info_t *type) {
 }
 
 bool type_equal(type_info_t *a, type_info_t *b) {
-    if (a->kind != b->kind) {
-        return false;
-    }
+    if (a->kind != b->kind) return false;
+
+    if (a->size != b->size) return false;
 
     switch (a->kind) {
         case TYPE_UNION: {
@@ -115,11 +115,10 @@ bool type_equal(type_info_t *a, type_info_t *b) {
             return typeid_eq(a->data.pointer.type, b->data.pointer.type);
         }
 
-        case TYPE_BOOL:
-        case TYPE_FLOAT32:
-        case TYPE_FLOAT64:
-        case TYPE_INT32:
-        case TYPE_INT64:
+        case TYPE_BOOL: return true;
+
+        case TYPE_NUMBER: return a->data.num == b->data.num;
+
         case TYPE_STRING:
         case TYPE_VOID:
         case TYPE_TYPE:
@@ -185,25 +184,12 @@ type_t type_merge(type_table_t *set, type_t a_id, type_t b_id) {
 }
 
 bool type_is_float(type_info_t *type) {
-    switch (type->kind) {
-        case TYPE_FLOAT32:
-        case TYPE_FLOAT64: return true;
-
-        default: return false;
-    }
+    return type->data.num == NUM_TYPE_FLOAT;
 }
 
 bool type_is_integer(type_info_t *type, bool include_bool) {
-    if (include_bool && type->kind == TYPE_BOOL) {
-        return true;
-    }
-
-    switch (type->kind) {
-        case TYPE_INT32:
-        case TYPE_INT64: return true;
-
-        default: return false;
-    }
+    if (type->kind == TYPE_BOOL && include_bool) return true;
+    return type->data.num == NUM_TYPE_SIGNED;
 }
 
 bool type_is_number(type_info_t *type, bool include_bool) {
@@ -215,7 +201,7 @@ size_t bytes_to_slots(i32 byte_count) {
         return 1;
     }
 
-    return (byte_count / sizeof(slot_t)) + ((byte_count % sizeof(slot_t) != 0));
+    return (byte_count / WORD_SIZE) + ((byte_count % WORD_SIZE != 0));
 }
 
 struct_field_t *type_struct_find_field(type_info_t *struct_, const char *name, size_t name_length) {
@@ -245,7 +231,9 @@ bool type_fits(type_info_t* storage_type, type_info_t* value_type) {
 }
 
 string_t type_to_string_toplevel(type_infos_t types, type_t type, arena_t *allocator, bool is_toplevel) {
-    string_builder_t sb = {.allocator = allocator};
+    tmp_arena_t *tmp_arena = allocator_borrow();
+
+    string_builder_t sb = {.allocator = tmp_arena->allocator};
 
     type_info_t *type_info = get_type_info(&types, type);
 
@@ -318,10 +306,18 @@ string_t type_to_string_toplevel(type_infos_t types, type_t type, arena_t *alloc
         char *type_name;
         switch (type_info->kind) {
             case TYPE_BOOL: type_name = "bool"; break;
-            case TYPE_FLOAT32: type_name = "f32"; break;
-            case TYPE_FLOAT64: type_name = "f64"; break;
-            case TYPE_INT32: type_name = "i32"; break;
-            case TYPE_INT64: type_name = "i64"; break;
+            case TYPE_NUMBER: {
+                switch (type_info->data.num) {
+                    case NUM_TYPE_FLOAT: sb_add_char(&sb, 'f'); break;
+                    case NUM_TYPE_SIGNED: sb_add_char(&sb, 'i'); break;
+                    case NUM_TYPE_UNSIGNED: sb_add_char(&sb, 'u'); break;
+                }
+
+                string_t s = string_format("%llu", tmp_arena->allocator, (type_info->size*8));
+                sb_add_cstr(&sb, s.cstr);
+                break;
+            }
+
             case TYPE_STRING: type_name = "string"; break;
             case TYPE_SYMBOL: type_name = "symbol"; break;
             case TYPE_VOID: type_name = "void"; break;
@@ -343,6 +339,8 @@ string_t type_to_string_toplevel(type_infos_t types, type_t type, arena_t *alloc
     }
 
     string_t string = sb_render(&sb, allocator);
+
+    allocator_return(tmp_arena);
 
     return string;
 }

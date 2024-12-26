@@ -15,6 +15,12 @@ typedef struct type_table_t {
     type_infos_t types;
     table_t(type2u64) *types2index;
     arena_t *allocator;
+
+    type_t f32_;
+    type_t f64_;
+    type_t i32_;
+    type_t i64_;
+    type_t empty_function_;
 } type_table_t;
 
 void type_set_init(type_table_t *set, arena_t *allocator);
@@ -25,6 +31,7 @@ bool type_is_function(type_infos_t types, type_t type);
 bool type_is_native_function(type_infos_t types, type_t type);
 bool type_is_struct(type_infos_t types, type_t type);
 bool type_is_pointer(type_infos_t types, type_t type);
+bool type_is_number_(type_infos_t types, type_t type);
 
 type_t type_set_fetch_union(type_table_t *set, types_t types);
 

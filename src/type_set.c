@@ -144,47 +144,68 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
     set->types2index = table_new(type2u64, allocator);
     set->types = (type_infos_t){.allocator=allocator};
 
-    for (size_t i = 0; i < TYPE_COUNT; ++i) {
-        array_push(&set->types, NULL);
-    }
-
-    static type_info_t type_void = {.kind=TYPE_VOID, .size=0};
-    static type_info_t type_bool = {.kind=TYPE_BOOL, .size=sizeof(byte)};
-    static type_info_t type_f32 = {.kind=TYPE_FLOAT32, .size=sizeof(f32)};
-    static type_info_t type_f64 = {.kind=TYPE_FLOAT64, .size=sizeof(f64)};
-    static type_info_t type_i32 = {.kind=TYPE_INT32, .size=sizeof(i32)};
-    static type_info_t type_i64 = {.kind=TYPE_INT64, .size=sizeof(i64)};
-    static type_info_t type_string = {.kind=TYPE_STRING, .size=sizeof(void*)};
-    static type_info_t type_symbol = {.kind=TYPE_SYMBOL, .size=sizeof(void*)};
     static type_info_t type_invalid = {.kind=TYPE_INVALID, .size=0};
     static type_info_t type_unresolved = {.kind=TYPE_UNRESOLVED, .size=0};
     static type_info_t type_undefined = {.kind=TYPE_UNDEFINED, .size=0};
+
+    static type_info_t type_void = {.kind=TYPE_VOID, .size=0};
+    static type_info_t type_bool = {.kind=TYPE_BOOL, .size=sizeof(byte)};
+    static type_info_t type_f32 = {.kind=TYPE_NUMBER, .size=sizeof(f32), .data.num = NUM_TYPE_FLOAT};
+    static type_info_t type_f64 = {.kind=TYPE_NUMBER, .size=sizeof(f64), .data.num = NUM_TYPE_FLOAT};
+    static type_info_t type_i32 = {.kind=TYPE_NUMBER, .size=sizeof(i32), .data.num = NUM_TYPE_SIGNED};
+    static type_info_t type_i64 = {.kind=TYPE_NUMBER, .size=sizeof(i64), .data.num = NUM_TYPE_SIGNED};
+    static type_info_t type_string = {.kind=TYPE_STRING, .size=sizeof(void*)};
+    static type_info_t type_symbol = {.kind=TYPE_SYMBOL, .size=sizeof(void*)};
     static type_info_t type_type = {.kind=TYPE_TYPE, .size=sizeof(type_t)};
     static type_info_t empty_function = {.kind = TYPE_FUNCTION, .size = sizeof(void*), .data.function.return_type = typeid(TYPE_VOID)};
 
-    for (size_t i = 0; i < TYPE_COUNT; ++i) {
-        switch ((type_kind_t)i) {
-            case TYPE_VOID: set->types.items[i] = &type_void; break;
-            case TYPE_BOOL: set->types.items[i] = &type_bool; break;
-            case TYPE_FLOAT32: set->types.items[i] = &type_f32; break;
-            case TYPE_FLOAT64: set->types.items[i] = &type_f64; break;
-            case TYPE_INT32: set->types.items[i] = &type_i32; break;
-            case TYPE_INT64: set->types.items[i] = &type_i64; break;
-            case TYPE_STRING: set->types.items[i] = &type_string; break;
-            case TYPE_SYMBOL: set->types.items[i] = &type_symbol; break;
-            case TYPE_INVALID: set->types.items[i] = &type_invalid; break;
-            case TYPE_UNRESOLVED: set->types.items[i] = &type_unresolved; break;
-            case TYPE_UNDEFINED: set->types.items[i] = &type_undefined; break;
-            case TYPE_TYPE: set->types.items[i] = &type_type; break;
-            case TYPE_FUNCTION: set->types.items[i] = &empty_function; break;
+    type_t invalid = typeid(set->types.count);
+    array_push(&set->types, &type_invalid);
 
-            case TYPE_NATIVE_FUNCTION:
-            case TYPE_POINTER:
-            case TYPE_UNION:
-            case TYPE_STRUCT:
-            case TYPE_COUNT: set->types.items[i] = &type_invalid; break;
-        }
-    }
+    type_t unresolved = typeid(set->types.count);
+    array_push(&set->types, &type_unresolved);
+
+    type_t undefined = typeid(set->types.count);
+    array_push(&set->types, &type_undefined);
+
+    type_t void_ = typeid(set->types.count);
+    array_push(&set->types, &type_void);
+
+    type_t bool_ = typeid(set->types.count);
+    array_push(&set->types, &type_bool);
+
+    type_t string_ = typeid(set->types.count);
+    array_push(&set->types, &type_string);
+
+    type_t symbol_ = typeid(set->types.count);
+    array_push(&set->types, &type_symbol);
+
+    type_t type_ = typeid(set->types.count);
+    array_push(&set->types, &type_type);
+
+    set->f32_ = typeid(set->types.count);
+    array_push(&set->types, &type_f32);
+
+    set->f64_ = typeid(set->types.count);
+    array_push(&set->types, &type_f64);
+
+    set->i32_ = typeid(set->types.count);
+    array_push(&set->types, &type_i32);
+
+    set->i64_ = typeid(set->types.count);
+    array_push(&set->types, &type_i64);
+
+    set->empty_function_ = typeid(set->types.count);
+    array_push(&set->types, &empty_function);
+    
+    ASSERT(invalid.i == TYPE_INVALID, "must be same as type invalid");
+    ASSERT(unresolved.i == TYPE_UNRESOLVED, "must be same as type unresolved");
+    ASSERT(undefined.i == TYPE_UNDEFINED, "must be same as type undefined");
+    ASSERT(void_.i == TYPE_VOID, "must be same as type void");
+    ASSERT(bool_.i == TYPE_BOOL, "must be same as type bool");
+    ASSERT(string_.i == TYPE_STRING, "must be same as type string");
+    ASSERT(symbol_.i == TYPE_SYMBOL, "must be same as type symbol");
+    ASSERT(type_.i == TYPE_TYPE, "must be same as type type");
 }
 
 type_info_t *get_type_info(type_infos_t *types, type_t type) {
@@ -211,6 +232,10 @@ bool type_is_struct(type_infos_t types, type_t type) {
 
 bool type_is_pointer(type_infos_t types, type_t type) {
     return get_type_info(&types, type)->kind == TYPE_POINTER;
+}
+
+bool type_is_number_(type_infos_t types, type_t type) {
+    return get_type_info(&types, type)->kind == TYPE_NUMBER;
 }
 
 static u64 hash_type(type_info_t *type) {
@@ -369,13 +394,13 @@ type_t type_set_fetch_anonymous_struct(type_table_t *set, i32 field_count, struc
             type_t previous_type = fields[i - 1].type;
             type_info_t *previous_type_info = get_type_info(&set->types, previous_type);
 
-            i32 bytes = bytes_to_slots(previous_type_info->size) * sizeof(slot_t);
+            i32 bytes = bytes_to_slots(previous_type_info->size) * WORD_SIZE;
             type_info->data.struct_.fields[i].offset = previous_offset + bytes;
         }
 
         type_t field_type= type_info->data.struct_.fields[field_count-1].type;
         type_info_t *field_type_info = get_type_info(&set->types, field_type);
-        i32 size_of_final = bytes_to_slots(field_type_info->size) * sizeof(slot_t);
+        i32 size_of_final = bytes_to_slots(field_type_info->size) * WORD_SIZE;
         i32 total_size = type_info->data.struct_.fields[field_count - 1].offset + size_of_final;
 
         type_info->size = total_size;

@@ -39,7 +39,7 @@ static void adjust_capacity(symbol_table_t* table, i32 capacity) {
     symbol_table_entry_t* entries = arena_alloc(table->allocator, sizeof(symbol_table_entry_t)*capacity);
     for (i32 i = 0; i < capacity; i++) {
         entries[i].key = NULL;
-        entries[i].value = SLOT_I(0);
+        entries[i].value = WORDI(0);
     }
 
     table->count = 0;
@@ -59,12 +59,12 @@ static void adjust_capacity(symbol_table_t* table, i32 capacity) {
     table->capacity = capacity;
 }
 
-bool symbol_table_get(symbol_table_t* table, symbol_t* symbol, slot_t* value) {
+bool symbol_table_get(symbol_table_t *table, symbol_t *symbol, word_t *value) {
     if (table->count == 0) {
         return false;
     }
 
-    symbol_table_entry_t* entry = find_entry(table->entries, table->capacity, symbol);
+    symbol_table_entry_t *entry = find_entry(table->entries, table->capacity, symbol);
     if (entry->key == NULL) {
         return false;
     }
@@ -73,7 +73,7 @@ bool symbol_table_get(symbol_table_t* table, symbol_t* symbol, slot_t* value) {
     return true;
 }
 
-bool symbol_table_set(symbol_table_t* table, symbol_t* key, slot_t value) {
+bool symbol_table_set(symbol_table_t *table, symbol_t *key, word_t value) {
     if (table->count + 1 > table->capacity * ORSO_SYMBOL_TABLE_MAX_LOAD) {
         i32 capacity = GROW_CAPACITY(table->capacity);
         adjust_capacity(table, capacity);

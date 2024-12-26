@@ -418,13 +418,13 @@ bool memarr_push_value(memarr_t *arr, void *data, size_t size_bytes, value_index
     return false;
 }
 
-static ast_node_t* number(parser_t* parser, bool inside_type_context) {
+static ast_node_t* number(parser_t *parser, bool inside_type_context) {
     ast_node_t* expression_node = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_PRIMARY, inside_type_context, parser->previous);
 
     switch (parser->previous.type)  {
         case TOKEN_INTEGER: {
             i64 value = cstrn_to_i64(parser->previous.start, parser->previous.length);
-            expression_node->value_type = typeid(TYPE_INT64);
+            expression_node->value_type = parser->ast->type_set.i64_;
             unless (memarr_push_value(&parser->ast->constants, &value, sizeof(i64), &expression_node->value_index)) {
                 error(parser, ERROR_CODEGEN_NOT_ENOUGH_MEMORY);
             }
@@ -432,7 +432,7 @@ static ast_node_t* number(parser_t* parser, bool inside_type_context) {
         }
         case TOKEN_FLOAT: {
             f64 value = cstrn_to_f64(parser->previous.start, parser->previous.length);
-            expression_node->value_type = typeid(TYPE_FLOAT64);
+            expression_node->value_type = parser->ast->type_set.f64_;
             unless (memarr_push_value(&parser->ast->constants, &value, sizeof(f64), &expression_node->value_index)) {
             }
             break;
@@ -466,11 +466,10 @@ static ast_node_t *literal(parser_t *parser, bool inside_type_context) {
             break;
         }
         case TOKEN_STRING: {
-            expression_node->value_type = typeid(TYPE_STRING);
-            OrsoString *value = orso_new_string_from_cstrn(expression_node->start.start + 1, expression_node->start.length - 2, &parser->ast->allocator);
-            unless (memarr_push_value(&parser->ast->constants, &value, sizeof(OrsoString*), &expression_node->value_index)) {
-                error(parser, ERROR_CODEGEN_NOT_ENOUGH_MEMORY);
-            }
+            UNREACHABLE();
+            // unless (memarr_push_value(&parser->ast->constants, &value, sizeof(OrsoString*), &expression_node->value_index)) {
+            //     error(parser, ERROR_CODEGEN_NOT_ENOUGH_MEMORY);
+            // }
             break;
         };
 
@@ -1047,7 +1046,7 @@ static ast_node_t *statement(parser_t* parser, bool omit_end_of_statement) {
     return statement_node;
 }
 
-static ast_node_t *entity_declaration(parser_t* parser, bool as_parameter) {
+static ast_node_t *entity_declaration(parser_t *parser, bool as_parameter) {
     ast_node_t *entity_declaration_node = ast_node_new(parser->ast, AST_NODE_TYPE_DECLARATION, false, parser->current);
 
     advance(parser);
@@ -1175,44 +1174,38 @@ value_index_t zero_value(ast_t *ast, type_t type, symbol_table_t *symbol_table) 
 
     type_info_t *type_info = ast->type_set.types.items[type.i];
 
-    slot_t value[bytes_to_slots(type_info->size)];
+    word_t value[bytes_to_slots(type_info->size)];
 
     switch (type_info->kind) {
         case TYPE_POINTER:
         case TYPE_VOID:
         case TYPE_BOOL:
-        case TYPE_INT32:
-        case TYPE_INT64:
-            value[0] = SLOT_I(0);
+        
+        case TYPE_NUMBER: {
+            switch (type_info->data.num) {
+                case NUM_TYPE_SIGNED:
+                case NUM_TYPE_UNSIGNED: value[0] = WORDI(0); break;
+                case NUM_TYPE_FLOAT: value[0] = WORDD(0); break;
+            }
             break;
-
-        case TYPE_FLOAT32:
-        case TYPE_FLOAT64:
-            value[0] = SLOT_F(0.0);
-            break;
+        }
 
         case TYPE_STRING:
-            value[0] = SLOT_P(orso_new_string_from_cstrn("", 0, &ast->allocator));
+            UNREACHABLE();
             break;
 
         case TYPE_SYMBOL:
-            value[0] = SLOT_P(orso_new_symbol_from_cstrn("", 0, symbol_table, &ast->allocator));
+            value[0] = WORDP(orso_new_symbol_from_cstrn("", 0, symbol_table, &ast->allocator));
             break;
         
         case TYPE_UNION: {
-            ASSERT(union_type_has_type(type_info, typeid(TYPE_VOID)), "must include void type if looking for zero value");
-            
-            u32 size_slots = type_slot_count(type_info);
-            for (u32 i = 0; i < size_slots; i++) {
-                value[i] = SLOT_I(0);
-            }
-            value[0] = SLOT_U(TYPE_VOID);
+            UNREACHABLE();
             break;
         }
 
         case TYPE_STRUCT: {
             for (size_t i = 0; i < bytes_to_slots(type_info->size); i++) {
-                value[i] = SLOT_I(0);
+                value[i] = WORDI(0);
             }
             break;
         }
@@ -1225,7 +1218,7 @@ value_index_t zero_value(ast_t *ast, type_t type, symbol_table_t *symbol_table) 
         case TYPE_UNDEFINED:
         case TYPE_UNRESOLVED:
             UNREACHABLE();
-            value[0] = SLOT_I(0);
+            value[0] = WORDI(0);
             break;
     }
 

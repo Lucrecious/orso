@@ -19,9 +19,9 @@
 
 typedef bool (*IsCircularDependencyFunc)(analyzer_t*, ast_node_t*);
 
-static void clock_native(slot_t* arguments, slot_t* result) {
+static void clock_native(word_t *arguments, word_t *result) {
     (void)arguments;
-    result[0] = SLOT_F((double)clock() / CLOCKS_PER_SEC);
+    result[0] = WORDD((double)clock() / CLOCKS_PER_SEC);
 }
 
 typedef symbol_table_t SymbolTable;
@@ -72,7 +72,7 @@ static scope_t *scope_copy_new(scope_t *scope, arena_t *allocator) {
 
         Entity* entity_copy = (Entity*)arena_alloc(allocator, sizeof(Entity));
         *entity_copy = *((Entity*)entry->value.as.p);
-        entry->value = SLOT_P(entity_copy);
+        entry->value = WORDP(entity_copy);
     }
 
     scope_copy->outer = scope_copy_new(scope->outer, allocator);
@@ -92,10 +92,10 @@ static void scope_merge(type_table_t* set, scope_t* scope, scope_t* a, scope_t* 
             continue;
         }
 
-        slot_t entity_a_slot;
-        slot_t entity_b_slot;
-        if (!symbol_table_get(&a->named_entities, entry->key, &entity_a_slot)
-                || !symbol_table_get(&b->named_entities, entry->key, &entity_b_slot)) {
+        word_t entity_a_slot;
+        word_t entity_b_slot;
+        unless (symbol_table_get(&a->named_entities, entry->key, &entity_a_slot)
+                && symbol_table_get(&b->named_entities, entry->key, &entity_b_slot)) {
             continue;
         }
 
@@ -133,14 +133,14 @@ static void scope_merge(type_table_t* set, scope_t* scope, scope_t* a, scope_t* 
     scope_merge(set, scope->outer, a->outer, b->outer);
 }
 
-static void add_entity(scope_t* scope, arena_t *allocator, symbol_t* identifier, ast_node_t* declaration_node) {
-    Entity* entity = arena_alloc(allocator, sizeof(Entity));
+static void add_entity(scope_t *scope, arena_t *allocator, symbol_t *identifier, ast_node_t *declaration_node) {
+    Entity *entity = arena_alloc(allocator, sizeof(Entity));
     entity->declared_type = typeid(TYPE_UNRESOLVED);
     entity->narrowed_type = typeid(TYPE_UNRESOLVED);
     entity->node = declaration_node;
     entity->value_index = value_index_nil();
 
-    symbol_table_set(&scope->named_entities, identifier, SLOT_P(entity));
+    symbol_table_set(&scope->named_entities, identifier, WORDP(entity));
 }
 
 static Entity* add_builtin_entity(ast_t *ast, symbol_t *identifier, type_t type, value_index_t value_index) {
@@ -150,7 +150,7 @@ static Entity* add_builtin_entity(ast_t *ast, symbol_t *identifier, type_t type,
     entity->node = NULL;
     entity->value_index = value_index;
 
-    symbol_table_set(&ast->builtins, identifier, SLOT_P(entity));
+    symbol_table_set(&ast->builtins, identifier, WORDP(entity));
 
     return entity;
 }
@@ -180,7 +180,7 @@ static void error_token(analyzer_t* analyzer, token_t token, error_type_t error_
     analyzer->error_fn(error);
 }
 
-static void error_range(analyzer_t* analyzer, token_t start, token_t end, error_type_t error_type) {
+static void error_range(analyzer_t *analyzer, token_t start, token_t end, error_type_t error_type) {
     analyzer->had_error = true;
 
     function_dependencies_cannot_be_compiled(analyzer);
@@ -227,7 +227,7 @@ static type_t resolve_unary_type(ast_t* ast, token_type_t operator, type_t opera
                 if (type_is_number(operand, false)) {
                     return operand_id;
                 } else if (operand_id.i == TYPE_BOOL) {
-                    return typeid(TYPE_INT32);
+                    return ast->type_set.i32_;
                 } else {
                     return typeid(TYPE_INVALID);
                 }
@@ -282,23 +282,33 @@ static Entity* get_resolved_entity_by_identifier(
         EntityQuery* query,
         scope_t** found_scope);
 
-static bool is_builtin_type(symbol_t* identifier, type_t *type) {
+static bool is_builtin_type(type_table_t *t, symbol_t *identifier, type_t *type) {
 #define RETURN_IF_TYPE(SYMBOL, TYPE_STRING, TYPE) \
 if (strlen(SYMBOL->text) == (sizeof(#TYPE_STRING) - 1) && \
     memcmp(SYMBOL->text, #TYPE_STRING, (sizeof(#TYPE_STRING) - 1)) == 0) { \
-    type->i = (TYPE); \
+    *type = (TYPE); \
     return true; \
 }
 
-    RETURN_IF_TYPE(identifier, void, TYPE_VOID)
+    RETURN_IF_TYPE(identifier, i32, t->i32_)
+    RETURN_IF_TYPE(identifier, i64, t->i64_)
+    RETURN_IF_TYPE(identifier, f32, t->f32_)
+    RETURN_IF_TYPE(identifier, f64, t->f64_)
+#undef RETURN_IF_TYPE
+
+#define RETURN_IF_TYPE(SYMBOL, TYPE_STRING, TYPE) \
+if (strlen(SYMBOL->text) == (sizeof(#TYPE_STRING) - 1) && \
+    memcmp(SYMBOL->text, #TYPE_STRING, (sizeof(#TYPE_STRING) - 1)) == 0) { \
+    *type = typeid(TYPE); \
+    return true; \
+}
+
+    RETURN_IF_TYPE(identifier, void, TYPE_INVALID)
     RETURN_IF_TYPE(identifier, bool, TYPE_BOOL)
-    RETURN_IF_TYPE(identifier, i32, TYPE_INT32)
-    RETURN_IF_TYPE(identifier, i64, TYPE_INT64)
-    RETURN_IF_TYPE(identifier, f32, TYPE_FLOAT32)
-    RETURN_IF_TYPE(identifier, f64, TYPE_FLOAT64)
     RETURN_IF_TYPE(identifier, string, TYPE_STRING)
     RETURN_IF_TYPE(identifier, symbol, TYPE_SYMBOL)
     RETURN_IF_TYPE(identifier, type, TYPE_TYPE)
+#undef RETURN_IF_TYPE
 
     return false;
 
@@ -307,7 +317,7 @@ if (strlen(SYMBOL->text) == (sizeof(#TYPE_STRING) - 1) && \
 
 static bool is_builtin_function(ast_t *ast, symbol_t *identifier, native_function_t **function) {
     if (identifier->length == 5 && strncmp(identifier->text, "clock", 5) == 0) {
-        type_t function_type = type_set_fetch_native_function(&ast->type_set, typeid(TYPE_INT64), (types_t){0});
+        type_t function_type = type_set_fetch_native_function(&ast->type_set, ast->type_set.i64_, (types_t){0});
         *function = orso_new_native_function(clock_native, function_type, &ast->allocator);
         return true;
     }
@@ -386,10 +396,10 @@ static void fold_constants_via_runtime(
         ast_node_t* expression);
 
 static void resolve_foldable(
-        analyzer_t* analyzer,
-        ast_t* ast,
+        analyzer_t *analyzer,
+        ast_t *ast,
         AnalysisState state,
-        ast_node_t* expression) {
+        ast_node_t *expression) {
 
     bool foldable = false;
     value_index_t folded_index = value_index_nil();
@@ -429,7 +439,7 @@ static void resolve_foldable(
                 type_t rhs_folded_type = get_folded_type(ast, right->value_index);
 
                 type_t merged_type = type_merge(&ast->type_set, lhs_folded_type, rhs_folded_type);
-                slot_t merged_type_slot = SLOT_U(merged_type.i);
+                word_t merged_type_slot = WORDU(merged_type.i);
 
                 folded_index = add_value_to_ast_constant_stack(ast, &merged_type_slot, typeid(TYPE_TYPE));
             }
@@ -456,7 +466,7 @@ static void resolve_foldable(
 
                     expression->value_type = typeid(TYPE_TYPE);
 
-                    slot_t type_slot = SLOT_U(pointer_type.i);
+                    word_t type_slot = WORDU(pointer_type.i);
                     
                     folded_index = add_value_to_ast_constant_stack(ast, &type_slot, typeid(TYPE_TYPE));
                 } else {
@@ -703,7 +713,7 @@ static void fold_function_signature(analyzer_t *analyzer, ast_t *ast, ast_node_t
 
     type_t function_type = type_set_fetch_function(&ast->type_set, return_type, parameter_types);
 
-    slot_t function_type_slot = SLOT_U(function_type.i);
+    word_t function_type_slot = WORDU(function_type.i);
     value_index_t index = add_value_to_ast_constant_stack(ast, &function_type_slot, typeid(TYPE_TYPE));
 
     expression->foldable = true;
@@ -1587,8 +1597,8 @@ void resolve_expression(
 
 static void declare_entity(analyzer_t* analyzer, scope_t* scope, ast_node_t* entity) {
     symbol_t *identifier = orso_unmanaged_symbol_from_cstrn(entity->start.start, entity->start.length, &analyzer->symbols, &analyzer->allocator);
-    slot_t slot_type_pair;
-    if (symbol_table_get(&scope->named_entities, identifier, &slot_type_pair)) {
+    word_t word_type_pair;
+    if (symbol_table_get(&scope->named_entities, identifier, &word_type_pair)) {
         const char message[126];
         snprintf((char*)message, 126, "Duplicate entity definition of '%.*s'.", entity->start.length, entity->start.start);
         error_token(analyzer, entity->start, ERROR_ANALYSIS_CANNOT_OVERLOAD_ENTITY_DEFINITION);
@@ -1658,7 +1668,7 @@ static void resolve_entity_declaration(analyzer_t* analyzer, ast_t* ast, Analysi
         }
     }
 
-    slot_t entity_slot;
+    word_t entity_slot;
     symbol_t *name = orso_unmanaged_symbol_from_cstrn(entity_declaration->start.start, entity_declaration->start.length, &analyzer->symbols, &ast->allocator);
 
     ASSERT(symbol_table_get(&state.scope->named_entities, name, &entity_slot), "should be forward_declared already");
@@ -1748,7 +1758,7 @@ static void resolve_entity_declaration(analyzer_t* analyzer, ast_t* ast, Analysi
             to_struct_type->foldable = true;
             type_info_t *initial_expression_type_info = get_type_info(&ast->type_set.types, INITIAL_EXPRESSION->value_type);
             type_t named_struct_id = type_create_struct(&ast->type_set, entity_declaration->start.start, entity_declaration->start.length, initial_expression_type_info);
-            slot_t struct_type_slot = SLOT_U(named_struct_id.i);
+            word_t struct_type_slot = WORDU(named_struct_id.i);
             to_struct_type->value_index = add_value_to_ast_constant_stack(ast, &struct_type_slot, typeid(TYPE_TYPE));
 
             type_t initial_expression_type = INITIAL_EXPRESSION->value_type;
@@ -1775,29 +1785,21 @@ static void resolve_entity_declaration(analyzer_t* analyzer, ast_t* ast, Analysi
     entity_declaration->as.declaration.fold_level_resolved_at = state.fold_level;
 
     // TODO: Outer if should be if the expression is null or not
-    unless (type_is_union(ast->type_set.types, entity_declaration->value_type)) {
-        if (TYPE_IS_UNRESOLVED(entity_declaration->value_type)) {
-            ASSERT(INITIAL_EXPRESSION != NULL, "this should be a parsing error.");
+    if (TYPE_IS_UNRESOLVED(entity_declaration->value_type)) {
+        ASSERT(INITIAL_EXPRESSION != NULL, "this should be a parsing error.");
 
-            type_t expression_type = INITIAL_EXPRESSION->value_type;
+        type_t expression_type = INITIAL_EXPRESSION->value_type;
 
-            if (expression_type.i == TYPE_BOOL || expression_type.i == TYPE_INT32) {
-                entity_declaration->value_type = expression_type;
-            } else {
-                entity_declaration->value_type = expression_type;
-            }
+        if (typeid_eq(expression_type, typeid(TYPE_BOOL)) || typeid_eq(expression_type, ast->type_set.i32_)) {
+            entity_declaration->value_type = expression_type;
         } else {
-            unless (INITIAL_EXPRESSION == NULL || typeid_eq(entity_declaration->value_type, INITIAL_EXPRESSION->value_type)) {
-                unless (TYPE_IS_INVALID(INITIAL_EXPRESSION->value_type)) {
-                    error_range(analyzer, INITIAL_EXPRESSION->start, INITIAL_EXPRESSION->end, ERROR_ANALYSIS_TYPE_MISMATCH);
-                }
-            }
+            entity_declaration->value_type = expression_type;
         }
     } else {
-        if (INITIAL_EXPRESSION != NULL && !typeid_eq(entity_declaration->value_type, INITIAL_EXPRESSION->value_type)) {
-            error_range2(analyzer,
-                    entity_declaration->as.declaration.type_expression->start, entity_declaration->as.declaration.type_expression->end,
-                    INITIAL_EXPRESSION->start, INITIAL_EXPRESSION->end, ERROR_ANALYSIS_TYPE_MISMATCH);
+        unless (INITIAL_EXPRESSION == NULL || typeid_eq(entity_declaration->value_type, INITIAL_EXPRESSION->value_type)) {
+            unless (TYPE_IS_INVALID(INITIAL_EXPRESSION->value_type)) {
+                error_range(analyzer, INITIAL_EXPRESSION->start, INITIAL_EXPRESSION->end, ERROR_ANALYSIS_TYPE_MISMATCH);
+            }
         }
     }
 
@@ -1836,20 +1838,20 @@ static void resolve_entity_declaration(analyzer_t* analyzer, ast_t* ast, Analysi
 }
 
 static Entity *get_builtin_entity(ast_t *ast, symbol_t *identifier) {
-    slot_t entity_slot;
-    if (!symbol_table_get(&ast->builtins, identifier, &entity_slot)) {
+    word_t entity_slot;
+    unless (symbol_table_get(&ast->builtins, identifier, &entity_slot)) {
         type_t type;
         native_function_t *function;
         bool has_value = false;
         type_t value_type;
-        slot_t value_slot;
-        if (is_builtin_type(identifier, &type)) {
+        word_t value_slot;
+        if (is_builtin_type(&ast->type_set, identifier, &type)) {
             has_value = true;
-            value_slot = SLOT_U(type.i);
+            value_slot = WORDU(type.i);
             value_type = typeid(TYPE_TYPE);
         } else if (is_builtin_function(ast, identifier, &function)) {
             has_value = true;
-            value_slot = SLOT_P(function);
+            value_slot = WORDP(function);
             value_type = function->signature;
         }
 
@@ -1945,7 +1947,7 @@ static Entity *get_resolved_entity_by_identifier(
         }
     }
 
-    slot_t entity_slot;
+    word_t entity_slot;
     *search_scope = state.scope;
 
     while (*search_scope) {
@@ -2194,7 +2196,7 @@ static void resolve_function_expression(
 
     
     function_definition_expression->foldable = true;
-    slot_t function_slot_value = SLOT_P(function);
+    word_t function_slot_value = WORDP(function);
     value_index_t function_constant_index = add_value_to_ast_constant_stack(ast, &function_slot_value, function_type);
     function_definition_expression->value_index = function_constant_index;
 
@@ -2459,8 +2461,8 @@ static void resolve_struct_definition(analyzer_t *analyzer, ast_t *ast, Analysis
         ASSERT(complete_struct_type_info->data.struct_.field_count == field_count, "completed struct must have the same number as fields as ast field declaration nodes");
 
         u64 size_in_slots = bytes_to_slots(complete_struct_type_info->size);
-        byte struct_data[size_in_slots * sizeof(slot_t)];
-        for (u64 i = 0; i < size_in_slots * sizeof(slot_t); i++) {
+        byte struct_data[size_in_slots * sizeof(word_t)];
+        for (u64 i = 0; i < size_in_slots * sizeof(word_t); i++) {
             struct_data[i] = 0;
         }
 
@@ -2478,16 +2480,16 @@ static void resolve_struct_definition(analyzer_t *analyzer, ast_t *ast, Analysis
                     typeid(TYPE_TYPE) : declaration->as.declaration.initial_value_expression->value_type;
                 ASSERT(!type_is_union(ast->type_set.types, value_expression_type), "initial expression cannot be a union.");
 
-                memcpy(struct_data + offset, (byte*)(&value_expression_type), sizeof(slot_t));
-                offset += sizeof(slot_t);
-                bytes_to_copy -= sizeof(slot_t);
+                memcpy(struct_data + offset, (byte*)(&value_expression_type), WORD_SIZE);
+                offset += WORD_SIZE;
+                bytes_to_copy -= WORD_SIZE;
             }
 
             void *value_src = ast->constants.data + declaration->value_index.index;
             memcpy(struct_data + offset, value_src, bytes_to_copy);
         }
 
-        struct_definition->value_index = add_value_to_ast_constant_stack(ast, (slot_t*)struct_data, complete_struct_type);
+        struct_definition->value_index = add_value_to_ast_constant_stack(ast, struct_data, complete_struct_type);
 
         node_and_scope.scope = NULL;
         table_put(type2ns, ast->type_to_creation_node, complete_struct_type, node_and_scope);

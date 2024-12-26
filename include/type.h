@@ -25,17 +25,16 @@ typedef struct type_info_t type_info_t;
 
 typedef enum type_kind_t {
     TYPE_INVALID = 0,      // error type
-    TYPE_UNDEFINED,        // used for blocks with returns
     TYPE_UNRESOLVED,       // unresolved (not undefined, not error, not defined)
+    TYPE_UNDEFINED,        // used for blocks with returns
     TYPE_VOID,             // null
     TYPE_BOOL,             // true false
-    TYPE_INT32,            // [-2^32, 2^32 - 1]
-    TYPE_INT64,            // [-2^64, 2^64 - 1]
-    TYPE_FLOAT32,          // single precision IEEE 754 float
-    TYPE_FLOAT64,          // double precision IEEE 754 float
     TYPE_STRING,           // "anything in here"
     TYPE_SYMBOL,           // 'anything in here'
     TYPE_TYPE,             // i32, void, type, () -> void, etc
+    
+    // "complex" types
+    TYPE_NUMBER,           // i8, u8, i16, u16, i32, u32, i64, u32, u64, f32, f64
     TYPE_FUNCTION,         // (type1, type2, ..., typen) -> return_type OR (foo := 0, bar := "") -> return_type
     TYPE_NATIVE_FUNCTION,  // (type1, type2, ..., typen) -> return_type
     TYPE_POINTER,          // &type
@@ -65,10 +64,19 @@ struct type_infos_t {
     arena_t *allocator;
 };
 
+typedef enum num_type_t num_type_t;
+enum num_type_t {
+    NUM_TYPE_UNSIGNED = 0,
+    NUM_TYPE_SIGNED,
+    NUM_TYPE_FLOAT,
+};
+
 struct type_info_t {
     type_kind_t kind;
     size_t size; // not serialized
     union {
+        num_type_t num;
+
         struct {
             types_t types;
         } union_;
