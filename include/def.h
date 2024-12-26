@@ -15,7 +15,7 @@
 #define println(cstr) printf(cstr"\n");
 #define printfln(fmt, ...) printf(fmt"\n", __VA_ARGS__)
 
-#define megabytes(bytes) (bytes)*1000*1000
+#define megabytes(bytes) ((bytes)*1000*1000)
 
 typedef uint8_t byte;
 typedef int16_t i16;

@@ -73,13 +73,16 @@ int main(int argc, char **argv) {
     ast_t ast = {0};
     ast_init(&ast, megabytes(2));
 
-    bool success = parse_expr_cstr(&ast, "69", lit2str(""));
+    bool success = parse_expr_cstr(&ast, "70 - 1", lit2str(""));
     unless (success) return 1;
 
     memarr_t *memory = arena_alloc(&arena, sizeof(memarr_t));
     *memory = (memarr_t){0};
 
-    memarr_init(memory, megabytes(2));
+    memarr_init(memory, megabytes(2.5));
+    size_t stack_size = (size_t)megabytes(0.5);
+    memory->count = stack_size;
+    memset(memory->data, 0, stack_size);
     
     function_t *expr_function = new_function(memory, &arena);
 
@@ -87,6 +90,7 @@ int main(int argc, char **argv) {
 
     vm_t vm = {0};
     vm_init(&vm);
+    vm.registers[REG_STACK_BOTTOM].as.u = stack_size;
 
     i64 *result = (i64*)vm_run_function(&vm, expr_function);
 

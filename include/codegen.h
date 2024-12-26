@@ -27,6 +27,9 @@ typedef enum reg_t reg_t;
 enum reg_t {
     REG_NULL = 0,
     REG_OPERAND1,
+    REG_OPERAND2,
+
+    REG_STACK_BOTTOM,
 };
 
 declare_table(str2cf, string_t, call_frame_t)
@@ -42,22 +45,22 @@ static void emit_read_memory_to_reg(function_t *function, reg_t destination, mem
     ASSERT(type_info->size <= WORD_SIZE, "only word-sized values or smaller can go into registers");
 
     instruction_t instruction;
-    instruction.op = OP_READWORD_MEM_TO_REG;
+    instruction.op = OP_MOVWORD_MEM_TO_REG;
 
     if (type_is_number(type_info, true) && type_info->size < WORD_SIZE) {
         switch (type_info->kind) {
             case TYPE_BOOL: {
-                instruction.op = OP_READU8_MEM_TO_REG;
+                instruction.op = OP_MOVU8_MEM_TO_REG;
                 break;
             }
 
             case TYPE_INT32: {
-                instruction.op = OP_READI32_MEM_TO_REG;
+                instruction.op = OP_MOVI32_MEM_TO_REG;
                 break;
             }
 
             case TYPE_FLOAT32: {
-                instruction.op = OP_READF32_MEM_TO_REG;
+                instruction.op = OP_MOVF32_MEM_TO_REG;
                 break;
             }
 
@@ -80,15 +83,87 @@ static void emit_read_memory_to_reg(function_t *function, reg_t destination, mem
 
     }
 
-    instruction.as.read_memory_to_reg.memory_address = address;
-    instruction.as.read_memory_to_reg.reg_result = destination;
+    instruction.as.mov_mem_to_reg.mem_address = address;
+    instruction.as.mov_mem_to_reg.reg_result = destination;
 
     array_push(&function->code, instruction);
 }
 
-static void gen_binary(function_t *function, ast_node_t *binary) {
-    UNUSED(function);
-    UNUSED(binary);
+void emit_push_wordreg(function_t *function, reg_t reg_source) {
+    instruction_t instruction = {0};
+
+    {
+        instruction.op = OP_SUB_REGU_U32;
+        instruction.as.bin_regu_immediateu.reg_operand = REG_STACK_BOTTOM;
+        instruction.as.bin_regu_immediateu.reg_result = REG_STACK_BOTTOM;
+        instruction.as.bin_regu_immediateu.immediate = (u32)sizeof(word_t);
+
+        array_push(&function->code, instruction);
+    }
+
+    {
+        instruction.op = OP_MOVWORD_REG_TO_REGMEM;
+        instruction.as.mov_reg_to_regmem.reg_source = reg_source;
+        instruction.as.mov_reg_to_regmem.regmem_destination = REG_STACK_BOTTOM;
+
+        array_push(&function->code, instruction);
+    }
+}
+
+void emit_pop_to_wordreg(function_t *function, reg_t reg_destination) {
+    instruction_t instruction = {0};
+
+    {
+        instruction.op = OP_MOVWORD_REGMEM_TO_REG;
+        instruction.as.mov_regmem_to_reg.regmem_source = REG_STACK_BOTTOM;
+        instruction.as.mov_regmem_to_reg.reg_destination = reg_destination;
+
+        array_push(&function->code, instruction);
+    }
+
+    {
+        instruction.op = OP_ADD_REGU_U32;
+        instruction.as.bin_regu_immediateu.reg_operand = REG_STACK_BOTTOM;
+        instruction.as.bin_regu_immediateu.reg_result = REG_STACK_BOTTOM;
+        instruction.as.bin_regu_immediateu.immediate = (u32)sizeof(word_t);
+
+        array_push(&function->code, instruction);
+    }
+}
+
+static void emit_binary(function_t *function, token_type_t token_type, reg_t op1, reg_t op2, reg_t result) {
+    instruction_t instruction = {0};
+
+    switch (token_type) {
+        case TOKEN_PLUS: {
+            instruction.op = OP_ADD_REGI_TO_REGI;
+            break;
+        }
+        default:
+            UNREACHABLE();
+    }
+
+    instruction.as.bin_reg_to_reg.reg_op1 = (byte)op1;
+    instruction.as.bin_reg_to_reg.reg_op2 = (byte)op2;
+    instruction.as.bin_reg_to_reg.reg_result = (byte)result;
+
+    array_push(&function->code, instruction);
+}
+
+static void gen_expression(gen_t *gen, function_t *function, ast_node_t *expression);
+
+static void gen_binary(gen_t *gen, function_t *function, ast_node_t *binary) {
+    ast_node_t *lhs = binary->children.items[AN_CHILD_LHS];
+    gen_expression(gen, function, lhs);
+
+    emit_push_wordreg(function, REG_OPERAND1);
+
+    ast_node_t *rhs = binary->children.items[AN_CHILD_RHS];
+    gen_expression(gen, function, rhs);
+
+    emit_pop_to_wordreg(function, REG_OPERAND2);
+
+    emit_binary(function, binary->operator.type, REG_OPERAND1, REG_OPERAND2, REG_OPERAND1);
 }
 
 static value_index_t add_constant(function_t *function, void *data, size_t size) {
@@ -141,7 +216,7 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
         }
 
         case AST_NODE_TYPE_EXPRESSION_BINARY: {
-            gen_binary(function, expression);
+            gen_binary(gen, function, expression);
             break;
         }
 
