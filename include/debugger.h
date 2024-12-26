@@ -9,8 +9,7 @@
 typedef struct source_location_t source_location_t;
 struct source_location_t {
     string_t file_path;
-    size_t line;
-    size_t column;
+    text_location_t text_location;
 };
 
 typedef struct breakpoints_t breakpoints_t;

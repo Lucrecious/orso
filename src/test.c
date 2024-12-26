@@ -21,8 +21,8 @@
 #define MEMARR_IMPLEMENTATION
 #include "memarr.h"
 
-
-// #include "debugger.h"
+#define DEBUGGER_IMPLEMENTATION
+#include "debugger.h"
 
 #include "parser.h"
 
@@ -31,7 +31,7 @@
 #include "error.h"
 
 void myerror(error_t error) {
-    fprintf(stderr, "[line %d] %s\n", error.region.token.line + 1, error_messages[error.type]);
+    fprintf(stderr, "[line %llu] %s\n", error.region.token.start_location.line + 1, error_messages[error.type]);
 }
 
 void mywrite(const char* chars) {
@@ -84,7 +84,7 @@ int main(int argc, char **argv) {
     memory->count = stack_size;
     memset(memory->data, 0, stack_size);
     
-    function_t *expr_function = new_function(memory, &arena);
+    function_t *expr_function = new_function(lit2str("<none>"), memory, &arena);
 
     compile_expr_to_function(expr_function, &ast);
 
@@ -92,16 +92,10 @@ int main(int argc, char **argv) {
     vm_init(&vm);
     vm.registers[REG_STACK_BOTTOM].as.u = stack_size;
 
-    f64 *result = (f64*)vm_run_function(&vm, expr_function);
+    vm_set_entry_point(&vm, expr_function);
 
-    printf("%f\n", *result);
-
-    // size_t id = vm_add_function(&vm, expr_function);
-
-    // vm_begin(&vm, id);
-
-    // debugger_t debugger = {0};
-    // debugger_init(&debugger, &arena);
-    // while (debugger_step(&debugger, &vm));
+    debugger_t debugger = {0};
+    debugger_init(&debugger, &arena);
+    while (debugger_step(&debugger, &vm));
 }
 

@@ -409,7 +409,7 @@ type_t type_set_fetch_anonymous_struct(type_table_t *set, i32 field_count, struc
     return type; 
 }
 
-type_t type_create_struct(type_table_t *set, char *name, i32 name_length, type_info_t *anonymous_struct) {
+type_t type_create_struct(type_table_t *set, cstr_t name, i32 name_length, type_info_t *anonymous_struct) {
     ASSERT(anonymous_struct->kind == TYPE_STRUCT && anonymous_struct->data.struct_.name == NULL, "can only create struct from anonymous struct");
 
     if (anonymous_struct->data.struct_.constant_count == 0) {

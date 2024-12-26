@@ -20,6 +20,9 @@ typedef struct type_table_t {
     type_t f64_;
     type_t i32_;
     type_t i64_;
+    type_t string_;
+    type_t symbol_;
+    type_t type_;
     type_t empty_function_;
 } type_table_t;
 
@@ -52,7 +55,7 @@ type_t type_set_fetch_anonymous_struct(
 
 type_t type_set_fetch_pointer(type_table_t *set, type_t type);
 
-type_t type_create_struct(type_table_t *set, char *name, i32 name_length, type_info_t *anonymous_struct);
+type_t type_create_struct(type_table_t *set, cstr_t name, i32 name_length, type_info_t *anonymous_struct);
 
 type_t type_unique_incomplete_struct_type(type_table_t *set);
 

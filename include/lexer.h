@@ -37,14 +37,27 @@ enum token_type_t {
     TOKEN_ERROR, TOKEN_EOF, TOKEN_SIZE,
 };
 
+typedef struct text_location_t text_location_t;
+struct text_location_t {
+    size_t line;
+    size_t column;
+};
+
+#define texloc(line_, col) ((text_location_t){.line=(line_), .column=(col)})
+
 typedef struct token_t token_t;
 struct token_t {
     string_t file_path;
-    char *start;
-    i32 length;
-    i32 line;
+    cstr_t start;
+    size_t length;
+    text_location_t start_location;
     token_type_t type;
 };
+
+#define token_end_location(token) ((text_location_t){\
+    .line = ((token)->start_location.line),\
+    .column=(((token)->start_location.column + (token)->length))\
+})
 
 typedef struct lexer_t lexer_t;
 struct lexer_t {
@@ -52,8 +65,9 @@ struct lexer_t {
     error_function_t error_fn;
     string_t file_path;
     i32 line;
-    char *start;
-    char *current;
+    cstr_t start;
+    cstr_t line_start;
+    cstr_t current;
 };
 
 void lexer_init(lexer_t *state, string_t file_path, cstr_t code);

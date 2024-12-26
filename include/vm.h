@@ -81,6 +81,14 @@ struct instruction_t {
 
 typedef struct function_t function_t;
 struct function_t {
+    string_t file_path;
+    struct {
+        text_location_t *items;
+        size_t count;
+        size_t capacity;
+        arena_t *allocator;
+    } locations;
+
     memarr_t *memory;
     struct {
         instruction_t *items;
@@ -90,7 +98,7 @@ struct function_t {
     } code;
 };
 
-function_t *new_function(memarr_t *memory, arena_t *arena);
+function_t *new_function(string_t file_path, memarr_t *memory, arena_t *arena);
 
 typedef struct call_frame_t call_frame_t;
 struct call_frame_t {
@@ -107,16 +115,21 @@ struct vm_t {
 
 
 void vm_init(vm_t *vm);
+
+void vm_set_entry_point(vm_t *vm, function_t *entry_point);
 void vm_step(vm_t *vm);
 
 #endif
 
 #ifdef VM_IMPLEMENTATION
 
-function_t *new_function(memarr_t *memory, arena_t *arena) {
+function_t *new_function(string_t file_path, memarr_t *memory, arena_t *arena) {
     function_t *function = arena_alloc(arena, sizeof(function_t));
     *function = (function_t){0};
     function->memory = memory;
+    function->file_path = string_copy(file_path, arena);
+
+    function->locations.allocator = arena;
     function->code.allocator = arena;
     return function;
 }
@@ -124,6 +137,12 @@ function_t *new_function(memarr_t *memory, arena_t *arena) {
 void vm_init(vm_t *vm) {
     *vm = (vm_t){0};
     // vm->pc = 0;
+}
+
+void vm_set_entry_point(vm_t *vm, function_t *entry_point) {
+    vm->halted = false;
+    vm->call_frame.function = entry_point;
+    vm->call_frame.ip = 0;
 }
 
 void vm_step(vm_t *vm) {

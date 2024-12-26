@@ -21,8 +21,9 @@ static void show_line(vm_t *vm, size_t bytecode_around) {
 }
 
 static bool try_vm_step(vm_t *vm) {
+    if (vm->halted) return false;
     vm_step(vm);
-    return vm->halted;
+    return true;
 }
 
 bool debugger_step(debugger_t *debugger, vm_t *vm) {
@@ -50,7 +51,7 @@ bool debugger_step(debugger_t *debugger, vm_t *vm) {
         printfln("breakpoint count: %zu", debugger->breakpoints.count);
         for (size_t i = 0; i < debugger->breakpoints.count; ++i) {
             source_location_t bp = debugger->breakpoints.items[i];
-            printfln("breakpoint #%zu: %s:%zu", i, bp.file_path.cstr, bp.line);
+            printfln("breakpoint #%zu: %s:%zu", i, bp.file_path.cstr, bp.text_location.line);
         }
         println("");
     } else if (cstr_eq(command.cstr, "break")) {
@@ -63,13 +64,13 @@ bool debugger_step(debugger_t *debugger, vm_t *vm) {
         string_t line_number = command_n_args.items[2];
         size_t line = string2size(line_number);
 
-        array_push(&debugger->breakpoints, ((source_location_t){.file_path=file_path, .line=line, .column=0 }));
+        array_push(&debugger->breakpoints, ((source_location_t){.file_path=file_path, .text_location = texloc(line, 0) }));
     } else if (cstr_eq(command.cstr, "stepo")) {
-        source_location_t source_location = vm_find_source_location(vm);
+        source_location_t bp = vm_find_source_location(vm);
 
         while (try_vm_step(vm)) {
             source_location_t new_location = vm_find_source_location(vm);
-            if (new_location.line != source_location.line || !string_eq(source_location.file_path, new_location.file_path)) {
+            if (new_location.text_location.line != bp.text_location.line || !string_eq(bp.file_path, new_location.file_path)) {
                 show_line(vm, 3);
                 break;
             }
@@ -88,6 +89,18 @@ bool debugger_step(debugger_t *debugger, vm_t *vm) {
 }
 
 source_location_t vm_find_source_location(vm_t *vm) {
-    UNUSED(vm);
-    return (source_location_t){0};
+    if (vm->call_frame.function == NULL) {
+        return (source_location_t){.text_location = texloc(0, 0), .file_path=lit2str("<none>")};
+    }
+    
+    function_t *function = vm->call_frame.function;
+    size_t index = vm->call_frame.ip - function->code.items;
+
+    string_t file_path = function->file_path;
+    text_location_t text_location = function->locations.items[index];
+
+    return (source_location_t){
+        .file_path = file_path,
+        .text_location = text_location,
+    };
 }

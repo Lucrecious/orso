@@ -1600,7 +1600,7 @@ static void declare_entity(analyzer_t* analyzer, scope_t* scope, ast_node_t* ent
     word_t word_type_pair;
     if (symbol_table_get(&scope->named_entities, identifier, &word_type_pair)) {
         const char message[126];
-        snprintf((char*)message, 126, "Duplicate entity definition of '%.*s'.", entity->start.length, entity->start.start);
+        snprintf((char*)message, 126, "Duplicate entity definition of '%.*s'.", (int)entity->start.length, entity->start.start);
         error_token(analyzer, entity->start, ERROR_ANALYSIS_CANNOT_OVERLOAD_ENTITY_DEFINITION);
         return;
     }

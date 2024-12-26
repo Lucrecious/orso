@@ -164,7 +164,8 @@ void ast_free(ast_t *ast) {
 #define TOKEN_NIL (token_t){\
     .file_path = lit2str(""),\
     .length = 0,\
-    .line = 0,\
+    .start_location.line = 0,\
+    .start_location.column= 0,\
     .start = "",\
     .type = TOKEN_ERROR\
 }
@@ -203,7 +204,7 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type
         case AST_NODE_TYPE_DECLARATION: {
             node->as.declaration.initial_value_expression = NULL;
             node->as.declaration.fold_level_resolved_at = -1;
-            node->as.declaration.identifier = (token_t){ .start = 0, .length = 0, .type = TOKEN_IDENTIFIER, .line = -1 };
+            node->as.declaration.identifier = TOKEN_NIL;
             node->as.declaration.is_mutable = false;
             node->as.declaration.type_expression = NULL;
             break;
@@ -275,7 +276,7 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type
         case AST_NODE_TYPE_EXPRESSION_DOT: {
             node->as.dot.lhs = NULL;
             node->as.dot.referencing_declaration = NULL;
-            node->as.dot.identifier = (token_t){ .length = 0, .line = -1, .start = NULL, .type = TOKEN_IDENTIFIER };
+            node->as.dot.identifier = TOKEN_NIL;
             break;
         }
 

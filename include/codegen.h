@@ -41,7 +41,12 @@ static string_view_t token2sv(token_t t) {
     };
 }
 
-static void emit_read_memory_to_reg(function_t *function, reg_t destination, memaddr_t address, type_info_t *type_info) {
+static void emit_instruction(function_t *function, text_location_t location, instruction_t instruction) {
+    array_push(&function->code, instruction);
+    array_push(&function->locations, location);
+}
+
+static void emit_read_memory_to_reg(text_location_t location, function_t *function, reg_t destination, memaddr_t address, type_info_t *type_info) {
     ASSERT(type_info->size <= WORD_SIZE, "only word-sized values or smaller can go into registers");
 
     instruction_t instruction;
@@ -75,10 +80,10 @@ static void emit_read_memory_to_reg(function_t *function, reg_t destination, mem
     instruction.as.mov_mem_to_reg.mem_address = address;
     instruction.as.mov_mem_to_reg.reg_result = destination;
 
-    array_push(&function->code, instruction);
+    emit_instruction(function, location, instruction);
 }
 
-void emit_push_wordreg(function_t *function, reg_t reg_source) {
+void emit_push_wordreg(text_location_t text_location, function_t *function, reg_t reg_source) {
     instruction_t instruction = {0};
 
     {
@@ -87,7 +92,7 @@ void emit_push_wordreg(function_t *function, reg_t reg_source) {
         instruction.as.bin_regu_immediateu.reg_result = REG_STACK_BOTTOM;
         instruction.as.bin_regu_immediateu.immediate = (u32)sizeof(word_t);
 
-        array_push(&function->code, instruction);
+        emit_instruction(function, text_location, instruction);
     }
 
     {
@@ -95,11 +100,11 @@ void emit_push_wordreg(function_t *function, reg_t reg_source) {
         instruction.as.mov_reg_to_regmem.reg_source = reg_source;
         instruction.as.mov_reg_to_regmem.regmem_destination = REG_STACK_BOTTOM;
 
-        array_push(&function->code, instruction);
+        emit_instruction(function, text_location, instruction);
     }
 }
 
-void emit_pop_to_wordreg(function_t *function, reg_t reg_destination) {
+void emit_pop_to_wordreg(text_location_t text_location, function_t *function, reg_t reg_destination) {
     instruction_t instruction = {0};
 
     {
@@ -107,7 +112,7 @@ void emit_pop_to_wordreg(function_t *function, reg_t reg_destination) {
         instruction.as.mov_regmem_to_reg.regmem_source = REG_STACK_BOTTOM;
         instruction.as.mov_regmem_to_reg.reg_destination = reg_destination;
 
-        array_push(&function->code, instruction);
+        emit_instruction(function, text_location, instruction);
     }
 
     {
@@ -116,11 +121,11 @@ void emit_pop_to_wordreg(function_t *function, reg_t reg_destination) {
         instruction.as.bin_regu_immediateu.reg_result = REG_STACK_BOTTOM;
         instruction.as.bin_regu_immediateu.immediate = (u32)sizeof(word_t);
 
-        array_push(&function->code, instruction);
+        emit_instruction(function, text_location, instruction);
     }
 }
 
-static void emit_binary(function_t *function, token_type_t token_type, type_info_t *type_info, reg_t op1, reg_t op2, reg_t result) {
+static void emit_binary(text_location_t text_location, function_t *function, token_type_t token_type, type_info_t *type_info, reg_t op1, reg_t op2, reg_t result) {
     instruction_t instruction = {0};
     ASSERT(type_info->kind == TYPE_NUMBER, "for now only numbers");
 
@@ -168,14 +173,14 @@ static void emit_binary(function_t *function, token_type_t token_type, type_info
     instruction.as.bin_reg_to_reg.reg_op2 = (byte)op2;
     instruction.as.bin_reg_to_reg.reg_result = (byte)result;
 
-    array_push(&function->code, instruction);
+    emit_instruction(function, text_location, instruction);
 }
 
-static void emit_return(function_t *function) {
+static void emit_return(text_location_t text_location, function_t *function) {
     instruction_t instruction = {0};
     instruction.op = OP_RETURN;
 
-    array_push(&function->code, instruction);
+    emit_instruction(function, text_location, instruction);
 }
 
 static void gen_expression(gen_t *gen, function_t *function, ast_node_t *expression);
@@ -184,16 +189,16 @@ static void gen_binary(gen_t *gen, function_t *function, ast_node_t *binary) {
     ast_node_t *lhs = an_lhs(binary);
     gen_expression(gen, function, lhs);
 
-    emit_push_wordreg(function, REG_OPERAND1);
+    emit_push_wordreg(token_end_location(&lhs->end), function, REG_OPERAND1);
 
     ast_node_t *rhs = an_rhs(binary);
     gen_expression(gen, function, rhs);
 
-    emit_pop_to_wordreg(function, REG_OPERAND2);
+    emit_pop_to_wordreg(token_end_location(&rhs->end), function, REG_OPERAND2);
 
     type_info_t *expr_type_info = get_type_info(&gen->ast->type_set.types, binary->value_type);
 
-    emit_binary(function, binary->operator.type, expr_type_info, REG_OPERAND2, REG_OPERAND1, REG_OPERAND1);
+    emit_binary(token_end_location(&binary->end), function, binary->operator.type, expr_type_info, REG_OPERAND2, REG_OPERAND1, REG_OPERAND1);
 }
 
 static value_index_t add_constant(function_t *function, void *data, size_t size) {
@@ -205,11 +210,11 @@ static value_index_t add_constant(function_t *function, void *data, size_t size)
     return value_index_(index);
 }
 
-static void gen_constant(function_t *function, void *data, type_info_t *type_info) {
+static void gen_constant(text_location_t location, function_t *function, void *data, type_info_t *type_info) {
     value_index_t value_index = add_constant(function, data, type_info->size);
 
     if (type_info->size <= WORD_SIZE) {
-        emit_read_memory_to_reg(function, REG_OPERAND1, value_index.index, type_info);
+        emit_read_memory_to_reg(location, function, REG_OPERAND1, value_index.index, type_info);
     } else {
         ASSERT(false, "todo");
     }
@@ -233,7 +238,7 @@ static void gen_primary(gen_t *gen, function_t *function, ast_node_t *primary) {
     }
 
     void *data = memarr_get_ptr(&gen->ast->constants, primary->value_index);
-    gen_constant(function, data, type_info);
+    gen_constant(primary->start.start_location, function, data, type_info);
 }
 
 static void gen_expression(gen_t *gen, function_t *function, ast_node_t *expression) {
@@ -288,10 +293,10 @@ static void gen_block(gen_t *gen, function_t *function, ast_node_t *block) {
     }
 }
 
-static void gen_return(gen_t *gen, function_t *function, type_t type) {
+static void gen_return(gen_t *gen, text_location_t location, function_t *function, type_t type) {
     UNUSED(gen);
     UNUSED(type);
-    emit_return(function);
+    emit_return(location, function);
 }
 
 static void error_fn(error_t error) {
@@ -304,7 +309,8 @@ bool compile_expr_to_function(function_t *function, ast_t *ast) {
     gen.error_fn = error_fn;
 
     gen_expression(&gen, function, ast->root);
-    gen_return(&gen, function, ast->root->value_type);
+
+    gen_return(&gen, token_end_location(&ast->root->end), function, ast->root->value_type);
     
     return gen.had_error;
 }

@@ -5,12 +5,38 @@
 #include <string.h>
 #include <stdlib.h>
 
-void lexer_init(lexer_t *lexer, string_t file_path, const char* code) {
+static token_t create_token(lexer_t *lexer, token_type_t type) {
+    token_t token = { 
+        .file_path = lexer->file_path,
+        .type = type,
+        .start = lexer->start,
+        .length = lexer->current - lexer->start,
+        .start_location = texloc(lexer->line, lexer->current - lexer->line_start),
+    };
+
+    return token;
+}
+
+static token_t error_token(lexer_t *lexer, cstr_t message) {
+    token_t token = {
+        .file_path = lexer->file_path,
+        .type = TOKEN_ERROR,
+        .start = (char*)message,
+        .length = strlen(message),
+        .start_location = texloc(lexer->line, lexer->current - lexer->line_start),
+    };
+    
+    return token;
+}
+
+void lexer_init(lexer_t *lexer, string_t file_path, cstr_t code) {
     lexer->file_path = file_path;
-    lexer->previous_token = (token_t){ .length = 0, .line = 0, .start = 0, .type = TOKEN_ERROR };
     lexer->line = 0;
     lexer->start = (char*)code;
+    lexer->line_start = lexer->start;
     lexer->current = (char*)code;
+
+    lexer->previous_token = error_token(lexer, "<previous token>");
 }
 
 static bool is_digit(char c) {
@@ -25,30 +51,6 @@ static bool is_alpha(char c) {
 
 static bool is_at_end(lexer_t* lexer) {
     return *lexer->current == '\0';
-}
-
-static token_t create_token(lexer_t *lexer, token_type_t type) {
-    token_t token = { 
-        .file_path = lexer->file_path,
-        .type = type,
-        .start = lexer->start,
-        .length = lexer->current - lexer->start,
-        .line = lexer->line,
-    };
-
-    return token;
-}
-
-static token_t error_token(lexer_t *lexer, const char *message) {
-    token_t token = {
-        .file_path = lexer->file_path,
-        .type = TOKEN_ERROR,
-        .start = (char*)message,
-        .length = (i32)(strlen(message)),
-        .line = lexer->line,
-    };
-    
-    return token;
 }
 
 static char advance(lexer_t* lexer) {
@@ -107,6 +109,7 @@ static void skip_whitespace(lexer_t* lexer) {
                 break;
             case '\n':
                 lexer->line++;
+                lexer->line_start = lexer->current;
                 advance(lexer);
                 break;
             default:
@@ -311,7 +314,7 @@ static token_t directive(lexer_t* lexer) {
     return create_token(lexer, TOKEN_DIRECTIVE);
 }
 
-token_t _lexer_next_token(lexer_t* lexer) {
+token_t _lexer_next_token(lexer_t *lexer) {
     // skip preceeding comments and whitespace
     while (true) {
         skip_whitespace(lexer);
