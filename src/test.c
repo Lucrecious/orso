@@ -73,7 +73,7 @@ int main(int argc, char **argv) {
     ast_t ast = {0};
     ast_init(&ast, megabytes(2));
 
-    bool success = parse_expr_cstr(&ast, "70 - 1", lit2str(""));
+    bool success = parse_expr_cstr(&ast, "69 * 2 / 2", lit2str(""));
     unless (success) return 1;
 
     memarr_t *memory = arena_alloc(&arena, sizeof(memarr_t));

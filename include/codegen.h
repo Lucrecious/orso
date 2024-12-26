@@ -93,7 +93,7 @@ void emit_push_wordreg(function_t *function, reg_t reg_source) {
     instruction_t instruction = {0};
 
     {
-        instruction.op = OP_SUB_REGU_U32;
+        instruction.op = OP_SUBU_REG_IM32;
         instruction.as.bin_regu_immediateu.reg_operand = REG_STACK_BOTTOM;
         instruction.as.bin_regu_immediateu.reg_result = REG_STACK_BOTTOM;
         instruction.as.bin_regu_immediateu.immediate = (u32)sizeof(word_t);
@@ -122,7 +122,7 @@ void emit_pop_to_wordreg(function_t *function, reg_t reg_destination) {
     }
 
     {
-        instruction.op = OP_ADD_REGU_U32;
+        instruction.op = OP_ADDU_REG_IM32;
         instruction.as.bin_regu_immediateu.reg_operand = REG_STACK_BOTTOM;
         instruction.as.bin_regu_immediateu.reg_result = REG_STACK_BOTTOM;
         instruction.as.bin_regu_immediateu.immediate = (u32)sizeof(word_t);
@@ -136,14 +136,24 @@ static void emit_binary(function_t *function, token_type_t token_type, reg_t op1
 
     switch (token_type) {
         case TOKEN_PLUS: {
-            instruction.op = OP_ADD_REGI_REGI;
+            instruction.op = OP_ADDI_REG_REG;
             break;
         }
 
         case TOKEN_MINUS: {
-            instruction.op = OP_SUB_REGI_REGI;
+            instruction.op = OP_SUBI_REG_REG;
             break;
         }
+
+        case TOKEN_STAR: {
+            instruction.op = OP_MULI_REG_REG;
+            break;
+        }
+        case TOKEN_SLASH: {
+            instruction.op = OP_DIVI_REG_REG;
+            break;
+        }
+
         default:
             UNREACHABLE();
     }
