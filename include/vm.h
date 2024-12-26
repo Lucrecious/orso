@@ -20,6 +20,8 @@ enum op_code_t {
     OP_ADD_REGU_U32,
 
     OP_ADD_REGI_TO_REGI,
+
+    OP_RETURN,
 };
 
 typedef u32 memaddr_t;
@@ -216,6 +218,11 @@ void vm_step(vm_t *vm) {
             vm->registers[c].as.i = vm->registers[a].as.i + vm->registers[b].as.i;
 
             IP_ADV(1);
+            break;
+        }
+
+        case OP_RETURN: {
+            vm->halted = true;
             break;
         }
     }

@@ -150,6 +150,13 @@ static void emit_binary(function_t *function, token_type_t token_type, reg_t op1
     array_push(&function->code, instruction);
 }
 
+static void emit_return(function_t *function) {
+    instruction_t instruction = {0};
+    instruction.op = OP_RETURN;
+
+    array_push(&function->code, instruction);
+}
+
 static void gen_expression(gen_t *gen, function_t *function, ast_node_t *expression);
 
 static void gen_binary(gen_t *gen, function_t *function, ast_node_t *binary) {
@@ -256,8 +263,8 @@ static void gen_block(gen_t *gen, function_t *function, ast_node_t *block) {
 
 static void gen_return(gen_t *gen, function_t *function, type_t type) {
     UNUSED(gen);
-    UNUSED(function);
     UNUSED(type);
+    emit_return(function);
 }
 
 static void error_fn(error_t error) {
