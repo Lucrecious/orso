@@ -19,7 +19,8 @@ enum op_code_t {
     OP_SUB_REGU_U32,
     OP_ADD_REGU_U32,
 
-    OP_ADD_REGI_TO_REGI,
+    OP_ADD_REGI_REGI,
+    OP_SUB_REGI_REGI,
 
     OP_RETURN,
 };
@@ -210,12 +211,23 @@ void vm_step(vm_t *vm) {
             break;
         }
 
-        case OP_ADD_REGI_TO_REGI: {
+        case OP_ADD_REGI_REGI: {
             byte a = instruction.as.bin_reg_to_reg.reg_op1;
             byte b = instruction.as.bin_reg_to_reg.reg_op2;
             byte c = instruction.as.bin_reg_to_reg.reg_result;
 
             vm->registers[c].as.i = vm->registers[a].as.i + vm->registers[b].as.i;
+
+            IP_ADV(1);
+            break;
+        }
+
+        case OP_SUB_REGI_REGI: {
+            byte a = instruction.as.bin_reg_to_reg.reg_op1;
+            byte b = instruction.as.bin_reg_to_reg.reg_op2;
+            byte c = instruction.as.bin_reg_to_reg.reg_result;
+
+            vm->registers[c].as.i = vm->registers[a].as.i - vm->registers[b].as.i;
 
             IP_ADV(1);
             break;

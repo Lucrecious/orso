@@ -136,7 +136,12 @@ static void emit_binary(function_t *function, token_type_t token_type, reg_t op1
 
     switch (token_type) {
         case TOKEN_PLUS: {
-            instruction.op = OP_ADD_REGI_TO_REGI;
+            instruction.op = OP_ADD_REGI_REGI;
+            break;
+        }
+
+        case TOKEN_MINUS: {
+            instruction.op = OP_SUB_REGI_REGI;
             break;
         }
         default:
@@ -170,7 +175,7 @@ static void gen_binary(gen_t *gen, function_t *function, ast_node_t *binary) {
 
     emit_pop_to_wordreg(function, REG_OPERAND2);
 
-    emit_binary(function, binary->operator.type, REG_OPERAND1, REG_OPERAND2, REG_OPERAND1);
+    emit_binary(function, binary->operator.type, REG_OPERAND2, REG_OPERAND1, REG_OPERAND1);
 }
 
 static value_index_t add_constant(function_t *function, void *data, size_t size) {
