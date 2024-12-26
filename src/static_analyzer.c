@@ -247,7 +247,7 @@ static type_t resolve_unary_type(ast_t* ast, token_type_t operator, type_t opera
 }
 
 static ast_node_t *implicit_cast(ast_t *ast, ast_node_t *operand, type_t value_type) {
-    ast_node_t* implicit_cast = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT, operand->is_in_type_context, operand->start);
+    ast_node_t* implicit_cast = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT, operand->inside_type_context, operand->start);
     implicit_cast->end = operand->end;
 
     implicit_cast->value_type = value_type;
@@ -449,7 +449,7 @@ static void resolve_foldable(
             foldable = expression->as.expression->foldable;
 
             if (expression->operator.type == TOKEN_AMPERSAND) {
-                if (expression->is_in_type_context) {
+                if (expression->inside_type_context) {
                     type_t type = get_folded_type(ast, expression->as.expression->value_index);
 
                     type_t pointer_type = type_set_fetch_pointer(&ast->type_set, type);
@@ -1121,7 +1121,7 @@ void resolve_expression(
                 break;
             }
 
-            if (expression->is_in_type_context && expression->operator.type == TOKEN_AMPERSAND) {
+            if (expression->inside_type_context && expression->operator.type == TOKEN_AMPERSAND) {
                 if (!TYPE_IS_TYPE(expression->as.expression->value_type)) {
                     INVALIDATE(expression);
                     error_range(analyzer, expression->start, expression->end, ERROR_ANALYSIS_INVALID_UNARY_OPERAND);
@@ -1152,9 +1152,9 @@ void resolve_expression(
 
             scope_t *entity_scope;
             EntityQuery query = {
-                .search_type = expression->is_in_type_context ? typeid(TYPE_TYPE) : typeid(TYPE_INVALID),
+                .search_type = expression->inside_type_context ? typeid(TYPE_TYPE) : typeid(TYPE_INVALID),
                 .skip_mutable = (state.mode & MODE_CONSTANT_TIME),
-                .flags = expression->is_in_type_context ? QUERY_FLAG_MATCH_TYPE : QUERY_FLAG_MATCH_ANY,
+                .flags = expression->inside_type_context ? QUERY_FLAG_MATCH_TYPE : QUERY_FLAG_MATCH_ANY,
             };
 
             Entity *entity = get_resolved_entity_by_identifier(analyzer, ast, state, expression->as.dot.identifier, &query, &entity_scope);
@@ -1738,7 +1738,7 @@ static void resolve_entity_declaration(analyzer_t* analyzer, ast_t* ast, Analysi
         if (INITIAL_EXPRESSION != NULL
         && type_is_struct(ast->type_set.types, INITIAL_EXPRESSION->value_type)
         && (TYPE_IS_UNRESOLVED(declaration_type) || TYPE_IS_TYPE(declaration_type))) {
-            ast_node_t *to_struct_type = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT, INITIAL_EXPRESSION->is_in_type_context, INITIAL_EXPRESSION->start);
+            ast_node_t *to_struct_type = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT, INITIAL_EXPRESSION->inside_type_context, INITIAL_EXPRESSION->start);
             to_struct_type->value_type = typeid(TYPE_TYPE);
             to_struct_type->as.expression = INITIAL_EXPRESSION;
 

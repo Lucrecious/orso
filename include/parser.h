@@ -177,7 +177,7 @@ struct ast_node_t {
     // branching, blocks
     return_guarentee_t return_guarentee;
 
-    bool is_in_type_context;
+    bool inside_type_context;
 
     bool fold;
 
@@ -266,7 +266,7 @@ type_t get_folded_type(ast_t *ast, value_index_t index);
 void ast_init(ast_t *ast, size_t memory_size_bytes);
 void ast_free(ast_t *ast);
 
-ast_node_t* ast_node_new(ast_t *ast, ast_node_type_t node_type, bool is_in_type_context, token_t start);
+ast_node_t* ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type_context, token_t start);
 
 bool ast_node_type_is_decl_or_stmt(ast_node_type_t node_type);
 bool ast_node_type_is_expression(ast_node_type_t node_type);
