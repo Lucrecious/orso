@@ -120,26 +120,43 @@ void emit_pop_to_wordreg(function_t *function, reg_t reg_destination) {
     }
 }
 
-static void emit_binary(function_t *function, token_type_t token_type, reg_t op1, reg_t op2, reg_t result) {
+static void emit_binary(function_t *function, token_type_t token_type, type_info_t *type_info, reg_t op1, reg_t op2, reg_t result) {
     instruction_t instruction = {0};
+    ASSERT(type_info->kind == TYPE_NUMBER, "for now only numbers");
 
     switch (token_type) {
         case TOKEN_PLUS: {
-            instruction.op = OP_ADDI_REG_REG;
+            switch (type_info->data.num) {
+                case NUM_TYPE_FLOAT: instruction.op = OP_ADDD_REG_REG; break;
+                case NUM_TYPE_SIGNED: instruction.op = OP_ADDI_REG_REG; break;
+                case NUM_TYPE_UNSIGNED: instruction.op = OP_ADDU_REG_REG; break;
+            }
             break;
         }
 
         case TOKEN_MINUS: {
-            instruction.op = OP_SUBI_REG_REG;
+            switch (type_info->data.num) {
+                case NUM_TYPE_FLOAT: instruction.op = OP_SUBD_REG_REG; break;
+                case NUM_TYPE_SIGNED: instruction.op = OP_SUBI_REG_REG; break;
+                case NUM_TYPE_UNSIGNED: instruction.op = OP_SUBU_REG_REG; break;
+            }
             break;
         }
 
         case TOKEN_STAR: {
-            instruction.op = OP_MULI_REG_REG;
+            switch (type_info->data.num) {
+                case NUM_TYPE_FLOAT: instruction.op = OP_MULD_REG_REG; break;
+                case NUM_TYPE_SIGNED: instruction.op = OP_MULI_REG_REG; break;
+                case NUM_TYPE_UNSIGNED: instruction.op = OP_MULU_REG_REG; break;
+            }
             break;
         }
         case TOKEN_SLASH: {
-            instruction.op = OP_DIVI_REG_REG;
+            switch (type_info->data.num) {
+                case NUM_TYPE_FLOAT: instruction.op = OP_DIVD_REG_REG; break;
+                case NUM_TYPE_SIGNED: instruction.op = OP_DIVI_REG_REG; break;
+                case NUM_TYPE_UNSIGNED: instruction.op = OP_DIVU_REG_REG; break;
+            }
             break;
         }
 
@@ -164,17 +181,19 @@ static void emit_return(function_t *function) {
 static void gen_expression(gen_t *gen, function_t *function, ast_node_t *expression);
 
 static void gen_binary(gen_t *gen, function_t *function, ast_node_t *binary) {
-    ast_node_t *lhs = binary->children.items[AN_CHILD_LHS];
+    ast_node_t *lhs = an_lhs(binary);
     gen_expression(gen, function, lhs);
 
     emit_push_wordreg(function, REG_OPERAND1);
 
-    ast_node_t *rhs = binary->children.items[AN_CHILD_RHS];
+    ast_node_t *rhs = an_rhs(binary);
     gen_expression(gen, function, rhs);
 
     emit_pop_to_wordreg(function, REG_OPERAND2);
 
-    emit_binary(function, binary->operator.type, REG_OPERAND2, REG_OPERAND1, REG_OPERAND1);
+    type_info_t *expr_type_info = get_type_info(&gen->ast->type_set.types, binary->value_type);
+
+    emit_binary(function, binary->operator.type, expr_type_info, REG_OPERAND2, REG_OPERAND1, REG_OPERAND1);
 }
 
 static value_index_t add_constant(function_t *function, void *data, size_t size) {
@@ -231,6 +250,11 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
             break;
         }
 
+        case AST_NODE_TYPE_EXPRESSION_GROUPING: {
+            gen_expression(gen, function, an_operand(expression));
+            break;
+        }
+
         case AST_NODE_TYPE_EXPRESSION_ASSIGNMENT:
         case AST_NODE_TYPE_EXPRESSION_BLOCK:
         case AST_NODE_TYPE_EXPRESSION_BRANCHING:
@@ -240,7 +264,6 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
         case AST_NODE_TYPE_EXPRESSION_ENTITY:
         case AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION:
         case AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE:
-        case AST_NODE_TYPE_EXPRESSION_GROUPING:
         case AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION:
         case AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER:
         case AST_NODE_TYPE_EXPRESSION_UNARY:
@@ -261,7 +284,7 @@ static void gen_block(gen_t *gen, function_t *function, ast_node_t *block) {
         ast_node_t *node = block->as.block.items[i];
         ASSERT(node->node_type == AST_NODE_TYPE_STATEMENT_EXPRESSION, "only allowing statement expressions right now");
 
-        gen_expression(gen, function, node->as.expression);
+        gen_expression(gen, function, an_operand(node));
     }
 }
 

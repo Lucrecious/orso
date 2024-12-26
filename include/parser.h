@@ -164,12 +164,9 @@ struct value_index_t {
 
 bool memarr_push_value(memarr_t *arr, void *data, size_t size_bytes, value_index_t *out_index);
 
-typedef enum ast_node_child_index_t ast_node_child_index_t;
-enum ast_node_child_index_t {
-    AST_NODE_CHILD_OPERAND = 0,
-    AN_CHILD_LHS = 0,
-    AN_CHILD_RHS = 1,
-};
+#define an_operand(n) (n)->children.items[0]
+#define an_lhs(n) (n)->children.items[0]
+#define an_rhs(n) (n)->children.items[1]
 
 struct ast_node_t {
     ast_node_type_t node_type;
@@ -200,8 +197,6 @@ struct ast_node_t {
     union {
         ast_declaration_t declaration;
 
-        // statement, print, print_expr, cast, grouping
-        ast_node_t *expression;
         ast_node_t *statement; // for readability
 
         ast_call_t call;

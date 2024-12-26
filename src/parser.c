@@ -244,7 +244,7 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type
         case AST_NODE_TYPE_STATEMENT_RETURN:
         case AST_NODE_TYPE_EXPRESSION_STATEMENT:
         case AST_NODE_TYPE_EXPRESSION_GROUPING: {
-            node->as.expression = NULL;
+            array_push(&node->children, &nil_node);
             break;
         }
 
@@ -493,7 +493,7 @@ static ast_node_t *literal(parser_t *parser, bool inside_type_context) {
 static ast_node_t *convert_assignment_expression(parser_t *parser, ast_node_t *left, ast_node_t *assignment) {
     (void)parser;
     assignment->start = left->start;
-    assignment->children.items[AN_CHILD_LHS] = left;
+    an_lhs(assignment) = left;
     return assignment;
 }
 
@@ -526,7 +526,7 @@ static ast_node_t *assignment(parser_t *parser, bool inside_type_context) {
     ast_node_t *expression_node = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_ASSIGNMENT, inside_type_context, parser->previous);
 
     ast_node_t *rhs = expression(parser, inside_type_context);
-    expression_node->children.items[AN_CHILD_RHS] = rhs;
+    an_rhs(expression_node) = rhs;
     expression_node->end = parser->previous;
 
     return expression_node;
@@ -722,11 +722,11 @@ static ast_node_t *grouping_or_function_signature_or_definition(parser_t *parser
             expression_node = convert_function_definition(parser, expression_node, definition);
         }
     } else {
-        expression_node->as.expression = expression(parser, inside_type_context);
+        an_operand(expression_node) = expression(parser, inside_type_context);
 
         consume(parser, TOKEN_PARENTHESIS_CLOSE, ERROR_PARSER_EXPECTED_CLOSE_PARENTHESIS);
 
-        expression_node->value_type = expression_node->as.expression->value_type;
+        expression_node->value_type = an_operand(expression_node)->value_type;
     }
 
     expression_node->end = parser->previous;
@@ -767,7 +767,7 @@ static ast_node_t* unary(parser_t* parser, bool inside_type_context) {
     ast_node_t* expression_node = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_UNARY, inside_type_context, parser->previous);
     expression_node->operator = parser->previous;
 
-    expression_node->as.expression = parse_precedence(parser, inside_type_context, PREC_UNARY);
+    an_operand(expression_node) = parse_precedence(parser, inside_type_context, PREC_UNARY);
     expression_node->end = parser->previous;
 
     return expression_node;
@@ -784,7 +784,7 @@ static ast_node_t* binary(parser_t* parser, bool inside_type_context) {
     expression_node->start = parser->previous;
 
     ast_node_t *rhs = parse_precedence(parser, inside_type_context, (Precedence)(rule->precedence + 1));
-    expression_node->children.items[AN_CHILD_RHS] = rhs;
+    an_rhs(expression_node) = rhs;
     expression_node->end = parser->previous;
 
     return expression_node;
@@ -813,7 +813,7 @@ static ast_node_t *print_(parser_t *parser, bool inside_type_context) {
     ast_node_type_t node_type = parser->previous.type == TOKEN_PRINT ? AST_NODE_TYPE_EXPRESSION_PRINT : AST_NODE_TYPE_EXPRESSION_PRINT_EXPR;
     ast_node_t *print_expression = ast_node_new(parser->ast, node_type, inside_type_context, parser->previous);
 
-    print_expression->as.expression = expression(parser, inside_type_context);
+    an_operand(print_expression) = expression(parser, inside_type_context);
 
     print_expression->end = parser->previous;
 
@@ -933,7 +933,7 @@ static ast_node_t* parse_precedence(parser_t* parser, bool inside_type_context, 
 
         switch (right_operand->node_type) {
             case AST_NODE_TYPE_EXPRESSION_BINARY: {
-                right_operand->children.items[AN_CHILD_LHS] = left_operand;
+                an_lhs(right_operand) = left_operand;
                 right_operand->start = left_operand->start;
                 left_operand = right_operand;
                 break;
@@ -1031,10 +1031,10 @@ static ast_node_t *statement(parser_t* parser, bool omit_end_of_statement) {
     if (is_return) {
         // expression is option in this case
         if (check_expression(parser)) {
-            statement_node->as.expression = expression(parser, false);
+            an_operand(statement_node) = expression(parser, false);
         }
     } else {
-        statement_node->as.expression = expression(parser, false);
+        an_operand(statement_node) = expression(parser, false);
     }
         
     if (!omit_end_of_statement) {
@@ -1272,17 +1272,17 @@ static void ast_print_ast_node(type_infos_t types, ast_node_t *node, u32 level) 
 
             print_indent(level + 1);
             print_line("left");
-            ast_print_ast_node(types, node->children.items[AN_CHILD_LHS], level+2);
+            ast_print_ast_node(types, an_lhs(node), level+2);
 
             print_indent(level + 1);
             print_line("right");
-            ast_print_ast_node(types, node->children.items[AN_CHILD_RHS], level+2);
+            ast_print_ast_node(types, an_rhs(node), level+2);
             break;
         }
         case AST_NODE_TYPE_EXPRESSION_GROUPING: {
             print_indent(level);
             print_line("group (...): %s", type2cstr(node));
-            ast_print_ast_node(types, node->as.expression, level + 1);
+            ast_print_ast_node(types, an_operand(node), level + 1);
             break;
         }
 
@@ -1311,13 +1311,13 @@ static void ast_print_ast_node(type_infos_t types, ast_node_t *node, u32 level) 
             print_indent(level);
             print_line("implicit cast: %s", type2cstr(node));
 
-            ast_print_ast_node(types, node->as.expression, level + 1);
+            ast_print_ast_node(types, an_operand(node), level + 1);
             break;
         }
         case AST_NODE_TYPE_EXPRESSION_UNARY: {
             print_indent(level);
             print_line("unary (%.*s): %s", node->operator.length, node->operator.start, type2cstr(node));
-            ast_print_ast_node(types, node->as.expression, level + 1);
+            ast_print_ast_node(types, an_operand(node), level + 1);
             break;
         }
         case AST_NODE_TYPE_EXPRESSION_PRIMARY: {
@@ -1336,11 +1336,11 @@ static void ast_print_ast_node(type_infos_t types, ast_node_t *node, u32 level) 
 
             print_indent(level + 1);
             print_line("lvalue");
-            ast_print_ast_node(types, node->children.items[AN_CHILD_LHS], level + 2);
+            ast_print_ast_node(types, an_lhs(node), level + 2);
 
             print_indent(level + 1);
             print_line("rhs");
-            ast_print_ast_node(types, node->children.items[AN_CHILD_RHS], level + 2);
+            ast_print_ast_node(types, an_rhs(node), level + 2);
             break;
         }
         case AST_NODE_TYPE_EXPRESSION_BLOCK: {
@@ -1430,7 +1430,7 @@ static void ast_print_ast_node(type_infos_t types, ast_node_t *node, u32 level) 
         case AST_NODE_TYPE_EXPRESSION_STATEMENT: {
             print_indent(level);
             print_line("expression statement: %s", type2cstr(node));
-            ast_print_ast_node(types, node->as.expression, level + 1);
+            ast_print_ast_node(types, an_operand(node), level + 1);
             break;
         }
         case AST_NODE_TYPE_EXPRESSION_PRINT_EXPR: {
@@ -1446,14 +1446,14 @@ static void ast_print_ast_node(type_infos_t types, ast_node_t *node, u32 level) 
         case AST_NODE_TYPE_STATEMENT_EXPRESSION: {
             print_indent(level);
             print_line("statement expression: %s", type2cstr(node));
-            ast_print_ast_node(types, node->as.expression, level + 1);
+            ast_print_ast_node(types, an_operand(node), level + 1);
             break;
         }
         case AST_NODE_TYPE_STATEMENT_RETURN: {
             print_indent(level);
             print_line("return");
 
-            ast_print_ast_node(types, node->as.expression, level + 1);
+            ast_print_ast_node(types, an_operand(node), level + 1);
             break;
         }
         case AST_NODE_TYPE_EXPRESSION_DOT: {

@@ -73,7 +73,7 @@ int main(int argc, char **argv) {
     ast_t ast = {0};
     ast_init(&ast, megabytes(2));
 
-    bool success = parse_expr_cstr(&ast, "69 * 2 / 2", lit2str(""));
+    bool success = parse_expr_cstr(&ast, "(4.2 + 5.4 / 2.0) * 60.9", lit2str(""));
     unless (success) return 1;
 
     memarr_t *memory = arena_alloc(&arena, sizeof(memarr_t));
@@ -92,9 +92,9 @@ int main(int argc, char **argv) {
     vm_init(&vm);
     vm.registers[REG_STACK_BOTTOM].as.u = stack_size;
 
-    i64 *result = (i64*)vm_run_function(&vm, expr_function);
+    f64 *result = (f64*)vm_run_function(&vm, expr_function);
 
-    printf("%lld\n", *result);
+    printf("%f\n", *result);
 
     // size_t id = vm_add_function(&vm, expr_function);
 

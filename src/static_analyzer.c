@@ -251,7 +251,7 @@ static ast_node_t *implicit_cast(ast_t *ast, ast_node_t *operand, type_t value_t
     implicit_cast->end = operand->end;
 
     implicit_cast->value_type = value_type;
-    implicit_cast->as.expression = operand;
+    an_operand(implicit_cast) = operand;
     implicit_cast->fold = false;
     implicit_cast->foldable = true;
     implicit_cast->value_index = value_index_nil();
@@ -374,7 +374,7 @@ static bool is_block_compile_time_foldable(ast_nodes_t block) {
             }
             
             case AST_NODE_TYPE_STATEMENT_EXPRESSION: {
-                if (!EXPRESSION_RESOLVED(declaration->as.expression) || TYPE_IS_INVALID(declaration->as.expression->value_type)) {
+                if (!EXPRESSION_RESOLVED(an_operand(declaration)) || TYPE_IS_INVALID(an_operand(declaration)->value_type)) {
                     return false;
                 }
                 break;
@@ -406,8 +406,8 @@ static void resolve_foldable(
 
     switch (expression->node_type) {
         case AST_NODE_TYPE_EXPRESSION_GROUPING: {
-            foldable = expression->as.expression->foldable;
-            folded_index = expression->as.expression->value_index;
+            foldable = an_operand(expression)->foldable;
+            folded_index = an_operand(expression)->value_index;
             break;
         }
 
@@ -429,8 +429,8 @@ static void resolve_foldable(
         }
 
         case AST_NODE_TYPE_EXPRESSION_BINARY: {
-            ast_node_t *left = expression->children.items[AN_CHILD_LHS];
-            ast_node_t *right = expression->children.items[AN_CHILD_RHS];
+            ast_node_t *left = an_lhs(expression);
+            ast_node_t *right = an_rhs(expression);
             foldable = left->foldable && right->foldable;
 
             if (expression->operator.type == TOKEN_BAR) {
@@ -456,11 +456,11 @@ static void resolve_foldable(
         }
 
         case AST_NODE_TYPE_EXPRESSION_UNARY: {
-            foldable = expression->as.expression->foldable;
+            foldable = an_operand(expression)->foldable;
 
             if (expression->operator.type == TOKEN_AMPERSAND) {
                 if (expression->inside_type_context) {
-                    type_t type = get_folded_type(ast, expression->as.expression->value_index);
+                    type_t type = get_folded_type(ast, an_operand(expression)->value_index);
 
                     type_t pointer_type = type_set_fetch_pointer(&ast->type_set, type);
 
@@ -589,7 +589,7 @@ static void resolve_foldable(
         case AST_NODE_TYPE_EXPRESSION_STATEMENT: {
             switch (expression->as.statement->node_type) {
                 case AST_NODE_TYPE_STATEMENT_EXPRESSION: {
-                    foldable = expression->as.statement->as.expression->foldable;
+                    foldable = an_operand(expression->as.statement)->foldable;
                     break;
                 }
 
@@ -927,10 +927,10 @@ void resolve_expression(
 
     switch (expression->node_type) {
         case AST_NODE_TYPE_EXPRESSION_GROUPING: {
-            resolve_expression(analyzer, ast, state, expression->as.expression);
-            expression->lvalue_node = expression->as.expression->lvalue_node;
+            resolve_expression(analyzer, ast, state, an_operand(expression));
+            expression->lvalue_node = an_operand(expression)->lvalue_node;
 
-            expression->value_type = expression->as.expression->value_type;
+            expression->value_type = an_operand(expression)->value_type;
             break;
         }
 
@@ -1008,10 +1008,10 @@ void resolve_expression(
         }
 
         case AST_NODE_TYPE_EXPRESSION_BINARY: {
-            ast_node_t *left = expression->children.items[AN_CHILD_LHS];
+            ast_node_t *left = an_lhs(expression);
             resolve_expression(analyzer, ast, state, left);
 
-            ast_node_t *right = expression->children.items[AN_CHILD_RHS];
+            ast_node_t *right = an_rhs(expression);
             resolve_expression(analyzer, ast, state, right);
 
             if (TYPE_IS_INVALID(left->value_type) || TYPE_IS_INVALID(right->value_type)) {
@@ -1110,41 +1110,41 @@ void resolve_expression(
 
             if (!is_logical_operator) {
                 if (!typeid_eq(cast_left, left->value_type)) {
-                    expression->children.items[AN_CHILD_LHS] = implicit_cast(ast, left, cast_left);
-                    fold_constants_via_runtime(analyzer, ast, state, expression->children.items[AN_CHILD_LHS]);
+                    an_lhs(expression) = implicit_cast(ast, left, cast_left);
+                    fold_constants_via_runtime(analyzer, ast, state, an_lhs(expression));
                 }
 
 
                 if (!typeid_eq(cast_right, right->value_type)) {
-                    expression->children.items[AN_CHILD_RHS] = implicit_cast(ast, right, cast_right);
-                    fold_constants_via_runtime(analyzer, ast, state, expression->children.items[AN_CHILD_RHS]);
+                    an_rhs(expression) = implicit_cast(ast, right, cast_right);
+                    fold_constants_via_runtime(analyzer, ast, state, an_rhs(expression));
                 }
             }
             break;
         }
 
         case AST_NODE_TYPE_EXPRESSION_UNARY: {
-            resolve_expression(analyzer, ast, state, expression->as.expression);
+            resolve_expression(analyzer, ast, state, an_operand(expression));
 
-            if (TYPE_IS_INVALID(expression->as.expression->value_type)) {
+            if (TYPE_IS_INVALID(an_operand(expression)->value_type)) {
                 INVALIDATE(expression);
                 break;
             }
 
             if (expression->inside_type_context && expression->operator.type == TOKEN_AMPERSAND) {
-                if (!TYPE_IS_TYPE(expression->as.expression->value_type)) {
+                if (!TYPE_IS_TYPE(an_operand(expression)->value_type)) {
                     INVALIDATE(expression);
                     error_range(analyzer, expression->start, expression->end, ERROR_ANALYSIS_INVALID_UNARY_OPERAND);
                     break;
                 }
 
-                unless (IS_FOLDED(expression->as.expression)) {
+                unless (IS_FOLDED(an_operand(expression))) {
                     INVALIDATE(expression);
-                    error_range(analyzer, expression->as.expression->start, expression->as.expression->end, ERROR_ANALYSIS_EXPECTED_CONSTANT);
+                    error_range(analyzer, an_operand(expression)->start, an_operand(expression)->end, ERROR_ANALYSIS_EXPECTED_CONSTANT);
                     break;
                 }
             } else {
-                type_t new_type = resolve_unary_type(ast, expression->operator.type, expression->as.expression->value_type);
+                type_t new_type = resolve_unary_type(ast, expression->operator.type, an_operand(expression)->value_type);
                 expression->value_type = new_type;
                 
                 // TODO: Must negate the new type implications if the unary operation is NOT
@@ -1276,7 +1276,7 @@ void resolve_expression(
         }
 
         case AST_NODE_TYPE_EXPRESSION_ASSIGNMENT: {
-            ast_node_t *rhs = expression->children.items[AN_CHILD_RHS];
+            ast_node_t *rhs = an_rhs(expression);
             resolve_expression(analyzer, ast, state, rhs);
 
             if (TYPE_IS_INVALID(rhs->value_type)) {
@@ -1284,7 +1284,7 @@ void resolve_expression(
                 break;
             }
 
-            ast_node_t *lhs = expression->children.items[AN_CHILD_LHS];
+            ast_node_t *lhs = an_lhs(expression);
             resolve_expression(analyzer, ast, state, lhs);
             ast_node_t *lvalue_node = lhs->lvalue_node;
             if (lvalue_node == NULL) {
@@ -1362,11 +1362,11 @@ void resolve_expression(
 
             return_guarentee_t block_return_guarentee = RETURN_GUARENTEE_NONE;
             for (i32 i = 0; i < declarations_count; i++) {
-                ast_node_t* declaration = expression->as.block.items[i];
+                ast_node_t *declaration = expression->as.block.items[i];
                 if (declaration->node_type == AST_NODE_TYPE_STATEMENT_RETURN) {
                     block_return_guarentee = RETURN_GUARENTEE_YES;
                 } else if (declaration->node_type == AST_NODE_TYPE_STATEMENT_EXPRESSION) {
-                    ast_node_t* statement = declaration->as.expression;
+                    ast_node_t *statement = an_operand(declaration);
                     if (statement->node_type == AST_NODE_TYPE_EXPRESSION_BLOCK && statement->return_guarentee != RETURN_GUARENTEE_NONE) {
                         block_return_guarentee = statement->return_guarentee;
                     } else if (statement->node_type == AST_NODE_TYPE_EXPRESSION_BRANCHING && statement->return_guarentee != RETURN_GUARENTEE_NONE) {
@@ -1394,7 +1394,7 @@ void resolve_expression(
                 if (last_expression_statement == NULL) {
                     expression->value_type = typeid(TYPE_VOID);
                 } else {
-                    expression->value_type = last_expression_statement->as.expression->value_type;
+                    expression->value_type = an_operand(last_expression_statement)->value_type;
                 }
             }
             break;
@@ -1403,13 +1403,13 @@ void resolve_expression(
         case AST_NODE_TYPE_EXPRESSION_STATEMENT: {
             resolve_statement(analyzer, ast, state, expression->as.statement);
 
-            if (TYPE_IS_INVALID(expression->as.statement->as.expression->value_type)) {
+            if (TYPE_IS_INVALID(an_operand(expression->as.statement)->value_type)) {
                 INVALIDATE(expression);
                 break;
             }
 
-            expression->return_guarentee = expression->as.statement->as.expression ? 
-                    expression->as.statement->as.expression->return_guarentee : RETURN_GUARENTEE_NONE;
+            expression->return_guarentee = an_operand(expression->as.statement) ? 
+                    an_operand(expression->as.statement)->return_guarentee : RETURN_GUARENTEE_NONE;
 
             if (expression->as.statement->node_type == AST_NODE_TYPE_STATEMENT_RETURN) {
                 if (expression->return_guarentee != RETURN_GUARENTEE_NONE) {
@@ -1422,7 +1422,7 @@ void resolve_expression(
             if (expression->return_guarentee != RETURN_GUARENTEE_NONE) {
                 expression->value_type = typeid(TYPE_UNDEFINED);
             } else {
-                expression->value_type = expression->as.statement->as.expression->value_type;
+                expression->value_type = an_operand(expression->as.statement)->value_type;
             }
             break;
         }
@@ -1572,7 +1572,7 @@ void resolve_expression(
 
         case AST_NODE_TYPE_EXPRESSION_PRINT:
         case AST_NODE_TYPE_EXPRESSION_PRINT_EXPR: {
-            resolve_expression(analyzer, ast, state, expression->as.expression);
+            resolve_expression(analyzer, ast, state, an_operand(expression));
             expression->value_type = typeid(TYPE_VOID);
             break;
         }
@@ -1701,7 +1701,7 @@ static void resolve_entity_declaration(analyzer_t* analyzer, ast_t* ast, Analysi
         ast_node_t *cast_node = entity_declaration->as.declaration.initial_value_expression;
         ASSERT(cast_node->node_type == AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT, "must be implicit casting node");
         
-        type_t completed_struct_type = cast_node->as.expression->value_type;
+        type_t completed_struct_type = an_operand(cast_node)->value_type;
         
         // this means that we found out later that the struct this was supposed to be was actually invalid, so we need to fix the ast
         if (TYPE_IS_INVALID(completed_struct_type)) {
@@ -1752,7 +1752,7 @@ static void resolve_entity_declaration(analyzer_t* analyzer, ast_t* ast, Analysi
         && (TYPE_IS_UNRESOLVED(declaration_type) || TYPE_IS_TYPE(declaration_type))) {
             ast_node_t *to_struct_type = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT, INITIAL_EXPRESSION->inside_type_context, INITIAL_EXPRESSION->start);
             to_struct_type->value_type = typeid(TYPE_TYPE);
-            to_struct_type->as.expression = INITIAL_EXPRESSION;
+            an_operand(to_struct_type) = INITIAL_EXPRESSION;
 
             to_struct_type->fold = false;
             to_struct_type->foldable = true;
@@ -1772,7 +1772,7 @@ static void resolve_entity_declaration(analyzer_t* analyzer, ast_t* ast, Analysi
             table_put(type2ns, ast->type_to_creation_node, named_struct_id, node_and_scope);
             
             {
-                value_index_t value_index = to_struct_type->as.expression->value_index;
+                value_index_t value_index = an_operand(to_struct_type)->value_index;
                 ASSERT(value_index.exists, "must be the value of the anonymous type");
                 table_put(ptr2sizet, ast->type_to_zero_index, named_struct_id, value_index.index);
             }
@@ -2516,16 +2516,16 @@ static void resolve_statement(
         ast_node_t *statement) {
     switch (statement->node_type) {
         case AST_NODE_TYPE_STATEMENT_EXPRESSION:
-            resolve_expression(analyzer, ast, state, statement->as.expression);
-            statement->value_type = statement->as.expression->value_type;
+            resolve_expression(analyzer, ast, state, an_operand(statement));
+            statement->value_type = an_operand(statement)->value_type;
             break;
 
         case AST_NODE_TYPE_STATEMENT_RETURN: {
             type_t return_expression_type = typeid(TYPE_VOID);
 
-            if (statement->as.expression) {
-                resolve_expression(analyzer, ast, state, statement->as.expression);
-                return_expression_type = statement->as.expression->value_type;
+            if (an_operand(statement)) {
+                resolve_expression(analyzer, ast, state, an_operand(statement));
+                return_expression_type = an_operand(statement)->value_type;
             }
 
             scope_t *function_scope = get_closest_outer_function_scope(&ast->type_set.types, state.scope);
@@ -2536,7 +2536,7 @@ static void resolve_statement(
 
             type_t function_return_type = function_scope ? function_type_info->data.function.return_type : typeid(TYPE_VOID);
             unless (TYPE_IS_INVALID(return_expression_type) || typeid_eq(function_return_type, return_expression_type)) {
-                error_range(analyzer, statement->as.expression->start, statement->as.expression->end, ERROR_ANALYSIS_TYPE_MISMATCH);
+                error_range(analyzer, an_operand(statement)->start, an_operand(statement)->end, ERROR_ANALYSIS_TYPE_MISMATCH);
             }
             break;
         }
