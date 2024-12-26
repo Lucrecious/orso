@@ -161,6 +161,25 @@ void ast_free(ast_t *ast) {
     arena_free(&ast->allocator);
 }
 
+#define TOKEN_NIL (token_t){\
+    .file_path = lit2str(""),\
+    .length = 0,\
+    .line = 0,\
+    .start = "",\
+    .type = TOKEN_ERROR\
+}
+
+ast_node_t nil_node = {
+    .node_type=AST_NODE_TYPE_UNDEFINED,
+    .start = TOKEN_NIL,
+    .end = TOKEN_NIL,
+    .operator = TOKEN_NIL,
+
+    .value_type = typeid(TYPE_INVALID),
+    .return_guarentee = RETURN_GUARENTEE_NONE,
+    .lvalue_node = &nil_node,
+};
+
 ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type_context, token_t start) {
     ast_node_t *node = (ast_node_t*)arena_alloc(&ast->allocator, sizeof(ast_node_t));
     
@@ -178,6 +197,8 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type
 
     node->value_index = value_index_nil();
 
+    node->children = (ast_nodes_t){.allocator=&ast->allocator};
+
     switch (node_type) {
         case AST_NODE_TYPE_DECLARATION: {
             node->as.declaration.initial_value_expression = NULL;
@@ -190,8 +211,8 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type
 
         case AST_NODE_TYPE_EXPRESSION_ASSIGNMENT:
         case AST_NODE_TYPE_EXPRESSION_BINARY: {
-            node->as.binary.lhs = NULL;
-            node->as.binary.rhs = NULL;
+            array_push(&node->children, &nil_node);
+            array_push(&node->children, &nil_node);
             break;
         }
         
@@ -473,7 +494,7 @@ static ast_node_t *literal(parser_t *parser, bool inside_type_context) {
 static ast_node_t *convert_assignment_expression(parser_t *parser, ast_node_t *left, ast_node_t *assignment) {
     (void)parser;
     assignment->start = left->start;
-    assignment->as.binary.lhs = left;
+    assignment->children.items[AN_CHILD_LHS] = left;
     return assignment;
 }
 
@@ -503,9 +524,10 @@ static ast_node_t *convert_function_definition(parser_t *parser, ast_node_t *lef
 }
 
 static ast_node_t *assignment(parser_t *parser, bool inside_type_context) {
-    ast_node_t* expression_node = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_ASSIGNMENT, inside_type_context, parser->previous);
+    ast_node_t *expression_node = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_ASSIGNMENT, inside_type_context, parser->previous);
 
-    expression_node->as.binary.rhs = expression(parser, inside_type_context);
+    ast_node_t *rhs = expression(parser, inside_type_context);
+    expression_node->children.items[AN_CHILD_RHS] = rhs;
     expression_node->end = parser->previous;
 
     return expression_node;
@@ -757,13 +779,13 @@ static ast_node_t* binary(parser_t* parser, bool inside_type_context) {
 
     token_t operator = parser->previous;
     expression_node->operator = operator;
-    expression_node->as.binary.lhs = NULL;
-    expression_node->as.binary.rhs = NULL;
 
     ParseRule* rule = get_rule(operator.type);
 
     expression_node->start = parser->previous;
-    expression_node->as.binary.rhs = parse_precedence(parser, inside_type_context, (Precedence)(rule->precedence + 1));
+
+    ast_node_t *rhs = parse_precedence(parser, inside_type_context, (Precedence)(rule->precedence + 1));
+    expression_node->children.items[AN_CHILD_RHS] = rhs;
     expression_node->end = parser->previous;
 
     return expression_node;
@@ -911,27 +933,36 @@ static ast_node_t* parse_precedence(parser_t* parser, bool inside_type_context, 
         right_operand->inside_type_context = inside_type_context;
 
         switch (right_operand->node_type) {
-            case AST_NODE_TYPE_EXPRESSION_BINARY:
-                right_operand->as.binary.lhs = left_operand;
+            case AST_NODE_TYPE_EXPRESSION_BINARY: {
+                right_operand->children.items[AN_CHILD_LHS] = left_operand;
                 right_operand->start = left_operand->start;
                 left_operand = right_operand;
                 break;
+            }
+
             case AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER: {
                 right_operand->as.initiailizer.type = left_operand;
                 left_operand = right_operand;
                 break;
             }
-            case AST_NODE_TYPE_EXPRESSION_DOT:
+
+            case AST_NODE_TYPE_EXPRESSION_DOT: {
                 right_operand->as.dot.lhs = left_operand;
                 right_operand->start = left_operand->start;
                 left_operand = right_operand;
                 break;
-            case AST_NODE_TYPE_EXPRESSION_CALL:
+            }
+
+            case AST_NODE_TYPE_EXPRESSION_CALL: {
                 left_operand = convert_call_expression(left_operand, right_operand);
                 break;
-            case AST_NODE_TYPE_EXPRESSION_ASSIGNMENT:
+            }
+
+            case AST_NODE_TYPE_EXPRESSION_ASSIGNMENT: {
                 left_operand = convert_assignment_expression(parser, left_operand, right_operand);
                 break;
+            }
+
             default: UNREACHABLE();
         }
     }
@@ -1248,11 +1279,11 @@ static void ast_print_ast_node(type_infos_t types, ast_node_t *node, u32 level) 
 
             print_indent(level + 1);
             print_line("left");
-            ast_print_ast_node(types, node->as.binary.lhs, level+2);
+            ast_print_ast_node(types, node->children.items[AN_CHILD_LHS], level+2);
 
             print_indent(level + 1);
             print_line("right");
-            ast_print_ast_node(types, node->as.binary.rhs, level+2);
+            ast_print_ast_node(types, node->children.items[AN_CHILD_RHS], level+2);
             break;
         }
         case AST_NODE_TYPE_EXPRESSION_GROUPING: {
@@ -1312,11 +1343,11 @@ static void ast_print_ast_node(type_infos_t types, ast_node_t *node, u32 level) 
 
             print_indent(level + 1);
             print_line("lvalue");
-            ast_print_ast_node(types, node->as.binary.lhs, level + 2);
+            ast_print_ast_node(types, node->children.items[AN_CHILD_LHS], level + 2);
 
             print_indent(level + 1);
             print_line("rhs");
-            ast_print_ast_node(types, node->as.binary.rhs, level + 2);
+            ast_print_ast_node(types, node->children.items[AN_CHILD_RHS], level + 2);
             break;
         }
         case AST_NODE_TYPE_EXPRESSION_BLOCK: {

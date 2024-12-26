@@ -164,6 +164,13 @@ struct value_index_t {
 
 bool memarr_push_value(memarr_t *arr, void *data, size_t size_bytes, value_index_t *out_index);
 
+typedef enum ast_node_child_index_t ast_node_child_index_t;
+enum ast_node_child_index_t {
+    AST_NODE_CHILD_OPERAND = 0,
+    AN_CHILD_LHS = 0,
+    AN_CHILD_RHS = 1,
+};
+
 struct ast_node_t {
     ast_node_type_t node_type;
 
@@ -188,6 +195,8 @@ struct ast_node_t {
 
     ast_node_t *lvalue_node;
 
+    ast_nodes_t children;
+
     union {
         ast_declaration_t declaration;
 
@@ -196,9 +205,6 @@ struct ast_node_t {
         ast_node_t *statement; // for readability
 
         ast_call_t call;
-
-        // binary, assignment
-        ast_binary_t binary;
 
         // block (declarations or statements)
         ast_nodes_t block;
@@ -265,6 +271,8 @@ type_t get_folded_type(ast_t *ast, value_index_t index);
 
 void ast_init(ast_t *ast, size_t memory_size_bytes);
 void ast_free(ast_t *ast);
+
+ast_node_t nil_node;
 
 ast_node_t* ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type_context, token_t start);
 

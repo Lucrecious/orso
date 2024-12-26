@@ -419,8 +419,8 @@ static void resolve_foldable(
         }
 
         case AST_NODE_TYPE_EXPRESSION_BINARY: {
-            ast_node_t *left = expression->as.binary.lhs;
-            ast_node_t *right = expression->as.binary.rhs;
+            ast_node_t *left = expression->children.items[AN_CHILD_LHS];
+            ast_node_t *right = expression->children.items[AN_CHILD_RHS];
             foldable = left->foldable && right->foldable;
 
             if (expression->operator.type == TOKEN_BAR) {
@@ -998,10 +998,10 @@ void resolve_expression(
         }
 
         case AST_NODE_TYPE_EXPRESSION_BINARY: {
-            ast_node_t *left = expression->as.binary.lhs;
+            ast_node_t *left = expression->children.items[AN_CHILD_LHS];
             resolve_expression(analyzer, ast, state, left);
 
-            ast_node_t *right = expression->as.binary.rhs;
+            ast_node_t *right = expression->children.items[AN_CHILD_RHS];
             resolve_expression(analyzer, ast, state, right);
 
             if (TYPE_IS_INVALID(left->value_type) || TYPE_IS_INVALID(right->value_type)) {
@@ -1100,14 +1100,14 @@ void resolve_expression(
 
             if (!is_logical_operator) {
                 if (!typeid_eq(cast_left, left->value_type)) {
-                    expression->as.binary.lhs = implicit_cast(ast, left, cast_left);
-                    fold_constants_via_runtime(analyzer, ast, state, expression->as.binary.lhs);
+                    expression->children.items[AN_CHILD_LHS] = implicit_cast(ast, left, cast_left);
+                    fold_constants_via_runtime(analyzer, ast, state, expression->children.items[AN_CHILD_LHS]);
                 }
 
 
                 if (!typeid_eq(cast_right, right->value_type)) {
-                    expression->as.binary.rhs = implicit_cast(ast, right, cast_right);
-                    fold_constants_via_runtime(analyzer, ast, state, expression->as.binary.rhs);
+                    expression->children.items[AN_CHILD_RHS] = implicit_cast(ast, right, cast_right);
+                    fold_constants_via_runtime(analyzer, ast, state, expression->children.items[AN_CHILD_RHS]);
                 }
             }
             break;
@@ -1266,22 +1266,24 @@ void resolve_expression(
         }
 
         case AST_NODE_TYPE_EXPRESSION_ASSIGNMENT: {
-            resolve_expression(analyzer, ast, state, expression->as.binary.rhs);
+            ast_node_t *rhs = expression->children.items[AN_CHILD_RHS];
+            resolve_expression(analyzer, ast, state, rhs);
 
-            if (TYPE_IS_INVALID(expression->as.binary.rhs->value_type)) {
+            if (TYPE_IS_INVALID(rhs->value_type)) {
                 INVALIDATE(expression);
                 break;
             }
 
-            resolve_expression(analyzer, ast, state, expression->as.binary.lhs);
-            ast_node_t* lvalue_node = expression->as.binary.lhs->lvalue_node;
+            ast_node_t *lhs = expression->children.items[AN_CHILD_LHS];
+            resolve_expression(analyzer, ast, state, lhs);
+            ast_node_t *lvalue_node = lhs->lvalue_node;
             if (lvalue_node == NULL) {
-                error_range(analyzer, expression->as.binary.lhs->start, expression->as.binary.lhs->end, ERROR_ANALYSIS_EXPECTED_LVALUE);
+                error_range(analyzer, lhs->start, lhs->end, ERROR_ANALYSIS_EXPECTED_LVALUE);
                 INVALIDATE(expression);
                 break;
             } 
 
-            lvalue_node = expression->as.binary.lhs;
+            lvalue_node = lhs;
             expression->lvalue_node = lvalue_node;
 
             // // TODO: Find a way to merge the fitting logic
@@ -1299,7 +1301,7 @@ void resolve_expression(
 
                 expression->value_type = entity->declared_type;
 
-                type_t right_side_narrowed_type = expression->as.binary.rhs->value_type;
+                type_t right_side_narrowed_type = rhs->value_type;
                 unless (typeid_eq(entity->declared_type, right_side_narrowed_type)) {
                     error_range(analyzer, expression->start, expression->end, ERROR_ANALYSIS_TYPE_MISMATCH);
                     break;
@@ -1323,7 +1325,7 @@ void resolve_expression(
                     break;
                 }
 
-                unless (typeid_eq(dot_node->value_type, expression->as.binary.rhs->value_type)) {
+                unless (typeid_eq(dot_node->value_type, rhs->value_type)) {
                     error_range(analyzer, expression->start, expression->end, ERROR_ANALYSIS_TYPE_MISMATCH);
                     break;
                 }
