@@ -86,56 +86,6 @@ cstr_t const error_messages[] = {
     [ERROR_CODEGEN_MEMORY_SIZE_TOO_BIG] = "memory size is too large to index. the max is 2^32",
 };
 
-size_t arena_array_push(arena_array_t *array, void *data, size_t size) {
-    void *space = arena_alloc(&array->data, size);
-    memcpy(space, data, size);
-
-    size_t new_count = 0;
-    size_t index = 0;
-    
-    // find index
-    {
-        Region *last_region = array->data.end;
-        ASSERT((space >= (void*)last_region->data) && (space < ((void*)last_region->data+last_region->count)), "expected that the reserved space is in the last region");
-
-        size_t region_index = (byte*)space - (byte*)last_region->data;
-
-        Region *r = array->data.begin;
-        while (r) {
-            new_count += r->count;
-            r = r->next;
-        }
-
-        // remove over counting since last region is not filled yet
-        index = new_count;
-
-        // remove over counting
-        index -= last_region->count;
-        index += region_index;
-    }
-
-    array->count = new_count;
-
-    return index;
-}
-
-void *arena_array_get(arena_array_t *array, size_t index) {
-    Region *r = array->data.begin;
-    size_t bottom = 0;
-    while (r) {
-        if ((index >= bottom) && (index < (bottom + r->count))) {
-            size_t local_index = index - bottom;
-            return r->data+local_index;
-        }
-        bottom += r->count;
-        r = r->next;
-    }
-
-    UNREACHABLE();
-    return NULL;
-}
-
-
 static int type_hash(type_t id) {
     return kh_int64_hash_func((khint64_t)id.i);
 }
@@ -144,7 +94,7 @@ static int type_equal_(type_t a, type_t b) {
     return typeid_eq(a, b);
 }
 
-implement_table(ptr2i32, type_t, i32, type_hash, type_equal_)
+implement_table(ptr2sizet, type_t, size_t, type_hash, type_equal_)
 implement_table(type2ns, type_t, ast_node_and_scope_t, type_hash, type_equal_)
 
 typedef struct parser_t {
@@ -182,16 +132,18 @@ typedef struct {
     Precedence precedence;
 } ParseRule;
 
-void ast_init(ast_t* ast) {
+void ast_init(ast_t *ast, size_t memory_size_bytes) {
     ast->allocator = (arena_t){0};
 
     ast->resolved = false;
     ast->root = NULL;
-    ast->constants = (arena_array_t){0};
+
+    memarr_init(&ast->constants, memory_size_bytes);
 
     {
         u64 zero = 0;
-        arena_array_push_t(&ast->constants, &zero, sizeof(u64));
+        size_t _unused;
+        memarr_push(&ast->constants, &zero, (sizeof(u64)), &_unused);
     }
 
     symbol_table_init(&ast->symbols, &ast->allocator);
@@ -201,7 +153,7 @@ void ast_init(ast_t* ast) {
 
     symbol_table_init(&ast->builtins, &ast->allocator);
 
-    ast->type_to_zero_index = table_new(ptr2i32, &ast->allocator);
+    ast->type_to_zero_index = table_new(ptr2sizet, &ast->allocator);
     ast->type_to_creation_node = table_new(type2ns, &ast->allocator);
 }
 
@@ -224,7 +176,7 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool is_in_type_
     node->is_in_type_context = is_in_type_context;
     node->lvalue_node = NULL;
 
-    node->value_index = -1;
+    node->value_index = value_index_nil();
 
     switch (node_type) {
         case AST_NODE_TYPE_DECLARATION: {
@@ -434,6 +386,17 @@ bool ast_node_type_is_expression(ast_node_type_t node_type) {
     }
 }
 
+bool memarr_push_value(memarr_t *arr, void *data, size_t size_bytes, value_index_t *out_index) {
+    size_t index = 0;
+    if (memarr_push(arr, data, size_bytes, &index)) {
+        *out_index = value_index_(index);
+        return true;
+    }
+
+    *out_index = value_index_nil();
+    return false;
+}
+
 static ast_node_t* number(parser_t* parser, bool is_in_type_context) {
     ast_node_t* expression_node = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_PRIMARY, is_in_type_context, parser->previous);
 
@@ -441,13 +404,16 @@ static ast_node_t* number(parser_t* parser, bool is_in_type_context) {
         case TOKEN_INTEGER: {
             i64 value = cstrn_to_i64(parser->previous.start, parser->previous.length);
             expression_node->value_type = typeid(TYPE_INT64);
-            expression_node->value_index = arena_array_push_t(&parser->ast->constants, &value, i64);
+            unless (memarr_push_value(&parser->ast->constants, &value, sizeof(i64), &expression_node->value_index)) {
+                error(parser, ERROR_CODEGEN_NOT_ENOUGH_MEMORY);
+            }
             break;
         }
         case TOKEN_FLOAT: {
             f64 value = cstrn_to_f64(parser->previous.start, parser->previous.length);
             expression_node->value_type = typeid(TYPE_FLOAT64);
-            expression_node->value_index = arena_array_push_t(&parser->ast->constants, &value, f64);
+            unless (memarr_push_value(&parser->ast->constants, &value, sizeof(f64), &expression_node->value_index)) {
+            }
             break;
         }
         default: UNREACHABLE();
@@ -468,25 +434,31 @@ static ast_node_t *literal(parser_t *parser, bool is_in_type_context) {
 
             bool is_true = parser->previous.type == TOKEN_TRUE;
             byte value = (byte)is_true;
-            expression_node->value_index = arena_array_push_t(&parser->ast->constants, &value, byte);
+            unless (memarr_push_value(&parser->ast->constants, &value, sizeof(byte), &expression_node->value_index)) {
+                error(parser, ERROR_CODEGEN_NOT_ENOUGH_MEMORY);
+            }
             break;
         }
         case TOKEN_NULL: {
             expression_node->value_type = typeid(TYPE_VOID);
-            expression_node->value_index = 0;
+            expression_node->value_index = value_index_(0);
             break;
         }
         case TOKEN_STRING: {
             expression_node->value_type = typeid(TYPE_STRING);
             OrsoString *value = orso_new_string_from_cstrn(expression_node->start.start + 1, expression_node->start.length - 2, &parser->ast->allocator);
-            expression_node->value_index = arena_array_push_t(&parser->ast->constants, &value, OrsoString*);
+            unless (memarr_push_value(&parser->ast->constants, &value, sizeof(OrsoString*), &expression_node->value_index)) {
+                error(parser, ERROR_CODEGEN_NOT_ENOUGH_MEMORY);
+            }
             break;
         };
 
         case TOKEN_SYMBOL: {
             expression_node->value_type = typeid(TYPE_SYMBOL);
             symbol_t *value = orso_new_symbol_from_cstrn(expression_node->start.start + 1, expression_node->start.length - 2, &parser->ast->symbols, &parser->ast->allocator);
-            expression_node->value_index = arena_array_push_t(&parser->ast->constants, &value, symbol_t*);
+            unless (memarr_push_value(&parser->ast->constants, &value, sizeof(symbol_t*), &expression_node->value_index)) {
+                error(parser, ERROR_CODEGEN_NOT_ENOUGH_MEMORY);
+            }
             break;
         }
         default:
@@ -1053,7 +1025,7 @@ static ast_node_t *entity_declaration(parser_t* parser, bool as_parameter) {
 
     entity_declaration_node->as.declaration.type_expression = NULL;
     entity_declaration_node->as.declaration.initial_value_expression = NULL;
-    entity_declaration_node->value_index = -1;
+    entity_declaration_node->value_index = value_index_nil();
     entity_declaration_node->as.declaration.fold_level_resolved_at = -1;
     entity_declaration_node->as.declaration.is_mutable = false;
 
@@ -1119,8 +1091,21 @@ static ast_node_t *declaration(parser_t *parser, bool is_top_level) {
     return node;
 }
 
+bool parse_expr(ast_t *ast, string_t file_path, cstr_t source, error_function_t error_fn) {
+    parser_t parser = {0};
+    parser_init(&parser, ast, file_path, source, error_fn);
+
+    advance(&parser);
+
+    ast->root = parse_precedence(&parser, false, PREC_BLOCK);
+
+    consume(&parser, TOKEN_EOF, ERROR_PARSER_EXPECTED_EOF);
+
+    return !parser.had_error;
+}
+
 bool parse(ast_t *ast, string_t file_path, cstr_t source, error_function_t error_fn) {
-    parser_t parser;
+    parser_t parser = {0};
     parser_init(&parser, ast, file_path, source, error_fn);
 
     advance(&parser);
@@ -1139,17 +1124,22 @@ bool parse(ast_t *ast, string_t file_path, cstr_t source, error_function_t error
     return !parser.had_error;
 }
 
-size_t add_value_to_ast_constant_stack(ast_t *ast, void *data, type_t type) {
+value_index_t add_value_to_ast_constant_stack(ast_t *ast, void *data, type_t type) {
     type_info_t *type_info = get_type_info(&ast->type_set.types, type);
     size_t size = type_info->size;
-    size_t index = arena_array_push(&ast->constants, data, size);
-    return index;
+
+    size_t index;
+    if (memarr_push(&ast->constants, data, size, &index)) {
+        return value_index_(index);
+    }
+
+    return value_index_nil();
 }
 
-i32 zero_value(ast_t *ast, type_t type, symbol_table_t *symbol_table) {
-    i32 result = -1;
-    if (table_get(ptr2i32, ast->type_to_zero_index, type, &result)) {
-        return result;
+value_index_t zero_value(ast_t *ast, type_t type, symbol_table_t *symbol_table) {
+    size_t result = 0;
+    if (table_get(ptr2sizet, ast->type_to_zero_index, type, &result)) {
+        return value_index_(result);
     }
 
     type_info_t *type_info = ast->type_set.types.items[type.i];
@@ -1208,15 +1198,23 @@ i32 zero_value(ast_t *ast, type_t type, symbol_table_t *symbol_table) {
             break;
     }
 
-    i32 zero_index = add_value_to_ast_constant_stack(ast, value, type);
-    table_put(ptr2i32, ast->type_to_zero_index, type, zero_index);
+    value_index_t zero_index = add_value_to_ast_constant_stack(ast, value, type);
+    if (zero_index.exists) {
+        table_put(ptr2sizet, ast->type_to_zero_index, type, zero_index.index);
+    }
+
     return zero_index;
 }
 
-type_t get_folded_type(ast_t *ast, size_t index) {
-    void *type_data = arena_array_get(&ast->constants, index);
-    type_t type = *((type_t*)type_data);
-    return type;
+type_t get_folded_type(ast_t *ast, value_index_t index) {
+    ASSERT(index.exists, "must be there");
+
+    type_t type;
+    if (memarr_get(&ast->constants, index.index, sizeof(type_t), &type)) {
+        return type;
+    }
+
+    return typeid(TYPE_INVALID);
 }
 
 static void print_indent(u32 level) {

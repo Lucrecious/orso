@@ -301,4 +301,5 @@ void arena_free(Arena *a)
     a->end = NULL;
 }
 
+#undef ARENA_IMPLEMENTATION
 #endif // ARENA_IMPLEMENTATION

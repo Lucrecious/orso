@@ -3,12 +3,25 @@
 
 #include "parser.h"
 #include "vm.h"
+#include "error.h"
 
 bool compile_program(vm_t *vm, ast_t *ast);
+
+bool compile_expr_to_function(function_t *function, ast_t *expr_ast);
 
 #endif
 
 #ifdef CODEGEN_IMPLEMENTATION
+
+#define memarr_get_ptr(arr, value_index) ((arr)->data)+((value_index).index)
+
+typedef struct gen_t gen_t;
+struct gen_t {
+    error_function_t error_fn;
+    ast_t *ast;
+
+    bool had_error;
+};
 
 typedef enum reg_t reg_t;
 enum reg_t {
@@ -16,19 +29,7 @@ enum reg_t {
     REG_OPERAND1,
 };
 
-typedef struct builder_t builder_t;
-struct builder_t {
-    ast_t *ast;
-    error_function_t error_fn;
-
-    struct {
-        instruction_t *items;
-        size_t count;
-        size_t capacity;
-        arena_t *allocator;
-    } instructions;
-    arena_array_t memory;
-};
+declare_table(str2cf, string_t, call_frame_t)
 
 static string_view_t token2sv(token_t t) {
     return (string_view_t) {
@@ -37,23 +38,7 @@ static string_view_t token2sv(token_t t) {
     };
 }
 
-static void builder2vm(vm_t *vm, builder_t *builder) {
-    ASSERT(vm->memory == NULL, "vm is expected to be zeroed out right now");
-
-    vm_init(vm, builder->instructions.count, builder->memory.count);
-
-    Region *r = builder->memory.data.begin;
-    size_t index = 0;
-    while (r) {
-        memcpy(vm->memory+index, r->data, r->count);
-        index += r->count;
-        r = r->next;
-    }
-
-    memcpy(vm->program, builder->instructions.items, builder->instructions.count*sizeof(instruction_t));
-}
-
-static void emit_read_memory_to_reg(builder_t *builder, reg_t destination, memaddr_t address, type_info_t *type_info) {
+static void emit_read_memory_to_reg(function_t *function, reg_t destination, memaddr_t address, type_info_t *type_info) {
     ASSERT(type_info->size <= WORD_SIZE, "only word-sized values or smaller can go into registers");
 
     instruction_t instruction;
@@ -98,39 +83,42 @@ static void emit_read_memory_to_reg(builder_t *builder, reg_t destination, memad
     instruction.as.read_memory_to_reg.memory_address = address;
     instruction.as.read_memory_to_reg.reg_result = destination;
 
-    array_push(&builder->instructions, instruction);
+    array_push(&function->code, instruction);
 }
 
-static void gen_binary(builder_t *builder, ast_node_t *binary) {
-    UNUSED(builder);
+static void gen_binary(function_t *function, ast_node_t *binary) {
+    UNUSED(function);
     UNUSED(binary);
 }
 
-static u32 add_constant(builder_t *builder, void *data, size_t size) {
-    size_t index = arena_array_push(&builder->memory, data, size);
-    ASSERT(index < UINT32_MAX, "index cannot be higher than this, we must have checked this already");
-    return (u32)index;
+static value_index_t add_constant(function_t *function, void *data, size_t size) {
+    size_t index;
+    unless (memarr_push(function->memory, data, size, &index)) {
+        return value_index_nil();
+    }
+
+    return value_index_(index);
 }
 
-static void gen_constant(builder_t *builder, void *data, type_info_t *type_info) {
-    u32 index = add_constant(builder, data, type_info->size);
+static void gen_constant(function_t *function, void *data, type_info_t *type_info) {
+    value_index_t value_index = add_constant(function, data, type_info->size);
 
     if (type_info->size <= WORD_SIZE) {
-        emit_read_memory_to_reg(builder, REG_OPERAND1, index, type_info);
+        emit_read_memory_to_reg(function, REG_OPERAND1, value_index.index, type_info);
     } else {
         ASSERT(false, "todo");
     }
 }
 
-static void gen_primary(builder_t *builder, ast_node_t *primary) {
-    ASSERT(primary->value_index >= 0, "must contain concrete value");
+static void gen_primary(gen_t *gen, function_t *function, ast_node_t *primary) {
+    ASSERT(primary->value_index.exists, "must contain concrete value");
 
-    type_info_t *type_info = get_type_info(&builder->ast->type_set.types, primary->value_type);
+    type_info_t *type_info = get_type_info(&gen->ast->type_set.types, primary->value_type);
 
     // this ensures the data is always indexable
-    if (builder->memory.count+(type_info->size*2) > UINT32_MAX) {
-        if (builder->error_fn) {
-            builder->error_fn((error_t){
+    if (function->memory->count+type_info->size >= function->memory->capacity) {
+        if (gen->error_fn) {
+            gen->error_fn((error_t){
                 .type=ERROR_CODEGEN_MEMORY_SIZE_TOO_BIG,
                 .region_type=ERROR_REGION_TYPE_RANGE,
                 .region={.range={.start=primary->start, .end=primary->end}}
@@ -139,21 +127,21 @@ static void gen_primary(builder_t *builder, ast_node_t *primary) {
         }
     }
 
-    void *data = arena_array_get(&builder->ast->constants, primary->value_index);
-    gen_constant(builder, data, type_info);
+    void *data = memarr_get_ptr(&gen->ast->constants, primary->value_index);
+    gen_constant(function, data, type_info);
 }
 
-static void gen_expression(builder_t *builder, ast_node_t *expression) {
+static void gen_expression(gen_t *gen, function_t *function, ast_node_t *expression) {
     ASSERT(ast_node_type_is_expression(expression->node_type), "must be expression");
 
     switch (expression->node_type) {
         case AST_NODE_TYPE_EXPRESSION_PRIMARY: {
-            gen_primary(builder, expression);
+            gen_primary(gen, function, expression);
             break;
         }
 
         case AST_NODE_TYPE_EXPRESSION_BINARY: {
-            gen_binary(builder, expression);
+            gen_binary(function, expression);
             break;
         }
 
@@ -180,70 +168,89 @@ static void gen_expression(builder_t *builder, ast_node_t *expression) {
     }
 }
 
-static void gen_block(builder_t *builder, ast_node_t *block) {
+static void gen_block(gen_t *gen, function_t *function, ast_node_t *block) {
     ASSERT(block->node_type == AST_NODE_TYPE_EXPRESSION_BLOCK, "must be block");
 
     for (size_t i = 0; i < block->as.block.count; ++i) {
         ast_node_t *node = block->as.block.items[i];
         ASSERT(node->node_type == AST_NODE_TYPE_STATEMENT_EXPRESSION, "only allowing statement expressions right now");
 
-        gen_expression(builder, node->as.expression);
+        gen_expression(gen, function, node->as.expression);
     }
+}
+
+static void gen_return(gen_t *gen, function_t *function, type_t type) {
+    UNUSED(gen);
+    UNUSED(function);
+    UNUSED(type);
 }
 
 static void error_fn(error_t error) {
     UNUSED(error);
 }
 
-bool compile_program(vm_t *vm, ast_t *ast) {
-    tmp_arena_t *tmp = allocator_borrow();
+bool compile_expr_to_function(function_t *function, ast_t *ast) {
+    gen_t gen = {0};
+    gen.ast = ast;
+    gen.error_fn = error_fn;
 
-    ast_node_t *root = ast->root;
-    assert(root->node_type == AST_NODE_TYPE_EXPRESSION_BLOCK);
-
-    ast_node_t *main_node = NULL;
-    string_view_t main_name = cstr2sv("main");
-    for (size_t i = 0; i < root->as.block.count; ++i) {
-        ast_node_t *node = root->as.block.items[i];
-        assert(node->node_type == AST_NODE_TYPE_DECLARATION);
-
-        string_view_t identifier = token2sv(node->as.declaration.identifier);
-        if (sv_eq(identifier, main_name)) {
-            main_node = node;
-            break;
-        }
-    }
-
-    if (!main_node) {
-        return false;
-    }
-
-    ast_node_t *initial_expression = main_node->as.declaration.initial_value_expression;
-    if (initial_expression->value_index < 0) {
-        return false;
-    }
-
-    if (!type_is_function(ast->type_set.types, initial_expression->value_type)) {
-        return false;
-    }
-
-    // TODO: ignoring the parameters for main
-
-    assert(initial_expression->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION);
-
-    //size_t instruction_index = builder.code.count;
-
-    builder_t builder = {0};
-    builder.ast = ast;
-    builder.error_fn = error_fn;
-    builder.instructions.allocator = tmp->allocator;
-    gen_block(&builder, initial_expression->as.function.block);
-
-    builder2vm(vm, &builder);
-
-    allocator_return(tmp);
-
-    return true;
+    gen_expression(&gen, function, ast->root);
+    gen_return(&gen, function, ast->root->value_type);
+    
+    return gen.had_error;
 }
 
+bool compile_program(vm_t *vm, ast_t *ast) {
+    UNUSED(vm);
+    UNUSED(ast);
+    return false;
+    // tmp_arena_t *tmp = allocator_borrow();
+
+    // ast_node_t *root = ast->root;
+    // assert(root->node_type == AST_NODE_TYPE_EXPRESSION_BLOCK);
+
+    // ast_node_t *main_node = NULL;
+    // string_view_t main_name = cstr2sv("main");
+    // for (size_t i = 0; i < root->as.block.count; ++i) {
+    //     ast_node_t *node = root->as.block.items[i];
+    //     assert(node->node_type == AST_NODE_TYPE_DECLARATION);
+
+    //     string_view_t identifier = token2sv(node->as.declaration.identifier);
+    //     if (sv_eq(identifier, main_name)) {
+    //         main_node = node;
+    //         break;
+    //     }
+    // }
+
+    // if (!main_node) {
+    //     return false;
+    // }
+
+    // ast_node_t *initial_expression = main_node->as.declaration.initial_value_expression;
+    // if (initial_expression->value_index < 0) {
+    //     return false;
+    // }
+
+    // if (!type_is_function(ast->type_set.types, initial_expression->value_type)) {
+    //     return false;
+    // }
+
+    // // TODO: ignoring the parameters for main
+
+    // assert(initial_expression->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION);
+
+    // //size_t instruction_index = builder.code.count;
+
+    // gen_t gen = {0};
+    // gen.ast = ast;
+    // gen.error_fn = error_fn;
+    // gen_block(&gen, initial_expression->as.function.block);
+
+    // allocator_return(tmp);
+
+    // return true;
+}
+
+#undef memarr_get_ptr
+#undef CODEGEN_IMPLEMENTATION
 #endif

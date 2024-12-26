@@ -5,6 +5,7 @@
 #include "mathutils.h"
 #include "type_set.h"
 #include "error.h"
+#include "vm.h"
 
 #include <time.h>
 
@@ -13,7 +14,7 @@
 #define INVALIDATE(NODE) do {\
     ast_node_t* node = NODE;\
     node->value_type = typeid(TYPE_INVALID);\
-    node->value_index = -1;\
+    node->value_index = value_index_nil();\
 } while(false)
 
 typedef bool (*IsCircularDependencyFunc)(analyzer_t*, ast_node_t*);
@@ -43,7 +44,7 @@ typedef struct Entity {
     type_t narrowed_type;
 
     ast_node_t* node;
-    i32 value_index;
+    value_index_t value_index;
 
 } Entity;
 
@@ -137,12 +138,12 @@ static void add_entity(scope_t* scope, arena_t *allocator, symbol_t* identifier,
     entity->declared_type = typeid(TYPE_UNRESOLVED);
     entity->narrowed_type = typeid(TYPE_UNRESOLVED);
     entity->node = declaration_node;
-    entity->value_index = -1;
+    entity->value_index = value_index_nil();
 
     symbol_table_set(&scope->named_entities, identifier, SLOT_P(entity));
 }
 
-static Entity* add_builtin_entity(ast_t *ast, symbol_t *identifier, type_t type, i32 value_index) {
+static Entity* add_builtin_entity(ast_t *ast, symbol_t *identifier, type_t type, value_index_t value_index) {
     Entity* entity = arena_alloc(&ast->allocator, sizeof(Entity));
     entity->declared_type = type;
     entity->narrowed_type = type;
@@ -253,12 +254,12 @@ static ast_node_t *implicit_cast(ast_t *ast, ast_node_t *operand, type_t value_t
     implicit_cast->as.expression = operand;
     implicit_cast->fold = false;
     implicit_cast->foldable = true;
-    implicit_cast->value_index = -1;
+    implicit_cast->value_index = value_index_nil();
 
     return implicit_cast;
 }
 
-#define IS_FOLDED(EXPRESSION_PTR) (EXPRESSION_PTR->value_index >= 0)
+#define IS_FOLDED(EXPRESSION_PTR) (EXPRESSION_PTR->value_index.exists)
 
 typedef enum {
     QUERY_FLAG_MATCH_ANY = 0x1,
@@ -334,12 +335,12 @@ static bool can_call(type_infos_t types, type_t type, ast_nodes_t arguments) {
     return true;
 }
 
-static i32 evaluate_expression(analyzer_t *analyzer, ast_t *ast, bool is_folding_time, ast_node_t *expression) {
+static value_index_t evaluate_expression(analyzer_t *analyzer, ast_t *ast, bool is_folding_time, ast_node_t *expression) {
     UNUSED(analyzer);
     UNUSED(ast);
     UNUSED(is_folding_time);
     UNUSED(expression);
-    return -1;
+    return value_index_nil();
 }
 
 static bool is_declaration_resolved(ast_node_t* entity) {
@@ -348,7 +349,7 @@ static bool is_declaration_resolved(ast_node_t* entity) {
         return true;
     }
 
-    return (entity->value_index >= 0 || (declaration->initial_value_expression && !TYPE_IS_UNRESOLVED(declaration->initial_value_expression->value_type))) && !TYPE_IS_UNRESOLVED(entity->value_type);
+    return (entity->value_index.exists || (declaration->initial_value_expression && !TYPE_IS_UNRESOLVED(declaration->initial_value_expression->value_type))) && !TYPE_IS_UNRESOLVED(entity->value_type);
 }
 
 static bool is_block_compile_time_foldable(ast_nodes_t block) {
@@ -391,7 +392,7 @@ static void resolve_foldable(
         ast_node_t* expression) {
 
     bool foldable = false;
-    i32 folded_index = -1;
+    value_index_t folded_index = value_index_nil();
 
     switch (expression->node_type) {
         case AST_NODE_TYPE_EXPRESSION_GROUPING: {
@@ -404,7 +405,7 @@ static void resolve_foldable(
             if (expression->as.initiailizer.arguments.count == 0) {
                 foldable = true;
                 type_t type = get_folded_type(ast, expression->as.initiailizer.type->value_index);
-                i32 value_index = zero_value(ast, type, &ast->symbols);
+                value_index_t value_index = zero_value(ast, type, &ast->symbols);
                 folded_index = value_index;
             } else {
                 foldable = true;
@@ -485,7 +486,7 @@ static void resolve_foldable(
                 folded_index = referencing_declaration->as.declaration.initial_value_expression->value_index;
 
                 unless (TYPE_IS_INVALID(referencing_declaration->as.declaration.initial_value_expression->value_type)) {
-                    ASSERT(folded_index >= 0, "since the entity is a constant, it should have a folded value already");
+                    ASSERT(folded_index.exists, "since the entity is a constant, it should have a folded value already");
                 }
             } else {
                 foldable = true;
@@ -498,7 +499,7 @@ static void resolve_foldable(
             ASSERT(expression->as.dot.referencing_declaration, "referencing declaration must be present for dot expression");
 
             foldable = expression->foldable && expression->as.dot.referencing_declaration->foldable;
-            folded_index = foldable ? expression->as.dot.referencing_declaration->value_index : -1;
+            folded_index = foldable ? expression->as.dot.referencing_declaration->value_index : value_index_nil();
             break;
         }
 
@@ -523,23 +524,25 @@ static void resolve_foldable(
             // we should probably let the user know and also not allow them to fold something
             // that has an invalid thing.
             if (type_is_function(ast->type_set.types, expression->as.call.callee->value_type)) {
-                size_t value_index = expression->as.call.callee->value_index;
-                function_t* function = arena_array_get_t(&ast->constants, value_index, function_t*);
-                ast_node_t* function_definition = NULL;
-                for (size_t i = 0; i < ast->function_definition_pairs.count; ++i) {
-                    if (function == ast->function_definition_pairs.items[i].function) {
-                        function_definition = ast->function_definition_pairs.items[i].ast_defintion;
-                        break;
-                    }
-                }
+                ASSERT(false, "todo");
+                // value_index_t value_index = expression->as.call.callee->value_index;
+                // function_t* function = NULL;
+                // memarr_get(&ast->constants, value_index.index, sizeof(function_t*), &function);
+                // ast_node_t* function_definition = NULL;
+                // for (size_t i = 0; i < ast->function_definition_pairs.count; ++i) {
+                //     if (function == ast->function_definition_pairs.items[i].function) {
+                //         function_definition = ast->function_definition_pairs.items[i].ast_defintion;
+                //         break;
+                //     }
+                // }
 
-                ASSERT(function_definition, "this has to exist in the pair list");
+                // ASSERT(function_definition, "this has to exist in the pair list");
 
-                unless (function_definition->as.function.compilable) {
-                    foldable = false;
-                    error_range(analyzer, function_definition->start, function_definition->end, ERROR_ANALYSIS_CANNOT_FOLD_ON_ERRORED_FUNCTION_DEFINITION);
-                    break;
-                }
+                // unless (function_definition->as.function.compilable) {
+                //     foldable = false;
+                //     error_range(analyzer, function_definition->start, function_definition->end, ERROR_ANALYSIS_CANNOT_FOLD_ON_ERRORED_FUNCTION_DEFINITION);
+                //     break;
+                // }
             }
 
             foldable = expression->as.call.callee->foldable;
@@ -617,6 +620,8 @@ static void fold_constants_via_runtime(
         ast_t* ast,
         AnalysisState state,
         ast_node_t* expression) {
+    
+    UNUSED(analyzer);
 
     // // TODO: we need to figure how a better way to figure out if an expression needs to be refolded
     // if (IS_FOLDED(expression)) {
@@ -637,40 +642,7 @@ static void fold_constants_via_runtime(
     ASSERT(!TYPE_IS_TYPE(expression->value_type), "types must be created at compile time");
 
 
-    i32 value_index = evaluate_expression(analyzer, ast, state.mode & MODE_FOLDING_TIME, expression);
-
-    /*
-    * During constant time mode or folding mode, expressions types themselves will narrow down
-    * since they will be either be a standalone statement, or put into a constant value. Either way
-    * they should contain the the type of their actual folded value rather than the analyzed one.
-    * 
-    * I don't do this during runtime mode because I still want stuff like this to work:
-    * 
-    *           x := "hello world" or null;
-    * I still want x's type to be string|null
-    * 
-    * 
-    *           x :: "hello world" or null;
-    * because x is a constant, I want x's type to be just string
-    * 
-    * 
-    *           "hello world" or null;
-    * in this case the type of expression doesn't matter. So if it's narrowed value is known an rune time or not
-    * it doesn't matter.
-    */
-    if (type_is_union(ast->type_set.types, expression->value_type)) {
-
-        type_t narrowed_type = get_folded_type(ast, value_index);
-
-        if (state.mode & MODE_CONSTANT_TIME) {
-
-            value_index++; // the type makes up the first slot value, and rest is the actual value
-
-            expression->value_type = narrowed_type;
-        }
-
-        // TODO: might have an else here to do something for when this is RUNTIME mode
-    }
+    value_index_t value_index = evaluate_expression(analyzer, ast, state.mode & MODE_FOLDING_TIME, expression);
 
     expression->value_index = value_index;
 }
@@ -703,7 +675,7 @@ static void fold_function_signature(analyzer_t *analyzer, ast_t *ast, ast_node_t
             break;
         }
 
-        i32 index = parameter->value_index + type_is_union(ast->type_set.types, parameter->value_type);
+        value_index_t index = parameter->value_index;
 
         type_t type = get_folded_type(ast, index);
         array_push(&parameter_types, type);
@@ -722,7 +694,7 @@ static void fold_function_signature(analyzer_t *analyzer, ast_t *ast, ast_node_t
     type_t return_type;
     {
         if (return_type_expression) {
-            i32 index = return_type_expression->value_index + type_is_union(ast->type_set.types, return_type_expression->value_type);
+            value_index_t index = return_type_expression->value_index;
             return_type = get_folded_type(ast, index);
         } else {
             return_type = typeid(TYPE_VOID);
@@ -732,7 +704,7 @@ static void fold_function_signature(analyzer_t *analyzer, ast_t *ast, ast_node_t
     type_t function_type = type_set_fetch_function(&ast->type_set, return_type, parameter_types);
 
     slot_t function_type_slot = SLOT_U(function_type.i);
-    i32 index = add_value_to_ast_constant_stack(ast, &function_type_slot, typeid(TYPE_TYPE));
+    value_index_t index = add_value_to_ast_constant_stack(ast, &function_type_slot, typeid(TYPE_TYPE));
 
     expression->foldable = true;
     expression->value_index = index;
@@ -955,13 +927,13 @@ void resolve_expression(
         case AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER: {
             resolve_expression(analyzer, ast, state, expression->as.initiailizer.type);
 
-            if (!TYPE_IS_TYPE(expression->as.initiailizer.type->value_type)) {
+            unless (TYPE_IS_TYPE(expression->as.initiailizer.type->value_type)) {
                 error_range(analyzer, expression->as.initiailizer.type->start, expression->as.initiailizer.type->end, ERROR_ANALYSIS_EXPECTED_TYPE);
                 INVALIDATE(expression);
                 break;
             }
 
-            if (expression->as.initiailizer.type->value_index < 0) {
+            unless (expression->as.initiailizer.type->value_index.exists) {
                 error_range(analyzer, expression->as.initiailizer.type->start, expression->as.initiailizer.type->end, ERROR_ANALYSIS_EXPECTED_CONSTANT);
                 INVALIDATE(expression);
                 break;
@@ -1752,10 +1724,15 @@ static void resolve_entity_declaration(analyzer_t* analyzer, ast_t* ast, Analysi
 
     unless (entity_declaration->as.declaration.is_mutable) {
         if (INITIAL_EXPRESSION != NULL && type_is_function(ast->type_set.types, INITIAL_EXPRESSION->value_type)) {
-            function_t *function = arena_array_get_t(&ast->constants, INITIAL_EXPRESSION->value_index, function_t*);
-            if (function->binded_name == NULL) {
-                function->binded_name = name;
+            function_t *function = NULL;
+            if (memarr_get(&ast->constants, INITIAL_EXPRESSION->value_index.index, sizeof(function_t*), &function)) {
+                ASSERT(false, "todo");
             }
+
+            // function_t_ *function = arena_array_get_t(&ast->constants, INITIAL_EXPRESSION->value_index, function_t_*);
+            // if (function->binded_name == NULL) {
+            //     function->binded_name = name;
+            // }
         }
 
         if (INITIAL_EXPRESSION != NULL
@@ -1783,9 +1760,9 @@ static void resolve_entity_declaration(analyzer_t* analyzer, ast_t* ast, Analysi
             table_put(type2ns, ast->type_to_creation_node, named_struct_id, node_and_scope);
             
             {
-                i32 value_index = to_struct_type->as.expression->value_index;
-                ASSERT(value_index >= 0, "must be the value of the anonymous type");
-                table_put(ptr2i32, ast->type_to_zero_index, named_struct_id, value_index);
+                value_index_t value_index = to_struct_type->as.expression->value_index;
+                ASSERT(value_index.exists, "must be the value of the anonymous type");
+                table_put(ptr2sizet, ast->type_to_zero_index, named_struct_id, value_index.index);
             }
         }
     }
@@ -1830,7 +1807,7 @@ static void resolve_entity_declaration(analyzer_t* analyzer, ast_t* ast, Analysi
             entity->narrowed_type = typeid(TYPE_VOID);
         } 
 
-        i32 value_index = -1;
+        value_index_t value_index = value_index_nil();
 
         if (type_is_union(ast->type_set.types, entity_declaration->value_type) && !typeid_eq(entity_declaration->value_type, typeid(TYPE_VOID))) {
             error_range(analyzer, entity_declaration->end, entity_declaration->end, ERROR_ANALYSIS_EXPECTED_DEFAULT_VALUE);
@@ -1839,7 +1816,7 @@ static void resolve_entity_declaration(analyzer_t* analyzer, ast_t* ast, Analysi
         }
 
         entity->node->value_index = value_index;
-        entity->node->foldable = value_index >= 0;
+        entity->node->foldable = value_index.exists;
     } else {
         entity->narrowed_type = INITIAL_EXPRESSION->value_type;
         if (IS_FOLDED(INITIAL_EXPRESSION)) {
@@ -1849,7 +1826,7 @@ static void resolve_entity_declaration(analyzer_t* analyzer, ast_t* ast, Analysi
             }
 
             entity->node->value_index = INITIAL_EXPRESSION->value_index;
-            entity->node->foldable = INITIAL_EXPRESSION->value_index >= 0;
+            entity->node->foldable = INITIAL_EXPRESSION->value_index.exists;
         }
     }
 
@@ -1875,7 +1852,7 @@ static Entity *get_builtin_entity(ast_t *ast, symbol_t *identifier) {
         }
 
         if (has_value) {
-            i32 index = add_value_to_ast_constant_stack(ast, &value_slot, value_type);
+            value_index_t index = add_value_to_ast_constant_stack(ast, &value_slot, value_type);
             Entity *entity = add_builtin_entity(ast, identifier, value_type, index);
             return entity;
         }
@@ -2085,23 +2062,25 @@ static Entity *get_resolved_entity_by_identifier(
             *     [1] by analyzed I mean type checked, type flowed, constants folded, etc. i.e. getting the ast ready for codegen.
             */
 
-            function_t *function = arena_array_get_t(&ast->constants, entity->node->as.declaration.initial_value_expression->value_index, function_t*);
-            for (size_t i = 0; i < analyzer->dependencies.count; ++i) {
-                i32 i_ = analyzer->dependencies.count - 1 - i;
-                analysis_dependency_t *dependency = &analyzer->dependencies.items[i_];
-                ast_node_t *node = dependency->ast_node;
-                if (node->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION) {
-                    function_t *folded_function = arena_array_get_t(&ast->constants, node->value_index, function_t*);
-                    if (folded_function == function && dependency->fold_level != state.fold_level) {
-                        // TODO: Use better system to figure out whether function definition can be compiled or not
-                        // In this case, it cannot because of the fold level circular dependency.
-                        node->as.function.compilable = false;
+            UNREACHABLE();
 
-                        error_range(analyzer, node->start, node->end, ERROR_ANALYSIS_FOLDING_LOOP);
-                        return NULL;
-                    }
-                }
-            }
+            // function_t_ *function = arena_array_get_t(&ast->constants, entity->node->as.declaration.initial_value_expression->value_index, function_t_*);
+            // for (size_t i = 0; i < analyzer->dependencies.count; ++i) {
+            //     i32 i_ = analyzer->dependencies.count - 1 - i;
+            //     analysis_dependency_t *dependency = &analyzer->dependencies.items[i_];
+            //     ast_node_t *node = dependency->ast_node;
+            //     if (node->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION) {
+            //         function_t_ *folded_function = arena_array_get_t(&ast->constants, node->value_index, function_t_*);
+            //         if (folded_function == function && dependency->fold_level != state.fold_level) {
+            //             // TODO: Use better system to figure out whether function definition can be compiled or not
+            //             // In this case, it cannot because of the fold level circular dependency.
+            //             node->as.function.compilable = false;
+
+            //             error_range(analyzer, node->start, node->end, ERROR_ANALYSIS_FOLDING_LOOP);
+            //             return NULL;
+            //         }
+            //     }
+            // }
         }
 
         if (!query) {
@@ -2203,7 +2182,7 @@ static void resolve_function_expression(
     }
 
     type_t function_type = type_set_fetch_function(&ast->type_set, return_type, parameter_types);
-    function_t *function = orso_new_function(function_definition_expression->start.file_path, &analyzer->allocator);
+    function_t_ *function = orso_new_function(function_definition_expression->start.file_path, &analyzer->allocator);
     function->signature = function_type;
 
     array_push(&ast->function_definition_pairs, ((function_definition_pair_t){
@@ -2214,7 +2193,7 @@ static void resolve_function_expression(
     
     function_definition_expression->foldable = true;
     slot_t function_slot_value = SLOT_P(function);
-    i32 function_constant_index = add_value_to_ast_constant_stack(ast, &function_slot_value, function_type);
+    value_index_t function_constant_index = add_value_to_ast_constant_stack(ast, &function_slot_value, function_type);
     function_definition_expression->value_index = function_constant_index;
 
     // TODO: Maybe use a marco defined for this file for setting both the value and type, maybe an inlined function
@@ -2392,7 +2371,7 @@ static void resolve_struct_definition(analyzer_t *analyzer, ast_t *ast, Analysis
     struct_definition->value_type = incomplete_struct_id;
 
     struct_definition->foldable = true;
-    struct_definition->value_index = 0;
+    struct_definition->value_index = value_index_(0);
 
     ast_node_and_scope_t node_and_scope = {
         .node = struct_definition,
@@ -2502,7 +2481,7 @@ static void resolve_struct_definition(analyzer_t *analyzer, ast_t *ast, Analysis
                 bytes_to_copy -= sizeof(slot_t);
             }
 
-            byte *value_src = (byte*)arena_array_get(&ast->constants, declaration->value_index);
+            void *value_src = ast->constants.data + declaration->value_index.index;
             memcpy(struct_data + offset, value_src, bytes_to_copy);
         }
 
@@ -2630,29 +2609,46 @@ void resolve_declarations(analyzer_t* analyzer, ast_t* ast, AnalysisState state,
     }
 }
 
-bool resolve_ast(analyzer_t* analyzer, ast_t* ast) {
-    if (ast->root->as.block.items == NULL) {
-        ast->resolved = false;
-        // error(analyzer, 0, "No code to run. Akin to having no main function.");
-        return false;
+bool resolve_ast(analyzer_t *analyzer, ast_t *ast) {
+    if (ast->root->node_type == AST_NODE_TYPE_EXPRESSION_BLOCK) {
+        if (ast->root->as.block.items == NULL) {
+            ast->resolved = false;
+            // error(analyzer, 0, "No code to run. Akin to having no main function.");
+            return false;
+        }
+
+        scope_t global_scope = {0};
+        scope_init(&global_scope, &analyzer->allocator, SCOPE_TYPE_MODULE, NULL, NULL);
+
+        AnalysisState analysis_state = (AnalysisState) {
+            .mode = MODE_RUNTIME,
+            .scope = &global_scope,
+            .fold_level = 0,
+        };
+
+        i32 declaration_count = ast->root->as.block.count;
+        forward_scan_declaration_names(analyzer, &global_scope, ast->root->as.block, declaration_count);
+        resolve_declarations(analyzer, ast, analysis_state, ast->root->as.block, declaration_count);
+
+        ast->resolved = !analyzer->had_error;
+
+        return ast->resolved;
+    } else {
+        scope_t global_scope = {0};
+        scope_init(&global_scope, &analyzer->allocator, SCOPE_TYPE_MODULE, NULL, NULL);
+
+        AnalysisState state = (AnalysisState) {
+            .mode = MODE_RUNTIME,
+            .scope = &global_scope,
+            .fold_level = 0,
+        };
+
+        resolve_expression(analyzer, ast, state, ast->root);
+
+        ast->resolved = !analyzer->had_error;
+
+        return ast->resolved;
     }
-
-    scope_t global_scope;
-    scope_init(&global_scope, &analyzer->allocator, SCOPE_TYPE_MODULE, NULL, NULL);
-
-    AnalysisState analysis_state = (AnalysisState) {
-        .mode = MODE_RUNTIME,
-        .scope = &global_scope,
-        .fold_level = 0,
-    };
-
-    i32 declaration_count = ast->root->as.block.count;
-    forward_scan_declaration_names(analyzer, &global_scope, ast->root->as.block, declaration_count);
-    resolve_declarations(analyzer, ast, analysis_state, ast->root->as.block, declaration_count);
-
-    ast->resolved = !analyzer->had_error;
-
-    return ast->resolved;
 }
 
 void analyzer_init(analyzer_t* analyzer, write_function_t write_fn, error_function_t error_fn) {

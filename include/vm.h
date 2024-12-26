@@ -1,6 +1,9 @@
 #ifndef VM_H_
 #define VM_H_
 
+#include "def.h"
+#include "parser.h"
+
 typedef enum op_type_t op_type_t;
 enum op_code_t {
     OP_NOP,
@@ -13,7 +16,7 @@ enum op_code_t {
 
 typedef u32 memaddr_t;
 
-// 64bit instructions
+// 64bit code
 typedef struct instruction_t instruction_t;
 struct instruction_t {
     byte op;
@@ -34,79 +37,104 @@ struct instruction_t {
 };
 
 #define REGISTER_COUNT 64
+#define CALL_STACK_COUNT 1024
+
+typedef struct function_t function_t;
+struct function_t {
+    memarr_t *memory;
+    struct {
+        instruction_t *items;
+        size_t count;
+        size_t capacity;
+        arena_t *allocator;
+    } code;
+};
+
+function_t *new_function(memarr_t *memory, arena_t *arena);
+
+typedef struct call_frame_t call_frame_t;
+struct call_frame_t {
+    function_t *function;
+    instruction_t *ip;
+};
 
 typedef struct vm_t vm_t;
 struct vm_t {
-    arena_t allocator;
-
-    size_t pc;
-    byte *memory;
-    instruction_t *program;
+    call_frame_t call_frame;
     word_t registers[REGISTER_COUNT];
-
     bool halted;
 };
 
-void vm_init(vm_t *vm, size_t instruction_count, size_t memory_size);
+
+void vm_init(vm_t *vm);
 void vm_step(vm_t *vm);
 
 #endif
 
 #ifdef VM_IMPLEMENTATION
 
-void vm_init(vm_t *vm, size_t instruction_count, size_t memory_size) {
-    vm->program = arena_alloc(&vm->allocator, instruction_count*sizeof(instruction_t));
-    vm->memory = arena_alloc(&vm->allocator, memory_size);
+function_t *new_function(memarr_t *memory, arena_t *arena) {
+    function_t *function = arena_alloc(arena, sizeof(function_t));
+    *function = (function_t){0};
+    function->memory = memory;
+    function->code.allocator = arena;
+    return function;
+}
 
-    vm->halted = false;
-    vm->pc = 0;
+void vm_init(vm_t *vm) {
+    *vm = (vm_t){0};
+    // vm->pc = 0;
 }
 
 void vm_step(vm_t *vm) {
-    instruction_t instruction = vm->program[vm->pc];
+    #define IP_ADV(amount) (vm->call_frame.ip += amount)
+    #define MEMORY (vm->call_frame.function->memory)
+
+    instruction_t instruction = *vm->call_frame.ip;
     switch(instruction.op) {
-        case OP_NOP: ++vm->pc; break;
+        case OP_NOP: IP_ADV(1); break;
 
         case OP_READU8_MEM_TO_REG: {
             memaddr_t memaddr = instruction.as.read_memory_to_reg.memory_address;
             byte reg = instruction.as.read_memory_to_reg.reg_result;
-            byte value = vm->memory[memaddr];
+            byte value = MEMORY->data[memaddr];
             vm->registers[reg].as.u = value;
 
-            ++vm->pc;
+            IP_ADV(1);
             break;
         }
 
         case OP_READI32_MEM_TO_REG: {
             memaddr_t memaddr = instruction.as.read_memory_to_reg.memory_address;
             byte reg = instruction.as.read_memory_to_reg.reg_result;
-            i32 value = *((i32*)(vm->memory + memaddr));
+            i32 value = *((i32*)(MEMORY->data + memaddr));
             vm->registers[reg].as.i = value;
 
-            ++vm->pc;
+            IP_ADV(1);
             break;
         }
 
         case OP_READF32_MEM_TO_REG: {
             memaddr_t memaddr = instruction.as.read_memory_to_reg.memory_address;
             byte reg = instruction.as.read_memory_to_reg.reg_result;
-            f32 value = *((f32*)(vm->memory + memaddr));
+            f32 value = *((f32*)(MEMORY->data + memaddr));
             vm->registers[reg].as.d = value;
 
-            ++vm->pc;
+            IP_ADV(1);
             break;
         }
 
         case OP_READWORD_MEM_TO_REG: {
             memaddr_t memaddr = instruction.as.read_memory_to_reg.memory_address;
             byte reg = instruction.as.read_memory_to_reg.reg_result;
-            word_t value = *((word_t*)(vm->memory+memaddr));
+            word_t value = *((word_t*)(MEMORY->data + memaddr));
             vm->registers[reg] = value;
 
-            ++vm->pc;
+            IP_ADV(1);
             break;
         }
     }
 }
 
+#undef VM_IMPLEMENTATION
 #endif

@@ -192,7 +192,9 @@ type_info_t *get_type_info(type_infos_t *types, type_t type) {
 }
 
 bool type_is_union(type_infos_t types, type_t type) {
-    return get_type_info(&types, type)->kind == TYPE_UNION;
+    UNUSED(types);
+    UNUSED(type);
+    return false;
 }
 
 bool type_is_function(type_infos_t types, type_t type) {

@@ -61,7 +61,7 @@ string_t bytes_to_string(byte *data, type_infos_t *types, type_t type, arena_t *
             tmp_arena_t *tmp = allocator_borrow(); {
                 string_builder_t sb = {.allocator = tmp->allocator};
 
-                function_t *function = cast(data, function_t*);
+                function_t_ *function = cast(data, function_t_*);
                 sb_add_cstr(&sb, string_format("<%s :: (", tmp->allocator,
                     function->binded_name ? function->binded_name->text : "<anonymous>").cstr);
                 
@@ -157,8 +157,8 @@ OrsoString *orso_string_concat(OrsoString *a, OrsoString *b, arena_t *allocator)
     return string;
 }
 
-function_t *orso_new_function(string_t file_defined_in, arena_t *allocator) {
-    function_t *function = (function_t*)object_new(sizeof(function_t), typeid(TYPE_FUNCTION), allocator);
+function_t_ *orso_new_function(string_t file_defined_in, arena_t *allocator) {
+    function_t_ *function = (function_t_*)object_new(sizeof(function_t_), typeid(TYPE_FUNCTION), allocator);
     function->signature = typeid(TYPE_FUNCTION);
     function->binded_name = NULL;
     function->file_defined_in = file_defined_in;
@@ -166,7 +166,7 @@ function_t *orso_new_function(string_t file_defined_in, arena_t *allocator) {
     return function;
 }
 
-bool is_function_compiled(function_t* function) {
+bool is_function_compiled(function_t_* function) {
     UNUSED(function);
     return false;
 }

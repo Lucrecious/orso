@@ -51,6 +51,6 @@ void allocator_return(tmp_arena_t *tmp_arena) {
     }
 }
 
-
+#undef TMP_IMPLEMENTATION
 #endif
 

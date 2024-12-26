@@ -7,19 +7,9 @@
 #include "type.h"
 #include "type_set.h"
 #include "arena.h"
+#include "memarr.h"
 
 #include "table.h"
-
-typedef struct arena_array_t arena_array_t;
-struct arena_array_t {
-    arena_t data;
-    size_t count;
-};
-
-size_t arena_array_push(arena_array_t *array, void *data, size_t size);
-void *arena_array_get(arena_array_t *array, size_t index);
-#define arena_array_push_t(array, data, type) arena_array_push(array, data, sizeof(type))
-#define arena_array_get_t(array, index, type) ((type)((type*)arena_array_get(array, index)))
 
 typedef enum return_guarentee_t {
     RETURN_GUARENTEE_NONE,
@@ -54,7 +44,7 @@ typedef struct scope_t {
 } scope_t;
 
 typedef struct function_definition_pair_t {
-    function_t *function;
+    function_t_ *function;
     ast_node_t *ast_defintion;
 } function_definition_pair_t;
 
@@ -163,6 +153,17 @@ struct ast_type_initializer_t {
     ast_nodes_t arguments;
 };
 
+typedef struct value_index_t value_index_t;
+struct value_index_t {
+    bool exists;
+    size_t index;
+};
+
+#define value_index_(i) ((value_index_t){.exists=true, .index=(i)})
+#define value_index_nil() ((value_index_t){.exists=false, .index=0})
+
+bool memarr_push_value(memarr_t *arr, void *data, size_t size_bytes, value_index_t *out_index);
+
 struct ast_node_t {
     ast_node_type_t node_type;
 
@@ -183,7 +184,7 @@ struct ast_node_t {
     bool foldable;
 
     // primary, folding value, declaration default value
-    i32 value_index;
+    value_index_t value_index;
 
     ast_node_t *lvalue_node;
 
@@ -219,7 +220,7 @@ struct ast_node_t {
     } as;
 };
 
-declare_table(ptr2i32, type_t, i32)
+declare_table(ptr2sizet, type_t, size_t)
 
 typedef struct ast_node_and_scope_t {
     ast_node_t *node;
@@ -247,9 +248,9 @@ typedef struct ast_t {
     fd_pairs_t function_definition_pairs;
 
     ast_node_t *root;
-    arena_array_t constants;
+    memarr_t constants;
 
-    table_t(ptr2i32) *type_to_zero_index;
+    table_t(ptr2sizet) *type_to_zero_index;
     table_t(type2ns) *type_to_creation_node;
 
     symbol_table_t symbols;
@@ -257,11 +258,12 @@ typedef struct ast_t {
 
 void ast_print(ast_t *ast, const char *name);
 
-size_t add_value_to_ast_constant_stack(ast_t *ast, void *data, type_t type);
+value_index_t add_value_to_ast_constant_stack(ast_t *ast, void *data, type_t type);
+bool parse_expr(ast_t *ast, string_t file_path, cstr_t source, error_function_t error_fn);
 bool parse(ast_t *ast, string_t file_path, cstr_t source, error_function_t error_fn);
-type_t get_folded_type(ast_t *ast, size_t index);
+type_t get_folded_type(ast_t *ast, value_index_t index);
 
-void ast_init(ast_t *ast);
+void ast_init(ast_t *ast, size_t memory_size_bytes);
 void ast_free(ast_t *ast);
 
 ast_node_t* ast_node_new(ast_t *ast, ast_node_type_t node_type, bool is_in_type_context, token_t start);
@@ -269,6 +271,6 @@ ast_node_t* ast_node_new(ast_t *ast, ast_node_type_t node_type, bool is_in_type_
 bool ast_node_type_is_decl_or_stmt(ast_node_type_t node_type);
 bool ast_node_type_is_expression(ast_node_type_t node_type);
 
-i32 zero_value(ast_t *ast, type_t type, symbol_table_t *symbol_table);
+value_index_t zero_value(ast_t *ast, type_t type, symbol_table_t *symbol_table);
 
 #endif

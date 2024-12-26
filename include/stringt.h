@@ -59,7 +59,8 @@ void sb_add_char(string_builder_t *builder, char c);
 void sb_add_cstr(string_builder_t *builder, cstr_t cstr);
 string_t sb_render(string_builder_t *builder, arena_t *allocator);
 
-#define str(string_literal) (string_t){ .cstr = string_literal, .length = (sizeof(string_literal)/sizeof(char) - sizeof(char)) };
+#define str(string_literal) (string_t){ .cstr = string_literal, .length = (sizeof(string_literal)/sizeof(char) - sizeof(char)) }
+#define lit2str(lit) str(lit)
 
 #endif
 
@@ -198,4 +199,5 @@ string_t sb_render(string_builder_t *builder, arena_t *allocator) {
     return cstrn2string(builder->items, builder->count, allocator);
 }
 
+#undef STRINGT_IMPLEMENTATION
 #endif

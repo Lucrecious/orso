@@ -1,6 +1,13 @@
 #define NOB_IMPLEMENTATION
 #include "nob.h"
 
+#define ARENA_IMPLEMENTATION
+#include "include/arena.h"
+
+#include "include/def.h"
+
+#include <stdlib.h>
+
 
 const char* SOURCES[] = {
     "./src/lexer.c",
@@ -13,89 +20,111 @@ const char* SOURCES[] = {
     "./src/type_set.c",
 };
 
-typedef enum {
-    BUILD_MODE_NONE = 0x0,
-    BUILD_MODE_DEBUG = 0x1,
-    BUILD_MODE_RELEASE = 0x2,
-} build_mode_t;
+typedef enum cb_std_t cb_std_t;
+enum cb_std_t {
+    cb_std_c99
+};
 
-void print_usage() {
-    nob_log(NOB_INFO, "Usage: nob [option]");
-    nob_log(NOB_INFO, "       --debug (-d)           compiles debug build");
-    nob_log(NOB_INFO, "       --release (-r)         compiles release build");
-    nob_log(NOB_INFO, "       --debug-trace (-dt)    compiles debug-trace build");
-    nob_log(NOB_INFO, "       --test                 compiles the test suite");
+typedef struct c_builder_t c_builder_t;
+struct c_builder_t {
+    arena_t *allocator;
+    cb_std_t std;
+    cstr_t output;
+
+    struct {
+        cstr_t *items;
+        size_t count;
+        size_t capacity;
+    } flags;
+
+    struct {
+        cstr_t *items;
+        size_t count;
+        size_t capacity;
+    } sources;
+
+    struct {
+        cstr_t *items;
+        size_t count;
+        size_t capacity;
+    } includes;
+};
+
+void cb_flags(c_builder_t *cb, size_t n, ...) {
+    va_list args;
+    va_start(args, n);
+    
+    for (size_t i = 0; i < n; ++i) {
+        cstr_t flag = va_arg(args, cstr_t);
+        flag = arena_strdup(cb->allocator, flag);
+        nob_da_append(&cb->flags, flag);
+    }
+
+    va_end(args);
 }
 
+void cb_source(c_builder_t *cb, cstr_t src) {
+    src = arena_strdup(cb->allocator, src);
+    nob_da_append(&cb->sources, src);
+}
 
-bool build_program(build_mode_t build_mode, const char* output_name) {
+void cb_include(c_builder_t *cb, cstr_t include_path) {
+    include_path = arena_strdup(cb->allocator, include_path);
+    nob_da_append(&cb->includes, include_path);
+}
+
+bool cb_build(c_builder_t *cb) {
     Nob_Cmd cmd = {0};
+
+    nob_cmd_append(&cmd, "cc");
+
+    nob_cmd_append(&cmd, "-o", cb->output);
+
+    for (size_t i = 0; i < cb->flags.count; ++i) {
+        nob_cmd_append(&cmd, cb->flags.items[i]);
+    }
+
+    for (size_t i = 0; i < cb->includes.count; ++i) {
+        nob_cmd_append(&cmd, nob_temp_sprintf("-I%s", cb->includes.items[i]));
+    }
+
+    for (size_t i = 0; i < cb->sources.count; ++i) {
+        cstr_t src = cb->sources.items[i];
+        nob_cmd_append(&cmd, src);
+    }
+
+    bool success = nob_cmd_run_sync(cmd);
+
+    nob_cmd_free(cmd);
+
+    return success;
+}
+
+int main(int argc, char **argv) {
+    NOB_GO_REBUILD_URSELF(argc, argv);
+
+    arena_t allocator = {0};
 
     nob_mkdir_if_not_exists("./bin");
 
-    nob_cmd_append(&cmd, "cc");
-    nob_cmd_append(&cmd, "-Wall", "-Wextra");
-    nob_cmd_append(&cmd, "-fsanitize=address");
-    nob_cmd_append(&cmd, "-std=c99");
+    c_builder_t cb = {.allocator=&allocator};
+    cb.std = cb_std_c99;
+    cb_flags(&cb, 3, "-Wall", "-Wextra", "-fsanitize=address");
 
-    nob_cmd_append(&cmd, "-I./include");
+    cb_include(&cb, "./include");
 
-    if (build_mode & BUILD_MODE_DEBUG) {
-        nob_cmd_append(&cmd, "-ggdb");
-        nob_cmd_append(&cmd, "-DDEBUG");
-        nob_cmd_append(&cmd, "-o", nob_temp_sprintf("./bin/%s", output_name));
-    } else if (build_mode & BUILD_MODE_RELEASE) {
-        nob_cmd_append(&cmd, "-O3");
-        nob_cmd_append(&cmd, "-o", nob_temp_sprintf("./bin/%s", output_name));
-    } else {
-        NOB_ASSERT(false && "Unreachable");
-        return 1;
-    }
+    cb_flags(&cb, 2, "-ggdb", "-DDEBUG");
+
+    cb.output = nob_temp_sprintf("./bin/test");
 
     for (size_t i = 0; i < sizeof(SOURCES) / sizeof(SOURCES[0]); i++) {
-        nob_cmd_append(&cmd, SOURCES[i]);
+        cb_source(&cb, SOURCES[i]);
     }
 
-    nob_cmd_append(&cmd, "./src/main.c");
+    cb_source(&cb, "./src/test.c");
 
-    return nob_cmd_run_sync(cmd);
-}
+    cb_build(&cb);
 
-int main(int argc, char** argv) {
-    NOB_GO_REBUILD_URSELF(argc, argv);
+    arena_free(&allocator);
 
-    nob_shift_args(&argc, &argv);
-
-    build_mode_t mode = BUILD_MODE_NONE;
-
-    const char* output_name = "dorso";
-
-    if (argc == 0) {
-        mode = BUILD_MODE_DEBUG;
-    } else {
-        while (argc > 0) {
-            const char* option = nob_shift_args(&argc, &argv);
-
-            if (strcmp(option, "--release") == 0 || strcmp(option, "-r") == 0) {
-                mode |= BUILD_MODE_RELEASE;
-                output_name = "orso";
-            } else if (strcmp(option, "--debug") == 0 || strcmp(option, "-d") == 0) {
-                mode |= BUILD_MODE_DEBUG;
-                output_name = "dorso";
-            } else {
-                nob_log(NOB_ERROR, nob_temp_sprintf("unknown option: %s", option));
-                print_usage();
-                return 1;
-            }
-        }
-    }
-
-    nob_log(NOB_INFO, "building compiler");
-
-    if (!build_program(mode, output_name)) {
-        nob_log(NOB_ERROR, "unable to compile compiler");
-        return 1;
-    }
-
-    return 0;
 }

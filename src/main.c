@@ -5,15 +5,12 @@
 
 #define STRINGT_IMPLEMENTATION
 #include "stringt.h"
-#undef STRINGT_IMPLEMENTATION
 
 #define ARENA_IMPLEMENTATION
 #include "arena.h"
-#undef ARENA_IMPLEMENTATION
 
 #define TMP_IMPLEMENTATION
 #include "tmp.h"
-#undef TMP_IMPLEMENTATION
 
 #include <libtcc.h>
 
@@ -24,11 +21,12 @@
 
 #define CODEGEN_IMPLEMENTATION
 #include "codegen.h"
-#undef CODEGEN_IMPLEMENTATION
 
 #define VM_IMPLEMENTATION
 #include "vm.h"
-#undef VM_IMPLEMENTATION
+
+#define LOG_IMPLEMENTATION
+#include "log.h"
 
 #include "debugger.h"
 #include "debugger.c"
@@ -49,17 +47,6 @@
     [ ] Make a nice debugging view for the ast nodes
 
 */
-
-void log_fatal(cstr_t format, ...) {
-    va_list args;
-    va_start(args, format);
-
-    printf("[FATAL] ");
-    vprintf(format, args);
-    printf("\n");
-
-    va_end(args);
-}
 
 void myerror(error_t error) {
     fprintf(stderr, "[line %d] %s\n", error.region.token.line + 1, error_messages[error.type]);
@@ -109,7 +96,7 @@ int main(int argc, char **argv) {
     }
 
     ast_t ast = {0};
-    ast_init(&ast);
+    ast_init(&ast, megabytes(2));
 
     bool success = parse(&ast, path, source.cstr, myerror);
     unless (success) {

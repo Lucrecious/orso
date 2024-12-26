@@ -24,12 +24,12 @@ typedef struct symbol_t {
     char text[];
 } symbol_t;
 
-typedef struct function_t {
+typedef struct function_t_ {
     object_t object;
     type_t signature;
     symbol_t *binded_name;
     string_t file_defined_in;
-} function_t;
+} function_t_;
 
 typedef struct struct_t {
     slot_t *slots;
@@ -69,8 +69,8 @@ void copy_bytes_to_slots(void *destination, void *source, type_kind_t type_kind,
 
 OrsoString *orso_new_string_from_cstrn(const char *start, i32 length, arena_t *allocator);
 
-function_t *orso_new_function(string_t file_defined_in, arena_t *allocator);
-bool is_function_compiled(function_t *function);
+function_t_ *orso_new_function(string_t file_defined_in, arena_t *allocator);
+bool is_function_compiled(function_t_ *function);
 
 native_function_t *orso_new_native_function(native_function_interface_t function, type_t type, arena_t *allocator);
 
