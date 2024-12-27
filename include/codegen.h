@@ -13,8 +13,6 @@ bool compile_expr_to_function(function_t *function, ast_t *expr_ast);
 
 #ifdef CODEGEN_IMPLEMENTATION
 
-#define memarr_get_ptr(arr, value_index) ((arr)->data)+((value_index).index)
-
 typedef struct gen_t gen_t;
 struct gen_t {
     error_function_t error_fn;
@@ -366,6 +364,5 @@ bool compile_program(vm_t *vm, ast_t *ast) {
     // return true;
 }
 
-#undef memarr_get_ptr
 #undef CODEGEN_IMPLEMENTATION
 #endif

@@ -55,8 +55,9 @@ string_view_t string2sv(string_t string);
 string_t sv2string(string_view_t sv, arena_t *allocator);
 string_view_t sv_filename(string_view_t sv);
 
-void sb_add_char(string_builder_t *builder, char c);
-void sb_add_cstr(string_builder_t *builder, cstr_t cstr);
+void sb_add_char(string_builder_t *sb, char c);
+void sb_add_cstr(string_builder_t *sb, cstr_t cstr);
+void sb_add_format(string_builder_t *sb, cstr_t format, ...);
 string_t sb_render(string_builder_t *builder, arena_t *allocator);
 
 #define str(string_literal) (string_t){ .cstr = string_literal, .length = (sizeof(string_literal)/sizeof(char) - sizeof(char)) }
@@ -193,6 +194,32 @@ void sb_add_cstr(string_builder_t *builder, cstr_t cstr) {
         array_push(builder, *c);
         c = ++cstr;
     }
+}
+
+void sb_add_format(string_builder_t *sb, cstr_t format, ...) {
+	va_list args;
+	va_start(args, format);
+
+	int size = vsnprintf(NULL, 0, format, args);
+	va_end(args);
+
+	if (size <= 0) {
+		return;
+	}
+
+    tmp_arena_t *tmp = allocator_borrow();
+
+	char *buffer = arena_alloc(tmp->allocator, (size + 1));
+
+	va_start(args, format);
+	vsnprintf(buffer, size + 1, format, args);
+	va_end(args);
+
+	for (char *c = buffer; *c; ++c) {
+		array_push(sb, *c);
+	}
+
+    allocator_return(tmp);
 }
 
 string_t sb_render(string_builder_t *builder, arena_t *allocator) {

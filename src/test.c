@@ -18,6 +18,9 @@
 #define CODEGEN_IMPLEMENTATION
 #include "codegen.h"
 
+#define CODEGENC_IMPLEMENTATION
+#include "codegenc.h"
+
 #define MEMARR_IMPLEMENTATION
 #include "memarr.h"
 
@@ -75,26 +78,30 @@ int main(int argc, char **argv) {
     bool success = parse_expr_cstr(&ast, "(4.2 + 5.4 / 2.0) * 60.9", lit2str(""));
     unless (success) return 1;
 
-    memarr_t *memory = arena_alloc(&arena, sizeof(memarr_t));
-    *memory = (memarr_t){0};
+    string_t expr_str = compile_expr_to_c(&ast, &arena);
 
-    memarr_init(memory, megabytes(2.5));
-    size_t stack_size = (size_t)megabytes(0.5);
-    memory->count = stack_size;
-    memset(memory->data, 0, stack_size);
+    printf("%s\n", expr_str.cstr);
+
+    // memarr_t *memory = arena_alloc(&arena, sizeof(memarr_t));
+    // *memory = (memarr_t){0};
+
+    // memarr_init(memory, megabytes(2.5));
+    // size_t stack_size = (size_t)megabytes(0.5);
+    // memory->count = stack_size;
+    // memset(memory->data, 0, stack_size);
     
-    function_t *expr_function = new_function(lit2str("<none>"), memory, &arena);
+    // function_t *expr_function = new_function(lit2str("<none>"), memory, &arena);
 
-    compile_expr_to_function(expr_function, &ast);
+    // compile_expr_to_function(expr_function, &ast);
 
-    vm_t vm = {0};
-    vm_init(&vm);
-    vm.registers[REG_STACK_BOTTOM].as.u = stack_size;
+    // vm_t vm = {0};
+    // vm_init(&vm);
+    // vm.registers[REG_STACK_BOTTOM].as.u = stack_size;
 
-    vm_set_entry_point(&vm, expr_function);
+    // vm_set_entry_point(&vm, expr_function);
 
-    debugger_t debugger = {0};
-    debugger_init(&debugger, &arena);
-    while (debugger_step(&debugger, &vm));
+    // debugger_t debugger = {0};
+    // debugger_init(&debugger, &arena);
+    // while (debugger_step(&debugger, &vm));
 }
 

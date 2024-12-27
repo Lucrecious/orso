@@ -15,6 +15,8 @@ void memarr_free(memarr_t *arr);
 bool memarr_push(memarr_t *arr, void *data, size_t size_bytes, size_t *out_index);
 bool memarr_get(memarr_t *arr, size_t index, size_t size_bytes, void *out_result);
 
+#define memarr_get_ptr(arr, value_index) ((arr)->data)+((value_index).index)
+
 #endif
 
 #ifdef MEMARR_IMPLEMENTATION
