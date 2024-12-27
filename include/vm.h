@@ -51,7 +51,7 @@ struct instruction_t {
             byte reg_result;
             byte reg_operand;
             u32 immediate;
-        } bin_regu_immediateu;
+        } binu_reg_immediate;
 
         struct {
             byte reg_result;
@@ -103,7 +103,7 @@ function_t *new_function(string_t file_path, memarr_t *memory, arena_t *arena);
 typedef struct call_frame_t call_frame_t;
 struct call_frame_t {
     function_t *function;
-    instruction_t *ip;
+    size_t pc;
 };
 
 typedef struct vm_t vm_t;
@@ -142,14 +142,14 @@ void vm_init(vm_t *vm) {
 void vm_set_entry_point(vm_t *vm, function_t *entry_point) {
     vm->halted = false;
     vm->call_frame.function = entry_point;
-    vm->call_frame.ip = 0;
+    vm->call_frame.pc = 0;
 }
 
 void vm_step(vm_t *vm) {
-#define IP_ADV(amount) (vm->call_frame.ip += amount)
+#define IP_ADV(amount) (vm->call_frame.pc += amount)
 #define MEMORY (vm->call_frame.function->memory)
 
-    instruction_t instruction = *vm->call_frame.ip;
+    instruction_t instruction = vm->call_frame.function->code.items[vm->call_frame.pc];
     op_code_t op = (op_code_t)instruction.op;
     switch(op) {
         case OP_NOP: IP_ADV(1); break;
@@ -230,10 +230,10 @@ void vm_step(vm_t *vm) {
         }
 
         case OP_ADDU_REG_IM32: {
-            byte s = instruction.as.bin_regu_immediateu.reg_operand;
-            u32 immediate = instruction.as.bin_regu_immediateu.immediate;
+            byte s = instruction.as.binu_reg_immediate.reg_operand;
+            u32 immediate = instruction.as.binu_reg_immediate.immediate;
 
-            byte d = instruction.as.bin_regu_immediateu.reg_result;
+            byte d = instruction.as.binu_reg_immediate.reg_result;
 
             vm->registers[d].as.u = vm->registers[s].as.u + immediate;
 
@@ -242,10 +242,10 @@ void vm_step(vm_t *vm) {
         }
 
         case OP_SUBU_REG_IM32: {
-            byte s = instruction.as.bin_regu_immediateu.reg_operand;
-            u32 immediate = instruction.as.bin_regu_immediateu.immediate;
+            byte s = instruction.as.binu_reg_immediate.reg_operand;
+            u32 immediate = instruction.as.binu_reg_immediate.immediate;
 
-            byte d = instruction.as.bin_regu_immediateu.reg_result;
+            byte d = instruction.as.binu_reg_immediate.reg_result;
 
             vm->registers[d].as.u = vm->registers[s].as.u - immediate;
 

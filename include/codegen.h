@@ -88,9 +88,9 @@ void emit_push_wordreg(text_location_t text_location, function_t *function, reg_
 
     {
         instruction.op = OP_SUBU_REG_IM32;
-        instruction.as.bin_regu_immediateu.reg_operand = REG_STACK_BOTTOM;
-        instruction.as.bin_regu_immediateu.reg_result = REG_STACK_BOTTOM;
-        instruction.as.bin_regu_immediateu.immediate = (u32)sizeof(word_t);
+        instruction.as.binu_reg_immediate.reg_operand = REG_STACK_BOTTOM;
+        instruction.as.binu_reg_immediate.reg_result = REG_STACK_BOTTOM;
+        instruction.as.binu_reg_immediate.immediate = (u32)sizeof(word_t);
 
         emit_instruction(function, text_location, instruction);
     }
@@ -117,9 +117,9 @@ void emit_pop_to_wordreg(text_location_t text_location, function_t *function, re
 
     {
         instruction.op = OP_ADDU_REG_IM32;
-        instruction.as.bin_regu_immediateu.reg_operand = REG_STACK_BOTTOM;
-        instruction.as.bin_regu_immediateu.reg_result = REG_STACK_BOTTOM;
-        instruction.as.bin_regu_immediateu.immediate = (u32)sizeof(word_t);
+        instruction.as.binu_reg_immediate.reg_operand = REG_STACK_BOTTOM;
+        instruction.as.binu_reg_immediate.reg_result = REG_STACK_BOTTOM;
+        instruction.as.binu_reg_immediate.immediate = (u32)sizeof(word_t);
 
         emit_instruction(function, text_location, instruction);
     }

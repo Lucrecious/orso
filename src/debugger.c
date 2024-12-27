@@ -1,5 +1,8 @@
 #include "debugger.h"
 
+#include "tmp.h"
+
+
 void debugger_init(debugger_t *debugger, arena_t *allocator) {
     debugger->allocator = allocator;
     debugger->breakpoints = (breakpoints_t){.allocator=allocator};
@@ -15,9 +18,100 @@ static string_t get_input(arena_t *allocator) {
     return s;
 }
 
+static string_t disassemble_instruction(instruction_t instruction, arena_t *allocator) {
+    op_code_t op = (op_code_t)instruction.op;
+    switch (op) {
+        case OP_NOP: return lit2str("OP_NOP");
+
+        #define OP_MOV_MEM_TO_REG(suffix) string_format("OP_MOV"#suffix"_MEM_TO_REG(memaddr: %lu, result_result: %lu)", allocator,\
+                (u32)instruction.as.mov_mem_to_reg.mem_address,\
+                (u32)instruction.as.mov_mem_to_reg.reg_result)
+
+        case OP_MOVU8_MEM_TO_REG: return OP_MOV_MEM_TO_REG(U8);
+        case OP_MOVI32_MEM_TO_REG: return OP_MOV_MEM_TO_REG(I32);
+        case OP_MOVU32_MEM_TO_REG: return OP_MOV_MEM_TO_REG(U32);
+        case OP_MOVF32_MEM_TO_REG: return OP_MOV_MEM_TO_REG(F32);
+        case OP_MOVWORD_MEM_TO_REG: return OP_MOV_MEM_TO_REG(WORD);
+
+        #undef OP_MOV_MEM_TO_REG
+
+        case OP_MOVWORD_REG_TO_REGMEM: {
+            return string_format("OP_MOVWORD_REG_TO_REGMEM(reg_source: %lu, regmem_destination: %lu)", allocator,
+                    (u32)instruction.as.mov_reg_to_regmem.reg_source,
+                    (u32)instruction.as.mov_reg_to_regmem.regmem_destination);
+        }
+        case OP_MOVWORD_REGMEM_TO_REG: {
+            return string_format("OP_MOVWORD_REGMEM_TO_REG(reg_source: %lu, regmem_destination: %lu)", allocator,
+                    (u32)instruction.as.mov_regmem_to_reg.regmem_source,
+                    (u32)instruction.as.mov_regmem_to_reg.reg_destination);
+        }
+
+        case OP_SUBU_REG_IM32: {
+            return string_format("OP_SUBU_REG_IM32(reg_operand: %lu, immediate: %lu, reg_result: %lu)", allocator,
+                    (u32)instruction.as.binu_reg_immediate.reg_operand,
+                    (u32)instruction.as.binu_reg_immediate.immediate,
+                    (u32)instruction.as.binu_reg_immediate.reg_result);
+        }
+
+        case OP_ADDU_REG_IM32: {
+            return string_format("OP_ADDU_REG_IM32(reg_operand: %lu, immediate: %lu, reg_result: %lu)", allocator,
+                    (u32)instruction.as.binu_reg_immediate.reg_operand,
+                    (u32)instruction.as.binu_reg_immediate.immediate,
+                    (u32)instruction.as.binu_reg_immediate.reg_result);
+        }
+
+        #define OP_BIN_REG_REG(type) string_format("OP_"#type"_REG_REG(reg_op1: %lu, reg_op2: %lu, reg_result: %lu)", allocator,\
+                (u32)instruction.as.bin_reg_to_reg.reg_op1,\
+                (u32)instruction.as.bin_reg_to_reg.reg_op2,\
+                (u32)instruction.as.bin_reg_to_reg.reg_result)
+
+        case OP_ADDI_REG_REG: return OP_BIN_REG_REG(ADDI);
+        case OP_SUBI_REG_REG: return OP_BIN_REG_REG(SUBI);
+        case OP_MULI_REG_REG: return OP_BIN_REG_REG(MULI);
+        case OP_DIVI_REG_REG: return OP_BIN_REG_REG(DIVI);
+
+        case OP_ADDU_REG_REG: return OP_BIN_REG_REG(ADDU);
+        case OP_SUBU_REG_REG: return OP_BIN_REG_REG(SUBU);
+        case OP_MULU_REG_REG: return OP_BIN_REG_REG(MULU);
+        case OP_DIVU_REG_REG: return OP_BIN_REG_REG(DIVU);
+
+        case OP_ADDD_REG_REG: return OP_BIN_REG_REG(ADDD);
+        case OP_SUBD_REG_REG: return OP_BIN_REG_REG(SUBD);
+        case OP_MULD_REG_REG: return OP_BIN_REG_REG(MULD);
+        case OP_DIVD_REG_REG: return OP_BIN_REG_REG(DIVD);
+
+        #undef OP_BIN_REG_REG
+
+        case OP_RETURN: return lit2str("OP_RETURN");
+    }
+}
+
 static void show_line(vm_t *vm, size_t bytecode_around) {
-    UNUSED(vm);
-    UNUSED(bytecode_around);
+    if (vm->halted) {
+        printf("<no source to show>\n");
+        return;
+    }
+
+    function_t *function = vm->call_frame.function;
+    size_t pc = vm->call_frame.pc;
+
+    size_t low = bytecode_around > pc ? 0 : (pc - bytecode_around);
+    size_t high = (pc + bytecode_around) > function->code.count ? function->code.count : (pc + bytecode_around);
+
+    if (low == high && high < function->code.count) ++high;
+
+    tmp_arena_t *tmp_arena = allocator_borrow();
+
+    for (size_t i = low; i < high; ++i) {
+        if (i == pc) {
+            printf("-> ");
+        }
+
+        string_t as_string = disassemble_instruction(function->code.items[i], tmp_arena->allocator);
+        printf("%s\n", as_string.cstr);
+    }
+
+    allocator_return(tmp_arena);
 }
 
 static bool try_vm_step(vm_t *vm) {
@@ -94,7 +188,7 @@ source_location_t vm_find_source_location(vm_t *vm) {
     }
     
     function_t *function = vm->call_frame.function;
-    size_t index = vm->call_frame.ip - function->code.items;
+    size_t index = vm->call_frame.pc;
 
     string_t file_path = function->file_path;
     text_location_t text_location = function->locations.items[index];

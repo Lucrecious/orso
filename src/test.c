@@ -21,7 +21,6 @@
 #define MEMARR_IMPLEMENTATION
 #include "memarr.h"
 
-#define DEBUGGER_IMPLEMENTATION
 #include "debugger.h"
 
 #include "parser.h"
@@ -31,7 +30,7 @@
 #include "error.h"
 
 void myerror(error_t error) {
-    fprintf(stderr, "[line %llu] %s\n", error.region.token.start_location.line + 1, error_messages[error.type]);
+    fprintf(stderr, "[line %lu] %s\n", error.region.token.start_location.line + 1, error_messages[error.type]);
 }
 
 void mywrite(const char* chars) {
@@ -56,7 +55,7 @@ bool parse_expr_cstr(ast_t *ast, cstr_t expr_source, string_t file_path) {
 }
 
 static void *vm_run_function(vm_t *vm, function_t *function) {
-    vm->call_frame = (call_frame_t){.ip = &function->code.items[0], .function = function};
+    vm->call_frame = (call_frame_t){.pc = 0, .function = function};
     until (vm->halted) {
         vm_step(vm);
     }
