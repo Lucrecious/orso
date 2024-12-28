@@ -175,6 +175,24 @@ bool debugger_step(debugger_t *debugger, vm_t *vm) {
         }
     } else if (cstr_eq(command.cstr, "run")) {
         while(try_vm_step(vm));
+    } else if (cstr_eq(command.cstr, "reg")) {
+        size_t number = REGISTER_COUNT;
+        if (command_n_args.count > 1) {
+            string_t arg = command_n_args.items[1];
+            number = string2size(arg);
+            number = number < REGISTER_COUNT ? number : REGISTER_COUNT-1;
+        }
+
+        if (number == REGISTER_COUNT) {
+            for (size_t i = 0; i < REGISTER_COUNT; ++i) {
+                word_t reg = vm->registers[i];
+                printf("%02zu: %lld, %llu, %lf, %p\n", i, reg.as.i, reg.as.u, reg.as.d, reg.as.p);
+            }
+            printf("\n");
+        } else {
+            word_t reg = vm->registers[number];
+            printf("%02zu: %lld, %llu, %lf, %p\n", number, reg.as.i, reg.as.u, reg.as.d, reg.as.p);
+        }
     } else {
         printfln("unknown command: %s", command.cstr);
     }
