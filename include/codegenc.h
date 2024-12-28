@@ -101,8 +101,8 @@ static void *memarr_value_at(memarr_t *memarr, value_index_t value_index) {
     return NULL;
 }
 
-static bool is_expression_consumed(ast_node_t *expression) {
-    return !expression->not_consumed || expression->node_type != AST_NODE_TYPE_EXPRESSION_BLOCK;
+static bool is_pure_statement(ast_node_t *expression) {
+    return expression->not_consumed && expression->node_type == AST_NODE_TYPE_EXPRESSION_BLOCK;
 }
 
 static void cgen_expression(cgen_t *cgen, string_builder_t *sb, ast_node_t *expression, size_t tmpid);
@@ -203,7 +203,7 @@ static void cgen_declaration(cgen_t *cgen, string_builder_t *sb, ast_node_t *dec
         default: UNREACHABLE(); break;
     }
 
-    if (is_expression_consumed(an_expression(declaration))) {
+    if (!is_pure_statement(an_expression(declaration))) {
         sb_add_cstr(sb, ";\n");
     }
 }
@@ -281,7 +281,7 @@ static void cgen_expression(cgen_t *cgen, string_builder_t *sb, ast_node_t *expr
 
         case AST_NODE_TYPE_EXPRESSION_GROUPING: {
             if (requires_tmp) {
-                ast_node_t *operand = an_operand(expression);
+                ast_node_t *operand = an_expression(expression);
                 cgen_add_indent(sb, cgen->indent);
                 cgen_expression(cgen, sb, operand, tmpid);
             } else {
@@ -306,7 +306,18 @@ static void cgen_expression(cgen_t *cgen, string_builder_t *sb, ast_node_t *expr
             ASSERT(requires_tmp, "must require a tmp");
             size_t block_tmpid = cgen_next_tmpid(cgen);
 
-            sb_add_format(sb, "%s %s; {\n", cgen_type_name(cgen, expression->value_type), cgen_tmp_name(cgen, block_tmpid));
+            bool is_statement = is_pure_statement(expression) && tmpid == 0;
+
+            if (tmpid > 0) {
+                cgen_add_indent(sb, cgen->indent);
+            }
+
+            if (is_statement) {
+                sb_add_cstr(sb, "{\n");
+            } else {
+                sb_add_format(sb, "%s %s; {\n", cgen_type_name(cgen, expression->value_type), cgen_tmp_name(cgen, block_tmpid));
+            }
+
             cgen_indent(cgen);
 
             if (expression->children.count > 0) {
@@ -331,11 +342,15 @@ static void cgen_expression(cgen_t *cgen, string_builder_t *sb, ast_node_t *expr
                     }
 
                     case AST_NODE_TYPE_DECLARATION_STATEMENT: {
-                        size_t block_result_tmpid = cgen_next_tmpid(cgen);
-                        cgen_expression(cgen, sb, an_expression(last_declaration), block_result_tmpid);
+                        if (is_statement) {
+                            cgen_declaration(cgen, sb, last_declaration);
+                        } else {
+                            size_t block_result_tmpid = cgen_next_tmpid(cgen);
+                            cgen_expression(cgen, sb, an_expression(last_declaration), block_result_tmpid);
 
-                        cgen_add_indent(sb, cgen->indent);
-                        sb_add_format(sb, "%s = %s;\n", cgen_tmp_name(cgen, block_tmpid), cgen_tmp_name(cgen, block_result_tmpid));
+                            cgen_add_indent(sb, cgen->indent);
+                            sb_add_format(sb, "%s = %s;\n", cgen_tmp_name(cgen, block_tmpid), cgen_tmp_name(cgen, block_result_tmpid));
+                        }
                         break;
                     }
 
@@ -351,7 +366,7 @@ static void cgen_expression(cgen_t *cgen, string_builder_t *sb, ast_node_t *expr
                 cgen_add_indent(sb, cgen->indent);
                 sb_add_format(sb, "%s %s = %s;\n", cgen_type_name(cgen, expression->value_type), cgen_tmp_name(cgen, tmpid), cgen_tmp_name(cgen, block_tmpid));
             } else {
-                if (is_expression_consumed(expression)) {
+                if (!is_statement) {
                     sb_add_format(sb, "%s", cgen_tmp_name(cgen, block_tmpid));
                 }
             }
