@@ -18,6 +18,7 @@ struct cgen_t {
     size_t tmp_count;
     size_t indent;
 
+    arena_t tmp_arena;
 };
 
 static size_t cgen_next_tmpid(cgen_t *cgen) {
@@ -36,6 +37,11 @@ static void cgen_add_indent(string_builder_t *sb, size_t indent) {
     for (size_t i = 0; i < indent; ++i) {
         sb_add_cstr(sb, "  ");
     }
+}
+
+static cstr_t cgen_tmp_name(cgen_t *cgen, size_t tmpid) {
+    string_t result = string_format("tmp%llu", &cgen->tmp_arena, tmpid);
+    return result.cstr;
 }
 
 static void *memarr_value_at(memarr_t *memarr, value_index_t value_index) {
@@ -148,6 +154,7 @@ static void cgen_declaration(cgen_t *cgen, string_builder_t *sb, ast_node_t *dec
 }
 
 static void cgen_expression(cgen_t *cgen, string_builder_t *sb, ast_node_t *expression, size_t tmpid) {
+    arena_reset(&cgen->tmp_arena);
 
     bool requires_tmp = expression_requires_tmp(expression);
 
@@ -162,11 +169,11 @@ static void cgen_expression(cgen_t *cgen, string_builder_t *sb, ast_node_t *expr
 
                 if (tmpid > 0) {
                     cgen_add_indent(sb, cgen->indent);
-                    sb_add_format(sb, "tmp%llu = ", tmpid);
+                    sb_add_format(sb, "%s = ", cgen_tmp_name(cgen, tmpid));
                 }
 
                 cstr_t opcstr = token2opcstr(expression->operator);
-                sb_add_format(sb, "tmp%llu %s tmp%llu", lhs_tmpid, opcstr, rhs_tmpid);
+                sb_add_format(sb, "%s %s %s", cgen_tmp_name(cgen, lhs_tmpid), opcstr, cgen_tmp_name(cgen, rhs_tmpid));
 
                 if (tmpid > 0) {
                     sb_add_cstr(sb, ";\n");
@@ -175,7 +182,7 @@ static void cgen_expression(cgen_t *cgen, string_builder_t *sb, ast_node_t *expr
             } else {
                 if (tmpid > 0) {
                     cgen_add_indent(sb, cgen->indent);
-                    sb_add_format(sb, "tmp%llu = ", tmpid);
+                    sb_add_format(sb, "%s = ", cgen_tmp_name(cgen, tmpid));
                 }
 
                 cgen_expression(cgen, sb, an_lhs(expression), 0);
@@ -198,7 +205,7 @@ static void cgen_expression(cgen_t *cgen, string_builder_t *sb, ast_node_t *expr
 
             if (tmpid > 0) {
                 cgen_add_indent(sb, cgen->indent);
-                sb_add_format(sb, "tmp%llu = ", tmpid);
+                sb_add_format(sb, "%s = ", cgen_tmp_name(cgen, tmpid));
             }
 
             cgen_primary(cgen, sb, expression->value_index, type_info);
@@ -225,7 +232,7 @@ static void cgen_expression(cgen_t *cgen, string_builder_t *sb, ast_node_t *expr
             } else {
                 if (tmpid > 0) {
                     cgen_add_indent(sb, cgen->indent);
-                    sb_add_format(sb, "tmp%llu = ", tmpid);
+                    sb_add_format(sb, "%s = ", cgen_tmp_name(cgen, tmpid));
                 }
 
                 sb_add_cstr(sb, "(");
@@ -245,7 +252,7 @@ static void cgen_expression(cgen_t *cgen, string_builder_t *sb, ast_node_t *expr
             size_t block_tmpid = cgen_next_tmpid(cgen);
 
             cgen_add_indent(sb, cgen->indent);
-            sb_add_format(sb, "tmp%llu; {\n", block_tmpid);
+            sb_add_format(sb, "%s; {\n", cgen_tmp_name(cgen, block_tmpid));
             cgen_indent(cgen);
 
             if (expression->children.count > 0) {
@@ -285,9 +292,9 @@ static void cgen_expression(cgen_t *cgen, string_builder_t *sb, ast_node_t *expr
 
             if (tmpid > 0) {
                 cgen_add_indent(sb, cgen->indent);
-                sb_add_format(sb, "tmp%llu = tmp%llu;\n", tmpid, block_tmpid);
+                sb_add_format(sb, "%s = %s;\n", cgen_tmp_name(cgen, tmpid), cgen_tmp_name(cgen, block_tmpid));
             } else {
-                sb_add_format(sb, "tmp%llu", block_tmpid);
+                sb_add_format(sb, "%s", cgen_tmp_name(cgen, block_tmpid));
             }
 
             break;
