@@ -44,6 +44,54 @@ static cstr_t cgen_tmp_name(cgen_t *cgen, size_t tmpid) {
     return result.cstr;
 }
 
+static cstr_t cgen_type_name(cgen_t *cgen, type_t type) {
+    type_info_t *type_info = get_type_info(&cgen->ast->type_set.types, type);
+
+    switch (type_info->kind) {
+        case TYPE_NUMBER: {
+            switch (type_info->size) {
+                case 1: UNREACHABLE(); return "byte";
+                case 2: UNREACHABLE(); return "u16";
+                case 4: {
+                    switch (type_info->data.num) {
+                        case NUM_TYPE_FLOAT: return "f32";
+                        case NUM_TYPE_SIGNED: return "i32";
+                        case NUM_TYPE_UNSIGNED: return "u32";
+                    }
+                    break;
+                }
+
+                case 8: {
+                    switch (type_info->data.num) {
+                        case NUM_TYPE_FLOAT: return "f64";
+                        case NUM_TYPE_SIGNED: return "i64";
+                        case NUM_TYPE_UNSIGNED: return "u64";
+                    }
+                    break;
+                }
+
+                default: UNREACHABLE(); return "void";
+            }
+        }
+
+        case TYPE_VOID:
+        case TYPE_BOOL:
+        case TYPE_STRING:
+        case TYPE_SYMBOL:
+        case TYPE_TYPE:
+        case TYPE_FUNCTION:
+        case TYPE_NATIVE_FUNCTION:
+        case TYPE_POINTER:
+        case TYPE_STRUCT: UNREACHABLE(); return "void";
+
+        case TYPE_INVALID:
+        case TYPE_UNRESOLVED:
+        case TYPE_UNDEFINED:
+        case TYPE_UNION:
+        case TYPE_COUNT: UNREACHABLE(); return "void";
+    }
+}
+
 static void *memarr_value_at(memarr_t *memarr, value_index_t value_index) {
     if (value_index.exists && value_index.index < memarr->count) {
         return memarr_get_ptr(memarr, value_index);
@@ -51,6 +99,10 @@ static void *memarr_value_at(memarr_t *memarr, value_index_t value_index) {
 
     UNREACHABLE();
     return NULL;
+}
+
+static bool is_expression_consumed(ast_node_t *expression) {
+    return !expression->not_consumed || expression->node_type != AST_NODE_TYPE_EXPRESSION_BLOCK;
 }
 
 static void cgen_expression(cgen_t *cgen, string_builder_t *sb, ast_node_t *expression, size_t tmpid);
@@ -143,6 +195,7 @@ static void cgen_declaration(cgen_t *cgen, string_builder_t *sb, ast_node_t *dec
         }
 
         case AST_NODE_TYPE_DECLARATION_STATEMENT: {
+            cgen_add_indent(sb, cgen->indent);
             cgen_expression(cgen, sb, an_expression(declaration), 0);
             break;
         }
@@ -150,7 +203,9 @@ static void cgen_declaration(cgen_t *cgen, string_builder_t *sb, ast_node_t *dec
         default: UNREACHABLE(); break;
     }
 
-    sb_add_cstr(sb, ";\n");
+    if (is_expression_consumed(an_expression(declaration))) {
+        sb_add_cstr(sb, ";\n");
+    }
 }
 
 static void cgen_expression(cgen_t *cgen, string_builder_t *sb, ast_node_t *expression, size_t tmpid) {
@@ -169,7 +224,7 @@ static void cgen_expression(cgen_t *cgen, string_builder_t *sb, ast_node_t *expr
 
                 if (tmpid > 0) {
                     cgen_add_indent(sb, cgen->indent);
-                    sb_add_format(sb, "%s = ", cgen_tmp_name(cgen, tmpid));
+                    sb_add_format(sb, "%s %s = ", cgen_type_name(cgen, expression->value_type), cgen_tmp_name(cgen, tmpid));
                 }
 
                 cstr_t opcstr = token2opcstr(expression->operator);
@@ -182,7 +237,7 @@ static void cgen_expression(cgen_t *cgen, string_builder_t *sb, ast_node_t *expr
             } else {
                 if (tmpid > 0) {
                     cgen_add_indent(sb, cgen->indent);
-                    sb_add_format(sb, "%s = ", cgen_tmp_name(cgen, tmpid));
+                    sb_add_format(sb, "%s %s = ", cgen_type_name(cgen, expression->value_type), cgen_tmp_name(cgen, tmpid));
                 }
 
                 cgen_expression(cgen, sb, an_lhs(expression), 0);
@@ -205,7 +260,7 @@ static void cgen_expression(cgen_t *cgen, string_builder_t *sb, ast_node_t *expr
 
             if (tmpid > 0) {
                 cgen_add_indent(sb, cgen->indent);
-                sb_add_format(sb, "%s = ", cgen_tmp_name(cgen, tmpid));
+                sb_add_format(sb, "%s %s = ", cgen_type_name(cgen, expression->value_type), cgen_tmp_name(cgen, tmpid));
             }
 
             cgen_primary(cgen, sb, expression->value_index, type_info);
@@ -232,7 +287,7 @@ static void cgen_expression(cgen_t *cgen, string_builder_t *sb, ast_node_t *expr
             } else {
                 if (tmpid > 0) {
                     cgen_add_indent(sb, cgen->indent);
-                    sb_add_format(sb, "%s = ", cgen_tmp_name(cgen, tmpid));
+                    sb_add_format(sb, "%s %s = ", cgen_type_name(cgen, expression->value_type), cgen_tmp_name(cgen, tmpid));
                 }
 
                 sb_add_cstr(sb, "(");
@@ -251,13 +306,11 @@ static void cgen_expression(cgen_t *cgen, string_builder_t *sb, ast_node_t *expr
             ASSERT(requires_tmp, "must require a tmp");
             size_t block_tmpid = cgen_next_tmpid(cgen);
 
-            cgen_add_indent(sb, cgen->indent);
-            sb_add_format(sb, "%s; {\n", cgen_tmp_name(cgen, block_tmpid));
+            sb_add_format(sb, "%s %s; {\n", cgen_type_name(cgen, expression->value_type), cgen_tmp_name(cgen, block_tmpid));
             cgen_indent(cgen);
 
             if (expression->children.count > 0) {
                 for (size_t i = 0; i < expression->children.count-1; ++i) {
-                    cgen_add_indent(sb, cgen->indent);
                     ast_node_t *declaration = expression->children.items[i];
                     cgen_declaration(cgen, sb, declaration);
                 }
@@ -278,7 +331,11 @@ static void cgen_expression(cgen_t *cgen, string_builder_t *sb, ast_node_t *expr
                     }
 
                     case AST_NODE_TYPE_DECLARATION_STATEMENT: {
-                        cgen_expression(cgen, sb, an_expression(last_declaration), block_tmpid);
+                        size_t block_result_tmpid = cgen_next_tmpid(cgen);
+                        cgen_expression(cgen, sb, an_expression(last_declaration), block_result_tmpid);
+
+                        cgen_add_indent(sb, cgen->indent);
+                        sb_add_format(sb, "%s = %s;\n", cgen_tmp_name(cgen, block_tmpid), cgen_tmp_name(cgen, block_result_tmpid));
                         break;
                     }
 
@@ -292,9 +349,11 @@ static void cgen_expression(cgen_t *cgen, string_builder_t *sb, ast_node_t *expr
 
             if (tmpid > 0) {
                 cgen_add_indent(sb, cgen->indent);
-                sb_add_format(sb, "%s = %s;\n", cgen_tmp_name(cgen, tmpid), cgen_tmp_name(cgen, block_tmpid));
+                sb_add_format(sb, "%s %s = %s;\n", cgen_type_name(cgen, expression->value_type), cgen_tmp_name(cgen, tmpid), cgen_tmp_name(cgen, block_tmpid));
             } else {
-                sb_add_format(sb, "%s", cgen_tmp_name(cgen, block_tmpid));
+                if (is_expression_consumed(expression)) {
+                    sb_add_format(sb, "%s", cgen_tmp_name(cgen, block_tmpid));
+                }
             }
 
             break;

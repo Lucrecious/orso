@@ -176,6 +176,7 @@ struct ast_node_t {
     return_guarentee_t return_guarentee;
 
     bool inside_type_context;
+    bool not_consumed;
 
     bool fold;
 

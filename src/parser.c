@@ -194,6 +194,7 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type
     node->fold = false;
     node->foldable = false;
     node->inside_type_context = inside_type_context;
+    node->not_consumed = false;
     node->lvalue_node = NULL;
 
     node->value_index = value_index_nil();
@@ -1031,10 +1032,14 @@ static ast_node_t *statement(parser_t* parser, bool omit_end_of_statement) {
     if (is_return) {
         // expression is option in this case
         if (check_expression(parser)) {
-            an_operand(statement_node) = expression(parser, false);
+            an_expression(statement_node) = expression(parser, false);
         }
     } else {
-        an_operand(statement_node) = expression(parser, false);
+        an_expression(statement_node) = expression(parser, false);
+    }
+
+    if (node_type == AST_NODE_TYPE_DECLARATION_STATEMENT) {
+        an_expression(statement_node)->not_consumed = true;
     }
         
     if (!omit_end_of_statement) {
