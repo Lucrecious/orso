@@ -366,21 +366,21 @@ static bool is_block_compile_time_foldable(ast_nodes_t block) {
     for (size_t i = 0; i < block.count; i++) {
         ast_node_t *declaration = block.items[i];
         switch (declaration->node_type) {
-            case AST_NODE_TYPE_DECLARATION: {
+            case AST_NODE_TYPE_DECLARATION_DEFINITION: {
                 if (!is_declaration_resolved(declaration)) {
                     return false;
                 }
                 break;
             }
             
-            case AST_NODE_TYPE_STATEMENT_EXPRESSION: {
+            case AST_NODE_TYPE_DECLARATION_STATEMENT: {
                 if (!EXPRESSION_RESOLVED(an_operand(declaration)) || TYPE_IS_INVALID(an_operand(declaration)->value_type)) {
                     return false;
                 }
                 break;
             }
             
-            case AST_NODE_TYPE_STATEMENT_RETURN: return false;
+            case AST_NODE_TYPE_EXPRESSION_RETURN: return false;
             case AST_NODE_TYPE_UNDEFINED: return false;
             case AST_NODE_TYPE_EXPRESSION_CASE: UNREACHABLE();
         }
@@ -574,7 +574,7 @@ static void resolve_foldable(
                 break;
             }
 
-            foldable = is_block_compile_time_foldable(expression->as.block);
+            foldable = is_block_compile_time_foldable(expression->children);
             break;
         }
         case AST_NODE_TYPE_EXPRESSION_ASSIGNMENT: {
@@ -586,21 +586,6 @@ static void resolve_foldable(
             break;
         }
 
-        case AST_NODE_TYPE_EXPRESSION_STATEMENT: {
-            switch (expression->as.statement->node_type) {
-                case AST_NODE_TYPE_STATEMENT_EXPRESSION: {
-                    foldable = an_operand(expression->as.statement)->foldable;
-                    break;
-                }
-
-                case AST_NODE_TYPE_UNDEFINED:
-                case AST_NODE_TYPE_STATEMENT_RETURN: foldable = false; break;
-
-                case AST_NODE_TYPE_DECLARATION:
-                case AST_NODE_TYPE_EXPRESSION_CASE: UNREACHABLE(); 
-            }
-            break;
-        }
         case AST_NODE_TYPE_EXPRESSION_PRINT:
         case AST_NODE_TYPE_EXPRESSION_PRINT_EXPR: {
             break;
@@ -613,10 +598,14 @@ static void resolve_foldable(
             break;
         }
 
+        case AST_NODE_TYPE_EXPRESSION_RETURN: {
+            foldable = false;
+            break;
+        }
+
         case AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE:
-        case AST_NODE_TYPE_DECLARATION:
-        case AST_NODE_TYPE_STATEMENT_EXPRESSION:
-        case AST_NODE_TYPE_STATEMENT_RETURN:
+        case AST_NODE_TYPE_DECLARATION_DEFINITION:
+        case AST_NODE_TYPE_DECLARATION_STATEMENT:
         case AST_NODE_TYPE_UNDEFINED:
             UNREACHABLE(); break;
     }
@@ -840,6 +829,14 @@ static void pop_dependency(analyzer_t *analyzer) {
     --analyzer->dependencies.count;
 }
 
+static scope_t *get_closest_outer_function_scope(type_infos_t *types, scope_t *scope) {
+    while (scope && scope->creator && !type_is_function(*types, scope->creator->value_type)) {
+        scope = scope->outer;
+    }
+
+    return scope;
+}
+
 static void resolve_declarations(
         analyzer_t *analyzer,
         ast_t *ast,
@@ -853,7 +850,7 @@ static void resolve_declaration(
         AnalysisState state,
         ast_node_t* declaration_node);
 
-static void resolve_statement(
+static void resolve_declaration_statement(
     analyzer_t* analyzer,
     ast_t* ast,
     AnalysisState state,
@@ -876,7 +873,7 @@ static void declare_entity(analyzer_t* analyzer, scope_t* scope, ast_node_t* ent
 static void forward_scan_declaration_names(analyzer_t* analyzer, scope_t* scope, ast_nodes_t declarations, i32 count) {
     for (i32 i = 0; i < count; i++) {
         ast_node_t* declaration = declarations.items[i];
-        if (declaration->node_type != AST_NODE_TYPE_DECLARATION) {
+        if (declaration->node_type != AST_NODE_TYPE_DECLARATION_DEFINITION) {
             continue;
         }
 
@@ -1352,41 +1349,32 @@ void resolve_expression(
             scope_t block_scope;
             scope_init(&block_scope, &analyzer->allocator, SCOPE_TYPE_BLOCK, state.scope, expression);
 
-            i32 declarations_count = expression->as.block.count;
-            forward_scan_declaration_names(analyzer, &block_scope, expression->as.block, declarations_count);
+            i32 declarations_count = expression->children.count;
+            forward_scan_declaration_names(analyzer, &block_scope, expression->children, declarations_count);
 
             AnalysisState block_state = state;
             block_state.scope = &block_scope;
             block_state.mode = MODE_RUNTIME | (state.mode & MODE_FOLDING_TIME);
-            resolve_declarations(analyzer, ast, block_state, expression->as.block, declarations_count);
+            resolve_declarations(analyzer, ast, block_state, expression->children, declarations_count);
 
             return_guarentee_t block_return_guarentee = RETURN_GUARENTEE_NONE;
             for (i32 i = 0; i < declarations_count; i++) {
-                ast_node_t *declaration = expression->as.block.items[i];
-                if (declaration->node_type == AST_NODE_TYPE_STATEMENT_RETURN) {
-                    block_return_guarentee = RETURN_GUARENTEE_YES;
-                } else if (declaration->node_type == AST_NODE_TYPE_STATEMENT_EXPRESSION) {
-                    ast_node_t *statement = an_operand(declaration);
-                    if (statement->node_type == AST_NODE_TYPE_EXPRESSION_BLOCK && statement->return_guarentee != RETURN_GUARENTEE_NONE) {
-                        block_return_guarentee = statement->return_guarentee;
-                    } else if (statement->node_type == AST_NODE_TYPE_EXPRESSION_BRANCHING && statement->return_guarentee != RETURN_GUARENTEE_NONE) {
-                        block_return_guarentee = statement->return_guarentee;
-                    }
+                ast_node_t *declaration = expression->children.items[i];
+                if (declaration->return_guarentee != RETURN_GUARENTEE_NONE) {
+                    block_return_guarentee = declaration->return_guarentee;
                 }
 
-                if (block_return_guarentee == RETURN_GUARENTEE_YES) {
-                    break;
-                }
+                if (block_return_guarentee == RETURN_GUARENTEE_YES) break;
             }
 
             if (block_return_guarentee != RETURN_GUARENTEE_NONE) {
                 expression->return_guarentee = block_return_guarentee;
                 expression->value_type = typeid(TYPE_UNDEFINED);
             } else {
-                ast_node_t* last_expression_statement = NULL;
+                ast_node_t *last_expression_statement = NULL;
                 if (declarations_count > 0) {
-                    ast_node_t* last_declaration = expression->as.block.items[declarations_count - 1];
-                    if (last_declaration->node_type == AST_NODE_TYPE_STATEMENT_EXPRESSION) {
+                    ast_node_t *last_declaration = expression->children.items[declarations_count - 1];
+                    if (last_declaration->node_type == AST_NODE_TYPE_DECLARATION_STATEMENT) {
                         last_expression_statement = last_declaration;
                     }
                 }
@@ -1400,18 +1388,29 @@ void resolve_expression(
             break;
         }
 
-        case AST_NODE_TYPE_EXPRESSION_STATEMENT: {
-            resolve_statement(analyzer, ast, state, expression->as.statement);
+        case AST_NODE_TYPE_EXPRESSION_RETURN: {
+            type_t return_expression_type = typeid(TYPE_VOID);
 
-            if (TYPE_IS_INVALID(an_operand(expression->as.statement)->value_type)) {
-                INVALIDATE(expression);
-                break;
+            if (an_expression(expression)) {
+                resolve_expression(analyzer, ast, state, an_expression(expression));
+                return_expression_type = an_expression(expression)->value_type;
+            }
+
+            scope_t *function_scope = get_closest_outer_function_scope(&ast->type_set.types, state.scope);
+            ASSERT(function_scope, "right now all scopes should be under a function scope");
+
+            type_t function_type = function_scope->creator->value_type;
+            type_info_t *function_type_info = ast->type_set.types.items[function_type.i];
+
+            type_t function_return_type = function_scope ? function_type_info->data.function.return_type : typeid(TYPE_VOID);
+            unless (TYPE_IS_INVALID(return_expression_type) || typeid_eq(function_return_type, return_expression_type)) {
+                error_range(analyzer, an_expression(expression)->start, an_expression(expression)->end, ERROR_ANALYSIS_TYPE_MISMATCH);
             }
 
             expression->return_guarentee = an_operand(expression->as.statement) ? 
                     an_operand(expression->as.statement)->return_guarentee : RETURN_GUARENTEE_NONE;
 
-            if (expression->as.statement->node_type == AST_NODE_TYPE_STATEMENT_RETURN) {
+            if (expression->as.statement->node_type == AST_NODE_TYPE_EXPRESSION_RETURN) {
                 if (expression->return_guarentee != RETURN_GUARENTEE_NONE) {
                     error_range(analyzer, expression->start, expression->end, ERROR_ANALYSIS_CANNOT_RETURN_INSIDE_RETURN);
                 } else {
@@ -1424,7 +1423,7 @@ void resolve_expression(
             } else {
                 expression->value_type = an_operand(expression->as.statement)->value_type;
             }
-            break;
+            
         }
 
         case AST_NODE_TYPE_EXPRESSION_BRANCHING: {
@@ -1445,14 +1444,13 @@ void resolve_expression(
             return_guarentee_t branch_return_guarentee;
             // resolve return guarentee first
             {
-                ASSERT(expression->as.branch.then_expression->node_type == AST_NODE_TYPE_EXPRESSION_BLOCK || expression->as.branch.then_expression->node_type == AST_NODE_TYPE_EXPRESSION_STATEMENT, "must be expression statement or block, not other choices");
+                ASSERT(expression->as.branch.then_expression->node_type == AST_NODE_TYPE_DECLARATION_STATEMENT, "must be expression statement or block, not other choices");
                 return_guarentee_t then_return_guarentee = expression->as.branch.then_expression->return_guarentee;
 
                 return_guarentee_t else_return_guarentee = RETURN_GUARENTEE_NONE;
                 if (expression->as.branch.else_expression) {
                     if (expression->as.branch.else_expression->node_type == AST_NODE_TYPE_EXPRESSION_BLOCK
-                    || expression->as.branch.else_expression->node_type == AST_NODE_TYPE_EXPRESSION_BRANCHING
-                    || expression->as.branch.else_expression->node_type == AST_NODE_TYPE_EXPRESSION_STATEMENT) {
+                    || expression->as.branch.else_expression->node_type == AST_NODE_TYPE_EXPRESSION_BRANCHING) {
                         else_return_guarentee = expression->as.branch.else_expression->return_guarentee;
                     } else {
                         ASSERT(false, "only blocks and ifs allowed during elses for now");
@@ -1578,10 +1576,9 @@ void resolve_expression(
         }
 
         case AST_NODE_TYPE_UNDEFINED:
-        case AST_NODE_TYPE_DECLARATION:
-        case AST_NODE_TYPE_STATEMENT_EXPRESSION:
-        case AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT:
-        case AST_NODE_TYPE_STATEMENT_RETURN: {
+        case AST_NODE_TYPE_DECLARATION_DEFINITION:
+        case AST_NODE_TYPE_DECLARATION_STATEMENT:
+        case AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT: {
             UNREACHABLE();
             break;
         }
@@ -1608,7 +1605,7 @@ static void declare_entity(analyzer_t* analyzer, scope_t* scope, ast_node_t* ent
     add_entity(scope, &analyzer->allocator, identifier, entity);
 }
 
-static void resolve_entity_declaration(analyzer_t* analyzer, ast_t* ast, AnalysisState state, ast_node_t* entity_declaration) {
+static void resolve_declaration_definition(analyzer_t* analyzer, ast_t* ast, AnalysisState state, ast_node_t* entity_declaration) {
 // due to the way structs are resolved, it is possible for the initial value expression to be swapped out with another
 // this is simply a safer way of accessing the initial value expression
 #define INITIAL_EXPRESSION (entity_declaration->as.declaration.initial_value_expression)
@@ -1985,7 +1982,7 @@ static Entity *get_resolved_entity_by_identifier(
         if (entity->node->as.declaration.initial_value_expression) {
             AnalysisState new_state = state;
             new_state.scope = *search_scope;
-            resolve_entity_declaration(analyzer, ast, new_state, entity->node);
+            resolve_declaration_definition(analyzer, ast, new_state, entity->node);
         }
 
         if (entity->node->as.declaration.is_mutable && entity->node->as.declaration.fold_level_resolved_at != state.fold_level) {
@@ -2149,7 +2146,7 @@ static void resolve_function_expression(
         // parameters look syntacticly like mutables, but their initial expressions should be constants
         new_state.mode = MODE_CONSTANT_TIME | (state.mode & MODE_FOLDING_TIME);
         new_state.scope = &function_parameter_scope;
-        resolve_entity_declaration(analyzer, ast, new_state, definition->parameter_nodes.items[i]);
+        resolve_declaration_definition(analyzer, ast, new_state, definition->parameter_nodes.items[i]);
         array_push(&parameter_types, definition->parameter_nodes.items[i]->value_type);
         
 
@@ -2390,7 +2387,7 @@ static void resolve_struct_definition(analyzer_t *analyzer, ast_t *ast, Analysis
         ast_node_t* declaration = struct_definition->as.struct_.declarations.items[i];
         field_count += (declaration->as.declaration.is_mutable);
 
-        resolve_entity_declaration(analyzer, ast, state, declaration);
+        resolve_declaration_definition(analyzer, ast, state, declaration);
 
         if (TYPE_IS_INVALID(declaration->value_type) || TYPE_IS_UNRESOLVED(declaration->value_type)) {
             invalid_struct = true;
@@ -2501,50 +2498,13 @@ static void resolve_struct_definition(analyzer_t *analyzer, ast_t *ast, Analysis
     }
 }
 
-static scope_t *get_closest_outer_function_scope(type_infos_t *types, scope_t *scope) {
-    while (scope && scope->creator && !type_is_function(*types, scope->creator->value_type)) {
-        scope = scope->outer;
-    }
-
-    return scope;
-}
-
-static void resolve_statement(
+static void resolve_declaration_statement(
         analyzer_t *analyzer,
         ast_t *ast,
         AnalysisState state,
         ast_node_t *statement) {
-    switch (statement->node_type) {
-        case AST_NODE_TYPE_STATEMENT_EXPRESSION:
-            resolve_expression(analyzer, ast, state, an_operand(statement));
-            statement->value_type = an_operand(statement)->value_type;
-            break;
-
-        case AST_NODE_TYPE_STATEMENT_RETURN: {
-            type_t return_expression_type = typeid(TYPE_VOID);
-
-            if (an_operand(statement)) {
-                resolve_expression(analyzer, ast, state, an_operand(statement));
-                return_expression_type = an_operand(statement)->value_type;
-            }
-
-            scope_t *function_scope = get_closest_outer_function_scope(&ast->type_set.types, state.scope);
-            ASSERT(function_scope, "right now all scopes should be under a function scope");
-
-            type_t function_type = function_scope->creator->value_type;
-            type_info_t *function_type_info = ast->type_set.types.items[function_type.i];
-
-            type_t function_return_type = function_scope ? function_type_info->data.function.return_type : typeid(TYPE_VOID);
-            unless (TYPE_IS_INVALID(return_expression_type) || typeid_eq(function_return_type, return_expression_type)) {
-                error_range(analyzer, an_operand(statement)->start, an_operand(statement)->end, ERROR_ANALYSIS_TYPE_MISMATCH);
-            }
-            break;
-        }
-
-        case AST_NODE_TYPE_UNDEFINED: break;
-        case AST_NODE_TYPE_DECLARATION:
-        case AST_NODE_TYPE_EXPRESSION_CASE: UNREACHABLE();
-    }
+    resolve_expression(analyzer, ast, state, an_expression(statement));
+    statement->value_type = an_expression(statement)->value_type;
 }
 
 static void resolve_declaration(
@@ -2553,14 +2513,18 @@ static void resolve_declaration(
         AnalysisState state,
         ast_node_t* declaration_node) {
 
-    // TODO: eventually this will be resolved, everything will be a declaration entity
-    // there will only be two types: anonymous declarations and named declarations
-    // print_expr, print and statement expressions will be all me anonymous declarations
-    if (declaration_node->node_type == AST_NODE_TYPE_DECLARATION) {
-        resolve_entity_declaration(analyzer, ast, state, declaration_node);
-    } else {
-        resolve_statement(analyzer,ast, state, declaration_node);
+    switch (declaration_node->node_type) {
+        case AST_NODE_TYPE_DECLARATION_DEFINITION: {
+            resolve_declaration_definition(analyzer, ast, state, declaration_node);
+            break;
+        }
 
+        case AST_NODE_TYPE_DECLARATION_STATEMENT: {
+            resolve_declaration_statement(analyzer, ast, state, declaration_node);
+            break;
+        }
+
+        default: UNREACHABLE();
     }
 }
 
@@ -2588,7 +2552,7 @@ void resolve_declarations(analyzer_t* analyzer, ast_t* ast, AnalysisState state,
         // the body of its own function regardless, it's something that I need to check for anyways to make sure they are no
         // circular dependencies.
         // Anyways, that's why constants are skipped and resolved only when they are accessed
-        if (declaration->node_type == AST_NODE_TYPE_DECLARATION && !declaration->as.declaration.is_mutable) {
+        if (declaration->node_type == AST_NODE_TYPE_DECLARATION_DEFINITION && !declaration->as.declaration.is_mutable) {
             continue;
         }
 
@@ -2597,7 +2561,7 @@ void resolve_declarations(analyzer_t* analyzer, ast_t* ast, AnalysisState state,
 
     for (i32 i = 0; i < count; i++) {
         ast_node_t *declaration = declarations.items[i];
-        if (declaration->node_type != AST_NODE_TYPE_DECLARATION) {
+        if (declaration->node_type != AST_NODE_TYPE_DECLARATION_DEFINITION) {
             continue;
         }
 
@@ -2615,7 +2579,7 @@ void resolve_declarations(analyzer_t* analyzer, ast_t* ast, AnalysisState state,
 
 bool resolve_ast(analyzer_t *analyzer, ast_t *ast) {
     if (ast->root->node_type == AST_NODE_TYPE_EXPRESSION_BLOCK) {
-        if (ast->root->as.block.items == NULL) {
+        if (ast->root->children.items == NULL) {
             ast->resolved = false;
             // error(analyzer, 0, "No code to run. Akin to having no main function.");
             return false;
@@ -2630,9 +2594,9 @@ bool resolve_ast(analyzer_t *analyzer, ast_t *ast) {
             .fold_level = 0,
         };
 
-        i32 declaration_count = ast->root->as.block.count;
-        forward_scan_declaration_names(analyzer, &global_scope, ast->root->as.block, declaration_count);
-        resolve_declarations(analyzer, ast, analysis_state, ast->root->as.block, declaration_count);
+        i32 declaration_count = ast->root->children.count;
+        forward_scan_declaration_names(analyzer, &global_scope, ast->root->children, declaration_count);
+        resolve_declarations(analyzer, ast, analysis_state, ast->root->children, declaration_count);
 
         ast->resolved = !analyzer->had_error;
 

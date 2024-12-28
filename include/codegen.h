@@ -239,6 +239,31 @@ static void gen_primary(gen_t *gen, function_t *function, ast_node_t *primary) {
     gen_constant(primary->start.start_location, function, data, type_info);
 }
 
+static void gen_declaration(gen_t *gen, function_t *function, ast_node_t *declaration) {
+    switch (declaration->node_type) {
+        case AST_NODE_TYPE_DECLARATION_DEFINITION: {
+            // todo
+            UNREACHABLE();
+            break;
+        }
+
+        case AST_NODE_TYPE_DECLARATION_STATEMENT: {
+            ast_node_t *expression = an_expression(declaration);
+            gen_expression(gen, function, expression);
+            break;
+        }
+
+        default: UNREACHABLE();
+    }
+}
+
+static void gen_block(gen_t *gen, function_t *function, ast_node_t *block) {
+    for (size_t i = 0; i < block->children.count; ++i) {
+        ast_node_t *declaration = block->children.items[i];
+        gen_declaration(gen, function, declaration);
+    }
+}
+
 static void gen_expression(gen_t *gen, function_t *function, ast_node_t *expression) {
     ASSERT(ast_node_type_is_expression(expression->node_type), "must be expression");
 
@@ -258,8 +283,12 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
             break;
         }
 
+        case AST_NODE_TYPE_EXPRESSION_BLOCK: {
+            gen_block(gen, function, expression);
+            break;
+        }
+
         case AST_NODE_TYPE_EXPRESSION_ASSIGNMENT:
-        case AST_NODE_TYPE_EXPRESSION_BLOCK:
         case AST_NODE_TYPE_EXPRESSION_BRANCHING:
         case AST_NODE_TYPE_EXPRESSION_CALL:
         case AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT:
@@ -270,24 +299,12 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
         case AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION:
         case AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER:
         case AST_NODE_TYPE_EXPRESSION_UNARY:
-        case AST_NODE_TYPE_STATEMENT_EXPRESSION:
-        case AST_NODE_TYPE_STATEMENT_RETURN:
+        case AST_NODE_TYPE_DECLARATION_STATEMENT:
+        case AST_NODE_TYPE_EXPRESSION_RETURN:
         case AST_NODE_TYPE_UNDEFINED:
-        case AST_NODE_TYPE_DECLARATION:
+        case AST_NODE_TYPE_DECLARATION_DEFINITION:
         case AST_NODE_TYPE_EXPRESSION_PRINT:
-        case AST_NODE_TYPE_EXPRESSION_PRINT_EXPR:
-        case AST_NODE_TYPE_EXPRESSION_STATEMENT: ASSERT(false, "not implemented");
-    }
-}
-
-static void gen_block(gen_t *gen, function_t *function, ast_node_t *block) {
-    ASSERT(block->node_type == AST_NODE_TYPE_EXPRESSION_BLOCK, "must be block");
-
-    for (size_t i = 0; i < block->as.block.count; ++i) {
-        ast_node_t *node = block->as.block.items[i];
-        ASSERT(node->node_type == AST_NODE_TYPE_STATEMENT_EXPRESSION, "only allowing statement expressions right now");
-
-        gen_expression(gen, function, an_operand(node));
+        case AST_NODE_TYPE_EXPRESSION_PRINT_EXPR: ASSERT(false, "not implemented");
     }
 }
 
@@ -326,7 +343,7 @@ bool compile_program(vm_t *vm, ast_t *ast) {
     // string_view_t main_name = cstr2sv("main");
     // for (size_t i = 0; i < root->as.block.count; ++i) {
     //     ast_node_t *node = root->as.block.items[i];
-    //     assert(node->node_type == AST_NODE_TYPE_DECLARATION);
+    //     assert(node->node_type == AST_NODE_TYPE_DECLARATION_DEFINITION);
 
     //     string_view_t identifier = token2sv(node->as.declaration.identifier);
     //     if (sv_eq(identifier, main_name)) {

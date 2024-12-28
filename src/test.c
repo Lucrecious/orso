@@ -75,7 +75,7 @@ int main(int argc, char **argv) {
     ast_t ast = {0};
     ast_init(&ast, megabytes(2));
 
-    bool success = parse_expr_cstr(&ast, "(4.2 + 5.4 / 2.0) * 60.9", lit2str(""));
+    bool success = parse_expr_cstr(&ast, "{2;}+2", lit2str(""));
     unless (success) return 1;
 
     // string_t expr_str = compile_expr_to_c(&ast, &arena);

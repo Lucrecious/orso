@@ -50,9 +50,9 @@ typedef struct function_definition_pair_t {
 
 typedef enum ast_node_type_t {
     AST_NODE_TYPE_UNDEFINED, // TODO: try to remove this shit
-    AST_NODE_TYPE_DECLARATION,
-    AST_NODE_TYPE_STATEMENT_RETURN,
-    AST_NODE_TYPE_STATEMENT_EXPRESSION,
+    AST_NODE_TYPE_DECLARATION_DEFINITION, // for declaring globals, locals, constants, etc
+    AST_NODE_TYPE_DECLARATION_STATEMENT, // for expressions
+    AST_NODE_TYPE_EXPRESSION_RETURN,
     AST_NODE_TYPE_EXPRESSION_PRINT, // TODO: remove in favor of a native function
     AST_NODE_TYPE_EXPRESSION_PRINT_EXPR, // TODO: remove in favor of a native function
     AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT,
@@ -70,12 +70,6 @@ typedef enum ast_node_type_t {
     AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION,
     AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE,
     AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER,
-
-    /*
-    * This is a special case expression. It's simply an expression with a statement inside.
-    * This is used for branching.
-    */
-    AST_NODE_TYPE_EXPRESSION_STATEMENT,
 } ast_node_type_t;
 
 #define AST_NODE_TYPE_EXPRESSION_CASE \
@@ -94,7 +88,6 @@ case AST_NODE_TYPE_EXPRESSION_PRIMARY: \
 case AST_NODE_TYPE_EXPRESSION_UNARY: \
 case AST_NODE_TYPE_EXPRESSION_PRINT: \
 case AST_NODE_TYPE_EXPRESSION_PRINT_EXPR: \
-case AST_NODE_TYPE_EXPRESSION_STATEMENT: \
 case AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER: \
 case AST_NODE_TYPE_EXPRESSION_DOT
 
@@ -164,9 +157,10 @@ struct value_index_t {
 
 bool memarr_push_value(memarr_t *arr, void *data, size_t size_bytes, value_index_t *out_index);
 
-#define an_operand(n) (n)->children.items[0]
-#define an_lhs(n) (n)->children.items[0]
-#define an_rhs(n) (n)->children.items[1]
+#define an_operand(n) ((n)->children.items[0])
+#define an_expression(n) an_operand(n)
+#define an_lhs(n) ((n)->children.items[0])
+#define an_rhs(n) ((n)->children.items[1])
 
 struct ast_node_t {
     ast_node_type_t node_type;
@@ -200,9 +194,6 @@ struct ast_node_t {
         ast_node_t *statement; // for readability
 
         ast_call_t call;
-
-        // block (declarations or statements)
-        ast_nodes_t block;
 
         // branching (if, unless, while, until)
         ast_branch_t branch;

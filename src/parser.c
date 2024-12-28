@@ -201,7 +201,7 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type
     node->children = (ast_nodes_t){.allocator=&ast->allocator};
 
     switch (node_type) {
-        case AST_NODE_TYPE_DECLARATION: {
+        case AST_NODE_TYPE_DECLARATION_DEFINITION: {
             node->as.declaration.initial_value_expression = NULL;
             node->as.declaration.fold_level_resolved_at = -1;
             node->as.declaration.identifier = TOKEN_NIL;
@@ -218,7 +218,6 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type
         }
         
         case AST_NODE_TYPE_EXPRESSION_BLOCK: {
-            node->as.block = (ast_nodes_t){.allocator=&ast->allocator};
             break;
         }
         
@@ -239,11 +238,10 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type
         
         case AST_NODE_TYPE_EXPRESSION_UNARY:
         case AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT:
-        case AST_NODE_TYPE_STATEMENT_EXPRESSION:
+        case AST_NODE_TYPE_DECLARATION_STATEMENT:
         case AST_NODE_TYPE_EXPRESSION_PRINT:
         case AST_NODE_TYPE_EXPRESSION_PRINT_EXPR:
-        case AST_NODE_TYPE_STATEMENT_RETURN:
-        case AST_NODE_TYPE_EXPRESSION_STATEMENT:
+        case AST_NODE_TYPE_EXPRESSION_RETURN:
         case AST_NODE_TYPE_EXPRESSION_GROUPING: {
             array_push(&node->children, &nil_node);
             break;
@@ -388,9 +386,9 @@ bool ast_node_type_is_decl_or_stmt(ast_node_type_t node_type) {
         case AST_NODE_TYPE_UNDEFINED:
             return false;
         
-        case AST_NODE_TYPE_DECLARATION:
-        case AST_NODE_TYPE_STATEMENT_EXPRESSION:
-        case AST_NODE_TYPE_STATEMENT_RETURN:
+        case AST_NODE_TYPE_DECLARATION_DEFINITION:
+        case AST_NODE_TYPE_DECLARATION_STATEMENT:
+        case AST_NODE_TYPE_EXPRESSION_RETURN:
             return true;
     }
 }
@@ -400,9 +398,9 @@ bool ast_node_type_is_expression(ast_node_type_t node_type) {
         case AST_NODE_TYPE_EXPRESSION_CASE:
             return true;
         
-        case AST_NODE_TYPE_DECLARATION:
-        case AST_NODE_TYPE_STATEMENT_EXPRESSION:
-        case AST_NODE_TYPE_STATEMENT_RETURN:
+        case AST_NODE_TYPE_DECLARATION_DEFINITION:
+        case AST_NODE_TYPE_DECLARATION_STATEMENT:
+        case AST_NODE_TYPE_EXPRESSION_RETURN:
         case AST_NODE_TYPE_UNDEFINED:
             return false;
     }
@@ -507,7 +505,7 @@ static ast_node_t *convert_call_expression(ast_node_t *left_operand, ast_node_t 
 static ast_node_t *convert_function_definition(parser_t *parser, ast_node_t *left_operand, ast_node_t *function_definition) {
     for (size_t i = 0; i < left_operand->as.function.parameter_nodes.count; i++) {
         ast_node_t *parameter = left_operand->as.function.parameter_nodes.items[i];
-        if (parameter->node_type != AST_NODE_TYPE_DECLARATION) {
+        if (parameter->node_type != AST_NODE_TYPE_DECLARATION_DEFINITION) {
             error_at(parser, &parameter->start, ERROR_PARSER_EXPECTED_DECLARATION);
             left_operand->node_type = AST_NODE_TYPE_UNDEFINED;
             return left_operand;
@@ -545,11 +543,10 @@ static ast_node_t* variable(parser_t *parser, bool inside_type_context) {
 
 static void parse_block(parser_t *parser, ast_node_t *block) {
     block->return_guarentee = RETURN_GUARENTEE_NONE;
-    block->as.block = (ast_nodes_t){.allocator=&parser->ast->allocator};
 
     while (!check(parser, TOKEN_BRACE_CLOSE) && !check(parser, TOKEN_EOF)) {
         ast_node_t *declaration_node = declaration(parser, false);
-        array_push(&block->as.block, declaration_node);
+        array_push(&block->children, declaration_node);
     }
 
     consume(parser, TOKEN_BRACE_CLOSE, ERROR_PARSER_EXPECTED_CLOSE_BRACE);
@@ -566,7 +563,7 @@ static ast_node_t *block(parser_t *parser, bool inside_type_context) {
     return expression_node;
 }
 
-static ast_node_t* ifelse(parser_t* parser, bool inside_type_context) {
+static ast_node_t *ifelse(parser_t *parser, bool inside_type_context) {
     ast_node_t* expression_node = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_BRANCHING, inside_type_context, parser->previous);
 
     expression_node->as.branch.condition_negated = false;
@@ -592,10 +589,11 @@ static ast_node_t* ifelse(parser_t* parser, bool inside_type_context) {
         }
 
         {
-            ast_node_t* then_statement = statement(parser, true);
-            ast_node_t* then_expression = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_STATEMENT, inside_type_context, then_statement->start);
-            then_expression->as.statement = then_statement;
-            then_expression->end = then_statement->end;
+            // ast_node_t *then_statement = statement(parser, true);
+            // ast_node_t *then_expression = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_STATEMENT, inside_type_context, then_statement->start);
+            // then_expression->as.statement = then_statement;
+            // then_expression->end = then_statement->end;
+            ast_node_t *then_expression = expression(parser, inside_type_context); //statement(parser, true);
             expression_node->as.branch.then_expression = then_expression;
         }
     }
@@ -606,10 +604,11 @@ static ast_node_t* ifelse(parser_t* parser, bool inside_type_context) {
     }
 
     {
-        ast_node_t* else_statement = statement(parser, true);
-        ast_node_t* else_expression = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_STATEMENT, inside_type_context, else_statement->start);
-        else_expression->as.statement = else_statement;
-        else_expression->end = else_statement->end;
+        // ast_node_t* else_statement = statement(parser, true);
+        // ast_node_t* else_expression = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_STATEMENT, inside_type_context, else_statement->start);
+        // else_expression->as.statement = else_statement;
+        // else_expression->end = else_statement->end;
+        ast_node_t *else_expression = expression(parser, inside_type_context);
         expression_node->as.branch.else_expression = else_expression;
     }
 
@@ -754,8 +753,8 @@ static ast_nodes_t parse_arguments(parser_t* parser, bool inside_type_context) {
     return arguments;
 }
 
-static ast_node_t* call(parser_t* parser, bool inside_type_context) {
-    ast_node_t* expression_node = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_CALL, inside_type_context, parser->previous);
+static ast_node_t *call(parser_t *parser, bool inside_type_context) {
+    ast_node_t *expression_node = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_CALL, inside_type_context, parser->previous);
 
     expression_node->as.call.callee = NULL;
     expression_node->as.call.arguments = parse_arguments(parser, inside_type_context);
@@ -764,8 +763,8 @@ static ast_node_t* call(parser_t* parser, bool inside_type_context) {
     return expression_node;
 }
 
-static ast_node_t* unary(parser_t* parser, bool inside_type_context) {
-    ast_node_t* expression_node = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_UNARY, inside_type_context, parser->previous);
+static ast_node_t *unary(parser_t *parser, bool inside_type_context) {
+    ast_node_t *expression_node = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_UNARY, inside_type_context, parser->previous);
     expression_node->operator = parser->previous;
 
     an_operand(expression_node) = parse_precedence(parser, inside_type_context, PREC_UNARY);
@@ -774,7 +773,7 @@ static ast_node_t* unary(parser_t* parser, bool inside_type_context) {
     return expression_node;
 }
 
-static ast_node_t* binary(parser_t* parser, bool inside_type_context) {
+static ast_node_t *binary(parser_t *parser, bool inside_type_context) {
     ast_node_t* expression_node = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_BINARY, inside_type_context, parser->previous);
 
     token_t operator = parser->previous;
@@ -800,7 +799,7 @@ static ast_node_t *struct_(parser_t *parser, bool inside_type_context) {
 
     while (!check(parser, TOKEN_BRACE_CLOSE) && !check(parser, TOKEN_EOF)) {
         ast_node_t *declaration_node = entity_declaration(parser, false);
-        array_push(&struct_definition->as.block, declaration_node);
+        array_push(&struct_definition->children, declaration_node);
     }
 
     consume(parser, TOKEN_BRACE_CLOSE, ERROR_PARSER_EXPECTED_CLOSE_BRACE);
@@ -1020,10 +1019,10 @@ static ast_node_t *statement(parser_t* parser, bool omit_end_of_statement) {
     bool is_return = false;
     ast_node_type_t node_type;
     if (match(parser, TOKEN_RETURN)) {
-        node_type = AST_NODE_TYPE_STATEMENT_RETURN;
+        node_type = AST_NODE_TYPE_EXPRESSION_RETURN;
         is_return = true;
     } else {
-        node_type = AST_NODE_TYPE_STATEMENT_EXPRESSION;
+        node_type = AST_NODE_TYPE_DECLARATION_STATEMENT;
     }
 
     ast_node_t *statement_node = ast_node_new(parser->ast, node_type, false, parser->current);
@@ -1048,7 +1047,7 @@ static ast_node_t *statement(parser_t* parser, bool omit_end_of_statement) {
 }
 
 static ast_node_t *entity_declaration(parser_t *parser, bool as_parameter) {
-    ast_node_t *entity_declaration_node = ast_node_new(parser->ast, AST_NODE_TYPE_DECLARATION, false, parser->current);
+    ast_node_t *entity_declaration_node = ast_node_new(parser->ast, AST_NODE_TYPE_DECLARATION_DEFINITION, false, parser->current);
 
     advance(parser);
 
@@ -1146,7 +1145,7 @@ bool parse(ast_t *ast, string_t file_path, cstr_t source, error_function_t error
     while (!match(&parser, TOKEN_EOF)) {
         ast_node_t *declaration_node = declaration(&parser, true);
         if (declaration_node) {
-            array_push(&ast->root->as.block, declaration_node);
+            array_push(&ast->root->children, declaration_node);
         }
     }
 
@@ -1347,8 +1346,8 @@ static void ast_print_ast_node(type_infos_t types, ast_node_t *node, u32 level) 
         case AST_NODE_TYPE_EXPRESSION_BLOCK: {
             print_indent(level);
             print_line("{...}: %s", type2cstr(node));
-            for (size_t i = 0; i < node->as.block.count; ++i) {
-                ast_print_ast_node(types, node->as.block.items[i], level + 1);
+            for (size_t i = 0; i < node->children.count; ++i) {
+                ast_print_ast_node(types, node->children.items[i], level + 1);
             }
             break;
         }
@@ -1428,12 +1427,7 @@ static void ast_print_ast_node(type_infos_t types, ast_node_t *node, u32 level) 
             print_line("signature: %s", type2cstr(node));
             break;
         }
-        case AST_NODE_TYPE_EXPRESSION_STATEMENT: {
-            print_indent(level);
-            print_line("expression statement: %s", type2cstr(node));
-            ast_print_ast_node(types, an_operand(node), level + 1);
-            break;
-        }
+
         case AST_NODE_TYPE_EXPRESSION_PRINT_EXPR: {
             print_indent(level);
             print_line("print_expr (to be removed)");
@@ -1444,13 +1438,13 @@ static void ast_print_ast_node(type_infos_t types, ast_node_t *node, u32 level) 
             print_line("print (to be removed)");
             break;
         }
-        case AST_NODE_TYPE_STATEMENT_EXPRESSION: {
+        case AST_NODE_TYPE_DECLARATION_STATEMENT: {
             print_indent(level);
             print_line("statement expression: %s", type2cstr(node));
             ast_print_ast_node(types, an_operand(node), level + 1);
             break;
         }
-        case AST_NODE_TYPE_STATEMENT_RETURN: {
+        case AST_NODE_TYPE_EXPRESSION_RETURN: {
             print_indent(level);
             print_line("return");
 
@@ -1469,7 +1463,7 @@ static void ast_print_ast_node(type_infos_t types, ast_node_t *node, u32 level) 
             print_line("accessor (%.*s)", node->as.dot.identifier.length, node->as.dot.identifier.start);
             break;
         }
-        case AST_NODE_TYPE_DECLARATION: {
+        case AST_NODE_TYPE_DECLARATION_DEFINITION: {
             print_indent(level);
             print_line("declaration (%.*s): %s", node->as.declaration.identifier.length, node->as.declaration.identifier.start, type2cstr(node));
 
