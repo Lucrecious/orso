@@ -68,6 +68,10 @@ void myerror(error_t error, cstr_t source) {
         }
     }
 
+    if (column-1 == source_line.length) {
+        sb_add_char(&sb, '^');
+    }
+
     fprintf(stderr, "%.*s\n", (int)sb.count, sb.items);
 
     allocator_return(tmp_arena);
@@ -114,7 +118,7 @@ int main(int argc, char **argv) {
     ast_init(&ast, megabytes(2));
 
     // bool success = parse_expr_cstr(&ast, "1/{2;}", lit2str(""));
-    bool success = parse_expr_cstr(&ast, "{(1 + 1; 2;})", lit2str(""));
+    bool success = parse_expr_cstr(&ast, "{(1 + 1); 2;} + 5+{", lit2str(""));
     unless (success) return 1;
 
     string_t expr_str = compile_expr_to_c(&ast, &arena);
