@@ -234,6 +234,8 @@ struct fd_pairs_t {
 typedef struct ast_t {
     arena_t allocator;
 
+    cstr_t source;
+
     bool resolved;
     type_table_t type_set;
 

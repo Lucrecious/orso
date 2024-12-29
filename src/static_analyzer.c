@@ -167,17 +167,17 @@ static void function_dependencies_cannot_be_compiled(analyzer_t *analyzer) {
     }
 }
 
-static void error_token(analyzer_t* analyzer, token_t token, error_type_t error_type) {
+static void error_token(analyzer_t *analyzer, token_t token, error_type_t error_type) {
     analyzer->had_error = true;
 
     function_dependencies_cannot_be_compiled(analyzer);
     error_t error = {
         .type = error_type,
         .region_type = ERROR_REGION_TYPE_TOKEN,
-        .region.token = token,
+        .first = token,
     };
 
-    analyzer->error_fn(error);
+    analyzer->error_fn(error, analyzer->ast->source);
 }
 
 static void error_range(analyzer_t *analyzer, token_t start, token_t end, error_type_t error_type) {
@@ -187,27 +187,27 @@ static void error_range(analyzer_t *analyzer, token_t start, token_t end, error_
     error_t error = {
         .type = error_type,
         .region_type = ERROR_REGION_TYPE_RANGE,
-        .region.range.start = start,
-        .region.range.end = end,
+        .first = start,
+        .first_end = end,
     };
 
-    analyzer->error_fn(error);
+    analyzer->error_fn(error, analyzer->ast->source);
 }
 
-static void error_range2(analyzer_t* analyzer, token_t start1, token_t end1, token_t start2, token_t end2, error_type_t error_type) {
+static void error_range2(analyzer_t *analyzer, token_t start1, token_t end1, token_t start2, token_t end2, error_type_t error_type) {
     analyzer->had_error = true;
 
     function_dependencies_cannot_be_compiled(analyzer);
     error_t error = {
         .type = error_type,
         .region_type = ERROR_REGION_TYPE_TWO_RANGES,
-        .region.range2.start1 = start1,
-        .region.range2.end1 = end1,
-        .region.range2.start2 = start2,
-        .region.range2.end2 = end2,
+        .first = start1,
+        .first_end = end1,
+        .second = start2,
+        .second_end = end2,
     };
     
-    analyzer->error_fn(error);
+    analyzer->error_fn(error, analyzer->ast->source);
 }
 
 static type_t resolve_unary_type(ast_t* ast, token_type_t operator, type_t operand_id) {

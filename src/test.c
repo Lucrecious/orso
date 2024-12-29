@@ -32,17 +32,55 @@
 
 #include "error.h"
 
-void myerror(error_t error) {
-    fprintf(stderr, "[line %lu] %s\n", error.region.token.start_location.line + 1, error_messages[error.type]);
+string_view_t get_line(cstr_t source, cstr_t somewhere_in_source) {
+    char *s = (char*)somewhere_in_source;
+    until (*s == '\n' || s == source)  {
+        --s;
+    }
+
+    char *e = (char*)somewhere_in_source;
+    until (*e == '\n' || *e == '\0') {
+        ++e;
+    }
+
+    string_view_t view = {.length = e - s, .data = s};
+    return view;
 }
 
-void mywrite(const char* chars) {
+void myerror(error_t error, cstr_t source) {
+    size_t line = error.first.start_location.line + 1;
+    size_t column = error.first.start_location.column + 1;
+    cstr_t file = error.first.file_path.cstr;
+
+    string_view_t source_line = get_line(source, error.first.start);
+
+    fprintf(stderr, "%s:%lu:%lu: %s\n", file, line, column, error_messages[error.type]);
+    fprintf(stderr, "%.*s\n", (int)source_line.length, source_line.data);
+
+    tmp_arena_t *tmp_arena = allocator_borrow();
+    string_builder_t sb = {.allocator=tmp_arena->allocator};
+
+    for (size_t i = 0; i < source_line.length; ++i) {
+        if (i == column-1) {
+            sb_add_char(&sb, '^');
+        } else {
+            sb_add_char(&sb, ' ');
+        }
+    }
+
+    fprintf(stderr, "%.*s\n", (int)sb.count, sb.items);
+
+    allocator_return(tmp_arena);
+}
+
+void mywrite(cstr_t chars) {
     printf("%s", chars);
 }
 
 
 // todo: fix memory leak because too lazy to write an ast_dup function right now
 bool parse_expr_cstr(ast_t *ast, cstr_t expr_source, string_t file_path) {
+    ast->source = expr_source;
     bool success = parse_expr(ast, file_path, expr_source, myerror);
 
     if (success) {
@@ -76,7 +114,7 @@ int main(int argc, char **argv) {
     ast_init(&ast, megabytes(2));
 
     // bool success = parse_expr_cstr(&ast, "1/{2;}", lit2str(""));
-    bool success = parse_expr_cstr(&ast, "{1 + 1; 2;}", lit2str(""));
+    bool success = parse_expr_cstr(&ast, "{1 + 1 2;}", lit2str(""));
     unless (success) return 1;
 
     string_t expr_str = compile_expr_to_c(&ast, &arena);

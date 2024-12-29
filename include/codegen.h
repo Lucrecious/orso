@@ -229,8 +229,9 @@ static void gen_primary(gen_t *gen, function_t *function, ast_node_t *primary) {
             gen->error_fn((error_t){
                 .type=ERROR_CODEGEN_MEMORY_SIZE_TOO_BIG,
                 .region_type=ERROR_REGION_TYPE_RANGE,
-                .region={.range={.start=primary->start, .end=primary->end}}
-            });
+                .first = primary->start,
+                .first_end = primary->end,
+            }, gen->ast->source);
             return;
         }
     }
@@ -315,8 +316,9 @@ static void gen_return(gen_t *gen, text_location_t location, function_t *functio
     emit_return(location, function);
 }
 
-static void error_fn(error_t error) {
+static void error_fn(error_t error, cstr_t source) {
     UNUSED(error);
+    UNUSED(source);
 }
 
 bool compile_expr_to_function(function_t *function, ast_t *ast) {

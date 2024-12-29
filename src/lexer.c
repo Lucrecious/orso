@@ -11,7 +11,7 @@ static token_t create_token(lexer_t *lexer, token_type_t type) {
         .type = type,
         .start = lexer->start,
         .length = lexer->current - lexer->start,
-        .start_location = texloc(lexer->line, lexer->current - lexer->line_start),
+        .start_location = texloc(lexer->line, lexer->start - lexer->line_start),
     };
 
     return token;
@@ -31,6 +31,7 @@ static token_t error_token(lexer_t *lexer, cstr_t message) {
 
 void lexer_init(lexer_t *lexer, string_t file_path, cstr_t code) {
     lexer->file_path = file_path;
+    lexer->source = code;
     lexer->line = 0;
     lexer->start = (char*)code;
     lexer->line_start = lexer->start;
@@ -49,20 +50,20 @@ static bool is_alpha(char c) {
         || c == '_';
 }
 
-static bool is_at_end(lexer_t* lexer) {
+static bool is_at_end(lexer_t *lexer) {
     return *lexer->current == '\0';
 }
 
-static char advance(lexer_t* lexer) {
+static char advance(lexer_t *lexer) {
     lexer->current++;
     return lexer->current[-1];
 }
 
-static char FORCE_INLINE peek(lexer_t* lexer) {
+static char FORCE_INLINE peek(lexer_t *lexer) {
     return lexer->current[0];
 }
 
-static char peek_next(lexer_t* lexer) {
+static char peek_next(lexer_t *lexer) {
     if (is_at_end(lexer)) {
         return '\0';
     }
@@ -70,7 +71,7 @@ static char peek_next(lexer_t* lexer) {
     return lexer->current[1];
 }
 
-static bool match(lexer_t* lexer, char expected) {
+static bool match(lexer_t *lexer, char expected) {
     if (is_at_end(lexer)) {
         return false;
     }
@@ -83,7 +84,7 @@ static bool match(lexer_t* lexer, char expected) {
     return true;
 }
 
-static bool match2(lexer_t* lexer, const char* expected) {
+static bool match2(lexer_t *lexer, const char* expected) {
     ASSERT(strlen(expected) == 2, "the size of expected must be 2");
 
     if (is_at_end(lexer)) {
@@ -98,7 +99,7 @@ static bool match2(lexer_t* lexer, const char* expected) {
     return true;
 }
 
-static void skip_whitespace(lexer_t* lexer) {
+static void skip_whitespace(lexer_t *lexer) {
     for (;;) {
         char c = peek(lexer);
         switch (c) {
@@ -118,7 +119,7 @@ static void skip_whitespace(lexer_t* lexer) {
     }
 }
 
-static bool skip_comments(lexer_t* lexer) {
+static bool skip_comments(lexer_t *lexer) {
     if (match2(lexer, "//")) {
         while (!is_at_end(lexer)) {
             char c = advance(lexer);
@@ -155,7 +156,7 @@ static bool skip_comments(lexer_t* lexer) {
     return false;
 }
 
-static FORCE_INLINE token_t _string_symbol(lexer_t* lexer, char terminator, token_type_t type) {
+static FORCE_INLINE token_t _string_symbol(lexer_t *lexer, char terminator, token_type_t type) {
     while (peek(lexer) != terminator && !is_at_end(lexer)) {
         if (peek(lexer) == '\n') {
             lexer->line++;
@@ -171,15 +172,15 @@ static FORCE_INLINE token_t _string_symbol(lexer_t* lexer, char terminator, toke
     return create_token(lexer, type);
 }
 
-static token_t string(lexer_t* lexer) {
+static token_t string(lexer_t *lexer) {
     return _string_symbol(lexer, '"', TOKEN_STRING);
 }
 
-static token_t symbol(lexer_t* lexer) {
+static token_t symbol(lexer_t *lexer) {
     return _string_symbol(lexer, '\'', TOKEN_SYMBOL);
 }
 
-static token_t annotation(lexer_t* lexer) {
+static token_t annotation(lexer_t *lexer) {
     while (is_alpha(peek(lexer)) || is_digit(peek(lexer))) {
         advance(lexer);
     }
@@ -187,7 +188,7 @@ static token_t annotation(lexer_t* lexer) {
     return create_token(lexer, TOKEN_ANNOTATION);
 }
 
-static token_t number(lexer_t* lexer) {
+static token_t number(lexer_t *lexer) {
     while (is_digit(peek(lexer)) || peek(lexer) == '_') {
         advance(lexer);
     }
@@ -206,7 +207,7 @@ static token_t number(lexer_t* lexer) {
     return create_token(lexer, is_float ? TOKEN_FLOAT : TOKEN_INTEGER);
 }
 
-static token_type_t check_keyword(lexer_t* lexer, i32 start, i32 length,
+static token_type_t check_keyword(lexer_t *lexer, i32 start, i32 length,
         const char* rest, token_type_t type) {
     if (lexer->current - lexer->start == start + length &&
         memcmp(lexer->start + start, rest, length)== 0) {
@@ -216,7 +217,7 @@ static token_type_t check_keyword(lexer_t* lexer, i32 start, i32 length,
     return TOKEN_IDENTIFIER;
 }
 
-static token_type_t identifier_type(lexer_t* lexer) {
+static token_type_t identifier_type(lexer_t *lexer) {
     switch (lexer->start[0]) {
         case 'a': return check_keyword(lexer, 1, 2, "nd", TOKEN_AND);
         case 'd': return check_keyword(lexer, 1, 1, "o", TOKEN_DO);

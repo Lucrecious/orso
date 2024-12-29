@@ -48,8 +48,10 @@
 
 */
 
-void myerror(error_t error) {
-    fprintf(stderr, "[line %d] %s\n", error.region.token.line + 1, error_messages[error.type]);
+void myerror(error_t error, cstr_t source) {
+    UNUSED(error);
+    UNUSED(source);
+    // fprintf(stderr, "[line %d] %s\n", error.region.token.line + 1, error_messages[error.type]);
 }
 
 void mywrite(const char* chars) {

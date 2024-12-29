@@ -64,6 +64,7 @@ struct lexer_t {
     token_t previous_token;
     error_function_t error_fn;
     string_t file_path;
+    cstr_t source;
     i32 line;
     cstr_t start;
     cstr_t line_start;

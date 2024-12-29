@@ -24,7 +24,7 @@ struct analysis_dependencies_t {
 typedef struct analyzer_t {
     error_function_t error_fn;
     symbol_table_t symbols;
-    ast_t* ast;
+    ast_t *ast;
 
     analysis_dependencies_t dependencies;
 

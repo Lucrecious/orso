@@ -134,6 +134,7 @@ typedef struct {
 
 void ast_init(ast_t *ast, size_t memory_size_bytes) {
     ast->allocator = (arena_t){0};
+    ast->source = "";
 
     ast->resolved = false;
     ast->root = NULL;
@@ -308,9 +309,10 @@ static void error_at(parser_t *parser, token_t *token, error_type_t error_type) 
     error_t error = {
         .type = error_type,
         .region_type = ERROR_REGION_TYPE_TOKEN,
-        .region.token = *token,
+        .first = *token,
     };
-    parser->error_fn(error);
+
+    parser->error_fn(error, parser->lexer.source);
 }
 
 static void error_at_current(parser_t *parser, error_type_t error_type) {
@@ -1145,6 +1147,7 @@ bool parse_expr(ast_t *ast, string_t file_path, cstr_t source, error_function_t 
 bool parse(ast_t *ast, string_t file_path, cstr_t source, error_function_t error_fn) {
     parser_t parser = {0};
     parser_init(&parser, ast, file_path, source, error_fn);
+    ast->source = source;
 
     advance(&parser);
 

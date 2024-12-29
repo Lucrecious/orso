@@ -55,23 +55,10 @@ typedef enum error_region_type_t {
 typedef struct error_t {
     error_type_t type;
     error_region_type_t region_type;
-
-    union {
-        token_t token;
-        struct {
-            token_t start;
-            token_t end;
-        } range;
-
-        struct {
-            token_t start1;
-            token_t end1;
-
-            token_t start2;
-            token_t end2;
-        } range2;
-
-    } region;
+    token_t first;
+    token_t first_end;
+    token_t second;
+    token_t second_end;
 } error_t;
 
 #endif
