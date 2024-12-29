@@ -50,6 +50,7 @@ typedef struct function_definition_pair_t {
 
 typedef enum ast_node_type_t {
     AST_NODE_TYPE_UNDEFINED, // TODO: try to remove this shit
+    AST_NODE_TYPE_MODULE,
     AST_NODE_TYPE_DECLARATION_DEFINITION, // for declaring globals, locals, constants, etc
     AST_NODE_TYPE_DECLARATION_STATEMENT, // for expressions
     AST_NODE_TYPE_EXPRESSION_RETURN,

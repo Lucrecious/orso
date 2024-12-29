@@ -218,6 +218,7 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type
             break;
         }
         
+        case AST_NODE_TYPE_MODULE:
         case AST_NODE_TYPE_EXPRESSION_BLOCK: {
             break;
         }
@@ -385,6 +386,7 @@ bool ast_node_type_is_decl_or_stmt(ast_node_type_t node_type) {
     switch (node_type) {
         case AST_NODE_TYPE_EXPRESSION_CASE:
         case AST_NODE_TYPE_UNDEFINED:
+        case AST_NODE_TYPE_MODULE:
             return false;
         
         case AST_NODE_TYPE_DECLARATION_DEFINITION:
@@ -402,6 +404,7 @@ bool ast_node_type_is_expression(ast_node_type_t node_type) {
         case AST_NODE_TYPE_DECLARATION_DEFINITION:
         case AST_NODE_TYPE_DECLARATION_STATEMENT:
         case AST_NODE_TYPE_EXPRESSION_RETURN:
+        case AST_NODE_TYPE_MODULE:
         case AST_NODE_TYPE_UNDEFINED:
             return false;
     }
@@ -1348,6 +1351,8 @@ static void ast_print_ast_node(type_infos_t types, ast_node_t *node, u32 level) 
             ast_print_ast_node(types, an_rhs(node), level + 2);
             break;
         }
+
+        case AST_NODE_TYPE_MODULE:
         case AST_NODE_TYPE_EXPRESSION_BLOCK: {
             print_indent(level);
             print_line("{...}: %s", type2cstr(node));

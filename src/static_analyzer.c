@@ -382,6 +382,7 @@ static bool is_block_compile_time_foldable(ast_nodes_t block) {
             
             case AST_NODE_TYPE_EXPRESSION_RETURN: return false;
             case AST_NODE_TYPE_UNDEFINED: return false;
+            case AST_NODE_TYPE_MODULE:
             case AST_NODE_TYPE_EXPRESSION_CASE: UNREACHABLE();
         }
     }
@@ -603,6 +604,7 @@ static void resolve_foldable(
             break;
         }
 
+        case AST_NODE_TYPE_MODULE:
         case AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE:
         case AST_NODE_TYPE_DECLARATION_DEFINITION:
         case AST_NODE_TYPE_DECLARATION_STATEMENT:
@@ -1578,6 +1580,7 @@ void resolve_expression(
         case AST_NODE_TYPE_UNDEFINED:
         case AST_NODE_TYPE_DECLARATION_DEFINITION:
         case AST_NODE_TYPE_DECLARATION_STATEMENT:
+        case AST_NODE_TYPE_MODULE:
         case AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT: {
             UNREACHABLE();
             break;
@@ -2578,7 +2581,7 @@ void resolve_declarations(analyzer_t* analyzer, ast_t* ast, AnalysisState state,
 }
 
 bool resolve_ast(analyzer_t *analyzer, ast_t *ast) {
-    if (ast->root->node_type == AST_NODE_TYPE_EXPRESSION_BLOCK) {
+    if (ast->root->node_type == AST_NODE_TYPE_MODULE) {
         if (ast->root->children.items == NULL) {
             ast->resolved = false;
             // error(analyzer, 0, "No code to run. Akin to having no main function.");
