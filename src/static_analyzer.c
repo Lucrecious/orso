@@ -1233,9 +1233,7 @@ void resolve_expression(
                 }
 
                 token_t declaration_name = declaration->as.declaration.identifier;
-                if (declaration_name.length == expression->as.dot.identifier.length &&
-                    strncmp(declaration_name.start, expression->as.dot.identifier.start, declaration_name.length) == 0) {
-                    referencing_declaration = declaration;
+                if (sv_eq(declaration_name.source_view, expression->as.dot.identifier.source_view)) {
                     break;
                 }
             }
@@ -1595,12 +1593,12 @@ void resolve_expression(
     fold_constants_via_runtime(analyzer, ast, state, expression);
 }
 
-static void declare_entity(analyzer_t* analyzer, scope_t* scope, ast_node_t* entity) {
-    symbol_t *identifier = orso_unmanaged_symbol_from_cstrn(entity->start.start, entity->start.length, &analyzer->symbols, &analyzer->allocator);
+static void declare_entity(analyzer_t *analyzer, scope_t *scope, ast_node_t *entity) {
+    symbol_t *identifier = orso_unmanaged_symbol_from_cstrn(entity->start.source_view.data, entity->start.source_view.length, &analyzer->symbols, &analyzer->allocator);
     word_t word_type_pair;
     if (symbol_table_get(&scope->named_entities, identifier, &word_type_pair)) {
         const char message[126];
-        snprintf((char*)message, 126, "Duplicate entity definition of '%.*s'.", (int)entity->start.length, entity->start.start);
+        snprintf((char*)message, 126, "Duplicate entity definition of '%.*s'.", (int)entity->start.source_view.length, entity->start.source_view.data);
         error_token(analyzer, entity->start, ERROR_ANALYSIS_CANNOT_OVERLOAD_ENTITY_DEFINITION);
         return;
     }
@@ -1669,7 +1667,7 @@ static void resolve_declaration_definition(analyzer_t* analyzer, ast_t* ast, Ana
     }
 
     word_t entity_slot;
-    symbol_t *name = orso_unmanaged_symbol_from_cstrn(entity_declaration->start.start, entity_declaration->start.length, &analyzer->symbols, &ast->allocator);
+    symbol_t *name = orso_unmanaged_symbol_from_cstrn(entity_declaration->start.source_view.data, entity_declaration->start.source_view.length, &analyzer->symbols, &ast->allocator);
 
     ASSERT(symbol_table_get(&state.scope->named_entities, name, &entity_slot), "should be forward_declared already");
 
@@ -1757,7 +1755,7 @@ static void resolve_declaration_definition(analyzer_t* analyzer, ast_t* ast, Ana
             to_struct_type->fold = false;
             to_struct_type->foldable = true;
             type_info_t *initial_expression_type_info = get_type_info(&ast->type_set.types, INITIAL_EXPRESSION->value_type);
-            type_t named_struct_id = type_create_struct(&ast->type_set, entity_declaration->start.start, entity_declaration->start.length, initial_expression_type_info);
+            type_t named_struct_id = type_create_struct(&ast->type_set, entity_declaration->start.source_view.data, entity_declaration->start.source_view.length, initial_expression_type_info);
             word_t struct_type_slot = WORDU(named_struct_id.i);
             to_struct_type->value_index = add_value_to_ast_constant_stack(ast, &struct_type_slot, typeid(TYPE_TYPE));
 
@@ -1936,7 +1934,7 @@ static Entity *get_resolved_entity_by_identifier(
 
     bool passed_local_mutable_access_barrier = false;
 
-    symbol_t *identifier = orso_unmanaged_symbol_from_cstrn(identifier_token.start, identifier_token.length, &analyzer->symbols, &ast->allocator);
+    symbol_t *identifier = orso_unmanaged_symbol_from_cstrn(identifier_token.source_view.data, identifier_token.source_view.length, &analyzer->symbols, &ast->allocator);
     
     // early return if looking at a built in type
     {
@@ -2419,11 +2417,11 @@ static void resolve_struct_definition(analyzer_t *analyzer, ast_t *ast, Analysis
 
         for (i32 i = 0; i < declarations_count; ++i) {
             token_t identifier = struct_definition->as.struct_.declarations.items[i]->as.declaration.identifier;
-            char* name = arena_alloc(&analyzer->allocator, sizeof(char)*(identifier.length + 1));
+            char* name = arena_alloc(&analyzer->allocator, sizeof(char)*(identifier.source_view.length + 1));
 
-            memcpy(name, identifier.start, identifier.length);
+            memcpy(name, identifier.source_view.data, identifier.source_view.length);
             
-            name[identifier.length] = '\0';
+            name[identifier.source_view.length] = '\0';
 
             if (struct_definition->as.struct_.declarations.items[i]->as.declaration.is_mutable) {
                 fields[field_counter].type = struct_definition->as.struct_.declarations.items[i]->value_type;

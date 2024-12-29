@@ -32,13 +32,6 @@ enum reg_t {
 
 declare_table(str2cf, string_t, call_frame_t)
 
-static string_view_t token2sv(token_t t) {
-    return (string_view_t) {
-        .data = t.start,
-        .length = t.length,
-    };
-}
-
 static void emit_instruction(function_t *function, text_location_t location, instruction_t instruction) {
     array_push(&function->code, instruction);
     array_push(&function->locations, location);

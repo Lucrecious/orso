@@ -9,20 +9,18 @@ static token_t create_token(lexer_t *lexer, token_type_t type) {
     token_t token = { 
         .file_path = lexer->file_path,
         .type = type,
-        .start = lexer->start,
-        .length = lexer->current - lexer->start,
+        .source_view = {.length=lexer->current-lexer->start, .data = lexer->start},
         .start_location = texloc(lexer->line, lexer->start - lexer->line_start),
     };
 
     return token;
 }
 
-static token_t error_token(lexer_t *lexer, cstr_t message) {
+static token_t error_token(lexer_t *lexer, string_view_t message_view) {
     token_t token = {
         .file_path = lexer->file_path,
         .type = TOKEN_ERROR,
-        .start = (char*)message,
-        .length = strlen(message),
+        .source_view = message_view,
         .start_location = texloc(lexer->line, lexer->current - lexer->line_start),
     };
     
@@ -37,7 +35,7 @@ void lexer_init(lexer_t *lexer, string_t file_path, cstr_t code) {
     lexer->line_start = lexer->start;
     lexer->current = (char*)code;
 
-    lexer->previous_token = error_token(lexer, "<previous token>");
+    lexer->previous_token = error_token(lexer, lit2sv("<previous token>"));
 }
 
 static bool is_digit(char c) {
@@ -150,7 +148,7 @@ static bool skip_comments(lexer_t *lexer) {
             lexer->line += (c == '\n');
         }
 
-        error_token(lexer, "Expected closing comment */ before file end");
+        error_token(lexer, lit2sv("Expected closing comment */ before file end"));
     }
 
     return false;
@@ -165,7 +163,7 @@ static FORCE_INLINE token_t _string_symbol(lexer_t *lexer, char terminator, toke
     }
 
     if (is_at_end(lexer)) {
-        return error_token(lexer, "Unterminated string.");
+        return error_token(lexer, lit2sv("Unterminated string."));
     }
 
     advance(lexer);
@@ -401,7 +399,7 @@ token_t _lexer_next_token(lexer_t *lexer) {
         case '@': return annotation(lexer);
     }
 
-    return error_token(lexer, "Unexpected character.");
+    return error_token(lexer, lit2sv("Unexpected character."));
 }
 
 token_t lexer_next_token(lexer_t* lexer) {

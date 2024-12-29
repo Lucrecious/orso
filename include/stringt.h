@@ -62,6 +62,7 @@ string_t sb_render(string_builder_t *builder, arena_t *allocator);
 
 #define str(string_literal) ((string_t){ .cstr = string_literal, .length = (sizeof(string_literal)/sizeof(char) - sizeof(char)) })
 #define lit2str(lit) str(lit)
+#define lit2sv(lit) ((string_view_t){ .data = lit, .length = (sizeof(lit)/sizeof(char) - sizeof(char)) })
 
 #endif
 

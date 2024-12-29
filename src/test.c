@@ -52,7 +52,7 @@ void myerror(error_t error, cstr_t source) {
     size_t column = error.first.start_location.column + 1;
     cstr_t file = error.first.file_path.cstr;
 
-    string_view_t source_line = get_line(source, error.first.start);
+    string_view_t source_line = get_line(source, error.first.source_view.data);
 
     fprintf(stderr, "%s:%lu:%lu: %s\n", file, line, column, error_messages[error.type]);
     fprintf(stderr, "%.*s\n", (int)source_line.length, source_line.data);
@@ -114,7 +114,7 @@ int main(int argc, char **argv) {
     ast_init(&ast, megabytes(2));
 
     // bool success = parse_expr_cstr(&ast, "1/{2;}", lit2str(""));
-    bool success = parse_expr_cstr(&ast, "{1 + 1 2;}", lit2str(""));
+    bool success = parse_expr_cstr(&ast, "{(1 + 1; 2;})", lit2str(""));
     unless (success) return 1;
 
     string_t expr_str = compile_expr_to_c(&ast, &arena);

@@ -48,15 +48,14 @@ struct text_location_t {
 typedef struct token_t token_t;
 struct token_t {
     string_t file_path;
-    cstr_t start;
-    size_t length;
+    string_view_t source_view;
     text_location_t start_location;
     token_type_t type;
 };
 
 #define token_end_location(token) ((text_location_t){\
     .line = ((token)->start_location.line),\
-    .column=(((token)->start_location.column + (token)->length))\
+    .column=(((token)->start_location.column + (token)->source_view.length))\
 })
 
 typedef struct lexer_t lexer_t;
