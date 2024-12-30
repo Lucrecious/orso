@@ -306,8 +306,7 @@ static bool is_block_compile_time_foldable(ast_nodes_t block) {
                 break;
             }
             
-            case AST_NODE_TYPE_EXPRESSION_RETURN: return false;
-            case AST_NODE_TYPE_NONE: return false;
+            case AST_NODE_TYPE_NONE:
             case AST_NODE_TYPE_MODULE:
             case AST_NODE_TYPE_EXPRESSION_CASE: UNREACHABLE();
         }
@@ -499,11 +498,6 @@ static void resolve_foldable(
             }
 
             foldable = true;
-            break;
-        }
-
-        case AST_NODE_TYPE_EXPRESSION_PRINT:
-        case AST_NODE_TYPE_EXPRESSION_PRINT_EXPR: {
             break;
         }
 
@@ -1459,13 +1453,6 @@ void resolve_expression(
             fold_function_signature(analyzer, ast, expression);
 
             expression->value_type = typeid(TYPE_TYPE);
-            break;
-        }
-
-        case AST_NODE_TYPE_EXPRESSION_PRINT:
-        case AST_NODE_TYPE_EXPRESSION_PRINT_EXPR: {
-            resolve_expression(analyzer, ast, state, an_operand(expression));
-            expression->value_type = typeid(TYPE_VOID);
             break;
         }
 

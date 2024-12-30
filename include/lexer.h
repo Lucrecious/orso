@@ -31,9 +31,6 @@ enum token_type_t {
     TOKEN_TRUE, TOKEN_FALSE, TOKEN_NULL,
     TOKEN_RETURN,
 
-    // builtin functions
-    TOKEN_PRINT_EXPR, TOKEN_PRINT,
-
     TOKEN_ERROR, TOKEN_EOF, TOKEN_SIZE,
 };
 

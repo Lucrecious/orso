@@ -117,7 +117,7 @@ int main(int argc, char **argv) {
     ast_init(&ast, megabytes(2));
 
     // bool success = parse_expr_cstr(&ast, "1/{2;}", lit2str(""));
-    bool success = parse_expr_cstr(&ast, "{ x := 2 != 3; x; }", lit2str(""));
+    bool success = parse_expr_cstr(&ast, "{ x := 1; y := 2; z = if x > y then x else y; }", lit2str(""));
     unless (success) return 1;
 
     if (cgen) {

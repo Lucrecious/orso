@@ -240,15 +240,6 @@ static token_type_t identifier_type(lexer_t *lexer) {
             break;
         }
         case 'o': return check_keyword(lexer, 1, 1, "r", TOKEN_OR);
-        case 'p':
-            if (memcmp(lexer->start + 1, "rint", 4) == 0) {
-                if (lexer->current - lexer->start == 5) {
-                    return TOKEN_PRINT;
-                }
-
-                return check_keyword(lexer, 1, 9, "rint_expr", TOKEN_PRINT_EXPR);
-            }
-            break;
         case 'r': return check_keyword(lexer, 1, 5, "eturn", TOKEN_RETURN);
         case 's': return check_keyword(lexer, 1, 5, "truct", TOKEN_STRUCT);
         case 't':

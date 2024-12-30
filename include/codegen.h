@@ -443,9 +443,7 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
         case AST_NODE_TYPE_EXPRESSION_RETURN:
         case AST_NODE_TYPE_NONE:
         case AST_NODE_TYPE_DECLARATION_DEFINITION:
-        case AST_NODE_TYPE_EXPRESSION_PRINT:
-        case AST_NODE_TYPE_MODULE:
-        case AST_NODE_TYPE_EXPRESSION_PRINT_EXPR: ASSERT(false, "not implemented");
+        case AST_NODE_TYPE_MODULE: ASSERT(false, "not implemented");
     }
 }
 
