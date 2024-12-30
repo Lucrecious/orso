@@ -1396,11 +1396,6 @@ void resolve_expression(
             }
 
             if (branch_return_guarentee == RETURN_GUARENTEE_NONE) {
-                type_t else_block_type = typeid(TYPE_VOID);
-                if (an_is(an_else(expression))) {
-                    else_block_type = an_else(expression)->value_type;
-                }
-
                 if (!typeid_eq(an_then(expression)->value_type, an_else(expression)->value_type)) {
                     INVALIDATE(expression);
                 } else {

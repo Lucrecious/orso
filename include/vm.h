@@ -35,6 +35,27 @@ enum op_code_t {
     OP_MULD_REG_REG,
     OP_DIVD_REG_REG,
 
+    OP_GTD_REG_REG,
+    OP_GED_REG_REG,
+    OP_LTD_REG_REG,
+    OP_LED_REG_REG,
+    OP_EQD_REG_REG,
+    OP_NQD_REG_REG,
+
+    OP_GTI_REG_REG,
+    OP_GEI_REG_REG,
+    OP_LTI_REG_REG,
+    OP_LEI_REG_REG,
+    OP_EQI_REG_REG,
+    OP_NQI_REG_REG,
+
+    OP_GTU_REG_REG,
+    OP_GEU_REG_REG,
+    OP_LTU_REG_REG,
+    OP_LEU_REG_REG,
+    OP_EQU_REG_REG,
+    OP_NQU_REG_REG,
+
     OP_RETURN,
 };
 
@@ -121,6 +142,7 @@ void vm_step(vm_t *vm);
 
 #endif
 
+// #define VM_IMPLEMENTATION
 #ifdef VM_IMPLEMENTATION
 
 function_t *new_function(string_t file_path, memarr_t *memory, arena_t *arena) {
@@ -253,137 +275,51 @@ void vm_step(vm_t *vm) {
             break;
         }
 
-        case OP_ADDI_REG_REG: {
-            byte a = instruction.as.bin_reg_to_reg.reg_op1;
-            byte b = instruction.as.bin_reg_to_reg.reg_op2;
-            byte c = instruction.as.bin_reg_to_reg.reg_result;
+        #define case_bin_reg_reg(name, v, op) case OP_##name##_REG_REG: {\
+            byte a = instruction.as.bin_reg_to_reg.reg_op1; \
+            byte b = instruction.as.bin_reg_to_reg.reg_op2; \
+            byte c = instruction.as.bin_reg_to_reg.reg_result; \
+            vm->registers[c].as.v = vm->registers[a].as.v op vm->registers[b].as.v;\
+            IP_ADV(1); \
+            break; \
+        }\
+        break
 
-            vm->registers[c].as.i = vm->registers[a].as.i + vm->registers[b].as.i;
+        case_bin_reg_reg(ADDI, i, +);
+        case_bin_reg_reg(SUBI, i, -);
+        case_bin_reg_reg(MULI, i, *);
+        case_bin_reg_reg(DIVI, i, /);
 
-            IP_ADV(1);
-            break;
-        }
+        case_bin_reg_reg(ADDU, u, +);
+        case_bin_reg_reg(SUBU, u, -);
+        case_bin_reg_reg(MULU, u, *);
+        case_bin_reg_reg(DIVU, u, /);
 
-        case OP_SUBI_REG_REG: {
-            byte a = instruction.as.bin_reg_to_reg.reg_op1;
-            byte b = instruction.as.bin_reg_to_reg.reg_op2;
-            byte c = instruction.as.bin_reg_to_reg.reg_result;
+        case_bin_reg_reg(ADDD, d, +);
+        case_bin_reg_reg(SUBD, d, -);
+        case_bin_reg_reg(MULD, d, *);
+        case_bin_reg_reg(DIVD, d, /);
 
-            vm->registers[c].as.i = vm->registers[a].as.i - vm->registers[b].as.i;
+        case_bin_reg_reg(GTI, i, >);
+        case_bin_reg_reg(GEI, i, >=);
+        case_bin_reg_reg(LTI, i, <);
+        case_bin_reg_reg(LEI, i, <=);
+        case_bin_reg_reg(EQI, i, ==);
+        case_bin_reg_reg(NQI, i, !=);
 
-            IP_ADV(1);
-            break;
-        }
+        case_bin_reg_reg(GTU, u, >);
+        case_bin_reg_reg(GEU, u, >=);
+        case_bin_reg_reg(LTU, u, <);
+        case_bin_reg_reg(LEU, u, <=);
+        case_bin_reg_reg(EQU, u, ==);
+        case_bin_reg_reg(NQU, u, !=);
 
-        case OP_MULI_REG_REG: {
-            byte a = instruction.as.bin_reg_to_reg.reg_op1;
-            byte b = instruction.as.bin_reg_to_reg.reg_op2;
-            byte c = instruction.as.bin_reg_to_reg.reg_result;
-
-            vm->registers[c].as.i = vm->registers[a].as.i * vm->registers[b].as.i;
-
-            IP_ADV(1);
-            break;
-        }
-
-        case OP_DIVI_REG_REG: {
-            byte a = instruction.as.bin_reg_to_reg.reg_op1;
-            byte b = instruction.as.bin_reg_to_reg.reg_op2;
-            byte c = instruction.as.bin_reg_to_reg.reg_result;
-
-            vm->registers[c].as.i = vm->registers[a].as.i / vm->registers[b].as.i;
-
-            IP_ADV(1);
-            break;
-        }
-
-        case OP_ADDU_REG_REG: {
-            byte a = instruction.as.bin_reg_to_reg.reg_op1;
-            byte b = instruction.as.bin_reg_to_reg.reg_op2;
-            byte c = instruction.as.bin_reg_to_reg.reg_result;
-
-            vm->registers[c].as.u = vm->registers[a].as.u + vm->registers[b].as.u;
-
-            IP_ADV(1);
-            break;
-        }
-
-        case OP_SUBU_REG_REG: {
-            byte a = instruction.as.bin_reg_to_reg.reg_op1;
-            byte b = instruction.as.bin_reg_to_reg.reg_op2;
-            byte c = instruction.as.bin_reg_to_reg.reg_result;
-
-            vm->registers[c].as.u = vm->registers[a].as.u - vm->registers[b].as.u;
-
-            IP_ADV(1);
-            break;
-        }
-
-        case OP_MULU_REG_REG: {
-            byte a = instruction.as.bin_reg_to_reg.reg_op1;
-            byte b = instruction.as.bin_reg_to_reg.reg_op2;
-            byte c = instruction.as.bin_reg_to_reg.reg_result;
-
-            vm->registers[c].as.u = vm->registers[a].as.u * vm->registers[b].as.u;
-
-            IP_ADV(1);
-            break;
-        }
-
-        case OP_DIVU_REG_REG: {
-            byte a = instruction.as.bin_reg_to_reg.reg_op1;
-            byte b = instruction.as.bin_reg_to_reg.reg_op2;
-            byte c = instruction.as.bin_reg_to_reg.reg_result;
-
-            vm->registers[c].as.u = vm->registers[a].as.u / vm->registers[b].as.u;
-
-            IP_ADV(1);
-            break;
-        }
-
-        case OP_ADDD_REG_REG: {
-            byte a = instruction.as.bin_reg_to_reg.reg_op1;
-            byte b = instruction.as.bin_reg_to_reg.reg_op2;
-            byte c = instruction.as.bin_reg_to_reg.reg_result;
-
-            vm->registers[c].as.d = vm->registers[a].as.d + vm->registers[b].as.d;
-
-            IP_ADV(1);
-            break;
-        }
-
-        case OP_SUBD_REG_REG: {
-            byte a = instruction.as.bin_reg_to_reg.reg_op1;
-            byte b = instruction.as.bin_reg_to_reg.reg_op2;
-            byte c = instruction.as.bin_reg_to_reg.reg_result;
-
-            vm->registers[c].as.d = vm->registers[a].as.d - vm->registers[b].as.d;
-
-            IP_ADV(1);
-            break;
-        }
-
-        case OP_MULD_REG_REG: {
-            byte a = instruction.as.bin_reg_to_reg.reg_op1;
-            byte b = instruction.as.bin_reg_to_reg.reg_op2;
-            byte c = instruction.as.bin_reg_to_reg.reg_result;
-
-            vm->registers[c].as.d = vm->registers[a].as.d * vm->registers[b].as.d;
-
-            IP_ADV(1);
-            break;
-        }
-
-        case OP_DIVD_REG_REG: {
-            byte a = instruction.as.bin_reg_to_reg.reg_op1;
-            byte b = instruction.as.bin_reg_to_reg.reg_op2;
-            byte c = instruction.as.bin_reg_to_reg.reg_result;
-
-            vm->registers[c].as.d = vm->registers[a].as.d / vm->registers[b].as.d;
-
-            IP_ADV(1);
-            break;
-        }
+        case_bin_reg_reg(GTD, d, >);
+        case_bin_reg_reg(GED, d, >=);
+        case_bin_reg_reg(LTD, d, <);
+        case_bin_reg_reg(LED, d, <=);
+        case_bin_reg_reg(EQD, d, ==);
+        case_bin_reg_reg(NQD, d, !=);
 
         case OP_RETURN: {
             vm->halted = true;

@@ -137,7 +137,7 @@ void emit_pop_to_wordreg(gen_t *gen, text_location_t text_location, function_t *
 
 static void emit_binary(text_location_t text_location, function_t *function, token_type_t token_type, type_info_t *type_info, reg_t op1, reg_t op2, reg_t result) {
     instruction_t instruction = {0};
-    ASSERT(type_info->kind == TYPE_NUMBER, "for now only numbers");
+    ASSERT(type_info->kind == TYPE_NUMBER || type_info->kind == TYPE_BOOL, "for now only numbers");
 
     switch (token_type) {
         case TOKEN_PLUS: {
@@ -171,6 +171,60 @@ static void emit_binary(text_location_t text_location, function_t *function, tok
                 case NUM_TYPE_FLOAT: instruction.op = OP_DIVD_REG_REG; break;
                 case NUM_TYPE_SIGNED: instruction.op = OP_DIVI_REG_REG; break;
                 case NUM_TYPE_UNSIGNED: instruction.op = OP_DIVU_REG_REG; break;
+            }
+            break;
+        }
+
+        case TOKEN_GREATER: {
+            switch (type_info->data.num) {
+                case NUM_TYPE_FLOAT: instruction.op = OP_GTD_REG_REG; break;
+                case NUM_TYPE_SIGNED: instruction.op = OP_GTI_REG_REG; break;
+                case NUM_TYPE_UNSIGNED: instruction.op = OP_GTU_REG_REG; break;
+            }
+            break;
+        }
+
+        case TOKEN_GREATER_EQUAL: {
+            switch (type_info->data.num) {
+                case NUM_TYPE_FLOAT: instruction.op = OP_GED_REG_REG; break;
+                case NUM_TYPE_SIGNED: instruction.op = OP_GEI_REG_REG; break;
+                case NUM_TYPE_UNSIGNED: instruction.op = OP_GEU_REG_REG; break;
+            }
+            break;
+        }
+
+        case TOKEN_LESS:{
+            switch (type_info->data.num) {
+                case NUM_TYPE_FLOAT: instruction.op = OP_LTD_REG_REG; break;
+                case NUM_TYPE_SIGNED: instruction.op = OP_LTI_REG_REG; break;
+                case NUM_TYPE_UNSIGNED: instruction.op = OP_LTU_REG_REG; break;
+            }
+            break;
+        }
+
+        case TOKEN_LESS_EQUAL: {
+            switch (type_info->data.num) {
+                case NUM_TYPE_FLOAT: instruction.op = OP_LED_REG_REG; break;
+                case NUM_TYPE_SIGNED: instruction.op = OP_LEI_REG_REG; break;
+                case NUM_TYPE_UNSIGNED: instruction.op = OP_LEU_REG_REG; break;
+            }
+            break;
+        }
+
+        case TOKEN_EQUAL_EQUAL: {
+            switch (type_info->data.num) {
+                case NUM_TYPE_FLOAT: instruction.op = OP_EQD_REG_REG; break;
+                case NUM_TYPE_SIGNED: instruction.op = OP_EQI_REG_REG; break;
+                case NUM_TYPE_UNSIGNED: instruction.op = OP_EQU_REG_REG; break;
+            }
+            break;
+        }
+
+        case TOKEN_BANG_EQUAL: {
+            switch (type_info->data.num) {
+                case NUM_TYPE_FLOAT: instruction.op = OP_NQD_REG_REG; break;
+                case NUM_TYPE_SIGNED: instruction.op = OP_NQI_REG_REG; break;
+                case NUM_TYPE_UNSIGNED: instruction.op = OP_NQU_REG_REG; break;
             }
             break;
         }

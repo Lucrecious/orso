@@ -80,6 +80,27 @@ static string_t disassemble_instruction(instruction_t instruction, arena_t *allo
         case OP_MULD_REG_REG: return OP_BIN_REG_REG(MULD);
         case OP_DIVD_REG_REG: return OP_BIN_REG_REG(DIVD);
 
+        case OP_GTU_REG_REG: return OP_BIN_REG_REG(GTU);
+        case OP_GEU_REG_REG: return OP_BIN_REG_REG(GEU);
+        case OP_LTU_REG_REG: return OP_BIN_REG_REG(LTU);
+        case OP_LEU_REG_REG: return OP_BIN_REG_REG(LEU);
+        case OP_EQU_REG_REG: return OP_BIN_REG_REG(EQU);
+        case OP_NQU_REG_REG: return OP_BIN_REG_REG(NQU);
+
+        case OP_GTI_REG_REG: return OP_BIN_REG_REG(GTI);
+        case OP_GEI_REG_REG: return OP_BIN_REG_REG(GEI);
+        case OP_LTI_REG_REG: return OP_BIN_REG_REG(LTI);
+        case OP_LEI_REG_REG: return OP_BIN_REG_REG(LEI);
+        case OP_EQI_REG_REG: return OP_BIN_REG_REG(EQI);
+        case OP_NQI_REG_REG: return OP_BIN_REG_REG(NQI);
+
+        case OP_GTD_REG_REG: return OP_BIN_REG_REG(GTD);
+        case OP_GED_REG_REG: return OP_BIN_REG_REG(GED);
+        case OP_LTD_REG_REG: return OP_BIN_REG_REG(LTD);
+        case OP_LED_REG_REG: return OP_BIN_REG_REG(LED);
+        case OP_EQD_REG_REG: return OP_BIN_REG_REG(EQD);
+        case OP_NQD_REG_REG: return OP_BIN_REG_REG(NQD);
+
         #undef OP_BIN_REG_REG
 
         case OP_RETURN: return lit2str("OP_RETURN");
