@@ -32,7 +32,6 @@ typedef enum type_kind_t {
     TYPE_VOID,             // null
     TYPE_BOOL,             // true false
     TYPE_STRING,           // "anything in here"
-    TYPE_SYMBOL,           // 'anything in here'
     TYPE_TYPE,             // i32, void, type, () -> void, etc
     
     // "complex" types

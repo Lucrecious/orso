@@ -6,6 +6,7 @@
 #include "type_set.h"
 #include "error.h"
 #include "vm.h"
+#include "tmp.h"
 
 #include <time.h>
 
@@ -24,8 +25,6 @@ static void clock_native(word_t *arguments, word_t *result) {
     result[0] = WORDD((double)clock() / CLOCKS_PER_SEC);
 }
 
-typedef symbol_table_t SymbolTable;
-
 typedef enum ExpressionFoldingMode {
     MODE_RUNTIME = 0x1,
     MODE_CONSTANT_TIME = 0x2,
@@ -35,7 +34,7 @@ typedef enum ExpressionFoldingMode {
 typedef struct AnalysisState {
     i32 fold_level;
     ExpressionFoldingMode mode;
-    scope_t* scope;
+    scope_t *scope;
 } AnalysisState;
 
 typedef struct definition_t {
@@ -53,7 +52,7 @@ static void scope_init(scope_t *scope, arena_t *allocator, scope_type_t type, sc
     scope->outer = outer;
     scope->creator = creator_expression;
     scope->type = type;
-    symbol_table_init(&scope->named_entities, allocator);
+    scope->definitions = table_new(s2w, allocator);
 }
 
 static scope_t *scope_copy_new(scope_t *scope, arena_t *allocator) {
@@ -63,17 +62,16 @@ static scope_t *scope_copy_new(scope_t *scope, arena_t *allocator) {
 
     scope_t *scope_copy = arena_alloc(allocator, sizeof(scope_t));
     scope_init(scope_copy, allocator, scope->type, NULL, scope->creator);
-    symbol_table_add_all(&scope->named_entities, &scope_copy->named_entities);
 
-    for (i32 i = 0; i < scope_copy->named_entities.capacity; i++) {
-        symbol_table_entry_t* entry = &scope_copy->named_entities.entries[i];
-        if (entry->key == NULL) {
-            continue;
+    for (tbliter_t i = table_begin(s2w, scope->definitions); i != table_end(s2w, scope->definitions); ++i) {
+        if (kh_exist(scope->definitions, i)) {
+            string_t s = scope->definitions->keys[i];
+            definition_t *def = (definition_t*)scope->definitions->vals[i].as.p;
+
+            definition_t *def_copy = (definition_t*)arena_alloc(allocator, sizeof(definition_t));
+            *def_copy = *def;
+            table_put(s2w, scope_copy->definitions, string_copy(s, allocator), WORDP(def_copy));
         }
-
-        definition_t* entity_copy = (definition_t*)arena_alloc(allocator, sizeof(definition_t));
-        *entity_copy = *((definition_t*)entry->value.as.p);
-        entry->value = WORDP(entity_copy);
     }
 
     scope_copy->outer = scope_copy_new(scope->outer, allocator);
@@ -81,21 +79,21 @@ static scope_t *scope_copy_new(scope_t *scope, arena_t *allocator) {
     return scope_copy;
 }
 
-static void add_definition(scope_t *scope, arena_t *allocator, symbol_t *identifier, ast_node_t *declaration_node) {
+static void add_definition(scope_t *scope, arena_t *allocator, string_view_t identifier, ast_node_t *declaration_node) {
     definition_t *def = arena_alloc(allocator, sizeof(definition_t));
     def->node = declaration_node;
     def->value_index = value_index_nil();
 
-    symbol_table_set(&scope->named_entities, identifier, WORDP(def));
+    table_put(s2w, scope->definitions, sv2string(identifier, allocator), WORDP(def));
 }
 
-static definition_t *add_builtin_definition(ast_t *ast, symbol_t *identifier, type_t type, value_index_t value_index) {
+static definition_t *add_builtin_definition(ast_t *ast, string_view_t identifier, type_t type, value_index_t value_index) {
     definition_t *def = arena_alloc(&ast->allocator, sizeof(definition_t));
     def->node = &nil_node;
     def->value_index = value_index;
     def->declared_type = type;
 
-    symbol_table_set(&ast->builtins, identifier, WORDP(def));
+    table_put(s2w, ast->builtins, sv2string(identifier, &ast->allocator), WORDP(def));
 
     return def;
 }
@@ -223,10 +221,9 @@ static definition_t* get_resolved_entity_by_identifier(
         EntityQuery* query,
         scope_t** found_scope);
 
-static bool is_builtin_type(type_table_t *t, symbol_t *identifier, type_t *type) {
+static bool is_builtin_type(type_table_t *t, string_view_t identifier, type_t *type) {
 #define RETURN_IF_TYPE(SYMBOL, TYPE_STRING, TYPE) \
-if (strlen(SYMBOL->text) == (sizeof(#TYPE_STRING) - 1) && \
-    memcmp(SYMBOL->text, #TYPE_STRING, (sizeof(#TYPE_STRING) - 1)) == 0) { \
+if (sv_eq(identifier, lit2sv(#TYPE_STRING))) {\
     *type = (TYPE); \
     return true; \
 }
@@ -238,8 +235,7 @@ if (strlen(SYMBOL->text) == (sizeof(#TYPE_STRING) - 1) && \
 #undef RETURN_IF_TYPE
 
 #define RETURN_IF_TYPE(SYMBOL, TYPE_STRING, TYPE) \
-if (strlen(SYMBOL->text) == (sizeof(#TYPE_STRING) - 1) && \
-    memcmp(SYMBOL->text, #TYPE_STRING, (sizeof(#TYPE_STRING) - 1)) == 0) { \
+if (sv_eq(identifier, lit2sv(#TYPE_STRING))){\
     *type = typeid(TYPE); \
     return true; \
 }
@@ -247,7 +243,6 @@ if (strlen(SYMBOL->text) == (sizeof(#TYPE_STRING) - 1) && \
     RETURN_IF_TYPE(identifier, void, TYPE_INVALID)
     RETURN_IF_TYPE(identifier, bool, TYPE_BOOL)
     RETURN_IF_TYPE(identifier, string, TYPE_STRING)
-    RETURN_IF_TYPE(identifier, symbol, TYPE_SYMBOL)
     RETURN_IF_TYPE(identifier, type, TYPE_TYPE)
 #undef RETURN_IF_TYPE
 
@@ -256,8 +251,8 @@ if (strlen(SYMBOL->text) == (sizeof(#TYPE_STRING) - 1) && \
 #undef RETURN_IF_TYPE
 }
 
-static bool is_builtin_function(ast_t *ast, symbol_t *identifier, native_function_t **function) {
-    if (identifier->length == 5 && strncmp(identifier->text, "clock", 5) == 0) {
+static bool is_builtin_function(ast_t *ast, string_view_t identifier, native_function_t **function) {
+    if (sv_eq(identifier, lit2sv("clock"))) {
         type_t function_type = type_set_fetch_native_function(&ast->type_set, ast->type_set.i64_, (types_t){0});
         *function = orso_new_native_function(clock_native, function_type, &ast->allocator);
         return true;
@@ -356,7 +351,7 @@ static void resolve_foldable(
             if (expression->as.initiailizer.arguments.count == 0) {
                 foldable = true;
                 type_t type = get_folded_type(ast, expression->as.initiailizer.type->value_index);
-                value_index_t value_index = zero_value(ast, type, &ast->symbols);
+                value_index_t value_index = zero_value(ast, type);
                 folded_index = value_index;
             } else {
                 foldable = true;
@@ -1341,7 +1336,7 @@ void resolve_expression(
         case AST_NODE_TYPE_EXPRESSION_BRANCHING: {
             resolve_expression(analyzer, ast, state, an_condition(expression));
 
-            scope_t* then_scope = scope_copy_new(state.scope, &analyzer->allocator);
+            scope_t *then_scope = scope_copy_new(state.scope, &analyzer->allocator);
             AnalysisState then_state = state;
             then_state.scope = then_scope;
             resolve_expression(analyzer, ast, then_state, an_then(expression));
@@ -1502,16 +1497,21 @@ void resolve_expression(
 }
 
 static void declare_entity(analyzer_t *analyzer, scope_t *scope, ast_node_t *entity) {
-    symbol_t *identifier = orso_unmanaged_symbol_from_cstrn(entity->start.view.data, entity->start.view.length, &analyzer->symbols, &analyzer->allocator);
-    word_t word_type_pair;
-    if (symbol_table_get(&scope->named_entities, identifier, &word_type_pair)) {
+    word_t def_word;
+    
+    tmp_arena_t *tmp = allocator_borrow();
+    string_t identifier = sv2string(entity->identifier.view, tmp->allocator);
+
+    if (table_get(s2w, scope->definitions, identifier, &def_word)) {
         const char message[126];
         snprintf((char*)message, 126, "Duplicate entity definition of '%.*s'.", (int)entity->start.view.length, entity->start.view.data);
         error_token(analyzer, entity->start, ERROR_ANALYSIS_CANNOT_OVERLOAD_ENTITY_DEFINITION);
         return;
     }
 
-    add_definition(scope, &analyzer->allocator, identifier, entity);
+    add_definition(scope, &analyzer->allocator, string2sv(identifier), entity);
+
+    allocator_return(tmp);
 }
 
 static void resolve_declaration_definition(analyzer_t* analyzer, ast_t* ast, AnalysisState state, ast_node_t* declaration) {
@@ -1573,14 +1573,22 @@ static void resolve_declaration_definition(analyzer_t* analyzer, ast_t* ast, Ana
         }
     }
 
-    word_t entity_slot;
-    symbol_t *name = orso_unmanaged_symbol_from_cstrn(declaration->start.view.data, declaration->start.view.length, &analyzer->symbols, &ast->allocator);
+    word_t def_word;
 
-    ASSERT(symbol_table_get(&state.scope->named_entities, name, &entity_slot), "should be forward_declared already");
+    {
+        tmp_arena_t *tmp = allocator_borrow();
+        string_t name = sv2string(declaration->identifier.view, tmp->allocator);
 
-    symbol_table_get(&state.scope->named_entities, name, &entity_slot);
+        ASSERT(table_get(s2w, state.scope->definitions, name, &def_word), "should be forward_declared already");
 
-    definition_t *def = (definition_t*)entity_slot.as.p;
+        table_get(s2w, state.scope->definitions, name, &def_word);
+
+        allocator_return(tmp);
+    }
+
+    
+
+    definition_t *def = (definition_t*)def_word.as.p;
 
     // we are resolved
     if (is_declaration_resolved(declaration)) {
@@ -1638,10 +1646,7 @@ static void resolve_declaration_definition(analyzer_t* analyzer, ast_t* ast, Ana
                 ASSERT(false, "todo");
             }
 
-            // function_t_ *function = arena_array_get_t(&ast->constants, INITIAL_EXPRESSION->value_index, function_t_*);
-            // if (function->binded_name == NULL) {
-            //     function->binded_name = name;
-            // }
+            // todo bind name to a function?? 
         }
 
         if (!an_is_none(an_decl_expr(declaration))
@@ -1704,7 +1709,7 @@ static void resolve_declaration_definition(analyzer_t* analyzer, ast_t* ast, Ana
         value_index_t value_index = value_index_nil();
 
         unless (TYPE_IS_INVALID(def->node->value_type)) {
-            value_index = zero_value(ast, def->node->value_type, &analyzer->symbols);
+            value_index = zero_value(ast, def->node->value_type);
         }
 
         def->node->value_index = value_index;
@@ -1718,9 +1723,12 @@ static void resolve_declaration_definition(analyzer_t* analyzer, ast_t* ast, Ana
 
 }
 
-static definition_t *get_builtin_entity(ast_t *ast, symbol_t *identifier) {
+static definition_t *get_builtin_entity(ast_t *ast, string_view_t identifier) {
+    tmp_arena_t *tmp = allocator_borrow();
+    string_t identifier_ = sv2string(identifier, tmp->allocator);
+
     word_t entity_slot;
-    unless (symbol_table_get(&ast->builtins, identifier, &entity_slot)) {
+    unless (table_get(s2w, ast->builtins, identifier_, &entity_slot)) {
         type_t type;
         native_function_t *function;
         bool has_value = false;
@@ -1746,6 +1754,8 @@ static definition_t *get_builtin_entity(ast_t *ast, symbol_t *identifier) {
     }
 
     definition_t *entity = (definition_t*)entity_slot.as.p;
+
+    allocator_return(tmp);
     return entity;
 }
 
@@ -1817,11 +1827,9 @@ static definition_t *get_resolved_entity_by_identifier(
 
     bool passed_local_mutable_access_barrier = false;
 
-    symbol_t *identifier = orso_unmanaged_symbol_from_cstrn(identifier_token.view.data, identifier_token.view.length, &analyzer->symbols, &ast->allocator);
-    
     // early return if looking at a built in type
     {
-        definition_t *entity = get_builtin_entity(ast, identifier);
+        definition_t *entity = get_builtin_entity(ast, identifier_token.view);
         if (entity) {
             search_scope = NULL;
             return entity;
@@ -1839,10 +1847,18 @@ static definition_t *get_resolved_entity_by_identifier(
         if (query->flags & QUERY_FLAG_MATCH_ONLY_IN_GIVEN_SCOPE) { break; }\
         *search_scope = (*search_scope)->outer
 
-        unless (symbol_table_get(&(*search_scope)->named_entities, identifier, &entity_slot)) {
-            NEXT_SCOPE();
-            continue;
+        {
+            tmp_arena_t *tmp = allocator_borrow();
+            string_t identifier_ = sv2string(identifier_token.view, tmp->allocator);
+
+            unless (table_get(s2w, (*search_scope)->definitions, identifier_, &entity_slot)) {
+                NEXT_SCOPE();
+                continue;
+            }
+
+            allocator_return(tmp);
         }
+
 
         definition_t *entity = (definition_t*)entity_slot.as.p;
 
@@ -2067,19 +2083,20 @@ static void resolve_function_expression(
     }
 
     type_t function_type = type_set_fetch_function(&ast->type_set, return_type, parameter_types);
-    function_t_ *function = orso_new_function(function_definition_expression->start.file_path, &analyzer->allocator);
-    function->signature = function_type;
+    // todo
+    // function_t_ *function = orso_new_function(function_definition_expression->start.file_path, &analyzer->allocator);
+    // function->signature = function_type;
 
-    array_push(&ast->function_definition_pairs, ((function_definition_pair_t){
-        .ast_defintion = function_definition_expression,
-        .function = function
-    }));
+    // array_push(&ast->function_definition_pairs, ((function_definition_pair_t){
+    //     .ast_defintion = function_definition_expression,
+    //     .function = function
+    // }));
 
     
-    function_definition_expression->foldable = true;
-    word_t function_slot_value = WORDP(function);
-    value_index_t function_constant_index = add_value_to_ast_constant_stack(ast, &function_slot_value, function_type);
-    function_definition_expression->value_index = function_constant_index;
+    // function_definition_expression->foldable = true;
+    // word_t function_slot_value = WORDP(function);
+    // value_index_t function_constant_index = add_value_to_ast_constant_stack(ast, &function_slot_value, function_type);
+    // function_definition_expression->value_index = function_constant_index;
 
     // TODO: Maybe use a marco defined for this file for setting both the value and type, maybe an inlined function
     function_definition_expression->value_type = function_type;
@@ -2504,17 +2521,10 @@ void analyzer_init(analyzer_t* analyzer, write_function_t write_fn, error_functi
     // TODO: fix
     (void)write_fn;
 
-    symbol_table_init(&analyzer->symbols, &analyzer->allocator);
+    analyzer->symbols = table_new(s2w, &analyzer->allocator);
 }
 
 void analyzer_free(analyzer_t* analyzer) {
-    for (i32 i = 0; i < analyzer->symbols.capacity; i++) {
-        symbol_table_entry_t* entry = &analyzer->symbols.entries[i];
-        if (entry->key == NULL) {
-            continue;
-        }
-    }
-
     analyzer->dependencies.count = 0;
 
     analyzer->ast = NULL;

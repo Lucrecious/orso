@@ -2,7 +2,6 @@
 
 #include <stdio.h>
 
-#include "symbol_table.h"
 #include "type_set.h"
 #include "tmp.h"
 
@@ -69,36 +68,33 @@ string_t bytes_to_string(byte *data, type_infos_t *types, type_t type, arena_t *
 
         case TYPE_STRING: return cstrn2string(cast(data, OrsoString*)->text, cast(data, OrsoString*)->length, allocator);
 
-        case TYPE_SYMBOL: return string_format("'%s'", allocator, (char*)cast(data, symbol_t*)->text);
-
         case TYPE_FUNCTION: {
-            string_t string;
+            // string_t string;
 
-            tmp_arena_t *tmp = allocator_borrow(); {
-                string_builder_t sb = {.allocator = tmp->allocator};
+            // tmp_arena_t *tmp = allocator_borrow(); {
+            //     string_builder_t sb = {.allocator = tmp->allocator};
 
-                function_t_ *function = cast(data, function_t_*);
-                sb_add_cstr(&sb, string_format("<%s :: (", tmp->allocator,
-                    function->binded_name ? function->binded_name->text : "<anonymous>").cstr);
+            //     sb_add_cstr(&sb, string_format("<%s :: (", tmp->allocator,
+            //         function->binded_name ? function->binded_name->text : "<anonymous>").cstr);
                 
-                type_info_t *signature = get_type_info(types, function->signature);
+            //     type_info_t *signature = get_type_info(types, function->signature);
 
-                for (size_t i = 0; i < signature->data.function.argument_types.count; ++i) {
-                    string_t arg_type = type_to_string(*types, signature->data.function.argument_types.items[i], tmp->allocator);
-                    sb_add_cstr(&sb, arg_type.cstr);
+            //     for (size_t i = 0; i < signature->data.function.argument_types.count; ++i) {
+            //         string_t arg_type = type_to_string(*types, signature->data.function.argument_types.items[i], tmp->allocator);
+            //         sb_add_cstr(&sb, arg_type.cstr);
 
-                    if (i < signature->data.function.argument_types.count - 1)  {
-                        sb_add_cstr(&sb, ", ");
-                    }
-                }
+            //         if (i < signature->data.function.argument_types.count - 1)  {
+            //             sb_add_cstr(&sb, ", ");
+            //         }
+            //     }
 
-                string_t return_type_string = type_to_string(*types, signature->data.function.return_type, tmp->allocator);
-                sb_add_cstr(&sb, string_format(") -> %s>", tmp->allocator, return_type_string.cstr).cstr);
+            //     string_t return_type_string = type_to_string(*types, signature->data.function.return_type, tmp->allocator);
+            //     sb_add_cstr(&sb, string_format(") -> %s>", tmp->allocator, return_type_string.cstr).cstr);
 
-                string = sb_render(&sb, allocator);
-            } allocator_return(tmp);
+            //     string = sb_render(&sb, allocator);
+            // } allocator_return(tmp);
 
-            return string;
+            return lit2str("<fn:todo>");
         }
 
         case TYPE_NATIVE_FUNCTION: {
@@ -168,17 +164,7 @@ OrsoString *orso_string_concat(OrsoString *a, OrsoString *b, arena_t *allocator)
     return string;
 }
 
-function_t_ *orso_new_function(string_t file_defined_in, arena_t *allocator) {
-    function_t_ *function = (function_t_*)object_new(sizeof(function_t_), typeid(TYPE_FUNCTION), allocator);
-    function->signature = typeid(TYPE_FUNCTION);
-    function->binded_name = NULL;
-    function->file_defined_in = file_defined_in;
-
-    return function;
-}
-
-bool is_function_compiled(function_t_* function) {
-    UNUSED(function);
+bool is_function_compiled() {
     return false;
 }
 
@@ -239,42 +225,4 @@ f64 cstrn_to_f64(const char* text, i32 length) {
     }
 
     return value * fact;
-}
-
-symbol_t *orso_unmanaged_symbol_from_cstrn(const char *start, i32 length, symbol_table_t *symbol_table, arena_t *allocator) {
-    u32 hash = hash_cstrn(start, length);
-    symbol_t *symbol = symbol_table_find_cstrn(symbol_table, start, length, hash);
-    if (symbol != NULL) {
-        return symbol;
-    }
-
-    symbol = (symbol_t*)object_new(sizeof(symbol_t) + (length + 1)*sizeof(char), typeid(TYPE_SYMBOL), allocator);
-    symbol->hash = hash;
-    symbol->length = length;
-    memcpy(symbol->text, start, length);
-    symbol->text[length] = '\0';
-
-    word_t word = WORDI(0);
-    symbol_table_set(symbol_table, symbol, word);
-
-    return symbol;
-}
-
-symbol_t *orso_new_symbol_from_cstrn(const char *start, i32 length, symbol_table_t *symbol_table, arena_t *allocator) {
-    u32 hash = hash_cstrn(start, length);
-    symbol_t* symbol = symbol_table_find_cstrn(symbol_table, start, length, hash);
-    if (symbol != NULL) {
-        return symbol;
-    }
-
-    symbol = (symbol_t*)object_new(sizeof(symbol_t) + (length+1)*sizeof(char), typeid(TYPE_SYMBOL), allocator);
-    symbol->hash = hash;
-    symbol->length = length;
-    memcpy(symbol->text, start, length);
-    symbol->text[length] = '\0';
-
-    word_t word = WORDI(0);
-    symbol_table_set(symbol_table, symbol, word);
-
-    return symbol;
 }

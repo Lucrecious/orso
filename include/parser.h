@@ -3,7 +3,6 @@
 
 #include "lexer.h"
 #include "object.h"
-#include "symbol_table.h"
 #include "type.h"
 #include "type_set.h"
 #include "arena.h"
@@ -36,15 +35,17 @@ typedef enum scope_type_t {
     SCOPE_TYPE_STRUCT,
 } scope_type_t;
 
+declare_table(s2w, string_t, word_t)
+
 typedef struct scope_t {
     ast_node_t *creator;
-    symbol_table_t named_entities;
+    
+    table_t(s2w) *definitions;
     scope_type_t type;
     struct scope_t *outer;
 } scope_t;
 
 typedef struct function_definition_pair_t {
-    function_t_ *function;
     ast_node_t *ast_defintion;
 } function_definition_pair_t;
 
@@ -231,7 +232,7 @@ typedef struct ast_t {
     bool resolved;
     type_table_t type_set;
 
-    symbol_table_t builtins;
+    table_t(s2w) *builtins;
 
     fd_pairs_t function_definition_pairs;
 
@@ -241,7 +242,7 @@ typedef struct ast_t {
     table_t(ptr2sizet) *type_to_zero_index;
     table_t(type2ns) *type_to_creation_node;
 
-    symbol_table_t symbols;
+    table_t(s2w) *symbols;
 } ast_t;
 
 void ast_print(ast_t *ast, const char *name);
@@ -259,6 +260,6 @@ ast_node_t* ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type
 bool ast_node_type_is_decl_or_stmt(ast_node_type_t node_type);
 bool ast_node_type_is_expression(ast_node_type_t node_type);
 
-value_index_t zero_value(ast_t *ast, type_t type, symbol_table_t *symbol_table);
+value_index_t zero_value(ast_t *ast, type_t type);
 
 #endif

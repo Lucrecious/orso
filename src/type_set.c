@@ -131,7 +131,6 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
     static type_info_t type_i32 = {.kind=TYPE_NUMBER, .size=sizeof(i32), .data.num = NUM_TYPE_SIGNED};
     static type_info_t type_i64 = {.kind=TYPE_NUMBER, .size=sizeof(i64), .data.num = NUM_TYPE_SIGNED};
     static type_info_t type_string = {.kind=TYPE_STRING, .size=sizeof(void*)};
-    static type_info_t type_symbol = {.kind=TYPE_SYMBOL, .size=sizeof(void*)};
     static type_info_t type_type = {.kind=TYPE_TYPE, .size=sizeof(type_t)};
     static type_info_t empty_function = {.kind = TYPE_FUNCTION, .size = sizeof(void*), .data.function.return_type = typeid(TYPE_VOID)};
 
@@ -152,9 +151,6 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
 
     type_t string_ = typeid(set->types.count);
     array_push(&set->types, &type_string);
-
-    type_t symbol_ = typeid(set->types.count);
-    array_push(&set->types, &type_symbol);
 
     type_t type_ = typeid(set->types.count);
     array_push(&set->types, &type_type);
@@ -180,7 +176,6 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
     ASSERT(void_.i == TYPE_VOID, "must be same as type void");
     ASSERT(bool_.i == TYPE_BOOL, "must be same as type bool");
     ASSERT(string_.i == TYPE_STRING, "must be same as type string");
-    ASSERT(symbol_.i == TYPE_SYMBOL, "must be same as type symbol");
     ASSERT(type_.i == TYPE_TYPE, "must be same as type type");
 }
 

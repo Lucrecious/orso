@@ -77,7 +77,6 @@ static cstr_t cgen_type_name(cgen_t *cgen, type_t type) {
         case TYPE_VOID:
         case TYPE_BOOL:
         case TYPE_STRING:
-        case TYPE_SYMBOL:
         case TYPE_TYPE:
         case TYPE_FUNCTION:
         case TYPE_NATIVE_FUNCTION:
@@ -161,7 +160,6 @@ static void cgen_primary(cgen_t *cgen, string_builder_t *sb, value_index_t value
         case TYPE_VOID:
         case TYPE_BOOL:
         case TYPE_STRING:
-        case TYPE_SYMBOL:
         case TYPE_TYPE:
         case TYPE_NATIVE_FUNCTION:
         case TYPE_POINTER:

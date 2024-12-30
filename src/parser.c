@@ -97,6 +97,23 @@ static int type_equal_(type_t a, type_t b) {
 implement_table(ptr2sizet, type_t, size_t, type_hash, type_equal_)
 implement_table(type2ns, type_t, ast_node_and_scope_t, type_hash, type_equal_)
 
+static bool streq___(const string_t a, const string_t b) {
+    return string_eq(a, b);
+}
+
+uint32_t fnv1_hash__(string_t s) {
+	uint32_t hash = 0x811C9DC5;
+
+	for (size_t i = 0; i < s.length; i++) {
+		hash *= 0x01000193;
+		hash ^= (uint32_t)(unsigned char)s.cstr[i];
+	}
+
+	return hash;
+}
+
+implement_table(s2w, string_t, word_t, fnv1_hash__, streq___)
+
 typedef struct parser_t {
     error_function_t error_fn;
     ast_t* ast; // TODO: Consider moving this outside parser and instead passed through arguments
@@ -147,12 +164,12 @@ void ast_init(ast_t *ast, size_t memory_size_bytes) {
         memarr_push(&ast->constants, &zero, (sizeof(u64)), &_unused);
     }
 
-    symbol_table_init(&ast->symbols, &ast->allocator);
+    ast->symbols = table_new(s2w, &ast->allocator);
 
     ast->function_definition_pairs = (fd_pairs_t){.allocator=&ast->allocator};
     type_set_init(&ast->type_set, &ast->allocator);
 
-    symbol_table_init(&ast->builtins, &ast->allocator);
+    ast->builtins = table_new(s2w, &ast->allocator);
 
     ast->type_to_zero_index = table_new(ptr2sizet, &ast->allocator);
     ast->type_to_creation_node = table_new(type2ns, &ast->allocator);
@@ -473,18 +490,12 @@ static ast_node_t *literal(parser_t *parser, bool inside_type_context) {
         }
         case TOKEN_STRING: {
             UNREACHABLE();
-            // unless (memarr_push_value(&parser->ast->constants, &value, sizeof(OrsoString*), &expression_node->value_index)) {
-            //     error(parser, ERROR_CODEGEN_NOT_ENOUGH_MEMORY);
-            // }
             break;
         };
 
         case TOKEN_SYMBOL: {
-            expression_node->value_type = typeid(TYPE_SYMBOL);
-            symbol_t *value = orso_new_symbol_from_cstrn(expression_node->start.view.data + 1, expression_node->start.view.length - 2, &parser->ast->symbols, &parser->ast->allocator);
-            unless (memarr_push_value(&parser->ast->constants, &value, sizeof(symbol_t*), &expression_node->value_index)) {
-                error(parser, ERROR_CODEGEN_NOT_ENOUGH_MEMORY);
-            }
+            // todo
+            UNREACHABLE();
             break;
         }
         default:
@@ -1169,7 +1180,7 @@ value_index_t add_value_to_ast_constant_stack(ast_t *ast, void *data, type_t typ
     return value_index_nil();
 }
 
-value_index_t zero_value(ast_t *ast, type_t type, symbol_table_t *symbol_table) {
+value_index_t zero_value(ast_t *ast, type_t type) {
     size_t result = 0;
     if (table_get(ptr2sizet, ast->type_to_zero_index, type, &result)) {
         return value_index_(result);
@@ -1195,10 +1206,6 @@ value_index_t zero_value(ast_t *ast, type_t type, symbol_table_t *symbol_table) 
 
         case TYPE_STRING:
             UNREACHABLE();
-            break;
-
-        case TYPE_SYMBOL:
-            value[0] = WORDP(orso_new_symbol_from_cstrn("", 0, symbol_table, &ast->allocator));
             break;
 
         case TYPE_STRUCT: {

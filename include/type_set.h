@@ -11,7 +11,8 @@
 
 declare_table(type2u64, type_info_t*, type_t);
 
-typedef struct type_table_t {
+typedef struct type_table_t type_table_t;
+struct type_table_t {
     type_infos_t types;
     table_t(type2u64) *types2index;
     arena_t *allocator;
@@ -24,7 +25,7 @@ typedef struct type_table_t {
     type_t symbol_;
     type_t type_;
     type_t empty_function_;
-} type_table_t;
+};
 
 void type_set_init(type_table_t *set, arena_t *allocator);
 

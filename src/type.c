@@ -1,6 +1,6 @@
 #include "type.h"
 
-#include "symbol_table.h"
+#include "slot.h"
 #include "type_set.h"
 #include "tmp.h"
 
@@ -77,8 +77,7 @@ bool type_equal(type_info_t *a, type_info_t *b) {
 
         case TYPE_STRING:
         case TYPE_VOID:
-        case TYPE_TYPE:
-        case TYPE_SYMBOL: return true;
+        case TYPE_TYPE: return true;
 
         case TYPE_COUNT:
         case TYPE_INVALID:
@@ -215,7 +214,6 @@ string_t type_to_string_toplevel(type_infos_t types, type_t type, arena_t *alloc
             }
 
             case TYPE_STRING: type_name = "string"; break;
-            case TYPE_SYMBOL: type_name = "symbol"; break;
             case TYPE_VOID: type_name = "void"; break;
             case TYPE_TYPE: type_name = "type"; break;
             case TYPE_INVALID: type_name = "<invalid>"; break;
