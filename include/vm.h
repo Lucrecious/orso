@@ -2,6 +2,7 @@
 #define VM_H_
 
 #include "def.h"
+#include "slot.h"
 #include "parser.h"
 
 typedef enum op_code_t op_code_t;

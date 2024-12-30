@@ -20,10 +20,10 @@
 
 typedef bool (*IsCircularDependencyFunc)(analyzer_t*, ast_node_t*);
 
-static void clock_native(word_t *arguments, word_t *result) {
-    (void)arguments;
-    result[0] = WORDD((double)clock() / CLOCKS_PER_SEC);
-}
+// static void clock_native(word_t *arguments, word_t *result) {
+//     (void)arguments;
+//     result[0] = WORDD((double)clock() / CLOCKS_PER_SEC);
+// }
 
 typedef enum ExpressionFoldingMode {
     MODE_RUNTIME = 0x1,
@@ -249,16 +249,6 @@ if (sv_eq(identifier, lit2sv(#TYPE_STRING))){\
     return false;
 
 #undef RETURN_IF_TYPE
-}
-
-static bool is_builtin_function(ast_t *ast, string_view_t identifier, native_function_t **function) {
-    if (sv_eq(identifier, lit2sv("clock"))) {
-        type_t function_type = type_set_fetch_native_function(&ast->type_set, ast->type_set.i64_, (types_t){0});
-        *function = orso_new_native_function(clock_native, function_type, &ast->allocator);
-        return true;
-    }
-
-    return false;
 }
 
 static bool can_call(type_infos_t types, type_t type, ast_nodes_t arguments) {
@@ -1730,7 +1720,7 @@ static definition_t *get_builtin_entity(ast_t *ast, string_view_t identifier) {
     word_t entity_slot;
     unless (table_get(s2w, ast->builtins, identifier_, &entity_slot)) {
         type_t type;
-        native_function_t *function;
+        // native_function_t *function;
         bool has_value = false;
         type_t value_type;
         word_t value_slot;
@@ -1738,10 +1728,6 @@ static definition_t *get_builtin_entity(ast_t *ast, string_view_t identifier) {
             has_value = true;
             value_slot = WORDU(type.i);
             value_type = typeid(TYPE_TYPE);
-        } else if (is_builtin_function(ast, identifier, &function)) {
-            has_value = true;
-            value_slot = WORDP(function);
-            value_type = function->signature;
         }
 
         if (has_value) {

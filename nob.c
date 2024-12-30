@@ -11,7 +11,6 @@
 
 const char* SOURCES[] = {
     "./src/lexer.c",
-    "./src/object.c",
     "./src/parser.c",
     "./src/static_analyzer.c",
     "./src/type.c",

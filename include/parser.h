@@ -2,11 +2,11 @@
 #define PARSER_H_
 
 #include "lexer.h"
-#include "object.h"
 #include "type.h"
 #include "type_set.h"
 #include "arena.h"
 #include "memarr.h"
+#include "slot.h"
 
 #include "table.h"
 
