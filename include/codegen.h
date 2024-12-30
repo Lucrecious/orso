@@ -13,10 +13,25 @@ bool compile_expr_to_function(function_t *function, ast_t *expr_ast);
 
 #ifdef CODEGEN_IMPLEMENTATION
 
+typedef struct local_t local_t;
+struct local_t {
+    string_view_t name;
+    size_t stack_location;
+    ast_node_t *lvalue;
+};
+
 typedef struct gen_t gen_t;
 struct gen_t {
     error_function_t error_fn;
     ast_t *ast;
+    size_t stack_size;
+
+    struct {
+        local_t *items;
+        size_t count;
+        size_t capacity;
+        arena_t *allocator;
+    } locals;
 
     bool had_error;
 };
@@ -24,10 +39,11 @@ struct gen_t {
 typedef enum reg_t reg_t;
 enum reg_t {
     REG_NULL = 0,
-    REG_OPERAND1,
+    REG_RESULT,
     REG_OPERAND2,
 
     REG_STACK_BOTTOM,
+    REG_STACK_FRAME,
 };
 
 declare_table(str2cf, string_t, call_frame_t)
@@ -74,7 +90,9 @@ static void emit_read_memory_to_reg(text_location_t location, function_t *functi
     emit_instruction(function, location, instruction);
 }
 
-void emit_push_wordreg(text_location_t text_location, function_t *function, reg_t reg_source) {
+void emit_push_wordreg(gen_t *gen, text_location_t text_location, function_t *function, reg_t reg_source) {
+    gen->stack_size += sizeof(word_t);
+
     instruction_t instruction = {0};
 
     {
@@ -95,7 +113,8 @@ void emit_push_wordreg(text_location_t text_location, function_t *function, reg_
     }
 }
 
-void emit_pop_to_wordreg(text_location_t text_location, function_t *function, reg_t reg_destination) {
+void emit_pop_to_wordreg(gen_t *gen, text_location_t text_location, function_t *function, reg_t reg_destination) {
+    gen->stack_size -= sizeof(word_t);
     instruction_t instruction = {0};
 
     {
@@ -180,16 +199,16 @@ static void gen_binary(gen_t *gen, function_t *function, ast_node_t *binary) {
     ast_node_t *lhs = an_lhs(binary);
     gen_expression(gen, function, lhs);
 
-    emit_push_wordreg(token_end_location(&lhs->end), function, REG_OPERAND1);
+    emit_push_wordreg(gen, token_end_location(&lhs->end), function, REG_RESULT);
 
     ast_node_t *rhs = an_rhs(binary);
     gen_expression(gen, function, rhs);
 
-    emit_pop_to_wordreg(token_end_location(&rhs->end), function, REG_OPERAND2);
+    emit_pop_to_wordreg(gen, token_end_location(&rhs->end), function, REG_OPERAND2);
 
     type_info_t *expr_type_info = get_type_info(&gen->ast->type_set.types, binary->value_type);
 
-    emit_binary(token_end_location(&binary->end), function, binary->operator.type, expr_type_info, REG_OPERAND2, REG_OPERAND1, REG_OPERAND1);
+    emit_binary(token_end_location(&binary->end), function, binary->operator.type, expr_type_info, REG_OPERAND2, REG_RESULT, REG_RESULT);
 }
 
 static value_index_t add_constant(function_t *function, void *data, size_t size) {
@@ -205,7 +224,7 @@ static void gen_constant(text_location_t location, function_t *function, void *d
     value_index_t value_index = add_constant(function, data, type_info->size);
 
     if (type_info->size <= WORD_SIZE) {
-        emit_read_memory_to_reg(location, function, REG_OPERAND1, value_index.index, type_info);
+        emit_read_memory_to_reg(location, function, REG_RESULT, value_index.index, type_info);
     } else {
         ASSERT(false, "todo");
     }
@@ -230,11 +249,24 @@ static void gen_primary(gen_t *gen, function_t *function, ast_node_t *primary) {
     }
 
     void *data = memarr_get_ptr(&gen->ast->constants, primary->value_index);
-    gen_constant(primary->start.start_location, function, data, type_info);
+    gen_constant(primary->start.location, function, data, type_info);
+}
+
+static void gen_add_local(gen_t *gen, ast_node_t *declaration, size_t stack_location) {
+    local_t local;
+    local.name = declaration->identifier.view;
+    local.lvalue = declaration->lvalue_node;
+    local.stack_location = stack_location;
+
+    array_push(&gen->locals, local);
 }
 
 static void gen_local(gen_t *gen, function_t *function, ast_node_t *declaration) {
-    gen_expression(gen, function, declaration);
+    gen_expression(gen, function, an_decl_expr(declaration));
+    emit_push_wordreg(gen, token_end_location(&declaration->end), function, REG_RESULT);
+
+    size_t local_location = gen->stack_size;
+    gen_add_local(gen, declaration, local_location);
 }
 
 static void gen_declaration(gen_t *gen, function_t *function, ast_node_t *declaration, bool is_global) {
@@ -272,6 +304,48 @@ static void gen_block(gen_t *gen, function_t *function, ast_node_t *block) {
     }
 }
 
+static local_t *find_local(gen_t *gen, string_view_t name) {
+    for (size_t i = gen->locals.count; i >= 1; --i) {
+        size_t i_ = i-1;
+        local_t *local = &gen->locals.items[i_];
+        if (sv_eq(local->name, name)) {
+            return local;
+        }
+    }
+
+    UNREACHABLE();
+    return NULL;
+}
+
+static void gen_entity(gen_t *gen, function_t *function, ast_node_t *entity) {
+    local_t *local = find_local(gen, entity->identifier.view);
+    // emit_push_wordreg(gen, entity->start.location, function, REG_STACK_FRAME);
+
+    if (local->stack_location > UINT32_MAX) {
+        // todo
+        UNREACHABLE();
+        return;
+    }
+
+    instruction_t instruction = {0};
+    {
+        instruction.op = OP_SUBU_REG_IM32;
+        instruction.as.binu_reg_immediate.immediate = (u32)local->stack_location;
+        instruction.as.binu_reg_immediate.reg_operand = REG_STACK_FRAME;
+        instruction.as.binu_reg_immediate.reg_result = REG_RESULT;
+
+        emit_instruction(function, entity->start.location, instruction);
+    }
+
+    {
+        instruction.op = OP_MOVWORD_REGMEM_TO_REG;
+        instruction.as.mov_regmem_to_reg.regmem_source = REG_RESULT;
+        instruction.as.mov_regmem_to_reg.reg_destination = REG_RESULT;
+
+        emit_instruction(function, token_end_location(&entity->end), instruction);
+    }
+}
+
 static void gen_expression(gen_t *gen, function_t *function, ast_node_t *expression) {
     ASSERT(ast_node_type_is_expression(expression->node_type), "must be expression");
 
@@ -296,12 +370,16 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
             break;
         }
 
+        case AST_NODE_TYPE_EXPRESSION_ENTITY: {
+            gen_entity(gen, function, expression);
+            break;
+        }
+
         case AST_NODE_TYPE_EXPRESSION_ASSIGNMENT:
         case AST_NODE_TYPE_EXPRESSION_BRANCHING:
         case AST_NODE_TYPE_EXPRESSION_CALL:
         case AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT:
         case AST_NODE_TYPE_EXPRESSION_DOT:
-        case AST_NODE_TYPE_EXPRESSION_ENTITY:
         case AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION:
         case AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE:
         case AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION:
@@ -329,9 +407,12 @@ static void error_fn(error_t error, cstr_t source) {
 }
 
 bool compile_expr_to_function(function_t *function, ast_t *ast) {
+    arena_t arena = {0};
+
     gen_t gen = {0};
     gen.ast = ast;
     gen.error_fn = error_fn;
+    gen.locals.allocator = &arena;
 
     gen_expression(&gen, function, ast->root);
 

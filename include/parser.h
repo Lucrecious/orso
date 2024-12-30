@@ -159,8 +159,9 @@ ast_node_t nil_node;
 #define an_expression(n) an_operand(n)
 #define an_lhs(n) ((n)->children.items[0])
 #define an_rhs(n) ((n)->children.items[1])
+#define an_ref_decl(n) ((n)->children.items[1])
 #define an_decl_type(n) ((n)->children.items[0])
-#define an_decl_expression(n) ((n)->children.items[1])
+#define an_decl_expr(n) ((n)->children.items[1])
 #define an_is_none(n) ((n)->node_type == AST_NODE_TYPE_NONE)
 #define an_is(n) ((n)->node_type != AST_NODE_TYPE_NONE)
 
@@ -211,9 +212,6 @@ struct ast_node_t {
 
         // structs
         ast_struct_t struct_;
-
-        // member access, entity
-        ast_member_access_t dot;
 
         // type initializer
         ast_type_initializer_t initiailizer;

@@ -36,6 +36,8 @@ typedef const char* cstr_t;
 
 #define len(a) sizeof(a) / sizeof(a[0]);
 
+#define zero(ptr, type) memset(ptr, 0, sizeof(type))
+
 FORCE_INLINE i32 mini32(i32 a, i32 b) {
   return a < b ? a : b;
 }

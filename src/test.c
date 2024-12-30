@@ -48,11 +48,11 @@ string_view_t get_line(cstr_t source, cstr_t somewhere_in_source) {
 }
 
 void myerror(error_t error, cstr_t source) {
-    size_t line = error.first.start_location.line + 1;
-    size_t column = error.first.start_location.column + 1;
+    size_t line = error.first.location.line + 1;
+    size_t column = error.first.location.column + 1;
     cstr_t file = error.first.file_path.cstr;
 
-    string_view_t source_line = get_line(source, error.first.source_view.data);
+    string_view_t source_line = get_line(source, error.first.view.data);
 
     fprintf(stderr, "%s:%lu:%lu: %s\n", file, line, column, error_messages[error.type]);
     fprintf(stderr, "%.*s\n", (int)source_line.length, source_line.data);
@@ -105,7 +105,7 @@ static void *vm_run_function(vm_t *vm, function_t *function) {
         vm_step(vm);
     }
 
-    return &vm->registers[REG_OPERAND1];
+    return &vm->registers[REG_RESULT];
 }
 
 int main(int argc, char **argv) {
@@ -118,7 +118,7 @@ int main(int argc, char **argv) {
     ast_init(&ast, megabytes(2));
 
     // bool success = parse_expr_cstr(&ast, "1/{2;}", lit2str(""));
-    bool success = parse_expr_cstr(&ast, "{ x := 1; x; }", lit2str(""));
+    bool success = parse_expr_cstr(&ast, "{ x := 1; x + 1; }", lit2str(""));
     unless (success) return 1;
 
     // string_t expr_str = compile_expr_to_c(&ast, &arena);
@@ -139,6 +139,7 @@ int main(int argc, char **argv) {
 
     vm_t vm = {0};
     vm_init(&vm);
+    vm.registers[REG_STACK_FRAME].as.u = stack_size;
     vm.registers[REG_STACK_BOTTOM].as.u = stack_size;
 
     vm_set_entry_point(&vm, expr_function);

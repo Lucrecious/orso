@@ -9,8 +9,8 @@ static token_t create_token(lexer_t *lexer, token_type_t type) {
     token_t token = { 
         .file_path = lexer->file_path,
         .type = type,
-        .source_view = {.length=lexer->current-lexer->start, .data = lexer->start},
-        .start_location = texloc(lexer->line, lexer->start - lexer->line_start),
+        .view = {.length=lexer->current-lexer->start, .data = lexer->start},
+        .location = texloc(lexer->line, lexer->start - lexer->line_start),
     };
 
     return token;
@@ -20,8 +20,8 @@ static token_t error_token(lexer_t *lexer, string_view_t message_view) {
     token_t token = {
         .file_path = lexer->file_path,
         .type = TOKEN_ERROR,
-        .source_view = message_view,
-        .start_location = texloc(lexer->line, lexer->current - lexer->line_start),
+        .view = message_view,
+        .location = texloc(lexer->line, lexer->current - lexer->line_start),
     };
     
     return token;

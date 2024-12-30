@@ -164,9 +164,9 @@ void ast_free(ast_t *ast) {
 
 #define TOKEN_NIL (token_t){\
     .file_path = lit2str(""),\
-    .start_location.line = 0,\
-    .start_location.column= 0,\
-    .source_view = lit2sv(""),\
+    .location.line = 0,\
+    .location.column= 0,\
+    .view = lit2sv(""),\
     .type = TOKEN_ERROR\
 }
 
@@ -276,9 +276,9 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type
         
         case AST_NODE_TYPE_EXPRESSION_ENTITY:
         case AST_NODE_TYPE_EXPRESSION_DOT: {
-            node->as.dot.lhs = NULL;
-            node->as.dot.referencing_declaration = NULL;
-            node->as.dot.identifier = TOKEN_NIL;
+            array_push(&node->children, &nil_node);
+            array_push(&node->children, &nil_node);
+            node->identifier = TOKEN_NIL;
             break;
         }
 
@@ -429,7 +429,7 @@ static ast_node_t* number(parser_t *parser, bool inside_type_context) {
 
     switch (parser->previous.type)  {
         case TOKEN_INTEGER: {
-            i64 value = cstrn_to_i64(parser->previous.source_view.data, parser->previous.source_view.length);
+            i64 value = cstrn_to_i64(parser->previous.view.data, parser->previous.view.length);
             expression_node->value_type = parser->ast->type_set.i64_;
             unless (memarr_push_value(&parser->ast->constants, &value, sizeof(i64), &expression_node->value_index)) {
                 error(parser, ERROR_CODEGEN_NOT_ENOUGH_MEMORY);
@@ -437,7 +437,7 @@ static ast_node_t* number(parser_t *parser, bool inside_type_context) {
             break;
         }
         case TOKEN_FLOAT: {
-            f64 value = cstrn_to_f64(parser->previous.source_view.data, parser->previous.source_view.length);
+            f64 value = cstrn_to_f64(parser->previous.view.data, parser->previous.view.length);
             expression_node->value_type = parser->ast->type_set.f64_;
             unless (memarr_push_value(&parser->ast->constants, &value, sizeof(f64), &expression_node->value_index)) {
             }
@@ -481,7 +481,7 @@ static ast_node_t *literal(parser_t *parser, bool inside_type_context) {
 
         case TOKEN_SYMBOL: {
             expression_node->value_type = typeid(TYPE_SYMBOL);
-            symbol_t *value = orso_new_symbol_from_cstrn(expression_node->start.source_view.data + 1, expression_node->start.source_view.length - 2, &parser->ast->symbols, &parser->ast->allocator);
+            symbol_t *value = orso_new_symbol_from_cstrn(expression_node->start.view.data + 1, expression_node->start.view.length - 2, &parser->ast->symbols, &parser->ast->allocator);
             unless (memarr_push_value(&parser->ast->constants, &value, sizeof(symbol_t*), &expression_node->value_index)) {
                 error(parser, ERROR_CODEGEN_NOT_ENOUGH_MEMORY);
             }
@@ -540,7 +540,7 @@ static ast_node_t *assignment(parser_t *parser, bool inside_type_context) {
 
 static ast_node_t* named_variable(parser_t *parser, bool inside_type_context) {
     ast_node_t* expression_node = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_ENTITY, inside_type_context, parser->previous);
-    expression_node->as.dot.identifier = parser->previous;
+    expression_node->identifier = parser->previous;
     return expression_node;
 }
 
@@ -850,7 +850,7 @@ static ast_node_t *dot(parser_t* parser, bool inside_type_context) {
     } else {
         ast_node_t *dot_expression = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_DOT, inside_type_context, parser->previous);
         consume(parser, TOKEN_IDENTIFIER, ERROR_PARSER_DOT_OPERATOR_ONLY_NAMES_FOR_NOW);
-        dot_expression->as.dot.identifier = parser->previous;
+        dot_expression->identifier = parser->previous;
         dot_expression->end = parser->current;
 
         return dot_expression;
@@ -953,7 +953,7 @@ static ast_node_t* parse_precedence(parser_t* parser, bool inside_type_context, 
             }
 
             case AST_NODE_TYPE_EXPRESSION_DOT: {
-                right_operand->as.dot.lhs = left_operand;
+                an_lhs(right_operand) = left_operand;
                 right_operand->start = left_operand->start;
                 left_operand = right_operand;
                 break;
@@ -1008,9 +1008,9 @@ static ast_node_t *expression(parser_t *parser, bool inside_type_context) {
     bool fold = false;
     if (match(parser, TOKEN_DIRECTIVE)) {
         token_t directive = parser->previous;
-        fold = (directive.source_view.length - 1 == strlen("fold") && strncmp(directive.source_view.data + 1, "fold", 4) == 0);
+        fold = (directive.view.length - 1 == strlen("fold") && strncmp(directive.view.data + 1, "fold", 4) == 0);
 
-        bool is_type_directive = (directive.source_view.length - 1 == strlen("type") && strncmp(directive.source_view.data + 1, "type", 4) == 0);
+        bool is_type_directive = (directive.view.length - 1 == strlen("type") && strncmp(directive.view.data + 1, "type", 4) == 0);
         if (is_type_directive) {
             inside_type_context = is_type_directive;
         }
@@ -1093,10 +1093,10 @@ static ast_node_t *entity_declaration(parser_t *parser, bool as_parameter) {
     }
 
     if (requires_expression) {
-        an_decl_expression(entity_declaration_node) = expression(parser, false);
+        an_decl_expr(entity_declaration_node) = expression(parser, false);
     }
 
-    if (an_decl_expression(entity_declaration_node)->node_type == AST_NODE_TYPE_NONE) {
+    if (an_decl_expr(entity_declaration_node)->node_type == AST_NODE_TYPE_NONE) {
         entity_declaration_node->is_mutable = true;
     }
 
@@ -1273,7 +1273,7 @@ static void ast_print_ast_node(type_infos_t types, ast_node_t *node, u32 level) 
 
     switch (node->node_type) {
         case AST_NODE_TYPE_EXPRESSION_BINARY: {
-            string_t label = string_format("binary (%.*s): %s", tmp->allocator, node->operator.source_view.length, node->operator.source_view.data, type2cstr(node));
+            string_t label = string_format("binary (%.*s): %s", tmp->allocator, node->operator.view.length, node->operator.view.data, type2cstr(node));
 
             print_indent(level);
             print_line("%s", label.cstr);
@@ -1324,18 +1324,18 @@ static void ast_print_ast_node(type_infos_t types, ast_node_t *node, u32 level) 
         }
         case AST_NODE_TYPE_EXPRESSION_UNARY: {
             print_indent(level);
-            print_line("unary (%.*s): %s", node->operator.source_view.length, node->operator.source_view.data, type2cstr(node));
+            print_line("unary (%.*s): %s", node->operator.view.length, node->operator.view.data, type2cstr(node));
             ast_print_ast_node(types, an_operand(node), level + 1);
             break;
         }
         case AST_NODE_TYPE_EXPRESSION_PRIMARY: {
             print_indent(level);
-            print_line("primary (%.*s): %s", node->start.source_view.length, node->start.source_view.data, type2cstr(node));;
+            print_line("primary (%.*s): %s", node->start.view.length, node->start.view.data, type2cstr(node));;
             break;
         }
         case AST_NODE_TYPE_EXPRESSION_ENTITY: {
             print_indent(level);
-            print_line("entity (%.*s): %s", node->as.dot.identifier.source_view.length, node->as.dot.identifier.source_view.data, type2cstr(node));
+            print_line("entity (%.*s): %s", node->identifier.view.length, node->identifier.view.data, type2cstr(node));
             break;
         }
         case AST_NODE_TYPE_EXPRESSION_ASSIGNMENT: {
@@ -1467,20 +1467,20 @@ static void ast_print_ast_node(type_infos_t types, ast_node_t *node, u32 level) 
 
             print_indent(level+1);
             print_line("item");
-            ast_print_ast_node(types, node->as.dot.lhs, level+2);
+            ast_print_ast_node(types, an_lhs(node), level+2);
 
             print_indent(level + 1);
-            print_line("accessor (%.*s)", node->as.dot.identifier.source_view.length, node->as.dot.identifier.source_view.data);
+            print_line("accessor (%.*s)", node->identifier.view.length, node->identifier.view.data);
             break;
         }
         case AST_NODE_TYPE_DECLARATION_DEFINITION: {
             print_indent(level);
-            print_line("declaration (%.*s): %s", node->identifier.source_view.length, node->identifier.source_view.data, type2cstr(node));
+            print_line("declaration (%.*s): %s", node->identifier.view.length, node->identifier.view.data, type2cstr(node));
 
-            if (an_decl_expression(node) != AST_NODE_TYPE_NONE) {
+            if (an_decl_expr(node) != AST_NODE_TYPE_NONE) {
                 print_indent(level+1);
                 print_line("initial value");
-                ast_print_ast_node(types, an_decl_expression(node), level+2);
+                ast_print_ast_node(types, an_decl_expr(node), level+2);
             }
             break;
         }
