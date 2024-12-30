@@ -9,23 +9,6 @@
 #define ALLOC(TYPE) (TYPE*)arena_alloc(set->allocator, sizeof(TYPE))
 #define ALLOC_N(TYPE, N) (TYPE*)arena_alloc(set->allocator, sizeof(TYPE)*N)
 
-static type_info_t *union_type_new(type_table_t *set, types_t types) {
-    type_info_t* union_type = ALLOC(type_info_t);
-    union_type->kind = TYPE_UNION;
-    union_type->data.union_.types = (types_t){.allocator=set->allocator};
-
-    size_t total_size = 0;
-    for (size_t i = 0; i < union_type->data.union_.types.count; ++i) {
-        array_push(&union_type->data.union_.types, types.items[i]);
-        type_info_t *info = get_type_info(&set->types, types.items[i]);
-        total_size = total_size < info->size ? info->size : total_size;
-    }
-
-    union_type->size = total_size;
-
-    return union_type;
-}
-
 type_info_t *function_type_new(type_table_t *set, types_t arguments, type_t return_type, bool is_native) {
     type_info_t *function_type = ALLOC(type_info_t);
     function_type->kind = is_native ? TYPE_NATIVE_FUNCTION : TYPE_FUNCTION;
@@ -97,13 +80,6 @@ type_info_t *pointer_type_new(type_table_t *set, type_t type) {
 }
 
 type_info_t *type_copy_new(type_table_t *set, type_info_t *type) {
-    if (type->kind == TYPE_UNION) {
-        return (type_info_t*)union_type_new(
-            set,
-            type->data.union_.types
-        );
-    }
-
     if (type->kind == TYPE_FUNCTION || type->kind == TYPE_NATIVE_FUNCTION) {
         return (type_info_t*)function_type_new(
             set,
@@ -212,12 +188,6 @@ type_info_t *get_type_info(type_infos_t *types, type_t type) {
     return types->items[type.i];
 }
 
-bool type_is_union(type_infos_t types, type_t type) {
-    UNUSED(types);
-    UNUSED(type);
-    return false;
-}
-
 bool type_is_function(type_infos_t types, type_t type) {
     return get_type_info(&types, type)->kind == TYPE_FUNCTION;
 }
@@ -244,11 +214,7 @@ static u64 hash_type(type_info_t *type) {
     u32 hash = 2166136261u;
     ADD_HASH(hash, type->kind);
 
-    if (type->kind == TYPE_UNION) {
-        for (size_t i = 0; i < type->data.union_.types.count; ++i) {
-            ADD_HASH(hash, (u64)(type->data.union_.types.items[i].i));
-        }
-    } else if (type->kind == TYPE_FUNCTION) {
+    if (type->kind == TYPE_FUNCTION) {
         ADD_HASH(hash, type->data.function.argument_types.count);
 
         for (size_t i = 0; i < type->data.function.argument_types.count; ++i) {
@@ -281,36 +247,6 @@ static u64 hash_type(type_info_t *type) {
 }
 
 implement_table(type2u64, type_info_t*, type_t, hash_type, type_equal);
-
-static i32 type_compare(const void *a, const void *b) {
-    type_t *type_a = *((type_t**)a);
-    type_t *type_b = *((type_t**)b);
-    return type_a->i == type_b->i ? 0 : (type_a->i < type_b->i ? -1 : 1);
-
-}
-
-type_t type_set_fetch_union(type_table_t *set, types_t types) {
-    type_info_t union_type = {
-        .kind = TYPE_UNION,
-        .data.union_.types = {.allocator=set->allocator},
-    };
-
-    for (size_t i = 0; i < types.count; i++) {
-        array_push(&union_type.data.union_.types, types.items[i]);
-    }
-
-    qsort(union_type.data.union_.types.items, types.count, sizeof(type_t), type_compare);
-
-    type_t index;
-    if (table_get(type2u64, set->types2index, &union_type, &index)) {
-        return index;
-    }
-
-    type_info_t *type_info = type_copy_new(set, &union_type);
-    type_t type = track_type(set, type_info);
-
-    return type;
-}
 
 type_t type_set_fetch_pointer(type_table_t* set, type_t inner_type) {
     type_info_t pointer_type = {

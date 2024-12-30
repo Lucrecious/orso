@@ -140,11 +140,6 @@ string_t bytes_to_string(byte *data, type_infos_t *types, type_t type, arena_t *
             return  result;
         }
 
-        case TYPE_UNION: {
-            type_t type = cast(data, type_t);
-            return bytes_to_string(data + sizeof(type), types, type, allocator);
-        }
-
         case TYPE_TYPE: {
             string_t result;
 

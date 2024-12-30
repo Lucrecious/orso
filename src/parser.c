@@ -190,6 +190,8 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type
     node->operator = start;
     node->return_guarentee = RETURN_GUARENTEE_NONE;
     node->value_type.i = TYPE_UNRESOLVED;
+    node->condition_negated = false;
+    node->looping = false;
 
 
     node->inside_type_context = inside_type_context;
@@ -227,11 +229,9 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type
         }
         
         case AST_NODE_TYPE_EXPRESSION_BRANCHING: {
-            node->as.branch.condition = NULL;
-            node->as.branch.condition_negated = false;
-            node->as.branch.then_expression = NULL;
-            node->as.branch.else_expression = NULL;
-            node->as.branch.looping = false;
+            array_push(&node->children, &nil_node);
+            array_push(&node->children, &nil_node);
+            array_push(&node->children, &nil_node);
             break;
         }
         
@@ -573,40 +573,35 @@ static ast_node_t *block(parser_t *parser, bool inside_type_context) {
 static ast_node_t *ifelse(parser_t *parser, bool inside_type_context) {
     ast_node_t* expression_node = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_BRANCHING, inside_type_context, parser->previous);
 
-    expression_node->as.branch.condition_negated = false;
+    expression_node->condition_negated = false;
     if (parser->previous.type == TOKEN_UNLESS || parser->previous.type == TOKEN_UNTIL) {
-        expression_node->as.branch.condition_negated = true;
+        expression_node->condition_negated = true;
     }
 
-    expression_node->as.branch.looping = false;
+    expression_node->looping = false;
     if (parser->previous.type == TOKEN_WHILE || parser->previous.type == TOKEN_UNTIL) {
-        expression_node->as.branch.looping = true;
+        expression_node->looping = true;
     }
 
     expression_node->return_guarentee = RETURN_GUARENTEE_NONE;
 
-    expression_node->as.branch.condition = expression(parser, inside_type_context);
+    an_condition(expression_node) = expression(parser, inside_type_context);
     if (match(parser, TOKEN_BRACE_OPEN)) {
-        expression_node->as.branch.then_expression = block(parser, inside_type_context);
+        an_then(expression_node) = block(parser, inside_type_context);
     } else {
-        if (expression_node->as.branch.looping) {
+        if (expression_node->looping) {
             consume(parser, TOKEN_DO, ERROR_PARSER_EXPECTED_DO_OR_BLOCK);
         } else {
             consume(parser, TOKEN_THEN, ERROR_PARSER_EXPECTED_THEN_OR_BLOCK);
         }
 
         {
-            // ast_node_t *then_statement = statement(parser, true);
-            // ast_node_t *then_expression = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_STATEMENT, inside_type_context, then_statement->start);
-            // then_expression->as.statement = then_statement;
-            // then_expression->end = then_statement->end;
-            ast_node_t *then_expression = expression(parser, inside_type_context); //statement(parser, true);
-            expression_node->as.branch.then_expression = then_expression;
+            ast_node_t *then_expression = expression(parser, inside_type_context);
+            an_then(expression_node) = then_expression;
         }
     }
 
     if (!match(parser, TOKEN_ELSE)) {
-        expression_node->as.branch.else_expression = NULL;
         return expression_node;
     }
 
@@ -616,7 +611,7 @@ static ast_node_t *ifelse(parser_t *parser, bool inside_type_context) {
         // else_expression->as.statement = else_statement;
         // else_expression->end = else_statement->end;
         ast_node_t *else_expression = expression(parser, inside_type_context);
-        expression_node->as.branch.else_expression = else_expression;
+        an_else(expression_node) = else_expression;
     }
 
     expression_node->end = parser->previous;
@@ -1205,11 +1200,6 @@ value_index_t zero_value(ast_t *ast, type_t type, symbol_table_t *symbol_table) 
         case TYPE_SYMBOL:
             value[0] = WORDP(orso_new_symbol_from_cstrn("", 0, symbol_table, &ast->allocator));
             break;
-        
-        case TYPE_UNION: {
-            UNREACHABLE();
-            break;
-        }
 
         case TYPE_STRUCT: {
             for (size_t i = 0; i < bytes_to_slots(type_info->size); i++) {
@@ -1364,14 +1354,14 @@ static void ast_print_ast_node(type_infos_t types, ast_node_t *node, u32 level) 
         case AST_NODE_TYPE_EXPRESSION_BRANCHING: {
             print_indent(level);
             cstr_t branch = NULL;
-            unless (node->as.branch.looping) {
-                if (node->as.branch.condition_negated) {
+            unless (node->looping) {
+                if (node->condition_negated) {
                     branch = "unless";
                 } else {
                     branch = "if";
                 }
             } else {
-                if (node->as.branch.condition_negated) {
+                if (node->condition_negated) {
                     branch = "until";
                 } else {
                     branch = "while";
@@ -1381,16 +1371,16 @@ static void ast_print_ast_node(type_infos_t types, ast_node_t *node, u32 level) 
 
             print_indent(level + 1);
             print_line("condition");
-            ast_print_ast_node(types, node->as.branch.condition, level + 2);
+            ast_print_ast_node(types, an_condition(node), level + 2);
 
             print_indent(level + 1);
             print_line("then");
-            ast_print_ast_node(types, node->as.branch.then_expression, level + 2);
+            ast_print_ast_node(types, an_then(node), level + 2);
 
-            if (node->as.branch.else_expression) {
+            if (an_is(an_else(node))) {
                 print_indent(level + 1);
                 print_line("else");
-                ast_print_ast_node(types, node->as.branch.else_expression, level + 2);
+                ast_print_ast_node(types, an_else(node), level + 2);
             }
             break;
         }

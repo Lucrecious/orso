@@ -27,6 +27,8 @@ typedef enum type_kind_t {
     TYPE_INVALID = 0,      // error type
     TYPE_UNRESOLVED,       // unresolved (not undefined, not error, not defined)
     TYPE_UNDEFINED,        // used for blocks with returns
+
+    // simple types (types that do not require type info)
     TYPE_VOID,             // null
     TYPE_BOOL,             // true false
     TYPE_STRING,           // "anything in here"
@@ -38,7 +40,6 @@ typedef enum type_kind_t {
     TYPE_FUNCTION,         // (type1, type2, ..., typen) -> return_type OR (foo := 0, bar := "") -> return_type
     TYPE_NATIVE_FUNCTION,  // (type1, type2, ..., typen) -> return_type
     TYPE_POINTER,          // &type
-    TYPE_UNION,            // type1|type2|...|typen
     TYPE_STRUCT,           // used for both anonymous and named
 
     TYPE_COUNT,
@@ -114,12 +115,6 @@ struct type_table_t;
 bool struct_type_is_incomplete(type_info_t *type);
 
 bool type_equal(type_info_t *a, type_info_t *b);
-
-// orso_type_has_type_kind
-bool union_type_has_type(type_info_t *type, type_t subtype);
-bool union_type_contains_type(type_infos_t types, type_t union_, type_t type);
-
-type_t type_merge(struct type_table_t *set, type_t a, type_t b);
 
 bool type_is_float(type_info_t *type);
 bool type_is_integer(type_info_t *type, bool include_bool);

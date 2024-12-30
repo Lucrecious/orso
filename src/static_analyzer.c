@@ -38,17 +38,18 @@ typedef struct AnalysisState {
     scope_t* scope;
 } AnalysisState;
 
-typedef struct Entity {
-    // TODO: instead of using declarad type just use narrowed type and the type of the decalrtion node
+typedef struct definition_t {
+    ast_node_t *node;
+    
+    // for builtins
     type_t declared_type;
-    type_t narrowed_type;
-
-    ast_node_t* node;
     value_index_t value_index;
 
-} Entity;
+} definition_t;
 
-static void scope_init(scope_t* scope, arena_t *allocator, scope_type_t type, scope_t* outer, ast_node_t* creator_expression) {
+#define entity_type(e) (((e)->node->node_type == AST_NODE_TYPE_NONE) ? ((e)->declared_type) : ((e)->node->value_type))
+
+static void scope_init(scope_t *scope, arena_t *allocator, scope_type_t type, scope_t *outer, ast_node_t *creator_expression) {
     scope->outer = outer;
     scope->creator = creator_expression;
     scope->type = type;
@@ -70,8 +71,8 @@ static scope_t *scope_copy_new(scope_t *scope, arena_t *allocator) {
             continue;
         }
 
-        Entity* entity_copy = (Entity*)arena_alloc(allocator, sizeof(Entity));
-        *entity_copy = *((Entity*)entry->value.as.p);
+        definition_t* entity_copy = (definition_t*)arena_alloc(allocator, sizeof(definition_t));
+        *entity_copy = *((definition_t*)entry->value.as.p);
         entry->value = WORDP(entity_copy);
     }
 
@@ -80,79 +81,23 @@ static scope_t *scope_copy_new(scope_t *scope, arena_t *allocator) {
     return scope_copy;
 }
 
-static void scope_merge(type_table_t* set, scope_t* scope, scope_t* a, scope_t* b) {
-    if (!scope) {
-        ASSERT(!a && !b, "if no more scopes then all should be no more");
-        return;
-    }
+static void add_definition(scope_t *scope, arena_t *allocator, symbol_t *identifier, ast_node_t *declaration_node) {
+    definition_t *def = arena_alloc(allocator, sizeof(definition_t));
+    def->node = declaration_node;
+    def->value_index = value_index_nil();
 
-    for (i32 i = 0; i < scope->named_entities.capacity; i++) {
-        symbol_table_entry_t* entry = &scope->named_entities.entries[i];
-        if (entry->key == NULL) {
-            continue;
-        }
-
-        word_t entity_a_slot;
-        word_t entity_b_slot;
-        unless (symbol_table_get(&a->named_entities, entry->key, &entity_a_slot)
-                && symbol_table_get(&b->named_entities, entry->key, &entity_b_slot)) {
-            continue;
-        }
-
-        Entity* entity_a = (Entity*)entity_a_slot.as.p;
-        Entity* entity_b = (Entity*)entity_b_slot.as.p;
-
-        type_t anded_type;
-        type_t anded_narrowed;
-        if (TYPE_IS_UNRESOLVED(entity_a->declared_type) || TYPE_IS_UNRESOLVED(entity_b->declared_type)) {
-            if (typeid_eq(entity_a->declared_type, entity_b->declared_type)) {
-                continue;
-            }
-
-            // since one of the entities was not narrowed, we should use the declared type
-            // instead of the narrowed type. (since the other side wasn't narrowed to anything)
-            if (!TYPE_IS_UNRESOLVED(entity_a->declared_type)) {
-                anded_type = entity_a->declared_type;
-                anded_narrowed = entity_a->declared_type;
-            } else {
-                anded_type = entity_b->declared_type;
-                anded_narrowed = entity_b->declared_type;
-            }
-        } else {
-            ASSERT(typeid_eq(entity_a->declared_type, entity_b->declared_type), "declared type should be stable. TODO: No need for declared type to be in here... should be in the declaration instead.");
-            anded_type = entity_a->declared_type;
-            anded_narrowed = type_merge(set, entity_a->narrowed_type, entity_b->narrowed_type);
-        }
-
-        Entity* scope_entity = (Entity*)entry->value.as.p;
-
-        scope_entity->declared_type = anded_type;
-        scope_entity->narrowed_type = anded_narrowed;
-    }
-
-    scope_merge(set, scope->outer, a->outer, b->outer);
+    symbol_table_set(&scope->named_entities, identifier, WORDP(def));
 }
 
-static void add_entity(scope_t *scope, arena_t *allocator, symbol_t *identifier, ast_node_t *declaration_node) {
-    Entity *entity = arena_alloc(allocator, sizeof(Entity));
-    entity->declared_type = typeid(TYPE_UNRESOLVED);
-    entity->narrowed_type = typeid(TYPE_UNRESOLVED);
-    entity->node = declaration_node;
-    entity->value_index = value_index_nil();
+static definition_t *add_builtin_definition(ast_t *ast, symbol_t *identifier, type_t type, value_index_t value_index) {
+    definition_t *def = arena_alloc(&ast->allocator, sizeof(definition_t));
+    def->node = &nil_node;
+    def->value_index = value_index;
+    def->declared_type = type;
 
-    symbol_table_set(&scope->named_entities, identifier, WORDP(entity));
-}
+    symbol_table_set(&ast->builtins, identifier, WORDP(def));
 
-static Entity* add_builtin_entity(ast_t *ast, symbol_t *identifier, type_t type, value_index_t value_index) {
-    Entity* entity = arena_alloc(&ast->allocator, sizeof(Entity));
-    entity->declared_type = type;
-    entity->narrowed_type = type;
-    entity->node = NULL;
-    entity->value_index = value_index;
-
-    symbol_table_set(&ast->builtins, identifier, WORDP(entity));
-
-    return entity;
+    return def;
 }
 
 static void function_dependencies_cannot_be_compiled(analyzer_t *analyzer) {
@@ -223,14 +168,10 @@ static type_t resolve_unary_type(ast_t* ast, token_type_t operator, type_t opera
 
     switch (operator) {
         case TOKEN_MINUS: {
-            if (!type_is_union(ast->type_set.types, operand_id)) {
-                if (type_is_number(operand, false)) {
-                    return operand_id;
-                } else if (operand_id.i == TYPE_BOOL) {
-                    return ast->type_set.i32_;
-                } else {
-                    return typeid(TYPE_INVALID);
-                }
+            if (type_is_number(operand, false)) {
+                return operand_id;
+            } else if (operand_id.i == TYPE_BOOL) {
+                return ast->type_set.i32_;
             } else {
                 return typeid(TYPE_INVALID);
             }
@@ -274,7 +215,7 @@ typedef struct EntityQuery  {
     bool skip_mutable;
 } EntityQuery;
 
-static Entity* get_resolved_entity_by_identifier(
+static definition_t* get_resolved_entity_by_identifier(
         analyzer_t* analyzer,
         ast_t* ast,
         AnalysisState state,
@@ -432,24 +373,13 @@ static void resolve_foldable(
             ast_node_t *left = an_lhs(expression);
             ast_node_t *right = an_rhs(expression);
             foldable = left->foldable && right->foldable;
-
-            if (expression->operator.type == TOKEN_BAR) {
-                ASSERT(TYPE_IS_TYPE(left->value_type) && TYPE_IS_TYPE(right->value_type), "both left and right must be types");
-                type_t lhs_folded_type = get_folded_type(ast, left->value_index);
-                type_t rhs_folded_type = get_folded_type(ast, right->value_index);
-
-                type_t merged_type = type_merge(&ast->type_set, lhs_folded_type, rhs_folded_type);
-                word_t merged_type_slot = WORDU(merged_type.i);
-
-                folded_index = add_value_to_ast_constant_stack(ast, &merged_type_slot, typeid(TYPE_TYPE));
-            }
             break;
         }
 
         case AST_NODE_TYPE_EXPRESSION_BRANCHING: {
-            bool condition_is_foldable = expression->as.branch.condition->foldable;
-            bool then_is_foldable = expression->as.branch.then_expression->foldable;
-            bool else_is_foldable = expression->as.branch.else_expression ? expression->as.branch.else_expression->foldable : true;
+            bool condition_is_foldable = an_condition(expression)->foldable;
+            bool then_is_foldable = an_then(expression)->foldable;
+            bool else_is_foldable = an_is(an_else(expression)) ? an_else(expression)->foldable : true;
 
             foldable = condition_is_foldable && then_is_foldable && else_is_foldable;
             break;
@@ -1039,8 +969,6 @@ void resolve_expression(
                     }
                     expression->value_type = combined_type;
 
-                    ASSERT(!type_is_union(ast->type_set.types, expression->value_type), "arthimetic must narrow down to a single type");
-
                     cast_left = combined_type;
                     cast_right = combined_type;
                     break;
@@ -1092,8 +1020,7 @@ void resolve_expression(
                     cast_left = left->value_type;
                     cast_right = right->value_type;
 
-                    type_t merged_type = type_merge(&ast->type_set, left->value_type, right->value_type);
-                    expression->value_type = merged_type;
+                    expression->value_type = typeid(TYPE_BOOL);
                     break;
                 }
 
@@ -1165,7 +1092,7 @@ void resolve_expression(
                 .flags = expression->inside_type_context ? QUERY_FLAG_MATCH_TYPE : QUERY_FLAG_MATCH_ANY,
             };
 
-            Entity *entity = get_resolved_entity_by_identifier(analyzer, ast, state, expression->identifier, &query, &entity_scope);
+            definition_t *entity = get_resolved_entity_by_identifier(analyzer, ast, state, expression->identifier, &query, &entity_scope);
 
             if (entity == NULL) {
                 INVALIDATE(expression);
@@ -1175,7 +1102,7 @@ void resolve_expression(
             // keep for constant folding so not redo entity look up and simplify work there
             expression->ref_decl = entity->node;
 
-            expression->value_type = entity->declared_type;
+            expression->value_type = entity_type(entity);
 
             if (entity->node == NULL) {
                 expression->foldable = true;
@@ -1196,13 +1123,6 @@ void resolve_expression(
             resolve_expression(analyzer, ast, state, left);
             if (left->lvalue_node != NULL) {
                 expression->lvalue_node = left->lvalue_node;
-            }
-
-
-            if (type_is_union(ast->type_set.types, left->value_type)) {
-                error_range(analyzer, left->start, left->end, ERROR_ANALYSIS_INVALID_MEMBER_ACCESS);
-                INVALIDATE(expression);
-                break;
             }
 
             if (TYPE_IS_INVALID(left->value_type)) {
@@ -1256,7 +1176,7 @@ void resolve_expression(
                 };
 
                 scope_t* found_scope;
-                Entity* entity = get_resolved_entity_by_identifier(analyzer, ast, search_state, expression->identifier, &query, &found_scope);
+                definition_t* entity = get_resolved_entity_by_identifier(analyzer, ast, search_state, expression->identifier, &query, &found_scope);
 
                 unless (entity) {
                     INVALIDATE(expression);
@@ -1295,32 +1215,25 @@ void resolve_expression(
             // // TODO: Find a way to merge the fitting logic
             if (lvalue_node->node_type == AST_NODE_TYPE_EXPRESSION_ENTITY) {
                 scope_t* entity_scope;
-                Entity* entity;
+                definition_t *def;
                 token_t identifier = lvalue_node->identifier;
-                entity = get_resolved_entity_by_identifier(analyzer, ast, state, identifier, NULL, &entity_scope);
+                def = get_resolved_entity_by_identifier(analyzer, ast, state, identifier, NULL, &entity_scope);
 
                 
-                if (entity == NULL) {
+                if (def == NULL) {
                     INVALIDATE(expression);
                     break;
                 }
 
-                expression->value_type = entity->declared_type;
+                expression->value_type = entity_type(def);
 
-                type_t right_side_narrowed_type = rhs->value_type;
-                unless (typeid_eq(entity->declared_type, right_side_narrowed_type)) {
+                type_t rhs_type = rhs->value_type;
+                unless (typeid_eq(entity_type(def), rhs_type)) {
                     error_range(analyzer, expression->start, expression->end, ERROR_ANALYSIS_TYPE_MISMATCH);
                     break;
                 }
 
-                expression->value_type = right_side_narrowed_type;
-                ASSERT(!type_is_union(ast->type_set.types, expression->value_type) ||
-                        union_type_contains_type(ast->type_set.types, expression->value_type, right_side_narrowed_type),
-                        "this will fail in situations where the right side is not converted to the type of the left side. As of now, this is only known to happen with small numbers going into bigger numbers");
-
-                if (type_is_union(ast->type_set.types, entity->declared_type)) {
-                    entity->narrowed_type = expression->value_type;
-                }
+                expression->value_type = rhs_type;
 
             } else if (lvalue_node->node_type == AST_NODE_TYPE_EXPRESSION_DOT) {
                 ast_node_t* dot_node = lvalue_node;
@@ -1426,31 +1339,32 @@ void resolve_expression(
         }
 
         case AST_NODE_TYPE_EXPRESSION_BRANCHING: {
-            resolve_expression(analyzer, ast, state, expression->as.branch.condition);
+            resolve_expression(analyzer, ast, state, an_condition(expression));
 
             scope_t* then_scope = scope_copy_new(state.scope, &analyzer->allocator);
             AnalysisState then_state = state;
             then_state.scope = then_scope;
-            resolve_expression(analyzer, ast, then_state, expression->as.branch.then_expression);
+            resolve_expression(analyzer, ast, then_state, an_then(expression));
 
             scope_t* else_scope = scope_copy_new(state.scope, &analyzer->allocator);
             AnalysisState else_state = state;
             else_state.scope = else_scope;
-            if (expression->as.branch.else_expression) {
-                resolve_expression(analyzer, ast, else_state, expression->as.branch.else_expression);
+            if (an_is(an_else(expression))) {
+                resolve_expression(analyzer, ast, else_state, an_else(expression));
             }
 
             return_guarentee_t branch_return_guarentee;
             // resolve return guarentee first
             {
-                ASSERT(expression->as.branch.then_expression->node_type == AST_NODE_TYPE_DECLARATION_STATEMENT, "must be expression statement or block, not other choices");
-                return_guarentee_t then_return_guarentee = expression->as.branch.then_expression->return_guarentee;
+                ASSERT(an_then(expression)->node_type == AST_NODE_TYPE_DECLARATION_STATEMENT, "must be expression statement or block, not other choices");
+
+                return_guarentee_t then_return_guarentee = an_then(expression)->return_guarentee;
 
                 return_guarentee_t else_return_guarentee = RETURN_GUARENTEE_NONE;
-                if (expression->as.branch.else_expression) {
-                    if (expression->as.branch.else_expression->node_type == AST_NODE_TYPE_EXPRESSION_BLOCK
-                    || expression->as.branch.else_expression->node_type == AST_NODE_TYPE_EXPRESSION_BRANCHING) {
-                        else_return_guarentee = expression->as.branch.else_expression->return_guarentee;
+                if (an_is(an_else(expression))) {
+                    if (an_else(expression)->node_type == AST_NODE_TYPE_EXPRESSION_BLOCK
+                    || an_else(expression)->node_type == AST_NODE_TYPE_EXPRESSION_BRANCHING) {
+                        else_return_guarentee = an_else(expression)->return_guarentee;
                     } else {
                         ASSERT(false, "only blocks and ifs allowed during elses for now");
                     }
@@ -1465,8 +1379,6 @@ void resolve_expression(
                 }
             }
 
-            scope_merge(&ast->type_set, state.scope, then_state.scope, else_state.scope);
-
             while (then_scope) {
                 scope_t *outer_scope = scope_copy_new(then_scope->outer, &analyzer->allocator);
                 then_scope = outer_scope;
@@ -1477,21 +1389,23 @@ void resolve_expression(
                 else_scope = outer_scope;
             }
 
-            if (TYPE_IS_INVALID(expression->as.branch.then_expression->value_type) ||
-                (expression->as.branch.else_expression && TYPE_IS_INVALID(expression->as.branch.else_expression->value_type))) {
+            if (TYPE_IS_INVALID(an_then(expression)->value_type) ||
+                (an_is(an_else(expression)) && TYPE_IS_INVALID(an_else(expression)->value_type))) {
                 INVALIDATE(expression);
                 break;
             }
 
             if (branch_return_guarentee == RETURN_GUARENTEE_NONE) {
                 type_t else_block_type = typeid(TYPE_VOID);
-                if (expression->as.branch.else_expression) {
-                    else_block_type = expression->as.branch.else_expression->value_type;
+                if (an_is(an_else(expression))) {
+                    else_block_type = an_else(expression)->value_type;
                 }
 
-                expression->value_type = type_merge(&ast->type_set,
-                    expression->as.branch.then_expression->value_type, else_block_type
-                );
+                if (!typeid_eq(an_then(expression)->value_type, an_else(expression)->value_type)) {
+                    INVALIDATE(expression);
+                } else {
+                    expression->value_type = an_then(expression)->value_type;
+                }
             } else {
                 expression->return_guarentee = branch_return_guarentee;
                 expression->value_type = typeid(TYPE_UNDEFINED);
@@ -1602,7 +1516,7 @@ static void declare_entity(analyzer_t *analyzer, scope_t *scope, ast_node_t *ent
         return;
     }
 
-    add_entity(scope, &analyzer->allocator, identifier, entity);
+    add_definition(scope, &analyzer->allocator, identifier, entity);
 }
 
 static void resolve_declaration_definition(analyzer_t* analyzer, ast_t* ast, AnalysisState state, ast_node_t* declaration) {
@@ -1671,18 +1585,10 @@ static void resolve_declaration_definition(analyzer_t* analyzer, ast_t* ast, Ana
 
     symbol_table_get(&state.scope->named_entities, name, &entity_slot);
 
-    Entity* entity = (Entity*)entity_slot.as.p;
+    definition_t *def = (definition_t*)entity_slot.as.p;
 
     // we are resolved
     if (is_declaration_resolved(declaration)) {
-        // this is possible if we are in a branch (i.e. function is defined at the top level, copy scopes are created for branching, it's resolved in one branch but not the other)
-        if (TYPE_IS_UNRESOLVED(entity->declared_type)) {
-            ASSERT(TYPE_IS_UNRESOLVED(entity->narrowed_type), "both should always be set at the same time");
-
-            entity->declared_type = declaration->value_type;
-            entity->narrowed_type = an_decl_expr(declaration)->value_type;
-        }
-
         if (!TYPE_IS_TYPE(declaration->value_type)) {
             return;
         }
@@ -1799,40 +1705,25 @@ static void resolve_declaration_definition(analyzer_t* analyzer, ast_t* ast, Ana
         }
     }
 
-    entity->declared_type = declaration->value_type;
-    entity->narrowed_type = declaration->value_type;
-
     if (an_is_none(an_decl_expr(declaration))) {
-        if (type_is_union(ast->type_set.types, declaration->value_type)) {
-            entity->narrowed_type = typeid(TYPE_VOID);
-        } 
-
         value_index_t value_index = value_index_nil();
 
-        if (type_is_union(ast->type_set.types, declaration->value_type) && !typeid_eq(declaration->value_type, typeid(TYPE_VOID))) {
-            error_range(analyzer, declaration->end, declaration->end, ERROR_ANALYSIS_EXPECTED_DEFAULT_VALUE);
-        } else unless (TYPE_IS_INVALID(entity->node->value_type)) {
-            value_index = zero_value(ast, entity->node->value_type, &analyzer->symbols);
+        unless (TYPE_IS_INVALID(def->node->value_type)) {
+            value_index = zero_value(ast, def->node->value_type, &analyzer->symbols);
         }
 
-        entity->node->value_index = value_index;
-        entity->node->foldable = value_index.exists;
+        def->node->value_index = value_index;
+        def->node->foldable = value_index.exists;
     } else {
-        entity->narrowed_type = an_decl_expr(declaration)->value_type;
         if (IS_FOLDED(an_decl_expr(declaration))) {
-            if (type_is_union(ast->type_set.types, an_decl_expr(declaration)->value_type)) {
-                type_t folded_value_type = get_folded_type(ast, an_decl_expr(declaration)->value_index);
-                entity->narrowed_type = folded_value_type;
-            }
-
-            entity->node->value_index = an_decl_expr(declaration)->value_index;
-            entity->node->foldable = an_decl_expr(declaration)->value_index.exists;
+            def->node->value_index = an_decl_expr(declaration)->value_index;
+            def->node->foldable = an_decl_expr(declaration)->value_index.exists;
         }
     }
 
 }
 
-static Entity *get_builtin_entity(ast_t *ast, symbol_t *identifier) {
+static definition_t *get_builtin_entity(ast_t *ast, symbol_t *identifier) {
     word_t entity_slot;
     unless (symbol_table_get(&ast->builtins, identifier, &entity_slot)) {
         type_t type;
@@ -1852,14 +1743,14 @@ static Entity *get_builtin_entity(ast_t *ast, symbol_t *identifier) {
 
         if (has_value) {
             value_index_t index = add_value_to_ast_constant_stack(ast, &value_slot, value_type);
-            Entity *entity = add_builtin_entity(ast, identifier, value_type, index);
+            definition_t *entity = add_builtin_definition(ast, identifier, value_type, index);
             return entity;
         }
 
         return NULL;
     }
 
-    Entity *entity = (Entity*)entity_slot.as.p;
+    definition_t *entity = (definition_t*)entity_slot.as.p;
     return entity;
 }
 
@@ -1921,7 +1812,7 @@ static Entity *get_builtin_entity(ast_t *ast, symbol_t *identifier) {
  * 
  * This function below is what does this recursive dependency thing.
 */
-static Entity *get_resolved_entity_by_identifier(
+static definition_t *get_resolved_entity_by_identifier(
         analyzer_t *analyzer,
         ast_t *ast,
         AnalysisState state,
@@ -1935,7 +1826,7 @@ static Entity *get_resolved_entity_by_identifier(
     
     // early return if looking at a built in type
     {
-        Entity *entity = get_builtin_entity(ast, identifier);
+        definition_t *entity = get_builtin_entity(ast, identifier);
         if (entity) {
             search_scope = NULL;
             return entity;
@@ -1958,7 +1849,7 @@ static Entity *get_resolved_entity_by_identifier(
             continue;
         }
 
-        Entity *entity = (Entity*)entity_slot.as.p;
+        definition_t *entity = (definition_t*)entity_slot.as.p;
 
         if (query && query->skip_mutable && entity->node->is_mutable) {
             NEXT_SCOPE();
@@ -2469,16 +2360,6 @@ static void resolve_struct_definition(analyzer_t *analyzer, ast_t *ast, Analysis
             type_info_t *field_type_info = get_type_info(&ast->type_set.types, field_type);
 
             u32 bytes_to_copy = field_type_info->size;
-
-            if (type_is_union(ast->type_set.types, field_type)) {
-                type_t value_expression_type = an_is_none(an_decl_expr(declaration)) ?
-                    typeid(TYPE_TYPE) : an_decl_expr(declaration)->value_type;
-                ASSERT(!type_is_union(ast->type_set.types, value_expression_type), "initial expression cannot be a union.");
-
-                memcpy(struct_data + offset, (byte*)(&value_expression_type), WORD_SIZE);
-                offset += WORD_SIZE;
-                bytes_to_copy -= WORD_SIZE;
-            }
 
             void *value_src = ast->constants.data + declaration->value_index.index;
             memcpy(struct_data + offset, value_src, bytes_to_copy);

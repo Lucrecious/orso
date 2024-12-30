@@ -111,15 +111,6 @@ typedef struct ast_call_t {
     ast_nodes_t arguments;
 } ast_call_t;
 
-typedef struct ast_branch_t {
-    ast_node_t *condition;
-    ast_node_t *then_expression;
-    ast_node_t *else_expression;
-
-    bool looping;
-    bool condition_negated;
-} ast_branch_t;
-
 typedef struct ast_binary_t {
     ast_node_t *lhs;
     ast_node_t *rhs;
@@ -161,6 +152,10 @@ ast_node_t nil_node;
 #define an_rhs(n) ((n)->children.items[1])
 #define an_decl_type(n) ((n)->children.items[0])
 #define an_decl_expr(n) ((n)->children.items[1])
+#define an_condition(n) ((n)->children.items[0])
+#define an_then(n) ((n)->children.items[1])
+#define an_else(n) ((n)->children.items[2])
+
 #define an_is_none(n) ((n)->node_type == AST_NODE_TYPE_NONE)
 #define an_is(n) ((n)->node_type != AST_NODE_TYPE_NONE)
 
@@ -169,13 +164,11 @@ struct ast_node_t {
 
     token_t start, end, operator;
 
-    // expressions TODO: Fill this in for *everything*, declarations, statements included
-    // TODO: only use value type
     type_t value_type;
-    //AccessIdentifiers *value_type_identifiers, *value_type_narrowed_identifiers;
-
-    // branching, blocks
     return_guarentee_t return_guarentee;
+
+    bool looping;
+    bool condition_negated;
 
     bool inside_type_context;
     bool not_consumed;
@@ -201,9 +194,6 @@ struct ast_node_t {
         ast_node_t *statement; // for readability
 
         ast_call_t call;
-
-        // branching (if, unless, while, until)
-        ast_branch_t branch;
 
         // function signatures and defintions
         ast_function_t function;

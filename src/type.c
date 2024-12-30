@@ -4,33 +4,7 @@
 #include "type_set.h"
 #include "tmp.h"
 
-bool union_type_contains_type(type_infos_t types, type_t union_id, type_t type) {
-    type_info_t *union_type_info = types.items[union_id.i];
-    type_info_t *type_info = get_type_info(&types, type);
-    if (!type_is_union(types, type)) {
-        return union_type_has_type(union_type_info, type);
-    }
 
-    for (size_t i = 0; i < type_info->data.union_.types.count; ++i){
-        if (!union_type_has_type(union_type_info, type_info->data.union_.types.items[i])) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-bool union_type_has_type(type_info_t *type_info, type_t subtype) {
-    ASSERT(type_info->kind == TYPE_UNION, "must be a union type");
-
-    for (size_t i = 0; i < type_info->data.union_.types.count; ++i) {
-        if (typeid_eq(type_info->data.union_.types.items[i], subtype)) {
-            return true;
-        }
-    }
-
-    return false;
-}
 bool struct_type_is_incomplete(type_info_t *type) {
     return type->kind == TYPE_STRUCT && type->data.struct_.field_count < 0;
 }
@@ -41,24 +15,6 @@ bool type_equal(type_info_t *a, type_info_t *b) {
     if (a->size != b->size) return false;
 
     switch (a->kind) {
-        case TYPE_UNION: {
-            if (a->data.union_.types.count != b->data.union_.types.count) {
-                return false;
-            }
-
-            for (size_t i = 0; i < a->data.union_.types.count; ++i) {
-                if (!union_type_has_type(a, b->data.union_.types.items[i])) {
-                    return false;
-                }
-
-                if (!union_type_has_type(b, a->data.union_.types.items[i])) {
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
         case TYPE_FUNCTION:
         case TYPE_NATIVE_FUNCTION: {
             if (a->data.function.argument_types.count != b->data.function.argument_types.count) {
@@ -142,47 +98,6 @@ bool type_in_list(types_t list, type_t find) {
     return false;
 }
 
-// TODO: make this faster... Preferably type_in_list should be O(1)
-type_t type_merge(type_table_t *set, type_t a_id, type_t b_id) {
-    if (typeid_eq(a_id, b_id)) {
-        return a_id;
-    }
-
-    type_info_t *a = set->types.items[a_id.i];
-    type_info_t *b = set->types.items[b_id.i];
-
-    tmp_arena_t *tmp = allocator_borrow();
-    types_t types = {.allocator=tmp->allocator};
-
-    if (type_is_union(set->types, a_id)) {
-        for (size_t i = 0; i < a->data.union_.types.count; ++i) {
-            array_push(&types, a->data.union_.types.items[i]);
-        }
-    } else {
-        array_push(&types, a_id);
-    }
-
-    if (type_is_union(set->types, b_id)) {
-        for (size_t i = 0; i < b->data.union_.types.count; ++i) {
-            if (type_in_list(types, b->data.union_.types.items[i])) {
-                continue;
-            }
-
-            array_push(&types, b->data.union_.types.items[i]);
-        }
-    } else {
-        unless (type_in_list(types, b_id)) {
-            array_push(&types, b_id);
-        }
-    }
-
-    type_t merged_id = type_set_fetch_union(set, types);
-
-    allocator_return(tmp);
-
-    return merged_id;
-}
-
 bool type_is_float(type_info_t *type) {
     return type->data.num == NUM_TYPE_FLOAT;
 }
@@ -237,26 +152,7 @@ string_t type_to_string_toplevel(type_infos_t types, type_t type, arena_t *alloc
 
     type_info_t *type_info = get_type_info(&types, type);
 
-    // type1|type2|type3|type4
-    if (type_is_union(types, type)) {
-        for (size_t i = 0; i < type_info->data.union_.types.count; ++i) {
-            if (i != 0) {
-                sb_add_char(&sb, '|');
-            }
-
-            if (type_is_function(types, type_info->data.union_.types.items[i]) || type_is_native_function(types, type_info->data.union_.types.items[i])) {
-                sb_add_char(&sb, '(');
-            }
-
-            string_t inner_type = type_to_string_toplevel(types, type_info->data.union_.types.items[i], allocator, false);
-            sb_add_cstr(&sb, inner_type.cstr);
-
-            if (type_is_function(types, type_info->data.union_.types.items[i]) || type_is_native_function(types, type_info->data.union_.types.items[i])) {
-                sb_add_char(&sb, ')');
-            }
-        }
-    // (arg1_type, arg2_type, ..., argn_type) -> return_type
-    } else if (type_is_function(types, type) || type_is_native_function(types, type)) {
+    if (type_is_function(types, type) || type_is_native_function(types, type)) {
         sb_add_char(&sb, '(');
 
         for (size_t i = 0; i < type_info->data.function.argument_types.count; ++i) {
@@ -331,7 +227,6 @@ string_t type_to_string_toplevel(type_infos_t types, type_t type, arena_t *alloc
             case TYPE_FUNCTION:
             case TYPE_NATIVE_FUNCTION:
             case TYPE_POINTER:
-            case TYPE_UNION:
                 type_name = "<?>"; UNREACHABLE(); break;
         }
 
@@ -363,12 +258,6 @@ bool can_cast_implicit(type_infos_t types, type_t type_to_cast, type_t type) {
 
     type_info_t *type_info_to_cast = get_type_info(&types, type_to_cast);
     type_info_t *type_info = get_type_info(&types, type);
-
-    if (type_is_union(types, type)) {
-        return union_type_contains_type(types, type, type_to_cast);
-    }
-
-    if (type_is_union(types, type_to_cast)) return false;
 
     u32 type_to_cast_size = type_info_to_cast->size;
     u32 type_size = type_info->size;

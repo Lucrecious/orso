@@ -87,7 +87,6 @@ static cstr_t cgen_type_name(cgen_t *cgen, type_t type) {
         case TYPE_INVALID:
         case TYPE_UNRESOLVED:
         case TYPE_UNDEFINED:
-        case TYPE_UNION:
         case TYPE_COUNT: UNREACHABLE(); return "void";
     }
 }
@@ -169,7 +168,6 @@ static void cgen_primary(cgen_t *cgen, string_builder_t *sb, value_index_t value
         case TYPE_FUNCTION:
         case TYPE_STRUCT: UNREACHABLE(); break;
 
-        case TYPE_UNION:
         case TYPE_INVALID:
         case TYPE_UNRESOLVED:
         case TYPE_UNDEFINED:
