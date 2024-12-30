@@ -169,7 +169,7 @@ struct ast_node_t {
     bool condition_negated;
 
     bool inside_type_context;
-    bool not_consumed;
+    bool is_free_standing;
     bool is_mutable;
     ast_node_t *ref_decl;
 

@@ -212,7 +212,7 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type
 
 
     node->inside_type_context = inside_type_context;
-    node->not_consumed = false;
+    node->is_free_standing = false;
 
     node->fold = false;
     node->foldable = false;
@@ -438,8 +438,8 @@ bool memarr_push_value(memarr_t *arr, void *data, size_t size_bytes, value_index
     return false;
 }
 
-static ast_node_t* number(parser_t *parser, bool inside_type_context) {
-    ast_node_t* expression_node = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_PRIMARY, inside_type_context, parser->previous);
+static ast_node_t *number(parser_t *parser, bool inside_type_context) {
+    ast_node_t *expression_node = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_PRIMARY, inside_type_context, parser->previous);
 
     switch (parser->previous.type)  {
         case TOKEN_INTEGER: {
@@ -463,6 +463,18 @@ static ast_node_t* number(parser_t *parser, bool inside_type_context) {
     expression_node->foldable = true;
 
     return expression_node;
+}
+
+static ast_node_t *parse_return(parser_t *parser, bool inside_type_context) {
+    ast_node_t *return_expr = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_RETURN, inside_type_context, parser->previous);
+    if (check_expression(parser)) {
+        an_expression(return_expr) = expression(parser, inside_type_context);
+        return_expr->end = an_expression(return_expr)->end;
+    }
+
+    return_expr->value_type = typeid(TYPE_UNDEFINED);
+
+    return return_expr;
 }
 
 static ast_node_t *literal(parser_t *parser, bool inside_type_context) {
@@ -898,7 +910,7 @@ ParseRule rules[] = {
     [TOKEN_TRUE]                    = { literal,    NULL,       PREC_NONE },
     [TOKEN_FALSE]                   = { literal,    NULL,       PREC_NONE },
     [TOKEN_NULL]                    = { literal,    NULL,       PREC_NONE },
-    [TOKEN_RETURN]                  = { NULL,       NULL,       PREC_NONE },
+    [TOKEN_RETURN]                  = { parse_return,       NULL,       PREC_NONE },
     [TOKEN_ERROR]                   = { NULL,       NULL,       PREC_NONE },
     [TOKEN_EOF]                     = { NULL,       NULL,       PREC_NONE },
     [TOKEN_SIZE]                    = { NULL,       NULL,       PREC_NONE },
@@ -1013,30 +1025,9 @@ static ast_node_t *expression(parser_t *parser, bool inside_type_context) {
 }
 
 static ast_node_t *statement(parser_t* parser, bool omit_end_of_statement) {
-    bool is_return = false;
-    ast_node_type_t node_type;
-    if (match(parser, TOKEN_RETURN)) {
-        node_type = AST_NODE_TYPE_EXPRESSION_RETURN;
-        is_return = true;
-    } else {
-        node_type = AST_NODE_TYPE_DECLARATION_STATEMENT;
-    }
-
-    ast_node_t *statement_node = ast_node_new(parser->ast, node_type, false, parser->current);
-
-    // this can be shortened to (!is_return || check_expression(parser)) but this is clearer
-    if (is_return) {
-        // expression is option in this case
-        if (check_expression(parser)) {
-            an_expression(statement_node) = expression(parser, false);
-        }
-    } else {
-        an_expression(statement_node) = expression(parser, false);
-    }
-
-    if (node_type == AST_NODE_TYPE_DECLARATION_STATEMENT) {
-        an_expression(statement_node)->not_consumed = true;
-    }
+    ast_node_t *statement_node = ast_node_new(parser->ast, AST_NODE_TYPE_DECLARATION_STATEMENT, false, parser->current);
+    an_expression(statement_node) = expression(parser, false);
+    an_expression(statement_node)->is_free_standing = true;
         
     if (!omit_end_of_statement) {
         consume(parser, TOKEN_SEMICOLON, ERROR_PARSER_EXPECTED_SEMICOLON);

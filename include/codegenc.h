@@ -105,7 +105,7 @@ static void *memarr_value_at(memarr_t *memarr, value_index_t value_index) {
 }
 
 static bool is_pure_statement(ast_node_t *expression) {
-    return expression->not_consumed && expression->node_type == AST_NODE_TYPE_EXPRESSION_BLOCK;
+    return expression->is_free_standing && expression->node_type == AST_NODE_TYPE_EXPRESSION_BLOCK;
 }
 
 static void cgen_expression(cgen_t *cgen, string_builder_t *sb, ast_node_t *expression, size_t tmpid);
