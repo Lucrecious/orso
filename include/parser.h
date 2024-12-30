@@ -49,7 +49,8 @@ typedef struct function_definition_pair_t {
 } function_definition_pair_t;
 
 typedef enum ast_node_type_t {
-    AST_NODE_TYPE_UNDEFINED, // TODO: try to remove this shit
+    AST_NODE_TYPE_NONE,
+
     AST_NODE_TYPE_MODULE,
     AST_NODE_TYPE_DECLARATION_DEFINITION, // for declaring globals, locals, constants, etc
     AST_NODE_TYPE_DECLARATION_STATEMENT, // for expressions
@@ -132,13 +133,6 @@ typedef struct ast_member_access_t {
 } ast_member_access_t;
 
 typedef struct ast_declaration_t {
-    bool is_mutable;
-    i32 fold_level_resolved_at;
-
-    token_t identifier;
-    ast_node_t *type_expression;
-    
-    ast_node_t *initial_value_expression;
 } ast_declaration_t;
 
 typedef struct ast_type_initializer_t ast_type_initializer_t;
@@ -158,10 +152,17 @@ struct value_index_t {
 
 bool memarr_push_value(memarr_t *arr, void *data, size_t size_bytes, value_index_t *out_index);
 
+ast_node_t nil_node;
+
+#define an_idx(n, idx) ((idx) < (n)->children.count ? (n)->children.items[idx] : &nil_node)
 #define an_operand(n) ((n)->children.items[0])
 #define an_expression(n) an_operand(n)
 #define an_lhs(n) ((n)->children.items[0])
 #define an_rhs(n) ((n)->children.items[1])
+#define an_decl_type(n) ((n)->children.items[0])
+#define an_decl_expression(n) ((n)->children.items[1])
+#define an_is_none(n) ((n)->node_type == AST_NODE_TYPE_NONE)
+#define an_is(n) ((n)->node_type != AST_NODE_TYPE_NONE)
 
 struct ast_node_t {
     ast_node_type_t node_type;
@@ -178,10 +179,11 @@ struct ast_node_t {
 
     bool inside_type_context;
     bool not_consumed;
+    bool is_mutable;
 
     bool fold;
-
     bool foldable;
+    i32 fold_level_resolved_at;
 
     // primary, folding value, declaration default value
     value_index_t value_index;
@@ -189,6 +191,10 @@ struct ast_node_t {
     ast_node_t *lvalue_node;
 
     ast_nodes_t children;
+
+    token_t identifier;
+    ast_node_t *type_expression;
+    ast_node_t *initial_value_expression;
 
     union {
         ast_declaration_t declaration;
@@ -261,8 +267,6 @@ type_t get_folded_type(ast_t *ast, value_index_t index);
 
 void ast_init(ast_t *ast, size_t memory_size_bytes);
 void ast_free(ast_t *ast);
-
-ast_node_t nil_node;
 
 ast_node_t* ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type_context, token_t start);
 

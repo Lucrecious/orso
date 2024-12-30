@@ -171,7 +171,7 @@ void ast_free(ast_t *ast) {
 }
 
 ast_node_t nil_node = {
-    .node_type=AST_NODE_TYPE_UNDEFINED,
+    .node_type=AST_NODE_TYPE_NONE,
     .start = TOKEN_NIL,
     .end = TOKEN_NIL,
     .operator = TOKEN_NIL,
@@ -191,23 +191,25 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type
     node->return_guarentee = RETURN_GUARENTEE_NONE;
     node->value_type.i = TYPE_UNRESOLVED;
 
-    node->fold = false;
-    node->foldable = false;
+
     node->inside_type_context = inside_type_context;
     node->not_consumed = false;
-    node->lvalue_node = NULL;
 
+    node->fold = false;
+    node->foldable = false;
+    node->fold_level_resolved_at = -1;
+    node->is_mutable = false;
+    node->identifier = TOKEN_NIL;
+
+    node->lvalue_node = NULL;
     node->value_index = value_index_nil();
 
     node->children = (ast_nodes_t){.allocator=&ast->allocator};
 
     switch (node_type) {
         case AST_NODE_TYPE_DECLARATION_DEFINITION: {
-            node->as.declaration.initial_value_expression = NULL;
-            node->as.declaration.fold_level_resolved_at = -1;
-            node->as.declaration.identifier = TOKEN_NIL;
-            node->as.declaration.is_mutable = false;
-            node->as.declaration.type_expression = NULL;
+            array_push(&node->children, &nil_node);
+            array_push(&node->children, &nil_node);
             break;
         }
 
@@ -280,7 +282,7 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type
             break;
         }
 
-        case AST_NODE_TYPE_UNDEFINED: break;// UNREACHABLE();
+        case AST_NODE_TYPE_NONE: break;// UNREACHABLE();
     }
 
     return node;
@@ -386,7 +388,7 @@ static ast_node_t* parse_precedence(parser_t* parser, bool inside_type_context, 
 bool ast_node_type_is_decl_or_stmt(ast_node_type_t node_type) {
     switch (node_type) {
         case AST_NODE_TYPE_EXPRESSION_CASE:
-        case AST_NODE_TYPE_UNDEFINED:
+        case AST_NODE_TYPE_NONE:
         case AST_NODE_TYPE_MODULE:
             return false;
         
@@ -406,7 +408,7 @@ bool ast_node_type_is_expression(ast_node_type_t node_type) {
         case AST_NODE_TYPE_DECLARATION_STATEMENT:
         case AST_NODE_TYPE_EXPRESSION_RETURN:
         case AST_NODE_TYPE_MODULE:
-        case AST_NODE_TYPE_UNDEFINED:
+        case AST_NODE_TYPE_NONE:
             return false;
     }
 }
@@ -512,7 +514,7 @@ static ast_node_t *convert_function_definition(parser_t *parser, ast_node_t *lef
         ast_node_t *parameter = left_operand->as.function.parameter_nodes.items[i];
         if (parameter->node_type != AST_NODE_TYPE_DECLARATION_DEFINITION) {
             error_at(parser, &parameter->start, ERROR_PARSER_EXPECTED_DECLARATION);
-            left_operand->node_type = AST_NODE_TYPE_UNDEFINED;
+            left_operand->node_type = AST_NODE_TYPE_NONE;
             return left_operand;
         }
     }
@@ -521,7 +523,7 @@ static ast_node_t *convert_function_definition(parser_t *parser, ast_node_t *lef
     function_definition->as.function.return_type_expression = left_operand->as.function.return_type_expression;
 
     // prevents freeing the node  parameter and return expressions
-    left_operand->node_type = AST_NODE_TYPE_UNDEFINED;
+    left_operand->node_type = AST_NODE_TYPE_NONE;
 
     return function_definition;
 }
@@ -924,7 +926,7 @@ static ast_node_t* parse_precedence(parser_t* parser, bool inside_type_context, 
 
     if (prefix_rule == NULL) {
         error(parser, ERROR_PARSER_EXPECTED_EXPRESSION);
-        left_operand = ast_node_new(parser->ast, AST_NODE_TYPE_UNDEFINED, inside_type_context, parser->previous);
+        left_operand = ast_node_new(parser->ast, AST_NODE_TYPE_NONE, inside_type_context, parser->previous);
     } else {
         left_operand = prefix_rule(parser, inside_type_context);
         left_operand->inside_type_context = inside_type_context;
@@ -1062,32 +1064,28 @@ static ast_node_t *entity_declaration(parser_t *parser, bool as_parameter) {
 
     entity_declaration_node->value_type = typeid(TYPE_UNRESOLVED);
 
-    entity_declaration_node->as.declaration.type_expression = NULL;
-    entity_declaration_node->as.declaration.initial_value_expression = NULL;
     entity_declaration_node->value_index = value_index_nil();
-    entity_declaration_node->as.declaration.fold_level_resolved_at = -1;
-    entity_declaration_node->as.declaration.is_mutable = false;
 
-    entity_declaration_node->as.declaration.identifier = parser->previous;
+    entity_declaration_node->identifier = parser->previous;
 
     consume(parser, TOKEN_COLON, ERROR_PARSER_EXPECTED_TYPE);
 
     if (!check(parser, TOKEN_EQUAL) && !check(parser, TOKEN_COLON)) {
-        entity_declaration_node->as.declaration.type_expression = expression(parser, true);
+        an_decl_type(entity_declaration_node) = expression(parser, true);
     }
 
     // TODO: try to do constant vs variable detection a little more clever...
     bool requires_expression = false;
-    if (entity_declaration_node->as.declaration.type_expression) {
+    if (an_decl_type(entity_declaration_node)->node_type == AST_NODE_TYPE_NONE) {
         if (match(parser, TOKEN_EQUAL)) {
             requires_expression = true;
-            entity_declaration_node->as.declaration.is_mutable = true;
+            entity_declaration_node->is_mutable = true;
         } else if (match(parser, TOKEN_COLON)) {
             requires_expression = true;
         }
     } else {
         if (match(parser, TOKEN_EQUAL)) {
-            entity_declaration_node->as.declaration.is_mutable = true;
+            entity_declaration_node->is_mutable = true;
         } else {
             consume(parser, TOKEN_COLON, ERROR_PARSER_EXPECTED_DECLARATION_COLON);
         }
@@ -1095,11 +1093,11 @@ static ast_node_t *entity_declaration(parser_t *parser, bool as_parameter) {
     }
 
     if (requires_expression) {
-        entity_declaration_node->as.declaration.initial_value_expression = expression(parser, false);
+        an_decl_expression(entity_declaration_node) = expression(parser, false);
     }
 
-    if (entity_declaration_node->as.declaration.initial_value_expression == NULL) {
-        entity_declaration_node->as.declaration.is_mutable = true;
+    if (an_decl_expression(entity_declaration_node)->node_type == AST_NODE_TYPE_NONE) {
+        entity_declaration_node->is_mutable = true;
     }
 
     if (!as_parameter) {
@@ -1477,16 +1475,16 @@ static void ast_print_ast_node(type_infos_t types, ast_node_t *node, u32 level) 
         }
         case AST_NODE_TYPE_DECLARATION_DEFINITION: {
             print_indent(level);
-            print_line("declaration (%.*s): %s", node->as.declaration.identifier.source_view.length, node->as.declaration.identifier.source_view.data, type2cstr(node));
+            print_line("declaration (%.*s): %s", node->identifier.source_view.length, node->identifier.source_view.data, type2cstr(node));
 
-            if (node->as.declaration.initial_value_expression) {
+            if (an_decl_expression(node) != AST_NODE_TYPE_NONE) {
                 print_indent(level+1);
                 print_line("initial value");
-                ast_print_ast_node(types, node->as.declaration.initial_value_expression, level+2);
+                ast_print_ast_node(types, an_decl_expression(node), level+2);
             }
             break;
         }
-        case AST_NODE_TYPE_UNDEFINED: {
+        case AST_NODE_TYPE_NONE: {
             print_indent(level);
             print_line("<undefined>");
             break;

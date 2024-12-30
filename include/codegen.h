@@ -233,28 +233,42 @@ static void gen_primary(gen_t *gen, function_t *function, ast_node_t *primary) {
     gen_constant(primary->start.start_location, function, data, type_info);
 }
 
-static void gen_declaration(gen_t *gen, function_t *function, ast_node_t *declaration) {
-    switch (declaration->node_type) {
-        case AST_NODE_TYPE_DECLARATION_DEFINITION: {
-            // todo
-            UNREACHABLE();
-            break;
-        }
+static void gen_local(gen_t *gen, function_t *function, ast_node_t *declaration) {
+    gen_expression(gen, function, declaration);
+}
 
-        case AST_NODE_TYPE_DECLARATION_STATEMENT: {
-            ast_node_t *expression = an_expression(declaration);
-            gen_expression(gen, function, expression);
-            break;
+static void gen_declaration(gen_t *gen, function_t *function, ast_node_t *declaration, bool is_global) {
+    if (is_global) {
+        switch (declaration->node_type) {
+            case AST_NODE_TYPE_DECLARATION_DEFINITION: {
+                // todo
+                UNREACHABLE();
+                break;
+            }
+            default: UNREACHABLE();
         }
+    } else {
+        switch (declaration->node_type) {
+            case AST_NODE_TYPE_DECLARATION_DEFINITION: {
+                gen_local(gen, function, declaration);
+                break;
+            }
 
-        default: UNREACHABLE();
+            case AST_NODE_TYPE_DECLARATION_STATEMENT: {
+                ast_node_t *expression = an_expression(declaration);
+                gen_expression(gen, function, expression);
+                break;
+            }
+
+            default: UNREACHABLE();
+        }
     }
 }
 
 static void gen_block(gen_t *gen, function_t *function, ast_node_t *block) {
     for (size_t i = 0; i < block->children.count; ++i) {
         ast_node_t *declaration = block->children.items[i];
-        gen_declaration(gen, function, declaration);
+        gen_declaration(gen, function, declaration, false);
     }
 }
 
@@ -295,7 +309,7 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
         case AST_NODE_TYPE_EXPRESSION_UNARY:
         case AST_NODE_TYPE_DECLARATION_STATEMENT:
         case AST_NODE_TYPE_EXPRESSION_RETURN:
-        case AST_NODE_TYPE_UNDEFINED:
+        case AST_NODE_TYPE_NONE:
         case AST_NODE_TYPE_DECLARATION_DEFINITION:
         case AST_NODE_TYPE_EXPRESSION_PRINT:
         case AST_NODE_TYPE_MODULE:

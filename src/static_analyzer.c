@@ -353,13 +353,12 @@ static value_index_t evaluate_expression(analyzer_t *analyzer, ast_t *ast, bool 
     return value_index_nil();
 }
 
-static bool is_declaration_resolved(ast_node_t* entity) {
-    ast_declaration_t* declaration = &entity->as.declaration;
+static bool is_declaration_resolved(ast_node_t *entity) {
     if (TYPE_IS_INVALID(entity->value_type)) {
         return true;
     }
 
-    return (entity->value_index.exists || (declaration->initial_value_expression && !TYPE_IS_UNRESOLVED(declaration->initial_value_expression->value_type))) && !TYPE_IS_UNRESOLVED(entity->value_type);
+    return (entity->value_index.exists || (an_decl_expression(entity)->node_type != AST_NODE_TYPE_NONE && !TYPE_IS_UNRESOLVED(an_decl_expression(entity)->value_type))) && !TYPE_IS_UNRESOLVED(entity->value_type);
 }
 
 static bool is_block_compile_time_foldable(ast_nodes_t block) {
@@ -381,7 +380,7 @@ static bool is_block_compile_time_foldable(ast_nodes_t block) {
             }
             
             case AST_NODE_TYPE_EXPRESSION_RETURN: return false;
-            case AST_NODE_TYPE_UNDEFINED: return false;
+            case AST_NODE_TYPE_NONE: return false;
             case AST_NODE_TYPE_MODULE:
             case AST_NODE_TYPE_EXPRESSION_CASE: UNREACHABLE();
         }
@@ -487,16 +486,16 @@ static void resolve_foldable(
                 break;
             }
 
-            if (referencing_declaration->as.declaration.is_mutable) {
+            if (referencing_declaration->is_mutable) {
                 foldable = false;
                 break;
             }
 
-            if (referencing_declaration->as.declaration.initial_value_expression) {
-                foldable = referencing_declaration->as.declaration.initial_value_expression->foldable;
-                folded_index = referencing_declaration->as.declaration.initial_value_expression->value_index;
+            if (an_decl_expression(referencing_declaration)->node_type == AST_NODE_TYPE_NONE) {
+                foldable = an_decl_expression(referencing_declaration)->foldable;
+                folded_index = an_decl_expression(referencing_declaration)->value_index;
 
-                unless (TYPE_IS_INVALID(referencing_declaration->as.declaration.initial_value_expression->value_type)) {
+                unless (TYPE_IS_INVALID(an_decl_expression(referencing_declaration)->value_type)) {
                     ASSERT(folded_index.exists, "since the entity is a constant, it should have a folded value already");
                 }
             } else {
@@ -608,7 +607,7 @@ static void resolve_foldable(
         case AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE:
         case AST_NODE_TYPE_DECLARATION_DEFINITION:
         case AST_NODE_TYPE_DECLARATION_STATEMENT:
-        case AST_NODE_TYPE_UNDEFINED:
+        case AST_NODE_TYPE_NONE:
             UNREACHABLE(); break;
     }
 
@@ -1228,11 +1227,11 @@ void resolve_expression(
             ast_node_t *referencing_declaration = NULL;
             for (size_t i = 0; i < node_and_scope.node->as.struct_.declarations.count; ++i) {
                 ast_node_t *declaration = node_and_scope.node->as.struct_.declarations.items[i];
-                if (skip_mutable && declaration->as.declaration.is_mutable) {
+                if (skip_mutable && an_decl_expression(declaration)->is_mutable) {
                     continue;
                 }
 
-                token_t declaration_name = declaration->as.declaration.identifier;
+                token_t declaration_name = declaration->identifier;
                 if (sv_eq(declaration_name.source_view, expression->as.dot.identifier.source_view)) {
                     break;
                 }
@@ -1575,7 +1574,7 @@ void resolve_expression(
             break;
         }
 
-        case AST_NODE_TYPE_UNDEFINED:
+        case AST_NODE_TYPE_NONE:
         case AST_NODE_TYPE_DECLARATION_DEFINITION:
         case AST_NODE_TYPE_DECLARATION_STATEMENT:
         case AST_NODE_TYPE_MODULE:
@@ -1606,33 +1605,32 @@ static void declare_entity(analyzer_t *analyzer, scope_t *scope, ast_node_t *ent
     add_entity(scope, &analyzer->allocator, identifier, entity);
 }
 
-static void resolve_declaration_definition(analyzer_t* analyzer, ast_t* ast, AnalysisState state, ast_node_t* entity_declaration) {
+static void resolve_declaration_definition(analyzer_t* analyzer, ast_t* ast, AnalysisState state, ast_node_t* declaration) {
 // due to the way structs are resolved, it is possible for the initial value expression to be swapped out with another
 // this is simply a safer way of accessing the initial value expression
-#define INITIAL_EXPRESSION (entity_declaration->as.declaration.initial_value_expression)
 
     type_t declaration_type = typeid(TYPE_UNRESOLVED);
-    if (TYPE_IS_UNRESOLVED(entity_declaration->value_type) && entity_declaration->as.declaration.type_expression) {
-        bool pushed = push_dependency(analyzer, entity_declaration->as.declaration.type_expression, state.fold_level, is_value_circular_dependency);
+    if (TYPE_IS_UNRESOLVED(declaration->value_type) && !an_is_none(an_decl_type(declaration))) {
+        bool pushed = push_dependency(analyzer, an_decl_type(declaration), state.fold_level, is_value_circular_dependency);
         if (pushed) {
             AnalysisState new_state = state;
             new_state.mode = MODE_CONSTANT_TIME | (state.mode & MODE_FOLDING_TIME);
-            resolve_expression(analyzer, ast, new_state, entity_declaration->as.declaration.type_expression);
-            declaration_type = get_folded_type(ast, entity_declaration->as.declaration.type_expression->value_index);
+            resolve_expression(analyzer, ast, new_state, an_decl_type(declaration));
+            declaration_type = get_folded_type(ast, an_decl_type(declaration)->value_index);
             pop_dependency(analyzer);
         } else {
             declaration_type = typeid(TYPE_INVALID);
         }
     }
 
-    if (INITIAL_EXPRESSION != NULL) {
-        if (TYPE_IS_UNRESOLVED(INITIAL_EXPRESSION->value_type)) {
+    if (!an_is_none(an_decl_expression(declaration))) {
+        if (TYPE_IS_UNRESOLVED(an_decl_expression(declaration)->value_type)) {
             AnalysisState new_state = state;
             switch (state.scope->type) {
                 case SCOPE_TYPE_FUNCTION_BODY:
                 case SCOPE_TYPE_BLOCK:
                 case SCOPE_TYPE_MODULE: {
-                    ExpressionFoldingMode mode = entity_declaration->as.declaration.is_mutable ? MODE_RUNTIME : MODE_CONSTANT_TIME;
+                    ExpressionFoldingMode mode = declaration->is_mutable ? MODE_RUNTIME : MODE_CONSTANT_TIME;
                     mode = mode | (state.mode & MODE_FOLDING_TIME);
                     new_state.mode = mode;
                     break;
@@ -1645,29 +1643,29 @@ static void resolve_declaration_definition(analyzer_t* analyzer, ast_t* ast, Ana
                 }
             }
 
-            bool pushed = push_dependency(analyzer, entity_declaration->as.declaration.initial_value_expression, new_state.fold_level, is_value_circular_dependency);
+            bool pushed = push_dependency(analyzer, an_decl_expression(declaration), new_state.fold_level, is_value_circular_dependency);
             if (pushed) {
-                resolve_expression(analyzer, ast, new_state, entity_declaration->as.declaration.initial_value_expression);
+                resolve_expression(analyzer, ast, new_state, an_decl_expression(declaration));
                 pop_dependency(analyzer);
             } else {
                 unless (TYPE_IS_UNRESOLVED(declaration_type)) {
-                    entity_declaration->value_type = declaration_type;
+                    declaration->value_type = declaration_type;
                 }
-                INVALIDATE(entity_declaration->as.declaration.initial_value_expression);
+                INVALIDATE(an_decl_expression(declaration));
             }
         } else {
             // if (is_sizing_circular_dependency(analyzer, initial_expression)) {
             //     unless (TYPE_IS_UNRESOLVED(declaration_type)) {
-            //         entity_declaration->value_type = declaration_type;
+            //         declaration->value_type = declaration_type;
             //     }
-            //     error_range(analyzer, entity_declaration->start, entity_declaration->end, "Circular dependency (entity declaration)");
-            //     INVALIDATE(entity_declaration->data.declaration.initial_value_expression);
+            //     error_range(analyzer, declaration->start, declaration->end, "Circular dependency (entity declaration)");
+            //     INVALIDATE(declaration->data.declaration.initial_value_expression);
             // }
         }
     }
 
     word_t entity_slot;
-    symbol_t *name = orso_unmanaged_symbol_from_cstrn(entity_declaration->start.source_view.data, entity_declaration->start.source_view.length, &analyzer->symbols, &ast->allocator);
+    symbol_t *name = orso_unmanaged_symbol_from_cstrn(declaration->start.source_view.data, declaration->start.source_view.length, &analyzer->symbols, &ast->allocator);
 
     ASSERT(symbol_table_get(&state.scope->named_entities, name, &entity_slot), "should be forward_declared already");
 
@@ -1676,27 +1674,27 @@ static void resolve_declaration_definition(analyzer_t* analyzer, ast_t* ast, Ana
     Entity* entity = (Entity*)entity_slot.as.p;
 
     // we are resolved
-    if (is_declaration_resolved(entity_declaration)) {
+    if (is_declaration_resolved(declaration)) {
         // this is possible if we are in a branch (i.e. function is defined at the top level, copy scopes are created for branching, it's resolved in one branch but not the other)
         if (TYPE_IS_UNRESOLVED(entity->declared_type)) {
             ASSERT(TYPE_IS_UNRESOLVED(entity->narrowed_type), "both should always be set at the same time");
 
-            entity->declared_type = entity_declaration->value_type;
-            entity->narrowed_type = entity_declaration->as.declaration.initial_value_expression->value_type;
+            entity->declared_type = declaration->value_type;
+            entity->narrowed_type = an_decl_expression(declaration)->value_type;
         }
 
-        if (!TYPE_IS_TYPE(entity_declaration->value_type)) {
+        if (!TYPE_IS_TYPE(declaration->value_type)) {
             return;
         }
 
         // This must be available at compile time
-        type_t struct_type = get_folded_type(ast, entity_declaration->value_index);
+        type_t struct_type = get_folded_type(ast, declaration->value_index);
         type_info_t *struct_type_info = ast->type_set.types.items[struct_type.i];
         unless (struct_type_is_incomplete(struct_type_info) && struct_type_info->data.struct_.name) {
             return;
         }
 
-        ast_node_t *cast_node = entity_declaration->as.declaration.initial_value_expression;
+        ast_node_t *cast_node = an_decl_expression(declaration);
         ASSERT(cast_node->node_type == AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT, "must be implicit casting node");
         
         type_t completed_struct_type = an_operand(cast_node)->value_type;
@@ -1704,7 +1702,7 @@ static void resolve_declaration_definition(analyzer_t* analyzer, ast_t* ast, Ana
         // this means that we found out later that the struct this was supposed to be was actually invalid, so we need to fix the ast
         if (TYPE_IS_INVALID(completed_struct_type)) {
             INVALIDATE(cast_node);
-            INVALIDATE(entity_declaration);
+            INVALIDATE(declaration);
             return;
         }
 
@@ -1721,21 +1719,21 @@ static void resolve_declaration_definition(analyzer_t* analyzer, ast_t* ast, Ana
 
 
 
-    if (INITIAL_EXPRESSION && (TYPE_IS_UNDEFINED(INITIAL_EXPRESSION->value_type) || TYPE_IS_INVALID(INITIAL_EXPRESSION->value_type))) {
-        if (TYPE_IS_UNDEFINED(INITIAL_EXPRESSION->value_type)) {
+    if (!an_is_none(an_decl_expression(declaration)) && (TYPE_IS_UNDEFINED(an_decl_expression(declaration)->value_type) || TYPE_IS_INVALID(an_decl_expression(declaration)->value_type))) {
+        if (TYPE_IS_UNDEFINED(an_decl_expression(declaration)->value_type)) {
             error_range(analyzer,
-                INITIAL_EXPRESSION->start,
-                INITIAL_EXPRESSION->end,
+                an_decl_expression(declaration)->start,
+                an_decl_expression(declaration)->end,
                 ERROR_ANALYSIS_EXPECTED_RESOLVED);
         }
         
-        INVALIDATE(entity_declaration);
+        INVALIDATE(declaration);
     }
 
-    unless (entity_declaration->as.declaration.is_mutable) {
-        if (INITIAL_EXPRESSION != NULL && type_is_function(ast->type_set.types, INITIAL_EXPRESSION->value_type)) {
+    unless (declaration->is_mutable) {
+        if (!an_is_none(an_decl_expression(declaration)) && type_is_function(ast->type_set.types, an_decl_expression(declaration)->value_type)) {
             function_t *function = NULL;
-            if (memarr_get(&ast->constants, INITIAL_EXPRESSION->value_index.index, sizeof(function_t*), &function)) {
+            if (memarr_get(&ast->constants, an_decl_expression(declaration)->value_index.index, sizeof(function_t*), &function)) {
                 ASSERT(false, "todo");
             }
 
@@ -1745,27 +1743,27 @@ static void resolve_declaration_definition(analyzer_t* analyzer, ast_t* ast, Ana
             // }
         }
 
-        if (INITIAL_EXPRESSION != NULL
-        && type_is_struct(ast->type_set.types, INITIAL_EXPRESSION->value_type)
+        if (!an_is_none(an_decl_expression(declaration))
+        && type_is_struct(ast->type_set.types, an_decl_expression(declaration)->value_type)
         && (TYPE_IS_UNRESOLVED(declaration_type) || TYPE_IS_TYPE(declaration_type))) {
-            ast_node_t *to_struct_type = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT, INITIAL_EXPRESSION->inside_type_context, INITIAL_EXPRESSION->start);
+            ast_node_t *to_struct_type = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT, an_decl_expression(declaration)->inside_type_context, an_decl_expression(declaration)->start);
             to_struct_type->value_type = typeid(TYPE_TYPE);
-            an_operand(to_struct_type) = INITIAL_EXPRESSION;
+            an_operand(to_struct_type) = an_decl_expression(declaration);
 
             to_struct_type->fold = false;
             to_struct_type->foldable = true;
-            type_info_t *initial_expression_type_info = get_type_info(&ast->type_set.types, INITIAL_EXPRESSION->value_type);
-            type_t named_struct_id = type_create_struct(&ast->type_set, entity_declaration->start.source_view.data, entity_declaration->start.source_view.length, initial_expression_type_info);
+            type_info_t *initial_expression_type_info = get_type_info(&ast->type_set.types, an_decl_expression(declaration)->value_type);
+            type_t named_struct_id = type_create_struct(&ast->type_set, declaration->start.source_view.data, declaration->start.source_view.length, initial_expression_type_info);
             word_t struct_type_slot = WORDU(named_struct_id.i);
             to_struct_type->value_index = add_value_to_ast_constant_stack(ast, &struct_type_slot, typeid(TYPE_TYPE));
 
-            type_t initial_expression_type = INITIAL_EXPRESSION->value_type;
+            type_t initial_expression_type = an_decl_expression(declaration)->value_type;
 
             ast_node_and_scope_t node_and_scope;
             bool found = table_get(type2ns, ast->type_to_creation_node, initial_expression_type, &node_and_scope);
             ASSERT(found, "this shoudl always find something");
 
-            INITIAL_EXPRESSION = to_struct_type;
+            an_decl_expression(declaration) = to_struct_type;
 
             table_put(type2ns, ast->type_to_creation_node, named_struct_id, node_and_scope);
             
@@ -1778,41 +1776,41 @@ static void resolve_declaration_definition(analyzer_t* analyzer, ast_t* ast, Ana
     }
 
     // Could be resolved could be unresolved at this point.
-    entity_declaration->value_type = declaration_type;
+    declaration->value_type = declaration_type;
 
-    entity_declaration->as.declaration.fold_level_resolved_at = state.fold_level;
+    declaration->fold_level_resolved_at = state.fold_level;
 
     // TODO: Outer if should be if the expression is null or not
-    if (TYPE_IS_UNRESOLVED(entity_declaration->value_type)) {
-        ASSERT(INITIAL_EXPRESSION != NULL, "this should be a parsing error.");
+    if (TYPE_IS_UNRESOLVED(declaration->value_type)) {
+        ASSERT(!an_is_none(an_decl_expression(declaration)), "this should be a parsing error.");
 
-        type_t expression_type = INITIAL_EXPRESSION->value_type;
+        type_t expression_type = an_decl_expression(declaration)->value_type;
 
         if (typeid_eq(expression_type, typeid(TYPE_BOOL)) || typeid_eq(expression_type, ast->type_set.i32_)) {
-            entity_declaration->value_type = expression_type;
+            declaration->value_type = expression_type;
         } else {
-            entity_declaration->value_type = expression_type;
+            declaration->value_type = expression_type;
         }
     } else {
-        unless (INITIAL_EXPRESSION == NULL || typeid_eq(entity_declaration->value_type, INITIAL_EXPRESSION->value_type)) {
-            unless (TYPE_IS_INVALID(INITIAL_EXPRESSION->value_type)) {
-                error_range(analyzer, INITIAL_EXPRESSION->start, INITIAL_EXPRESSION->end, ERROR_ANALYSIS_TYPE_MISMATCH);
+        unless (an_is_none(an_decl_expression(declaration)) || typeid_eq(declaration->value_type, an_decl_expression(declaration)->value_type)) {
+            unless (TYPE_IS_INVALID(an_decl_expression(declaration)->value_type)) {
+                error_range(analyzer, an_decl_expression(declaration)->start, an_decl_expression(declaration)->end, ERROR_ANALYSIS_TYPE_MISMATCH);
             }
         }
     }
 
-    entity->declared_type = entity_declaration->value_type;
-    entity->narrowed_type = entity_declaration->value_type;
+    entity->declared_type = declaration->value_type;
+    entity->narrowed_type = declaration->value_type;
 
-    if (INITIAL_EXPRESSION == NULL) {
-        if (type_is_union(ast->type_set.types, entity_declaration->value_type)) {
+    if (an_is_none(an_decl_expression(declaration))) {
+        if (type_is_union(ast->type_set.types, declaration->value_type)) {
             entity->narrowed_type = typeid(TYPE_VOID);
         } 
 
         value_index_t value_index = value_index_nil();
 
-        if (type_is_union(ast->type_set.types, entity_declaration->value_type) && !typeid_eq(entity_declaration->value_type, typeid(TYPE_VOID))) {
-            error_range(analyzer, entity_declaration->end, entity_declaration->end, ERROR_ANALYSIS_EXPECTED_DEFAULT_VALUE);
+        if (type_is_union(ast->type_set.types, declaration->value_type) && !typeid_eq(declaration->value_type, typeid(TYPE_VOID))) {
+            error_range(analyzer, declaration->end, declaration->end, ERROR_ANALYSIS_EXPECTED_DEFAULT_VALUE);
         } else unless (TYPE_IS_INVALID(entity->node->value_type)) {
             value_index = zero_value(ast, entity->node->value_type, &analyzer->symbols);
         }
@@ -1820,19 +1818,18 @@ static void resolve_declaration_definition(analyzer_t* analyzer, ast_t* ast, Ana
         entity->node->value_index = value_index;
         entity->node->foldable = value_index.exists;
     } else {
-        entity->narrowed_type = INITIAL_EXPRESSION->value_type;
-        if (IS_FOLDED(INITIAL_EXPRESSION)) {
-            if (type_is_union(ast->type_set.types, INITIAL_EXPRESSION->value_type)) {
-                type_t folded_value_type = get_folded_type(ast, INITIAL_EXPRESSION->value_index);
+        entity->narrowed_type = an_decl_expression(declaration)->value_type;
+        if (IS_FOLDED(an_decl_expression(declaration))) {
+            if (type_is_union(ast->type_set.types, an_decl_expression(declaration)->value_type)) {
+                type_t folded_value_type = get_folded_type(ast, an_decl_expression(declaration)->value_index);
                 entity->narrowed_type = folded_value_type;
             }
 
-            entity->node->value_index = INITIAL_EXPRESSION->value_index;
-            entity->node->foldable = INITIAL_EXPRESSION->value_index.exists;
+            entity->node->value_index = an_decl_expression(declaration)->value_index;
+            entity->node->foldable = an_decl_expression(declaration)->value_index.exists;
         }
     }
 
-#undef INITIAL_EXPRESSION
 }
 
 static Entity *get_builtin_entity(ast_t *ast, symbol_t *identifier) {
@@ -1963,30 +1960,30 @@ static Entity *get_resolved_entity_by_identifier(
 
         Entity *entity = (Entity*)entity_slot.as.p;
 
-        if (query && query->skip_mutable && entity->node->as.declaration.is_mutable) {
+        if (query && query->skip_mutable && entity->node->is_mutable) {
             NEXT_SCOPE();
             continue;
         }
 
-        if (passed_local_mutable_access_barrier && (*search_scope)->creator != NULL && entity->node->as.declaration.is_mutable) {
+        if (passed_local_mutable_access_barrier && (*search_scope)->creator != NULL && entity->node->is_mutable) {
             NEXT_SCOPE();
             continue;
         }
 
         // this means that the declaration is *after* the entity we are trying to resolve
-        if (entity->node->as.declaration.is_mutable && !is_declaration_resolved(entity->node)) {
+        if (entity->node->is_mutable && !is_declaration_resolved(entity->node)) {
             NEXT_SCOPE();
             continue;
         }
 
         // ensure that the value is resolved
-        if (entity->node->as.declaration.initial_value_expression) {
+        if (an_is(an_decl_expression(entity->node))) {
             AnalysisState new_state = state;
             new_state.scope = *search_scope;
             resolve_declaration_definition(analyzer, ast, new_state, entity->node);
         }
 
-        if (entity->node->as.declaration.is_mutable && entity->node->as.declaration.fold_level_resolved_at != state.fold_level) {
+        if (entity->node->is_mutable && entity->node->fold_level_resolved_at != state.fold_level) {
             error_range2(analyzer,
                     entity->node->start, entity->node->start,
                     identifier_token, identifier_token,
@@ -2386,7 +2383,7 @@ static void resolve_struct_definition(analyzer_t *analyzer, ast_t *ast, Analysis
     bool invalid_struct = false;
     for (i32 i = 0; i < declarations_count; i++) {
         ast_node_t* declaration = struct_definition->as.struct_.declarations.items[i];
-        field_count += (declaration->as.declaration.is_mutable);
+        field_count += (declaration->is_mutable);
 
         resolve_declaration_definition(analyzer, ast, state, declaration);
 
@@ -2416,14 +2413,14 @@ static void resolve_struct_definition(analyzer_t *analyzer, ast_t *ast, Analysis
         i32 constant_counter = 0;
 
         for (i32 i = 0; i < declarations_count; ++i) {
-            token_t identifier = struct_definition->as.struct_.declarations.items[i]->as.declaration.identifier;
+            token_t identifier = struct_definition->as.struct_.declarations.items[i]->identifier;
             char* name = arena_alloc(&analyzer->allocator, sizeof(char)*(identifier.source_view.length + 1));
 
             memcpy(name, identifier.source_view.data, identifier.source_view.length);
             
             name[identifier.source_view.length] = '\0';
 
-            if (struct_definition->as.struct_.declarations.items[i]->as.declaration.is_mutable) {
+            if (struct_definition->as.struct_.declarations.items[i]->is_mutable) {
                 fields[field_counter].type = struct_definition->as.struct_.declarations.items[i]->value_type;
                 fields[field_counter].name = name;
 
@@ -2474,8 +2471,8 @@ static void resolve_struct_definition(analyzer_t *analyzer, ast_t *ast, Analysis
             u32 bytes_to_copy = field_type_info->size;
 
             if (type_is_union(ast->type_set.types, field_type)) {
-                type_t value_expression_type = declaration->as.declaration.initial_value_expression == NULL ?
-                    typeid(TYPE_TYPE) : declaration->as.declaration.initial_value_expression->value_type;
+                type_t value_expression_type = an_is_none(an_decl_expression(declaration)) ?
+                    typeid(TYPE_TYPE) : an_decl_expression(declaration)->value_type;
                 ASSERT(!type_is_union(ast->type_set.types, value_expression_type), "initial expression cannot be a union.");
 
                 memcpy(struct_data + offset, (byte*)(&value_expression_type), WORD_SIZE);
@@ -2553,7 +2550,7 @@ void resolve_declarations(analyzer_t* analyzer, ast_t* ast, AnalysisState state,
         // the body of its own function regardless, it's something that I need to check for anyways to make sure they are no
         // circular dependencies.
         // Anyways, that's why constants are skipped and resolved only when they are accessed
-        if (declaration->node_type == AST_NODE_TYPE_DECLARATION_DEFINITION && !declaration->as.declaration.is_mutable) {
+        if (declaration->node_type == AST_NODE_TYPE_DECLARATION_DEFINITION && !declaration->is_mutable) {
             continue;
         }
 
@@ -2566,7 +2563,7 @@ void resolve_declarations(analyzer_t* analyzer, ast_t* ast, AnalysisState state,
             continue;
         }
 
-        if (declaration->as.declaration.is_mutable) {
+        if (declaration->is_mutable) {
             continue;
         }
 
