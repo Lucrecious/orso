@@ -227,6 +227,8 @@ static void cgen_declaration(cgen_t *cgen, string_builder_t *sb, ast_node_t *dec
     }
 }
 
+// tmpid = 0 means expression generates inline
+// tmpid != 0 means expression generates inside of tmp variable
 static void cgen_expression(cgen_t *cgen, string_builder_t *sb, ast_node_t *expression, size_t tmpid) {
     arena_reset(&cgen->tmp_arena);
 
@@ -266,7 +268,9 @@ static void cgen_expression(cgen_t *cgen, string_builder_t *sb, ast_node_t *expr
 
                 cgen_expression(cgen, sb, an_lhs(expression), 0);
 
+                sb_add_cstr(sb, " ");
                 sb_add_cstr(sb, token2opcstr(expression->operator));
+                sb_add_cstr(sb, " ");
 
                 cgen_expression(cgen, sb, an_rhs(expression), 0);
 
