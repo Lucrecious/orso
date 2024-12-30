@@ -209,6 +209,7 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type
     node->value_type.i = TYPE_UNRESOLVED;
     node->condition_negated = false;
     node->looping = false;
+    node->requires_tmp_for_cgen = true;
 
 
     node->inside_type_context = inside_type_context;

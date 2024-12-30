@@ -165,6 +165,8 @@ struct ast_node_t {
     type_t value_type;
     return_guarentee_t return_guarentee;
 
+    bool requires_tmp_for_cgen;
+
     bool looping;
     bool condition_negated;
 

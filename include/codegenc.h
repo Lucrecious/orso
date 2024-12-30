@@ -110,21 +110,24 @@ static bool is_pure_statement(ast_node_t *expression) {
 
 static void cgen_expression(cgen_t *cgen, string_builder_t *sb, ast_node_t *expression, size_t tmpid);
 
-static bool expression_requires_tmp(ast_node_t *expression) {
-    // UNUSED(expression);
-    // return true;
-
+static void cgen_cache_requires_tmp(ast_node_t *expression) {
     switch (expression->node_type) {
-        case AST_NODE_TYPE_EXPRESSION_BLOCK: return true;
-        default: break;
+        case AST_NODE_TYPE_EXPRESSION_BRANCHING:
+        case AST_NODE_TYPE_EXPRESSION_BLOCK: {
+            expression->requires_tmp_for_cgen = true;
+            break;
+        }
+
+        default:  {
+            expression->requires_tmp_for_cgen = false;
+            break;
+        }
     }
 
     for (size_t i = 0; i < expression->children.count; ++i) {
         ast_node_t *child = expression->children.items[i];
-        if (expression_requires_tmp(child)) return true;
+        cgen_cache_requires_tmp(child);
     }
-
-    return false;
 }
 
 static void cgen_primary(cgen_t *cgen, string_builder_t *sb, value_index_t value_index, type_info_t *type_info) {
@@ -191,7 +194,7 @@ static cstr_t token2opcstr(token_t op) {
 static void cgen_declaration(cgen_t *cgen, string_builder_t *sb, ast_node_t *declaration) {
     switch (declaration->node_type) {
         case AST_NODE_TYPE_DECLARATION_DEFINITION: {
-            if (expression_requires_tmp(an_decl_expr(declaration))) {
+            if (an_decl_expr(declaration)->requires_tmp_for_cgen) {
                 size_t tmpid = cgen_next_tmpid(cgen);
                 cgen_expression(cgen, sb, an_decl_expr(declaration), tmpid);
 
@@ -228,10 +231,7 @@ static void cgen_declaration(cgen_t *cgen, string_builder_t *sb, ast_node_t *dec
 static void cgen_expression(cgen_t *cgen, string_builder_t *sb, ast_node_t *expression, size_t tmpid) {
     arena_reset(&cgen->tmp_arena);
 
-    bool requires_tmp = expression_requires_tmp(expression);
-    if (requires_tmp && expression->node_type == AST_NODE_TYPE_EXPRESSION_DEF_VALUE) {
-        expression_requires_tmp(expression);
-    }
+    bool requires_tmp = expression->requires_tmp_for_cgen;
 
     switch (expression->node_type) {
         case AST_NODE_TYPE_EXPRESSION_BINARY: {
@@ -400,6 +400,17 @@ static void cgen_expression(cgen_t *cgen, string_builder_t *sb, ast_node_t *expr
             break;
         }
 
+        case AST_NODE_TYPE_EXPRESSION_BRANCHING: {
+            if (expression->looping) {
+                // todo
+                UNREACHABLE();
+            }
+
+
+
+            break;
+        }
+
         case AST_NODE_TYPE_EXPRESSION_DEF_VALUE: {
             ASSERT(!requires_tmp, "this should always be placable, like primaries");
 
@@ -427,6 +438,8 @@ string_t compile_expr_to_c(ast_t *ast, arena_t *arena) {
     string_builder_t sb = {.allocator=tmp_arena->allocator};
 
     cgen_t cgen = {.ast = ast};
+
+    cgen_cache_requires_tmp(expr_node);
 
     cgen_expression(&cgen, &sb, expr_node, 0);
     sb_add_cstr(&sb, ";");
