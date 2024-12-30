@@ -372,9 +372,8 @@ static local_t *find_local(gen_t *gen, string_view_t name) {
     return NULL;
 }
 
-static void gen_entity(gen_t *gen, function_t *function, ast_node_t *entity) {
-    local_t *local = find_local(gen, entity->identifier.view);
-    // emit_push_wordreg(gen, entity->start.location, function, REG_STACK_FRAME);
+static void gen_definition(gen_t *gen, function_t *function, ast_node_t *def) {
+    local_t *local = find_local(gen, def->identifier.view);
 
     if (local->stack_location > UINT32_MAX) {
         // todo
@@ -389,7 +388,7 @@ static void gen_entity(gen_t *gen, function_t *function, ast_node_t *entity) {
         instruction.as.binu_reg_immediate.reg_operand = REG_STACK_FRAME;
         instruction.as.binu_reg_immediate.reg_result = REG_RESULT;
 
-        emit_instruction(function, entity->start.location, instruction);
+        emit_instruction(function, def->start.location, instruction);
     }
 
     {
@@ -397,7 +396,7 @@ static void gen_entity(gen_t *gen, function_t *function, ast_node_t *entity) {
         instruction.as.mov_regmem_to_reg.regmem_source = REG_RESULT;
         instruction.as.mov_regmem_to_reg.reg_destination = REG_RESULT;
 
-        emit_instruction(function, token_end_location(&entity->end), instruction);
+        emit_instruction(function, token_end_location(&def->end), instruction);
     }
 }
 
@@ -425,8 +424,8 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
             break;
         }
 
-        case AST_NODE_TYPE_EXPRESSION_ENTITY: {
-            gen_entity(gen, function, expression);
+        case AST_NODE_TYPE_EXPRESSION_DEF_VALUE: {
+            gen_definition(gen, function, expression);
             break;
         }
 

@@ -13,8 +13,8 @@
 
 /*
 program                  -> declaration* EOF
-declaration              -> entity_declaration | statement
-entity_declaration       -> IDENTIFIER `:` ((logic_or ((`=` | `:`) expression)?) | ((`=` | `:`) expression) `;`
+declaration              -> definition | statement
+definition               -> IDENTIFIER `:` ((logic_or ((`=` | `:`) expression)?) | ((`=` | `:`) expression) `;`
 parameters               -> parameter (`,` parameter)*
 parameter                -> IDENTIFIER `:` ((logic_or (`=` expression)?)
 statement                -> expression_statement
@@ -44,7 +44,7 @@ primary                  -> `true` | `false` | `null` | IDENTIFIER | INTEGER | D
                           | type_init
 function_definition      -> `(` parameters? `)` `->` logic_or block
 function_type            -> `(` (logic_or (`,` logic_or)*)? `)` `->` logic_or
-struct_definition        -> `struct` `{` entity_declaration* `}`
+struct_definition        -> `struct` `{` definition* `}`
 type_init                ->  logic_or`{` `}`
 */
 
@@ -74,8 +74,8 @@ cstr_t const error_messages[] = {
     [ERROR_ANALYSIS_EXPECTED_TYPE] = "expression must be a type",
     [ERROR_ANALYSIS_TYPE_MISMATCH] = "type mismatch; expression requires explicit cast",
     [ERROR_ANALYSIS_CANNOT_RETURN_INSIDE_RETURN] = "cannot return inside return",
-    [ERROR_ANALYSIS_CANNOT_ACCESS_MUTABLE_ON_DIFFERENT_FOLD_LEVEL] = "cannot access mutable entity on a different fold level",
-    [ERROR_ANALYSIS_CANNOT_OVERLOAD_ENTITY_DEFINITION] = "cannot overload entity definition",
+    [ERROR_ANALYSIS_CANNOT_ACCESS_MUTABLE_ON_DIFFERENT_FOLD_LEVEL] = "cannot access mutable definition on a different fold level",
+    [ERROR_ANALYSIS_CANNOT_OVERLOAD_DEFINITION] = "cannot overload definition",
     [ERROR_ANALYSIS_CANNOT_FOLD_ON_ERRORED_FUNCTION_DEFINITION] = "cannot fold on errored function definition",
     [ERROR_ANALYSIS_FOLDING_LOOP] = "folding operation causes a dependency loop",
     [ERROR_ANALYSIS_FUNCTION_MUST_RETURN_ON_ALL_BRANCHES] = "function must return on all branches",
@@ -292,7 +292,7 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type
         case AST_NODE_TYPE_EXPRESSION_PRIMARY:
             break;
         
-        case AST_NODE_TYPE_EXPRESSION_ENTITY:
+        case AST_NODE_TYPE_EXPRESSION_DEF_VALUE:
         case AST_NODE_TYPE_EXPRESSION_DOT: {
             array_push(&node->children, &nil_node);
             node->identifier = TOKEN_NIL;
@@ -550,7 +550,7 @@ static ast_node_t *assignment(parser_t *parser, bool inside_type_context) {
 }
 
 static ast_node_t* named_variable(parser_t *parser, bool inside_type_context) {
-    ast_node_t* expression_node = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_ENTITY, inside_type_context, parser->previous);
+    ast_node_t* expression_node = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_DEF_VALUE, inside_type_context, parser->previous);
     expression_node->identifier = parser->previous;
     return expression_node;
 }
@@ -673,13 +673,13 @@ static bool is_incoming_declaration_declaration(parser_t* parser) {
     return token.type == TOKEN_COLON;
 }
 
-static ast_node_t* entity_declaration(parser_t* parser, bool as_parameter);
+static ast_node_t* definition_declaration(parser_t* parser, bool as_parameter);
 
 static ast_nodes_t parse_parameters(parser_t *parser) {
     ast_nodes_t parameters = {.allocator=&parser->ast->allocator};
     until (check(parser, TOKEN_PARENTHESIS_CLOSE)) {
         if (is_incoming_declaration_declaration(parser)) {
-            array_push(&parameters, entity_declaration(parser, true));
+            array_push(&parameters, definition_declaration(parser, true));
         } else {
             array_push(&parameters, expression(parser, true));
         }
@@ -811,7 +811,7 @@ static ast_node_t *struct_(parser_t *parser, bool inside_type_context) {
     consume(parser, TOKEN_BRACE_OPEN, ERROR_PARSER_EXPECTED_OPEN_BRACE);
 
     while (!check(parser, TOKEN_BRACE_CLOSE) && !check(parser, TOKEN_EOF)) {
-        ast_node_t *declaration_node = entity_declaration(parser, false);
+        ast_node_t *declaration_node = definition_declaration(parser, false);
         array_push(&struct_definition->children, declaration_node);
     }
 
@@ -981,9 +981,9 @@ static ast_node_t* parse_precedence(parser_t* parser, bool inside_type_context, 
 
     /*
      * I was a little liberal with the parsing of the function signature because I wanted it 
-     * to capture both entity declarations and expressions for the parameters. This allows me
+     * to capture both definitions and expressions for the parameters. This allows me
      * to combine a block and a signature to make a definition and then check if all the
-     * parameters and entity declarations. That case is handled already.
+     * parameters and definitions. That case is handled already.
      * 
      * Now here, I need to verify that all the parameters are expressions because
      * this is the signature case. I only want the parameters to be expressions of types.
@@ -1063,35 +1063,35 @@ static ast_node_t *statement(parser_t* parser, bool omit_end_of_statement) {
     return statement_node;
 }
 
-static ast_node_t *entity_declaration(parser_t *parser, bool as_parameter) {
-    ast_node_t *entity_declaration_node = ast_node_new(parser->ast, AST_NODE_TYPE_DECLARATION_DEFINITION, false, parser->current);
+static ast_node_t *definition_declaration(parser_t *parser, bool as_parameter) {
+    ast_node_t *definition_node = ast_node_new(parser->ast, AST_NODE_TYPE_DECLARATION_DEFINITION, false, parser->current);
 
     advance(parser);
 
-    entity_declaration_node->value_type = typeid(TYPE_UNRESOLVED);
+    definition_node->value_type = typeid(TYPE_UNRESOLVED);
 
-    entity_declaration_node->value_index = value_index_nil();
+    definition_node->value_index = value_index_nil();
 
-    entity_declaration_node->identifier = parser->previous;
+    definition_node->identifier = parser->previous;
 
     consume(parser, TOKEN_COLON, ERROR_PARSER_EXPECTED_TYPE);
 
     if (!check(parser, TOKEN_EQUAL) && !check(parser, TOKEN_COLON)) {
-        an_decl_type(entity_declaration_node) = expression(parser, true);
+        an_decl_type(definition_node) = expression(parser, true);
     }
 
     // TODO: try to do constant vs variable detection a little more clever...
     bool requires_expression = false;
-    if (an_decl_type(entity_declaration_node)->node_type == AST_NODE_TYPE_NONE) {
+    if (an_decl_type(definition_node)->node_type == AST_NODE_TYPE_NONE) {
         if (match(parser, TOKEN_EQUAL)) {
             requires_expression = true;
-            entity_declaration_node->is_mutable = true;
+            definition_node->is_mutable = true;
         } else if (match(parser, TOKEN_COLON)) {
             requires_expression = true;
         }
     } else {
         if (match(parser, TOKEN_EQUAL)) {
-            entity_declaration_node->is_mutable = true;
+            definition_node->is_mutable = true;
         } else {
             consume(parser, TOKEN_COLON, ERROR_PARSER_EXPECTED_DECLARATION_COLON);
         }
@@ -1099,25 +1099,25 @@ static ast_node_t *entity_declaration(parser_t *parser, bool as_parameter) {
     }
 
     if (requires_expression) {
-        an_decl_expr(entity_declaration_node) = expression(parser, false);
+        an_decl_expr(definition_node) = expression(parser, false);
     }
 
-    if (an_decl_expr(entity_declaration_node)->node_type == AST_NODE_TYPE_NONE) {
-        entity_declaration_node->is_mutable = true;
+    if (an_decl_expr(definition_node)->node_type == AST_NODE_TYPE_NONE) {
+        definition_node->is_mutable = true;
     }
 
     if (!as_parameter) {
         consume(parser, TOKEN_SEMICOLON, ERROR_PARSER_EXPECTED_SEMICOLON);
     }
 
-    entity_declaration_node->end = parser->previous;
-    return entity_declaration_node;
+    definition_node->end = parser->previous;
+    return definition_node;
 }
 
 static ast_node_t *declaration(parser_t *parser, bool is_top_level) {
     ast_node_t *node = NULL;
     if (is_incoming_declaration_declaration(parser)) {
-        node = entity_declaration(parser, false);
+        node = definition_declaration(parser, false);
     } else {
         unless (is_top_level) {
             node = statement(parser, false);
@@ -1330,9 +1330,9 @@ static void ast_print_ast_node(type_infos_t types, ast_node_t *node, u32 level) 
             print_line("primary (%.*s): %s", node->start.view.length, node->start.view.data, type2cstr(node));;
             break;
         }
-        case AST_NODE_TYPE_EXPRESSION_ENTITY: {
+        case AST_NODE_TYPE_EXPRESSION_DEF_VALUE: {
             print_indent(level);
-            print_line("entity (%.*s): %s", node->identifier.view.length, node->identifier.view.data, type2cstr(node));
+            print_line("definition (%.*s): %s", node->identifier.view.length, node->identifier.view.data, type2cstr(node));
             break;
         }
         case AST_NODE_TYPE_EXPRESSION_ASSIGNMENT: {

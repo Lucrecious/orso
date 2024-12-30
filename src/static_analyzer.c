@@ -46,7 +46,7 @@ typedef struct definition_t {
 
 } definition_t;
 
-#define entity_type(e) (((e)->node->node_type == AST_NODE_TYPE_NONE) ? ((e)->declared_type) : ((e)->node->value_type))
+#define def_type(e) (((e)->node->node_type == AST_NODE_TYPE_NONE) ? ((e)->declared_type) : ((e)->node->value_type))
 
 static void scope_init(scope_t *scope, arena_t *allocator, scope_type_t type, scope_t *outer, ast_node_t *creator_expression) {
     scope->outer = outer;
@@ -207,19 +207,20 @@ typedef enum {
     QUERY_FLAG_MACH_FUNCTION = 0x8,
 } QueryFlags;
 
-typedef struct EntityQuery  {
+typedef struct def_query_t def_query_t;
+struct def_query_t  {
     QueryFlags flags;
     type_t search_type;
     bool skip_mutable;
-} EntityQuery;
+};
 
-static definition_t* get_resolved_entity_by_identifier(
-        analyzer_t* analyzer,
-        ast_t* ast,
+static definition_t *get_resolved_def_by_identifier(
+        analyzer_t *analyzer,
+        ast_t *ast,
         AnalysisState state,
         token_t identifier_token,
-        EntityQuery* query,
-        scope_t** found_scope);
+        def_query_t *query,
+        scope_t **found_scope);
 
 static bool is_builtin_type(type_table_t *t, string_view_t identifier, type_t *type) {
 #define RETURN_IF_TYPE(SYMBOL, TYPE_STRING, TYPE) \
@@ -279,12 +280,12 @@ static value_index_t evaluate_expression(analyzer_t *analyzer, ast_t *ast, bool 
     return value_index_nil();
 }
 
-static bool is_declaration_resolved(ast_node_t *entity) {
-    if (TYPE_IS_INVALID(entity->value_type)) {
+static bool is_declaration_resolved(ast_node_t *definition) {
+    if (TYPE_IS_INVALID(definition->value_type)) {
         return true;
     }
 
-    return (entity->value_index.exists || (an_decl_expr(entity)->node_type != AST_NODE_TYPE_NONE && !TYPE_IS_UNRESOLVED(an_decl_expr(entity)->value_type))) && !TYPE_IS_UNRESOLVED(entity->value_type);
+    return (definition->value_index.exists || (an_decl_expr(definition)->node_type != AST_NODE_TYPE_NONE && !TYPE_IS_UNRESOLVED(an_decl_expr(definition)->value_type))) && !TYPE_IS_UNRESOLVED(definition->value_type);
 }
 
 static bool is_block_compile_time_foldable(ast_nodes_t block) {
@@ -391,7 +392,7 @@ static void resolve_foldable(
             break;
         }
 
-        case AST_NODE_TYPE_EXPRESSION_ENTITY: {
+        case AST_NODE_TYPE_EXPRESSION_DEF_VALUE: {
             ast_node_t *referencing_declaration = expression->ref_decl;
 
             // this happens when the referencing declaration cannot be found OR for a builtin type
@@ -411,7 +412,7 @@ static void resolve_foldable(
                 folded_index = an_decl_expr(referencing_declaration)->value_index;
 
                 unless (TYPE_IS_INVALID(an_decl_expr(referencing_declaration)->value_type)) {
-                    ASSERT(folded_index.exists, "since the entity is a constant, it should have a folded value already");
+                    ASSERT(folded_index.exists, "since the definition is a constant, it should have a folded value already");
                 }
             } else {
                 foldable = true;
@@ -630,7 +631,7 @@ static void fold_function_signature(analyzer_t *analyzer, ast_t *ast, ast_node_t
  * is okay to do even with constant folding. We can think about compiling a progarm with a language like in two different ways.
  * Right now, the way the compiler works is through a principle I call "eager resolution". Which means that when a problem
  * comes up during static analysis (i.e. an unresolved expression) we immediately go to resolve it. For example, a problem
- * that may occur is that while trying to resolve the type of an entity, you need to resolve an expression, but to resolve
+ * that may occur is that while trying to resolve the type of an definition, you need to resolve an expression, but to resolve
  * that expression, you might need to perform a folding operation. My compiler walks down the line of dependencies and resolves
  * all the problems that come along the way.
  * 
@@ -784,16 +785,16 @@ static void resolve_struct_definition(
     AnalysisState state,
     ast_node_t* struct_definition);
 
-static void declare_entity(analyzer_t* analyzer, scope_t* scope, ast_node_t* entity);
+static void declare_definition(analyzer_t *analyzer, scope_t *scope, ast_node_t *definition);
 
-static void forward_scan_declaration_names(analyzer_t* analyzer, scope_t* scope, ast_nodes_t declarations, i32 count) {
+static void forward_scan_declaration_names(analyzer_t *analyzer, scope_t *scope, ast_nodes_t declarations, i32 count) {
     for (i32 i = 0; i < count; i++) {
         ast_node_t* declaration = declarations.items[i];
         if (declaration->node_type != AST_NODE_TYPE_DECLARATION_DEFINITION) {
             continue;
         }
 
-        declare_entity(analyzer, scope, declaration);
+        declare_definition(analyzer, scope, declaration);
     }
 }
 
@@ -1067,31 +1068,31 @@ void resolve_expression(
             break;
         }
 
-        case AST_NODE_TYPE_EXPRESSION_ENTITY: {
+        case AST_NODE_TYPE_EXPRESSION_DEF_VALUE: {
             expression->lvalue_node = expression;
 
-            scope_t *entity_scope;
-            EntityQuery query = {
+            scope_t *def_scope;
+            def_query_t query = {
                 .search_type = expression->inside_type_context ? typeid(TYPE_TYPE) : typeid(TYPE_INVALID),
                 .skip_mutable = (state.mode & MODE_CONSTANT_TIME),
                 .flags = expression->inside_type_context ? QUERY_FLAG_MATCH_TYPE : QUERY_FLAG_MATCH_ANY,
             };
 
-            definition_t *entity = get_resolved_entity_by_identifier(analyzer, ast, state, expression->identifier, &query, &entity_scope);
+            definition_t *definition = get_resolved_def_by_identifier(analyzer, ast, state, expression->identifier, &query, &def_scope);
 
-            if (entity == NULL) {
+            if (definition == NULL) {
                 INVALIDATE(expression);
                 break;
             }
 
-            // keep for constant folding so not redo entity look up and simplify work there
-            expression->ref_decl = entity->node;
+            // keep for constant folding so not redo definition look up and simplify work there
+            expression->ref_decl = definition->node;
 
-            expression->value_type = entity_type(entity);
+            expression->value_type = def_type(definition);
 
-            if (entity->node == NULL) {
+            if (definition->node == NULL) {
                 expression->foldable = true;
-                expression->value_index = entity->value_index;
+                expression->value_index = definition->value_index;
             }
             break;
         }
@@ -1148,27 +1149,27 @@ void resolve_expression(
                 break;
             }
 
-            // keep until constant folding so no need to redo the entity look up
+            // keep until constant folding so no need to redo the definition look up
             expression->ref_decl = referencing_declaration;
 
             unless (is_declaration_resolved(referencing_declaration)) {
                 AnalysisState search_state = state;
                 search_state.scope = node_and_scope.scope;
 
-                EntityQuery query = {
+                def_query_t query = {
                     .flags = QUERY_FLAG_MATCH_ANY | QUERY_FLAG_MATCH_ONLY_IN_GIVEN_SCOPE,
                     .skip_mutable = skip_mutable,
                 };
 
                 scope_t* found_scope;
-                definition_t* entity = get_resolved_entity_by_identifier(analyzer, ast, search_state, expression->identifier, &query, &found_scope);
+                definition_t* definition = get_resolved_def_by_identifier(analyzer, ast, search_state, expression->identifier, &query, &found_scope);
 
-                unless (entity) {
+                unless (definition) {
                     INVALIDATE(expression);
                     break;
                 }
 
-                expression->value_type = entity->node->value_type;
+                expression->value_type = definition->node->value_type;
                 break;
             }
 
@@ -1198,11 +1199,11 @@ void resolve_expression(
             expression->lvalue_node = lvalue_node;
 
             // // TODO: Find a way to merge the fitting logic
-            if (lvalue_node->node_type == AST_NODE_TYPE_EXPRESSION_ENTITY) {
-                scope_t* entity_scope;
+            if (lvalue_node->node_type == AST_NODE_TYPE_EXPRESSION_DEF_VALUE) {
+                scope_t* def_scope;
                 definition_t *def;
                 token_t identifier = lvalue_node->identifier;
-                def = get_resolved_entity_by_identifier(analyzer, ast, state, identifier, NULL, &entity_scope);
+                def = get_resolved_def_by_identifier(analyzer, ast, state, identifier, NULL, &def_scope);
 
                 
                 if (def == NULL) {
@@ -1210,10 +1211,10 @@ void resolve_expression(
                     break;
                 }
 
-                expression->value_type = entity_type(def);
+                expression->value_type = def_type(def);
 
                 type_t rhs_type = rhs->value_type;
-                unless (typeid_eq(entity_type(def), rhs_type)) {
+                unless (typeid_eq(def_type(def), rhs_type)) {
                     error_range(analyzer, expression->start, expression->end, ERROR_ANALYSIS_TYPE_MISMATCH);
                     break;
                 }
@@ -1486,20 +1487,20 @@ void resolve_expression(
     fold_constants_via_runtime(analyzer, ast, state, expression);
 }
 
-static void declare_entity(analyzer_t *analyzer, scope_t *scope, ast_node_t *entity) {
+static void declare_definition(analyzer_t *analyzer, scope_t *scope, ast_node_t *definition) {
     word_t def_word;
     
     tmp_arena_t *tmp = allocator_borrow();
-    string_t identifier = sv2string(entity->identifier.view, tmp->allocator);
+    string_t identifier = sv2string(definition->identifier.view, tmp->allocator);
 
     if (table_get(s2w, scope->definitions, identifier, &def_word)) {
         const char message[126];
-        snprintf((char*)message, 126, "Duplicate entity definition of '%.*s'.", (int)entity->start.view.length, entity->start.view.data);
-        error_token(analyzer, entity->start, ERROR_ANALYSIS_CANNOT_OVERLOAD_ENTITY_DEFINITION);
+        snprintf((char*)message, 126, "Duplicate definition definition of '%.*s'.", (int)definition->start.view.length, definition->start.view.data);
+        error_token(analyzer, definition->start, ERROR_ANALYSIS_CANNOT_OVERLOAD_DEFINITION);
         return;
     }
 
-    add_definition(scope, &analyzer->allocator, string2sv(identifier), entity);
+    add_definition(scope, &analyzer->allocator, string2sv(identifier), definition);
 
     allocator_return(tmp);
 }
@@ -1557,7 +1558,7 @@ static void resolve_declaration_definition(analyzer_t* analyzer, ast_t* ast, Ana
             //     unless (TYPE_IS_UNRESOLVED(declaration_type)) {
             //         declaration->value_type = declaration_type;
             //     }
-            //     error_range(analyzer, declaration->start, declaration->end, "Circular dependency (entity declaration)");
+            //     error_range(analyzer, declaration->start, declaration->end, "Circular dependency (definition declaration)");
             //     INVALIDATE(declaration->data.declaration.initial_value_expression);
             // }
         }
@@ -1713,12 +1714,12 @@ static void resolve_declaration_definition(analyzer_t* analyzer, ast_t* ast, Ana
 
 }
 
-static definition_t *get_builtin_entity(ast_t *ast, string_view_t identifier) {
+static definition_t *get_builtin_def(ast_t *ast, string_view_t identifier) {
     tmp_arena_t *tmp = allocator_borrow();
     string_t identifier_ = sv2string(identifier, tmp->allocator);
 
-    word_t entity_slot;
-    unless (table_get(s2w, ast->builtins, identifier_, &entity_slot)) {
+    word_t def_slot;
+    unless (table_get(s2w, ast->builtins, identifier_, &def_slot)) {
         type_t type;
         // native_function_t *function;
         bool has_value = false;
@@ -1732,17 +1733,17 @@ static definition_t *get_builtin_entity(ast_t *ast, string_view_t identifier) {
 
         if (has_value) {
             value_index_t index = add_value_to_ast_constant_stack(ast, &value_slot, value_type);
-            definition_t *entity = add_builtin_definition(ast, identifier, value_type, index);
-            return entity;
+            definition_t *definition = add_builtin_definition(ast, identifier, value_type, index);
+            return definition;
         }
 
         return NULL;
     }
 
-    definition_t *entity = (definition_t*)entity_slot.as.p;
+    definition_t *definition = (definition_t*)def_slot.as.p;
 
     allocator_return(tmp);
-    return entity;
+    return definition;
 }
 
 /*
@@ -1776,7 +1777,7 @@ static definition_t *get_builtin_entity(ast_t *ast, string_view_t identifier) {
  * in a far off module or something. I disagree and I think scanning the scope names is the solution to doing this
  * without a ton of overhead.
  * After scanning the scope for the names, now the current scope and all inner scopes will know what entities
- * exist in the program. When an expression is being resolved and requests the type or value of a named entity
+ * exist in the program. When an expression is being resolved and requests the type or value of a named definition
  * this is the function that is called. An expression can be dependant on resursively on other named entities.
  * 
  *       {
@@ -1803,26 +1804,26 @@ static definition_t *get_builtin_entity(ast_t *ast, string_view_t identifier) {
  * 
  * This function below is what does this recursive dependency thing.
 */
-static definition_t *get_resolved_entity_by_identifier(
+static definition_t *get_resolved_def_by_identifier(
         analyzer_t *analyzer,
         ast_t *ast,
         AnalysisState state,
         token_t identifier_token,
-        EntityQuery *query,
+        def_query_t *query,
         scope_t **search_scope) { // TODO: consider removing search scope from params, check if it's actually used
 
     bool passed_local_mutable_access_barrier = false;
 
     // early return if looking at a built in type
     {
-        definition_t *entity = get_builtin_entity(ast, identifier_token.view);
-        if (entity) {
+        definition_t *definition = get_builtin_def(ast, identifier_token.view);
+        if (definition) {
             search_scope = NULL;
-            return entity;
+            return definition;
         }
     }
 
-    word_t entity_slot;
+    word_t def_slot;
     *search_scope = state.scope;
 
     while (*search_scope) {
@@ -1837,7 +1838,7 @@ static definition_t *get_resolved_entity_by_identifier(
             tmp_arena_t *tmp = allocator_borrow();
             string_t identifier_ = sv2string(identifier_token.view, tmp->allocator);
 
-            unless (table_get(s2w, (*search_scope)->definitions, identifier_, &entity_slot)) {
+            unless (table_get(s2w, (*search_scope)->definitions, identifier_, &def_slot)) {
                 NEXT_SCOPE();
                 continue;
             }
@@ -1846,41 +1847,41 @@ static definition_t *get_resolved_entity_by_identifier(
         }
 
 
-        definition_t *entity = (definition_t*)entity_slot.as.p;
+        definition_t *definition = (definition_t*)def_slot.as.p;
 
-        if (query && query->skip_mutable && entity->node->is_mutable) {
+        if (query && query->skip_mutable && definition->node->is_mutable) {
             NEXT_SCOPE();
             continue;
         }
 
-        if (passed_local_mutable_access_barrier && (*search_scope)->creator != NULL && entity->node->is_mutable) {
+        if (passed_local_mutable_access_barrier && (*search_scope)->creator != NULL && definition->node->is_mutable) {
             NEXT_SCOPE();
             continue;
         }
 
-        // this means that the declaration is *after* the entity we are trying to resolve
-        if (entity->node->is_mutable && !is_declaration_resolved(entity->node)) {
+        // this means that the declaration is *after* the definition we are trying to resolve
+        if (definition->node->is_mutable && !is_declaration_resolved(definition->node)) {
             NEXT_SCOPE();
             continue;
         }
 
         // ensure that the value is resolved
-        if (an_is(an_decl_expr(entity->node))) {
+        if (an_is(an_decl_expr(definition->node))) {
             AnalysisState new_state = state;
             new_state.scope = *search_scope;
-            resolve_declaration_definition(analyzer, ast, new_state, entity->node);
+            resolve_declaration_definition(analyzer, ast, new_state, definition->node);
         }
 
-        if (entity->node->is_mutable && entity->node->fold_level_resolved_at != state.fold_level) {
+        if (definition->node->is_mutable && definition->node->fold_level_resolved_at != state.fold_level) {
             error_range2(analyzer,
-                    entity->node->start, entity->node->start,
+                    definition->node->start, definition->node->start,
                     identifier_token, identifier_token,
                     ERROR_ANALYSIS_CANNOT_ACCESS_MUTABLE_ON_DIFFERENT_FOLD_LEVEL);
 
             return NULL;
         }
 
-        if (type_is_function(ast->type_set.types, entity->node->value_type)) {
+        if (type_is_function(ast->type_set.types, definition->node->value_type)) {
             /*
             * Okay... Time to do some explaining. This is a complicated one. Let's begin with the context.
             *
@@ -1951,7 +1952,7 @@ static definition_t *get_resolved_entity_by_identifier(
 
             UNREACHABLE();
 
-            // function_t_ *function = arena_array_get_t(&ast->constants, entity->node->as.declaration.initial_value_expression->value_index, function_t_*);
+            // function_t_ *function = arena_array_get_t(&ast->constants, definition->node->as.declaration.initial_value_expression->value_index, function_t_*);
             // for (size_t i = 0; i < analyzer->dependencies.count; ++i) {
             //     i32 i_ = analyzer->dependencies.count - 1 - i;
             //     analysis_dependency_t *dependency = &analyzer->dependencies.items[i_];
@@ -1971,21 +1972,21 @@ static definition_t *get_resolved_entity_by_identifier(
         }
 
         if (!query) {
-            return entity;
+            return definition;
         }
 
         if (query->flags & QUERY_FLAG_MATCH_ANY) {
-            return entity;
+            return definition;
         }
 
-        type_t type = entity->node->value_type;
+        type_t type = definition->node->value_type;
 
         if (query->flags & QUERY_FLAG_MATCH_TYPE && typeid_eq(query->search_type, type)) {
-            return entity;
+            return definition;
         }
 
         if (query->flags & QUERY_FLAG_MACH_FUNCTION && type_is_function(ast->type_set.types, type)) {
-            return entity;
+            return definition;
         }
 
         NEXT_SCOPE();
@@ -2202,7 +2203,7 @@ static void resolve_function_expression(
 * struct { MyValue:: 10; value := #fold generate_value(); }; 
 *      => #fold generate_value()
 *          => () -> i32 { return Foo.MyValue; }
-*              => Foo.MyValue => Foo // At this point, get_resolved_entity_by_identifier will find
+*              => Foo.MyValue => Foo // At this point, get_resolved_def_by_identifier will find
 *                                    // Foo points to the "resolved" struct. But at this point, its still
 *                                    // potentially incomplete (in this case it is because while we are figuring out
 *                                    // what `value` is we are figuring out what is `Foo.MyValue`).

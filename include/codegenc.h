@@ -90,7 +90,7 @@ static cstr_t cgen_type_name(cgen_t *cgen, type_t type) {
     }
 }
 
-static void cgen_add_entity_name(string_builder_t *sb, string_view_t name) {
+static void cgen_add_definition_name(string_builder_t *sb, string_view_t name) {
     sb_add_format(sb, "%.*s", (int)name.length, name.data);
     sb_add_cstr(sb, "_");
 }
@@ -197,12 +197,12 @@ static void cgen_declaration(cgen_t *cgen, string_builder_t *sb, ast_node_t *dec
 
                 cgen_add_indent(sb, cgen->indent);
                 sb_add_format(sb, "%s ", cgen_type_name(cgen, declaration->value_type));
-                cgen_add_entity_name(sb, declaration->identifier.view);
+                cgen_add_definition_name(sb, declaration->identifier.view);
                 sb_add_format(sb, " = %s", cgen_tmp_name(cgen, tmpid));
             } else {
                 cgen_add_indent(sb, cgen->indent);
                 sb_add_format(sb, "%s ", cgen_type_name(cgen, declaration->value_type));
-                cgen_add_entity_name(sb, declaration->identifier.view);
+                cgen_add_definition_name(sb, declaration->identifier.view);
                 sb_add_cstr(sb, " = ");
                 cgen_expression(cgen, sb, an_decl_expr(declaration), 0);
             }
@@ -229,7 +229,7 @@ static void cgen_expression(cgen_t *cgen, string_builder_t *sb, ast_node_t *expr
     arena_reset(&cgen->tmp_arena);
 
     bool requires_tmp = expression_requires_tmp(expression);
-    if (requires_tmp && expression->node_type == AST_NODE_TYPE_EXPRESSION_ENTITY) {
+    if (requires_tmp && expression->node_type == AST_NODE_TYPE_EXPRESSION_DEF_VALUE) {
         expression_requires_tmp(expression);
     }
 
@@ -400,7 +400,7 @@ static void cgen_expression(cgen_t *cgen, string_builder_t *sb, ast_node_t *expr
             break;
         }
 
-        case AST_NODE_TYPE_EXPRESSION_ENTITY: {
+        case AST_NODE_TYPE_EXPRESSION_DEF_VALUE: {
             ASSERT(!requires_tmp, "this should always be placable, like primaries");
 
             if (tmpid > 0) {
@@ -408,7 +408,7 @@ static void cgen_expression(cgen_t *cgen, string_builder_t *sb, ast_node_t *expr
                 sb_add_format(sb, "%s %s = ", cgen_type_name(cgen, expression->value_type), cgen_tmp_name(cgen, tmpid));
             }
 
-            cgen_add_entity_name(sb, expression->identifier.view);
+            cgen_add_definition_name(sb, expression->identifier.view);
 
             if (tmpid > 0) {
                 sb_add_cstr(sb, ";\n");
