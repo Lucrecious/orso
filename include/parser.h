@@ -154,8 +154,8 @@ ast_node_t nil_node;
 #define an_then(n) ((n)->children.items[1])
 #define an_else(n) ((n)->children.items[2])
 
-#define an_is_none(n) ((n)->node_type == AST_NODE_TYPE_NONE)
-#define an_is(n) ((n)->node_type != AST_NODE_TYPE_NONE)
+#define an_is_none(n)    ((n)->node_type == AST_NODE_TYPE_NONE)
+#define an_is_notnone(n) ((n)->node_type != AST_NODE_TYPE_NONE)
 
 struct ast_node_t {
     ast_node_type_t node_type;
@@ -188,8 +188,6 @@ struct ast_node_t {
 
     union {
         ast_declaration_t declaration;
-
-        ast_node_t *statement; // for readability
 
         ast_call_t call;
 

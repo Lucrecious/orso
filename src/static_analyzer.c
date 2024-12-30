@@ -31,11 +31,11 @@ typedef enum ExpressionFoldingMode {
     MODE_FOLDING_TIME = 0x4,
 } ExpressionFoldingMode;
 
-typedef struct AnalysisState {
+typedef struct analysis_state_t {
     i32 fold_level;
     ExpressionFoldingMode mode;
     scope_t *scope;
-} AnalysisState;
+} analysis_state_t;
 
 typedef struct definition_t {
     ast_node_t *node;
@@ -53,30 +53,6 @@ static void scope_init(scope_t *scope, arena_t *allocator, scope_type_t type, sc
     scope->creator = creator_expression;
     scope->type = type;
     scope->definitions = table_new(s2w, allocator);
-}
-
-static scope_t *scope_copy_new(scope_t *scope, arena_t *allocator) {
-    if (scope == NULL) {
-        return NULL;
-    }
-
-    scope_t *scope_copy = arena_alloc(allocator, sizeof(scope_t));
-    scope_init(scope_copy, allocator, scope->type, NULL, scope->creator);
-
-    for (tbliter_t i = table_begin(s2w, scope->definitions); i != table_end(s2w, scope->definitions); ++i) {
-        if (kh_exist(scope->definitions, i)) {
-            string_t s = scope->definitions->keys[i];
-            definition_t *def = (definition_t*)scope->definitions->vals[i].as.p;
-
-            definition_t *def_copy = (definition_t*)arena_alloc(allocator, sizeof(definition_t));
-            *def_copy = *def;
-            table_put(s2w, scope_copy->definitions, string_copy(s, allocator), WORDP(def_copy));
-        }
-    }
-
-    scope_copy->outer = scope_copy_new(scope->outer, allocator);
-
-    return scope_copy;
 }
 
 static void add_definition(scope_t *scope, arena_t *allocator, string_view_t identifier, ast_node_t *declaration_node) {
@@ -217,7 +193,7 @@ struct def_query_t  {
 static definition_t *get_resolved_def_by_identifier(
         analyzer_t *analyzer,
         ast_t *ast,
-        AnalysisState state,
+        analysis_state_t state,
         token_t identifier_token,
         def_query_t *query,
         scope_t **found_scope);
@@ -318,13 +294,13 @@ static bool is_block_compile_time_foldable(ast_nodes_t block) {
 static void fold_constants_via_runtime(
         analyzer_t* analyzer,
         ast_t* ast,
-        AnalysisState state,
+        analysis_state_t state,
         ast_node_t* expression);
 
 static void resolve_foldable(
         analyzer_t *analyzer,
         ast_t *ast,
-        AnalysisState state,
+        analysis_state_t state,
         ast_node_t *expression) {
 
     bool foldable = false;
@@ -364,7 +340,7 @@ static void resolve_foldable(
         case AST_NODE_TYPE_EXPRESSION_BRANCHING: {
             bool condition_is_foldable = an_condition(expression)->foldable;
             bool then_is_foldable = an_then(expression)->foldable;
-            bool else_is_foldable = an_is(an_else(expression)) ? an_else(expression)->foldable : true;
+            bool else_is_foldable = an_is_notnone(an_else(expression)) ? an_else(expression)->foldable : true;
 
             foldable = condition_is_foldable && then_is_foldable && else_is_foldable;
             break;
@@ -421,7 +397,7 @@ static void resolve_foldable(
         }
 
         case AST_NODE_TYPE_EXPRESSION_DOT: {
-            ASSERT(an_is(expression->ref_decl), "referencing declaration must be present for dot expression");
+            ASSERT(an_is_notnone(expression->ref_decl), "referencing declaration must be present for dot expression");
 
             foldable = expression->foldable && expression->ref_decl->foldable;
             folded_index = foldable ? expression->ref_decl->value_index : value_index_nil();
@@ -528,7 +504,7 @@ static void resolve_foldable(
 static void fold_constants_via_runtime(
         analyzer_t* analyzer,
         ast_t* ast,
-        AnalysisState state,
+        analysis_state_t state,
         ast_node_t* expression) {
     
     UNUSED(analyzer);
@@ -751,32 +727,32 @@ static scope_t *get_closest_outer_function_scope(type_infos_t *types, scope_t *s
 static void resolve_declarations(
         analyzer_t *analyzer,
         ast_t *ast,
-        AnalysisState state,
+        analysis_state_t state,
         ast_nodes_t declarations,
         i32 count);
 
 static void resolve_declaration(
         analyzer_t* analyzer,
         ast_t* ast,
-        AnalysisState state,
+        analysis_state_t state,
         ast_node_t* declaration_node);
 
 static void resolve_declaration_statement(
     analyzer_t* analyzer,
     ast_t* ast,
-    AnalysisState state,
+    analysis_state_t state,
     ast_node_t* statement);
 
 static void resolve_function_expression(
         analyzer_t* analyzer,
         ast_t* ast,
-        AnalysisState state,
+        analysis_state_t state,
         ast_node_t* function_definition_expression);
 
 static void resolve_struct_definition(
     analyzer_t* analyzer,
     ast_t* ast,
-    AnalysisState state,
+    analysis_state_t state,
     ast_node_t* struct_definition);
 
 static void declare_definition(analyzer_t *analyzer, scope_t *scope, ast_node_t *definition);
@@ -795,7 +771,7 @@ static void forward_scan_declaration_names(analyzer_t *analyzer, scope_t *scope,
 void resolve_expression(
         analyzer_t *analyzer,
         ast_t *ast,
-        AnalysisState state,
+        analysis_state_t state,
         ast_node_t *expression) {
     
     ASSERT(ast_node_type_is_expression(expression->node_type), "should be only expressions");
@@ -1095,7 +1071,7 @@ void resolve_expression(
             ast_node_t *left = an_lhs(expression);
             ASSERT(left, "for now left must be present");
 
-            if (an_is(expression->ref_decl)) {
+            if (an_is_notnone(expression->ref_decl)) {
                 expression->value_type = expression->ref_decl->value_type;
                 break;
             }
@@ -1147,7 +1123,7 @@ void resolve_expression(
             expression->ref_decl = referencing_declaration;
 
             unless (is_declaration_resolved(referencing_declaration)) {
-                AnalysisState search_state = state;
+                analysis_state_t search_state = state;
                 search_state.scope = node_and_scope.scope;
 
                 def_query_t query = {
@@ -1244,7 +1220,7 @@ void resolve_expression(
             i32 declarations_count = expression->children.count;
             forward_scan_declaration_names(analyzer, &block_scope, expression->children, declarations_count);
 
-            AnalysisState block_state = state;
+            analysis_state_t block_state = state;
             block_state.scope = &block_scope;
             block_state.mode = MODE_RUNTIME | (state.mode & MODE_FOLDING_TIME);
             resolve_declarations(analyzer, ast, block_state, expression->children, declarations_count);
@@ -1281,11 +1257,8 @@ void resolve_expression(
         }
 
         case AST_NODE_TYPE_EXPRESSION_RETURN: {
-            type_t return_expression_type = typeid(TYPE_VOID);
-
             if (an_expression(expression)) {
                 resolve_expression(analyzer, ast, state, an_expression(expression));
-                return_expression_type = an_expression(expression)->value_type;
             }
 
             scope_t *function_scope = get_closest_outer_function_scope(&ast->type_set.types, state.scope);
@@ -1295,59 +1268,40 @@ void resolve_expression(
             type_info_t *function_type_info = ast->type_set.types.items[function_type.i];
 
             type_t function_return_type = function_scope ? function_type_info->data.function.return_type : typeid(TYPE_VOID);
-            unless (TYPE_IS_INVALID(return_expression_type) || typeid_eq(function_return_type, return_expression_type)) {
+            unless (TYPE_IS_INVALID(an_expression(expression)->value_type) || !typeid_eq(function_return_type, an_expression(expression)->value_type)) {
                 error_range(analyzer, an_expression(expression)->start, an_expression(expression)->end, ERROR_ANALYSIS_TYPE_MISMATCH);
             }
 
-            expression->return_guarentee = an_operand(expression->as.statement) ? 
-                    an_operand(expression->as.statement)->return_guarentee : RETURN_GUARENTEE_NONE;
+            expression->return_guarentee = RETURN_GUARENTEE_YES;
 
-            if (expression->as.statement->node_type == AST_NODE_TYPE_EXPRESSION_RETURN) {
+            if (an_expression(expression)->node_type == AST_NODE_TYPE_EXPRESSION_RETURN) {
                 if (expression->return_guarentee != RETURN_GUARENTEE_NONE) {
                     error_range(analyzer, expression->start, expression->end, ERROR_ANALYSIS_CANNOT_RETURN_INSIDE_RETURN);
                 } else {
                     expression->return_guarentee = RETURN_GUARENTEE_YES;
                 }
             }
-
-            if (expression->return_guarentee != RETURN_GUARENTEE_NONE) {
-                expression->value_type = typeid(TYPE_UNDEFINED);
-            } else {
-                expression->value_type = an_operand(expression->as.statement)->value_type;
-            }
-            
         }
 
         case AST_NODE_TYPE_EXPRESSION_BRANCHING: {
             resolve_expression(analyzer, ast, state, an_condition(expression));
 
-            scope_t *then_scope = scope_copy_new(state.scope, &analyzer->allocator);
-            AnalysisState then_state = state;
-            then_state.scope = then_scope;
-            resolve_expression(analyzer, ast, then_state, an_then(expression));
+            resolve_expression(analyzer, ast, state, an_then(expression));
 
-            scope_t* else_scope = scope_copy_new(state.scope, &analyzer->allocator);
-            AnalysisState else_state = state;
-            else_state.scope = else_scope;
-            if (an_is(an_else(expression))) {
-                resolve_expression(analyzer, ast, else_state, an_else(expression));
+            if (an_is_notnone(an_else(expression))) {
+                resolve_expression(analyzer, ast, state, an_else(expression));
             }
 
             return_guarentee_t branch_return_guarentee;
             // resolve return guarentee first
             {
-                ASSERT(an_then(expression)->node_type == AST_NODE_TYPE_DECLARATION_STATEMENT, "must be expression statement or block, not other choices");
+                ASSERT(an_then(expression)->node_type == AST_NODE_TYPE_DECLARATION_STATEMENT, "must be a statement");
 
                 return_guarentee_t then_return_guarentee = an_then(expression)->return_guarentee;
 
                 return_guarentee_t else_return_guarentee = RETURN_GUARENTEE_NONE;
-                if (an_is(an_else(expression))) {
-                    if (an_else(expression)->node_type == AST_NODE_TYPE_EXPRESSION_BLOCK
-                    || an_else(expression)->node_type == AST_NODE_TYPE_EXPRESSION_BRANCHING) {
-                        else_return_guarentee = an_else(expression)->return_guarentee;
-                    } else {
-                        ASSERT(false, "only blocks and ifs allowed during elses for now");
-                    }
+                if (an_is_notnone(an_else(expression))) {
+                    else_return_guarentee = an_else(expression)->return_guarentee;
                 }
 
                 if (then_return_guarentee == RETURN_GUARENTEE_YES && else_return_guarentee == RETURN_GUARENTEE_YES) {
@@ -1359,24 +1313,15 @@ void resolve_expression(
                 }
             }
 
-            while (then_scope) {
-                scope_t *outer_scope = scope_copy_new(then_scope->outer, &analyzer->allocator);
-                then_scope = outer_scope;
-            }
-
-            while (else_scope) {
-                scope_t* outer_scope = scope_copy_new(else_scope->outer, &analyzer->allocator);
-                else_scope = outer_scope;
-            }
-
             if (TYPE_IS_INVALID(an_then(expression)->value_type) ||
-                (an_is(an_else(expression)) && TYPE_IS_INVALID(an_else(expression)->value_type))) {
+                    (an_is_notnone(an_else(expression)) && TYPE_IS_INVALID(an_else(expression)->value_type))) {
                 INVALIDATE(expression);
                 break;
             }
 
             if (branch_return_guarentee == RETURN_GUARENTEE_NONE) {
                 if (!typeid_eq(an_then(expression)->value_type, an_else(expression)->value_type)) {
+                    error_token(analyzer, expression->start, ERROR_ANALYSIS_TYPE_MISMATCH);
                     INVALIDATE(expression);
                 } else {
                     expression->value_type = an_then(expression)->value_type;
@@ -1492,7 +1437,7 @@ static void declare_definition(analyzer_t *analyzer, scope_t *scope, ast_node_t 
     allocator_return(tmp);
 }
 
-static void resolve_declaration_definition(analyzer_t* analyzer, ast_t* ast, AnalysisState state, ast_node_t* declaration) {
+static void resolve_declaration_definition(analyzer_t* analyzer, ast_t* ast, analysis_state_t state, ast_node_t* declaration) {
 // due to the way structs are resolved, it is possible for the initial value expression to be swapped out with another
 // this is simply a safer way of accessing the initial value expression
 
@@ -1500,7 +1445,7 @@ static void resolve_declaration_definition(analyzer_t* analyzer, ast_t* ast, Ana
     if (TYPE_IS_UNRESOLVED(declaration->value_type) && !an_is_none(an_decl_type(declaration))) {
         bool pushed = push_dependency(analyzer, an_decl_type(declaration), state.fold_level, is_value_circular_dependency);
         if (pushed) {
-            AnalysisState new_state = state;
+            analysis_state_t new_state = state;
             new_state.mode = MODE_CONSTANT_TIME | (state.mode & MODE_FOLDING_TIME);
             resolve_expression(analyzer, ast, new_state, an_decl_type(declaration));
             declaration_type = get_folded_type(ast, an_decl_type(declaration)->value_index);
@@ -1512,7 +1457,7 @@ static void resolve_declaration_definition(analyzer_t* analyzer, ast_t* ast, Ana
 
     if (!an_is_none(an_decl_expr(declaration))) {
         if (TYPE_IS_UNRESOLVED(an_decl_expr(declaration)->value_type)) {
-            AnalysisState new_state = state;
+            analysis_state_t new_state = state;
             switch (state.scope->type) {
                 case SCOPE_TYPE_FUNCTION_BODY:
                 case SCOPE_TYPE_BLOCK:
@@ -1794,7 +1739,7 @@ static definition_t *get_builtin_def(ast_t *ast, string_view_t identifier) {
 static definition_t *get_resolved_def_by_identifier(
         analyzer_t *analyzer,
         ast_t *ast,
-        AnalysisState state,
+        analysis_state_t state,
         token_t identifier_token,
         def_query_t *query,
         scope_t **search_scope) { // TODO: consider removing search scope from params, check if it's actually used
@@ -1853,8 +1798,8 @@ static definition_t *get_resolved_def_by_identifier(
         }
 
         // ensure that the value is resolved
-        if (an_is(an_decl_expr(definition->node))) {
-            AnalysisState new_state = state;
+        if (an_is_notnone(an_decl_expr(definition->node))) {
+            analysis_state_t new_state = state;
             new_state.scope = *search_scope;
             resolve_declaration_definition(analyzer, ast, new_state, definition->node);
         }
@@ -1989,7 +1934,7 @@ static definition_t *get_resolved_def_by_identifier(
 static void resolve_function_expression(
         analyzer_t *analyzer,
         ast_t *ast,
-        AnalysisState state,
+        analysis_state_t state,
         ast_node_t *function_definition_expression) {
     ASSERT(function_definition_expression->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION, "must be function declaration at this point");
 
@@ -2016,7 +1961,7 @@ static void resolve_function_expression(
 
     // Resolves parameters for function type
     for (i32 i = 0; i < parameter_count; ++i) {
-        AnalysisState new_state = state;
+        analysis_state_t new_state = state;
         // parameters look syntacticly like mutables, but their initial expressions should be constants
         new_state.mode = MODE_CONSTANT_TIME | (state.mode & MODE_FOLDING_TIME);
         new_state.scope = &function_parameter_scope;
@@ -2033,7 +1978,7 @@ static void resolve_function_expression(
     if (definition->return_type_expression) {
         bool pushed = push_dependency(analyzer, definition->return_type_expression, state.fold_level, is_value_circular_dependency);
         if (pushed) {
-            AnalysisState new_state = state;
+            analysis_state_t new_state = state;
             new_state.mode = MODE_CONSTANT_TIME | (state.mode & MODE_FOLDING_TIME);
             resolve_expression(analyzer, ast, state, definition->return_type_expression);
             pop_dependency(analyzer);
@@ -2079,7 +2024,7 @@ static void resolve_function_expression(
 
     bool pushed = push_dependency(analyzer, function_definition_expression, state.fold_level, is_value_circular_dependency);
     if (pushed) {
-        AnalysisState new_state = state;
+        analysis_state_t new_state = state;
         new_state.mode = MODE_RUNTIME;
 
         scope_t function_scope;
@@ -2232,7 +2177,7 @@ static void resolve_function_expression(
 * 
 * 
 */
-static void resolve_struct_definition(analyzer_t *analyzer, ast_t *ast, AnalysisState state, ast_node_t *struct_definition) {
+static void resolve_struct_definition(analyzer_t *analyzer, ast_t *ast, analysis_state_t state, ast_node_t *struct_definition) {
     scope_t struct_scope;
     scope_init(&struct_scope, &analyzer->allocator, SCOPE_TYPE_STRUCT, state.scope, struct_definition);
 
@@ -2366,7 +2311,7 @@ static void resolve_struct_definition(analyzer_t *analyzer, ast_t *ast, Analysis
 static void resolve_declaration_statement(
         analyzer_t *analyzer,
         ast_t *ast,
-        AnalysisState state,
+        analysis_state_t state,
         ast_node_t *statement) {
     resolve_expression(analyzer, ast, state, an_expression(statement));
     statement->value_type = an_expression(statement)->value_type;
@@ -2375,7 +2320,7 @@ static void resolve_declaration_statement(
 static void resolve_declaration(
         analyzer_t* analyzer,
         ast_t* ast,
-        AnalysisState state,
+        analysis_state_t state,
         ast_node_t* declaration_node) {
 
     switch (declaration_node->node_type) {
@@ -2393,7 +2338,7 @@ static void resolve_declaration(
     }
 }
 
-void resolve_declarations(analyzer_t* analyzer, ast_t* ast, AnalysisState state, ast_nodes_t declarations, i32 count) {
+void resolve_declarations(analyzer_t* analyzer, ast_t* ast, analysis_state_t state, ast_nodes_t declarations, i32 count) {
     for (i32 i = 0; i < count; i++) {
         ast_node_t* declaration = declarations.items[i];
         // Constants are meant to be solved at compile time, which means they do not run during a particular state
@@ -2453,7 +2398,7 @@ bool resolve_ast(analyzer_t *analyzer, ast_t *ast) {
         scope_t global_scope = {0};
         scope_init(&global_scope, &analyzer->allocator, SCOPE_TYPE_MODULE, NULL, NULL);
 
-        AnalysisState analysis_state = (AnalysisState) {
+        analysis_state_t analysis_state = (analysis_state_t) {
             .mode = MODE_RUNTIME,
             .scope = &global_scope,
             .fold_level = 0,
@@ -2470,7 +2415,7 @@ bool resolve_ast(analyzer_t *analyzer, ast_t *ast) {
         scope_t global_scope = {0};
         scope_init(&global_scope, &analyzer->allocator, SCOPE_TYPE_MODULE, NULL, NULL);
 
-        AnalysisState state = (AnalysisState) {
+        analysis_state_t state = (analysis_state_t) {
             .mode = MODE_RUNTIME,
             .scope = &global_scope,
             .fold_level = 0,

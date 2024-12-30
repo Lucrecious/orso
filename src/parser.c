@@ -1355,7 +1355,7 @@ static void ast_print_ast_node(type_infos_t types, ast_node_t *node, u32 level) 
             print_line("then");
             ast_print_ast_node(types, an_then(node), level + 2);
 
-            if (an_is(an_else(node))) {
+            if (an_is_notnone(an_else(node))) {
                 print_indent(level + 1);
                 print_line("else");
                 ast_print_ast_node(types, an_else(node), level + 2);
