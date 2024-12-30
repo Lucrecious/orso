@@ -90,6 +90,7 @@ bool parse_expr_cstr(ast_t *ast, cstr_t expr_source, string_t file_path) {
     if (success) {
         analyzer_t analyzer = {0};
         analyzer_init(&analyzer, mywrite, myerror);
+        analyzer.ast = ast;
 
         success = resolve_ast(&analyzer, ast);
 
@@ -117,8 +118,12 @@ int main(int argc, char **argv) {
     ast_init(&ast, megabytes(2));
 
     // bool success = parse_expr_cstr(&ast, "1/{2;}", lit2str(""));
-    bool success = parse_expr_cstr(&ast, "{ x := 1; y := 2; z = if x > y then x else y; }", lit2str(""));
+    bool success = parse_expr_cstr(&ast, "{ x := 1; y := 2; z := if x > y then x else y; z; }", lit2str(""));
     unless (success) return 1;
+
+    ast_print(&ast, "ll");
+    return 1;
+
 
     if (cgen) {
         string_t expr_str = compile_expr_to_c(&ast, &arena);

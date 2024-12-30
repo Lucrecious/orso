@@ -1303,7 +1303,7 @@ static void ast_print_ast_node(type_infos_t types, ast_node_t *node, u32 level) 
         }
         case AST_NODE_TYPE_EXPRESSION_DEF_VALUE: {
             print_indent(level);
-            print_line("definition (%.*s): %s", node->identifier.view.length, node->identifier.view.data, type2cstr(node));
+            print_line("def value (%.*s): %s", node->identifier.view.length, node->identifier.view.data, type2cstr(node));
             break;
         }
         case AST_NODE_TYPE_EXPRESSION_ASSIGNMENT: {

@@ -1295,8 +1295,6 @@ void resolve_expression(
             return_guarentee_t branch_return_guarentee;
             // resolve return guarentee first
             {
-                ASSERT(an_then(expression)->node_type == AST_NODE_TYPE_DECLARATION_STATEMENT, "must be a statement");
-
                 return_guarentee_t then_return_guarentee = an_then(expression)->return_guarentee;
 
                 return_guarentee_t else_return_guarentee = RETURN_GUARENTEE_NONE;
@@ -1763,7 +1761,7 @@ static definition_t *get_resolved_def_by_identifier(
 
     #define NEXT_SCOPE() \
         if (is_function_scope) { passed_local_mutable_access_barrier = true; }\
-        if (query->flags & QUERY_FLAG_MATCH_ONLY_IN_GIVEN_SCOPE) { break; }\
+        if (query && query->flags & QUERY_FLAG_MATCH_ONLY_IN_GIVEN_SCOPE) { break; }\
         *search_scope = (*search_scope)->outer
 
         {

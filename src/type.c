@@ -209,7 +209,7 @@ string_t type_to_string_toplevel(type_infos_t types, type_t type, arena_t *alloc
                 }
 
                 string_t s = string_format("%llu", tmp_arena->allocator, (type_info->size*8));
-                sb_add_cstr(&sb, s.cstr);
+                type_name = s.cstr;
                 break;
             }
 
