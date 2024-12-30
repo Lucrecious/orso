@@ -200,6 +200,7 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type
     node->fold_level_resolved_at = -1;
     node->is_mutable = false;
     node->identifier = TOKEN_NIL;
+    node->ref_decl = &nil_node;
 
     node->lvalue_node = NULL;
     node->value_index = value_index_nil();
@@ -276,7 +277,6 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type
         
         case AST_NODE_TYPE_EXPRESSION_ENTITY:
         case AST_NODE_TYPE_EXPRESSION_DOT: {
-            array_push(&node->children, &nil_node);
             array_push(&node->children, &nil_node);
             node->identifier = TOKEN_NIL;
             break;

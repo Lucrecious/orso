@@ -477,7 +477,7 @@ static void resolve_foldable(
         }
 
         case AST_NODE_TYPE_EXPRESSION_ENTITY: {
-            ast_node_t* referencing_declaration = an_ref_decl(expression);
+            ast_node_t *referencing_declaration = expression->ref_decl;
 
             // this happens when the referencing declaration cannot be found OR for a builtin type
             unless (referencing_declaration) {
@@ -506,10 +506,10 @@ static void resolve_foldable(
         }
 
         case AST_NODE_TYPE_EXPRESSION_DOT: {
-            ASSERT(an_is(an_ref_decl(expression)), "referencing declaration must be present for dot expression");
+            ASSERT(an_is(expression->ref_decl), "referencing declaration must be present for dot expression");
 
-            foldable = expression->foldable && an_ref_decl(expression)->foldable;
-            folded_index = foldable ? an_ref_decl(expression)->value_index : value_index_nil();
+            foldable = expression->foldable && expression->ref_decl->foldable;
+            folded_index = foldable ? expression->ref_decl->value_index : value_index_nil();
             break;
         }
 
@@ -1173,7 +1173,7 @@ void resolve_expression(
             }
 
             // keep for constant folding so not redo entity look up and simplify work there
-            an_ref_decl(expression) = entity->node;
+            expression->ref_decl = entity->node;
 
             expression->value_type = entity->declared_type;
 
@@ -1188,8 +1188,8 @@ void resolve_expression(
             ast_node_t *left = an_lhs(expression);
             ASSERT(left, "for now left must be present");
 
-            if (an_is(an_ref_decl(expression))) {
-                expression->value_type = an_ref_decl(expression)->value_type;
+            if (an_is(expression->ref_decl)) {
+                expression->value_type = expression->ref_decl->value_type;
                 break;
             }
 
@@ -1244,7 +1244,7 @@ void resolve_expression(
             }
 
             // keep until constant folding so no need to redo the entity look up
-            an_ref_decl(expression) = referencing_declaration;
+            expression->ref_decl = referencing_declaration;
 
             unless (is_declaration_resolved(referencing_declaration)) {
                 AnalysisState search_state = state;

@@ -159,7 +159,6 @@ ast_node_t nil_node;
 #define an_expression(n) an_operand(n)
 #define an_lhs(n) ((n)->children.items[0])
 #define an_rhs(n) ((n)->children.items[1])
-#define an_ref_decl(n) ((n)->children.items[1])
 #define an_decl_type(n) ((n)->children.items[0])
 #define an_decl_expr(n) ((n)->children.items[1])
 #define an_is_none(n) ((n)->node_type == AST_NODE_TYPE_NONE)
@@ -181,6 +180,7 @@ struct ast_node_t {
     bool inside_type_context;
     bool not_consumed;
     bool is_mutable;
+    ast_node_t *ref_decl;
 
     bool fold;
     bool foldable;
@@ -194,8 +194,6 @@ struct ast_node_t {
     ast_nodes_t children;
 
     token_t identifier;
-    ast_node_t *type_expression;
-    ast_node_t *initial_value_expression;
 
     union {
         ast_declaration_t declaration;

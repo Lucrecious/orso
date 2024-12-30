@@ -109,8 +109,7 @@ static void *vm_run_function(vm_t *vm, function_t *function) {
 }
 
 int main(int argc, char **argv) {
-    UNUSED(argc);
-    UNUSED(argv);
+    bool cgen = (argc == 2 && strcmp(argv[1], "cgen") == 0);
 
     arena_t arena = {0};
 
@@ -118,34 +117,36 @@ int main(int argc, char **argv) {
     ast_init(&ast, megabytes(2));
 
     // bool success = parse_expr_cstr(&ast, "1/{2;}", lit2str(""));
-    bool success = parse_expr_cstr(&ast, "{ x := 1; x + 1; }", lit2str(""));
+    bool success = parse_expr_cstr(&ast, "{ x := 18 + 88*5; x; }", lit2str(""));
     unless (success) return 1;
 
-    // string_t expr_str = compile_expr_to_c(&ast, &arena);
+    if (cgen) {
+        string_t expr_str = compile_expr_to_c(&ast, &arena);
 
-    // printf("%s\n", expr_str.cstr);
+        printf("%s\n", expr_str.cstr);
+    } else {
+        memarr_t *memory = arena_alloc(&arena, sizeof(memarr_t));
+        *memory = (memarr_t){0};
 
-    memarr_t *memory = arena_alloc(&arena, sizeof(memarr_t));
-    *memory = (memarr_t){0};
+        memarr_init(memory, megabytes(2.5));
+        size_t stack_size = (size_t)megabytes(0.5);
+        memory->count = stack_size;
+        memset(memory->data, 0, stack_size);
+        
+        function_t *expr_function = new_function(lit2str("<none>"), memory, &arena);
 
-    memarr_init(memory, megabytes(2.5));
-    size_t stack_size = (size_t)megabytes(0.5);
-    memory->count = stack_size;
-    memset(memory->data, 0, stack_size);
-    
-    function_t *expr_function = new_function(lit2str("<none>"), memory, &arena);
+        compile_expr_to_function(expr_function, &ast);
 
-    compile_expr_to_function(expr_function, &ast);
+        vm_t vm = {0};
+        vm_init(&vm);
+        vm.registers[REG_STACK_FRAME].as.u = stack_size;
+        vm.registers[REG_STACK_BOTTOM].as.u = stack_size;
 
-    vm_t vm = {0};
-    vm_init(&vm);
-    vm.registers[REG_STACK_FRAME].as.u = stack_size;
-    vm.registers[REG_STACK_BOTTOM].as.u = stack_size;
+        vm_set_entry_point(&vm, expr_function);
 
-    vm_set_entry_point(&vm, expr_function);
-
-    debugger_t debugger = {0};
-    debugger_init(&debugger, &arena);
-    while (debugger_step(&debugger, &vm));
+        debugger_t debugger = {0};
+        debugger_init(&debugger, &arena);
+        while (debugger_step(&debugger, &vm));
+    }
 }
 
