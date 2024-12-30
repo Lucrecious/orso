@@ -213,7 +213,6 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type
 
 
     node->inside_type_context = inside_type_context;
-    node->is_free_standing = false;
 
     node->fold = false;
     node->foldable = false;
@@ -1024,7 +1023,6 @@ static ast_node_t *parse_expression(parser_t *parser, bool inside_type_context) 
 static ast_node_t *parse_statement(parser_t* parser, bool omit_end_of_statement) {
     ast_node_t *statement_node = ast_node_new(parser->ast, AST_NODE_TYPE_DECLARATION_STATEMENT, false, parser->current);
     an_expression(statement_node) = parse_expression(parser, false);
-    an_expression(statement_node)->is_free_standing = true;
         
     if (!omit_end_of_statement) {
         consume(parser, TOKEN_SEMICOLON, ERROR_PARSER_EXPECTED_SEMICOLON);
