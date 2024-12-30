@@ -372,7 +372,7 @@ static local_t *find_local(gen_t *gen, string_view_t name) {
     return NULL;
 }
 
-static void gen_definition(gen_t *gen, function_t *function, ast_node_t *def) {
+static void gen_def_value(gen_t *gen, function_t *function, ast_node_t *def) {
     local_t *local = find_local(gen, def->identifier.view);
 
     if (local->stack_location > UINT32_MAX) {
@@ -400,6 +400,54 @@ static void gen_definition(gen_t *gen, function_t *function, ast_node_t *def) {
     }
 }
 
+static size_t gen_jmp_if_reg(function_t *function, text_location_t location, reg_t condition_reg, bool jmp_condition) {
+    instruction_t instruction = {0};
+    instruction.op = OP_JMP_IF_REG_CONDITION;
+    instruction.as.jmp.forward = 0;
+    instruction.as.jmp.condition_reg = condition_reg;
+    instruction.as.jmp.check_for = jmp_condition;
+
+    size_t index = function->code.count;
+    emit_instruction(function, location, instruction);
+    return index;
+}
+
+static size_t gen_jmp(function_t *function, text_location_t location) {
+    instruction_t instruction = {0};
+    instruction.op = OP_JMP;
+    instruction.as.jmp.forward = 0;
+
+    size_t index = function->code.count;
+    emit_instruction(function, location, instruction);
+    return index;
+}
+
+static void gen_patch_jmp(function_t *function, size_t index) {
+    instruction_t *instruction = &function->code.items[index];
+    instruction->as.jmp.forward = function->code.count - index;
+}
+
+static void gen_branching(gen_t *gen, function_t *function, ast_node_t *branch) {
+    gen_expression(gen, function, an_condition(branch));
+
+    size_t then_index = gen_jmp_if_reg(function, token_end_location(&an_then(branch)->end), REG_RESULT, branch->condition_negated ? true : false);
+
+    gen_expression(gen, function, an_then(branch));
+
+    size_t else_index = gen_jmp(function, token_end_location(&an_then(branch)->end));
+
+    gen_patch_jmp(function, then_index);
+
+    if (an_is_notnone(an_else(branch))) {
+        gen_expression(gen, function, an_else(branch));
+    } else {
+        // todo
+        UNREACHABLE();
+    }
+
+    gen_patch_jmp(function, else_index);
+}
+
 static void gen_expression(gen_t *gen, function_t *function, ast_node_t *expression) {
     ASSERT(ast_node_type_is_expression(expression->node_type), "must be expression");
 
@@ -425,12 +473,16 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
         }
 
         case AST_NODE_TYPE_EXPRESSION_DEF_VALUE: {
-            gen_definition(gen, function, expression);
+            gen_def_value(gen, function, expression);
+            break;
+        }
+
+        case AST_NODE_TYPE_EXPRESSION_BRANCHING: {
+            gen_branching(gen, function, expression);
             break;
         }
 
         case AST_NODE_TYPE_EXPRESSION_ASSIGNMENT:
-        case AST_NODE_TYPE_EXPRESSION_BRANCHING:
         case AST_NODE_TYPE_EXPRESSION_CALL:
         case AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT:
         case AST_NODE_TYPE_EXPRESSION_DOT:

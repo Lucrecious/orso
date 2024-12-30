@@ -18,14 +18,14 @@ static string_t get_input(arena_t *allocator) {
     return s;
 }
 
-static string_t disassemble_instruction(instruction_t instruction, arena_t *allocator) {
-    op_code_t op = (op_code_t)instruction.op;
+static string_t disassemble_instruction(instruction_t in, arena_t *allocator) {
+    op_code_t op = (op_code_t)in.op;
     switch (op) {
         case OP_NOP: return lit2str("OP_NOP");
 
         #define OP_MOV_MEM_TO_REG(suffix) string_format("OP_MOV"#suffix"_MEM_TO_REG(memaddr: %lu, result_result: %lu)", allocator,\
-                (u32)instruction.as.mov_mem_to_reg.mem_address,\
-                (u32)instruction.as.mov_mem_to_reg.reg_result)
+                (u32)in.as.mov_mem_to_reg.mem_address,\
+                (u32)in.as.mov_mem_to_reg.reg_result)
 
         case OP_MOVU8_MEM_TO_REG: return OP_MOV_MEM_TO_REG(U8);
         case OP_MOVI32_MEM_TO_REG: return OP_MOV_MEM_TO_REG(I32);
@@ -35,35 +35,41 @@ static string_t disassemble_instruction(instruction_t instruction, arena_t *allo
 
         #undef OP_MOV_MEM_TO_REG
 
+        case OP_JMP_IF_REG_CONDITION:
+            return string_format("OP_JMP_IF_REG_CONDITION(condition_reg: %lu, check_for: %lu, forward: %lu)", allocator,
+                    (u32)in.as.jmp.condition_reg, (u32)in.as.jmp.check_for, in.as.jmp.forward);
+
+        case OP_JMP: return string_format("OP_JMP(forward: %lu)", allocator, (u32)in.as.jmp.forward);
+
         case OP_MOVWORD_REG_TO_REGMEM: {
             return string_format("OP_MOVWORD_REG_TO_REGMEM(reg_source: %lu, regmem_destination: %lu)", allocator,
-                    (u32)instruction.as.mov_reg_to_regmem.reg_source,
-                    (u32)instruction.as.mov_reg_to_regmem.regmem_destination);
+                    (u32)in.as.mov_reg_to_regmem.reg_source,
+                    (u32)in.as.mov_reg_to_regmem.regmem_destination);
         }
         case OP_MOVWORD_REGMEM_TO_REG: {
             return string_format("OP_MOVWORD_REGMEM_TO_REG(reg_source: %lu, regmem_destination: %lu)", allocator,
-                    (u32)instruction.as.mov_regmem_to_reg.regmem_source,
-                    (u32)instruction.as.mov_regmem_to_reg.reg_destination);
+                    (u32)in.as.mov_regmem_to_reg.regmem_source,
+                    (u32)in.as.mov_regmem_to_reg.reg_destination);
         }
 
         case OP_SUBU_REG_IM32: {
             return string_format("OP_SUBU_REG_IM32(reg_operand: %lu, immediate: %lu, reg_result: %lu)", allocator,
-                    (u32)instruction.as.binu_reg_immediate.reg_operand,
-                    (u32)instruction.as.binu_reg_immediate.immediate,
-                    (u32)instruction.as.binu_reg_immediate.reg_result);
+                    (u32)in.as.binu_reg_immediate.reg_operand,
+                    (u32)in.as.binu_reg_immediate.immediate,
+                    (u32)in.as.binu_reg_immediate.reg_result);
         }
 
         case OP_ADDU_REG_IM32: {
             return string_format("OP_ADDU_REG_IM32(reg_operand: %lu, immediate: %lu, reg_result: %lu)", allocator,
-                    (u32)instruction.as.binu_reg_immediate.reg_operand,
-                    (u32)instruction.as.binu_reg_immediate.immediate,
-                    (u32)instruction.as.binu_reg_immediate.reg_result);
+                    (u32)in.as.binu_reg_immediate.reg_operand,
+                    (u32)in.as.binu_reg_immediate.immediate,
+                    (u32)in.as.binu_reg_immediate.reg_result);
         }
 
         #define OP_BIN_REG_REG(type) string_format("OP_"#type"_REG_REG(reg_op1: %lu, reg_op2: %lu, reg_result: %lu)", allocator,\
-                (u32)instruction.as.bin_reg_to_reg.reg_op1,\
-                (u32)instruction.as.bin_reg_to_reg.reg_op2,\
-                (u32)instruction.as.bin_reg_to_reg.reg_result)
+                (u32)in.as.bin_reg_to_reg.reg_op1,\
+                (u32)in.as.bin_reg_to_reg.reg_op2,\
+                (u32)in.as.bin_reg_to_reg.reg_result)
 
         case OP_ADDI_REG_REG: return OP_BIN_REG_REG(ADDI);
         case OP_SUBI_REG_REG: return OP_BIN_REG_REG(SUBI);
@@ -153,6 +159,7 @@ bool debugger_step(debugger_t *debugger, vm_t *vm) {
     }
 
     string_t command = command_n_args.items[0];
+
     if (cstr_eq(command.cstr, "quit") || cstr_eq(command.cstr, "q")) {
         return false;
     } else if (cstr_eq(command.cstr, "show")) {
@@ -186,13 +193,13 @@ bool debugger_step(debugger_t *debugger, vm_t *vm) {
         while (try_vm_step(vm)) {
             source_location_t new_location = vm_find_source_location(vm);
             if (new_location.text_location.line != bp.text_location.line || !string_eq(bp.file_path, new_location.file_path)) {
-                show_line(vm, 3);
+                show_line(vm, 1);
                 break;
             }
         }
-    } else if (cstr_eq(command.cstr, "stepi")) {
+    } else if (cstr_eq(command.cstr, "stepi") || cstr_eq(command.cstr, "i")) {
         if (try_vm_step(vm)) {
-            show_line(vm, 0);
+            show_line(vm, 3);
         }
     } else if (cstr_eq(command.cstr, "run")) {
         while(try_vm_step(vm));

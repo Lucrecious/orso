@@ -198,7 +198,7 @@ string_t type_to_string_toplevel(type_infos_t types, type_t type, arena_t *alloc
         string_t type_string = type_to_string_toplevel(types, type_info->data.pointer.type, allocator, false);
         sb_add_cstr(&sb, type_string.cstr);
     } else {
-        char *type_name;
+        cstr_t type_name;
         switch (type_info->kind) {
             case TYPE_BOOL: type_name = "bool"; break;
             case TYPE_NUMBER: {

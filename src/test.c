@@ -121,10 +121,6 @@ int main(int argc, char **argv) {
     bool success = parse_expr_cstr(&ast, "{ x := 1; y := 2; z := if x > y then x else y; z; }", lit2str(""));
     unless (success) return 1;
 
-    ast_print(&ast, "ll");
-    return 1;
-
-
     if (cgen) {
         string_t expr_str = compile_expr_to_c(&ast, &arena);
 

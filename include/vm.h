@@ -57,6 +57,9 @@ enum op_code_t {
     OP_EQU_REG_REG,
     OP_NQU_REG_REG,
 
+    OP_JMP_IF_REG_CONDITION,
+    OP_JMP,
+
     OP_RETURN,
 };
 
@@ -69,6 +72,13 @@ struct instruction_t {
 
     union {
         byte _padding[7];
+
+        struct {
+            byte condition_reg;
+            byte check_for;
+            u32 forward;
+        } jmp;
+
         struct {
             byte reg_result;
             byte reg_operand;
@@ -172,14 +182,33 @@ void vm_step(vm_t *vm) {
 #define IP_ADV(amount) (vm->call_frame.pc += amount)
 #define MEMORY (vm->call_frame.function->memory)
 
-    instruction_t instruction = vm->call_frame.function->code.items[vm->call_frame.pc];
-    op_code_t op = (op_code_t)instruction.op;
+    instruction_t in = vm->call_frame.function->code.items[vm->call_frame.pc];
+    op_code_t op = (op_code_t)in.op;
     switch(op) {
         case OP_NOP: IP_ADV(1); break;
 
+        case OP_JMP: {
+            u32 jmp_amount = in.as.jmp.forward;
+            IP_ADV(jmp_amount);
+            break;
+        }
+
+        case OP_JMP_IF_REG_CONDITION: {
+            byte reg = in.as.jmp.condition_reg;
+            bool check_for = in.as.jmp.check_for;
+            bool is_true = (check_for == vm->registers[reg].as.u);
+            if (is_true) {
+                u32 jmp_amount = in.as.jmp.forward;
+                IP_ADV(jmp_amount);
+            } else {
+                IP_ADV(1);
+            }
+            break;
+        }
+
         case OP_MOVU8_MEM_TO_REG: {
-            memaddr_t memaddr = instruction.as.mov_mem_to_reg.mem_address;
-            byte reg = instruction.as.mov_mem_to_reg.reg_result;
+            memaddr_t memaddr = in.as.mov_mem_to_reg.mem_address;
+            byte reg = in.as.mov_mem_to_reg.reg_result;
             byte value = MEMORY->data[memaddr];
             vm->registers[reg].as.u = value;
 
@@ -188,8 +217,8 @@ void vm_step(vm_t *vm) {
         }
 
         case OP_MOVI32_MEM_TO_REG: {
-            memaddr_t memaddr = instruction.as.mov_mem_to_reg.mem_address;
-            byte reg = instruction.as.mov_mem_to_reg.reg_result;
+            memaddr_t memaddr = in.as.mov_mem_to_reg.mem_address;
+            byte reg = in.as.mov_mem_to_reg.reg_result;
             i32 value = *((i32*)(MEMORY->data + memaddr));
             vm->registers[reg].as.i = value;
 
@@ -198,8 +227,8 @@ void vm_step(vm_t *vm) {
         }
 
         case OP_MOVU32_MEM_TO_REG: {
-            memaddr_t memaddr = instruction.as.mov_mem_to_reg.mem_address;
-            byte reg = instruction.as.mov_mem_to_reg.reg_result;
+            memaddr_t memaddr = in.as.mov_mem_to_reg.mem_address;
+            byte reg = in.as.mov_mem_to_reg.reg_result;
             u32 value = *((u32*)(MEMORY->data + memaddr));
             vm->registers[reg].as.i = value;
 
@@ -208,8 +237,8 @@ void vm_step(vm_t *vm) {
         }
 
         case OP_MOVF32_MEM_TO_REG: {
-            memaddr_t memaddr = instruction.as.mov_mem_to_reg.mem_address;
-            byte reg = instruction.as.mov_mem_to_reg.reg_result;
+            memaddr_t memaddr = in.as.mov_mem_to_reg.mem_address;
+            byte reg = in.as.mov_mem_to_reg.reg_result;
             f32 value = *((f32*)(MEMORY->data + memaddr));
             vm->registers[reg].as.d = value;
 
@@ -218,8 +247,8 @@ void vm_step(vm_t *vm) {
         }
 
         case OP_MOVWORD_MEM_TO_REG: {
-            memaddr_t memaddr = instruction.as.mov_mem_to_reg.mem_address;
-            byte reg = instruction.as.mov_mem_to_reg.reg_result;
+            memaddr_t memaddr = in.as.mov_mem_to_reg.mem_address;
+            byte reg = in.as.mov_mem_to_reg.reg_result;
             word_t value = *((word_t*)(MEMORY->data + memaddr));
             vm->registers[reg] = value;
 
@@ -228,10 +257,10 @@ void vm_step(vm_t *vm) {
         }
 
         case OP_MOVWORD_REG_TO_REGMEM: {
-            byte reg = instruction.as.mov_reg_to_regmem.reg_source;
+            byte reg = in.as.mov_reg_to_regmem.reg_source;
             word_t value = vm->registers[reg];
 
-            byte regmem = instruction.as.mov_reg_to_regmem.regmem_destination;
+            byte regmem = in.as.mov_reg_to_regmem.regmem_destination;
             memaddr_t memaddr = (u32)vm->registers[regmem].as.u;
 
             memcpy(MEMORY->data + memaddr, &value, sizeof(word_t));
@@ -241,10 +270,10 @@ void vm_step(vm_t *vm) {
         }
 
         case OP_MOVWORD_REGMEM_TO_REG: {
-            byte regmem = instruction.as.mov_regmem_to_reg.regmem_source;
+            byte regmem = in.as.mov_regmem_to_reg.regmem_source;
             memaddr_t memaddr = vm->registers[regmem].as.u;
 
-            byte reg = instruction.as.mov_regmem_to_reg.reg_destination;
+            byte reg = in.as.mov_regmem_to_reg.reg_destination;
 
             memcpy(&vm->registers[reg], MEMORY->data + memaddr, sizeof(word_t));
 
@@ -253,10 +282,10 @@ void vm_step(vm_t *vm) {
         }
 
         case OP_ADDU_REG_IM32: {
-            byte s = instruction.as.binu_reg_immediate.reg_operand;
-            u32 immediate = instruction.as.binu_reg_immediate.immediate;
+            byte s = in.as.binu_reg_immediate.reg_operand;
+            u32 immediate = in.as.binu_reg_immediate.immediate;
 
-            byte d = instruction.as.binu_reg_immediate.reg_result;
+            byte d = in.as.binu_reg_immediate.reg_result;
 
             vm->registers[d].as.u = vm->registers[s].as.u + immediate;
 
@@ -265,10 +294,10 @@ void vm_step(vm_t *vm) {
         }
 
         case OP_SUBU_REG_IM32: {
-            byte s = instruction.as.binu_reg_immediate.reg_operand;
-            u32 immediate = instruction.as.binu_reg_immediate.immediate;
+            byte s = in.as.binu_reg_immediate.reg_operand;
+            u32 immediate = in.as.binu_reg_immediate.immediate;
 
-            byte d = instruction.as.binu_reg_immediate.reg_result;
+            byte d = in.as.binu_reg_immediate.reg_result;
 
             vm->registers[d].as.u = vm->registers[s].as.u - immediate;
 
@@ -277,9 +306,9 @@ void vm_step(vm_t *vm) {
         }
 
         #define case_bin_reg_reg(name, v, op) case OP_##name##_REG_REG: {\
-            byte a = instruction.as.bin_reg_to_reg.reg_op1; \
-            byte b = instruction.as.bin_reg_to_reg.reg_op2; \
-            byte c = instruction.as.bin_reg_to_reg.reg_result; \
+            byte a = in.as.bin_reg_to_reg.reg_op1; \
+            byte b = in.as.bin_reg_to_reg.reg_op2; \
+            byte c = in.as.bin_reg_to_reg.reg_result; \
             vm->registers[c].as.v = vm->registers[a].as.v op vm->registers[b].as.v;\
             IP_ADV(1); \
             break; \
