@@ -251,7 +251,16 @@ static void cgen_declaration(cgen_t *cgen, string_builder_t *sb, ast_node_t *dec
         case AST_NODE_TYPE_DECLARATION_STATEMENT: {
             cgen_add_indent(sb, cgen->indent);
             cgen_expression(cgen, sb, an_expression(declaration), nil_tmp_var);
-            sb_add_cstr(sb, ";\n");
+
+            switch (an_expression(declaration)->node_type) {
+                case AST_NODE_TYPE_EXPRESSION_BRANCHING:
+                case AST_NODE_TYPE_EXPRESSION_BLOCK: break;
+
+                default:
+                    sb_add_cstr(sb, ";\n");
+                    break;
+            }
+
             break;
         }
 
@@ -308,6 +317,7 @@ static void cgen_expression(cgen_t *cgen, string_builder_t *sb, ast_node_t *expr
             break;
         }
 
+        case AST_NODE_TYPE_EXPRESSION_NIL:
         case AST_NODE_TYPE_EXPRESSION_PRIMARY: {
             ASSERT(!requires_tmp, "primaries should never require tmps");
 
@@ -395,7 +405,15 @@ static void cgen_expression(cgen_t *cgen, string_builder_t *sb, ast_node_t *expr
                     }
 
                     case AST_NODE_TYPE_DECLARATION_STATEMENT: {
+                        if (no_var(var)) {
+                            cgen_add_indent(sb, cgen->indent);
+                        }
+
                         cgen_expression(cgen, sb, an_expression(last_declaration), cgen_var_not_new(var));
+
+                        if (no_var(var)) {
+                            sb_add_cstr(sb, ";\n");
+                        }
                         break;
                     }
 
@@ -421,10 +439,19 @@ static void cgen_expression(cgen_t *cgen, string_builder_t *sb, ast_node_t *expr
                 cgen_add_indent(sb, cgen->indent);
             }
 
+            bool skip_else = an_else(expression)->node_type == AST_NODE_TYPE_EXPRESSION_NIL;
+
             if (no_var(var) || !var.is_new) {
                 sb_add_cstr(sb, "{\n");
             } else {
-                sb_add_format(sb, "%s; {\n", cgen_var(cgen, var));
+                if (!skip_else) {
+                    sb_add_format(sb, "%s; {\n", cgen_var(cgen, var));
+                } else {
+                    sb_add_format(sb, "%s = ", cgen_var(cgen, var));
+                    ASSERT(!an_else(expression)->requires_tmp_for_cgen, "!");
+                    cgen_expression(cgen, sb, an_else(expression), nil_tmp_var);
+                    sb_add_cstr(sb, ";\n");
+                }
             }
 
             cgen_indent(cgen);
@@ -459,7 +486,7 @@ static void cgen_expression(cgen_t *cgen, string_builder_t *sb, ast_node_t *expr
 
             cgen_unindent(cgen);
 
-            if (an_is_notnone(an_else(expression))) {
+            if (!skip_else) {
                 cgen_add_indent(sb, cgen->indent);
                 sb_add_cstr(sb, "} else {\n");
 
@@ -483,6 +510,7 @@ static void cgen_expression(cgen_t *cgen, string_builder_t *sb, ast_node_t *expr
                 cgen_add_indent(sb, cgen->indent);
                 sb_add_cstr(sb, "}\n");
             } else {
+                cgen_add_indent(sb, cgen->indent);
                 sb_add_cstr(sb, "}\n");
             }
 

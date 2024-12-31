@@ -1,0 +1,78 @@
+animal_t :: struct {
+    name := "<none>";
+    speak := "<none>";
+};
+
+make_dog :: () -> animal_t {
+    return .{
+        .name = "dog",
+        .speak = "bark,
+    };
+};
+
+name, _ :~= make_dog();
+
+dog := make_dog();
+
+name, _ ~= dog;
+
+worker_t :: struct {
+    name := "<none>";
+    age := 0;
+    salary_usd := 80_000.0;
+    enum { CONTRACTOR, FULL_TIME } type := .FULL_TIME;
+    rank := 0;
+};
+
+make_bob :: () -> worker_t {
+    w := .{};
+    w.name = "bob";
+    w.age = 45;
+    w.salary_usd = 70_000.0;
+    w.type = .CONTRACTOR;
+    w.rank = 2;
+
+    return w;
+};
+
+bob := make_bob();
+
+
+// implicit types
+name,, salary :~= bob;
+
+// explicit types
+name,, salary : string, u64 ~= bob;
+
+handle_t :: struct {
+    u64 id = 0;
+};
+
+handle := handle_t.{};
+
+id :~= handle;
+
+numbers :: () -> []u32 {
+    return int.[1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+};
+
+first, second, middle..., last :~= numbers();
+
+// you can either all declare or all assignment, cannot intertwine
+first: u32, second, forth, ..., third_last: u32,, last :~= numbers();
+
+first, middle..., end : , []int ~= numbers();
+
+// ~= only works on struct and array types
+
+// ~= inside expressions must be wrapped in a struct initializer
+
+// in vector2
+vector2u.{ first, ..., last } ~= numbers();
+
+// anonymous struct inferred
+struct { first: u32, ..., last: u64 } ~= numbers();
+
+
+
+

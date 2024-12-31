@@ -7,7 +7,7 @@
 
 static token_t create_token(lexer_t *lexer, token_type_t type) {
     token_t token = { 
-        .file_path = lexer->file_path,
+        .source = lexer->source,
         .type = type,
         .view = {.length=lexer->current-lexer->start, .data = lexer->start},
         .location = texloc(lexer->line, lexer->start - lexer->line_start),
@@ -18,7 +18,7 @@ static token_t create_token(lexer_t *lexer, token_type_t type) {
 
 static token_t error_token(lexer_t *lexer, string_view_t message_view) {
     token_t token = {
-        .file_path = lexer->file_path,
+        .source = lexer->source,
         .type = TOKEN_ERROR,
         .view = message_view,
         .location = texloc(lexer->line, lexer->current - lexer->line_start),
@@ -27,13 +27,13 @@ static token_t error_token(lexer_t *lexer, string_view_t message_view) {
     return token;
 }
 
-void lexer_init(lexer_t *lexer, string_t file_path, cstr_t code) {
+void lexer_init(lexer_t *lexer, string_t file_path, string_view_t code) {
     lexer->file_path = file_path;
     lexer->source = code;
     lexer->line = 0;
-    lexer->start = (char*)code;
+    lexer->start = (char*)code.data;
     lexer->line_start = lexer->start;
-    lexer->current = (char*)code;
+    lexer->current = (char*)code.data;
 
     lexer->previous_token = error_token(lexer, lit2sv("<previous token>"));
 }

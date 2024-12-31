@@ -47,13 +47,17 @@
 #include "cc.h"
 
 
-string_view_t get_line(cstr_t source, cstr_t somewhere_in_source) {
-    char *s = (char*)somewhere_in_source;
-    until (*s == '\n' || s == source)  {
+string_view_t get_line(string_view_t source, string_view_t somewhere_in_source) {
+    if (somewhere_in_source.data >= source.data + source.length || somewhere_in_source.data < source.data) {
+        return lit2sv("");
+    }
+
+    char *s = (char*)somewhere_in_source.data;
+    until (*s == '\n' || s == source.data)  {
         --s;
     }
 
-    char *e = (char*)somewhere_in_source;
+    char *e = (char*)somewhere_in_source.data;
     until (*e == '\n' || *e == '\0') {
         ++e;
     }
@@ -62,14 +66,14 @@ string_view_t get_line(cstr_t source, cstr_t somewhere_in_source) {
     return view;
 }
 
-void myerror(error_t error, cstr_t source) {
+void myerror(error_t error) {
     size_t line = error.first.location.line + 1;
     size_t column = error.first.location.column + 1;
-    cstr_t file = error.first.file_path.cstr;
+    // cstr_t file = error.first.file_path.cstr;
 
-    string_view_t source_line = get_line(source, error.first.view.data);
+    string_view_t source_line = get_line(error.first.source, error.first.view);
 
-    fprintf(stderr, "%s:%lu:%lu: %s\n", file, line, column, error_messages[error.type]);
+    fprintf(stderr, "%s:%lu:%lu: %s\n", "todo", line, column, error_messages[error.type]);
     fprintf(stderr, "%.*s\n", (int)source_line.length, source_line.data);
 
     tmp_arena_t *tmp_arena = allocator_borrow();
@@ -98,8 +102,7 @@ void mywrite(cstr_t chars) {
 
 
 // todo: fix memory leak because too lazy to write an ast_dup function right now
-bool parse_expr_cstr(ast_t *ast, cstr_t expr_source, string_t file_path) {
-    ast->source = expr_source;
+bool parse_expr_cstr(ast_t *ast, string_view_t expr_source, string_t file_path) {
     bool success = parse_expr(ast, file_path, expr_source, myerror);
 
     if (success) {
@@ -142,20 +145,22 @@ int main(int argc, char **argv) {
     }
     
     String_View nob_sv = sb_to_sv(sb);
-    string_view_t sv = { .data = nob_sv.data, .length = nob_sv.count };
-    
-    string_t code = sv2string(sv, &arena);
+    string_view_t code = { .data = nob_sv.data, .length = nob_sv.count };
+    code = string2sv(sv2string(code, &arena));
 
     ast_t ast = {0};
     ast_init(&ast, megabytes(2));
 
-    success = parse_expr_cstr(&ast, code.cstr, lit2str(""));
+    success = parse_expr_cstr(&ast, code, lit2str(""));
     unless (success) return 1;
 
     i64 resultc = INT64_MIN;
-    if (false)
+    if (true)
     {
         string_t expr_str = compile_expr_to_c(&ast, &arena);
+
+        printf("%s\n", expr_str.cstr);
+        return 1;
 
         cc_t cc = cc_make(CC_GCC, &arena);
         cc_mem_source(&cc, expr_str);

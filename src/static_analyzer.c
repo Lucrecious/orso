@@ -96,7 +96,7 @@ static void error_token(analyzer_t *analyzer, token_t token, error_type_t error_
         .first = token,
     };
 
-    analyzer->error_fn(error, analyzer->ast->source);
+    analyzer->error_fn(error);
 }
 
 static void error_range(analyzer_t *analyzer, token_t start, token_t end, error_type_t error_type) {
@@ -110,7 +110,7 @@ static void error_range(analyzer_t *analyzer, token_t start, token_t end, error_
         .first_end = end,
     };
 
-    analyzer->error_fn(error, analyzer->ast->source);
+    analyzer->error_fn(error);
 }
 
 static void error_range2(analyzer_t *analyzer, token_t start1, token_t end1, token_t start2, token_t end2, error_type_t error_type) {
@@ -126,7 +126,7 @@ static void error_range2(analyzer_t *analyzer, token_t start1, token_t end1, tok
         .second_end = end2,
     };
     
-    analyzer->error_fn(error, analyzer->ast->source);
+    analyzer->error_fn(error);
 }
 
 static type_t resolve_unary_type(ast_t* ast, token_type_t operator, type_t operand_id) {
@@ -310,6 +310,12 @@ static void resolve_foldable(
         case AST_NODE_TYPE_EXPRESSION_GROUPING: {
             foldable = an_operand(expression)->foldable;
             folded_index = an_operand(expression)->value_index;
+            break;
+        }
+
+        case AST_NODE_TYPE_EXPRESSION_NIL: {
+            foldable = true;
+            folded_index = zero_value(ast, expression->value_type);
             break;
         }
 
@@ -768,6 +774,13 @@ static void forward_scan_declaration_names(analyzer_t *analyzer, scope_t *scope,
     }
 }
 
+static ast_node_t *ast_create_implicit_nil_node(ast_t *ast, type_t value_type) {
+    ast_node_t *nil_node = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_NIL, false, nil_token);
+    nil_node->value_type = value_type;
+    nil_node->value_index = zero_value(ast, value_type);
+    return nil_node;
+}
+
 void resolve_expression(
         analyzer_t *analyzer,
         ast_t *ast,
@@ -815,6 +828,14 @@ void resolve_expression(
             expression->lvalue_node = an_operand(expression)->lvalue_node;
 
             expression->value_type = an_operand(expression)->value_type;
+            break;
+        }
+
+        case AST_NODE_TYPE_EXPRESSION_NIL: {
+            if (TYPE_IS_UNRESOLVED(expression->value_type)) {
+                // todo
+                UNREACHABLE();
+            }
             break;
         }
 
@@ -1290,6 +1311,8 @@ void resolve_expression(
 
             if (an_is_notnone(an_else(expression))) {
                 resolve_expression(analyzer, ast, state, an_else(expression));
+            } else {
+                an_else(expression) = ast_create_implicit_nil_node(ast, an_then(expression)->value_type);
             }
 
             return_guarentee_t branch_return_guarentee;

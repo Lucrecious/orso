@@ -64,6 +64,7 @@ typedef enum ast_node_type_t {
     AST_NODE_TYPE_EXPRESSION_CALL,
     AST_NODE_TYPE_EXPRESSION_PRIMARY,
     AST_NODE_TYPE_EXPRESSION_DEF_VALUE,
+    AST_NODE_TYPE_EXPRESSION_NIL,
     AST_NODE_TYPE_EXPRESSION_ASSIGNMENT,
     AST_NODE_TYPE_EXPRESSION_BLOCK,
     AST_NODE_TYPE_EXPRESSION_BRANCHING,
@@ -81,6 +82,7 @@ case AST_NODE_TYPE_EXPRESSION_BRANCHING: \
 case AST_NODE_TYPE_EXPRESSION_CALL: \
 case AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT: \
 case AST_NODE_TYPE_EXPRESSION_DEF_VALUE: \
+case AST_NODE_TYPE_EXPRESSION_NIL: \
 case AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION: \
 case AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION: \
 case AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE: \
@@ -120,9 +122,6 @@ typedef struct ast_member_access_t {
     token_t identifier;
     ast_node_t *referencing_declaration;
 } ast_member_access_t;
-
-typedef struct ast_declaration_t {
-} ast_declaration_t;
 
 typedef struct ast_type_initializer_t ast_type_initializer_t;
 struct ast_type_initializer_t {
@@ -188,8 +187,6 @@ struct ast_node_t {
     token_t identifier;
 
     union {
-        ast_declaration_t declaration;
-
         ast_call_t call;
 
         // function signatures and defintions
@@ -223,8 +220,6 @@ struct fd_pairs_t {
 typedef struct ast_t {
     arena_t allocator;
 
-    cstr_t source;
-
     bool resolved;
     type_table_t type_set;
 
@@ -244,8 +239,8 @@ typedef struct ast_t {
 void ast_print(ast_t *ast, const char *name);
 
 value_index_t add_value_to_ast_constant_stack(ast_t *ast, void *data, type_t type);
-bool parse_expr(ast_t *ast, string_t file_path, cstr_t source, error_function_t error_fn);
-bool parse(ast_t *ast, string_t file_path, cstr_t source, error_function_t error_fn);
+bool parse_expr(ast_t *ast, string_t file_path, string_view_t source, error_function_t error_fn);
+bool parse(ast_t *ast, string_t file_path, string_view_t source, error_function_t error_fn);
 type_t get_folded_type(ast_t *ast, value_index_t index);
 
 void ast_init(ast_t *ast, size_t memory_size_bytes);

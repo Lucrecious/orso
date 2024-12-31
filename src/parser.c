@@ -151,8 +151,6 @@ typedef struct {
 
 void ast_init(ast_t *ast, size_t memory_size_bytes) {
     ast->allocator = (arena_t){0};
-    ast->source = "";
-
     ast->resolved = false;
     ast->root = NULL;
 
@@ -179,19 +177,11 @@ void ast_free(ast_t *ast) {
     arena_free(&ast->allocator);
 }
 
-#define TOKEN_NIL (token_t){\
-    .file_path = lit2str(""),\
-    .location.line = 0,\
-    .location.column= 0,\
-    .view = lit2sv(""),\
-    .type = TOKEN_ERROR\
-}
-
 ast_node_t nil_node = {
     .node_type=AST_NODE_TYPE_NONE,
-    .start = TOKEN_NIL,
-    .end = TOKEN_NIL,
-    .operator = TOKEN_NIL,
+    .start = nil_token,
+    .end = nil_token,
+    .operator = nil_token,
 
     .value_type = typeid(TYPE_INVALID),
     .return_guarentee = RETURN_GUARENTEE_NONE,
@@ -218,7 +208,7 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type
     node->foldable = false;
     node->fold_level_resolved_at = -1;
     node->is_mutable = false;
-    node->identifier = TOKEN_NIL;
+    node->identifier = nil_token;
     node->ref_decl = &nil_node;
 
     node->lvalue_node = NULL;
@@ -290,10 +280,14 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type
         case AST_NODE_TYPE_EXPRESSION_PRIMARY:
             break;
         
+        case AST_NODE_TYPE_EXPRESSION_NIL: {
+            break;
+        }
+        
         case AST_NODE_TYPE_EXPRESSION_DEF_VALUE:
         case AST_NODE_TYPE_EXPRESSION_DOT: {
             array_push(&node->children, &nil_node);
-            node->identifier = TOKEN_NIL;
+            node->identifier = nil_token;
             break;
         }
 
@@ -303,7 +297,7 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type
     return node;
 }
 
-static void parser_init(parser_t *parser, ast_t *ast, string_t file_path, cstr_t source, error_function_t error_fn) {
+static void parser_init(parser_t *parser, ast_t *ast, string_t file_path, string_view_t source, error_function_t error_fn) {
     lexer_init(&parser->lexer, file_path, source);
     parser->ast = ast;
     parser->error_fn = error_fn;
@@ -328,7 +322,7 @@ static void error_at(parser_t *parser, token_t *token, error_type_t error_type) 
         .first = *token,
     };
 
-    parser->error_fn(error, parser->lexer.source);
+    parser->error_fn(error);
 }
 
 static void error_at_current(parser_t *parser, error_type_t error_type) {
@@ -1104,7 +1098,7 @@ static ast_node_t *parse_declaration(parser_t *parser, bool is_top_level) {
     return node;
 }
 
-bool parse_expr(ast_t *ast, string_t file_path, cstr_t source, error_function_t error_fn) {
+bool parse_expr(ast_t *ast, string_t file_path, string_view_t source, error_function_t error_fn) {
     parser_t parser = {0};
     parser_init(&parser, ast, file_path, source, error_fn);
 
@@ -1117,10 +1111,9 @@ bool parse_expr(ast_t *ast, string_t file_path, cstr_t source, error_function_t 
     return !parser.had_error;
 }
 
-bool parse(ast_t *ast, string_t file_path, cstr_t source, error_function_t error_fn) {
+bool parse(ast_t *ast, string_t file_path, string_view_t source, error_function_t error_fn) {
     parser_t parser = {0};
     parser_init(&parser, ast, file_path, source, error_fn);
-    ast->source = source;
 
     advance(&parser);
 
@@ -1252,6 +1245,12 @@ static void ast_print_ast_node(type_infos_t types, ast_node_t *node, u32 level) 
             print_indent(level + 1);
             print_line("right");
             ast_print_ast_node(types, an_rhs(node), level+2);
+            break;
+        }
+
+        case AST_NODE_TYPE_EXPRESSION_NIL: {
+            print_indent(level);
+            print_line("nil");
             break;
         }
         case AST_NODE_TYPE_EXPRESSION_GROUPING: {

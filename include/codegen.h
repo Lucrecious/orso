@@ -296,10 +296,10 @@ static void gen_constant(text_location_t location, function_t *function, void *d
     }
 }
 
-static void gen_primary(gen_t *gen, function_t *function, ast_node_t *primary) {
-    ASSERT(primary->value_index.exists, "must contain concrete value");
+static void gen_folded_value(gen_t *gen, function_t *function, ast_node_t *expression) {
+    ASSERT(expression->value_index.exists, "must contain concrete value");
 
-    type_info_t *type_info = get_type_info(&gen->ast->type_set.types, primary->value_type);
+    type_info_t *type_info = get_type_info(&gen->ast->type_set.types, expression->value_type);
 
     // this ensures the data is always indexable
     if (function->memory->count+type_info->size >= function->memory->capacity) {
@@ -307,15 +307,15 @@ static void gen_primary(gen_t *gen, function_t *function, ast_node_t *primary) {
             gen->error_fn((error_t){
                 .type=ERROR_CODEGEN_MEMORY_SIZE_TOO_BIG,
                 .region_type=ERROR_REGION_TYPE_RANGE,
-                .first = primary->start,
-                .first_end = primary->end,
-            }, gen->ast->source);
+                .first = expression->start,
+                .first_end = expression->end,
+            });
             return;
         }
     }
 
-    void *data = memarr_get_ptr(&gen->ast->constants, primary->value_index);
-    gen_constant(primary->start.location, function, data, type_info);
+    void *data = memarr_get_ptr(&gen->ast->constants, expression->value_index);
+    gen_constant(expression->start.location, function, data, type_info);
 }
 
 static void gen_add_local(gen_t *gen, ast_node_t *declaration, size_t stack_location) {
@@ -512,8 +512,9 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
     ASSERT(ast_node_type_is_expression(expression->node_type), "must be expression");
 
     switch (expression->node_type) {
+        case AST_NODE_TYPE_EXPRESSION_NIL:
         case AST_NODE_TYPE_EXPRESSION_PRIMARY: {
-            gen_primary(gen, function, expression);
+            gen_folded_value(gen, function, expression);
             break;
         }
 
@@ -571,9 +572,8 @@ static void gen_return(gen_t *gen, text_location_t location, function_t *functio
     emit_return(location, function);
 }
 
-static void error_fn(error_t error, cstr_t source) {
+static void error_fn(error_t error) {
     UNUSED(error);
-    UNUSED(source);
 }
 
 static gen_t make_gen(ast_t *ast, error_function_t error_fn, arena_t *arena) {

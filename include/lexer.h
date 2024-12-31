@@ -44,11 +44,19 @@ struct text_location_t {
 
 typedef struct token_t token_t;
 struct token_t {
-    string_t file_path;
+    string_view_t source;
     string_view_t view;
     text_location_t location;
     token_type_t type;
 };
+
+#define nil_token (token_t){\
+    .source = lit2sv(""),\
+    .location.line = 0,\
+    .location.column= 0,\
+    .view = lit2sv(""),\
+    .type = TOKEN_ERROR\
+}
 
 #define token_end_location(token) ((text_location_t){\
     .line = ((token)->location.line),\
@@ -60,14 +68,14 @@ struct lexer_t {
     token_t previous_token;
     error_function_t error_fn;
     string_t file_path;
-    cstr_t source;
+    string_view_t source;
     i32 line;
     cstr_t start;
     cstr_t line_start;
     cstr_t current;
 };
 
-void lexer_init(lexer_t *state, string_t file_path, cstr_t code);
+void lexer_init(lexer_t *state, string_t file_path, string_view_t code);
 token_t lexer_next_token(lexer_t *state);
 
 #endif
