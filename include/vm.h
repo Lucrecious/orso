@@ -65,18 +65,16 @@ enum op_code_t {
 
 typedef u32 memaddr_t;
 
-// 64bit code
+// todo: actually check if it his is 64bit
 typedef struct instruction_t instruction_t;
 struct instruction_t {
-    byte op;
-
     union {
         byte _padding[7];
 
         struct {
+            u32 forward;
             byte condition_reg;
             byte check_for;
-            u32 forward;
         } jmp;
 
         struct {
@@ -106,6 +104,7 @@ struct instruction_t {
             byte reg_destination;
         } mov_regmem_to_reg;
     } as;
+    byte op;
 };
 
 #define REGISTER_COUNT 64

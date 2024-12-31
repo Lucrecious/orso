@@ -16,9 +16,9 @@ bool compile_expr_to_function(function_t *function, ast_t *expr_ast);
 
 typedef struct local_t local_t;
 struct local_t {
-    string_view_t name;
     size_t stack_location;
-    ast_node_t *lvalue;
+    ast_node_t *ref_decl;
+    size_t scope_level;
 };
 
 typedef struct gen_t gen_t;
@@ -26,6 +26,7 @@ struct gen_t {
     error_function_t error_fn;
     ast_t *ast;
     size_t stack_size;
+    size_t scope_level;
 
     struct {
         local_t *items;
@@ -134,6 +135,16 @@ void emit_pop_to_wordreg(gen_t *gen, text_location_t text_location, function_t *
 
         emit_instruction(function, text_location, instruction);
     }
+}
+
+static void emit_popn_words(function_t *function, u32 pop_size_words, text_location_t location) {
+    instruction_t in = {0};
+    in.op = OP_ADDU_REG_IM32;
+    in.as.binu_reg_immediate.immediate = pop_size_words*WORD_SIZE;
+    in.as.binu_reg_immediate.reg_operand = REG_STACK_BOTTOM;
+    in.as.binu_reg_immediate.reg_result = REG_STACK_BOTTOM;
+
+    emit_instruction(function, location, in);
 }
 
 static void emit_binary(text_location_t text_location, function_t *function, token_type_t token_type, type_info_t *type_info, reg_t op1, reg_t op2, reg_t result) {
@@ -309,9 +320,9 @@ static void gen_primary(gen_t *gen, function_t *function, ast_node_t *primary) {
 
 static void gen_add_local(gen_t *gen, ast_node_t *declaration, size_t stack_location) {
     local_t local;
-    local.name = declaration->identifier.view;
-    local.lvalue = declaration->lvalue_node;
+    local.ref_decl = declaration;
     local.stack_location = stack_location;
+    local.scope_level = gen->scope_level;
 
     array_push(&gen->locals, local);
 }
@@ -359,11 +370,35 @@ static void gen_block(gen_t *gen, function_t *function, ast_node_t *block) {
     }
 }
 
-static local_t *find_local(gen_t *gen, string_view_t name) {
+static void push_scope(gen_t *gen) {
+    ++gen->scope_level;
+}
+
+static void gen_pop_scope(gen_t *gen, function_t *function, text_location_t location) {
+    size_t pop_size_bytes = 0;
+    size_t pop_amount = 0;
+    for (size_t i = gen->locals.count; i > 0; --i) {
+        size_t i_ = i-1;
+        local_t *local = &gen->locals.items[i_];
+        if (local->scope_level >= gen->scope_level) {
+            type_info_t *type_info = get_type_info(&gen->ast->type_set.types, local->ref_decl->value_type);
+            pop_size_bytes += type_info->size;
+            ++pop_amount;
+        }
+    }
+
+    gen->locals.count -= pop_amount;
+    --gen->scope_level;
+
+    size_t pop_size_words = (pop_size_bytes + WORD_SIZE/2)/WORD_SIZE;
+    emit_popn_words(function, pop_size_words, location);
+}
+
+static local_t *find_local(gen_t *gen, ast_node_t *ref_decl) {
     for (size_t i = gen->locals.count; i >= 1; --i) {
         size_t i_ = i-1;
         local_t *local = &gen->locals.items[i_];
-        if (sv_eq(local->name, name)) {
+        if (local->ref_decl == ref_decl) {
             return local;
         }
     }
@@ -373,7 +408,7 @@ static local_t *find_local(gen_t *gen, string_view_t name) {
 }
 
 static void gen_def_value(gen_t *gen, function_t *function, ast_node_t *def) {
-    local_t *local = find_local(gen, def->identifier.view);
+    local_t *local = find_local(gen, def->ref_decl);
 
     if (local->stack_location > UINT32_MAX) {
         // todo
@@ -447,6 +482,31 @@ static void gen_branching(gen_t *gen, function_t *function, ast_node_t *branch) 
 
     gen_patch_jmp(function, else_index);
 }
+static void gen_assignment(gen_t *gen, function_t *function, ast_node_t *assignment) {
+    gen_expression(gen, function, an_rhs(assignment));
+
+    ast_node_t *ref_decl = an_lhs(assignment)->ref_decl;
+
+    local_t *local = find_local(gen, ref_decl);
+
+    instruction_t in = {0};
+    {
+        in.op = OP_SUBU_REG_IM32;
+        in.as.binu_reg_immediate.immediate = local->stack_location;
+        in.as.binu_reg_immediate.reg_operand = REG_STACK_FRAME;
+        in.as.binu_reg_immediate.reg_result = REG_OPERAND2;
+
+        emit_instruction(function, assignment->end.location, in);
+    }
+
+    {
+        in.op = OP_MOVWORD_REG_TO_REGMEM;
+        in.as.mov_reg_to_regmem.reg_source = REG_RESULT;
+        in.as.mov_reg_to_regmem.regmem_destination = REG_OPERAND2;
+
+        emit_instruction(function, token_end_location(&assignment->end), in);
+    }
+}
 
 static void gen_expression(gen_t *gen, function_t *function, ast_node_t *expression) {
     ASSERT(ast_node_type_is_expression(expression->node_type), "must be expression");
@@ -468,7 +528,9 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
         }
 
         case AST_NODE_TYPE_EXPRESSION_BLOCK: {
+            push_scope(gen);
             gen_block(gen, function, expression);
+            gen_pop_scope(gen, function, token_end_location(&expression->end));
             break;
         }
 
@@ -482,7 +544,11 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
             break;
         }
 
-        case AST_NODE_TYPE_EXPRESSION_ASSIGNMENT:
+        case AST_NODE_TYPE_EXPRESSION_ASSIGNMENT: {
+            gen_assignment(gen, function, expression);
+            break;
+        }
+
         case AST_NODE_TYPE_EXPRESSION_CALL:
         case AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT:
         case AST_NODE_TYPE_EXPRESSION_DOT:
@@ -510,13 +576,19 @@ static void error_fn(error_t error, cstr_t source) {
     UNUSED(source);
 }
 
-bool compile_expr_to_function(function_t *function, ast_t *ast) {
-    arena_t arena = {0};
-
+static gen_t make_gen(ast_t *ast, error_function_t error_fn, arena_t *arena) {
     gen_t gen = {0};
     gen.ast = ast;
     gen.error_fn = error_fn;
-    gen.locals.allocator = &arena;
+    gen.locals.allocator = arena;
+
+    return gen;
+}
+
+bool compile_expr_to_function(function_t *function, ast_t *ast) {
+    arena_t arena = {0};
+
+    gen_t gen = make_gen(ast, error_fn, &arena);
 
     gen_expression(&gen, function, ast->root);
 

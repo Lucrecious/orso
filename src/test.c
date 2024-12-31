@@ -153,6 +153,7 @@ int main(int argc, char **argv) {
     unless (success) return 1;
 
     i64 resultc = INT64_MIN;
+    if (false)
     {
         string_t expr_str = compile_expr_to_c(&ast, &arena);
 
@@ -178,6 +179,7 @@ int main(int argc, char **argv) {
     }
     
     i64 resultvm = INT64_MIN;
+    if (true)
     {
         memarr_t *memory = arena_alloc(&arena, sizeof(memarr_t));
         *memory = (memarr_t){0};
@@ -196,15 +198,20 @@ int main(int argc, char **argv) {
         vm.registers[REG_STACK_FRAME].as.u = stack_size;
         vm.registers[REG_STACK_BOTTOM].as.u = stack_size;
 
-        resultvm = *((i64*)vm_run_function(&vm, expr_function));
+        {
+            // resultvm = *((i64*)vm_run_function(&vm, expr_function));
+        }
+        {
+            UNUSED(vm_run_function);
+            vm_set_entry_point(&vm, expr_function);
 
-        // vm_set_entry_point(&vm, expr_function);
+            debugger_t debugger = {0};
+            debugger_init(&debugger, &arena);
+            while (debugger_step(&debugger, &vm));
+        }
 
-        // debugger_t debugger = {0};
-        // debugger_init(&debugger, &arena);
-        // while (debugger_step(&debugger, &vm));
     }
 
-    nob_log(INFO, "test %s: cgen(%lld) vmgen(%lld)", path, resultc, resultvm);
+    nob_log(INFO, "test\n-- %s:\ncgen = %lld;\nvmgen = %lld;\n%s", path, resultc, resultvm, (resultc == resultvm) ? "pass" : "fail");
 }
 

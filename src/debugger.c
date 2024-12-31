@@ -134,8 +134,9 @@ static void show_line(vm_t *vm, size_t bytecode_around) {
             printf("-> ");
         }
 
+        text_location_t location = function->locations.items[i];
         string_t as_string = disassemble_instruction(function->code.items[i], tmp_arena->allocator);
-        printf("%s\n", as_string.cstr);
+        printf("%04zu:%04zu: %s\n", location.line+1, location.column+1, as_string.cstr);
     }
 
     allocator_return(tmp_arena);
@@ -187,7 +188,7 @@ bool debugger_step(debugger_t *debugger, vm_t *vm) {
         size_t line = string2size(line_number);
 
         array_push(&debugger->breakpoints, ((source_location_t){.file_path=file_path, .text_location = texloc(line, 0) }));
-    } else if (cstr_eq(command.cstr, "stepo")) {
+    } else if (cstr_eq(command.cstr, "stepo") || cstr_eq(command.cstr, "o")) {
         source_location_t bp = vm_find_source_location(vm);
 
         while (try_vm_step(vm)) {
@@ -201,7 +202,7 @@ bool debugger_step(debugger_t *debugger, vm_t *vm) {
         if (try_vm_step(vm)) {
             show_line(vm, 3);
         }
-    } else if (cstr_eq(command.cstr, "run")) {
+    } else if (cstr_eq(command.cstr, "run") || cstr_eq(command.cstr, "r")) {
         while(try_vm_step(vm));
     } else if (cstr_eq(command.cstr, "reg")) {
         size_t number = REGISTER_COUNT;
@@ -220,6 +221,21 @@ bool debugger_step(debugger_t *debugger, vm_t *vm) {
         } else {
             word_t reg = vm->registers[number];
             printf("%02zu: %lld, %llu, %lf, %p\n", number, reg.as.i, reg.as.u, reg.as.d, reg.as.p);
+        }
+    } else if (cstr_eq(command.cstr, "mem")) {
+        if (command_n_args.count == 2) {
+            string_t arg = command_n_args.items[1];
+            memaddr_t memaddr = string2size(arg);
+
+            
+            memarr_t *memarr = vm->call_frame.function->memory;
+            if (memaddr + WORD_SIZE > memarr->count) {
+                printf("memory location is too high max is: %zu\n", memarr->count - WORD_SIZE);
+                return true;
+            }
+
+            word_t data = *(word_t*)(memarr->data + memaddr);
+            printf("mem: %llx\n", data.as.u);
         }
     } else {
         printfln("unknown command: %s", command.cstr);

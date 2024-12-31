@@ -1,5 +1,5 @@
 {
-    x := 1;
+    x := 5;
 
     none := 0;
     fizzbuzz := 1;

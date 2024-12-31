@@ -1159,7 +1159,7 @@ void resolve_expression(
             ast_node_t *lhs = an_lhs(expression);
             resolve_expression(analyzer, ast, state, lhs);
             ast_node_t *lvalue_node = lhs->lvalue_node;
-            if (lvalue_node == NULL) {
+            if (an_is_none(lvalue_node)) {
                 error_range(analyzer, lhs->start, lhs->end, ERROR_ANALYSIS_EXPECTED_LVALUE);
                 INVALIDATE(expression);
                 break;
@@ -1170,7 +1170,7 @@ void resolve_expression(
 
             // // TODO: Find a way to merge the fitting logic
             if (lvalue_node->node_type == AST_NODE_TYPE_EXPRESSION_DEF_VALUE) {
-                scope_t* def_scope;
+                scope_t *def_scope;
                 definition_t *def;
                 token_t identifier = lvalue_node->identifier;
                 def = get_resolved_def_by_identifier(analyzer, ast, state, identifier, NULL, &def_scope);
