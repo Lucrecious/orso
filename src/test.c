@@ -1,3 +1,11 @@
+#define NOB_IMPLEMENTATION
+#define NOB_STRIP_PREFIX
+#include "../nob.h"
+#undef UNREACHABLE
+#undef UNUSED
+#undef sv_eq
+#undef NOB_IMPLEMENTATION
+
 #define VM_IMPLEMENTATION
 #include "vm.h"
 
@@ -110,15 +118,34 @@ static void *vm_run_function(vm_t *vm, function_t *function) {
 }
 
 int main(int argc, char **argv) {
-    bool cgen = (argc == 2 && strcmp(argv[1], "cgen") == 0);
-
     arena_t arena = {0};
+
+    bool cgen = (argc >= 2 && strcmp(argv[1], "cgen") == 0);
+    string_t code;
+    if (cgen) {
+        if (argc == 3) {
+            cstr_t path = argv[2];
+            String_Builder sb = {0};
+            bool success = read_entire_file(path, &sb);
+
+            if (!success) {
+                nob_log(ERROR, "could not read file at %s", path);
+                return 1;
+            }
+            
+            String_View nob_sv = sb_to_sv(sb);
+            string_view_t sv = { .data = nob_sv.data, .length = nob_sv.count };
+
+            code = sv2string(sv, &arena);
+        } else {
+            return 1;
+        }
+    }
 
     ast_t ast = {0};
     ast_init(&ast, megabytes(2));
 
-    // bool success = parse_expr_cstr(&ast, "1/{2;}", lit2str(""));
-    bool success = parse_expr_cstr(&ast, "{ x := (if 1==1 then if 1!=1 then 1 else 2 else 3) + 4; x; }", lit2str(""));
+    bool success = parse_expr_cstr(&ast, code.cstr, lit2str(""));
     unless (success) return 1;
 
     if (cgen) {

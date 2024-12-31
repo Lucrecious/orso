@@ -103,8 +103,9 @@ static cstr_t cgen_type_name(cgen_t *cgen, type_t type) {
             }
         }
 
+        case TYPE_BOOL: return "bool";
+
         case TYPE_VOID:
-        case TYPE_BOOL:
         case TYPE_STRING:
         case TYPE_TYPE:
         case TYPE_FUNCTION:
@@ -427,15 +428,16 @@ static void cgen_expression(cgen_t *cgen, string_builder_t *sb, ast_node_t *expr
             }
 
             cgen_indent(cgen);
-            cgen_add_indent(sb, cgen->indent);
 
             if (an_condition(expression)->requires_tmp_for_cgen) {
                 cgen_var_t condition_id = cgen_next_tmpid(cgen, an_condition(expression)->value_type);
                 cgen_expression(cgen, sb, an_condition(expression), condition_id);
 
+                cgen_add_indent(sb, cgen->indent);
                 sb_add_format(sb, "%s (%s) {\n", expression->condition_negated ? "unless" : "if", cgen_var_name(cgen, condition_id));
                 
             } else {
+                cgen_add_indent(sb, cgen->indent);
                 sb_add_format(sb, "%s ", expression->condition_negated ? "unless" : "if");
                 cgen_expression(cgen, sb, an_condition(expression), nil_tmp_var);
                 sb_add_cstr(sb, " {\n");
@@ -447,7 +449,10 @@ static void cgen_expression(cgen_t *cgen, string_builder_t *sb, ast_node_t *expr
                 cgen_expression(cgen, sb, an_then(expression), cgen_var_not_new(var));
             } else {
                 cgen_add_indent(sb, cgen->indent);
-                sb_add_format(sb, "%s = ", cgen_var_name(cgen, cgen_var_not_new(var)));
+                if (has_var(var)) {
+                    sb_add_format(sb, "%s = ", cgen_var_name(cgen, var));
+                }
+
                 cgen_expression(cgen, sb, an_then(expression), nil_tmp_var);
                 sb_add_cstr(sb, ";\n");
             }
@@ -464,7 +469,11 @@ static void cgen_expression(cgen_t *cgen, string_builder_t *sb, ast_node_t *expr
                     cgen_expression(cgen, sb, an_else(expression), cgen_var_not_new(var));
                 } else {
                     cgen_add_indent(sb, cgen->indent);
-                    sb_add_format(sb, "%s = ", cgen_var_name(cgen, var));
+
+                    if (has_var(var)) {
+                        sb_add_format(sb, "%s = ", cgen_var_name(cgen, var));
+                    }
+
                     cgen_expression(cgen, sb, an_else(expression), nil_tmp_var);
                     sb_add_cstr(sb, ";\n");
                 }
@@ -480,12 +489,6 @@ static void cgen_expression(cgen_t *cgen, string_builder_t *sb, ast_node_t *expr
             cgen_unindent(cgen);
             cgen_add_indent(sb, cgen->indent);
             sb_add_cstr(sb, "}\n");
-
-            if (no_var(var)) {
-                if (true /*!is_statement*/) {
-                    sb_add_format(sb, "%s", cgen_var_name(cgen, var));
-                }
-            }
             break;
         }
 
