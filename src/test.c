@@ -32,6 +32,9 @@
 #define MEMARR_IMPLEMENTATION
 #include "memarr.h"
 
+#define DYNLIB_IMPLEMENTATION
+#include "dynlib.h"
+
 #include "debugger.h"
 
 #include "parser.h"
@@ -166,9 +169,16 @@ int main(int argc, char **argv) {
         bool success = cc_build(&cc);
 
         if (!success) {
-            printf("did not succeed :(\n");
             return 1;
         }
+
+        dynlib_t lib = dynlib_load(lit2str("./build/liborso.so"));
+
+        i64 (*expr)(void) = dynlib_symbol(lib, lit2str("expr"));
+
+        i64 result = expr();
+
+        printf("result: %lld\n", result);
 
 
     } else {

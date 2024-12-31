@@ -1,9 +1,10 @@
 {
-    x := {
-        y := 5;
-        if y > 3 then 3 else y;
-    };
+    x := 0;
+    n := 10;
+    sum := 0;
 
-    y := if 1 > 4 then 1 else 2;
-    x;
+    while x < n {
+        sum = sum + x;
+        x = x + 1;
+    }
 }
