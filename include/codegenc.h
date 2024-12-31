@@ -514,17 +514,26 @@ static void cgen_expression(cgen_t *cgen, string_builder_t *sb, ast_node_t *expr
 
 string_t compile_expr_to_c(ast_t *ast, arena_t *arena) {
     ast_node_t *expr_node = ast->root;
+    cgen_cache_requires_tmp(expr_node);
     
     tmp_arena_t *tmp_arena = allocator_borrow();
     string_builder_t sb = {.allocator=tmp_arena->allocator};
-
     cgen_t cgen = {.ast = ast, .tmp_count = 0};
 
-    cgen_cache_requires_tmp(expr_node);
+    sb_add_cstr(&sb, "#include \"intrinsics.h\"\n");
+
+    sb_add_format(&sb, "%s expr(void) {\n", cgen_type_name(&cgen, expr_node->value_type));
+    cgen_indent(&cgen);
 
     cgen_var_t var = cgen_user_var(&cgen, lit2sv("result"), expr_node->value_type);
-
     cgen_expression(&cgen, &sb, expr_node, var);
+
+    cgen_add_indent(&sb, cgen.indent);
+    sb_add_format(&sb, "return %s;\n", cgen_var_name(&cgen, var));
+
+    cgen_unindent(&cgen);
+
+    sb_add_cstr(&sb, "}\n");
 
     allocator_return(tmp_arena);
 

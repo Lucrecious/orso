@@ -141,10 +141,7 @@ int main(int argc, char **argv) {
     cb_flags(&cb, 3, "-Wall", "-Wextra", "-fsanitize=address");
 
     cb_include(&cb, "./include");
-    cb_include(&cb, "./tcc");
-
-    cb_library_dir(&cb, "./tcc");
-    cb_library(&cb, "tcc");
+    cb_include(&cb, "./lib");
 
     cb_flags(&cb, 2, "-ggdb", "-DDEBUG");
 

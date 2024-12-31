@@ -40,7 +40,9 @@
 
 #include "error.h"
 
-#include "libtcc.h"
+#define CC_IMPLEMENTATION
+#include "cc.h"
+
 
 string_view_t get_line(cstr_t source, cstr_t somewhere_in_source) {
     char *s = (char*)somewhere_in_source;
@@ -153,7 +155,22 @@ int main(int argc, char **argv) {
     if (cgen) {
         string_t expr_str = compile_expr_to_c(&ast, &arena);
 
-        printf("%s\n", expr_str.cstr);
+        cc_t cc = cc_make(CC_GCC, &arena);
+        cc_mem_source(&cc, expr_str);
+
+        cc_include_dir(&cc, lit2str("./lib"));
+
+        cc.output_type = CC_DYNAMIC;
+        cc.output_name = lit2str("liborso.so");
+
+        bool success = cc_build(&cc);
+
+        if (!success) {
+            printf("did not succeed :(\n");
+            return 1;
+        }
+
+
     } else {
         memarr_t *memory = arena_alloc(&arena, sizeof(memarr_t));
         *memory = (memarr_t){0};
