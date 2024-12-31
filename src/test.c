@@ -40,6 +40,8 @@
 
 #include "error.h"
 
+#include "libtcc.h"
+
 string_view_t get_line(cstr_t source, cstr_t somewhere_in_source) {
     char *s = (char*)somewhere_in_source;
     until (*s == '\n' || s == source)  {

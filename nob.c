@@ -46,6 +46,18 @@ struct c_builder_t {
         size_t count;
         size_t capacity;
     } includes;
+
+    struct {
+        cstr_t *items;
+        size_t count;
+        size_t capacity;
+    } library_dirs;
+
+    struct {
+        cstr_t *items;
+        size_t count;
+        size_t capacity;
+    } libraries;
 };
 
 void cb_flags(c_builder_t *cb, size_t n, ...) {
@@ -71,6 +83,17 @@ void cb_include(c_builder_t *cb, cstr_t include_path) {
     nob_da_append(&cb->includes, include_path);
 }
 
+void cb_library_dir(c_builder_t *cb, cstr_t library_dir) {
+    library_dir = arena_strdup(cb->allocator, library_dir);
+    nob_da_append(&cb->library_dirs, library_dir);
+}
+
+void cb_library(c_builder_t *cb, cstr_t library) {
+    library = arena_strdup(cb->allocator, library);
+    nob_da_append(&cb->libraries, library);
+}
+
+
 bool cb_build(c_builder_t *cb) {
     Nob_Cmd cmd = {0};
 
@@ -84,6 +107,14 @@ bool cb_build(c_builder_t *cb) {
 
     for (size_t i = 0; i < cb->includes.count; ++i) {
         nob_cmd_append(&cmd, nob_temp_sprintf("-I%s", cb->includes.items[i]));
+    }
+
+    for (size_t i = 0; i < cb->library_dirs.count; ++i) {
+        nob_cmd_append(&cmd, nob_temp_sprintf("-L%s", cb->library_dirs.items[i]));
+    }
+
+    for (size_t i = 0; i < cb->libraries.count; ++i) {
+        nob_cmd_append(&cmd, nob_temp_sprintf("-l%s", cb->libraries.items[i]));
     }
 
     for (size_t i = 0; i < cb->sources.count; ++i) {
@@ -110,6 +141,10 @@ int main(int argc, char **argv) {
     cb_flags(&cb, 3, "-Wall", "-Wextra", "-fsanitize=address");
 
     cb_include(&cb, "./include");
+    cb_include(&cb, "./tcc");
+
+    cb_library_dir(&cb, "./tcc");
+    cb_library(&cb, "tcc");
 
     cb_flags(&cb, 2, "-ggdb", "-DDEBUG");
 
