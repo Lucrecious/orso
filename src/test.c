@@ -127,35 +127,33 @@ static void *vm_run_function(vm_t *vm, function_t *function) {
 int main(int argc, char **argv) {
     arena_t arena = {0};
 
-    bool cgen = (argc >= 2 && strcmp(argv[1], "cgen") == 0);
-    string_t code;
-    if (cgen) {
-        if (argc == 3) {
-            cstr_t path = argv[2];
-            String_Builder sb = {0};
-            bool success = read_entire_file(path, &sb);
-
-            if (!success) {
-                nob_log(ERROR, "could not read file at %s", path);
-                return 1;
-            }
-            
-            String_View nob_sv = sb_to_sv(sb);
-            string_view_t sv = { .data = nob_sv.data, .length = nob_sv.count };
-
-            code = sv2string(sv, &arena);
-        } else {
-            return 1;
-        }
+    if (argc < 2) {
+        nob_log(ERROR, "needs input file");
+        return 1;
     }
+
+    cstr_t path = argv[1];
+    String_Builder sb = {0};
+    bool success = read_entire_file(path, &sb);
+
+    if (!success) {
+        nob_log(ERROR, "could not read file at %s", path);
+        return 1;
+    }
+    
+    String_View nob_sv = sb_to_sv(sb);
+    string_view_t sv = { .data = nob_sv.data, .length = nob_sv.count };
+    
+    string_t code = sv2string(sv, &arena);
 
     ast_t ast = {0};
     ast_init(&ast, megabytes(2));
 
-    bool success = parse_expr_cstr(&ast, code.cstr, lit2str(""));
+    success = parse_expr_cstr(&ast, code.cstr, lit2str(""));
     unless (success) return 1;
 
-    if (cgen) {
+    i64 resultc = INT64_MIN;
+    {
         string_t expr_str = compile_expr_to_c(&ast, &arena);
 
         cc_t cc = cc_make(CC_GCC, &arena);
@@ -176,12 +174,11 @@ int main(int argc, char **argv) {
 
         i64 (*expr)(void) = dynlib_symbol(lib, lit2str("expr"));
 
-        i64 result = expr();
-
-        printf("result: %lld\n", result);
-
-
-    } else {
+        resultc = expr();
+    }
+    
+    i64 resultvm = INT64_MIN;
+    {
         memarr_t *memory = arena_alloc(&arena, sizeof(memarr_t));
         *memory = (memarr_t){0};
 
@@ -199,11 +196,15 @@ int main(int argc, char **argv) {
         vm.registers[REG_STACK_FRAME].as.u = stack_size;
         vm.registers[REG_STACK_BOTTOM].as.u = stack_size;
 
-        vm_set_entry_point(&vm, expr_function);
+        resultvm = *((i64*)vm_run_function(&vm, expr_function));
 
-        debugger_t debugger = {0};
-        debugger_init(&debugger, &arena);
-        while (debugger_step(&debugger, &vm));
+        // vm_set_entry_point(&vm, expr_function);
+
+        // debugger_t debugger = {0};
+        // debugger_init(&debugger, &arena);
+        // while (debugger_step(&debugger, &vm));
     }
+
+    nob_log(INFO, "test %s: cgen(%lld) vmgen(%lld)", path, resultc, resultvm);
 }
 

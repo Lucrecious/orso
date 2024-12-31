@@ -10,6 +10,8 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "intrinsics.h"
+
 #define FORCE_INLINE inline __attribute__((always_inline))
 
 #define println(cstr) printf(cstr"\n");
@@ -17,15 +19,7 @@
 
 #define megabytes(bytes) ((bytes)*1000*1000)
 
-typedef uint8_t byte;
-typedef int16_t i16;
-typedef uint16_t u16;
-typedef int32_t i32;
-typedef uint32_t u32;
-typedef int64_t i64;
-typedef uint64_t u64;
-typedef float f32;
-typedef double f64;
+typedef u8 byte;
 typedef void* ptr;
 typedef const char* cstr_t;
 
