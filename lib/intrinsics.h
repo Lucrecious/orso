@@ -15,4 +15,7 @@ typedef float f32;
 typedef double f64;
 typedef u8 bool_;
 
+#define unless(condition) if (!(condition))
+#define until(condition) while (!(condition))
+
 #endif

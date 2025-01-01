@@ -155,7 +155,7 @@ int main(int argc, char **argv) {
     unless (success) return 1;
 
     i64 resultc = INT64_MIN;
-    if (false)
+    if (true)
     {
         string_t expr_str = compile_expr_to_c(&ast, &arena);
 

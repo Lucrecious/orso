@@ -3,9 +3,10 @@
     n := 10;
     sum := 0;
 
-    until x >= n {
+    if x < n {
         sum = sum + x;
-        x = x + 1;
+        x = {x;} + 1;
     } else sum;
-}
 
+    sum;
+}

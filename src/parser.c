@@ -927,7 +927,7 @@ static ast_node_t *parse_precedence(parser_t *parser, bool inside_type_context, 
     while (precedence <= parser_get_rule(parser->current.type)->precedence) {
         advance(parser);
         ParseFn infix_rule = parser_get_rule(parser->previous.type)->infix;
-        ast_node_t* right_operand = infix_rule(parser, inside_type_context);
+        ast_node_t *right_operand = infix_rule(parser, inside_type_context);
         right_operand->inside_type_context = inside_type_context;
 
         switch (right_operand->node_type) {

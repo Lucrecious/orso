@@ -798,35 +798,10 @@ void resolve_expression(
         state.mode |= MODE_FOLDING_TIME;
     }
 
-    // expression->is_lvalue
-    // this is a field that needs to be set if the expression can be an lvalue.
-    // it is initially to false which means by default, an expression is not an lvalue
-    // This needs to be set to true and transferred up the ast appropriately for expressions
-    // that can ALSO be referred to as "location values". During an assignment, the left hand
-    // side must be an lvalue.
-    // lvalues can be as simple as this:
-    //   foo = 10;
-    // where foo is an lvalue
-    //   (foo) = 10;
-    // should also work fine
-    //   foo + 1 = 10;
-    // should NOT work (foo + 1 is not an lvalue) 
-    //   foo.value = 10;
-    // should work since foo refers to an lvalue, thus, foo.value refers to an lvalue.
-    //   struct { value := 0; }.value = 10;
-    // this should NOT work since the leftmost value is not an lvalue, therefore
-    // .value cannot be an lvalue. Make note: this is totally fine syntax as a non-lvalue.
-    // Rules for lvalues are found below in the code.
-    // Also, for clarity: something being an lvalue is not mutally exclusive from it being
-    // unassignable. i.e. constants, depending on how they are implemented, can be lvalues
-    // since they inhabit a location in memory. However, that doesn't mean that they are assignable.
-    // These are two independent checks that the analyzer makes.
-
     switch (expression->node_type) {
         case AST_NODE_TYPE_EXPRESSION_GROUPING: {
             resolve_expression(analyzer, ast, state, an_operand(expression));
-            expression->lvalue_node = an_operand(expression)->lvalue_node;
-
+            expression->lvalue_node = an_operand(expression);
             expression->value_type = an_operand(expression)->value_type;
             break;
         }
@@ -1098,9 +1073,7 @@ void resolve_expression(
             }
 
             resolve_expression(analyzer, ast, state, left);
-            if (left->lvalue_node != NULL) {
-                expression->lvalue_node = left->lvalue_node;
-            }
+            // expression->lvalue_node = expression;
 
             if (TYPE_IS_INVALID(left->value_type)) {
                 INVALIDATE(expression);
@@ -1186,10 +1159,6 @@ void resolve_expression(
                 break;
             } 
 
-            lvalue_node = lhs;
-            expression->lvalue_node = lvalue_node;
-
-            // // TODO: Find a way to merge the fitting logic
             if (lvalue_node->node_type == AST_NODE_TYPE_EXPRESSION_DEF_VALUE) {
                 scope_t *def_scope;
                 definition_t *def;
@@ -1213,20 +1182,23 @@ void resolve_expression(
                 expression->value_type = rhs_type;
 
             } else if (lvalue_node->node_type == AST_NODE_TYPE_EXPRESSION_DOT) {
-                ast_node_t* dot_node = lvalue_node;
-                resolve_expression(analyzer, ast, state, dot_node);
+                // todo
+                UNREACHABLE();
 
-                if (TYPE_IS_INVALID(dot_node->value_type)) {
+                ASSERT(EXPRESSION_RESOLVED(lvalue_node), "must be resolved");
+                // resolve_expression(analyzer, ast, state, lvalue_node);
+
+                if (TYPE_IS_INVALID(lvalue_node->value_type)) {
                     INVALIDATE(expression);
                     break;
                 }
 
-                unless (typeid_eq(dot_node->value_type, rhs->value_type)) {
+                unless (typeid_eq(lvalue_node->value_type, rhs->value_type)) {
                     error_range(analyzer, expression->start, expression->end, ERROR_ANALYSIS_TYPE_MISMATCH);
                     break;
                 }
 
-                expression->value_type = dot_node->value_type;
+                expression->value_type = lvalue_node->value_type;
 
             } else {
                 UNREACHABLE();
