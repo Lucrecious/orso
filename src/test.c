@@ -159,8 +159,8 @@ int main(int argc, char **argv) {
     {
         string_t expr_str = compile_expr_to_c(&ast, &arena);
 
-        // printf("%s\n", expr_str.cstr);
-        // return 1;
+        printf("%s\n", expr_str.cstr);
+        return 1;
 
         cc_t cc = cc_make(CC_GCC, &arena);
         cc_mem_source(&cc, expr_str);
@@ -184,7 +184,7 @@ int main(int argc, char **argv) {
     }
     
     i64 resultvm = INT64_MIN;
-    if (true)
+    if (false)
     {
         memarr_t *memory = arena_alloc(&arena, sizeof(memarr_t));
         *memory = (memarr_t){0};

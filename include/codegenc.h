@@ -255,7 +255,10 @@ static void cgen_declaration(cgen_t *cgen, ast_node_t *declaration) {
         }
 
         case AST_NODE_TYPE_DECLARATION_STATEMENT: {
-            cgen_add_indent(cgen);
+            if (!an_expression(declaration)->requires_tmp_for_cgen) {
+                cgen_add_indent(cgen);
+            }
+
             cgen_expression(cgen, an_expression(declaration), nil_tmp_var);
 
             switch (an_expression(declaration)->node_type) {
@@ -286,8 +289,8 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
                 cgen_var_t rhs_var = cgen_next_tmpid(cgen, an_rhs(expression)->value_type);
                 cgen_expression(cgen, an_rhs(expression), rhs_var);
 
+                cgen_add_indent(cgen);
                 if (has_var(var)) {
-                    cgen_add_indent(cgen);
                     sb_add_format(&cgen->sb, "%s = ", cgen_var(cgen, var));
                 }
 

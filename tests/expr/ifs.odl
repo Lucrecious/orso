@@ -1,20 +1,20 @@
 {
-    x := 5;
+    if 1 < 2 {
+    };
 
-    none := 0;
-    fizzbuzz := 1;
-    fizz := 2;
-    buzz := 3;
+    if 3 < 4 {
+        5;
+    } else {
+        6;
+    };
 
-    out := if (x - (x/3)*3) == 0 {
-        if (x - (x/5)*5) == 0 then
-            fizzbuzz
-        else
-            fizz;
-    } else if (x - (x/5)*5) == 0 then
-        buzz
-    else
-        none;
-    
-    out;
+    x := if 7 < 8 {
+        9;
+    };
+
+    y := if 10 < 11 {
+        12;
+    } else {
+        13;
+    };
 }
