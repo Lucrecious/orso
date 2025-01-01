@@ -159,8 +159,8 @@ int main(int argc, char **argv) {
     {
         string_t expr_str = compile_expr_to_c(&ast, &arena);
 
-        printf("%s\n", expr_str.cstr);
-        return 1;
+        // printf("%s\n", expr_str.cstr);
+        // return 1;
 
         cc_t cc = cc_make(CC_GCC, &arena);
         cc_mem_source(&cc, expr_str);
@@ -204,15 +204,15 @@ int main(int argc, char **argv) {
         vm.registers[REG_STACK_BOTTOM].as.u = stack_size;
 
         {
-            // resultvm = *((i64*)vm_run_function(&vm, expr_function));
+            resultvm = *((i64*)vm_run_function(&vm, expr_function));
         }
         {
-            UNUSED(vm_run_function);
-            vm_set_entry_point(&vm, expr_function);
+            // UNUSED(vm_run_function);
+            // vm_set_entry_point(&vm, expr_function);
 
-            debugger_t debugger = {0};
-            debugger_init(&debugger, &arena);
-            while (debugger_step(&debugger, &vm));
+            // debugger_t debugger = {0};
+            // debugger_init(&debugger, &arena);
+            // while (debugger_step(&debugger, &vm));
         }
     }
 

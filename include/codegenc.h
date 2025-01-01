@@ -494,7 +494,11 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
                 cgen_add_indent(cgen);
 
                 if (!skip_else) {
-                    sb_add_format(&cgen->sb, "%s; {\n", cgen_var(cgen, var));
+                    if (var.is_new) {
+                        sb_add_format(&cgen->sb, "%s; {\n", cgen_var(cgen, var));
+                    } else {
+                        sb_add_cstr(&cgen->sb, "{\n");
+                    }
                 } else {
                     sb_add_format(&cgen->sb, "%s = ", cgen_var(cgen, var));
                     ASSERT(!an_else(expression)->requires_tmp_for_cgen, "!");

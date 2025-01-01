@@ -6,5 +6,5 @@
     while x < n {
         sum = sum + x;
         x = {x;} + 1;
-    } else 5;
+    } else sum;
 }
