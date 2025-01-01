@@ -25,12 +25,13 @@ struct cc_t {
     cc_output_type_t output_type;
     strings_t mem_sources;
     strings_t include_dirs;
-
+    strings_t no_warnings;
 };
 
 cc_t cc_make(cc_cc_t cc_cc, arena_t *arena);
 void cc_mem_source(cc_t *cc, string_t mem_source);
 void cc_include_dir(cc_t *cc, string_t dir);
+void cc_no_warning(cc_t *cc, string_t warning);
 bool cc_build(cc_t *cc);
 
 
@@ -43,6 +44,7 @@ cc_t cc_make(cc_cc_t cc_cc, arena_t *arena) {
         .arena = arena, 
         .mem_sources = {.allocator=arena},
         .include_dirs = {.allocator=arena},
+        .no_warnings = {.allocator=arena},
         .output_name = lit2str("a.out"),
         .build_dir = lit2str("./build"),
         .output_type = CC_EXE
@@ -55,6 +57,10 @@ void cc_mem_source(cc_t *cc, string_t mem_source) {
 
 void cc_include_dir(cc_t *cc, string_t dir) {
     array_push(&cc->include_dirs, dir);
+}
+
+void cc_no_warning(cc_t *cc, string_t warning) {
+    array_push(&cc->no_warnings, warning);
 }
 
 static string_t cc_name(cc_cc_t cc) {
@@ -100,6 +106,12 @@ bool cc_build(cc_t *cc) {
             string_t include_dir = cc->include_dirs.items[i];
             string_t include_dir_flag = string_format("-I%s", cc->arena, include_dir.cstr);
             cmd_append(&cmd, include_dir_flag.cstr);
+        }
+
+        for (size_t i = 0; i < cc->no_warnings.count; ++i) {
+            string_t warning = cc->no_warnings.items[i];
+            string_t nowarning_flag = string_format("-Wno-%s", cc->arena, warning.cstr);
+            cmd_append(&cmd, nowarning_flag.cstr);
         }
 
         cmd_append(&cmd, "-o");

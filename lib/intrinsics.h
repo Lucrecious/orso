@@ -14,6 +14,7 @@ typedef uint64_t u64;
 typedef float f32;
 typedef double f64;
 typedef u8 bool_;
+typedef const char *cstr_t;
 
 #define unless(condition) if (!(condition))
 #define until(condition) while (!(condition))

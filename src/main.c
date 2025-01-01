@@ -127,45 +127,68 @@ static void *vm_run_function(vm_t *vm, function_t *function) {
     return &vm->registers[REG_RESULT];
 }
 
-int main(int argc, char **argv) {
-    arena_t arena = {0};
+typedef enum compiler_mode_type_t compiler_mode_type_t;
+enum compiler_mode_type_t {
+    COMPILER_MODE_TEST,
+    COMPILER_MODE_TEST_GEN,
+};
 
-    if (argc < 2) {
-        nob_log(ERROR, "needs input file");
-        return 1;
+typedef struct compiler_mode_t compiler_mode_t;
+struct compiler_mode_t  {
+    compiler_mode_type_t type;
+    string_t file_or_dir;
+};
+
+compiler_mode_t get_compiler_mode_from_args(int argc, char **argv, arena_t *arena) {
+    compiler_mode_t mode = {0};
+    nob_shift_args(&argc, &argv);
+
+    while (argc > 0) {
+        cstr_t arg = shift_args(&argc, &argv);
+        if (cstr_eq(arg, "test")) {
+            mode.type = COMPILER_MODE_TEST;
+        } else if (cstr_eq(arg, "testgen")) {
+            mode.type = COMPILER_MODE_TEST_GEN;
+        } else {
+            mode.file_or_dir = cstr2string(arg, arena);
+        }
     }
 
-    cstr_t path = argv[1];
+    return mode;
+}
+
+void test_expr_file(string_t expr_file, arena_t *arena) {
     String_Builder sb = {0};
-    bool success = read_entire_file(path, &sb);
+    bool success = read_entire_file(expr_file.cstr, &sb);
 
     if (!success) {
-        nob_log(ERROR, "could not read file at %s", path);
-        return 1;
+        nob_log(ERROR, "could not read file at %s", expr_file.cstr);
+        return;
     }
     
     String_View nob_sv = sb_to_sv(sb);
     string_view_t code = { .data = nob_sv.data, .length = nob_sv.count };
-    code = string2sv(sv2string(code, &arena));
+    code = string2sv(sv2string(code, arena));
 
     ast_t ast = {0};
     ast_init(&ast, megabytes(2));
 
-    success = parse_expr_cstr(&ast, code, lit2str(""));
-    unless (success) return 1;
+    success = parse_expr_cstr(&ast, code, expr_file);
+    unless (success) {
+        nob_log(ERROR, "could not parse: %s", expr_file.cstr);
+        return;
+    }
 
     i64 resultc = INT64_MIN;
     if (true)
     {
-        string_t expr_str = compile_expr_to_c(&ast, &arena);
+        string_t expr_str = compile_expr_to_c(&ast, arena);
 
-        printf("%s\n", expr_str.cstr);
-        return 1;
-
-        cc_t cc = cc_make(CC_GCC, &arena);
+        cc_t cc = cc_make(CC_GCC, arena);
         cc_mem_source(&cc, expr_str);
 
         cc_include_dir(&cc, lit2str("./lib"));
+        cc_no_warning(&cc, lit2str("unused-value"));
 
         cc.output_type = CC_DYNAMIC;
         cc.output_name = lit2str("liborso.so");
@@ -173,7 +196,8 @@ int main(int argc, char **argv) {
         bool success = cc_build(&cc);
 
         if (!success) {
-            return 1;
+            nob_log(ERROR, "could not build c version of file: %s", expr_file.cstr);
+            return;
         }
 
         dynlib_t lib = dynlib_load(lit2str("./build/liborso.so"));
@@ -184,9 +208,9 @@ int main(int argc, char **argv) {
     }
     
     i64 resultvm = INT64_MIN;
-    if (false)
+    if (true)
     {
-        memarr_t *memory = arena_alloc(&arena, sizeof(memarr_t));
+        memarr_t *memory = arena_alloc(arena, sizeof(memarr_t));
         *memory = (memarr_t){0};
 
         memarr_init(memory, megabytes(2.5));
@@ -194,7 +218,7 @@ int main(int argc, char **argv) {
         memory->count = stack_size;
         memset(memory->data, 0, stack_size);
         
-        function_t *expr_function = new_function(lit2str("<none>"), memory, &arena);
+        function_t *expr_function = new_function(lit2str("<none>"), memory, arena);
 
         compile_expr_to_function(expr_function, &ast);
 
@@ -216,6 +240,44 @@ int main(int argc, char **argv) {
         }
     }
 
-    nob_log(INFO, "test\n-- %s:\ncgen = %lld;\nvmgen = %lld;\n%s", path, resultc, resultvm, (resultc == resultvm) ? "pass" : "fail");
+    nob_log(INFO, "---- test: %s", expr_file.cstr);
+    nob_log(INFO, "cgen = %lld", resultc);
+    nob_log(INFO, "vgen = %lld", resultvm);
+    nob_log(INFO, "TEST: %s\n", (resultc == resultvm) ? "PASS" : "FAIL");
+}
+
+int main(int argc, char **argv) {
+    arena_t arena = {0};
+
+    compiler_mode_t mode = get_compiler_mode_from_args(argc, argv, &arena);
+
+    switch (mode.type) {
+        case COMPILER_MODE_TEST: {
+            if (sv_ends_with(string2sv(mode.file_or_dir), ".edl")) {
+                test_expr_file(mode.file_or_dir, &arena);
+            } else {
+                File_Paths paths = {0};
+                unless (read_entire_dir(mode.file_or_dir.cstr, &paths)) {
+                    nob_log(ERROR, "could not read files in dir: %s", mode.file_or_dir.cstr);
+                    return 1;
+                }
+
+                arena_t test_arena = {0};
+                for (size_t i = 0; i < paths.count; ++i) {
+                    arena_reset(&test_arena);
+
+                    string_t file = string_format("%s/%s", &test_arena, mode.file_or_dir.cstr, paths.items[i]);
+                    if (sv_ends_with(string2sv(file), ".edl")) {
+                        test_expr_file(file, &arena);
+                    }
+                }
+            }
+            break;
+        }
+
+        case COMPILER_MODE_TEST_GEN: {
+            break;
+        }
+    }
 }
 

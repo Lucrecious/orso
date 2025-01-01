@@ -4,9 +4,8 @@
 #define ARENA_IMPLEMENTATION
 #include "include/arena.h"
 
-#include "include/def.h"
-
 #include <stdlib.h>
+#include "lib/intrinsics.h"
 
 
 const char* SOURCES[] = {
@@ -151,7 +150,7 @@ int main(int argc, char **argv) {
         cb_source(&cb, SOURCES[i]);
     }
 
-    cb_source(&cb, "./src/test.c");
+    cb_source(&cb, "./src/main.c");
 
     cb_build(&cb);
 

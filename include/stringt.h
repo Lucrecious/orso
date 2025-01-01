@@ -188,6 +188,18 @@ string_view_t sv_filename(string_view_t sv) {
     return (string_view_t){.data=sv.data+begin, .length=sv.length-begin};
 }
 
+bool sv_ends_with(string_view_t sv, cstr_t cstr) {
+    size_t len = strlen(cstr);
+    if (len > sv.length) return false;
+    if (len == 0) return true;
+
+    for (size_t i = 0; i < len; ++i) {
+        if (sv.data[sv.length - i - 1] != cstr[len - i - 1]) return false;
+    }
+
+    return true;
+}
+
 void sb_add_char(string_builder_t *builder, char c) {
     array_push(builder, c);
 }

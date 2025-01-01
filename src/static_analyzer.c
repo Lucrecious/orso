@@ -302,6 +302,7 @@ static void resolve_foldable(
         ast_t *ast,
         analysis_state_t state,
         ast_node_t *expression) {
+    UNUSED(analyzer);
 
     bool foldable = false;
     value_index_t folded_index = value_index_nil();

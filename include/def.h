@@ -21,7 +21,6 @@
 
 typedef u8 byte;
 typedef void* ptr;
-typedef const char* cstr_t;
 
 #define cast(void_ptr, type) (*((type*)void_ptr))
 
