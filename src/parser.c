@@ -48,44 +48,11 @@ struct_definition        -> `struct` `{` definition* `}`
 type_init                ->  logic_or`{` `}`
 */
 
+#define ERROR_XMACRO(error_type, error_message) [error_type] = error_message,
 cstr_t const error_messages[] = {
-    [ERROR_PARSER_UNEXPECTED_TOKEN] = "unexpected token",
-    [ERROR_PARSER_EXPECTED_OPEN_BRACE] = "expected open brace: '{'",
-    [ERROR_PARSER_EXPECTED_CLOSE_BRACE] = "expected close brace: '}'",
-    [ERROR_PARSER_EXPECTED_DO_OR_BLOCK] = "expected 'do' or block",
-    [ERROR_PARSER_EXPECTED_THEN_OR_BLOCK] = "expected 'then' or block",
-    [ERROR_PARSER_EXPECTED_CLOSE_PARENTHESIS] = "expected close parenthesis: ')'",
-    [ERROR_PARSER_EXPECTED_SEMICOLON] = "expected semicolon: ';'",
-    [ERROR_PARSER_EXPECTED_DECLARATION_COLON] = "expected colon: ':'",
-    [ERROR_PARSER_EXPECTED_DECLARATION] = "expected declaration",
-    [ERROR_PARSER_EXPECTED_EXPRESSION] = "expected expression",
-    [ERROR_PARSER_EXPECTED_EOF] = "expected end of file",
-    [ERROR_PARSER_DOT_OPERATOR_ONLY_NAMES_FOR_NOW] = "dot operator only valid for names right now",
-    [ERROR_PARSER_TOO_MANY_PARAMETERS] = "too many parameters; the max is 100",
-
-    [ERROR_ANALYSIS_INVALID_UNARY_OPERAND] = "unary operation cannot be performed without an explicit cast",
-    [ERROR_ANALYSIS_INVALID_BINARY_OPERANDS] = "binary operation cannot be performed without an explicit cast",
-    [ERROR_ANALYSIS_INVALID_MEMBER_ACCESS] = "expression is does not have accessible members",
-    [ERROR_ANALYSIS_INVALID_RETURN_TYPE] = "expression must resolve to a type for return",
-    [ERROR_ANALYSIS_EXPECTED_CONSTANT] = "expression must be resolved by compile time",
-    [ERROR_ANALYSIS_EXPECTED_LVALUE] = "expression must resolve to an lvalue",
-    [ERROR_ANALYSIS_EXPECTED_CALLABLE] = "expression must be callable",
-    [ERROR_ANALYSIS_EXPECTED_RESOLVED] = "expression must be defined and resolved",
-    [ERROR_ANALYSIS_EXPECTED_TYPE] = "expression must be a type",
-    [ERROR_ANALYSIS_TYPE_MISMATCH] = "type mismatch; expression requires explicit cast",
-    [ERROR_ANALYSIS_CANNOT_RETURN_INSIDE_RETURN] = "cannot return inside return",
-    [ERROR_ANALYSIS_CANNOT_ACCESS_MUTABLE_ON_DIFFERENT_FOLD_LEVEL] = "cannot access mutable definition on a different fold level",
-    [ERROR_ANALYSIS_CANNOT_OVERLOAD_DEFINITION] = "cannot overload definition",
-    [ERROR_ANALYSIS_CANNOT_FOLD_ON_ERRORED_FUNCTION_DEFINITION] = "cannot fold on errored function definition",
-    [ERROR_ANALYSIS_FOLDING_LOOP] = "folding operation causes a dependency loop",
-    [ERROR_ANALYSIS_FUNCTION_MUST_RETURN_ON_ALL_BRANCHES] = "function must return on all branches",
-    [ERROR_ANALYSIS_MEMBER_DOES_NOT_EXIST] = "member does not exist",
-    [ERROR_ANALYSIS_INVALID_TYPE_FOR_TYPE_INITIALIZER_LIST] = "invalid type for type initializer list",
-    [ERROR_ANALYSIS_TOO_MANY_STRUCT_ARGUMENTS] = "too many struct arguments",
-    [ERROR_ANALYSIS_BLOCKS_MUST_BE_EMPTY_OR_END_IN_STATEMENT] = "block must be empty or end in statement",
-
-    [ERROR_CODEGEN_MEMORY_SIZE_TOO_BIG] = "memory size is too large to index. the max is 2^32",
+#include "error.x"
 };
+#undef ERROR_XMACRO
 
 static int type_hash(type_t id) {
     return kh_int64_hash_func((khint64_t)id.i);
@@ -313,32 +280,8 @@ static void parser_init(parser_t *parser, ast_t *ast, string_t file_path, string
     parser->panic_mode = false;
 }
 
-static void error_at(parser_t *parser, token_t *token, error_type_t error_type) {
-    if (parser->panic_mode) {
-        return;
-    }
-    parser->panic_mode = true;
-    parser->had_error = true;
-
-    if (!parser->error_fn) {
-        return;
-    }
-
-    error_t error = {
-        .type = error_type,
-        .region_type = ERROR_REGION_TYPE_TOKEN,
-        .first = *token,
-    };
-
-    parser->error_fn(error);
-}
-
-static void error_at_current(parser_t *parser, error_type_t error_type) {
-    error_at(parser, &parser->current, error_type);
-}
-
-static void error(parser_t *parser, error_type_t error_type) {
-    error_at(parser, &parser->previous, error_type);
+static void parser_error(parser_t *parser, error_t error) {
+    if (parser->error_fn) parser->error_fn(error);
 }
 
 static void advance(parser_t *parser) {
@@ -350,17 +293,19 @@ static void advance(parser_t *parser) {
             break;
         }
 
-        error_at_current(parser, ERROR_PARSER_UNEXPECTED_TOKEN); 
+        error_t error = make_error_token(ERROR_PARSER_ILLEGAL_TOKEN, parser->current);
+        parser_error(parser, error);
     }
 }
 
-static void consume(parser_t *parser, token_type_t type, error_type_t error_type) {
+static void consume(parser_t *parser, token_type_t type) {
     if (parser->current.type == type) {
         advance(parser);
         return;
     }
 
-    error_at_current(parser, error_type);
+    error_t error = make_unexpected_error(parser->current, type);
+    parser_error(parser, error);
 }
 
 static FORCE_INLINE bool check(parser_t* parser, token_type_t type) {
@@ -448,7 +393,7 @@ static ast_node_t *parse_number(parser_t *parser, bool inside_type_context) {
             i64 value = cstrn_to_i64(parser->previous.view.data, parser->previous.view.length);
             expression_node->value_type = parser->ast->type_set.i64_;
             unless (memarr_push_value(&parser->ast->constants, &value, sizeof(i64), &expression_node->value_index)) {
-                error(parser, ERROR_CODEGEN_NOT_ENOUGH_MEMORY);
+                parser_error(parser, make_error_token(ERROR_PARSER_NOT_ENOUGH_MEMORY, parser->current));
             }
             break;
         }
@@ -490,7 +435,7 @@ static ast_node_t *parse_literal(parser_t *parser, bool inside_type_context) {
             bool is_true = parser->previous.type == TOKEN_TRUE;
             byte value = (byte)is_true;
             unless (memarr_push_value(&parser->ast->constants, &value, sizeof(byte), &expression_node->value_index)) {
-                error(parser, ERROR_CODEGEN_NOT_ENOUGH_MEMORY);
+                parser_error(parser, make_error_token(ERROR_PARSER_NOT_ENOUGH_MEMORY, parser->current));
             }
             break;
         }
@@ -531,7 +476,7 @@ static ast_node_t *convert_function_definition(parser_t *parser, ast_node_t *lef
     for (size_t i = 0; i < left_operand->as.function.parameter_nodes.count; i++) {
         ast_node_t *parameter = left_operand->as.function.parameter_nodes.items[i];
         if (parameter->node_type != AST_NODE_TYPE_DECLARATION_DEFINITION) {
-            error_at(parser, &parameter->start, ERROR_PARSER_EXPECTED_DECLARATION);
+            parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_DECLARATION, parameter->start));
             left_operand->node_type = AST_NODE_TYPE_NONE;
             return left_operand;
         }
@@ -570,7 +515,7 @@ static void parse_block_(parser_t *parser, ast_node_t *block) {
         array_push(&block->children, declaration_node);
     }
 
-    consume(parser, TOKEN_BRACE_CLOSE, ERROR_PARSER_EXPECTED_CLOSE_BRACE);
+    consume(parser, TOKEN_BRACE_CLOSE);
 }
 
 static ast_node_t *parse_block(parser_t *parser, bool inside_type_context) {
@@ -604,9 +549,9 @@ static ast_node_t *parse_ifelse(parser_t *parser, bool inside_type_context) {
         an_then(expression_node) = parse_block(parser, inside_type_context);
     } else {
         if (expression_node->looping) {
-            consume(parser, TOKEN_DO, ERROR_PARSER_EXPECTED_DO_OR_BLOCK);
+            consume(parser, TOKEN_DO);
         } else {
-            consume(parser, TOKEN_THEN, ERROR_PARSER_EXPECTED_THEN_OR_BLOCK);
+            consume(parser, TOKEN_THEN);
         }
 
         {
@@ -637,7 +582,8 @@ static bool is_incoming_function_signature(parser_t* parser) {
     // get matching close parenthesis
     while (true) {
         if (next.type == TOKEN_EOF) {
-            error(parser, ERROR_PARSER_EXPECTED_CLOSE_PARENTHESIS);
+            error_t error = make_unexpected_error(next, TOKEN_PARENTHESIS_CLOSE);
+            parser_error(parser, error);
             return false;
         }
 
@@ -696,7 +642,7 @@ static void parse_function_signature(parser_t *parser, ast_node_t *function_defi
 
     function_definition->as.function.parameter_nodes = parse_parameters(parser);
 
-    consume(parser, TOKEN_PARENTHESIS_CLOSE, ERROR_PARSER_EXPECTED_CLOSE_PARENTHESIS);
+    consume(parser, TOKEN_PARENTHESIS_CLOSE);
 
     if (match(parser, TOKEN_ARROW_RIGHT)) {
         function_definition->as.function.return_type_expression = parse_expression(parser, true);
@@ -735,7 +681,7 @@ static ast_node_t *parse_grouping_or_function_signature_or_definition(parser_t *
     } else {
         an_operand(expression_node) = parse_expression(parser, inside_type_context);
 
-        consume(parser, TOKEN_PARENTHESIS_CLOSE, ERROR_PARSER_EXPECTED_CLOSE_PARENTHESIS);
+        consume(parser, TOKEN_PARENTHESIS_CLOSE);
 
         expression_node->value_type = an_operand(expression_node)->value_type;
     }
@@ -755,10 +701,11 @@ static ast_nodes_t parse_arguments(parser_t* parser, bool inside_type_context) {
         } while (match(parser, TOKEN_COMMA));
     }
 
-    consume(parser, TOKEN_PARENTHESIS_CLOSE, ERROR_PARSER_EXPECTED_CLOSE_PARENTHESIS);
+    consume(parser, TOKEN_PARENTHESIS_CLOSE);
 
     if (arguments.count > MAX_PARAMETERS - 1) {
-        error(parser, ERROR_PARSER_TOO_MANY_PARAMETERS);
+        error_t error = make_error(ERROR_PARSER_TOO_MANY_PARAMETERS);
+        parser_error(parser, error);
     }
 
     return arguments;
@@ -806,14 +753,14 @@ static ast_node_t *parse_struct_def(parser_t *parser, bool inside_type_context) 
 
     ast_node_t *struct_definition = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION, inside_type_context, parser->previous);
 
-    consume(parser, TOKEN_BRACE_OPEN, ERROR_PARSER_EXPECTED_OPEN_BRACE);
+    consume(parser, TOKEN_BRACE_OPEN);
 
     while (!check(parser, TOKEN_BRACE_CLOSE) && !check(parser, TOKEN_EOF)) {
         ast_node_t *declaration_node = definition_declaration(parser, false);
         array_push(&struct_definition->children, declaration_node);
     }
 
-    consume(parser, TOKEN_BRACE_CLOSE, ERROR_PARSER_EXPECTED_CLOSE_BRACE);
+    consume(parser, TOKEN_BRACE_CLOSE);
 
     struct_definition->end = parser->previous;
 
@@ -834,7 +781,7 @@ static ast_node_t *parse_dot(parser_t* parser, bool inside_type_context) {
 
             } while (match(parser, TOKEN_COMMA));
 
-            consume(parser, TOKEN_BRACE_CLOSE, ERROR_PARSER_EXPECTED_CLOSE_BRACE);
+            consume(parser, TOKEN_BRACE_CLOSE);
         }
 
         initiailizer->end = parser->previous;
@@ -842,7 +789,7 @@ static ast_node_t *parse_dot(parser_t* parser, bool inside_type_context) {
         return initiailizer;
     } else {
         ast_node_t *dot_expression = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_DOT, inside_type_context, parser->previous);
-        consume(parser, TOKEN_IDENTIFIER, ERROR_PARSER_DOT_OPERATOR_ONLY_NAMES_FOR_NOW);
+        consume(parser, TOKEN_IDENTIFIER);
         dot_expression->identifier = parser->previous;
         dot_expression->end = parser->current;
 
@@ -915,7 +862,8 @@ static ast_node_t *parse_precedence(parser_t *parser, bool inside_type_context, 
     ast_node_t *left_operand;
 
     if (prefix_rule == NULL) {
-        error(parser, ERROR_PARSER_EXPECTED_EXPRESSION);
+        error_t error = make_error_token(ERROR_PARSER_EXPECTED_EXPRESSION, parser->previous);
+        parser_error(parser, error);
         left_operand = ast_node_new(parser->ast, AST_NODE_TYPE_NONE, inside_type_context, parser->previous);
     } else {
         left_operand = prefix_rule(parser, inside_type_context);
@@ -981,7 +929,7 @@ static ast_node_t *parse_precedence(parser_t *parser, bool inside_type_context, 
         for (size_t i = 0; i < left_operand->as.function.parameter_nodes.count; ++i) {
             ast_node_t *parameter = left_operand->as.function.parameter_nodes.items[i];
             if (!ast_node_type_is_expression(parameter->node_type)) {
-                error_at(parser, &parameter->start, ERROR_PARSER_EXPECTED_TYPE);
+                parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_TYPE, parameter->start));
                 break;
             }
         }
@@ -1017,7 +965,7 @@ static ast_node_t *parse_statement(parser_t* parser, bool omit_end_of_statement)
     an_expression(statement_node) = parse_expression(parser, false);
         
     if (!omit_end_of_statement) {
-        consume(parser, TOKEN_SEMICOLON, ERROR_PARSER_EXPECTED_SEMICOLON);
+        consume(parser, TOKEN_SEMICOLON);
     }
 
     statement_node->end = parser->previous;
@@ -1036,7 +984,7 @@ static ast_node_t *definition_declaration(parser_t *parser, bool as_parameter) {
 
     definition_node->identifier = parser->previous;
 
-    consume(parser, TOKEN_COLON, ERROR_PARSER_EXPECTED_TYPE);
+    consume(parser, TOKEN_COLON);
 
     if (!check(parser, TOKEN_EQUAL) && !check(parser, TOKEN_COLON)) {
         an_decl_type(definition_node) = parse_expression(parser, true);
@@ -1055,7 +1003,7 @@ static ast_node_t *definition_declaration(parser_t *parser, bool as_parameter) {
         if (match(parser, TOKEN_EQUAL)) {
             definition_node->is_mutable = true;
         } else {
-            consume(parser, TOKEN_COLON, ERROR_PARSER_EXPECTED_DECLARATION_COLON);
+            consume(parser, TOKEN_COLON);
         }
         requires_expression = true;
     }
@@ -1069,7 +1017,7 @@ static ast_node_t *definition_declaration(parser_t *parser, bool as_parameter) {
     }
 
     if (!as_parameter) {
-        consume(parser, TOKEN_SEMICOLON, ERROR_PARSER_EXPECTED_SEMICOLON);
+        consume(parser, TOKEN_SEMICOLON);
     }
 
     definition_node->end = parser->previous;
@@ -1084,7 +1032,7 @@ static ast_node_t *parse_declaration(parser_t *parser, bool is_top_level) {
         unless (is_top_level) {
             node = parse_statement(parser, false);
         } else {
-            error_at_current(parser, ERROR_PARSER_EXPECTED_DECLARATION);
+            parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_DECLARATION, parser->current));
             advance(parser);
         }
     }
@@ -1104,7 +1052,7 @@ bool parse_expr(ast_t *ast, string_t file_path, string_view_t source, error_func
 
     ast->root = parse_precedence(&parser, false, PREC_BLOCK);
 
-    consume(&parser, TOKEN_EOF, ERROR_PARSER_EXPECTED_EOF);
+    consume(&parser, TOKEN_EOF);
 
     return !parser.had_error;
 }
@@ -1124,7 +1072,7 @@ bool parse(ast_t *ast, string_t file_path, string_view_t source, error_function_
         }
     }
 
-    consume(&parser, TOKEN_EOF, ERROR_PARSER_EXPECTED_EOF);
+    consume(&parser, TOKEN_EOF);
 
     return !parser.had_error;
 }

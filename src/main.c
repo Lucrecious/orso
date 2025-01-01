@@ -67,13 +67,13 @@ string_view_t get_line(string_view_t source, string_view_t somewhere_in_source) 
 }
 
 void myerror(error_t error) {
-    size_t line = error.first.location.line + 1;
-    size_t column = error.first.location.column + 1;
+    size_t line = error.token.location.line + 1;
+    size_t column = error.token.location.column + 1;
     // cstr_t file = error.first.file_path.cstr;
 
-    string_view_t source_line = get_line(error.first.source, error.first.view);
+    string_view_t source_line = get_line(error.token.source, error.token.view);
 
-    fprintf(stderr, "%s:%lu:%lu: %s\n", "todo", line, column, error_messages[error.type]);
+    fprintf(stderr, "%s:%lu:%lu: %s\n", "todo", line, column, error.message);
     fprintf(stderr, "%.*s\n", (int)source_line.length, source_line.data);
 
     tmp_arena_t *tmp_arena = allocator_borrow();

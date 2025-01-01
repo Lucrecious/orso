@@ -309,12 +309,7 @@ static void gen_folded_value(gen_t *gen, function_t *function, ast_node_t *expre
     // this ensures the data is always indexable
     if (function->memory->count+type_info->size >= function->memory->capacity) {
         if (gen->error_fn) {
-            gen->error_fn((error_t){
-                .type=ERROR_CODEGEN_MEMORY_SIZE_TOO_BIG,
-                .region_type=ERROR_REGION_TYPE_RANGE,
-                .first = expression->start,
-                .first_end = expression->end,
-            });
+            gen->error_fn(make_error_node(ERROR_CODEGEN_MEMORY_SIZE_TOO_BIG, expression));
             return;
         }
     }
