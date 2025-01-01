@@ -58,6 +58,11 @@ static void emit_instruction(function_t *function, text_location_t location, ins
 static void emit_read_memory_to_reg(text_location_t location, function_t *function, reg_t destination, memaddr_t address, type_info_t *type_info) {
     ASSERT(type_info->size <= WORD_SIZE, "only word-sized values or smaller can go into registers");
 
+    if (type_info->size == 0) {
+        // nop
+        return;
+    }
+
     instruction_t instruction;
     instruction.op = OP_MOVWORD_MEM_TO_REG;
 

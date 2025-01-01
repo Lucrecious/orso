@@ -82,6 +82,7 @@ cstr_t const error_messages[] = {
     [ERROR_ANALYSIS_MEMBER_DOES_NOT_EXIST] = "member does not exist",
     [ERROR_ANALYSIS_INVALID_TYPE_FOR_TYPE_INITIALIZER_LIST] = "invalid type for type initializer list",
     [ERROR_ANALYSIS_TOO_MANY_STRUCT_ARGUMENTS] = "too many struct arguments",
+    [ERROR_ANALYSIS_BLOCKS_MUST_BE_EMPTY_OR_END_IN_STATEMENT] = "block must be empty or end in statement",
 
     [ERROR_CODEGEN_MEMORY_SIZE_TOO_BIG] = "memory size is too large to index. the max is 2^32",
 };
@@ -297,6 +298,13 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type
     return node;
 }
 
+ast_node_t *ast_create_implicit_nil_node(ast_t *ast, type_t value_type) {
+    ast_node_t *nil_node = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_NIL, false, nil_token);
+    nil_node->value_type = value_type;
+    nil_node->value_index = zero_value(ast, value_type);
+    return nil_node;
+}
+
 static void parser_init(parser_t *parser, ast_t *ast, string_t file_path, string_view_t source, error_function_t error_fn) {
     lexer_init(&parser->lexer, file_path, source);
     parser->ast = ast;
@@ -486,11 +494,7 @@ static ast_node_t *parse_literal(parser_t *parser, bool inside_type_context) {
             }
             break;
         }
-        case TOKEN_NULL: {
-            expression_node->value_type = typeid(TYPE_VOID);
-            expression_node->value_index = value_index_(0);
-            break;
-        }
+
         case TOKEN_STRING: {
             UNREACHABLE();
             break;
@@ -612,21 +616,16 @@ static ast_node_t *parse_ifelse(parser_t *parser, bool inside_type_context) {
     }
 
     if (!match(parser, TOKEN_ELSE)) {
+        an_else(expression_node) = ast_create_implicit_nil_node(parser->ast, typeid(TYPE_VOID));
         return expression_node;
-    }
-
-    {
-        // ast_node_t* else_statement = statement(parser, true);
-        // ast_node_t* else_expression = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_STATEMENT, inside_type_context, else_statement->start);
-        // else_expression->as.statement = else_statement;
-        // else_expression->end = else_statement->end;
+    } else {
         ast_node_t *else_expression = parse_expression(parser, inside_type_context);
         an_else(expression_node) = else_expression;
+
+        expression_node->end = parser->previous;
+
+        return expression_node;
     }
-
-    expression_node->end = parser->previous;
-
-    return expression_node;
 }
 
 static bool is_incoming_function_signature(parser_t* parser) {
@@ -899,7 +898,6 @@ parse_rule_t rules[] = {
     [TOKEN_ELSE]                    = { NULL,               NULL,               PREC_NONE },
     [TOKEN_TRUE]                    = { parse_literal,      NULL,               PREC_NONE },
     [TOKEN_FALSE]                   = { parse_literal,      NULL,               PREC_NONE },
-    [TOKEN_NULL]                    = { parse_literal,      NULL,               PREC_NONE },
     [TOKEN_RETURN]                  = { parse_return,       NULL,               PREC_NONE },
     [TOKEN_ERROR]                   = { NULL,               NULL,               PREC_NONE },
     [TOKEN_EOF]                     = { NULL,               NULL,               PREC_NONE },
@@ -1154,9 +1152,9 @@ value_index_t zero_value(ast_t *ast, type_t type) {
     word_t value[bytes_to_slots(type_info->size)];
 
     switch (type_info->kind) {
-        case TYPE_POINTER:
         case TYPE_VOID:
-        case TYPE_BOOL:
+        case TYPE_POINTER:
+        case TYPE_BOOL: value[0] = WORDI(0); break;
         
         case TYPE_NUMBER: {
             switch (type_info->data.num) {
@@ -1179,11 +1177,11 @@ value_index_t zero_value(ast_t *ast, type_t type) {
         }
 
         case TYPE_COUNT:
+        case TYPE_UNDEFINED:
         case TYPE_FUNCTION:
         case TYPE_NATIVE_FUNCTION:
         case TYPE_TYPE:
         case TYPE_INVALID:
-        case TYPE_UNDEFINED:
         case TYPE_UNRESOLVED:
             UNREACHABLE();
             value[0] = WORDI(0);

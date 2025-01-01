@@ -201,37 +201,7 @@ void test_expr_file(string_t expr_file, arena_t *arena) {
         nob_log(ERROR, "could not parse: %s", expr_file.cstr);
         return;
     }
-
-    i64 resultc = INT64_MIN;
-    string_t cexpr_str;
-    if (true)
-    {
-        cexpr_str = compile_expr_to_c(&ast, arena);
-
-        cc_t cc = cc_make(CC_GCC, arena);
-        cc_mem_source(&cc, cexpr_str);
-
-        cc_include_dir(&cc, lit2str("./lib"));
-        cc_no_warning(&cc, lit2str("unused-value"));
-
-        cc.output_type = CC_DYNAMIC;
-        cc.output_name = lit2str("liborso.so");
-
-        bool success = cc_build(&cc);
-
-        if (!success) {
-            nob_log(ERROR, "could not build c version of file: %s", expr_file.cstr);
-            return;
-        }
-
-        dynlib_t lib = dynlib_load(lit2str("./build/liborso.so"));
-
-        i64 (*expr)(void) = dynlib_symbol(lib, lit2str("expr"));
-
-        resultc = expr();
-    }
     
-    string_view_t ccode = {0};
     i64 resultvm = INT64_MIN;
     if (true)
     {
@@ -265,8 +235,38 @@ void test_expr_file(string_t expr_file, arena_t *arena) {
         }
     }
 
+    i64 resultc = INT64_MIN;
+    string_t cexpr_str;
+    if (true)
+    {
+        cexpr_str = compile_expr_to_c(&ast, arena);
+
+        cc_t cc = cc_make(CC_GCC, arena);
+        cc_mem_source(&cc, cexpr_str);
+
+        cc_include_dir(&cc, lit2str("./lib"));
+        cc_no_warning(&cc, lit2str("unused-value"));
+
+        cc.output_type = CC_DYNAMIC;
+        cc.output_name = lit2str("liborso.so");
+
+        bool success = cc_build(&cc);
+
+        if (!success) {
+            nob_log(ERROR, "could not build c version of file: %s", expr_file.cstr);
+            return;
+        }
+
+        dynlib_t lib = dynlib_load(lit2str("./build/liborso.so"));
+
+        i64 (*expr)(void) = dynlib_symbol(lib, lit2str("expr"));
+
+        resultc = expr();
+    }
+
     string_t coutput_file = coutput_file_from_edl(expr_file, arena);
 
+    string_view_t ccode = {0};
     {
         String_Builder sb = {0};
         if (file_exists(coutput_file.cstr) && read_entire_file(coutput_file.cstr, &sb)) {

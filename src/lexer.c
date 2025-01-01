@@ -234,7 +234,6 @@ static token_type_t identifier_type(lexer_t *lexer) {
             if (lexer->current - lexer->start > 1) {
                 switch (lexer->start[1]) {
                     case 'o': return check_keyword(lexer, 2, 1, "t", TOKEN_NOT);
-                    case 'u': return check_keyword(lexer, 2, 2, "ll", TOKEN_NULL);
                 }
             }
             break;

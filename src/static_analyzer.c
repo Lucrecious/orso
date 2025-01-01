@@ -775,13 +775,6 @@ static void forward_scan_declaration_names(analyzer_t *analyzer, scope_t *scope,
     }
 }
 
-static ast_node_t *ast_create_implicit_nil_node(ast_t *ast, type_t value_type) {
-    ast_node_t *nil_node = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_NIL, false, nil_token);
-    nil_node->value_type = value_type;
-    nil_node->value_index = zero_value(ast, value_type);
-    return nil_node;
-}
-
 void resolve_expression(
         analyzer_t *analyzer,
         ast_t *ast,
@@ -1233,18 +1226,20 @@ void resolve_expression(
                 expression->return_guarentee = block_return_guarentee;
                 expression->value_type = typeid(TYPE_UNDEFINED);
             } else {
-                ast_node_t *last_expression_statement = NULL;
+                ast_node_t *last_decl = NULL;
                 if (declarations_count > 0) {
-                    ast_node_t *last_declaration = expression->children.items[declarations_count - 1];
-                    if (last_declaration->node_type == AST_NODE_TYPE_DECLARATION_STATEMENT) {
-                        last_expression_statement = last_declaration;
-                    }
+                    last_decl = expression->children.items[declarations_count - 1];
                 }
 
-                if (last_expression_statement == NULL) {
+                if (last_decl == NULL) {
                     expression->value_type = typeid(TYPE_VOID);
                 } else {
-                    expression->value_type = an_operand(last_expression_statement)->value_type;
+                    if (last_decl->node_type == AST_NODE_TYPE_DECLARATION_DEFINITION) {
+                        error_range(analyzer, expression->start, expression->end, ERROR_ANALYSIS_BLOCKS_MUST_BE_EMPTY_OR_END_IN_STATEMENT);
+                        INVALIDATE(expression);
+                    } else {
+                        expression->value_type = an_operand(last_decl)->value_type;
+                    }
                 }
             }
             break;
@@ -1282,9 +1277,10 @@ void resolve_expression(
 
             resolve_expression(analyzer, ast, state, an_then(expression));
 
-            if (an_is_notnone(an_else(expression))) {
-                resolve_expression(analyzer, ast, state, an_else(expression));
-            } else {
+            resolve_expression(analyzer, ast, state, an_else(expression));
+
+            if (TYPE_IS_VOID(an_else(expression)->value_type) && an_else(expression)->node_type == AST_NODE_TYPE_EXPRESSION_NIL &&
+                !TYPE_IS_UNDEFINED(an_then(expression)->value_type)) {
                 an_else(expression) = ast_create_implicit_nil_node(ast, an_then(expression)->value_type);
             }
 
