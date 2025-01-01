@@ -59,20 +59,22 @@ enum op_code_t {
 
     OP_JMP_IF_REG_CONDITION,
     OP_JMP,
+    OP_LOOP,
 
     OP_RETURN,
 };
 
 typedef u32 memaddr_t;
 
-// todo: actually check if it his is 64bit
+// todo: reduce from 12 to 8 bytes
 typedef struct instruction_t instruction_t;
 struct instruction_t {
+    byte op;
     union {
         byte _padding[7];
 
         struct {
-            u32 forward;
+            u32 amount;
             byte condition_reg;
             byte check_for;
         } jmp;
@@ -104,7 +106,6 @@ struct instruction_t {
             byte reg_destination;
         } mov_regmem_to_reg;
     } as;
-    byte op;
 };
 
 #define REGISTER_COUNT 64
@@ -179,6 +180,7 @@ void vm_set_entry_point(vm_t *vm, function_t *entry_point) {
 
 void vm_step(vm_t *vm) {
 #define IP_ADV(amount) (vm->call_frame.pc += amount)
+#define IP_DCR(amount) (vm->call_frame.pc -= amount)
 #define MEMORY (vm->call_frame.function->memory)
 
     instruction_t in = vm->call_frame.function->code.items[vm->call_frame.pc];
@@ -187,8 +189,14 @@ void vm_step(vm_t *vm) {
         case OP_NOP: IP_ADV(1); break;
 
         case OP_JMP: {
-            u32 jmp_amount = in.as.jmp.forward;
+            u32 jmp_amount = in.as.jmp.amount;
             IP_ADV(jmp_amount);
+            break;
+        }
+        
+        case OP_LOOP: {
+            u32 jump_amount = in.as.jmp.amount;
+            IP_DCR(jump_amount);
             break;
         }
 
@@ -197,7 +205,7 @@ void vm_step(vm_t *vm) {
             bool check_for = in.as.jmp.check_for;
             bool is_true = (check_for == vm->registers[reg].as.u);
             if (is_true) {
-                u32 jmp_amount = in.as.jmp.forward;
+                u32 jmp_amount = in.as.jmp.amount;
                 IP_ADV(jmp_amount);
             } else {
                 IP_ADV(1);
@@ -357,6 +365,7 @@ void vm_step(vm_t *vm) {
     }
 
 #undef MEMORY
+#undef IP_DCR
 #undef IP_ADV
 }
 

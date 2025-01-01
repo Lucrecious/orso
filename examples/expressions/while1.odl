@@ -3,9 +3,9 @@
     n := 10;
     sum := 0;
 
-    while x < n {
+    until x >= n {
         sum = sum + x;
         x = x + 1;
-        sum;
-    }
+    } else sum;
 }
+

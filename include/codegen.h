@@ -438,7 +438,7 @@ static void gen_def_value(gen_t *gen, function_t *function, ast_node_t *def) {
 static size_t gen_jmp_if_reg(function_t *function, text_location_t location, reg_t condition_reg, bool jmp_condition) {
     instruction_t instruction = {0};
     instruction.op = OP_JMP_IF_REG_CONDITION;
-    instruction.as.jmp.forward = 0;
+    instruction.as.jmp.amount = 0;
     instruction.as.jmp.condition_reg = condition_reg;
     instruction.as.jmp.check_for = jmp_condition;
 
@@ -450,35 +450,43 @@ static size_t gen_jmp_if_reg(function_t *function, text_location_t location, reg
 static size_t gen_jmp(function_t *function, text_location_t location) {
     instruction_t instruction = {0};
     instruction.op = OP_JMP;
-    instruction.as.jmp.forward = 0;
+    instruction.as.jmp.amount = 0;
 
     size_t index = function->code.count;
     emit_instruction(function, location, instruction);
     return index;
 }
 
-static void gen_patch_jmp(function_t *function, size_t index) {
+static void gen_loop(function_t *function, text_location_t location, u32 loop_index) {
+    instruction_t in = {0};
+    in.op = OP_LOOP;
+    in.as.jmp.amount = function->code.count - loop_index;
+    emit_instruction(function, location, in);
+}
+
+static void gen_patch_jmp(function_t *function, u32 index) {
     instruction_t *instruction = &function->code.items[index];
-    instruction->as.jmp.forward = function->code.count - index;
+    instruction->as.jmp.amount = function->code.count - index;
 }
 
 static void gen_branching(gen_t *gen, function_t *function, ast_node_t *branch) {
+    size_t loop_index = function->code.count;
+
     gen_expression(gen, function, an_condition(branch));
 
     size_t then_index = gen_jmp_if_reg(function, token_end_location(&an_then(branch)->end), REG_RESULT, branch->condition_negated ? true : false);
 
     gen_expression(gen, function, an_then(branch));
 
+    if (branch->looping) {
+        gen_loop(function, token_end_location(&an_then(branch)->end), loop_index);
+    }
+
     size_t else_index = gen_jmp(function, token_end_location(&an_then(branch)->end));
 
     gen_patch_jmp(function, then_index);
 
-    if (an_is_notnone(an_else(branch))) {
-        gen_expression(gen, function, an_else(branch));
-    } else {
-        // todo
-        UNREACHABLE();
-    }
+    gen_expression(gen, function, an_else(branch));
 
     gen_patch_jmp(function, else_index);
 }

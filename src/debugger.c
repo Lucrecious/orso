@@ -36,10 +36,11 @@ static string_t disassemble_instruction(instruction_t in, arena_t *allocator) {
         #undef OP_MOV_MEM_TO_REG
 
         case OP_JMP_IF_REG_CONDITION:
-            return string_format("OP_JMP_IF_REG_CONDITION(condition_reg: %lu, check_for: %lu, forward: %lu)", allocator,
-                    (u32)in.as.jmp.condition_reg, (u32)in.as.jmp.check_for, in.as.jmp.forward);
+            return string_format("OP_JMP_IF_REG_CONDITION(condition_reg: %lu, check_for: %lu, amount: %lu)", allocator,
+                    (u32)in.as.jmp.condition_reg, (u32)in.as.jmp.check_for, in.as.jmp.amount);
 
-        case OP_JMP: return string_format("OP_JMP(forward: %lu)", allocator, (u32)in.as.jmp.forward);
+        case OP_JMP: return string_format("OP_JMP(amount: %lu)", allocator, (u32)in.as.jmp.amount);
+        case OP_LOOP: return string_format("OP_LOOP(amount: %lu)", allocator, (u32)in.as.jmp.amount);
 
         case OP_MOVWORD_REG_TO_REGMEM: {
             return string_format("OP_MOVWORD_REG_TO_REGMEM(reg_source: %lu, regmem_destination: %lu)", allocator,
@@ -136,7 +137,7 @@ static void show_line(vm_t *vm, size_t bytecode_around) {
 
         text_location_t location = function->locations.items[i];
         string_t as_string = disassemble_instruction(function->code.items[i], tmp_arena->allocator);
-        printf("%04zu:%04zu: %s\n", location.line+1, location.column+1, as_string.cstr);
+        printf("%04zu:%04zu:%04zu: %s\n", i, location.line+1, location.column+1, as_string.cstr);
     }
 
     allocator_return(tmp_arena);
@@ -194,7 +195,7 @@ bool debugger_step(debugger_t *debugger, vm_t *vm) {
         while (try_vm_step(vm)) {
             source_location_t new_location = vm_find_source_location(vm);
             if (new_location.text_location.line != bp.text_location.line || !string_eq(bp.file_path, new_location.file_path)) {
-                show_line(vm, 1);
+                show_line(vm, 3);
                 break;
             }
         }

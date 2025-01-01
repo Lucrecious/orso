@@ -155,7 +155,7 @@ int main(int argc, char **argv) {
     unless (success) return 1;
 
     i64 resultc = INT64_MIN;
-    if (true)
+    if (false)
     {
         string_t expr_str = compile_expr_to_c(&ast, &arena);
 
@@ -214,7 +214,6 @@ int main(int argc, char **argv) {
             debugger_init(&debugger, &arena);
             while (debugger_step(&debugger, &vm));
         }
-
     }
 
     nob_log(INFO, "test\n-- %s:\ncgen = %lld;\nvmgen = %lld;\n%s", path, resultc, resultvm, (resultc == resultvm) ? "pass" : "fail");
