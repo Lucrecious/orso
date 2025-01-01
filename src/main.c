@@ -157,6 +157,29 @@ compiler_mode_t get_compiler_mode_from_args(int argc, char **argv, arena_t *aren
     return mode;
 }
 
+bool get_first_different_line(string_view_t expected, string_view_t actual, size_t *first_different_line) {
+    *first_different_line = 0;
+    bool is_different = expected.length != actual.length;
+
+    size_t min_size = expected.length < actual.length ? expected.length : actual.length;
+    for (size_t i = 0; i < min_size; ++i) {
+        if (expected.data[i] != actual.data[i]) {
+            return false;
+        }
+
+        *first_different_line += (actual.data[i] == '\n');
+    }
+
+    return !is_different;
+}
+
+string_t coutput_file_from_edl(string_t file, arena_t *arena) {
+    string_view_t coutput_file_prefix = string2sv(file);
+    coutput_file_prefix.length -= 4;
+    string_t coutput_file = string_format("%.*s.c", arena, coutput_file_prefix.length, coutput_file_prefix.data);
+    return coutput_file;
+}
+
 void test_expr_file(string_t expr_file, arena_t *arena) {
     String_Builder sb = {0};
     bool success = read_entire_file(expr_file.cstr, &sb);
@@ -180,12 +203,13 @@ void test_expr_file(string_t expr_file, arena_t *arena) {
     }
 
     i64 resultc = INT64_MIN;
+    string_t cexpr_str;
     if (true)
     {
-        string_t expr_str = compile_expr_to_c(&ast, arena);
+        cexpr_str = compile_expr_to_c(&ast, arena);
 
         cc_t cc = cc_make(CC_GCC, arena);
-        cc_mem_source(&cc, expr_str);
+        cc_mem_source(&cc, cexpr_str);
 
         cc_include_dir(&cc, lit2str("./lib"));
         cc_no_warning(&cc, lit2str("unused-value"));
@@ -207,6 +231,7 @@ void test_expr_file(string_t expr_file, arena_t *arena) {
         resultc = expr();
     }
     
+    string_view_t ccode = {0};
     i64 resultvm = INT64_MIN;
     if (true)
     {
@@ -240,43 +265,109 @@ void test_expr_file(string_t expr_file, arena_t *arena) {
         }
     }
 
+    string_t coutput_file = coutput_file_from_edl(expr_file, arena);
+
+    {
+        String_Builder sb = {0};
+        if (file_exists(coutput_file.cstr) && read_entire_file(coutput_file.cstr, &sb)) {
+            String_View nob_sv = sb_to_sv(sb);
+            ccode = (string_view_t){.data = nob_sv.data, .length=nob_sv.count};
+        } else {
+        }
+    }
+
     nob_log(INFO, "---- test: %s", expr_file.cstr);
-    nob_log(INFO, "cgen = %lld", resultc);
-    nob_log(INFO, "vgen = %lld", resultvm);
-    nob_log(INFO, "TEST: %s\n", (resultc == resultvm) ? "PASS" : "FAIL");
+    if (resultc != resultvm) {
+        nob_log(ERROR, "c value != vm value; %lld != %lld", resultc, resultvm);
+    }
+
+    size_t first_different_line = 0;
+    bool is_same = false;
+    if (ccode.length) {
+        is_same = get_first_different_line(ccode, string2sv(cexpr_str), &first_different_line);
+        if (!is_same) {
+            nob_log(WARNING, "generated c file does not match expected c file starting at %zu", first_different_line+1);
+        }
+    } else {
+        nob_log(WARNING, "no c file output to test against; test will fail");
+    }
+
+    nob_log(INFO, "TEST: %s\n", (resultc == resultvm && is_same) ? "PASS" : "FAIL");
+}
+
+void test_gen_expr_file(string_t expr_file, arena_t *arena) {
+    String_Builder sb = {0};
+    bool success = read_entire_file(expr_file.cstr, &sb);
+
+    if (!success) {
+        nob_log(ERROR, "could not read file at %s", expr_file.cstr);
+        return;
+    }
+    
+    String_View nob_sv = sb_to_sv(sb);
+    string_view_t code = { .data = nob_sv.data, .length = nob_sv.count };
+    code = string2sv(sv2string(code, arena));
+
+    ast_t ast = {0};
+    ast_init(&ast, megabytes(2));
+
+    success = parse_expr_cstr(&ast, code, expr_file);
+    unless (success) {
+        nob_log(ERROR, "could not parse: %s", expr_file.cstr);
+        return;
+    }
+
+    string_t expr_str = compile_expr_to_c(&ast, arena);
+    string_t coutput_file = coutput_file_from_edl(expr_file, arena);
+
+    success = write_entire_file(coutput_file.cstr, expr_str.cstr, expr_str.length);
+
+    unless (success) {
+        nob_log(ERROR, "could not write to file: %s", coutput_file.cstr);
+    }
 }
 
 int main(int argc, char **argv) {
     arena_t arena = {0};
 
     compiler_mode_t mode = get_compiler_mode_from_args(argc, argv, &arena);
-
-    switch (mode.type) {
-        case COMPILER_MODE_TEST: {
-            if (sv_ends_with(string2sv(mode.file_or_dir), ".edl")) {
+    if (sv_ends_with(string2sv(mode.file_or_dir), ".edl")) {
+        switch (mode.type) {
+            case COMPILER_MODE_TEST: {
                 test_expr_file(mode.file_or_dir, &arena);
-            } else {
-                File_Paths paths = {0};
-                unless (read_entire_dir(mode.file_or_dir.cstr, &paths)) {
-                    nob_log(ERROR, "could not read files in dir: %s", mode.file_or_dir.cstr);
-                    return 1;
-                }
+                break;
+            }
 
-                arena_t test_arena = {0};
-                for (size_t i = 0; i < paths.count; ++i) {
-                    arena_reset(&test_arena);
+            case COMPILER_MODE_TEST_GEN: {
+                test_gen_expr_file(mode.file_or_dir, &arena);
+                break;
+            }
+        }
+    } else {
+        File_Paths paths = {0};
+        unless (read_entire_dir(mode.file_or_dir.cstr, &paths)) {
+            nob_log(ERROR, "could not read files in dir: %s", mode.file_or_dir.cstr);
+            return 1;
+        }
 
-                    string_t file = string_format("%s/%s", &test_arena, mode.file_or_dir.cstr, paths.items[i]);
-                    if (sv_ends_with(string2sv(file), ".edl")) {
+        arena_t test_arena = {0};
+        for (size_t i = 0; i < paths.count; ++i) {
+            arena_reset(&test_arena);
+
+            string_t file = string_format("%s/%s", &test_arena, mode.file_or_dir.cstr, paths.items[i]);
+            if (sv_ends_with(string2sv(file), ".edl")) {
+                switch (mode.type) {
+                    case COMPILER_MODE_TEST: {
                         test_expr_file(file, &arena);
+                        break;
+                    }
+
+                    case COMPILER_MODE_TEST_GEN: {
+                        test_gen_expr_file(mode.file_or_dir, &arena);
+                        break;
                     }
                 }
             }
-            break;
-        }
-
-        case COMPILER_MODE_TEST_GEN: {
-            break;
         }
     }
 }
