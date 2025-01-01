@@ -328,19 +328,19 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
             switch (lhs->lvalue_node->node_type) {
                 case AST_NODE_TYPE_EXPRESSION_DEF_VALUE: {
                     ASSERT(!lhs->requires_tmp_for_cgen, "def values do not require tmp");
-                        cgen_var_t lhs_var = cgen_user_var(cgen, lhs->lvalue_node->identifier.view, lhs->value_type);
-                        lhs_var.is_new = false;
+                    cgen_var_t lhs_var = cgen_user_var(cgen, lhs->lvalue_node->identifier.view, lhs->value_type);
+                    lhs_var.is_new = false;
 
                     if (requires_tmp) {
                         cgen_var_t rhs_var = cgen_next_tmpid(cgen, an_rhs(expression)->value_type);
                         cgen_expression(cgen, an_rhs(expression), rhs_var);
                         
+                        cgen_add_indent(cgen);
                         if (has_var(var)) {
-                            cgen_add_indent(cgen);
                             sb_add_format(&cgen->sb, "%s = ", cgen_var(cgen, var));
                         }
 
-                        sb_add_format(&cgen->sb, "(%s = %s)\n", cgen_var_name(cgen, lhs_var), cgen_var_name(cgen, rhs_var));
+                        sb_add_format(&cgen->sb, "(%s = %s)", cgen_var_name(cgen, lhs_var), cgen_var_name(cgen, rhs_var));
 
                         if (has_var(var)) {
                             sb_add_cstr(&cgen->sb, ";\n");
@@ -461,7 +461,7 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
                     }
 
                     case AST_NODE_TYPE_DECLARATION_STATEMENT: {
-                        if (no_var(var)) {
+                        if (no_var(var) && !an_expression(last_declaration)->requires_tmp_for_cgen) {
                             cgen_add_indent(cgen);
                         }
 
@@ -486,28 +486,26 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
         case AST_NODE_TYPE_EXPRESSION_BRANCHING: {
             ASSERT(requires_tmp, "branches always require a tmp");
 
-            if (has_var(var)) {
-                cgen_add_indent(cgen);
-            }
-
             bool skip_else = an_else(expression)->node_type == AST_NODE_TYPE_EXPRESSION_NIL;
 
-            if (no_var(var) || !var.is_new) {
+            if (no_var(var)) {
                 sb_add_cstr(&cgen->sb, "{\n");
             } else {
+                cgen_add_indent(cgen);
+
                 if (!skip_else) {
                     sb_add_format(&cgen->sb, "%s; {\n", cgen_var(cgen, var));
                 } else {
                     sb_add_format(&cgen->sb, "%s = ", cgen_var(cgen, var));
                     ASSERT(!an_else(expression)->requires_tmp_for_cgen, "!");
                     cgen_expression(cgen, an_else(expression), nil_tmp_var);
-                    sb_add_cstr(&cgen->sb, ";\n");
+                    sb_add_cstr(&cgen->sb, "; {\n");
                 }
             }
 
             cgen_indent(cgen);
 
-            #define branch_cstr (expression->looping ? (expression->condition_negated ? "until" : "while") : (expression->condition_negated ? "unless" : "if"))
+#define branch_cstr (expression->looping ? (expression->condition_negated ? "until" : "while") : (expression->condition_negated ? "unless" : "if"))
 
             if (an_condition(expression)->requires_tmp_for_cgen) {
                 cgen_var_t condition_id = cgen_next_tmpid(cgen, an_condition(expression)->value_type);
@@ -523,12 +521,18 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
                 sb_add_cstr(&cgen->sb, " {\n");
             }
 
+#undef branch_cstr
+
             cgen_indent(cgen);
 
             if (an_then(expression)->requires_tmp_for_cgen) {
+                if (no_var(var)) {
+                    cgen_add_indent(cgen);
+                }
                 cgen_expression(cgen, an_then(expression), cgen_var_not_new(var));
             } else {
                 cgen_add_indent(cgen);
+
                 if (has_var(var)) {
                     sb_add_format(&cgen->sb, "%s = ", cgen_var_name(cgen, var));
                 }
