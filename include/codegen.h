@@ -155,7 +155,7 @@ static void emit_popn_words(gen_t *gen, function_t *function, u32 pop_size_words
 
 static void emit_binary(text_location_t text_location, function_t *function, token_type_t token_type, type_info_t *type_info, reg_t op1, reg_t op2, reg_t result) {
     instruction_t instruction = {0};
-    ASSERT(type_info->kind == TYPE_NUMBER || type_info->kind == TYPE_BOOL, "for now only numbers");
+    ASSERT(type_info->kind == TYPE_NUMBER, "for now only numbers");
 
     switch (token_type) {
         case TOKEN_PLUS: {
@@ -278,7 +278,7 @@ static void gen_binary(gen_t *gen, function_t *function, ast_node_t *binary) {
 
     emit_pop_to_wordreg(gen, token_end_location(&rhs->end), function, REG_OPERAND2);
 
-    type_info_t *expr_type_info = get_type_info(&gen->ast->type_set.types, binary->value_type);
+    type_info_t *expr_type_info = get_type_info(&gen->ast->type_set.types, an_lhs(binary)->value_type);
 
     emit_binary(token_end_location(&binary->end), function, binary->operator.type, expr_type_info, REG_OPERAND2, REG_RESULT, REG_RESULT);
 }

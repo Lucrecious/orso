@@ -439,16 +439,9 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
                     }
 
                     case AST_NODE_TYPE_DECLARATION_STATEMENT: {
-                        // if (no_var(var) && !an_expression(last_declaration)->requires_tmp_for_cgen) {
-                            cgen_add_indent(cgen);
-                        // }
-
+                        cgen_add_indent(cgen);
                         cgen_expression(cgen, an_expression(last_declaration), cgen_var_not_new(var));
                         cgen_semicolon_nl(cgen);
-
-                        // if (no_var(var)) {
-                        //     sb_add_cstr(&cgen->sb, ";\n");
-                        // }
                         break;
                     }
 
