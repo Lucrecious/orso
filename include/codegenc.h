@@ -51,7 +51,7 @@ static cgen_var_t cgen_user_var(cgen_t *cgen, string_view_t name, type_t type) {
     return var;
 }
 
-static cgen_var_t cgen_var_not_new(cgen_var_t var) {
+static cgen_var_t cgen_var_used(cgen_var_t var) {
     cgen_var_t r = var;
     r.is_new = false;
     return r;
@@ -251,24 +251,22 @@ static void cgen_semicolon_nl(cgen_t *cgen) {
     sb_add_cstr(&cgen->sb, ";\n");
 }
 
+static void cgen_statement(cgen_t *cgen, ast_node_t *statement, cgen_var_t var, bool add_indent) {
+    if (add_indent) cgen_add_indent(cgen);
+    cgen_expression(cgen, statement, var);
+    cgen_semicolon_nl(cgen);
+}
+
 static void cgen_declaration(cgen_t *cgen, ast_node_t *declaration) {
     switch (declaration->node_type) {
         case AST_NODE_TYPE_DECLARATION_DEFINITION: {
-            cgen_add_indent(cgen);
-
             cgen_var_t var = cgen_user_var(cgen, declaration->identifier.view, declaration->value_type);
-            cgen_expression(cgen, an_decl_expr(declaration), var);
-
-            cgen_semicolon_nl(cgen);
+            cgen_statement(cgen, an_decl_expr(declaration), var, true);
             break;
         }
 
         case AST_NODE_TYPE_DECLARATION_STATEMENT: {
-            cgen_add_indent(cgen);
-
-            cgen_expression(cgen, an_expression(declaration), nil_tmp_var);
-
-            cgen_semicolon_nl(cgen);
+            cgen_statement(cgen, an_expression(declaration), nil_tmp_var, true);
             break;
         }
 
@@ -283,13 +281,10 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
         case AST_NODE_TYPE_EXPRESSION_BINARY: {
             if (cannot_inline) {
                 cgen_var_t lhs_var = cgen_next_tmpid(cgen, an_lhs(expression)->value_type);
-                cgen_expression(cgen, an_lhs(expression), lhs_var);
-                cgen_semicolon_nl(cgen);
+                cgen_statement(cgen, an_lhs(expression), lhs_var, false);
 
-                cgen_add_indent(cgen);
                 cgen_var_t rhs_var = cgen_next_tmpid(cgen, an_rhs(expression)->value_type);
-                cgen_expression(cgen, an_rhs(expression), rhs_var);
-                cgen_semicolon_nl(cgen);
+                cgen_statement(cgen, an_rhs(expression), rhs_var, true);
 
                 cgen_add_indent(cgen);
                 if (has_var(var)) {
@@ -329,8 +324,7 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
 
                     if (cannot_inline) {
                         cgen_var_t rhs_var = cgen_next_tmpid(cgen, an_rhs(expression)->value_type);
-                        cgen_expression(cgen, an_rhs(expression), rhs_var);
-                        cgen_semicolon_nl(cgen);
+                        cgen_statement(cgen, an_rhs(expression), rhs_var, false);
                         
                         cgen_add_indent(cgen);
                         if (has_var(var)) {
@@ -439,9 +433,7 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
                     }
 
                     case AST_NODE_TYPE_DECLARATION_STATEMENT: {
-                        cgen_add_indent(cgen);
-                        cgen_expression(cgen, an_expression(last_declaration), cgen_var_not_new(var));
-                        cgen_semicolon_nl(cgen);
+                        cgen_statement(cgen, an_expression(last_declaration), cgen_var_used(var), true);
                         break;
                     }
 
@@ -458,7 +450,7 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
         case AST_NODE_TYPE_EXPRESSION_BRANCHING: {
             ASSERT(cannot_inline, "branches always require a tmp");
 
-            bool skip_else = an_else(expression)->node_type == AST_NODE_TYPE_EXPRESSION_NIL;
+            bool skip_else = an_else(expression)->node_type == AST_NODE_TYPE_EXPRESSION_NIL && !expression->looping;
 
             if (no_var(var)) {
                 sb_add_cstr(&cgen->sb, "{\n");
@@ -482,13 +474,11 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
 #define branch_cstr (expression->looping ? (expression->condition_negated ? "until" : "while") : (expression->condition_negated ? "unless" : "if"))
 
             if (an_condition(expression)->requires_tmp_for_cgen) {
-                cgen_add_indent(cgen);
-                cgen_var_t condition_id = cgen_next_tmpid(cgen, an_condition(expression)->value_type);
-                cgen_expression(cgen, an_condition(expression), condition_id);
-                cgen_semicolon_nl(cgen);
+                cgen_var_t conditionid = cgen_next_tmpid(cgen, an_condition(expression)->value_type);
+                cgen_statement(cgen, an_condition(expression), conditionid, true);
 
                 cgen_add_indent(cgen);
-                sb_add_format(&cgen->sb, "%s (%s) {\n", branch_cstr, cgen_var_name(cgen, condition_id));
+                sb_add_format(&cgen->sb, "%s (%s) {\n", branch_cstr, cgen_var_name(cgen, conditionid));
                 
             } else {
                 cgen_add_indent(cgen);
@@ -502,9 +492,7 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
             cgen_indent(cgen);
 
             if (an_then(expression)->requires_tmp_for_cgen) {
-                cgen_add_indent(cgen);
-                cgen_expression(cgen, an_then(expression), cgen_var_not_new(var));
-                cgen_semicolon_nl(cgen);
+                cgen_statement(cgen, an_then(expression), cgen_var_used(var), true);
             } else {
                 cgen_add_indent(cgen);
 
@@ -523,11 +511,7 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
                 if (!skip_else) {
                     cgen_add_indent(cgen);
                     sb_add_cstr(&cgen->sb, "}\n");
-
-                    cgen_add_indent(cgen);
-                    cgen_expression(cgen, an_else(expression), cgen_var_not_new(var));
-                    cgen_semicolon_nl(cgen);
-
+                    cgen_statement(cgen, an_else(expression), cgen_var_used(var), true);
                 } else {
                     cgen_add_indent(cgen);
                     sb_add_cstr(&cgen->sb, "}\n");
@@ -540,9 +524,7 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
                     cgen_indent(cgen);
 
                     if (an_else(expression)->requires_tmp_for_cgen) {
-                        cgen_add_indent(cgen);
-                        cgen_expression(cgen, an_else(expression), cgen_var_not_new(var));
-                        cgen_semicolon_nl(cgen);
+                        cgen_statement(cgen, an_else(expression), cgen_var_used(var), true);
                     } else {
                         cgen_add_indent(cgen);
 

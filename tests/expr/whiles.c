@@ -30,14 +30,16 @@ i64 result_; {
       while (((count_ = (count_ - 1))) > 0) {
         (sum_ = (sum_ + 1));
       }
+      0;
     };
 
     (count_ = 10);
 
-    i64 a_ = 0; {
+    i64 a_; {
       while (((count_ = (count_ - 1))) > 0) {
         a_ = (sum_ = (sum_ + 1));
       }
+      a_ = 0;
     };
 
     {
