@@ -41,11 +41,11 @@ struct gen_t {
 typedef enum reg_t reg_t;
 enum reg_t {
     REG_NULL = 0,
-    REG_RESULT,
-    REG_OPERAND2,
+    REG_RESULT = 1, // 256 bytes for memory on stack
 
-    REG_STACK_BOTTOM,
-    REG_STACK_FRAME,
+    REG_OPERAND2 = 33,
+    REG_STACK_BOTTOM = 34,
+    REG_STACK_FRAME = 35,
 };
 
 declare_table(str2cf, string_t, call_frame_t)
@@ -142,7 +142,8 @@ void emit_pop_to_wordreg(gen_t *gen, text_location_t text_location, function_t *
     }
 }
 
-static void emit_popn_words(function_t *function, u32 pop_size_words, text_location_t location) {
+static void emit_popn_words(gen_t *gen, function_t *function, u32 pop_size_words, text_location_t location) {
+    gen->stack_size -= pop_size_words*WORD_SIZE;
     instruction_t in = {0};
     in.op = OP_ADDU_REG_IM32;
     in.as.binu_reg_immediate.immediate = pop_size_words*WORD_SIZE;
@@ -302,6 +303,10 @@ static void gen_constant(text_location_t location, function_t *function, void *d
 }
 
 static void gen_folded_value(gen_t *gen, function_t *function, ast_node_t *expression) {
+    if (TYPE_IS_VOID(expression->value_type)) {
+        // nop
+        return;
+    }
     ASSERT(expression->value_index.exists, "must contain concrete value");
 
     type_info_t *type_info = get_type_info(&gen->ast->type_set.types, expression->value_type);
@@ -391,7 +396,7 @@ static void gen_pop_scope(gen_t *gen, function_t *function, text_location_t loca
     --gen->scope_level;
 
     size_t pop_size_words = (pop_size_bytes + WORD_SIZE/2)/WORD_SIZE;
-    emit_popn_words(function, pop_size_words, location);
+    emit_popn_words(gen, function, pop_size_words, location);
 }
 
 static local_t *find_local(gen_t *gen, ast_node_t *ref_decl) {

@@ -119,8 +119,7 @@ bool parse_expr_cstr(ast_t *ast, string_view_t expr_source, string_t file_path) 
     return success;
 }
 
-static void *vm_run_function(vm_t *vm, function_t *function) {
-    vm->call_frame = (call_frame_t){.pc = 0, .function = function};
+static void *vm_run_(vm_t *vm) {
     until (vm->halted) {
         vm_step(vm);
     }
@@ -132,6 +131,7 @@ typedef enum compiler_mode_type_t compiler_mode_type_t;
 enum compiler_mode_type_t {
     COMPILER_MODE_TEST,
     COMPILER_MODE_TEST_GEN,
+    COMPILER_MODE_DEBUG,
 };
 
 typedef struct compiler_mode_t compiler_mode_t;
@@ -150,6 +150,8 @@ compiler_mode_t get_compiler_mode_from_args(int argc, char **argv, arena_t *aren
             mode.type = COMPILER_MODE_TEST;
         } else if (cstr_eq(arg, "testgen")) {
             mode.type = COMPILER_MODE_TEST_GEN;
+        } else if (cstr_eq(arg, "dbg")) {
+            mode.type = COMPILER_MODE_DEBUG;
         } else {
             mode.file_or_dir = cstr2string(arg, arena);
         }
@@ -181,24 +183,51 @@ string_t coutput_file_from_edl(string_t file, arena_t *arena) {
     return coutput_file;
 }
 
-void test_expr_file(string_t expr_file, arena_t *arena) {
+bool parse_expr_file(ast_t *ast, string_t expr_file, arena_t *arena) {
     String_Builder sb = {0};
     bool success = read_entire_file(expr_file.cstr, &sb);
 
     if (!success) {
-        nob_log(ERROR, "could not read file at %s", expr_file.cstr);
-        return;
+        return false;
     }
     
     String_View nob_sv = sb_to_sv(sb);
     string_view_t code = { .data = nob_sv.data, .length = nob_sv.count };
     code = string2sv(sv2string(code, arena));
 
-    ast_t ast = {0};
-    ast_init(&ast, megabytes(2));
+    ast_init(ast, megabytes(2));
 
-    success = parse_expr_cstr(&ast, code, expr_file);
+    success = parse_expr_cstr(ast, code, expr_file);
     unless (success) {
+        return false;
+    }
+
+    return true;
+}
+
+void compile_expr_to_vm(vm_t *vm, ast_t *ast, arena_t *arena, error_function_t error_fn) {
+    memarr_t *memory = arena_alloc(arena, sizeof(memarr_t));
+    *memory = (memarr_t){0};
+
+    memarr_init(memory, megabytes(2.5));
+    size_t stack_size = (size_t)megabytes(0.5);
+    memory->count = stack_size;
+    memset(memory->data, 0, stack_size);
+    
+    function_t *expr_function = new_function(lit2str("<none>"), memory, arena);
+
+    compile_expr_to_function(expr_function, ast, error_fn);
+
+    vm_init(vm);
+    vm->registers[REG_STACK_FRAME].as.u = stack_size;
+    vm->registers[REG_STACK_BOTTOM].as.u = stack_size;
+
+    vm_set_entry_point(vm, expr_function);
+}
+
+void test_expr_file(string_t expr_file, arena_t *arena) {
+    ast_t ast = {0};
+    unless (parse_expr_file(&ast, expr_file, arena)) {
         nob_log(ERROR, "could not parse: %s", expr_file.cstr);
         return;
     }
@@ -206,34 +235,11 @@ void test_expr_file(string_t expr_file, arena_t *arena) {
     i64 resultvm = INT64_MIN;
     if (true)
     {
-        memarr_t *memory = arena_alloc(arena, sizeof(memarr_t));
-        *memory = (memarr_t){0};
-
-        memarr_init(memory, megabytes(2.5));
-        size_t stack_size = (size_t)megabytes(0.5);
-        memory->count = stack_size;
-        memset(memory->data, 0, stack_size);
-        
-        function_t *expr_function = new_function(lit2str("<none>"), memory, arena);
-
-        compile_expr_to_function(expr_function, &ast, myerror);
 
         vm_t vm = {0};
-        vm_init(&vm);
-        vm.registers[REG_STACK_FRAME].as.u = stack_size;
-        vm.registers[REG_STACK_BOTTOM].as.u = stack_size;
+        compile_expr_to_vm(&vm, &ast, arena, myerror);
 
-        {
-            resultvm = *((i64*)vm_run_function(&vm, expr_function));
-        }
-        {
-            // UNUSED(vm_run_function);
-            // vm_set_entry_point(&vm, expr_function);
-
-            // debugger_t debugger = {0};
-            // debugger_init(&debugger, &arena);
-            // while (debugger_step(&debugger, &vm));
-        }
+        resultvm = *(i64*)vm_run_(&vm);
     }
 
     i64 resultc = INT64_MIN;
@@ -297,23 +303,8 @@ void test_expr_file(string_t expr_file, arena_t *arena) {
 }
 
 void test_gen_expr_file(string_t expr_file, arena_t *arena) {
-    String_Builder sb = {0};
-    bool success = read_entire_file(expr_file.cstr, &sb);
-
-    if (!success) {
-        nob_log(ERROR, "could not read file at %s", expr_file.cstr);
-        return;
-    }
-    
-    String_View nob_sv = sb_to_sv(sb);
-    string_view_t code = { .data = nob_sv.data, .length = nob_sv.count };
-    code = string2sv(sv2string(code, arena));
-
     ast_t ast = {0};
-    ast_init(&ast, megabytes(2));
-
-    success = parse_expr_cstr(&ast, code, expr_file);
-    unless (success) {
+    unless (parse_expr_file(&ast, expr_file, arena)) {
         nob_log(ERROR, "could not parse: %s", expr_file.cstr);
         return;
     }
@@ -321,11 +312,26 @@ void test_gen_expr_file(string_t expr_file, arena_t *arena) {
     string_t expr_str = compile_expr_to_c(&ast, arena);
     string_t coutput_file = coutput_file_from_edl(expr_file, arena);
 
-    success = write_entire_file(coutput_file.cstr, expr_str.cstr, expr_str.length);
+    bool success = write_entire_file(coutput_file.cstr, expr_str.cstr, expr_str.length);
 
     unless (success) {
         nob_log(ERROR, "could not write to file: %s", coutput_file.cstr);
     }
+}
+
+void debug_expr_file(string_t expr_file, arena_t *arena) {
+    ast_t ast = {0};
+    unless (parse_expr_file(&ast, expr_file, arena)) {
+        nob_log(ERROR, "could not parse: %s", expr_file.cstr);
+        return;
+    }
+    vm_t vm = {0};
+    compile_expr_to_vm(&vm, &ast, arena, myerror);
+
+    debugger_t debugger = {0};
+    debugger_init(&debugger, arena);
+    while (debugger_step(&debugger, &vm));
+
 }
 
 int main(int argc, char **argv) {
@@ -341,6 +347,11 @@ int main(int argc, char **argv) {
 
             case COMPILER_MODE_TEST_GEN: {
                 test_gen_expr_file(mode.file_or_dir, &arena);
+                break;
+            }
+
+            case COMPILER_MODE_DEBUG: {
+                debug_expr_file(mode.file_or_dir, &arena);
                 break;
             }
         }
@@ -365,6 +376,11 @@ int main(int argc, char **argv) {
 
                     case COMPILER_MODE_TEST_GEN: {
                         test_gen_expr_file(mode.file_or_dir, &arena);
+                        break;
+                    }
+
+                    case COMPILER_MODE_DEBUG: {
+                        debug_expr_file(mode.file_or_dir, &arena);
                         break;
                     }
                 }

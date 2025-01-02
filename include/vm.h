@@ -110,7 +110,7 @@ struct instruction_t {
     } as;
 };
 
-#define REGISTER_COUNT 64
+#define REGISTER_COUNT 128
 #define CALL_STACK_COUNT 1024
 
 typedef struct function_t function_t;

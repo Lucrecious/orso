@@ -1,0 +1,13 @@
+// did not decrease stack amount properly
+{
+    b := {
+        a := {
+            {
+                5;
+            };
+        };
+        a;
+    };
+
+    b;
+}
