@@ -572,7 +572,7 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
         case AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER:
         case AST_NODE_TYPE_EXPRESSION_UNARY:
         case AST_NODE_TYPE_DECLARATION_STATEMENT:
-        case AST_NODE_TYPE_EXPRESSION_RETURN:
+        case AST_NODE_TYPE_EXPRESSION_JMP:
         case AST_NODE_TYPE_NONE:
         case AST_NODE_TYPE_DECLARATION_DEFINITION:
         case AST_NODE_TYPE_MODULE: ASSERT(false, "not implemented");

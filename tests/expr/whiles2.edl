@@ -1,0 +1,12 @@
+{
+    count := 10;
+
+    until count <= 0 {
+        count = count - 1;
+        if count == 5 then break;
+    } else {
+        count = 0;
+    }
+
+    count;
+}

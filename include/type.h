@@ -26,9 +26,13 @@ typedef struct type_info_t type_info_t;
 typedef enum type_kind_t {
     TYPE_INVALID = 0,      // error type
     TYPE_UNRESOLVED,       // unresolved (not undefined, not error, not defined)
-    TYPE_UNDEFINED,        // used for blocks with returns
+    TYPE_UNDEFINED,
+
 
     // simple types (types that do not require type info)
+    TYPE_UNREACHABLE,      // for jmp expressions (return, break, continue)
+    TYPE_LABEL,     // for do labels
+
     TYPE_VOID,             // null
     TYPE_BOOL,             // true false
     TYPE_STRING,           // "anything in here"
@@ -107,6 +111,8 @@ struct type_info_t {
 #define TYPE_IS_TYPE(TYPE) ((TYPE).i == TYPE_TYPE)
 #define TYPE_IS_INVALID(TYPE) ((TYPE).i == TYPE_INVALID)
 #define TYPE_IS_UNDEFINED(TYPE) ((TYPE).i == TYPE_UNDEFINED)
+#define TYPE_IS_LABEL(TYPE) ((TYPE).i == TYPE_LABEL)
+#define TYPE_IS_UNREACHABLE(TYPE) ((TYPE).i == TYPE_UNREACHABLE)
 #define TYPE_IS_UNRESOLVED(TYPE) ((TYPE).i == TYPE_UNRESOLVED)
 
 struct type_table_t;

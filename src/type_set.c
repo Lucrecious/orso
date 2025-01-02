@@ -123,8 +123,10 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
     static type_info_t type_invalid = {.kind=TYPE_INVALID, .size=0};
     static type_info_t type_unresolved = {.kind=TYPE_UNRESOLVED, .size=0};
     static type_info_t type_undefined = {.kind=TYPE_UNDEFINED, .size=0};
+    static type_info_t type_unreachable = {.kind=TYPE_UNREACHABLE, .size=0};
 
     static type_info_t type_void = {.kind=TYPE_VOID, .size=0};
+    static type_info_t type_label = { .kind=TYPE_LABEL, .size=sizeof(u64) };
     static type_info_t type_bool = {.kind=TYPE_BOOL, .size=sizeof(byte)};
     static type_info_t type_f32 = {.kind=TYPE_NUMBER, .size=sizeof(f32), .data.num = NUM_TYPE_FLOAT};
     static type_info_t type_f64 = {.kind=TYPE_NUMBER, .size=sizeof(f64), .data.num = NUM_TYPE_FLOAT};
@@ -142,6 +144,12 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
 
     type_t undefined = typeid(set->types.count);
     array_push(&set->types, &type_undefined);
+
+    type_t unreachable = typeid(set->types.count);
+    array_push(&set->types, &type_unreachable);
+
+    type_t label = typeid(set->types.count);
+    array_push(&set->types, &type_label);
 
     type_t void_ = typeid(set->types.count);
     array_push(&set->types, &type_void);
@@ -173,6 +181,8 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
     ASSERT(invalid.i == TYPE_INVALID, "must be same as type invalid");
     ASSERT(unresolved.i == TYPE_UNRESOLVED, "must be same as type unresolved");
     ASSERT(undefined.i == TYPE_UNDEFINED, "must be same as type undefined");
+    ASSERT(unreachable.i == TYPE_UNREACHABLE, "must be same as type unreachable");
+    ASSERT(label.i == TYPE_LABEL, "must be same as type jmp location");
     ASSERT(void_.i == TYPE_VOID, "must be same as type void");
     ASSERT(bool_.i == TYPE_BOOL, "must be same as type bool");
     ASSERT(string_.i == TYPE_STRING, "must be same as type string");

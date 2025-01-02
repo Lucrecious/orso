@@ -151,7 +151,7 @@ ast_node_t nil_node = {
     .operator = nil_token,
 
     .value_type = typeid(TYPE_INVALID),
-    .return_guarentee = RETURN_GUARENTEE_NONE,
+    .return_guarentee = JMP_GUARENTEE_NONE,
     .lvalue_node = &nil_node,
 };
 
@@ -162,7 +162,7 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type
     node->start = start;
     node->end = start;
     node->operator = start;
-    node->return_guarentee = RETURN_GUARENTEE_NONE;
+    node->return_guarentee = JMP_GUARENTEE_NONE;
     node->value_type.i = TYPE_UNRESOLVED;
     node->condition_negated = false;
     node->looping = false;
@@ -177,6 +177,8 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type
     node->is_mutable = false;
     node->identifier = nil_token;
     node->ref_decl = &nil_node;
+
+    node->jmp_scope_node = &nil_node;
 
     node->lvalue_node = NULL;
     node->value_index = value_index_nil();
@@ -218,7 +220,7 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type
         case AST_NODE_TYPE_EXPRESSION_UNARY:
         case AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT:
         case AST_NODE_TYPE_DECLARATION_STATEMENT:
-        case AST_NODE_TYPE_EXPRESSION_RETURN:
+        case AST_NODE_TYPE_EXPRESSION_JMP:
         case AST_NODE_TYPE_EXPRESSION_GROUPING: {
             array_push(&node->children, &nil_node);
             break;
@@ -413,16 +415,18 @@ static ast_node_t *parse_number(parser_t *parser, bool inside_type_context) {
     return expression_node;
 }
 
-static ast_node_t *parse_return(parser_t *parser, bool inside_type_context) {
-    ast_node_t *return_expr = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_RETURN, inside_type_context, parser->previous);
+static ast_node_t *parse_jmp(parser_t *parser, bool inside_type_context) {
+    ast_node_t *jmp_expr = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_JMP, inside_type_context, parser->previous);
+    jmp_expr->identifier = parser->previous;
+
     if (check_expression(parser)) {
-        an_expression(return_expr) = parse_expression(parser, inside_type_context);
-        return_expr->end = an_expression(return_expr)->end;
+        an_expression(jmp_expr) = parse_expression(parser, inside_type_context);
+        jmp_expr->end = an_expression(jmp_expr)->end;
     }
 
-    return_expr->value_type = typeid(TYPE_UNDEFINED);
+    jmp_expr->value_type = typeid(TYPE_UNREACHABLE);
 
-    return return_expr;
+    return jmp_expr;
 }
 
 static ast_node_t *parse_literal(parser_t *parser, bool inside_type_context) {
@@ -509,7 +513,7 @@ static ast_node_t *parse_def_value(parser_t *parser, bool inside_type_context) {
 }
 
 static void parse_block_(parser_t *parser, ast_node_t *block) {
-    block->return_guarentee = RETURN_GUARENTEE_NONE;
+    block->return_guarentee = JMP_GUARENTEE_NONE;
 
     while (!check(parser, TOKEN_BRACE_CLOSE) && !check(parser, TOKEN_EOF)) {
         ast_node_t *declaration_node = parse_declaration(parser, false);
@@ -548,7 +552,7 @@ static ast_node_t *parse_ifelse(parser_t *parser, bool inside_type_context) {
         expression_node->looping = true;
     }
 
-    expression_node->return_guarentee = RETURN_GUARENTEE_NONE;
+    expression_node->return_guarentee = JMP_GUARENTEE_NONE;
 
     an_condition(expression_node) = parse_expression(parser, inside_type_context);
     if (match(parser, TOKEN_BRACE_OPEN)) {
@@ -851,7 +855,9 @@ parse_rule_t rules[] = {
     [TOKEN_ELSE]                    = { NULL,               NULL,               PREC_NONE },
     [TOKEN_TRUE]                    = { parse_literal,      NULL,               PREC_NONE },
     [TOKEN_FALSE]                   = { parse_literal,      NULL,               PREC_NONE },
-    [TOKEN_RETURN]                  = { parse_return,       NULL,               PREC_NONE },
+    [TOKEN_RETURN]                  = { parse_jmp,          NULL,               PREC_NONE },
+    [TOKEN_BREAK]                   = { parse_jmp,          NULL,               PREC_NONE },
+    [TOKEN_CONTINUE]                = { parse_jmp,          NULL,               PREC_NONE },
     [TOKEN_ERROR]                   = { NULL,               NULL,               PREC_NONE },
     [TOKEN_EOF]                     = { NULL,               NULL,               PREC_NONE },
     [TOKEN_SIZE]                    = { NULL,               NULL,               PREC_NONE },
@@ -1130,8 +1136,14 @@ value_index_t zero_value(ast_t *ast, type_t type) {
             break;
         }
 
+        case TYPE_LABEL: {
+            UNREACHABLE();
+            break;
+        }
+
         case TYPE_COUNT:
         case TYPE_UNDEFINED:
+        case TYPE_UNREACHABLE:
         case TYPE_FUNCTION:
         case TYPE_NATIVE_FUNCTION:
         case TYPE_TYPE:
@@ -1363,7 +1375,7 @@ static void ast_print_ast_node(type_infos_t types, ast_node_t *node, u32 level) 
             break;
         }
 
-        case AST_NODE_TYPE_EXPRESSION_RETURN: {
+        case AST_NODE_TYPE_EXPRESSION_JMP: {
             print_indent(level);
             print_line("return");
 

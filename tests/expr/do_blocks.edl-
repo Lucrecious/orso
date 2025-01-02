@@ -1,0 +1,100 @@
+{
+    sum := 0;
+
+    a := 0;
+
+    do a = 1 then a = 2;
+
+    if a == 2 then sum = sum + 1;
+
+    do {
+        a = 1;
+    } then {
+        a = 2;
+    };
+
+    if a == 2 then sum = sum + 1;
+
+    do {
+        a = 1;
+        break;
+    } then {
+        a = 2;
+    };
+
+    if a == 1 then sum = sum + 1;
+
+    do {
+        a = 1;
+        continue;
+
+        a = 2;
+    } then {
+        a = 3;
+    };
+
+    if a == 3 then sum = sum + 1;
+
+    do {
+        a = 2;
+        continue;
+
+        a = 2;
+    } then do {
+        a = 3;
+    } then {
+        a = 4;
+    };
+
+    if a == 4 then sum = sum + 1;
+
+
+    do {
+        a = 2;
+        continue;
+
+        a = 2;
+    } then do {
+        a = 3;
+        break;
+    } then {
+        a = 4;
+    };
+
+    if a == 3 then sum = sum + 1;
+
+    {
+        // labels are like variables and cannot be redefined in the same scope
+        do: outer if a == 3 {
+            while a > 0 {
+                if a == 3 then break outer;
+
+                a = a - 1;
+            }
+        } 
+    }
+
+    if a == 3 sum = sum + 1;
+
+    do: outer if a == 3 {
+        while a > 0 {
+            if a == 3 then continue outer;
+            a = a - 1;
+        } else {
+            a = 10;
+        };
+    } then {
+        a = 4;
+    };
+
+    if a == 4 the sum = sum + 1;
+
+    sum = do: value {
+        if a == 4 {
+            sum + 1;
+            break value;
+        };
+    };
+
+    sum;
+}

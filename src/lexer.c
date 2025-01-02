@@ -218,6 +218,8 @@ static token_type_t check_keyword(lexer_t *lexer, i32 start, i32 length,
 static token_type_t identifier_type(lexer_t *lexer) {
     switch (lexer->start[0]) {
         case 'a': return check_keyword(lexer, 1, 2, "nd", TOKEN_AND);
+        case 'b': return check_keyword(lexer, 1, 4, "reak", TOKEN_BREAK);
+        case 'c': return check_keyword(lexer, 1, 7, "ontinue", TOKEN_CONTINUE);
         case 'd': return check_keyword(lexer, 1, 1, "o", TOKEN_DO);
         case 'e': return check_keyword(lexer, 1, 3, "lse", TOKEN_ELSE);
         case 'f': {
@@ -317,32 +319,6 @@ token_t _lexer_next_token(lexer_t *lexer) {
     }
 
     lexer->start = lexer->current;
-
-    // if (lexer->previous_token.line != lexer->line || is_at_end(lexer)) {
-    //     switch (lexer->previous_token.type) {
-    //         case TOKEN_IDENTIFIER:
-    //         case TOKEN_STRING:
-    //         case TOKEN_DIRECTIVE:
-    //         case TOKEN_ANNOTATION:
-    //         case TOKEN_FALSE:
-    //         case TOKEN_TRUE:
-    //         case TOKEN_SYMBOL:
-    //         case TOKEN_RETURN:
-    //         case TOKEN_NULL:
-    //         case TOKEN_BRACE_CLOSE:
-    //         case TOKEN_BRACKET_CLOSE:
-    //         case TOKEN_PARENTHESIS_CLOSE:
-    //         case TOKEN_INTEGER:
-    //         case TOKEN_FLOAT:
-    //             return  (token_t) {
-    //                 .length = 0,
-    //                 .line = lexer->line,
-    //                 .start = lexer->start,
-    //                 .type = TOKEN_SEMICOLON,
-    //             };
-    //         default: break;
-    //     }
-    // }
 
     if (is_at_end(lexer)) {
         return create_token(lexer, TOKEN_EOF);

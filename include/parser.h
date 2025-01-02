@@ -12,9 +12,9 @@
 #include "table.h"
 
 typedef enum return_guarentee_t {
-    RETURN_GUARENTEE_NONE,
-    RETURN_GUARENTEE_MAYBE,
-    RETURN_GUARENTEE_YES,
+    JMP_GUARENTEE_NONE,
+    JMP_GUARENTEE_MAYBE,
+    JMP_GUARENTEE_YES,
 } return_guarentee_t;
 
 struct ast_node_t;
@@ -29,11 +29,13 @@ struct ast_nodes_t {
 };
 
 typedef enum scope_type_t {
-    SCOPE_TYPE_MODULE,
-    SCOPE_TYPE_FUNCTION_PARAMETERS,
-    SCOPE_TYPE_FUNCTION_BODY,
-    SCOPE_TYPE_BLOCK,
-    SCOPE_TYPE_STRUCT,
+    SCOPE_TYPE_NONE                     = 0,
+    SCOPE_TYPE_MODULE                   = 1 << 0,
+    SCOPE_TYPE_FUNCTION_PARAMETERS      = 1 << 1,
+    SCOPE_TYPE_FUNCTION_BODY            = 1 << 2,
+    SCOPE_TYPE_BRANCH                   = 1 << 3,
+    SCOPE_TYPE_BLOCK                    = 1 << 4,
+    SCOPE_TYPE_STRUCT                   = 1 << 5,
 } scope_type_t;
 
 declare_table(s2w, string_t, word_t)
@@ -54,9 +56,10 @@ typedef enum ast_node_type_t {
     AST_NODE_TYPE_NONE,
 
     AST_NODE_TYPE_MODULE,
-    AST_NODE_TYPE_DECLARATION_DEFINITION, // for declaring globals, locals, constants, etc
+    AST_NODE_TYPE_DECLARATION_DEFINITION, // for declaring globals, locals and constants
     AST_NODE_TYPE_DECLARATION_STATEMENT, // for expressions
-    AST_NODE_TYPE_EXPRESSION_RETURN,
+
+    AST_NODE_TYPE_EXPRESSION_JMP, // return, break, continue
     AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT,
     AST_NODE_TYPE_EXPRESSION_BINARY,
     AST_NODE_TYPE_EXPRESSION_DOT,
@@ -89,7 +92,7 @@ case AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION: \
 case AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE: \
 case AST_NODE_TYPE_EXPRESSION_GROUPING: \
 case AST_NODE_TYPE_EXPRESSION_PRIMARY: \
-case AST_NODE_TYPE_EXPRESSION_RETURN: \
+case AST_NODE_TYPE_EXPRESSION_JMP: \
 case AST_NODE_TYPE_EXPRESSION_UNARY: \
 case AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER: \
 case AST_NODE_TYPE_EXPRESSION_DOT
@@ -186,6 +189,8 @@ struct ast_node_t {
     ast_nodes_t children;
 
     token_t identifier;
+
+    ast_node_t *jmp_scope_node;
 
     union {
         ast_call_t call;

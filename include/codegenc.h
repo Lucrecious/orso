@@ -118,11 +118,13 @@ static cstr_t cgen_type_name(cgen_t *cgen, type_t type) {
         case TYPE_FUNCTION:
         case TYPE_NATIVE_FUNCTION:
         case TYPE_POINTER:
+        case TYPE_LABEL:
         case TYPE_STRUCT: UNREACHABLE(); return "void";
 
         case TYPE_INVALID:
         case TYPE_UNRESOLVED:
         case TYPE_UNDEFINED:
+        case TYPE_UNREACHABLE:
         case TYPE_COUNT: UNREACHABLE(); return "void";
     }
 }
@@ -209,6 +211,7 @@ static void cgen_primary(cgen_t *cgen, value_index_t value_index, type_info_t *t
             break;
         }
 
+        case TYPE_LABEL:
         case TYPE_VOID:
         case TYPE_BOOL:
         case TYPE_STRING:
@@ -218,6 +221,7 @@ static void cgen_primary(cgen_t *cgen, value_index_t value_index, type_info_t *t
         case TYPE_FUNCTION:
         case TYPE_STRUCT: UNREACHABLE(); break;
 
+        case TYPE_UNREACHABLE:
         case TYPE_INVALID:
         case TYPE_UNRESOLVED:
         case TYPE_UNDEFINED:

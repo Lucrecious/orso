@@ -25,15 +25,15 @@ typedef bool (*IsCircularDependencyFunc)(analyzer_t*, ast_node_t*);
 //     result[0] = WORDD((double)clock() / CLOCKS_PER_SEC);
 // }
 
-typedef enum ExpressionFoldingMode {
+typedef enum folding_mode_t {
     MODE_RUNTIME = 0x1,
     MODE_CONSTANT_TIME = 0x2,
     MODE_FOLDING_TIME = 0x4,
-} ExpressionFoldingMode;
+} folding_mode_t;
 
 typedef struct analysis_state_t {
     i32 fold_level;
-    ExpressionFoldingMode mode;
+    folding_mode_t mode;
     scope_t *scope;
 } analysis_state_t;
 
@@ -453,7 +453,7 @@ static void resolve_foldable(
             break;
         }
 
-        case AST_NODE_TYPE_EXPRESSION_RETURN: {
+        case AST_NODE_TYPE_EXPRESSION_JMP: {
             foldable = false;
             break;
         }
@@ -688,6 +688,17 @@ static scope_t *get_closest_outer_function_scope(type_infos_t *types, scope_t *s
     }
 
     return scope;
+}
+
+
+static scope_t *get_nearest_scope_in_func_or_null(scope_t *scope, scope_type_t type) {
+    while (scope->outer) {
+        if (scope->type == type) return scope;
+        if (scope->type == SCOPE_TYPE_FUNCTION_BODY) return NULL;
+        scope = scope->outer;
+    }
+
+    return NULL;
 }
 
 static void resolve_declarations(
@@ -1174,19 +1185,19 @@ void resolve_expression(
             block_state.mode = MODE_RUNTIME | (state.mode & MODE_FOLDING_TIME);
             resolve_declarations(analyzer, ast, block_state, expression->children, declarations_count);
 
-            return_guarentee_t block_return_guarentee = RETURN_GUARENTEE_NONE;
+            return_guarentee_t block_return_guarentee = JMP_GUARENTEE_NONE;
             for (i32 i = 0; i < declarations_count; i++) {
                 ast_node_t *declaration = expression->children.items[i];
-                if (declaration->return_guarentee != RETURN_GUARENTEE_NONE) {
+                if (declaration->return_guarentee != JMP_GUARENTEE_NONE) {
                     block_return_guarentee = declaration->return_guarentee;
                 }
 
-                if (block_return_guarentee == RETURN_GUARENTEE_YES) break;
+                if (block_return_guarentee == JMP_GUARENTEE_YES) break;
             }
 
-            if (block_return_guarentee != RETURN_GUARENTEE_NONE) {
+            if (block_return_guarentee != JMP_GUARENTEE_NONE) {
                 expression->return_guarentee = block_return_guarentee;
-                expression->value_type = typeid(TYPE_UNDEFINED);
+                expression->value_type = typeid(TYPE_UNREACHABLE);
             } else {
                 ast_node_t *last_decl = NULL;
                 if (declarations_count > 0) {
@@ -1207,41 +1218,19 @@ void resolve_expression(
             break;
         }
 
-        case AST_NODE_TYPE_EXPRESSION_RETURN: {
-            if (an_expression(expression)) {
-                resolve_expression(analyzer, ast, state, an_expression(expression));
-            }
-
-            scope_t *function_scope = get_closest_outer_function_scope(&ast->type_set.types, state.scope);
-            ASSERT(function_scope, "right now all scopes should be under a function scope");
-
-            type_t function_type = function_scope->creator->value_type;
-            type_info_t *function_type_info = ast->type_set.types.items[function_type.i];
-
-            type_t function_return_type = function_scope ? function_type_info->data.function.return_type : typeid(TYPE_VOID);
-            unless (TYPE_IS_INVALID(an_expression(expression)->value_type) || !typeid_eq(function_return_type, an_expression(expression)->value_type)) {
-                printf("todo: another case where i need to put in the right nodes here... the expected should be the expression of the ufnction return value\n");
-                stan_error(analyzer, make_type_mismatch_error(an_expression(expression), an_expression(expression)));
-                INVALIDATE(expression);
-            }
-
-            expression->return_guarentee = RETURN_GUARENTEE_YES;
-
-            if (an_expression(expression)->node_type == AST_NODE_TYPE_EXPRESSION_RETURN) {
-                if (expression->return_guarentee != RETURN_GUARENTEE_NONE) {
-                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CANNOT_RETURN_INSIDE_RETURN, expression));
-                } else {
-                    expression->return_guarentee = RETURN_GUARENTEE_YES;
-                }
-            }
-        }
-
         case AST_NODE_TYPE_EXPRESSION_BRANCHING: {
-            resolve_expression(analyzer, ast, state, an_condition(expression));
+            scope_t branch_scope;
+            scope_init(&branch_scope, &analyzer->allocator, SCOPE_TYPE_BRANCH, state.scope, expression);
 
-            resolve_expression(analyzer, ast, state, an_then(expression));
+            analysis_state_t branch_state = state;
+            branch_state.scope = &branch_scope;
+            branch_state.mode = MODE_RUNTIME | (state.mode & MODE_FOLDING_TIME);
 
-            resolve_expression(analyzer, ast, state, an_else(expression));
+            resolve_expression(analyzer, ast, branch_state, an_condition(expression));
+
+            resolve_expression(analyzer, ast, branch_state, an_then(expression));
+
+            resolve_expression(analyzer, ast, branch_state, an_else(expression));
 
             if (TYPE_IS_VOID(an_else(expression)->value_type) && an_else(expression)->node_type == AST_NODE_TYPE_EXPRESSION_NIL &&
                 !TYPE_IS_UNDEFINED(an_then(expression)->value_type)) {
@@ -1258,17 +1247,17 @@ void resolve_expression(
             {
                 return_guarentee_t then_return_guarentee = an_then(expression)->return_guarentee;
 
-                return_guarentee_t else_return_guarentee = RETURN_GUARENTEE_NONE;
+                return_guarentee_t else_return_guarentee = JMP_GUARENTEE_NONE;
                 if (an_is_notnone(an_else(expression))) {
                     else_return_guarentee = an_else(expression)->return_guarentee;
                 }
 
-                if (then_return_guarentee == RETURN_GUARENTEE_YES && else_return_guarentee == RETURN_GUARENTEE_YES) {
-                    branch_return_guarentee = RETURN_GUARENTEE_YES;
-                } else if (then_return_guarentee == RETURN_GUARENTEE_NONE && else_return_guarentee == RETURN_GUARENTEE_NONE) {
-                    branch_return_guarentee = RETURN_GUARENTEE_NONE;
+                if (then_return_guarentee == JMP_GUARENTEE_YES && else_return_guarentee == JMP_GUARENTEE_YES) {
+                    branch_return_guarentee = JMP_GUARENTEE_YES;
+                } else if (then_return_guarentee == JMP_GUARENTEE_NONE && else_return_guarentee == JMP_GUARENTEE_NONE) {
+                    branch_return_guarentee = JMP_GUARENTEE_NONE;
                 } else {
-                    branch_return_guarentee = RETURN_GUARENTEE_MAYBE;
+                    branch_return_guarentee = JMP_GUARENTEE_MAYBE;
                 }
             }
 
@@ -1278,7 +1267,7 @@ void resolve_expression(
                 break;
             }
 
-            if (branch_return_guarentee == RETURN_GUARENTEE_NONE) {
+            if (branch_return_guarentee == JMP_GUARENTEE_NONE) {
                 if (!typeid_eq(an_then(expression)->value_type, an_else(expression)->value_type)) {
                     stan_error(analyzer, make_type_mismatch_error(an_then(expression), an_else(expression)));
                     INVALIDATE(expression);
@@ -1287,9 +1276,51 @@ void resolve_expression(
                 }
             } else {
                 expression->return_guarentee = branch_return_guarentee;
-                expression->value_type = typeid(TYPE_UNDEFINED);
+                expression->value_type = typeid(TYPE_UNREACHABLE);
             }
             break;
+        }
+
+        case AST_NODE_TYPE_EXPRESSION_JMP: {
+            if (an_expression(expression)) {
+                resolve_expression(analyzer, ast, state, an_expression(expression));
+            }
+
+            switch (expression->identifier.type) {
+                case TOKEN_RETURN: {
+                    scope_t *function_scope = get_closest_outer_function_scope(&ast->type_set.types, state.scope);
+                    ASSERT(function_scope, "right now all scopes should be under a function scope");
+
+                    type_t function_type = function_scope->creator->value_type;
+                    type_info_t *function_type_info = ast->type_set.types.items[function_type.i];
+
+                    type_t function_return_type = function_scope ? function_type_info->data.function.return_type : typeid(TYPE_VOID);
+                    unless (TYPE_IS_INVALID(an_expression(expression)->value_type) || !typeid_eq(function_return_type, an_expression(expression)->value_type)) {
+                        printf("todo: another case where i need to put in the right nodes here... the expected should be the expression of the ufnction return value\n");
+                        stan_error(analyzer, make_type_mismatch_error(an_expression(expression), an_expression(expression)));
+                    }
+                    break;
+                }
+                case TOKEN_CONTINUE:
+                case TOKEN_BREAK: {
+                    if (!TYPE_IS_LABEL(an_expression(expression)->value_type) && !TYPE_IS_VOID(an_expression(expression)->value_type)) {
+                        printf("todo: another case where i need to put in the right nodes here... the expected should be the expression of the do label\n");
+                        stan_error(analyzer, make_type_mismatch_error(an_expression(expression), an_expression(expression)));
+                    } else {
+                        ASSERT(TYPE_IS_VOID(an_expression(expression)->value_type), "labels not supported yet");
+                        scope_t *scope = get_nearest_scope_in_func_or_null(state.scope, SCOPE_TYPE_BRANCH);
+                        expression->jmp_scope_node = scope->creator;
+                        ASSERT(scope->creator->node_type == AST_NODE_TYPE_EXPRESSION_BRANCHING, "only supports branches rn");
+                    }
+                    break;
+                }
+
+                default: UNREACHABLE();
+            }
+
+
+            expression->return_guarentee = JMP_GUARENTEE_YES;
+            expression->value_type = typeid(TYPE_UNREACHABLE);
         }
 
         case AST_NODE_TYPE_EXPRESSION_CALL: {
@@ -1420,8 +1451,9 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
             switch (state.scope->type) {
                 case SCOPE_TYPE_FUNCTION_BODY:
                 case SCOPE_TYPE_BLOCK:
+                case SCOPE_TYPE_BRANCH:
                 case SCOPE_TYPE_MODULE: {
-                    ExpressionFoldingMode mode = declaration->is_mutable ? MODE_RUNTIME : MODE_CONSTANT_TIME;
+                    folding_mode_t mode = declaration->is_mutable ? MODE_RUNTIME : MODE_CONSTANT_TIME;
                     mode = mode | (state.mode & MODE_FOLDING_TIME);
                     new_state.mode = mode;
                     break;
@@ -1432,6 +1464,8 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
                     new_state.mode = MODE_CONSTANT_TIME | (state.mode & MODE_FOLDING_TIME);
                     break;
                 }
+
+                case SCOPE_TYPE_NONE: UNREACHABLE(); break;
             }
 
             bool pushed = push_dependency(analyzer, an_decl_expr(declaration), new_state.fold_level, is_value_circular_dependency);
@@ -1903,11 +1937,6 @@ static void resolve_function_expression(
     ast_function_t *definition = &function_definition_expression->as.function;
 
     i32 parameter_count = definition->parameter_nodes.count;
-    // TODO: use a code gen error instead for parameter limit
-    // // TODO: instead of hardcoding the number of parameters, instead use the numbers of bytes the params take up
-    // if (parameter_count > MAX_PARAMETERS - 1) {
-    //     error(analyzer, definition->parameter_nodes[0]->start.line, "Orso only allows a maximum of 100 parameters");
-    // }
 
     scope_t function_parameter_scope;
     scope_init(&function_parameter_scope, &analyzer->allocator, SCOPE_TYPE_FUNCTION_PARAMETERS, state.scope, function_definition_expression);
@@ -1992,7 +2021,7 @@ static void resolve_function_expression(
         pop_dependency(analyzer);
     }
 
-    if (!TYPE_IS_VOID(return_type) && definition->block->return_guarentee != RETURN_GUARENTEE_YES) {
+    if (!TYPE_IS_VOID(return_type) && definition->block->return_guarentee != JMP_GUARENTEE_YES) {
         stan_error(analyzer, make_error_node(ERROR_ANALYSIS_FUNCTION_MUST_RETURN_ON_ALL_BRANCHES, function_definition_expression));
     }
 }
@@ -2002,25 +2031,31 @@ static void resolve_function_expression(
 * we wouldn't be here trying to resolve it (expression calls this only if the ast is unresolved)
 * It's possible for a struct to be defined like this:
 * 
-*          Foo :: struct {
-*              i: i32;
-*              foo: Foo;
-*          };
+*           Foo :: struct {
+*               i: i32;
+*               foo: Foo;
+*           };
 * 
 * Despite this being an invalid type (since this creates an infinitely sized struct) I can only find out
 * after I figure out *what* Foo is. The first time Foo's assigned value is being analyzed is also the first
 * time the analyzer enters the struct and encounters Foo. At this point, it is not obvious what Foo is because
-* we are actively in the process of figuring that out! Also, this is a simple example, but since this language
-* allows for this type of syntax (where ors and ands can resolve to any value) we cannot just consider the rhs
-* to be a single ast node, like a function definition or structure.
+* we are actively in the process of figuring that out!
 * 
-*          Foo :: null or struct {
-*              i: i32;
-*              foo: Foo;
-*          };
+*           Foo :: #fold if PLATFORM == WIN32_ then
+*               struct {
+*                   platform := WINDOWS;
+*                   foo: Foo;
+*               };
+*           else
+*               struct {
+*                   platform := UNIX;
+*                   foo: Foo;
+*               };
+*
 * 
 * This looks dumb, and it is, but it's also valid. And it means we cannot know what Foo is until *after* we have
-* analyzed the `or` expression. And for that, we need to loop around and figure out the type for Foo.
+* analyzed the `if` expression (since struct's platform's default value can be WINDOWS or UNIX).
+* And for that, we need to loop around and figure out the type for Foo.
 * 
 *          Foo :: #fold generate_foo();
 * 
@@ -2059,7 +2094,7 @@ static void resolve_function_expression(
 *              };
 *          };
 * 
-* In the above example, Foo = *should* be a struct like this: struct { x := 100; }, I think that
+* In the above example, Foo *should* be a struct like this: struct { x := 100; }, I think that
 * makes sense.
 * 
 * Later on, it will be possible to do this based on compile type parameters
@@ -2067,8 +2102,8 @@ static void resolve_function_expression(
 *          Vector2i :: #fold generate_vector2(i32, 0);
 *          Vector2f :: #fold generate_vector2(f32, 0.0);
 *          
-*          // for now the `#!` means the parameter in the function call must be a compile time constnat
-*          generate_foo(#! t: type, default_value: t) -> struct { x: t; y: t; } {
+*          // for now the `!` means the parameter in the function call must be a compile time constnat
+*          generate_foo(!t: type, default_value: t) -> struct { x: t; y: t; } {
 *              return struct {
 *                  x := default_value;
 *                  y := default_value;
@@ -2123,17 +2158,8 @@ static void resolve_function_expression(
 * we can easily create an "incomplete" type just for the vm run. And since there were no causes for 
 * circular dependencies, the codegen should be fine and the resulting runtime should be as well. This is 
 * because the analyzer is so pathological. We know if we resolve a branch of the ast, all the dependencies
-* under it are ready.
-* 
-* For (2) this needs to cause a circular dependency. When `foo` is found to be `Foo` type, then we try to figure
-* out what `value2` is, and when we try to resolve that, we should be able to detect a circular depedency as we
-* would normally. If we start the dependency chain at the function, when we resolve `foo.value2`,
-* `generate_value` is being resolved at fold level 0. When we try to resolve foo.value2, we find that it
-* folds to a function, but at that point we at fold level 1, meaning we have a circular dependency while folding.
-* The same thing would happen if we start the dependency chain at the struct, except we'd find the circular
-* dependency at fold level 2 (since we'd start at fold level 1 instead).
-* 
-* 
+* under it are ready. But we will not make this work.
+ 
 */
 static void resolve_struct_definition(analyzer_t *analyzer, ast_t *ast, analysis_state_t state, ast_node_t *struct_definition) {
     scope_t struct_scope;
