@@ -43,7 +43,19 @@ i64 expr(void) {
       b_ = a_;
     }
 
-    result_ = b_;
+    i64 c_; {
+      {
+        {
+          {
+            {
+              c_ = 10;
+            }
+          }
+        }
+      }
+    }
+
+    result_ = c_;
   }
   return result_;
 }
