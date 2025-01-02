@@ -31,6 +31,26 @@ i64 expr(void) {
       }
     }
 
+    i64 e_; {
+      i64 a_ = 1;
+
+      i64 b_ = 2;
+
+      i64 c_ = 3;
+
+      i64 tmp2; {
+        tmp2 = ((a_ + b_) + c_);
+      }
+      i64 tmp1 = (b_ = tmp2);
+      e_ = (a_ = tmp1);
+    }
+
+    {
+      if (e_ == 9) {
+        (sum_ = (sum_ + 1));
+      }
+    }
+
     result_ = sum_;
   }
   return result_;
