@@ -369,9 +369,11 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
                             sb_add_format(&cgen->sb, "%s = (", cgen_var(cgen, var));
                         }
 
-                        sb_add_format(&cgen->sb, "%s = ", cgen_var_name(cgen, lhs_var));
+                        sb_add_format(&cgen->sb, "(%s = ", cgen_var_name(cgen, lhs_var));
 
                         cgen_expression(cgen, an_rhs(expression), nil_tmp_var);
+
+                        sb_add_cstr(&cgen->sb, ")");
 
                         if (has_var(var)) {
                             sb_add_cstr(&cgen->sb, ");\n");

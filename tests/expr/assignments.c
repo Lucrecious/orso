@@ -5,9 +5,33 @@ i64 expr(void) {
 
     i64 n_ = 10;
 
-    x_ = n_;
+    (x_ = n_);
 
-    result_ = x_;
+    i64 sum_ = 0;
+
+    {
+      if (x_ == n_) {
+        (sum_ = (sum_ + 1));
+      }
+    }
+
+    i64 d_; {
+      i64 a_ = 1;
+
+      i64 b_ = 2;
+
+      i64 c_ = 3;
+
+      d_ = ((a_ = (b_ = c_)));
+    }
+
+    {
+      if (d_ == 3) {
+        (sum_ = (sum_ + 1));
+      }
+    }
+
+    result_ = sum_;
   }
   return result_;
 }

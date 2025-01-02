@@ -10,7 +10,7 @@ i64 expr(void) {
     {
       while (x_ < n_) {
         {
-          sum_ = (sum_ + x_);
+          (sum_ = (sum_ + x_));
 
           i64 tmp2; {
             tmp2 = x_;

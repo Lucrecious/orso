@@ -2,5 +2,20 @@
     x := 0;
     n := 10;
     x = n;
-    x;
+
+    sum := 0;
+
+    if x == n then sum = sum + 1;
+    
+    d := {
+        a := 1;
+        b := 2;
+        c := 3;
+
+        a = b = c;
+    };
+
+    if d == 3 then sum = sum + 1; 
+
+    sum;
 }

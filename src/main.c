@@ -383,12 +383,12 @@ int main(int argc, char **argv) {
                     }
 
                     case COMPILER_MODE_TEST_GEN: {
-                        test_gen_expr_file(mode.file_or_dir, &arena);
+                        test_gen_expr_file(file, &arena);
                         break;
                     }
 
                     case COMPILER_MODE_DEBUG: {
-                        debug_expr_file(mode.file_or_dir, &arena);
+                        debug_expr_file(file, &arena);
                         break;
                     }
                 }
