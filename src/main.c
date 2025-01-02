@@ -226,6 +226,8 @@ void compile_expr_to_vm(vm_t *vm, ast_t *ast, arena_t *arena, error_function_t e
 }
 
 void test_expr_file(string_t expr_file, arena_t *arena) {
+    nob_log(INFO, "---- test: %s", expr_file.cstr);
+
     ast_t ast = {0};
     unless (parse_expr_file(&ast, expr_file, arena)) {
         nob_log(ERROR, "could not parse: %s", expr_file.cstr);
@@ -255,7 +257,10 @@ void test_expr_file(string_t expr_file, arena_t *arena) {
         cc_no_warning(&cc, lit2str("unused-value"));
 
         cc.output_type = CC_DYNAMIC;
-        cc.output_name = lit2str("liborso.so");
+
+        string_view_t filename_ = sv_filename(string2sv(expr_file));
+        string_t filename = string_format("%.*s.so", arena, filename_.length, filename_.data);
+        cc.output_name = filename;
 
         bool success = cc_build(&cc);
 
@@ -264,9 +269,13 @@ void test_expr_file(string_t expr_file, arena_t *arena) {
             return;
         }
 
-        dynlib_t lib = dynlib_load(lit2str("./build/liborso.so"));
+        
+        string_t dll_path = string_format("%s/%s", arena, cc.build_dir.cstr, filename.cstr);
+        dynlib_t lib = dynlib_load(dll_path);
 
         i64 (*expr)(void) = dynlib_symbol(lib, lit2str("expr"));
+
+        dynlib_unload(lib);
 
         resultc = expr();
     }
@@ -283,7 +292,6 @@ void test_expr_file(string_t expr_file, arena_t *arena) {
         }
     }
 
-    nob_log(INFO, "---- test: %s", expr_file.cstr);
     if (resultc != resultvm) {
         nob_log(ERROR, "c value != vm value; %lld != %lld", resultc, resultvm);
     }

@@ -9,6 +9,7 @@ struct dynlib_t {
 };
 
 dynlib_t dynlib_load(string_t path);
+void dynlib_unload(dynlib_t dl);
 void *dynlib_symbol(dynlib_t dl, string_t symbol_name);
 
 #endif
@@ -19,8 +20,13 @@ void *dynlib_symbol(dynlib_t dl, string_t symbol_name);
 
 dynlib_t dynlib_load(string_t path) {
     dynlib_t dl;
-    dl.handle = dlopen(path.cstr, RTLD_LAZY);
+    dl.handle = dlopen(path.cstr, RTLD_LOCAL);
     return dl;
+}
+
+void dynlib_unload(dynlib_t dl) {
+    // dlclose(dl.handle);
+    UNUSED(dl);
 }
 
 void *dynlib_symbol(dynlib_t dl, string_t symbol_name) {
