@@ -4,7 +4,6 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-#include "common.h"
 #include "error.h"
 #include "type.h"
 #include "type_set.h"

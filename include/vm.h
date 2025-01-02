@@ -5,6 +5,8 @@
 #include "slot.h"
 #include "parser.h"
 
+typedef void (*write_function_t)(const char* chars);
+
 typedef enum op_code_t op_code_t;
 enum op_code_t {
     OP_NOP,

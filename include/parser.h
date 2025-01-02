@@ -7,6 +7,7 @@
 #include "arena.h"
 #include "memarr.h"
 #include "slot.h"
+#include "error.h"
 
 #include "table.h"
 

@@ -1,7 +1,6 @@
 #ifndef LEXER_H_
 #define LEXER_H_
 
-#include "common.h"
 #include "def.h"
 #include "stringt.h"
 
@@ -66,7 +65,6 @@ struct token_t {
 typedef struct lexer_t lexer_t;
 struct lexer_t {
     token_t previous_token;
-    error_function_t error_fn;
     string_t file_path;
     string_view_t source;
     i32 line;

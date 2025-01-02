@@ -39,8 +39,6 @@
 
 #include "parser.h"
 
-#include "common.h"
-
 #include "error.h"
 
 #define CC_IMPLEMENTATION

@@ -2,9 +2,9 @@
 #define STATIC_ANALYZER_H_
 
 #include "parser.h"
-#include "common.h"
 #include "type_set.h"
 #include "arena.h"
+#include "vm.h"
 
 struct interpreter_t;
 

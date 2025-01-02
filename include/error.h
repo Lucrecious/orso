@@ -23,6 +23,10 @@ typedef struct error_t {
     token_type_t expected_token_type;
 } error_t;
 
+#define MAX_PARAMETERS 100
+
+typedef void (*error_function_t)(struct error_t error);
+
 #define make_error_(et, n1, n2, t, ett) ((error_t){ .type = (et), .message = error_messages[et], .nodes = {n1, n2}, .token = (t), .expected_token_type = (ett) })
 #define make_error(et) make_error_(et, &nil_node, &nil_node, nil_token, TOKEN_ERROR)
 #define make_error_token(et, t) make_error_(et, &nil_node, &nil_node, t, TOKEN_ERROR)
