@@ -247,40 +247,28 @@ static cstr_t token2opcstr(token_t op) {
     return "+";
 }
 
-static void cgen_declaration(cgen_t *cgen, ast_node_t *declaration) {
+static void cgen_semicolon_nl(cgen_t *cgen) {
+    sb_add_cstr(&cgen->sb, ";\n");
+}
 
+static void cgen_declaration(cgen_t *cgen, ast_node_t *declaration) {
     switch (declaration->node_type) {
         case AST_NODE_TYPE_DECLARATION_DEFINITION: {
+            cgen_add_indent(cgen);
+
             cgen_var_t var = cgen_user_var(cgen, declaration->identifier.view, declaration->value_type);
             cgen_expression(cgen, an_decl_expr(declaration), var);
+
+            cgen_semicolon_nl(cgen);
             break;
         }
 
         case AST_NODE_TYPE_DECLARATION_STATEMENT: {
-            bool needs_indent = false;
-
-            switch (an_expression(declaration)->node_type) {
-                case AST_NODE_TYPE_EXPRESSION_BRANCHING:
-                case AST_NODE_TYPE_EXPRESSION_BLOCK: needs_indent = true; break;
-                default: break;
-            }
-
-            if (!an_expression(declaration)->requires_tmp_for_cgen) {
-                needs_indent = true;
-            }
-            if (needs_indent) cgen_add_indent(cgen);
+            cgen_add_indent(cgen);
 
             cgen_expression(cgen, an_expression(declaration), nil_tmp_var);
 
-            switch (an_expression(declaration)->node_type) {
-                case AST_NODE_TYPE_EXPRESSION_BRANCHING:
-                case AST_NODE_TYPE_EXPRESSION_BLOCK: break;
-
-                default:
-                    sb_add_cstr(&cgen->sb, ";\n");
-                    break;
-            }
-
+            cgen_semicolon_nl(cgen);
             break;
         }
 
@@ -289,16 +277,19 @@ static void cgen_declaration(cgen_t *cgen, ast_node_t *declaration) {
 }
 
 static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var) {
-    bool requires_tmp = expression->requires_tmp_for_cgen;
+    bool cannot_inline = expression->requires_tmp_for_cgen;
 
     switch (expression->node_type) {
         case AST_NODE_TYPE_EXPRESSION_BINARY: {
-            if (requires_tmp) {
+            if (cannot_inline) {
                 cgen_var_t lhs_var = cgen_next_tmpid(cgen, an_lhs(expression)->value_type);
                 cgen_expression(cgen, an_lhs(expression), lhs_var);
+                cgen_semicolon_nl(cgen);
 
+                cgen_add_indent(cgen);
                 cgen_var_t rhs_var = cgen_next_tmpid(cgen, an_rhs(expression)->value_type);
                 cgen_expression(cgen, an_rhs(expression), rhs_var);
+                cgen_semicolon_nl(cgen);
 
                 cgen_add_indent(cgen);
                 if (has_var(var)) {
@@ -308,13 +299,8 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
                 cstr_t opcstr = token2opcstr(expression->operator);
                 sb_add_format(&cgen->sb, "%s %s %s", cgen_var_name(cgen, lhs_var), opcstr, cgen_var_name(cgen, rhs_var));
 
-                if (has_var(var)) {
-                    sb_add_cstr(&cgen->sb, ";\n");
-                }
-
             } else {
                 if (has_var(var)) {
-                    cgen_add_indent(cgen);
                     sb_add_format(&cgen->sb, "%s = ", cgen_var(cgen, var));
                 }
 
@@ -329,10 +315,6 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
                 cgen_expression(cgen, an_rhs(expression), nil_tmp_var);
 
                 sb_add_cstr(&cgen->sb, ")");
-
-                if (has_var(var)) {
-                    sb_add_cstr(&cgen->sb, ";\n");
-                }
             }
             break;
         }
@@ -345,9 +327,10 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
                     cgen_var_t lhs_var = cgen_user_var(cgen, lhs->lvalue_node->identifier.view, lhs->value_type);
                     lhs_var.is_new = false;
 
-                    if (requires_tmp) {
+                    if (cannot_inline) {
                         cgen_var_t rhs_var = cgen_next_tmpid(cgen, an_rhs(expression)->value_type);
                         cgen_expression(cgen, an_rhs(expression), rhs_var);
+                        cgen_semicolon_nl(cgen);
                         
                         cgen_add_indent(cgen);
                         if (has_var(var)) {
@@ -355,16 +338,7 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
                         }
 
                         sb_add_format(&cgen->sb, "(%s = %s)", cgen_var_name(cgen, lhs_var), cgen_var_name(cgen, rhs_var));
-
-                        if (has_var(var)) {
-                            sb_add_cstr(&cgen->sb, ";\n");
-                        }
-
                     } else {
-                        if (has_var(var)) {
-                            cgen_add_indent(cgen);
-                        }
-
                         if (has_var(var)) {
                             sb_add_format(&cgen->sb, "%s = (", cgen_var(cgen, var));
                         }
@@ -376,7 +350,7 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
                         sb_add_cstr(&cgen->sb, ")");
 
                         if (has_var(var)) {
-                            sb_add_cstr(&cgen->sb, ");\n");
+                            sb_add_cstr(&cgen->sb, ")");
                         }
                     }
                     break;
@@ -391,7 +365,7 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
 
         case AST_NODE_TYPE_EXPRESSION_NIL:
         case AST_NODE_TYPE_EXPRESSION_PRIMARY: {
-            ASSERT(!requires_tmp, "primaries should never require tmps");
+            ASSERT(!cannot_inline, "primaries should never require tmps");
 
             type_info_t *type_info = get_type_info(&cgen->ast->type_set.types, expression->value_type);
 
@@ -399,15 +373,10 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
                 if (has_var(var)) sb_add_cstr(&cgen->sb, "\n");
             } else {
                 if (has_var(var)) {
-                    cgen_add_indent(cgen);
                     sb_add_format(&cgen->sb, "%s = ", cgen_var(cgen, var));
                 }
 
                 cgen_primary(cgen, expression->value_index, type_info);
-
-                if (has_var(var)) {
-                    sb_add_cstr(&cgen->sb, ";\n");
-                }
             }
 
             switch (type_info->kind) {
@@ -422,13 +391,11 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
         }
 
         case AST_NODE_TYPE_EXPRESSION_GROUPING: {
-            if (requires_tmp) {
+            if (cannot_inline) {
                 ast_node_t *operand = an_expression(expression);
-                cgen_add_indent(cgen);
                 cgen_expression(cgen, operand, var);
             } else {
                 if (has_var(var)) {
-                    cgen_add_indent(cgen);
                     sb_add_format(&cgen->sb, "%s = ",  cgen_var(cgen, var));
                 }
 
@@ -436,20 +403,12 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
                 ast_node_t *operand = an_operand(expression);
                 cgen_expression(cgen, operand, nil_tmp_var);
                 sb_add_cstr(&cgen->sb, ")");
-
-                if (has_var(var)) {
-                    sb_add_cstr(&cgen->sb, ";\n");
-                }
             }
             break;
         }
 
         case AST_NODE_TYPE_EXPRESSION_BLOCK: {
-            ASSERT(requires_tmp, "must require a tmp");
-
-            if (has_var(var)) {
-                cgen_add_indent(cgen);
-            }
+            ASSERT(cannot_inline, "must require a tmp");
 
             if (no_var(var) || !var.is_new) {
                 sb_add_cstr(&cgen->sb, "{\n");
@@ -480,15 +439,16 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
                     }
 
                     case AST_NODE_TYPE_DECLARATION_STATEMENT: {
-                        if (no_var(var) && !an_expression(last_declaration)->requires_tmp_for_cgen) {
+                        // if (no_var(var) && !an_expression(last_declaration)->requires_tmp_for_cgen) {
                             cgen_add_indent(cgen);
-                        }
+                        // }
 
                         cgen_expression(cgen, an_expression(last_declaration), cgen_var_not_new(var));
+                        cgen_semicolon_nl(cgen);
 
-                        if (no_var(var)) {
-                            sb_add_cstr(&cgen->sb, ";\n");
-                        }
+                        // if (no_var(var)) {
+                        //     sb_add_cstr(&cgen->sb, ";\n");
+                        // }
                         break;
                     }
 
@@ -498,20 +458,18 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
 
             cgen_unindent(cgen);
             cgen_add_indent(cgen);
-            sb_add_format(&cgen->sb, "}\n");
+            sb_add_format(&cgen->sb, "}");
             break;
         }
 
         case AST_NODE_TYPE_EXPRESSION_BRANCHING: {
-            ASSERT(requires_tmp, "branches always require a tmp");
+            ASSERT(cannot_inline, "branches always require a tmp");
 
             bool skip_else = an_else(expression)->node_type == AST_NODE_TYPE_EXPRESSION_NIL;
 
             if (no_var(var)) {
                 sb_add_cstr(&cgen->sb, "{\n");
             } else {
-                cgen_add_indent(cgen);
-
                 if (!skip_else) {
                     if (var.is_new) {
                         sb_add_format(&cgen->sb, "%s; {\n", cgen_var(cgen, var));
@@ -531,8 +489,10 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
 #define branch_cstr (expression->looping ? (expression->condition_negated ? "until" : "while") : (expression->condition_negated ? "unless" : "if"))
 
             if (an_condition(expression)->requires_tmp_for_cgen) {
+                cgen_add_indent(cgen);
                 cgen_var_t condition_id = cgen_next_tmpid(cgen, an_condition(expression)->value_type);
                 cgen_expression(cgen, an_condition(expression), condition_id);
+                cgen_semicolon_nl(cgen);
 
                 cgen_add_indent(cgen);
                 sb_add_format(&cgen->sb, "%s (%s) {\n", branch_cstr, cgen_var_name(cgen, condition_id));
@@ -549,10 +509,9 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
             cgen_indent(cgen);
 
             if (an_then(expression)->requires_tmp_for_cgen) {
-                if (no_var(var)) {
-                    cgen_add_indent(cgen);
-                }
+                cgen_add_indent(cgen);
                 cgen_expression(cgen, an_then(expression), cgen_var_not_new(var));
+                cgen_semicolon_nl(cgen);
             } else {
                 cgen_add_indent(cgen);
 
@@ -561,7 +520,8 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
                 }
 
                 cgen_expression(cgen, an_then(expression), nil_tmp_var);
-                sb_add_cstr(&cgen->sb, ";\n");
+
+                cgen_semicolon_nl(cgen);
             }
 
             cgen_unindent(cgen);
@@ -571,7 +531,13 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
                     cgen_add_indent(cgen);
                     sb_add_cstr(&cgen->sb, "}\n");
 
+                    cgen_add_indent(cgen);
                     cgen_expression(cgen, an_else(expression), cgen_var_not_new(var));
+                    cgen_semicolon_nl(cgen);
+
+                } else {
+                    cgen_add_indent(cgen);
+                    sb_add_cstr(&cgen->sb, "}\n");
                 }
             } else {
                 if (!skip_else) {
@@ -581,10 +547,9 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
                     cgen_indent(cgen);
 
                     if (an_else(expression)->requires_tmp_for_cgen) {
-                        if (no_var(var)) {
-                            cgen_add_indent(cgen);
-                        }
+                        cgen_add_indent(cgen);
                         cgen_expression(cgen, an_else(expression), cgen_var_not_new(var));
+                        cgen_semicolon_nl(cgen);
                     } else {
                         cgen_add_indent(cgen);
 
@@ -593,7 +558,7 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
                         }
 
                         cgen_expression(cgen, an_else(expression), nil_tmp_var);
-                        sb_add_cstr(&cgen->sb, ";\n");
+                        cgen_semicolon_nl(cgen);
                     }
 
                     cgen_unindent(cgen);
@@ -605,15 +570,14 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
 
             cgen_unindent(cgen);
             cgen_add_indent(cgen);
-            sb_add_cstr(&cgen->sb, "}\n");
+            sb_add_cstr(&cgen->sb, "}");
             break;
         }
 
         case AST_NODE_TYPE_EXPRESSION_DEF_VALUE: {
-            ASSERT(!requires_tmp, "this should always be placable, like primaries");
+            ASSERT(!cannot_inline, "this should always be placable, like primaries");
 
             if (has_var(var)) {
-                cgen_add_indent(cgen);
                 sb_add_format(&cgen->sb, "%s = ", cgen_var(cgen, var));
             }
 
@@ -644,7 +608,9 @@ string_t compile_expr_to_c(ast_t *ast, arena_t *arena) {
 
     cgen_var_t var = cgen_user_var(&cgen, lit2sv("result"), expr_node->value_type);
     cgen_expression(&cgen, expr_node, var);
+    cgen_semicolon_nl(&cgen);
 
+    sb_add_cstr(&cgen.sb, "\n");
     cgen_add_indent(&cgen);
     sb_add_format(&cgen.sb, "return %s;\n", cgen_var_name(&cgen, var));
 

@@ -7,4 +7,17 @@
         sum = sum + x;
         x = {x;} + 1;
     } else sum;
+
+    count := 10;
+    while (count = count - 1) > 0 do sum = sum + 1;
+
+    count = 10;
+    a := while (count = count - 1) > 0 do sum = sum + 1;
+
+    if a == 0 then sum = sum - 65 else sum = sum + 1;
+
+    b := while sum > 0 do sum = sum - 1 else sum = sum + 1;
+
+    b;
+    //if b == 1 then 1 else 0;
 }
