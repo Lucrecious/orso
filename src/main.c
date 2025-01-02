@@ -64,12 +64,15 @@ string_view_t get_line(string_view_t source, string_view_t somewhere_in_source) 
     return view;
 }
 
-void myerror(error_t error) {
+void myerror(ast_t *ast, error_t error) {
+    UNUSED(ast);
+
     size_t line = error.token.location.line + 1;
     size_t column = error.token.location.column + 1;
     // cstr_t file = error.first.file_path.cstr;
 
     string_view_t source_line = get_line(error.token.source, error.token.view);
+
 
     fprintf(stderr, "%s:%lu:%lu: %s\n", "todo", line, column, error.message);
     fprintf(stderr, "%.*s\n", (int)source_line.length, source_line.data);
@@ -213,7 +216,7 @@ void test_expr_file(string_t expr_file, arena_t *arena) {
         
         function_t *expr_function = new_function(lit2str("<none>"), memory, arena);
 
-        compile_expr_to_function(expr_function, &ast);
+        compile_expr_to_function(expr_function, &ast, myerror);
 
         vm_t vm = {0};
         vm_init(&vm);

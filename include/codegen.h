@@ -8,7 +8,7 @@
 
 bool compile_program(vm_t *vm, ast_t *ast);
 
-bool compile_expr_to_function(function_t *function, ast_t *expr_ast);
+bool compile_expr_to_function(function_t *function, ast_t *expr_ast, error_function_t error_fn);
 
 #endif
 
@@ -309,7 +309,7 @@ static void gen_folded_value(gen_t *gen, function_t *function, ast_node_t *expre
     // this ensures the data is always indexable
     if (function->memory->count+type_info->size >= function->memory->capacity) {
         if (gen->error_fn) {
-            gen->error_fn(make_error_node(ERROR_CODEGEN_MEMORY_SIZE_TOO_BIG, expression));
+            gen->error_fn(gen->ast, make_error_node(ERROR_CODEGEN_MEMORY_SIZE_TOO_BIG, expression));
             return;
         }
     }
@@ -580,10 +580,6 @@ static void gen_return(gen_t *gen, text_location_t location, function_t *functio
     emit_return(location, function);
 }
 
-static void error_fn(error_t error) {
-    UNUSED(error);
-}
-
 static gen_t make_gen(ast_t *ast, error_function_t error_fn, arena_t *arena) {
     gen_t gen = {0};
     gen.ast = ast;
@@ -593,7 +589,7 @@ static gen_t make_gen(ast_t *ast, error_function_t error_fn, arena_t *arena) {
     return gen;
 }
 
-bool compile_expr_to_function(function_t *function, ast_t *ast) {
+bool compile_expr_to_function(function_t *function, ast_t *ast, error_function_t error_fn) {
     arena_t arena = {0};
 
     gen_t gen = make_gen(ast, error_fn, &arena);

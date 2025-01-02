@@ -109,9 +109,10 @@ static cstr_t cgen_type_name(cgen_t *cgen, type_t type) {
             }
         }
 
-        case TYPE_BOOL: return "bool";
+        case TYPE_BOOL: return "bool_";
 
-        case TYPE_VOID:
+        case TYPE_VOID: return "void";
+
         case TYPE_STRING:
         case TYPE_TYPE:
         case TYPE_FUNCTION:

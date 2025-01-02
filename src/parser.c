@@ -280,7 +280,9 @@ static void parser_init(parser_t *parser, ast_t *ast, string_t file_path, string
 }
 
 static void parser_error(parser_t *parser, error_t error) {
-    if (parser->error_fn) parser->error_fn(error);
+    parser->had_error = true;
+    parser->panic_mode = true;
+    if (parser->error_fn) parser->error_fn(parser->ast, error);
 }
 
 static void advance(parser_t *parser) {
@@ -520,10 +522,15 @@ static void parse_block_(parser_t *parser, ast_node_t *block) {
 static ast_node_t *parse_block(parser_t *parser, bool inside_type_context) {
     (void)inside_type_context;
 
-    ast_node_t* expression_node = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_BLOCK, inside_type_context, parser->previous);
+    ast_node_t *expression_node = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_BLOCK, inside_type_context, parser->previous);
 
     parse_block_(parser, expression_node);
     expression_node->end = parser->previous;
+
+    if (expression_node->children.count == 0) {
+        expression_node->node_type = AST_NODE_TYPE_EXPRESSION_NIL;
+        expression_node->value_type = typeid(TYPE_VOID);
+    }
 
     return expression_node;
 }

@@ -87,7 +87,8 @@ static definition_t *add_builtin_definition(ast_t *ast, string_view_t identifier
 // }
 
 static void stan_error(analyzer_t *analyzer, error_t error) {
-    if (analyzer->error_fn) analyzer->error_fn(error);
+    analyzer->had_error = true;
+    if (analyzer->error_fn) analyzer->error_fn(analyzer->ast, error);
 }
 
 static type_t resolve_unary_type(ast_t* ast, token_type_t operator, type_t operand_id) {
@@ -123,7 +124,7 @@ static type_t resolve_unary_type(ast_t* ast, token_type_t operator, type_t opera
 }
 
 static ast_node_t *implicit_cast(ast_t *ast, ast_node_t *operand, type_t value_type) {
-    ast_node_t* implicit_cast = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT, operand->inside_type_context, operand->start);
+    ast_node_t *implicit_cast = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT, operand->inside_type_context, operand->start);
     implicit_cast->end = operand->end;
 
     implicit_cast->value_type = value_type;
@@ -697,28 +698,28 @@ static void resolve_declarations(
         i32 count);
 
 static void resolve_declaration(
-        analyzer_t* analyzer,
-        ast_t* ast,
+        analyzer_t *analyzer,
+        ast_t *ast,
         analysis_state_t state,
-        ast_node_t* declaration_node);
+        ast_node_t *declaration_node);
 
 static void resolve_declaration_statement(
-    analyzer_t* analyzer,
-    ast_t* ast,
+    analyzer_t *analyzer,
+    ast_t *ast,
     analysis_state_t state,
-    ast_node_t* statement);
+    ast_node_t *statement);
 
 static void resolve_function_expression(
-        analyzer_t* analyzer,
-        ast_t* ast,
+        analyzer_t *analyzer,
+        ast_t *ast,
         analysis_state_t state,
-        ast_node_t* function_definition_expression);
+        ast_node_t *function_definition_expression);
 
 static void resolve_struct_definition(
-    analyzer_t* analyzer,
-    ast_t* ast,
+    analyzer_t *analyzer,
+    ast_t *ast,
     analysis_state_t state,
-    ast_node_t* struct_definition);
+    ast_node_t *struct_definition);
 
 static void declare_definition(analyzer_t *analyzer, scope_t *scope, ast_node_t *definition);
 
@@ -1161,10 +1162,11 @@ void resolve_expression(
         }
 
         case AST_NODE_TYPE_EXPRESSION_BLOCK: {
+            i32 declarations_count = expression->children.count;
+
             scope_t block_scope;
             scope_init(&block_scope, &analyzer->allocator, SCOPE_TYPE_BLOCK, state.scope, expression);
 
-            i32 declarations_count = expression->children.count;
             forward_scan_declaration_names(analyzer, &block_scope, expression->children, declarations_count);
 
             analysis_state_t block_state = state;
@@ -1244,6 +1246,11 @@ void resolve_expression(
             if (TYPE_IS_VOID(an_else(expression)->value_type) && an_else(expression)->node_type == AST_NODE_TYPE_EXPRESSION_NIL &&
                 !TYPE_IS_UNDEFINED(an_then(expression)->value_type)) {
                 an_else(expression) = ast_create_implicit_nil_node(ast, an_then(expression)->value_type);
+            }
+
+            if (TYPE_IS_VOID(an_then(expression)->value_type) && an_then(expression)->node_type == AST_NODE_TYPE_EXPRESSION_NIL &&
+                !TYPE_IS_UNDEFINED(an_else(expression)->value_type)) {
+                an_then(expression) = ast_create_implicit_nil_node(ast, an_else(expression)->value_type);
             }
 
             return_guarentee_t branch_return_guarentee;
@@ -1389,7 +1396,7 @@ static void declare_definition(analyzer_t *analyzer, scope_t *scope, ast_node_t 
     allocator_return(tmp);
 }
 
-static void resolve_declaration_definition(analyzer_t* analyzer, ast_t* ast, analysis_state_t state, ast_node_t* declaration) {
+static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, analysis_state_t state, ast_node_t *declaration) {
 // due to the way structs are resolved, it is possible for the initial value expression to be swapped out with another
 // this is simply a safer way of accessing the initial value expression
 
@@ -1508,6 +1515,11 @@ static void resolve_declaration_definition(analyzer_t* analyzer, ast_t* ast, ana
             stan_error(analyzer, make_error_node(ERROR_ANALYSIS_EXPECTED_RESOLVED, an_decl_expr(declaration)));
         }
         
+        INVALIDATE(declaration);
+    }
+
+    if (TYPE_IS_VOID(an_decl_expr(declaration)->value_type)) {
+        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CANNOT_STORE_VOID_EXPRESSIONS, declaration));
         INVALIDATE(declaration);
     }
 
