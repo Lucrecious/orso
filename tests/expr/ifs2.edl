@@ -1,6 +1,6 @@
 {
     sum := 0;
-    
+
     check := 0;
 
     if sum == 0 {
@@ -26,15 +26,40 @@
 
     if check == 42 then
         sum = sum + 1;
+    
+    check = if check == 0 {
+        break 10;
+    } else {
+        100;
+    };
 
-    //check = 1;
-    //if check == 1 {
-    //    check = 0;
-    //    continue;
-    //} else if check == 0 then
-    //    check = 1;
+    if check == 100 then
+        sum = sum + 1;
 
-    //if check == 1 then sum = sum + 1;
+    check = if check == 100 then
+        break 69;
 
-    //sum;
+    if check == 69 then
+        sum = sum + 1;
+
+    check = if check == 69 then
+        break 420
+    else 
+        421;
+
+    if check == 420 then
+        sum = sum + 1;
+    
+    check = 1;
+    if check == 1 {
+        check = 0;
+        continue;
+        check = 2;
+    } else if check == 0 then
+        check = 10;
+
+    if check == 10 then
+        sum = sum + 1;
+
+    sum;
 }

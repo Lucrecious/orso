@@ -1358,9 +1358,14 @@ void resolve_expression(
                 case TOKEN_CONTINUE:
                 case TOKEN_BREAK: {
                     scope_t *scope = get_nearest_scope_in_func_or_null(state.scope, SCOPE_TYPE_RETURN_BRANCH);
-                    expression->jmp_out_scope_node = scope->creator;
-                    array_push(&scope->creator->jmp_nodes, expression);
-                    ASSERT(scope->creator->node_type == AST_NODE_TYPE_EXPRESSION_BRANCHING, "only supports branches rn");
+                    unless (scope) {
+                        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_SCOPE_FOR_JMP, expression));
+                        INVALIDATE(expression);
+                    } else {
+                        expression->jmp_out_scope_node = scope->creator;
+                        array_push(&scope->creator->jmp_nodes, expression);
+                        ASSERT(scope->creator->node_type == AST_NODE_TYPE_EXPRESSION_BRANCHING, "only supports branches rn");
+                    }
                     break;
                 }
 
