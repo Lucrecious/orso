@@ -43,12 +43,17 @@ enum reg_t {
     REG_NULL = 0,
     REG_RESULT = 1, // 256 bytes for memory on stack
 
-    REG_OPERAND2 = 33,
+    REG_TMP = 33,
     REG_STACK_BOTTOM = 34,
     REG_STACK_FRAME = 35,
 };
 
 declare_table(str2cf, string_t, call_frame_t)
+
+static void gen_error(gen_t *gen, error_t error) {
+    gen->had_error = true;
+    if (gen->error_fn) gen->error_fn(gen->ast, error);
+}
 
 static void emit_instruction(function_t *function, text_location_t location, instruction_t instruction) {
     array_push(&function->code, instruction);
@@ -265,6 +270,15 @@ static void emit_return(text_location_t text_location, function_t *function) {
     emit_instruction(function, text_location, instruction);
 }
 
+static void emit_mov_reg_to_reg(function_t *function, text_location_t location, byte reg_dest, byte reg_src) {
+    instruction_t in = {0};
+    in.op = OP_MOV_REG_TO_REG;
+    in.as.mov_reg_to_reg.reg_destination = reg_dest;
+    in.as.mov_reg_to_reg.reg_source = reg_src;
+
+    emit_instruction(function, location, in);
+}
+
 static void gen_expression(gen_t *gen, function_t *function, ast_node_t *expression);
 
 static void gen_binary(gen_t *gen, function_t *function, ast_node_t *binary) {
@@ -276,11 +290,11 @@ static void gen_binary(gen_t *gen, function_t *function, ast_node_t *binary) {
     ast_node_t *rhs = an_rhs(binary);
     gen_expression(gen, function, rhs);
 
-    emit_pop_to_wordreg(gen, token_end_location(&rhs->end), function, REG_OPERAND2);
+    emit_pop_to_wordreg(gen, token_end_location(&rhs->end), function, REG_TMP);
 
     type_info_t *expr_type_info = get_type_info(&gen->ast->type_set.types, an_lhs(binary)->value_type);
 
-    emit_binary(token_end_location(&binary->end), function, binary->operator.type, expr_type_info, REG_OPERAND2, REG_RESULT, REG_RESULT);
+    emit_binary(token_end_location(&binary->end), function, binary->operator.type, expr_type_info, REG_TMP, REG_RESULT, REG_RESULT);
 }
 
 static value_index_t add_constant(function_t *function, void *data, size_t size) {
@@ -313,10 +327,7 @@ static void gen_folded_value(gen_t *gen, function_t *function, ast_node_t *expre
 
     // this ensures the data is always indexable
     if (function->memory->count+type_info->size >= function->memory->capacity) {
-        if (gen->error_fn) {
-            gen->error_fn(gen->ast, make_error_node(ERROR_CODEGEN_MEMORY_SIZE_TOO_BIG, expression));
-            return;
-        }
+        gen_error(gen, make_error_node(ERROR_CODEGEN_MEMORY_SIZE_TOO_BIG, expression));
     }
 
     void *data = memarr_get_ptr(&gen->ast->constants, expression->value_index);
@@ -462,38 +473,81 @@ static size_t gen_jmp(function_t *function, text_location_t location) {
     return index;
 }
 
-static void gen_loop(function_t *function, text_location_t location, u32 loop_index) {
+static void gen_loop(gen_t *gen, function_t *function, text_location_t location, u32 loop_index) {
+    size_t amount = function->code.count - loop_index;
+    if (amount > UINT32_MAX) {
+        gen_error(gen, make_error(ERROR_CODEGEN_JMP_TOO_LARGE));
+        return;
+    }
     instruction_t in = {0};
     in.op = OP_LOOP;
-    in.as.jmp.amount = function->code.count - loop_index;
+    in.as.jmp.amount = (u32)amount;
     emit_instruction(function, location, in);
 }
 
-static void gen_patch_jmp(function_t *function, u32 index) {
+static void gen_patch_jmp(gen_t *gen, function_t *function, size_t index) {
+    size_t amount = function->code.count - index;
+    if (amount > UINT32_MAX) {
+        gen_error(gen, make_error(ERROR_CODEGEN_JMP_TOO_LARGE));
+        return;
+    }
+
     instruction_t *instruction = &function->code.items[index];
-    instruction->as.jmp.amount = function->code.count - index;
+    instruction->as.jmp.amount = (u32)amount;
 }
 
 static void gen_branching(gen_t *gen, function_t *function, ast_node_t *branch) {
     size_t loop_index = function->code.count;
 
+    emit_push_wordreg(gen, branch->start.location, function, REG_RESULT);
+
     gen_expression(gen, function, an_condition(branch));
 
-    size_t then_index = gen_jmp_if_reg(function, token_end_location(&an_then(branch)->end), REG_RESULT, branch->condition_negated ? true : false);
+    emit_mov_reg_to_reg(function, token_end_location(&an_condition(branch)->end), REG_TMP, REG_RESULT);
+
+    emit_pop_to_wordreg(gen, token_end_location(&an_condition(branch)->end), function, REG_RESULT);
+
+    size_t then_index = gen_jmp_if_reg(function, token_end_location(&an_then(branch)->end), REG_TMP, branch->condition_negated ? true : false);
 
     gen_expression(gen, function, an_then(branch));
 
+    ast_node_t *then = an_then(branch);
     if (branch->looping) {
-        gen_loop(function, token_end_location(&an_then(branch)->end), loop_index);
+        // todo
+        UNREACHABLE();
+        // for (size_t i = 0; i < then->continues_to_patch.count; ++i) {
+        //     gen_patch_jmp(gen, function, loop_index);
+        // }
+    } else {
+        for (size_t i = 0; i < then->breaks_to_patch.count; ++i) {
+            size_t break_index = then->breaks_to_patch.items[i];
+            gen_patch_jmp(gen, function, break_index);
+        }
+    }
+
+    if (branch->looping) {
+        gen_loop(gen, function, token_end_location(&an_then(branch)->end), loop_index);
     }
 
     size_t else_index = gen_jmp(function, token_end_location(&an_then(branch)->end));
 
-    gen_patch_jmp(function, then_index);
+    gen_patch_jmp(gen, function, then_index);
+
+    if (!branch->looping) {
+        for (size_t i = 0; i < then->continues_to_patch.count; ++i) {
+            size_t continue_index = then->continues_to_patch.items[i];
+            gen_patch_jmp(gen, function, continue_index);
+        }
+    }
 
     gen_expression(gen, function, an_else(branch));
 
-    gen_patch_jmp(function, else_index);
+    gen_patch_jmp(gen, function, else_index);
+
+    if (branch->looping) {
+        // todo
+        UNREACHABLE();
+    }
 }
 static void gen_assignment(gen_t *gen, function_t *function, ast_node_t *assignment) {
     gen_expression(gen, function, an_rhs(assignment));
@@ -507,7 +561,7 @@ static void gen_assignment(gen_t *gen, function_t *function, ast_node_t *assignm
         in.op = OP_SUBU_REG_IM32;
         in.as.binu_reg_immediate.immediate = local->stack_location;
         in.as.binu_reg_immediate.reg_operand = REG_STACK_FRAME;
-        in.as.binu_reg_immediate.reg_result = REG_OPERAND2;
+        in.as.binu_reg_immediate.reg_result = REG_TMP;
 
         emit_instruction(function, assignment->end.location, in);
     }
@@ -515,7 +569,7 @@ static void gen_assignment(gen_t *gen, function_t *function, ast_node_t *assignm
     {
         in.op = OP_MOVWORD_REG_TO_REGMEM;
         in.as.mov_reg_to_regmem.reg_source = REG_RESULT;
-        in.as.mov_reg_to_regmem.regmem_destination = REG_OPERAND2;
+        in.as.mov_reg_to_regmem.regmem_destination = REG_TMP;
 
         emit_instruction(function, token_end_location(&assignment->end), in);
     }

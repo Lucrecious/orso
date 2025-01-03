@@ -700,6 +700,59 @@ static scope_t *get_nearest_scope_in_func_or_null(scope_t *scope, scope_type_t t
 
     return NULL;
 }
+type_t resolve_block_return_types(ast_node_t *block) {
+    switch (block->node_type) {
+        case AST_NODE_TYPE_EXPRESSION_BRANCHING: {
+            ast_node_t *then = an_then(block);
+            ast_node_t *else_ = an_else(block);
+
+            tmp_arena_t *tmp = allocator_borrow();
+            types_t types = {.allocator=tmp->allocator};
+
+            unless (TYPE_IS_UNREACHABLE(then->value_type)) {
+                array_push(&types, then->value_type);
+            }
+
+            unless (TYPE_IS_UNREACHABLE(else_->value_type)) {
+                array_push(&types, else_->value_type);
+            }
+
+            for (size_t i = 0; i < block->jmp_nodes.count; ++i) {
+                ast_node_t *jmp_node_expr = an_expression(block->jmp_nodes.items[i]);
+                unless (TYPE_IS_UNREACHABLE(jmp_node_expr->value_type)) {
+                    array_push(&types, jmp_node_expr->value_type);
+                }
+            }
+
+            types_t sans_void = {.allocator=tmp->allocator};
+            for (size_t i = 0; i < types.count; ++i) {
+                type_t t = types.items[i];
+                unless (TYPE_IS_VOID(t)) array_push(&sans_void, t);
+            }
+
+            type_t type = (sans_void.count != types.count) ? typeid(TYPE_VOID) : typeid(TYPE_UNREACHABLE);
+            if (sans_void.count > 0) {
+                type = sans_void.items[0];
+            }
+
+            for (size_t i = 1; i < sans_void.count; ++i) {
+                unless (typeid_eq(sans_void.items[i], type)) {
+                    type = typeid(TYPE_INVALID);
+                    break;
+                }
+            }
+
+            allocator_return(tmp);
+
+            return type;
+            break;
+        }
+
+        default: UNREACHABLE();
+    }
+
+    return typeid(TYPE_INVALID);
+}
 
 static void resolve_declarations(
         analyzer_t *analyzer,
@@ -1185,17 +1238,17 @@ void resolve_expression(
             block_state.mode = MODE_RUNTIME | (state.mode & MODE_FOLDING_TIME);
             resolve_declarations(analyzer, ast, block_state, expression->children, declarations_count);
 
-            return_guarentee_t block_return_guarentee = JMP_GUARENTEE_NONE;
+            return_guarentee_t block_return_guarentee = NO_JMP_IS_GUARENTEED;
             for (i32 i = 0; i < declarations_count; i++) {
                 ast_node_t *declaration = expression->children.items[i];
-                if (declaration->return_guarentee != JMP_GUARENTEE_NONE) {
+                if (declaration->return_guarentee != NO_JMP_IS_GUARENTEED) {
                     block_return_guarentee = declaration->return_guarentee;
                 }
 
-                if (block_return_guarentee == JMP_GUARENTEE_YES) break;
+                if (block_return_guarentee == JMP_IS_GUARENTEED) break;
             }
 
-            if (block_return_guarentee != JMP_GUARENTEE_NONE) {
+            if (block_return_guarentee != NO_JMP_IS_GUARENTEED) {
                 expression->return_guarentee = block_return_guarentee;
                 expression->value_type = typeid(TYPE_UNREACHABLE);
             } else {
@@ -1219,72 +1272,73 @@ void resolve_expression(
         }
 
         case AST_NODE_TYPE_EXPRESSION_BRANCHING: {
-            scope_t branch_scope;
-            scope_init(&branch_scope, &analyzer->allocator, SCOPE_TYPE_BRANCH, state.scope, expression);
+            resolve_expression(analyzer, ast, state, an_condition(expression));
 
-            analysis_state_t branch_state = state;
-            branch_state.scope = &branch_scope;
-            branch_state.mode = MODE_RUNTIME | (state.mode & MODE_FOLDING_TIME);
+            scope_t return_scope = {0};
+            scope_init(&return_scope, &analyzer->allocator, SCOPE_TYPE_RETURN_BRANCH, state.scope, expression);
 
-            resolve_expression(analyzer, ast, branch_state, an_condition(expression));
+            analysis_state_t return_state = state;
+            return_state.scope = &return_scope;
+            return_state.mode = MODE_RUNTIME | (state.mode & MODE_FOLDING_TIME);
 
-            resolve_expression(analyzer, ast, branch_state, an_then(expression));
+            resolve_expression(analyzer, ast, return_state, an_then(expression));
 
-            resolve_expression(analyzer, ast, branch_state, an_else(expression));
-
-            if (TYPE_IS_VOID(an_else(expression)->value_type) && an_else(expression)->node_type == AST_NODE_TYPE_EXPRESSION_NIL &&
-                !TYPE_IS_UNDEFINED(an_then(expression)->value_type)) {
-                an_else(expression) = ast_create_implicit_nil_node(ast, an_then(expression)->value_type);
-            }
-
-            if (TYPE_IS_VOID(an_then(expression)->value_type) && an_then(expression)->node_type == AST_NODE_TYPE_EXPRESSION_NIL &&
-                !TYPE_IS_UNDEFINED(an_else(expression)->value_type)) {
-                an_then(expression) = ast_create_implicit_nil_node(ast, an_else(expression)->value_type);
-            }
+            resolve_expression(analyzer, ast, state, an_else(expression));
 
             return_guarentee_t branch_return_guarentee;
             // resolve return guarentee first
             {
                 return_guarentee_t then_return_guarentee = an_then(expression)->return_guarentee;
 
-                return_guarentee_t else_return_guarentee = JMP_GUARENTEE_NONE;
-                if (an_is_notnone(an_else(expression))) {
-                    else_return_guarentee = an_else(expression)->return_guarentee;
-                }
+                return_guarentee_t else_return_guarentee = an_else(expression)->return_guarentee;
 
-                if (then_return_guarentee == JMP_GUARENTEE_YES && else_return_guarentee == JMP_GUARENTEE_YES) {
-                    branch_return_guarentee = JMP_GUARENTEE_YES;
-                } else if (then_return_guarentee == JMP_GUARENTEE_NONE && else_return_guarentee == JMP_GUARENTEE_NONE) {
-                    branch_return_guarentee = JMP_GUARENTEE_NONE;
+                if (then_return_guarentee == JMP_IS_GUARENTEED && else_return_guarentee == JMP_IS_GUARENTEED) {
+                    branch_return_guarentee = JMP_IS_GUARENTEED;
+                } else if (then_return_guarentee == NO_JMP_IS_GUARENTEED && else_return_guarentee == NO_JMP_IS_GUARENTEED) {
+                    branch_return_guarentee = NO_JMP_IS_GUARENTEED;
                 } else {
-                    branch_return_guarentee = JMP_GUARENTEE_MAYBE;
+                    branch_return_guarentee = JMP_POSSIBLE;
                 }
             }
 
-            if (TYPE_IS_INVALID(an_then(expression)->value_type) ||
-                    (an_is_notnone(an_else(expression)) && TYPE_IS_INVALID(an_else(expression)->value_type))) {
+            type_t branch_type = resolve_block_return_types(expression);
+            expression->value_type = branch_type;
+
+            if (!TYPE_IS_UNREACHABLE(branch_type)) {
+                if (TYPE_IS_VOID(an_then(expression)->value_type) && an_then(expression)->node_type == AST_NODE_TYPE_EXPRESSION_NIL) {
+                    an_then(expression) = ast_create_implicit_nil_node(ast, branch_type);
+                }
+
+                if (TYPE_IS_VOID(an_else(expression)->value_type) && an_else(expression)->node_type == AST_NODE_TYPE_EXPRESSION_NIL) {
+                    an_else(expression) = ast_create_implicit_nil_node(ast, branch_type);
+                }
+            }
+
+            if (TYPE_IS_INVALID(branch_type)) {
+                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_BLOCK_RETURNS_MISMATCH, expression));
                 INVALIDATE(expression);
-                break;
             }
 
-            if (branch_return_guarentee == JMP_GUARENTEE_NONE) {
-                if (!typeid_eq(an_then(expression)->value_type, an_else(expression)->value_type)) {
-                    stan_error(analyzer, make_type_mismatch_error(an_then(expression), an_else(expression)));
-                    INVALIDATE(expression);
-                } else {
-                    expression->value_type = an_then(expression)->value_type;
-                }
-            } else {
-                expression->return_guarentee = branch_return_guarentee;
-                expression->value_type = typeid(TYPE_UNREACHABLE);
+            if (TYPE_IS_INVALID(an_then(expression)->value_type) || TYPE_IS_INVALID(an_else(expression)->value_type)) {
+                INVALIDATE(expression);
             }
+
+            if (an_condition(expression)->return_guarentee != NO_JMP_IS_GUARENTEED) {
+                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CANNOT_JMP_IN_CONDITION, an_condition(expression)));
+                INVALIDATE(expression);
+            }
+
+            unless (typeid_eq(an_condition(expression)->value_type, typeid(TYPE_BOOL))) {
+                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CONDITION_MUST_BE_BOOL, an_condition(expression)));
+                INVALIDATE(expression);
+            }
+
+            expression->return_guarentee = branch_return_guarentee;
             break;
         }
 
         case AST_NODE_TYPE_EXPRESSION_JMP: {
-            if (an_expression(expression)) {
-                resolve_expression(analyzer, ast, state, an_expression(expression));
-            }
+            resolve_expression(analyzer, ast, state, an_expression(expression));
 
             switch (expression->identifier.type) {
                 case TOKEN_RETURN: {
@@ -1303,15 +1357,10 @@ void resolve_expression(
                 }
                 case TOKEN_CONTINUE:
                 case TOKEN_BREAK: {
-                    if (!TYPE_IS_LABEL(an_expression(expression)->value_type) && !TYPE_IS_VOID(an_expression(expression)->value_type)) {
-                        printf("todo: another case where i need to put in the right nodes here... the expected should be the expression of the do label\n");
-                        stan_error(analyzer, make_type_mismatch_error(an_expression(expression), an_expression(expression)));
-                    } else {
-                        ASSERT(TYPE_IS_VOID(an_expression(expression)->value_type), "labels not supported yet");
-                        scope_t *scope = get_nearest_scope_in_func_or_null(state.scope, SCOPE_TYPE_BRANCH);
-                        expression->jmp_scope_node = scope->creator;
-                        ASSERT(scope->creator->node_type == AST_NODE_TYPE_EXPRESSION_BRANCHING, "only supports branches rn");
-                    }
+                    scope_t *scope = get_nearest_scope_in_func_or_null(state.scope, SCOPE_TYPE_RETURN_BRANCH);
+                    expression->jmp_out_scope_node = scope->creator;
+                    array_push(&scope->creator->jmp_nodes, expression);
+                    ASSERT(scope->creator->node_type == AST_NODE_TYPE_EXPRESSION_BRANCHING, "only supports branches rn");
                     break;
                 }
 
@@ -1319,8 +1368,9 @@ void resolve_expression(
             }
 
 
-            expression->return_guarentee = JMP_GUARENTEE_YES;
+            expression->return_guarentee = JMP_IS_GUARENTEED;
             expression->value_type = typeid(TYPE_UNREACHABLE);
+            break;
         }
 
         case AST_NODE_TYPE_EXPRESSION_CALL: {
@@ -1451,7 +1501,7 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
             switch (state.scope->type) {
                 case SCOPE_TYPE_FUNCTION_BODY:
                 case SCOPE_TYPE_BLOCK:
-                case SCOPE_TYPE_BRANCH:
+                case SCOPE_TYPE_RETURN_BRANCH:
                 case SCOPE_TYPE_MODULE: {
                     folding_mode_t mode = declaration->is_mutable ? MODE_RUNTIME : MODE_CONSTANT_TIME;
                     mode = mode | (state.mode & MODE_FOLDING_TIME);
@@ -2021,7 +2071,7 @@ static void resolve_function_expression(
         pop_dependency(analyzer);
     }
 
-    if (!TYPE_IS_VOID(return_type) && definition->block->return_guarentee != JMP_GUARENTEE_YES) {
+    if (!TYPE_IS_VOID(return_type) && definition->block->return_guarentee != JMP_IS_GUARENTEED) {
         stan_error(analyzer, make_error_node(ERROR_ANALYSIS_FUNCTION_MUST_RETURN_ON_ALL_BRANCHES, function_definition_expression));
     }
 }
@@ -2299,6 +2349,7 @@ static void resolve_declaration_statement(
         ast_node_t *statement) {
     resolve_expression(analyzer, ast, state, an_expression(statement));
     statement->value_type = an_expression(statement)->value_type;
+    statement->return_guarentee = an_expression(statement)->return_guarentee;
 }
 
 static void resolve_declaration(

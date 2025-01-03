@@ -12,9 +12,9 @@
 #include "table.h"
 
 typedef enum return_guarentee_t {
-    JMP_GUARENTEE_NONE,
-    JMP_GUARENTEE_MAYBE,
-    JMP_GUARENTEE_YES,
+    NO_JMP_IS_GUARENTEED,
+    JMP_POSSIBLE,
+    JMP_IS_GUARENTEED,
 } return_guarentee_t;
 
 struct ast_node_t;
@@ -33,7 +33,7 @@ typedef enum scope_type_t {
     SCOPE_TYPE_MODULE                   = 1 << 0,
     SCOPE_TYPE_FUNCTION_PARAMETERS      = 1 << 1,
     SCOPE_TYPE_FUNCTION_BODY            = 1 << 2,
-    SCOPE_TYPE_BRANCH                   = 1 << 3,
+    SCOPE_TYPE_RETURN_BRANCH            = 1 << 3,
     SCOPE_TYPE_BLOCK                    = 1 << 4,
     SCOPE_TYPE_STRUCT                   = 1 << 5,
 } scope_type_t;
@@ -190,7 +190,21 @@ struct ast_node_t {
 
     token_t identifier;
 
-    ast_node_t *jmp_scope_node;
+    ast_node_t *jmp_out_scope_node;
+    ast_nodes_t jmp_nodes;
+    struct {
+        size_t *items;
+        size_t count;
+        size_t capacity;
+        arena_t *allocator;
+    } breaks_to_patch;
+
+    struct {
+        size_t *items;
+        size_t count;
+        size_t capacity;
+        arena_t *allocator;
+    } continues_to_patch;
 
     union {
         ast_call_t call;

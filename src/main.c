@@ -132,6 +132,7 @@ enum compiler_mode_type_t {
     COMPILER_MODE_TEST,
     COMPILER_MODE_TEST_GEN,
     COMPILER_MODE_DEBUG,
+    COMPILER_MODE_AST,
 };
 
 typedef struct compiler_mode_t compiler_mode_t;
@@ -152,6 +153,8 @@ compiler_mode_t get_compiler_mode_from_args(int argc, char **argv, arena_t *aren
             mode.type = COMPILER_MODE_TEST_GEN;
         } else if (cstr_eq(arg, "dbg")) {
             mode.type = COMPILER_MODE_DEBUG;
+        } else if (cstr_eq(arg, "ast")) {
+            mode.type = COMPILER_MODE_AST;
         } else {
             mode.file_or_dir = cstr2string(arg, arena);
         }
@@ -342,6 +345,16 @@ void debug_expr_file(string_t expr_file, arena_t *arena) {
 
 }
 
+void ast_expr_file(string_t expr_file, arena_t *arena) {
+    ast_t ast = {0};
+    unless (parse_expr_file(&ast, expr_file, arena)) {
+        nob_log(ERROR, "could not parse: %s", expr_file.cstr);
+        return;
+    }
+
+    ast_print(&ast, expr_file.cstr);
+}
+
 int main(int argc, char **argv) {
     arena_t arena = {0};
 
@@ -362,6 +375,11 @@ int main(int argc, char **argv) {
                 debug_expr_file(mode.file_or_dir, &arena);
                 break;
             }
+
+            case COMPILER_MODE_AST: {
+                ast_expr_file(mode.file_or_dir, &arena);
+                break;
+            }
         }
     } else {
         File_Paths paths = {0};
@@ -370,25 +388,30 @@ int main(int argc, char **argv) {
             return 1;
         }
 
-        arena_t test_arena = {0};
+        arena_t loop_arena = {0};
         for (size_t i = 0; i < paths.count; ++i) {
-            arena_reset(&test_arena);
+            arena_reset(&loop_arena);
 
-            string_t file = string_format("%s/%s", &test_arena, mode.file_or_dir.cstr, paths.items[i]);
+            string_t file = string_format("%s/%s", &loop_arena, mode.file_or_dir.cstr, paths.items[i]);
             if (sv_ends_with(string2sv(file), ".edl")) {
                 switch (mode.type) {
                     case COMPILER_MODE_TEST: {
-                        test_expr_file(file, &arena);
+                        test_expr_file(file, &loop_arena);
                         break;
                     }
 
                     case COMPILER_MODE_TEST_GEN: {
-                        test_gen_expr_file(file, &arena);
+                        test_gen_expr_file(file, &loop_arena);
                         break;
                     }
 
                     case COMPILER_MODE_DEBUG: {
-                        debug_expr_file(file, &arena);
+                        debug_expr_file(file, &loop_arena);
+                        break;
+                    }
+
+                    case COMPILER_MODE_AST: {
+                        ast_expr_file(mode.file_or_dir, &loop_arena);
                         break;
                     }
                 }

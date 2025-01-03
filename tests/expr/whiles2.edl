@@ -6,7 +6,7 @@
         if count == 5 then break;
     } else {
         count = 0;
-    }
+    };
 
     count;
 }

@@ -47,10 +47,17 @@ static string_t disassemble_instruction(instruction_t in, arena_t *allocator) {
                     (u32)in.as.mov_reg_to_regmem.reg_source,
                     (u32)in.as.mov_reg_to_regmem.regmem_destination);
         }
+
         case OP_MOVWORD_REGMEM_TO_REG: {
             return string_format("OP_MOVWORD_REGMEM_TO_REG(reg_source: %lu, regmem_destination: %lu)", allocator,
                     (u32)in.as.mov_regmem_to_reg.regmem_source,
                     (u32)in.as.mov_regmem_to_reg.reg_destination);
+        }
+
+        case OP_MOV_REG_TO_REG: {
+            return string_format("OP_MOV_REG_TO_REG(reg_source: %lu, reg_destination: %lu)", allocator,
+                    (u32)in.as.mov_reg_to_reg.reg_source,
+                    (u32)in.as.mov_reg_to_reg.reg_destination);
         }
 
         case OP_SUBU_REG_IM32: {

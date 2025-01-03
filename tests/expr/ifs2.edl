@@ -1,0 +1,27 @@
+{
+    sum := 0;
+
+    check := 0;
+
+    if sum == 0 {
+        check = 1;
+        break 1;
+
+        check = 0;
+    };
+
+    if check == 1 then sum = sum + 1;
+
+    check = (if sum == 0 then break 1);
+
+    //check = 1;
+    //if check == 1 {
+    //    check = 0;
+    //    continue;
+    //} else if check == 0 then
+    //    check = 1;
+
+    // if check == 1 then sum = sum + 1;
+
+    sum;
+}

@@ -16,6 +16,7 @@ enum op_code_t {
     OP_MOVU32_MEM_TO_REG,
     OP_MOVF32_MEM_TO_REG,
     OP_MOVWORD_MEM_TO_REG,
+    OP_MOV_REG_TO_REG,
 
     OP_MOVWORD_REG_TO_REGMEM,
     OP_MOVWORD_REGMEM_TO_REG,
@@ -107,6 +108,11 @@ struct instruction_t {
             byte regmem_source;
             byte reg_destination;
         } mov_regmem_to_reg;
+
+        struct {
+            byte reg_destination;
+            byte reg_source;
+        } mov_reg_to_reg;
     } as;
 };
 
@@ -285,6 +291,15 @@ void vm_step(vm_t *vm) {
             byte reg = in.as.mov_regmem_to_reg.reg_destination;
 
             memcpy(&vm->registers[reg], MEMORY->data + memaddr, sizeof(word_t));
+
+            IP_ADV(1);
+            break;
+        }
+
+        case OP_MOV_REG_TO_REG: {
+            byte reg_dest = in.as.mov_reg_to_reg.reg_destination;
+            byte reg_source = in.as.mov_reg_to_reg.reg_source;
+            vm->registers[reg_dest] = vm->registers[reg_source];
 
             IP_ADV(1);
             break;
