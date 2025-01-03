@@ -691,16 +691,17 @@ static scope_t *get_closest_outer_function_scope(type_infos_t *types, scope_t *s
 }
 
 
-static bool get_nearest_scope_in_func_or_error(analyzer_t *analyzer, ast_node_t *jmp_node, scope_t *scope, scope_type_t search_type, scope_t **found_scope) {
+static bool get_nearest_scope_in_func_or_error(
+        analyzer_t *analyzer, ast_node_t *jmp_node, scope_t *scope,
+        scope_type_t search_type, string_view_t label, scope_t **found_scope) {
     while (scope->outer) {
-        if (scope->type == search_type) {
+        if (scope->type == search_type && sv_eq(label, scope->creator->identifier.view)) {
             *found_scope = scope;
             return true;
         }
 
         if (scope->type == SCOPE_TYPE_FUNCTION_BODY) {
-            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_NO_VALID_JMP_BLOCK, jmp_node));
-            return false;
+            break;
         }
 
         if (scope->type == SCOPE_TYPE_CONDITION) {
@@ -711,6 +712,11 @@ static bool get_nearest_scope_in_func_or_error(analyzer_t *analyzer, ast_node_t 
         scope = scope->outer;
     }
 
+    if (label.length != 0) {
+        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CANNOT_FIND_JMP_LABEL, jmp_node));
+    } else {
+        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_NO_VALID_JMP_BLOCK, jmp_node));
+    }
     return false;
 }
 type_t resolve_block_return_types(ast_node_t *block) {
@@ -1353,7 +1359,7 @@ void resolve_expression(
                 case TOKEN_BREAK: {
 
                     scope_t *found_scope = NULL;
-                    bool success = get_nearest_scope_in_func_or_error(analyzer, expression, state.scope, SCOPE_TYPE_RETURN_BRANCH, &found_scope);
+                    bool success = get_nearest_scope_in_func_or_error(analyzer, expression, state.scope, SCOPE_TYPE_RETURN_BRANCH, expression->identifier.view, &found_scope);
                     unless (success) {
                         INVALIDATE(expression);
                     } else {

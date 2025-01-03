@@ -5,7 +5,8 @@
 
     do a = 1 then a = 2;
 
-    if a == 2 then sum = sum + 1;
+    if a == 2 then 
+        sum = sum + 1;
 
     do {
         a = 1;
@@ -13,7 +14,8 @@
         a = 2;
     };
 
-    if a == 2 then sum = sum + 1;
+    if a == 2 then
+        sum = sum + 1;
 
     do {
         a = 1;
@@ -22,7 +24,8 @@
         a = 2;
     };
 
-    if a == 1 then sum = sum + 1;
+    if a == 1 then
+        sum = sum + 1;
 
     do {
         a = 1;
@@ -33,7 +36,8 @@
         a = 3;
     };
 
-    if a == 3 then sum = sum + 1;
+    if a == 3 then
+        sum = sum + 1;
 
     do {
         a = 2;
@@ -46,7 +50,8 @@
         a = 4;
     };
 
-    if a == 4 then sum = sum + 1;
+    if a == 4 then
+        sum = sum + 1;
 
     do {
         a = 2;
@@ -63,13 +68,11 @@
     if a == 3 then
         sum = sum + 1;
 
-    do:outer if a == 3 {
-        while a > 0 {
-            if a == 3 then break:outer;
+    do:outer while a > 0 {
+        if a == 3 then break:outer;
 
-            a = a - 1;
-        };
-    };
+        a = a - 1;
+    } then a = 0;
 
     if a == 3 then
         sum = sum + 1;
@@ -85,7 +88,8 @@
         a = 4;
     };
 
-    if a == 4 then sum = sum + 1;
+    if a == 4 then
+        sum = sum + 1;
 
     answer := do:outer {
         do:outer {
@@ -95,7 +99,7 @@
         10;
     };
 
-    if answer == 10 then
+    if answer == 0 then
         sum = sum + 1;
 
     sum = do:value {
