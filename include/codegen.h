@@ -496,6 +496,15 @@ static void gen_patch_jmp(gen_t *gen, function_t *function, size_t index) {
     instruction->as.jmp.amount = (u32)amount;
 }
 
+static void gen_patch_jmps(gen_t *gen, function_t *function, ast_node_t *expr, token_type_t jmp_type) {
+    for (size_t i = 0; i < expr->jmp_nodes.count; ++i) {
+        ast_node_t *jmp_node = expr->jmp_nodes.items[i];
+        if (jmp_node->start.type != jmp_type) continue;
+        size_t code_jmp_index = jmp_node->code_jmp_index;
+        gen_patch_jmp(gen, function, code_jmp_index);
+    }
+}
+
 static void gen_branching(gen_t *gen, function_t *function, ast_node_t *branch) {
     size_t loop_index = function->code.count;
 
@@ -512,6 +521,7 @@ static void gen_branching(gen_t *gen, function_t *function, ast_node_t *branch) 
     gen_expression(gen, function, an_then(branch));
 
     if (branch->looping) {
+        gen_patch_jmps(gen, function, branch, TOKEN_CONTINUE);
         gen_loop(gen, function, token_end_location(&an_then(branch)->end), loop_index);
     }
 
@@ -519,45 +529,15 @@ static void gen_branching(gen_t *gen, function_t *function, ast_node_t *branch) 
 
     gen_patch_jmp(gen, function, then_index);
 
-    unless (branch->looping) {
-        for (size_t i = 0; i < branch->jmp_nodes.count; ++i) {
-            ast_node_t *jmp_node = branch->jmp_nodes.items[i];
-            switch (jmp_node->start.type) {
-                case TOKEN_BREAK: break;
-                case TOKEN_CONTINUE: {
-                    size_t code_jmp_index = jmp_node->code_jmp_index;
-                    gen_patch_jmp(gen, function, code_jmp_index);
-                    break;
-                }
-
-                default: UNREACHABLE();
-            }
-        }
+    if (!branch->looping) {
+        gen_patch_jmps(gen, function, branch, TOKEN_CONTINUE);
     }
 
     gen_expression(gen, function, an_else(branch));
 
-    for (size_t i = 0; i < branch->jmp_nodes.count; ++i) {
-        ast_node_t *jmp_node = branch->jmp_nodes.items[i];
-        switch (jmp_node->start.type) {
-            case TOKEN_BREAK: {
-                size_t code_jmp_index = jmp_node->code_jmp_index;
-                gen_patch_jmp(gen, function, code_jmp_index);
-                break;
-            }
-
-            case TOKEN_CONTINUE: break;
-
-            default: UNREACHABLE();
-        }
-    }
+    gen_patch_jmps(gen, function, branch, TOKEN_BREAK);
     
     gen_patch_jmp(gen, function, else_index);
-
-    if (branch->looping) {
-        // todo
-        UNREACHABLE();
-    }
 }
 static void gen_assignment(gen_t *gen, function_t *function, ast_node_t *assignment) {
     gen_expression(gen, function, an_rhs(assignment));
@@ -582,6 +562,24 @@ static void gen_assignment(gen_t *gen, function_t *function, ast_node_t *assignm
         in.as.mov_reg_to_regmem.regmem_destination = REG_TMP;
 
         emit_instruction(function, token_end_location(&assignment->end), in);
+    }
+}
+
+static void gen_jmp_expr(gen_t *gen, function_t *function, ast_node_t *jmp_expr) {
+    gen_expression(gen, function, an_expression(jmp_expr));
+    switch (jmp_expr->start.type) {
+        case TOKEN_BREAK: {
+            jmp_expr->code_jmp_index = gen_jmp(function, jmp_expr->start.location);
+            break;
+        }
+        case TOKEN_CONTINUE: {
+            jmp_expr->code_jmp_index = gen_jmp(function, jmp_expr->start.location);
+            break;
+        }
+        case TOKEN_RETURN: UNREACHABLE();
+
+        default: UNREACHABLE();
+
     }
 }
 
@@ -628,21 +626,7 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
         }
 
         case AST_NODE_TYPE_EXPRESSION_JMP: {
-            gen_expression(gen, function, an_expression(expression));
-            switch (expression->start.type) {
-                case TOKEN_BREAK: {
-                    expression->code_jmp_index = gen_jmp(function, expression->start.location);
-                    break;
-                }
-                case TOKEN_CONTINUE: {
-                    expression->code_jmp_index = gen_jmp(function, expression->start.location);
-                    break;
-                }
-                case TOKEN_RETURN: UNREACHABLE();
-
-                default: UNREACHABLE();
-
-            }
+            gen_jmp_expr(gen, function, expression);
             break;
         }
 
