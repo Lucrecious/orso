@@ -20,15 +20,49 @@
         sum = sum + 1;
     
     count = 10;
+    odds := 0;
+    evens := 0;
 
     while count > 0 do {
         count = count - 1;
-        if count/2+1 == (count+1)/2 then continue;
+        if count/2+1 == (count+1)/2 {
+            odds = odds + 1;
+            continue;
+        };
+        evens = evens + 1;
     } else {
         count = 69;
     };
 
+    if evens == 5 then
+        sum = sum + 1;
+    
+    if odds == 5 then
+        sum = sum + 1;
+
     if count == 69 then
+        sum = sum + 1;
+
+    count = 10;
+
+    found2 := 0;
+    found_others := 0;
+    count = while count > 0 {
+        count = count - 1;
+        if count == 2 {
+            found2 = 1;
+            continue;
+        };
+
+        found_others = found_others + 1;
+    } else {
+        420;
+    };
+
+    if found2 == 1 then
+        sum = sum + 1;
+
+    if found_others == 9 then
         sum = sum + 1;
 
     sum;
