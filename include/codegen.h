@@ -505,48 +505,60 @@ static void gen_patch_jmps(gen_t *gen, function_t *function, ast_node_t *expr, t
     }
 }
 
+static size_t gen_condition(gen_t *gen, ast_node_t *branch, function_t *function) {
+    emit_push_wordreg(gen, branch->start.location, function, REG_RESULT);
+
+    gen_expression(gen, function, an_condition(branch));
+
+    emit_mov_reg_to_reg(function, token_end_location(&an_condition(branch)->end), REG_TMP, REG_RESULT);
+
+    emit_pop_to_wordreg(gen, token_end_location(&an_condition(branch)->end), function, REG_RESULT);
+
+    // then index
+    return gen_jmp_if_reg(function, token_end_location(&an_condition(branch)->end), REG_TMP, branch->condition_negated ? true : false);
+
+}
+
 static void gen_branching(gen_t *gen, function_t *function, ast_node_t *branch) {
-    size_t loop_index = function->code.count;
+    switch (branch->branch_type) {
+        case BRANCH_TYPE_DO: {
+            gen_expression(gen, function, an_then(branch));
+            gen_patch_jmps(gen, function, branch, TOKEN_CONTINUE);
 
-    size_t then_index = 0;
-    if (branch->branch_type != BRANCH_TYPE_DO) {
-        emit_push_wordreg(gen, branch->start.location, function, REG_RESULT);
+            gen_expression(gen, function, an_else(branch));
+            gen_patch_jmps(gen, function, branch, TOKEN_BREAK);
+            break;
+        }
+        case BRANCH_TYPE_IFTHEN: {
+            size_t then_index = gen_condition(gen, branch, function);
+            gen_expression(gen, function, an_then(branch));
 
-        gen_expression(gen, function, an_condition(branch));
+            size_t else_index = gen_jmp(function, token_end_location(&an_then(branch)->end));
 
-        emit_mov_reg_to_reg(function, token_end_location(&an_condition(branch)->end), REG_TMP, REG_RESULT);
+            gen_patch_jmp(gen, function, then_index);
 
-        emit_pop_to_wordreg(gen, token_end_location(&an_condition(branch)->end), function, REG_RESULT);
+            gen_expression(gen, function, an_else(branch));
 
-        then_index = gen_jmp_if_reg(function, token_end_location(&an_condition(branch)->end), REG_TMP, branch->condition_negated ? true : false);
-    }
+            gen_patch_jmp(gen, function, else_index);
+            break;
+        }
+        case BRANCH_TYPE_LOOPING: {
+            size_t loop_index = function->code.count;
+            size_t then_index = gen_condition(gen, branch, function);
+            gen_expression(gen, function, an_then(branch));
 
-    gen_expression(gen, function, an_then(branch));
+            gen_patch_jmps(gen, function, branch, TOKEN_CONTINUE);
+            gen_loop(gen, function, token_end_location(&an_then(branch)->end), loop_index);
 
-    if (branch->branch_type == BRANCH_TYPE_LOOPING) {
-        gen_patch_jmps(gen, function, branch, TOKEN_CONTINUE);
-        gen_loop(gen, function, token_end_location(&an_then(branch)->end), loop_index);
-    }
+            size_t else_index = gen_jmp(function, token_end_location(&an_then(branch)->end));
 
-    size_t else_index = 0;
-    if (branch->branch_type != BRANCH_TYPE_DO) {
-        else_index = gen_jmp(function, token_end_location(&an_then(branch)->end));
-    }
+            gen_patch_jmp(gen, function, then_index);
 
-    if (branch->branch_type == BRANCH_TYPE_DO) {
-        gen_patch_jmps(gen, function, branch, TOKEN_CONTINUE);
-    }
-
-    if (branch->branch_type != BRANCH_TYPE_DO) {
-        gen_patch_jmp(gen, function, then_index);
-    }
-
-    gen_expression(gen, function, an_else(branch));
-
-    gen_patch_jmps(gen, function, branch, TOKEN_BREAK);
-    
-    if (branch->branch_type != BRANCH_TYPE_DO) {
-        gen_patch_jmp(gen, function, else_index);
+            gen_expression(gen, function, an_else(branch));
+            gen_patch_jmps(gen, function, branch, TOKEN_BREAK);
+            gen_patch_jmp(gen, function, else_index);
+            break;
+        }
     }
 }
 static void gen_assignment(gen_t *gen, function_t *function, ast_node_t *assignment) {
