@@ -1275,11 +1275,14 @@ void resolve_expression(
             resolve_expression(analyzer, ast, state, an_condition(expression));
 
             scope_t return_scope = {0};
-            scope_init(&return_scope, &analyzer->allocator, SCOPE_TYPE_RETURN_BRANCH, state.scope, expression);
-
             analysis_state_t return_state = state;
-            return_state.scope = &return_scope;
-            return_state.mode = MODE_RUNTIME | (state.mode & MODE_FOLDING_TIME);
+            if (expression->looping) {
+                scope_init(&return_scope, &analyzer->allocator, SCOPE_TYPE_RETURN_BRANCH, state.scope, expression);
+
+                return_state = state;
+                return_state.scope = &return_scope;
+                return_state.mode = MODE_RUNTIME | (state.mode & MODE_FOLDING_TIME);
+            }
 
             resolve_expression(analyzer, ast, return_state, an_then(expression));
 

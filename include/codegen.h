@@ -529,10 +529,6 @@ static void gen_branching(gen_t *gen, function_t *function, ast_node_t *branch) 
 
     gen_patch_jmp(gen, function, then_index);
 
-    if (!branch->looping) {
-        gen_patch_jmps(gen, function, branch, TOKEN_CONTINUE);
-    }
-
     gen_expression(gen, function, an_else(branch));
 
     gen_patch_jmps(gen, function, branch, TOKEN_BREAK);

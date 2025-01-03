@@ -1,12 +1,35 @@
 {
     count := 10;
 
+    sum := 0;
+
     until count <= 0 {
         count = count - 1;
         if count == 5 then break;
-    } else {
-        count = 0;
     };
 
-    count;
+    if count == 5 then
+        sum = sum + 1;
+
+    count = while count > 0 {
+        count = count - 1;
+        if count == 3 then break 100;
+    };
+
+    if count == 100 then
+        sum = sum + 1;
+    
+    count = 10;
+
+    while count > 0 do {
+        count = count - 1;
+        if count/2+1 == (count+1)/2 then continue;
+    } else {
+        count = 69;
+    };
+
+    if count == 69 then
+        sum = sum + 1;
+
+    sum;
 }
