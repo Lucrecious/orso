@@ -11,12 +11,6 @@
 
 #include "table.h"
 
-typedef enum return_guarentee_t {
-    NO_JMP_IS_GUARENTEED,
-    JMP_POSSIBLE,
-    JMP_IS_GUARENTEED,
-} return_guarentee_t;
-
 struct ast_node_t;
 typedef struct ast_node_t ast_node_t;
 
@@ -36,6 +30,7 @@ typedef enum scope_type_t {
     SCOPE_TYPE_RETURN_BRANCH            = 1 << 3,
     SCOPE_TYPE_BLOCK                    = 1 << 4,
     SCOPE_TYPE_STRUCT                   = 1 << 5,
+    SCOPE_TYPE_CONDITION                = 1 << 6,
 } scope_type_t;
 
 declare_table(s2w, string_t, word_t)
@@ -160,17 +155,23 @@ ast_node_t nil_node;
 #define an_is_none(n)    ((n)->node_type == AST_NODE_TYPE_NONE)
 #define an_is_notnone(n) ((n)->node_type != AST_NODE_TYPE_NONE)
 
+typedef enum ast_branch_type_t ast_branch_type_t;
+enum ast_branch_type_t {
+    BRANCH_TYPE_LOOPING,
+    BRANCH_TYPE_IFTHEN,
+    BRANCH_TYPE_DO,
+};
+
 struct ast_node_t {
     ast_node_type_t node_type;
 
     token_t start, end, operator;
 
     type_t value_type;
-    return_guarentee_t return_guarentee;
 
     bool requires_tmp_for_cgen;
 
-    bool looping;
+    ast_branch_type_t branch_type;
     bool condition_negated;
 
     bool inside_type_context;

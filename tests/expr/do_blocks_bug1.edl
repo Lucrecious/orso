@@ -1,0 +1,11 @@
+{
+    answer := do:outer {
+        do:outer {
+            break:outer 5;
+        };
+
+        10;
+    };
+
+    answer;
+}

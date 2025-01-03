@@ -520,7 +520,7 @@ static void gen_branching(gen_t *gen, function_t *function, ast_node_t *branch) 
 
     gen_expression(gen, function, an_then(branch));
 
-    if (branch->looping) {
+    if (branch->branch_type == BRANCH_TYPE_LOOPING) {
         gen_patch_jmps(gen, function, branch, TOKEN_CONTINUE);
         gen_loop(gen, function, token_end_location(&an_then(branch)->end), loop_index);
     }

@@ -454,7 +454,7 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
         case AST_NODE_TYPE_EXPRESSION_BRANCHING: {
             ASSERT(cannot_inline, "branches always require a tmp");
 
-            bool skip_else = an_else(expression)->node_type == AST_NODE_TYPE_EXPRESSION_NIL && !expression->looping;
+            bool skip_else = an_else(expression)->node_type == AST_NODE_TYPE_EXPRESSION_NIL && expression->branch_type != BRANCH_TYPE_LOOPING;
 
             if (no_var(var)) {
                 sb_add_cstr(&cgen->sb, "{\n");
@@ -475,7 +475,7 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
 
             cgen_indent(cgen);
 
-#define branch_cstr (expression->looping ? (expression->condition_negated ? "until" : "while") : (expression->condition_negated ? "unless" : "if"))
+#define branch_cstr "if"// (expression->looping ? (expression->condition_negated ? "until" : "while") : (expression->condition_negated ? "unless" : "if"))
 
             if (an_condition(expression)->requires_tmp_for_cgen) {
                 cgen_var_t conditionid = cgen_next_tmpid(cgen, an_condition(expression)->value_type);
@@ -511,7 +511,7 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
 
             cgen_unindent(cgen);
 
-            if (expression->looping) {
+            if (expression->branch_type == BRANCH_TYPE_LOOPING) {
                 if (!skip_else) {
                     cgen_add_indent(cgen);
                     sb_add_cstr(&cgen->sb, "}\n");

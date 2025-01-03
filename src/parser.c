@@ -151,7 +151,6 @@ ast_node_t nil_node = {
     .operator = nil_token,
 
     .value_type = typeid(TYPE_INVALID),
-    .return_guarentee = NO_JMP_IS_GUARENTEED,
     .lvalue_node = &nil_node,
 };
 
@@ -163,10 +162,9 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type
     node->start = start;
     node->end = start;
     node->operator = start;
-    node->return_guarentee = NO_JMP_IS_GUARENTEED;
     node->value_type.i = TYPE_UNRESOLVED;
     node->condition_negated = false;
-    node->looping = false;
+    node->branch_type = BRANCH_TYPE_IFTHEN;
     node->requires_tmp_for_cgen = true;
     node->code_jmp_index = 0;
 
@@ -419,14 +417,24 @@ static ast_node_t *parse_number(parser_t *parser, bool inside_type_context) {
 
 static ast_node_t *parse_jmp(parser_t *parser, bool inside_type_context) {
     ast_node_t *jmp_expr = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_JMP, inside_type_context, parser->previous);
-    jmp_expr->identifier = parser->previous;
 
-    if (check_expression(parser)) {
+    if (jmp_expr->start.type == TOKEN_BREAK || jmp_expr->start.type == TOKEN_CONTINUE) {
+        if (match(parser, TOKEN_COLON)) {
+            consume(parser, TOKEN_IDENTIFIER);
+            jmp_expr->identifier = parser->previous;
+        }
+    }
+
+    bool has_expr = jmp_expr->start.type == TOKEN_BREAK || jmp_expr->start.type == TOKEN_RETURN;
+
+    if (has_expr && check_expression(parser)) {
         an_expression(jmp_expr) = parse_expression(parser, inside_type_context);
         jmp_expr->end = an_expression(jmp_expr)->end;
     } else {
         an_expression(jmp_expr) = ast_create_implicit_nil_node(parser->ast, typeid(TYPE_VOID));
     }
+
+    jmp_expr->end = an_expression(jmp_expr)->end;
 
     return jmp_expr;
 }
@@ -515,8 +523,6 @@ static ast_node_t *parse_def_value(parser_t *parser, bool inside_type_context) {
 }
 
 static void parse_block_(parser_t *parser, ast_node_t *block) {
-    block->return_guarentee = NO_JMP_IS_GUARENTEED;
-
     while (!check(parser, TOKEN_BRACE_CLOSE) && !check(parser, TOKEN_EOF)) {
         ast_node_t *declaration_node = parse_declaration(parser, false);
         array_push(&block->children, declaration_node);
@@ -541,48 +547,66 @@ static ast_node_t *parse_block(parser_t *parser, bool inside_type_context) {
     return expression_node;
 }
 
-static ast_node_t *parse_ifelse(parser_t *parser, bool inside_type_context) {
-    ast_node_t* expression_node = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_BRANCHING, inside_type_context, parser->previous);
+static ast_node_t *parse_branch(parser_t *parser, bool inside_type_context) {
+    ast_node_t *branch = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_BRANCHING, inside_type_context, parser->previous);
+    branch->condition_negated = false;
+    branch->branch_type = BRANCH_TYPE_IFTHEN;
 
-    expression_node->condition_negated = false;
-    if (parser->previous.type == TOKEN_UNLESS || parser->previous.type == TOKEN_UNTIL) {
-        expression_node->condition_negated = true;
-    }
 
-    expression_node->looping = false;
-    if (parser->previous.type == TOKEN_WHILE || parser->previous.type == TOKEN_UNTIL) {
-        expression_node->looping = true;
-    }
+    if (branch->start.type == TOKEN_DO) {
+        branch->branch_type = BRANCH_TYPE_DO;
 
-    expression_node->return_guarentee = NO_JMP_IS_GUARENTEED;
+        an_condition(branch) = ast_create_implicit_nil_node(parser->ast, typeid(TYPE_BOOL));
 
-    an_condition(expression_node) = parse_expression(parser, inside_type_context);
-    if (match(parser, TOKEN_BRACE_OPEN)) {
-        an_then(expression_node) = parse_block(parser, inside_type_context);
-    } else {
-        if (expression_node->looping) {
-            consume(parser, TOKEN_DO);
+        if (match(parser, TOKEN_COLON)) {
+            consume(parser, TOKEN_IDENTIFIER);
+            branch->identifier = parser->previous;
+        }
+
+        an_then(branch) = parse_expression(parser, inside_type_context);
+
+        unless (match(parser, TOKEN_THEN)) {
+            an_else(branch) = ast_create_implicit_nil_node(parser->ast, typeid(TYPE_VOID));
         } else {
-            consume(parser, TOKEN_THEN);
+            an_else(branch) = parse_expression(parser, inside_type_context);
+            branch->end = an_else(branch)->end;
         }
-
-        {
-            ast_node_t *then_expression = parse_expression(parser, inside_type_context);
-            an_then(expression_node) = then_expression;
-        }
-    }
-
-    if (!match(parser, TOKEN_ELSE)) {
-        an_else(expression_node) = ast_create_implicit_nil_node(parser->ast, typeid(TYPE_VOID));
-        return expression_node;
     } else {
-        ast_node_t *else_expression = parse_expression(parser, inside_type_context);
-        an_else(expression_node) = else_expression;
+        if (branch->start.type == TOKEN_UNLESS || branch->start.type == TOKEN_UNTIL) {
+            branch->condition_negated = true;
+        }
 
-        expression_node->end = parser->previous;
+        if (branch->start.type == TOKEN_WHILE || branch->start.type == TOKEN_UNTIL) {
+            branch->branch_type = BRANCH_TYPE_LOOPING;
+        } else {
+            branch->branch_type = BRANCH_TYPE_IFTHEN;
+        }
 
-        return expression_node;
+        an_condition(branch) = parse_expression(parser, inside_type_context);
+        if (match(parser, TOKEN_BRACE_OPEN)) {
+            an_then(branch) = parse_block(parser, inside_type_context);
+        } else {
+            if (branch->branch_type == BRANCH_TYPE_LOOPING) {
+                consume(parser, TOKEN_DO);
+            } else {
+                consume(parser, TOKEN_THEN);
+            }
+
+            ast_node_t *then_expression = parse_expression(parser, inside_type_context);
+            an_then(branch) = then_expression;
+        }
+
+        unless (match(parser, TOKEN_ELSE)) {
+            an_else(branch) = ast_create_implicit_nil_node(parser->ast, typeid(TYPE_VOID));
+        } else {
+            ast_node_t *else_expression = parse_expression(parser, inside_type_context);
+            an_else(branch) = else_expression;
+
+            branch->end = parser->previous;
+        }
     }
+
+    return branch;
 }
 
 static bool is_incoming_function_signature(parser_t* parser) {
@@ -847,13 +871,13 @@ parse_rule_t rules[] = {
     [TOKEN_NOT]                     = { parse_unary,        NULL,               PREC_NONE },
     [TOKEN_AND]                     = { NULL,               parse_binary,       PREC_AND },
     [TOKEN_OR]                      = { NULL,               parse_binary,       PREC_OR },
-    [TOKEN_IF]                      = { parse_ifelse,       NULL,               PREC_BLOCK },
+    [TOKEN_IF]                      = { parse_branch,       NULL,               PREC_BLOCK },
     [TOKEN_THEN]                    = { NULL,               NULL,               PREC_NONE },
-    [TOKEN_UNLESS]                  = { parse_ifelse,       NULL,               PREC_BLOCK },
-    [TOKEN_WHILE]                   = { parse_ifelse,       NULL,               PREC_BLOCK },
-    [TOKEN_UNTIL]                   = { parse_ifelse,       NULL,               PREC_BLOCK },
+    [TOKEN_UNLESS]                  = { parse_branch,       NULL,               PREC_BLOCK },
+    [TOKEN_WHILE]                   = { parse_branch,       NULL,               PREC_BLOCK },
+    [TOKEN_UNTIL]                   = { parse_branch,       NULL,               PREC_BLOCK },
     [TOKEN_FOR]                     = { NULL,               NULL,               PREC_NONE },
-    [TOKEN_DO]                      = { NULL,               NULL,               PREC_NONE },
+    [TOKEN_DO]                      = { parse_branch,       NULL,               PREC_NONE },
     [TOKEN_ELSE]                    = { NULL,               NULL,               PREC_NONE },
     [TOKEN_TRUE]                    = { parse_literal,      NULL,               PREC_NONE },
     [TOKEN_FALSE]                   = { parse_literal,      NULL,               PREC_NONE },
@@ -1296,34 +1320,52 @@ static void ast_print_ast_node(type_infos_t types, ast_node_t *node, u32 level) 
         }
         case AST_NODE_TYPE_EXPRESSION_BRANCHING: {
             print_indent(level);
-            cstr_t branch = NULL;
-            unless (node->looping) {
-                if (node->condition_negated) {
-                    branch = "unless";
-                } else {
-                    branch = "if";
+            switch (node->branch_type) {
+                case BRANCH_TYPE_DO: {
+                    print_line("branch (do:%.*s): %s", node->start.view.length, node->start.view.data, type2cstr(node));
+
+                    print_indent(level + 1);
+                    print_line("do");
+                    ast_print_ast_node(types, an_then(node), level + 2);
+
+                    print_indent(level + 1);
+                    print_line("then");
+                    ast_print_ast_node(types, an_else(node), level + 2);
+                    break;
                 }
-            } else {
-                if (node->condition_negated) {
-                    branch = "until";
-                } else {
-                    branch = "while";
+
+                case BRANCH_TYPE_IFTHEN:
+                case BRANCH_TYPE_LOOPING: {
+                    cstr_t branch = NULL;
+                    if (node->branch_type == BRANCH_TYPE_IFTHEN) {
+                        if (node->condition_negated) {
+                            branch = "unless";
+                        } else {
+                            branch = "if";
+                        }
+                    } else {
+                        if (node->condition_negated) {
+                            branch = "until";
+                        } else {
+                            branch = "while";
+                        }
+                    }
+
+                    print_line("branch (%s): %s", branch, type2cstr(node));
+
+                    print_indent(level + 1);
+                    print_line("condition");
+                    ast_print_ast_node(types, an_condition(node), level + 2);
+
+                    print_indent(level + 1);
+                    print_line("then");
+                    ast_print_ast_node(types, an_then(node), level + 2);
+
+                    print_indent(level + 1);
+                    print_line("else");
+                    ast_print_ast_node(types, an_else(node), level + 2);
+                    break;
                 }
-            }
-            print_line("branch (%s): %s", branch, type2cstr(node));
-
-            print_indent(level + 1);
-            print_line("condition");
-            ast_print_ast_node(types, an_condition(node), level + 2);
-
-            print_indent(level + 1);
-            print_line("then");
-            ast_print_ast_node(types, an_then(node), level + 2);
-
-            if (an_is_notnone(an_else(node))) {
-                print_indent(level + 1);
-                print_line("else");
-                ast_print_ast_node(types, an_else(node), level + 2);
             }
             break;
         }
@@ -1380,7 +1422,11 @@ static void ast_print_ast_node(type_infos_t types, ast_node_t *node, u32 level) 
 
         case AST_NODE_TYPE_EXPRESSION_JMP: {
             print_indent(level);
-            print_line("%.*s", node->start.view.length, node->start.view.data);
+            string_view_t label = node->identifier.view;
+            if (node->identifier.view.length == 0) {
+                label = lit2sv("<none>");
+            }
+            print_line("%.*s:%.*s", node->start.view.length, node->start.view.data, label.length, label.data);
 
             ast_print_ast_node(types, an_operand(node), level + 1);
             break;

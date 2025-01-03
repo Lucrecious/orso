@@ -691,14 +691,27 @@ static scope_t *get_closest_outer_function_scope(type_infos_t *types, scope_t *s
 }
 
 
-static scope_t *get_nearest_scope_in_func_or_null(scope_t *scope, scope_type_t type) {
+static bool get_nearest_scope_in_func_or_error(analyzer_t *analyzer, ast_node_t *jmp_node, scope_t *scope, scope_type_t search_type, scope_t **found_scope) {
     while (scope->outer) {
-        if (scope->type == type) return scope;
-        if (scope->type == SCOPE_TYPE_FUNCTION_BODY) return NULL;
+        if (scope->type == search_type) {
+            *found_scope = scope;
+            return true;
+        }
+
+        if (scope->type == SCOPE_TYPE_FUNCTION_BODY) {
+            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_NO_VALID_JMP_BLOCK, jmp_node));
+            return false;
+        }
+
+        if (scope->type == SCOPE_TYPE_CONDITION) {
+            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CANNOT_JMP_IN_CONDITION, jmp_node));
+            return false;
+        }
+
         scope = scope->outer;
     }
 
-    return NULL;
+    return false;
 }
 type_t resolve_block_return_types(ast_node_t *block) {
     switch (block->node_type) {
@@ -1238,71 +1251,55 @@ void resolve_expression(
             block_state.mode = MODE_RUNTIME | (state.mode & MODE_FOLDING_TIME);
             resolve_declarations(analyzer, ast, block_state, expression->children, declarations_count);
 
-            return_guarentee_t block_return_guarentee = NO_JMP_IS_GUARENTEED;
-            for (i32 i = 0; i < declarations_count; i++) {
-                ast_node_t *declaration = expression->children.items[i];
-                if (declaration->return_guarentee != NO_JMP_IS_GUARENTEED) {
-                    block_return_guarentee = declaration->return_guarentee;
-                }
-
-                if (block_return_guarentee == JMP_IS_GUARENTEED) break;
+            ast_node_t *last_decl = NULL;
+            if (declarations_count > 0) {
+                last_decl = expression->children.items[declarations_count - 1];
             }
 
-            if (block_return_guarentee != NO_JMP_IS_GUARENTEED) {
-                expression->return_guarentee = block_return_guarentee;
-                expression->value_type = typeid(TYPE_UNREACHABLE);
+            if (last_decl == NULL) {
+                expression->value_type = typeid(TYPE_VOID);
             } else {
-                ast_node_t *last_decl = NULL;
-                if (declarations_count > 0) {
-                    last_decl = expression->children.items[declarations_count - 1];
-                }
-
-                if (last_decl == NULL) {
-                    expression->value_type = typeid(TYPE_VOID);
+                if (last_decl->node_type == AST_NODE_TYPE_DECLARATION_DEFINITION) {
+                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_BLOCKS_MUST_BE_EMPTY_OR_END_IN_STATEMENT, expression));
+                    INVALIDATE(expression);
                 } else {
-                    if (last_decl->node_type == AST_NODE_TYPE_DECLARATION_DEFINITION) {
-                        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_BLOCKS_MUST_BE_EMPTY_OR_END_IN_STATEMENT, expression));
-                        INVALIDATE(expression);
-                    } else {
-                        expression->value_type = an_operand(last_decl)->value_type;
-                    }
+                    expression->value_type = an_operand(last_decl)->value_type;
                 }
             }
             break;
         }
 
         case AST_NODE_TYPE_EXPRESSION_BRANCHING: {
-            resolve_expression(analyzer, ast, state, an_condition(expression));
+            {
+                scope_t condition_scope = {0};
+                scope_init(&condition_scope, &ast->allocator, SCOPE_TYPE_CONDITION, state.scope, an_condition(expression));
+
+                analysis_state_t cond_state = state;
+                cond_state.scope = &condition_scope;
+
+                resolve_expression(analyzer, ast, cond_state, an_condition(expression));
+            }
 
             scope_t return_scope = {0};
             analysis_state_t return_state = state;
-            if (expression->looping) {
-                scope_init(&return_scope, &analyzer->allocator, SCOPE_TYPE_RETURN_BRANCH, state.scope, expression);
 
-                return_state = state;
-                return_state.scope = &return_scope;
-                return_state.mode = MODE_RUNTIME | (state.mode & MODE_FOLDING_TIME);
+            switch (expression->branch_type) {
+                case BRANCH_TYPE_DO:
+                case BRANCH_TYPE_LOOPING: {
+                    scope_init(&return_scope, &analyzer->allocator, SCOPE_TYPE_RETURN_BRANCH, state.scope, expression);
+
+                    return_state = state;
+                    return_state.scope = &return_scope;
+                    return_state.mode = MODE_RUNTIME | (state.mode & MODE_FOLDING_TIME);
+                    break;
+                }
+
+                case BRANCH_TYPE_IFTHEN: break;
             }
 
             resolve_expression(analyzer, ast, return_state, an_then(expression));
 
             resolve_expression(analyzer, ast, state, an_else(expression));
-
-            return_guarentee_t branch_return_guarentee;
-            // resolve return guarentee first
-            {
-                return_guarentee_t then_return_guarentee = an_then(expression)->return_guarentee;
-
-                return_guarentee_t else_return_guarentee = an_else(expression)->return_guarentee;
-
-                if (then_return_guarentee == JMP_IS_GUARENTEED && else_return_guarentee == JMP_IS_GUARENTEED) {
-                    branch_return_guarentee = JMP_IS_GUARENTEED;
-                } else if (then_return_guarentee == NO_JMP_IS_GUARENTEED && else_return_guarentee == NO_JMP_IS_GUARENTEED) {
-                    branch_return_guarentee = NO_JMP_IS_GUARENTEED;
-                } else {
-                    branch_return_guarentee = JMP_POSSIBLE;
-                }
-            }
 
             type_t branch_type = resolve_block_return_types(expression);
             expression->value_type = branch_type;
@@ -1326,24 +1323,18 @@ void resolve_expression(
                 INVALIDATE(expression);
             }
 
-            if (an_condition(expression)->return_guarentee != NO_JMP_IS_GUARENTEED) {
-                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CANNOT_JMP_IN_CONDITION, an_condition(expression)));
-                INVALIDATE(expression);
-            }
-
             unless (typeid_eq(an_condition(expression)->value_type, typeid(TYPE_BOOL))) {
                 stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CONDITION_MUST_BE_BOOL, an_condition(expression)));
                 INVALIDATE(expression);
             }
 
-            expression->return_guarentee = branch_return_guarentee;
             break;
         }
 
         case AST_NODE_TYPE_EXPRESSION_JMP: {
             resolve_expression(analyzer, ast, state, an_expression(expression));
 
-            switch (expression->identifier.type) {
+            switch (expression->start.type) {
                 case TOKEN_RETURN: {
                     scope_t *function_scope = get_closest_outer_function_scope(&ast->type_set.types, state.scope);
                     ASSERT(function_scope, "right now all scopes should be under a function scope");
@@ -1360,14 +1351,15 @@ void resolve_expression(
                 }
                 case TOKEN_CONTINUE:
                 case TOKEN_BREAK: {
-                    scope_t *scope = get_nearest_scope_in_func_or_null(state.scope, SCOPE_TYPE_RETURN_BRANCH);
-                    unless (scope) {
-                        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_SCOPE_FOR_JMP, expression));
+
+                    scope_t *found_scope = NULL;
+                    bool success = get_nearest_scope_in_func_or_error(analyzer, expression, state.scope, SCOPE_TYPE_RETURN_BRANCH, &found_scope);
+                    unless (success) {
                         INVALIDATE(expression);
                     } else {
-                        expression->jmp_out_scope_node = scope->creator;
-                        array_push(&scope->creator->jmp_nodes, expression);
-                        ASSERT(scope->creator->node_type == AST_NODE_TYPE_EXPRESSION_BRANCHING, "only supports branches rn");
+                        expression->jmp_out_scope_node = found_scope->creator;
+                        array_push(&found_scope->creator->jmp_nodes, expression);
+                        ASSERT(found_scope->creator->node_type == AST_NODE_TYPE_EXPRESSION_BRANCHING, "only supports branches rn");
                     }
                     break;
                 }
@@ -1376,7 +1368,6 @@ void resolve_expression(
             }
 
 
-            expression->return_guarentee = JMP_IS_GUARENTEED;
             expression->value_type = typeid(TYPE_UNREACHABLE);
             break;
         }
@@ -1509,6 +1500,7 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
             switch (state.scope->type) {
                 case SCOPE_TYPE_FUNCTION_BODY:
                 case SCOPE_TYPE_BLOCK:
+                case SCOPE_TYPE_CONDITION:
                 case SCOPE_TYPE_RETURN_BRANCH:
                 case SCOPE_TYPE_MODULE: {
                     folding_mode_t mode = declaration->is_mutable ? MODE_RUNTIME : MODE_CONSTANT_TIME;
@@ -2079,7 +2071,7 @@ static void resolve_function_expression(
         pop_dependency(analyzer);
     }
 
-    if (!TYPE_IS_VOID(return_type) && definition->block->return_guarentee != JMP_IS_GUARENTEED) {
+    if (!TYPE_IS_UNREACHABLE(definition->block->value_type)) {
         stan_error(analyzer, make_error_node(ERROR_ANALYSIS_FUNCTION_MUST_RETURN_ON_ALL_BRANCHES, function_definition_expression));
     }
 }
@@ -2357,7 +2349,6 @@ static void resolve_declaration_statement(
         ast_node_t *statement) {
     resolve_expression(analyzer, ast, state, an_expression(statement));
     statement->value_type = an_expression(statement)->value_type;
-    statement->return_guarentee = an_expression(statement)->return_guarentee;
 }
 
 static void resolve_declaration(

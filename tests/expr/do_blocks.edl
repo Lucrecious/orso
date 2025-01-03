@@ -48,7 +48,6 @@
 
     if a == 4 then sum = sum + 1;
 
-
     do {
         a = 2;
         continue;
@@ -61,19 +60,20 @@
         a = 4;
     };
 
-    if a == 3 then sum = sum + 1;
+    if a == 3 then
+        sum = sum + 1;
 
     do:outer if a == 3 {
         while a > 0 {
             if a == 3 then break:outer;
 
             a = a - 1;
-        }
-    } 
+        };
+    };
 
-    if a == 3 sum = sum + 1;
+    if a == 3 then
+        sum = sum + 1;
 
-    // same label can be used multiple times if its not shadowed
     do:outer if a == 3 {
         while a > 0 {
             if a == 3 then continue:outer;
@@ -85,7 +85,18 @@
         a = 4;
     };
 
-    if a == 4 the sum = sum + 1;
+    if a == 4 then sum = sum + 1;
+
+    answer := do:outer {
+        do:outer {
+            break:outer 5;
+        };
+
+        10;
+    };
+
+    if answer == 10 then
+        sum = sum + 1;
 
     sum = do:value {
         if a == 4 {
