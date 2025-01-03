@@ -192,19 +192,7 @@ struct ast_node_t {
 
     ast_node_t *jmp_out_scope_node;
     ast_nodes_t jmp_nodes;
-    struct {
-        size_t *items;
-        size_t count;
-        size_t capacity;
-        arena_t *allocator;
-    } breaks_to_patch;
-
-    struct {
-        size_t *items;
-        size_t count;
-        size_t capacity;
-        arena_t *allocator;
-    } continues_to_patch;
+    size_t code_jmp_index;
 
     union {
         ast_call_t call;

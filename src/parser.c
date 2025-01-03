@@ -168,6 +168,7 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type
     node->condition_negated = false;
     node->looping = false;
     node->requires_tmp_for_cgen = true;
+    node->code_jmp_index = 0;
 
     node->inside_type_context = inside_type_context;
 
@@ -178,8 +179,6 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type
     node->identifier = nil_token;
     node->ref_decl = &nil_node;
 
-    node->breaks_to_patch.allocator = &ast->allocator;
-    node->continues_to_patch.allocator = &ast->allocator;
     node->jmp_nodes.allocator = &ast->allocator;
     node->jmp_out_scope_node = &nil_node;
 

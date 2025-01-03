@@ -507,23 +507,9 @@ static void gen_branching(gen_t *gen, function_t *function, ast_node_t *branch) 
 
     emit_pop_to_wordreg(gen, token_end_location(&an_condition(branch)->end), function, REG_RESULT);
 
-    size_t then_index = gen_jmp_if_reg(function, token_end_location(&an_then(branch)->end), REG_TMP, branch->condition_negated ? true : false);
+    size_t then_index = gen_jmp_if_reg(function, token_end_location(&an_condition(branch)->end), REG_TMP, branch->condition_negated ? true : false);
 
     gen_expression(gen, function, an_then(branch));
-
-    ast_node_t *then = an_then(branch);
-    if (branch->looping) {
-        // todo
-        UNREACHABLE();
-        // for (size_t i = 0; i < then->continues_to_patch.count; ++i) {
-        //     gen_patch_jmp(gen, function, loop_index);
-        // }
-    } else {
-        for (size_t i = 0; i < then->breaks_to_patch.count; ++i) {
-            size_t break_index = then->breaks_to_patch.items[i];
-            gen_patch_jmp(gen, function, break_index);
-        }
-    }
 
     if (branch->looping) {
         gen_loop(gen, function, token_end_location(&an_then(branch)->end), loop_index);
@@ -533,15 +519,23 @@ static void gen_branching(gen_t *gen, function_t *function, ast_node_t *branch) 
 
     gen_patch_jmp(gen, function, then_index);
 
-    if (!branch->looping) {
-        for (size_t i = 0; i < then->continues_to_patch.count; ++i) {
-            size_t continue_index = then->continues_to_patch.items[i];
-            gen_patch_jmp(gen, function, continue_index);
-        }
-    }
-
     gen_expression(gen, function, an_else(branch));
 
+    for (size_t i = 0; i < branch->jmp_nodes.count; ++i) {
+        ast_node_t *jmp_node = branch->jmp_nodes.items[i];
+        switch (jmp_node->start.type) {
+            case TOKEN_BREAK: {
+                size_t code_jmp_index = jmp_node->code_jmp_index;
+                gen_patch_jmp(gen, function, code_jmp_index);
+                break;
+            }
+
+            case TOKEN_CONTINUE: break;
+
+            default: UNREACHABLE();
+        }
+    }
+    
     gen_patch_jmp(gen, function, else_index);
 
     if (branch->looping) {
@@ -617,6 +611,21 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
             break;
         }
 
+        case AST_NODE_TYPE_EXPRESSION_JMP: {
+            switch (expression->start.type) {
+                case TOKEN_BREAK: {
+                    expression->code_jmp_index = gen_jmp(function, expression->start.location);
+                    break;
+                }
+                case TOKEN_CONTINUE: UNREACHABLE(); break;
+                case TOKEN_RETURN: UNREACHABLE();
+
+                default: UNREACHABLE();
+
+            }
+            break;
+        }
+
         case AST_NODE_TYPE_EXPRESSION_CALL:
         case AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT:
         case AST_NODE_TYPE_EXPRESSION_DOT:
@@ -626,7 +635,6 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
         case AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER:
         case AST_NODE_TYPE_EXPRESSION_UNARY:
         case AST_NODE_TYPE_DECLARATION_STATEMENT:
-        case AST_NODE_TYPE_EXPRESSION_JMP:
         case AST_NODE_TYPE_NONE:
         case AST_NODE_TYPE_DECLARATION_DEFINITION:
         case AST_NODE_TYPE_MODULE: ASSERT(false, "not implemented");

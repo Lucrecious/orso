@@ -10,9 +10,14 @@
         check = 0;
     };
 
-    if check == 1 then sum = sum + 1;
+    if check == 1 then
+        sum = sum + 1;
 
-    check = (if sum == 0 then break 1);
+    check = if check == 0 then
+        break 1;
+
+    if check == 0 then
+        sum = sum + 1;
 
     //check = 1;
     //if check == 1 {
@@ -21,7 +26,7 @@
     //} else if check == 0 then
     //    check = 1;
 
-    // if check == 1 then sum = sum + 1;
+    //if check == 1 then sum = sum + 1;
 
-    sum;
+    //sum;
 }
