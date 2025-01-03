@@ -1306,11 +1306,11 @@ void resolve_expression(
 
             if (!TYPE_IS_UNREACHABLE(branch_type)) {
                 if (TYPE_IS_VOID(an_then(expression)->value_type) && an_then(expression)->node_type == AST_NODE_TYPE_EXPRESSION_NIL) {
-                    an_then(expression) = ast_create_implicit_nil_node(ast, branch_type);
+                    an_then(expression) = ast_create_implicit_nil_node(ast, branch_type, an_then(expression)->start);
                 }
 
                 if (TYPE_IS_VOID(an_else(expression)->value_type) && an_else(expression)->node_type == AST_NODE_TYPE_EXPRESSION_NIL) {
-                    an_else(expression) = ast_create_implicit_nil_node(ast, branch_type);
+                    an_else(expression) = ast_create_implicit_nil_node(ast, branch_type, an_else(expression)->start);
                 }
             }
 

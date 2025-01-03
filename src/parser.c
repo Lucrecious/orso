@@ -266,8 +266,15 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type
     return node;
 }
 
-ast_node_t *ast_create_implicit_nil_node(ast_t *ast, type_t value_type) {
-    ast_node_t *nil_node = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_NIL, false, nil_token);
+ast_node_t *ast_create_implicit_nil_node(ast_t *ast, type_t value_type, token_t token_location) {
+    token_t implicit_token = token_location;
+    implicit_token.location = token_end_location(&token_location);
+    implicit_token.type = TOKEN_IMPLICIT;
+    implicit_token.view.data += implicit_token.view.length;
+    implicit_token.view.length = 0;
+
+
+    ast_node_t *nil_node = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_NIL, false, implicit_token);
     nil_node->value_type = value_type;
     nil_node->value_index = zero_value(ast, value_type);
     return nil_node;
@@ -429,9 +436,8 @@ static ast_node_t *parse_jmp(parser_t *parser, bool inside_type_context) {
 
     if (has_expr && check_expression(parser)) {
         an_expression(jmp_expr) = parse_expression(parser, inside_type_context);
-        jmp_expr->end = an_expression(jmp_expr)->end;
     } else {
-        an_expression(jmp_expr) = ast_create_implicit_nil_node(parser->ast, typeid(TYPE_VOID));
+        an_expression(jmp_expr) = ast_create_implicit_nil_node(parser->ast, typeid(TYPE_VOID), an_expression(jmp_expr)->end);
     }
 
     jmp_expr->end = an_expression(jmp_expr)->end;
@@ -556,7 +562,7 @@ static ast_node_t *parse_branch(parser_t *parser, bool inside_type_context) {
     if (branch->start.type == TOKEN_DO) {
         branch->branch_type = BRANCH_TYPE_DO;
 
-        an_condition(branch) = ast_create_implicit_nil_node(parser->ast, typeid(TYPE_BOOL));
+        an_condition(branch) = ast_create_implicit_nil_node(parser->ast, typeid(TYPE_BOOL), branch->end);
 
         if (match(parser, TOKEN_COLON)) {
             consume(parser, TOKEN_IDENTIFIER);
@@ -566,7 +572,7 @@ static ast_node_t *parse_branch(parser_t *parser, bool inside_type_context) {
         an_then(branch) = parse_expression(parser, inside_type_context);
 
         unless (match(parser, TOKEN_THEN)) {
-            an_else(branch) = ast_create_implicit_nil_node(parser->ast, typeid(TYPE_VOID));
+            an_else(branch) = ast_create_implicit_nil_node(parser->ast, typeid(TYPE_VOID), an_then(branch)->end);
         } else {
             an_else(branch) = parse_expression(parser, inside_type_context);
             branch->end = an_else(branch)->end;
@@ -597,7 +603,7 @@ static ast_node_t *parse_branch(parser_t *parser, bool inside_type_context) {
         }
 
         unless (match(parser, TOKEN_ELSE)) {
-            an_else(branch) = ast_create_implicit_nil_node(parser->ast, typeid(TYPE_VOID));
+            an_else(branch) = ast_create_implicit_nil_node(parser->ast, typeid(TYPE_VOID), an_then(branch)->end);
         } else {
             ast_node_t *else_expression = parse_expression(parser, inside_type_context);
             an_else(branch) = else_expression;
