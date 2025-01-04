@@ -166,9 +166,10 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type
     node->condition_negated = false;
     node->branch_type = BRANCH_TYPE_IFTHEN;
     node->requires_tmp_for_cgen = true;
-    node->code_jmp_index = 0;
-    node->code_jmp_label = lit2str("");
-    node->code_cvar_name = lit2str("");
+    node->ccode_jmp_index = 0;
+    node->ccode_break_label = lit2str("");
+    node->ccode_continue_label = lit2str("");
+    node->ccode_var_name = lit2str("");
 
     node->inside_type_context = inside_type_context;
 

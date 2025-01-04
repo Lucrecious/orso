@@ -195,9 +195,10 @@ struct ast_node_t {
 
     ast_node_t *jmp_out_scope_node;
     ast_nodes_t jmp_nodes;
-    size_t code_jmp_index;
-    string_t code_jmp_label;
-    string_t code_cvar_name;
+    size_t ccode_jmp_index;
+    string_t ccode_break_label;
+    string_t ccode_continue_label;
+    string_t ccode_var_name;
 
     union {
         ast_call_t call;

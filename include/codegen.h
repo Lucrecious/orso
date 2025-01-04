@@ -500,7 +500,7 @@ static void gen_patch_jmps(gen_t *gen, function_t *function, ast_node_t *expr, t
     for (size_t i = 0; i < expr->jmp_nodes.count; ++i) {
         ast_node_t *jmp_node = expr->jmp_nodes.items[i];
         if (jmp_node->start.type != jmp_type) continue;
-        size_t code_jmp_index = jmp_node->code_jmp_index;
+        size_t code_jmp_index = jmp_node->ccode_jmp_index;
         gen_patch_jmp(gen, function, code_jmp_index);
     }
 }
@@ -591,11 +591,11 @@ static void gen_jmp_expr(gen_t *gen, function_t *function, ast_node_t *jmp_expr)
     gen_expression(gen, function, an_expression(jmp_expr));
     switch (jmp_expr->start.type) {
         case TOKEN_BREAK: {
-            jmp_expr->code_jmp_index = gen_jmp(function, jmp_expr->start.location);
+            jmp_expr->ccode_jmp_index = gen_jmp(function, jmp_expr->start.location);
             break;
         }
         case TOKEN_CONTINUE: {
-            jmp_expr->code_jmp_index = gen_jmp(function, jmp_expr->start.location);
+            jmp_expr->ccode_jmp_index = gen_jmp(function, jmp_expr->start.location);
             break;
         }
         case TOKEN_RETURN: UNREACHABLE();

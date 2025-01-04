@@ -15,23 +15,24 @@ i64 result_; {
                   {
                     (inner_before_ = 1);
 
-                    break;
+                    ;
+                    goto break1_;
                   };
                 }
                 ;
-              } blockend3_:;
+              } break5_:;
 
               (inner_after_ = 1);
 
               ;
-              goto blockend2_;
+              goto break3_;
             };
           }
           ;
-        } blockend2_:;
+        } break3_:;
       } while(false); 
       ;
-    } blockend1_:;
+    } break1_:;
 
     result_ = (inner_after_ + inner_before_);
   };

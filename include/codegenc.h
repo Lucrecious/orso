@@ -565,7 +565,7 @@ static void cgen_while(cgen_t *cgen, ast_node_t *branch, cgen_var_t var)  {
     cgen_end_branch(cgen);
 
     sb_add_cstr(&cgen->sb, " ");
-    cgen_jmp_label(cgen, branch->code_jmp_label);
+    cgen_jmp_label(cgen, branch->ccode_break_label);
 
 }
 
@@ -592,7 +592,7 @@ static void cgen_do(cgen_t *cgen, ast_node_t *branch, cgen_var_t var) {
     cgen_end_branch(cgen);
 
     sb_add_cstr(&cgen->sb, " ");
-    cgen_jmp_label(cgen, branch->code_jmp_label);
+    cgen_jmp_label(cgen, branch->ccode_break_label);
 }
 
 static void cgen_branching(cgen_t *cgen, ast_node_t *branch, cgen_var_t var) {
@@ -600,9 +600,10 @@ static void cgen_branching(cgen_t *cgen, ast_node_t *branch, cgen_var_t var) {
         case BRANCH_TYPE_LOOPING:
         case BRANCH_TYPE_DO: {
             if (has_var(var)) {
-                branch->code_cvar_name = cstr2string(cgen_var(cgen, cgen_var_used(var)), &cgen->ast->allocator);
+                branch->ccode_var_name = cstr2string(cgen_var(cgen, cgen_var_used(var)), &cgen->ast->allocator);
             }
-            branch->code_jmp_label = string_copy(cgen_next_label(cgen, "blockend"), &cgen->ast->allocator);
+            branch->ccode_break_label = string_copy(cgen_next_label(cgen, "break"), &cgen->ast->allocator);
+            branch->ccode_continue_label = string_copy(cgen_next_label(cgen, "continue"), &cgen->ast->allocator);
             if (branch->branch_type == BRANCH_TYPE_LOOPING) {
                 cgen_while(cgen, branch, var);
             } else {
@@ -632,17 +633,12 @@ static void cgen_def_value(cgen_t *cgen, ast_node_t *def_value, cgen_var_t var) 
     }
 }
 
-static void cgen_goto(cgen_t *cgen, ast_node_t *jmp) {
-    string_t jmp_label = jmp->jmp_out_scope_node->code_jmp_label;
-    sb_add_format(&cgen->sb, "goto %s", jmp_label.cstr);
-}
-
-static void cgen_break_jmp(cgen_t *cgen, ast_node_t *jmp, cgen_var_t var) {
+static void cgen_break_or_continue(cgen_t *cgen, ast_node_t *jmp, cgen_var_t var, token_type_t type) {
     ASSERT(jmp->requires_tmp_for_cgen, "requires a tmp because its leaving the scope");
 
     cgen_var_t jmp_var = nil_cvar;
-    if (jmp->jmp_out_scope_node->code_cvar_name.length > 0) {
-        jmp_var.name = jmp->jmp_out_scope_node->code_cvar_name;
+    if (type == TOKEN_BREAK && jmp->jmp_out_scope_node->ccode_var_name.length > 0) {
+        jmp_var.name = jmp->jmp_out_scope_node->ccode_var_name;
         jmp_var.is_new = false;
     }
 
@@ -650,23 +646,22 @@ static void cgen_break_jmp(cgen_t *cgen, ast_node_t *jmp, cgen_var_t var) {
     cgen_semicolon_nl(cgen);
     
     cgen_add_indent(cgen);
-    cgen_goto(cgen, jmp);
-}
 
-static void cgen_continue_jmp(cgen_t *cgen, ast_node_t *jmp) {
-    switch (jmp->jmp_out_scope_node->branch_type) {
-        case BRANCH_TYPE_LOOPING: {
-            sb_add_cstr(&cgen->sb, "continue");
+    switch (type) {
+        case TOKEN_CONTINUE: {
+            string_t continue_label = jmp->jmp_out_scope_node->ccode_break_label;
+            sb_add_format(&cgen->sb, "goto %s", continue_label.cstr);
             break;
         }
-        case BRANCH_TYPE_DO: {
-            sb_add_cstr(&cgen->sb, "break");
+
+        case TOKEN_BREAK: {
+            string_t break_label = jmp->jmp_out_scope_node->ccode_break_label;
+            sb_add_format(&cgen->sb, "goto %s", break_label.cstr);
             break;
         }
-        case BRANCH_TYPE_IFTHEN: UNREACHABLE();
+        default: UNREACHABLE();
     }
 }
-
 
 static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var) {
     switch (expression->node_type) {
@@ -708,17 +703,12 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
 
         case AST_NODE_TYPE_EXPRESSION_JMP: {
             switch (expression->start.type) {
+                case TOKEN_CONTINUE:
                 case TOKEN_BREAK: {
-                    cgen_break_jmp(cgen, expression, var);
+                    cgen_break_or_continue(cgen, expression, var, expression->start.type);
                     break;
                 }
 
-                case TOKEN_CONTINUE: {
-                    cgen_continue_jmp(cgen, expression);
-                    break;
-                }
-
-                
                 case TOKEN_RETURN: UNREACHABLE();
 
                 default: UNREACHABLE();
