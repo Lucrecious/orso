@@ -15,12 +15,11 @@ i64 result_; {
               ;
               goto blockend1_;
             }
-          };
+          }
         };
       }
-      ;
-      blockend1_:
-    };
+      0;
+    } blockend1_:;
 
     {
       if (count_ == 5) {
@@ -31,19 +30,18 @@ i64 result_; {
     i64 tmp2; {
       while (count_ > 0) {
         {
-          (count_ = (count_ - 1));
+          tmp2 = ((count_ = (count_ - 1)));
 
-          tmp2 = ; {
+          {
             if (count_ == 3) {
               tmp2 = 100;
               goto blockend3_;
             }
-          };
+          }
         };
       }
       tmp2 = 0;
-      blockend3_:
-    };
+    } blockend3_:;
     (count_ = tmp2);
 
     {
@@ -68,20 +66,17 @@ i64 result_; {
               {
                 (odds_ = (odds_ + 1));
 
-                ;
-                goto blockend4_;
+                continue;
               };
             }
-          };
-
+          }
           (evens_ = (evens_ + 1));
         };
       }
       {
         (count_ = 69);
       };
-      blockend4_:
-    };
+    } blockend4_:;
 
     {
       if (evens_ == 5) {
@@ -117,20 +112,17 @@ i64 result_; {
               {
                 (found2_ = 1);
 
-                ;
-                goto blockend6_;
+                continue;
               };
             }
-          };
-
+          }
           tmp5 = ((found_others_ = (found_others_ + 1)));
         };
       }
       {
         tmp5 = 420;
       };
-      blockend6_:
-    };
+    } blockend6_:;
     (count_ = tmp5);
 
     {

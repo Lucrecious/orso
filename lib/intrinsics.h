@@ -19,4 +19,6 @@ typedef const char *cstr_t;
 #define unless(condition) if (!(condition))
 #define until(condition) while (!(condition))
 
+#define NOP()
+
 #endif

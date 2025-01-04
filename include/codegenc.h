@@ -265,7 +265,12 @@ static void cgen_semicolon_nl(cgen_t *cgen) {
 static void cgen_statement(cgen_t *cgen, ast_node_t *expression, cgen_var_t var, bool add_indent) {
     if (add_indent) cgen_add_indent(cgen);
     cgen_expression(cgen, expression, var);
-    cgen_semicolon_nl(cgen);
+
+    if (TYPE_IS_VOID(expression->value_type)) {
+
+    } else {
+        cgen_semicolon_nl(cgen);
+    }
 }
 
 static void cgen_declaration(cgen_t *cgen, ast_node_t *declaration) {
@@ -370,7 +375,9 @@ static void cgen_primary_or_nil(cgen_t *cgen, ast_node_t *primary_or_nil, cgen_v
     type_info_t *type_info = get_type_info(&cgen->ast->type_set.types, primary_or_nil->value_type);
 
     if (TYPE_IS_VOID(primary_or_nil->value_type)) {
-        if (has_var(var)) sb_add_cstr(&cgen->sb, "\n");
+        // ASSERT(!has_var(var), "shouldnt have a var since its void");
+        // if (has_var(var)) sb_add_cstr(&cgen->sb, "");
+        // sb_add_cstr(&cgen->sb, "NOP()\n");
     } else {
         if (has_var(var)) {
             sb_add_format(&cgen->sb, "%s = ", cgen_var(cgen, var));
@@ -422,7 +429,9 @@ static void cgen_block(cgen_t *cgen, ast_node_t *block, cgen_var_t var) {
         ast_node_t *declaration = block->children.items[i];
         if (declaration == block->last_statement) {
             cgen_statement(cgen, an_expression(block->last_statement), cgen_var_used(var), true);
-            sb_add_char(&cgen->sb, '\n');
+            if (i != block->children.count-1) {
+                sb_add_char(&cgen->sb, '\n');
+            }
         } else {
             cgen_declaration(cgen, declaration);
             sb_add_char(&cgen->sb, '\n');
@@ -536,7 +545,7 @@ static void cgen_if(cgen_t *cgen, ast_node_t *branch, cgen_var_t var) {
 }
 
 static void cgen_jmp_label(cgen_t *cgen, string_t label) {
-    sb_add_format(&cgen->sb, "%s:\n", label.cstr);
+    sb_add_format(&cgen->sb, "%s:", label.cstr);
 }
 
 static void cgen_while(cgen_t *cgen, ast_node_t *branch, cgen_var_t var)  {
@@ -563,10 +572,11 @@ static void cgen_while(cgen_t *cgen, ast_node_t *branch, cgen_var_t var)  {
         cgen_statement(cgen, an_else(branch), cgen_var_used(var), true);
     }
 
-    cgen_add_indent(cgen);
+    cgen_end_branch(cgen);
+
+    sb_add_cstr(&cgen->sb, " ");
     cgen_jmp_label(cgen, branch->code_jmp_label);
 
-    cgen_end_branch(cgen);
 }
 
 static void cgen_do(cgen_t *cgen, ast_node_t *branch, cgen_var_t var) {
@@ -611,7 +621,7 @@ static void cgen_goto(cgen_t *cgen, ast_node_t *jmp) {
     sb_add_format(&cgen->sb, "goto %s", jmp_label.cstr);
 }
 
-static void cgen_break_continue_jmp(cgen_t *cgen, ast_node_t *jmp, cgen_var_t var) {
+static void cgen_break_jmp(cgen_t *cgen, ast_node_t *jmp, cgen_var_t var) {
     ASSERT(jmp->requires_tmp_for_cgen, "requires a tmp because its leaving the scope");
 
     cgen_var_t jmp_var = nil_cvar;
@@ -619,10 +629,23 @@ static void cgen_break_continue_jmp(cgen_t *cgen, ast_node_t *jmp, cgen_var_t va
         jmp_var.name = jmp->jmp_out_scope_node->code_cvar_name;
         jmp_var.is_new = false;
     }
-    cgen_statement(cgen, an_expression(jmp), jmp_var, false);
+
+    cgen_expression(cgen, an_expression(jmp), jmp_var);
+    cgen_semicolon_nl(cgen);
     
     cgen_add_indent(cgen);
     cgen_goto(cgen, jmp);
+}
+
+static void cgen_continue_jmp(cgen_t *cgen, ast_node_t *jmp) {
+    switch (jmp->jmp_out_scope_node->branch_type) {
+        case BRANCH_TYPE_LOOPING: {
+            sb_add_cstr(&cgen->sb, "continue");
+            break;
+        }
+        case BRANCH_TYPE_DO:
+        case BRANCH_TYPE_IFTHEN: UNREACHABLE();
+    }
 }
 
 
@@ -666,9 +689,13 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
 
         case AST_NODE_TYPE_EXPRESSION_JMP: {
             switch (expression->start.type) {
-                case TOKEN_BREAK:
+                case TOKEN_BREAK: {
+                    cgen_break_jmp(cgen, expression, var);
+                    break;
+                }
+
                 case TOKEN_CONTINUE: {
-                    cgen_break_continue_jmp(cgen, expression, var);
+                    cgen_continue_jmp(cgen, expression);
                     break;
                 }
 
