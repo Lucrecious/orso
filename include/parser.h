@@ -197,6 +197,7 @@ struct ast_node_t {
     ast_nodes_t jmp_nodes;
     size_t code_jmp_index;
     string_t code_jmp_label;
+    string_t code_cvar_name;
 
     union {
         ast_call_t call;

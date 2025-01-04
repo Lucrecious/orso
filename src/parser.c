@@ -168,6 +168,7 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type
     node->requires_tmp_for_cgen = true;
     node->code_jmp_index = 0;
     node->code_jmp_label = lit2str("");
+    node->code_cvar_name = lit2str("");
 
     node->inside_type_context = inside_type_context;
 

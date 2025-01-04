@@ -31,7 +31,7 @@ struct cgen_var_t {
     type_t type;
 };
 
-static cgen_var_t nil_tmp_var = {.is_new = false, .id = 0 , .type = typeid(TYPE_INVALID) };
+static cgen_var_t nil_cvar = {.is_new = false, .id = 0 , .type = typeid(TYPE_INVALID) };
 
 
 #define no_var(tv) ((tv).id == 0 && (tv).name.length == 0)
@@ -277,7 +277,7 @@ static void cgen_declaration(cgen_t *cgen, ast_node_t *declaration) {
         }
 
         case AST_NODE_TYPE_DECLARATION_STATEMENT: {
-            cgen_statement(cgen, an_expression(declaration), nil_tmp_var, true);
+            cgen_statement(cgen, an_expression(declaration), nil_cvar, true);
             break;
         }
 
@@ -294,13 +294,13 @@ static void cgen_binary(cgen_t *cgen, ast_node_t *binary, cgen_var_t var) {
 
         sb_add_cstr(&cgen->sb, "(");
 
-        cgen_expression(cgen, an_lhs(binary), nil_tmp_var);
+        cgen_expression(cgen, an_lhs(binary), nil_cvar);
 
         sb_add_cstr(&cgen->sb, " ");
         sb_add_cstr(&cgen->sb, token2opcstr(binary->operator));
         sb_add_cstr(&cgen->sb, " ");
 
-        cgen_expression(cgen, an_rhs(binary), nil_tmp_var);
+        cgen_expression(cgen, an_rhs(binary), nil_cvar);
 
         sb_add_cstr(&cgen->sb, ")");
 
@@ -337,7 +337,7 @@ static void cgen_assignment(cgen_t *cgen, ast_node_t *assignment, cgen_var_t var
 
                 sb_add_format(&cgen->sb, "(%s = ", cgen_var_name(cgen, lhs_var));
 
-                cgen_expression(cgen, an_rhs(assignment), nil_tmp_var);
+                cgen_expression(cgen, an_rhs(assignment), nil_cvar);
 
                 sb_add_cstr(&cgen->sb, ")");
 
@@ -399,7 +399,7 @@ static void cgen_grouping(cgen_t *cgen, ast_node_t *grouping, cgen_var_t var) {
 
         sb_add_cstr(&cgen->sb, "(");
         ast_node_t *operand = an_operand(grouping);
-        cgen_expression(cgen, operand, nil_tmp_var);
+        cgen_expression(cgen, operand, nil_cvar);
         sb_add_cstr(&cgen->sb, ")");
     } else {
         ast_node_t *operand = an_expression(grouping);
@@ -471,7 +471,7 @@ static void cgen_condition_and_open_block(cgen_t *cgen, ast_node_t *branch, cstr
     } else {
         cgen_add_indent(cgen);
         sb_add_format(&cgen->sb, "%s ", branch_cstr);
-        cgen_expression(cgen, an_condition(branch), nil_tmp_var);
+        cgen_expression(cgen, an_condition(branch), nil_cvar);
         sb_add_cstr(&cgen->sb, " {\n");
     }
 
@@ -487,7 +487,7 @@ static void cgen_then(cgen_t *cgen, ast_node_t *branch, cgen_var_t var) {
             sb_add_format(&cgen->sb, "%s = ", cgen_var_name(cgen, var));
         }
 
-        cgen_expression(cgen, an_then(branch), nil_tmp_var);
+        cgen_expression(cgen, an_then(branch), nil_cvar);
 
         cgen_semicolon_nl(cgen);
     }
@@ -522,7 +522,7 @@ static void cgen_if(cgen_t *cgen, ast_node_t *branch, cgen_var_t var) {
                 sb_add_format(&cgen->sb, "%s = ", cgen_var_name(cgen, var));
             }
 
-            cgen_expression(cgen, an_else(branch), nil_tmp_var);
+            cgen_expression(cgen, an_else(branch), nil_cvar);
             cgen_semicolon_nl(cgen);
         }
 
@@ -585,6 +585,7 @@ static void cgen_branching(cgen_t *cgen, ast_node_t *branch, cgen_var_t var) {
         }
 
         case BRANCH_TYPE_LOOPING: {
+            branch->code_cvar_name = cstr2string(cgen_var(cgen, cgen_var_used(var)), &cgen->ast->allocator);
             cgen_while(cgen, branch, var);
             break;
         }
@@ -611,9 +612,14 @@ static void cgen_goto(cgen_t *cgen, ast_node_t *jmp) {
 }
 
 static void cgen_break_continue_jmp(cgen_t *cgen, ast_node_t *jmp, cgen_var_t var) {
-    ASSERT(jmp->requires_tmp_for_cgen, "requires a tmp because");
+    ASSERT(jmp->requires_tmp_for_cgen, "requires a tmp because its leaving the scope");
 
-    cgen_statement(cgen, an_expression(jmp), var, false);
+    cgen_var_t jmp_var = nil_cvar;
+    if (jmp->jmp_out_scope_node->code_cvar_name.length > 0) {
+        jmp_var.name = jmp->jmp_out_scope_node->code_cvar_name;
+        jmp_var.is_new = false;
+    }
+    cgen_statement(cgen, an_expression(jmp), jmp_var, false);
     
     cgen_add_indent(cgen);
     cgen_goto(cgen, jmp);

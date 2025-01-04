@@ -12,7 +12,7 @@ i64 result_; {
 
           {
             if (count_ == 3) {
-              100;
+              tmp1 = 100;
               goto blockend2_;
             }
           };
