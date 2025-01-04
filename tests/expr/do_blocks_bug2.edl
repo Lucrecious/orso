@@ -1,0 +1,17 @@
+{
+    inner_before := 0;
+    inner_after := 0;
+
+    do:outer while true {
+        while true {
+            inner_before = 1;
+            continue:outer;
+            break;
+        };
+
+        inner_after = 1;
+        break;
+    };
+
+    inner_after + inner_before;
+}

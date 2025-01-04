@@ -218,9 +218,13 @@ static void cgen_primary(cgen_t *cgen, value_index_t value_index, type_info_t *t
             break;
         }
 
+        case TYPE_BOOL: {
+            sb_add_format(&cgen->sb, "%s", (value_at(byte) == 1) ? "true" : "false");
+            break;
+        }
+
         case TYPE_LABEL:
         case TYPE_VOID:
-        case TYPE_BOOL:
         case TYPE_STRING:
         case TYPE_TYPE:
         case TYPE_NATIVE_FUNCTION:
@@ -266,11 +270,12 @@ static void cgen_statement(cgen_t *cgen, ast_node_t *expression, cgen_var_t var,
     if (add_indent) cgen_add_indent(cgen);
     cgen_expression(cgen, expression, var);
 
-    if (TYPE_IS_VOID(expression->value_type)) {
-
-    } else {
-        cgen_semicolon_nl(cgen);
-    }
+    cgen_semicolon_nl(cgen);
+    // if (TYPE_IS_VOID(expression->value_type)) {
+    //     cgen_semicolon_nl(cgen);
+    // } else {
+    //     cgen_semicolon_nl(cgen);
+    // }
 }
 
 static void cgen_declaration(cgen_t *cgen, ast_node_t *declaration) {
@@ -385,15 +390,6 @@ static void cgen_primary_or_nil(cgen_t *cgen, ast_node_t *primary_or_nil, cgen_v
 
         cgen_primary(cgen, primary_or_nil->value_index, type_info);
     }
-
-    switch (type_info->kind) {
-        case TYPE_VOID:
-        case TYPE_NUMBER: {
-            break;
-        }
-        
-        default: UNREACHABLE(); break;
-    }
 }
 
 static void cgen_grouping(cgen_t *cgen, ast_node_t *grouping, cgen_var_t var) {
@@ -479,9 +475,9 @@ static void cgen_condition_and_open_block(cgen_t *cgen, ast_node_t *branch, cstr
         
     } else {
         cgen_add_indent(cgen);
-        sb_add_format(&cgen->sb, "%s ", branch_cstr);
+        sb_add_format(&cgen->sb, "%s (", branch_cstr);
         cgen_expression(cgen, an_condition(branch), nil_cvar);
-        sb_add_cstr(&cgen->sb, " {\n");
+        sb_add_cstr(&cgen->sb, ") {\n");
     }
 
 }
