@@ -4,11 +4,12 @@ i64 result_; {
     i64 sum_ = (0 - 1);
 
     i64 b_; {
-      while (sum_ > 0) {
+      while ((sum_ > 0)) {
         b_ = (sum_ = (sum_ - 1));
+        continue2_:;
       }
       b_ = ((sum_ = (sum_ + 1)));
-    } blockend1_:;
+    } break1_:;
 
     result_ = b_;
 ;

@@ -555,6 +555,10 @@ static void cgen_while(cgen_t *cgen, ast_node_t *branch, cgen_var_t var)  {
 
     cgen_then(cgen, branch, var);
 
+    cgen_add_indent(cgen);
+    cgen_jmp_label(cgen, branch->ccode_continue_label);
+    cgen_semicolon_nl(cgen);
+
     cgen_unindent(cgen);
 
     cgen_add_indent(cgen);
@@ -583,6 +587,10 @@ static void cgen_do(cgen_t *cgen, ast_node_t *branch, cgen_var_t var) {
     cgen_then(cgen, branch, var);
 
     cgen_unindent(cgen);
+
+    cgen_add_indent(cgen);
+    cgen_jmp_label(cgen, branch->ccode_continue_label);
+    cgen_semicolon_nl(cgen);
 
     cgen_add_indent(cgen);
     sb_add_cstr(&cgen->sb, "} while(false); \n");
@@ -649,7 +657,7 @@ static void cgen_break_or_continue(cgen_t *cgen, ast_node_t *jmp, cgen_var_t var
 
     switch (type) {
         case TOKEN_CONTINUE: {
-            string_t continue_label = jmp->jmp_out_scope_node->ccode_break_label;
+            string_t continue_label = jmp->jmp_out_scope_node->ccode_continue_label;
             sb_add_format(&cgen->sb, "goto %s", continue_label.cstr);
             break;
         }

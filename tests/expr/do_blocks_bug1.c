@@ -8,17 +8,19 @@ i64 result_; {
             do {
               {
                 5;
-                goto blockend2_;
+                goto break3_;
               };
+            continue4_:;
             } while(false); 
             0;
-          } blockend2_:;
+          } break3_:;
 
           answer_ = 10;
         };
+      continue2_:;
       } while(false); 
       answer_ = 0;
-    } blockend1_:;
+    } break1_:;
 
     result_ = answer_;
 ;

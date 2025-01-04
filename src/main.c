@@ -254,12 +254,15 @@ void test_expr_file(string_t expr_file, arena_t *arena) {
         cexpr_str = compile_expr_to_c(&ast, arena);
 
         cc_t cc = cc_make(CC_GCC, arena);
+        cc.output_type = CC_DYNAMIC;
+
         cc_mem_source(&cc, cexpr_str);
 
         cc_include_dir(&cc, lit2str("./lib"));
         cc_no_warning(&cc, lit2str("unused-value"));
-
-        cc.output_type = CC_DYNAMIC;
+        
+        // stops warnings from ((x == y)) type of conditions
+        cc_no_warning(&cc, lit2str("parentheses-equality"));
 
         string_view_t filename_ = sv_filename(string2sv(expr_file));
         string_t filename = string_format("%.*s.so", arena, filename_.length, filename_.data);

@@ -8,12 +8,13 @@ i64 result_; {
     {
       do {
         (a_ = 1);
+      continue2_:;
       } while(false); 
       (a_ = 2);
-    } blockend1_:;
+    } break1_:;
 
     {
-      if (a_ == 2) {
+      if ((a_ == 2)) {
         (sum_ = (sum_ + 1));
       }
     };
@@ -23,14 +24,15 @@ i64 result_; {
         {
           (a_ = 1);
         };
+      continue4_:;
       } while(false); 
       {
         (a_ = 2);
       };
-    } blockend2_:;
+    } break3_:;
 
     {
-      if (a_ == 2) {
+      if ((a_ == 2)) {
         (sum_ = (sum_ + 1));
       }
     };
@@ -41,16 +43,17 @@ i64 result_; {
           (a_ = 1);
 
           ;
-          goto blockend3_;
+          goto break5_;
         };
+      continue6_:;
       } while(false); 
       {
         (a_ = 2);
       };
-    } blockend3_:;
+    } break5_:;
 
     {
-      if (a_ == 1) {
+      if ((a_ == 1)) {
         (sum_ = (sum_ + 1));
       }
     };
@@ -60,16 +63,18 @@ i64 result_; {
         {
           (a_ = 1);
 
-          break;
+          ;
+          goto continue8_;
         };
+      continue8_:;
       } while(false); 
       {
         (a_ = 3);
       };
-    } blockend4_:;
+    } break7_:;
 
     {
-      if (a_ == 3) {
+      if ((a_ == 3)) {
         (sum_ = (sum_ + 1));
       }
     };
@@ -79,23 +84,26 @@ i64 result_; {
         {
           (a_ = 2);
 
-          break;
+          ;
+          goto continue10_;
         };
+      continue10_:;
       } while(false); 
       {
         do {
           {
             (a_ = 3);
           };
+        continue12_:;
         } while(false); 
         {
           (a_ = 4);
         };
-      } blockend6_:;
-    } blockend5_:;
+      } break11_:;
+    } break9_:;
 
     {
-      if (a_ == 4) {
+      if ((a_ == 4)) {
         (sum_ = (sum_ + 1));
       }
     };
@@ -105,8 +113,10 @@ i64 result_; {
         {
           (a_ = 2);
 
-          break;
+          ;
+          goto continue14_;
         };
+      continue14_:;
       } while(false); 
       {
         do {
@@ -114,17 +124,18 @@ i64 result_; {
             (a_ = 3);
 
             ;
-            goto blockend8_;
+            goto break15_;
           };
+        continue16_:;
         } while(false); 
         {
           (a_ = 4);
         };
-      } blockend8_:;
-    } blockend7_:;
+      } break15_:;
+    } break13_:;
 
     {
-      if (a_ == 3) {
+      if ((a_ == 3)) {
         (sum_ = (sum_ + 1));
       }
     };
@@ -132,25 +143,28 @@ i64 result_; {
     {
       do {
         {
-          while (a_ > 0) {
+          while ((a_ > 0)) {
             {
               {
-                if (a_ == 3) {
+                if ((a_ == 3)) {
                   ;
-                  goto blockend9_;
+                  goto break17_;
                 }
-              }
+              };
+
               (a_ = (a_ - 1));
             };
+            continue20_:;
           }
           0;
-        } blockend10_:;
+        } break19_:;
+      continue18_:;
       } while(false); 
       (a_ = 0);
-    } blockend9_:;
+    } break17_:;
 
     {
-      if (a_ == 3) {
+      if ((a_ == 3)) {
         (sum_ = (sum_ + 1));
       }
     };
@@ -158,34 +172,38 @@ i64 result_; {
     {
       do {
         {
-          if (a_ == 3) {
+          if ((a_ == 3)) {
             {
               {
-                while (a_ > 0) {
+                while ((a_ > 0)) {
                   {
                     {
-                      if (a_ == 3) {
-                        break;
+                      if ((a_ == 3)) {
+                        ;
+                        goto continue22_;
                       }
-                    }
+                    };
+
                     (a_ = (a_ - 1));
                   };
+                  continue24_:;
                 }
                 {
                   (a_ = 10);
                 };
-              } blockend12_:;
+              } break23_:;
             };
           }
         };
+      continue22_:;
       } while(false); 
       {
         (a_ = 4);
       };
-    } blockend11_:;
+    } break21_:;
 
     {
-      if (a_ == 4) {
+      if ((a_ == 4)) {
         (sum_ = (sum_ + 1));
       }
     };
@@ -197,38 +215,44 @@ i64 result_; {
             do {
               {
                 5;
-                goto blockend14_;
+                goto break27_;
               };
+            continue28_:;
             } while(false); 
             0;
-          } blockend14_:;
+          } break27_:;
 
           answer_ = 10;
         };
+      continue26_:;
       } while(false); 
       answer_ = 0;
-    } blockend13_:;
+    } break25_:;
 
     {
-      if (answer_ == 0) {
+      if ((answer_ == 0)) {
         (sum_ = (sum_ + 1));
       }
     };
 
-    i64 tmp15; {
+    i64 tmp29; {
       do {
         {
-          ; {
-            if (a_ == 4) {
+          ;
+; {
+            if ((a_ == 4)) {
               {
-                tmp15 = (sum_ + 1);
-                goto blockend16_;
+                tmp29 = (sum_ + 1);
+                goto break30_;
               };
             }
-          }        }      } while(false); 
-      tmp15 = 0;
-    } blockend16_:;
-    (sum_ = tmp15);
+          };
+        };
+      continue31_:;
+      } while(false); 
+      tmp29 = 0;
+    } break30_:;
+    (sum_ = tmp29);
 
     result_ = sum_;
 ;

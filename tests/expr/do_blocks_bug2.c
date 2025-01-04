@@ -16,8 +16,9 @@ i64 result_; {
                     (inner_before_ = 1);
 
                     ;
-                    goto break1_;
+                    goto continue2_;
                   };
+                  continue6_:;
                 }
                 ;
               } break5_:;
@@ -27,9 +28,11 @@ i64 result_; {
               ;
               goto break3_;
             };
+            continue4_:;
           }
           ;
         } break3_:;
+      continue2_:;
       } while(false); 
       ;
     } break1_:;
