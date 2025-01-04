@@ -167,6 +167,7 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type
     node->branch_type = BRANCH_TYPE_IFTHEN;
     node->requires_tmp_for_cgen = true;
     node->code_jmp_index = 0;
+    node->code_jmp_label = lit2str("");
 
     node->inside_type_context = inside_type_context;
 
@@ -180,8 +181,10 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type
     node->jmp_nodes.allocator = &ast->allocator;
     node->jmp_out_scope_node = &nil_node;
 
-    node->lvalue_node = NULL;
+    node->lvalue_node = &nil_node;
     node->value_index = value_index_nil();
+
+    node->last_statement = &nil_node;
 
     node->children = (ast_nodes_t){.allocator=&ast->allocator};
 

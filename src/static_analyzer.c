@@ -825,7 +825,7 @@ void resolve_expression(
     
     ASSERT(ast_node_type_is_expression(expression->node_type), "should be only expressions");
 
-    if (!TYPE_IS_UNRESOLVED(expression->value_type)) {
+    unless (TYPE_IS_UNRESOLVED(expression->value_type)) {
         return;
     }
 
@@ -1257,21 +1257,57 @@ void resolve_expression(
             block_state.mode = MODE_RUNTIME | (state.mode & MODE_FOLDING_TIME);
             resolve_declarations(analyzer, ast, block_state, expression->children, declarations_count);
 
-            ast_node_t *last_decl = NULL;
-            if (declarations_count > 0) {
-                last_decl = expression->children.items[declarations_count - 1];
-            }
-
-            if (last_decl == NULL) {
-                expression->value_type = typeid(TYPE_VOID);
-            } else {
-                if (last_decl->node_type == AST_NODE_TYPE_DECLARATION_DEFINITION) {
-                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_BLOCKS_MUST_BE_EMPTY_OR_END_IN_STATEMENT, expression));
-                    INVALIDATE(expression);
-                } else {
-                    expression->value_type = an_operand(last_decl)->value_type;
+            size_t last_unreachable_index = expression->children.count;
+            for (size_t i = 0; i < expression->children.count; ++i) {
+                ast_node_t *decl = expression->children.items[i];
+                if (TYPE_IS_UNREACHABLE(decl->value_type)) {
+                    last_unreachable_index = i;
+                    break;
                 }
             }
+
+            // discard everything past an unreachable type
+            if (last_unreachable_index < expression->children.count) {
+                expression->children.count = last_unreachable_index+1;
+
+                // todo: add a warning for this
+            }
+
+            size_t last_decl_def = expression->children.count;
+            size_t last_non_void_decl_stmt = expression->children.count;
+            size_t last_decl_stmt = expression->children.count;
+
+            for (size_t i = 0; i < expression->children.count; ++i) {
+                ast_node_t *decl = expression->children.items[i];
+                switch (decl->node_type) {
+                    case AST_NODE_TYPE_DECLARATION_DEFINITION: {
+                        last_decl_def = i;
+                        break;
+                    }
+
+                    case AST_NODE_TYPE_DECLARATION_STATEMENT: {
+                        last_decl_stmt = i;
+                        unless (TYPE_IS_VOID(an_expression(decl)->value_type)) {
+                            last_non_void_decl_stmt = i;
+                        }
+                        break;
+                    }
+
+                    default: UNREACHABLE();
+                }
+            }
+
+            if (last_non_void_decl_stmt < expression->children.count && (last_decl_def == expression->children.count || last_decl_def < last_non_void_decl_stmt)) {
+                expression->last_statement = expression->children.items[last_non_void_decl_stmt];
+            } else if (last_decl_stmt < expression->children.count && (last_decl_def == expression->children.count || last_decl_def < last_decl_stmt)) {
+                expression->last_statement = expression->children.items[last_decl_stmt];
+            } else {
+                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_BLOCKS_MUST_BE_EMPTY_OR_END_IN_STATEMENT, expression));
+                INVALIDATE(expression);
+                break;
+            }
+
+            expression->value_type = expression->last_statement->value_type;
             break;
         }
 

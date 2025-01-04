@@ -1,0 +1,15 @@
+// tmp c variable generated is weird
+{
+    sum : = 0;
+    count := 5;
+
+    count = while count > 0 {
+        count = count - 1;
+        if count == 3 then break 100;
+    };
+
+    if count == 100 then
+        sum = sum + 1;
+    
+    sum;
+}

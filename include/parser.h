@@ -187,6 +187,8 @@ struct ast_node_t {
 
     ast_node_t *lvalue_node;
 
+    ast_node_t *last_statement;
+
     ast_nodes_t children;
 
     token_t identifier;
@@ -194,6 +196,7 @@ struct ast_node_t {
     ast_node_t *jmp_out_scope_node;
     ast_nodes_t jmp_nodes;
     size_t code_jmp_index;
+    string_t code_jmp_label;
 
     union {
         ast_call_t call;
