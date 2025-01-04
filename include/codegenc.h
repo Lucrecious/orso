@@ -550,17 +550,12 @@ static void cgen_jmp_label(cgen_t *cgen, string_t label) {
 
 static void cgen_while(cgen_t *cgen, ast_node_t *branch, cgen_var_t var)  {
     ASSERT(branch->requires_tmp_for_cgen, "branches always require a tmp");
-    bool skip_else = an_else(branch)->node_type == AST_NODE_TYPE_EXPRESSION_NIL && branch->branch_type != BRANCH_TYPE_LOOPING;
-    cgen_begin_branch(cgen, branch, var, skip_else);
+    cgen_begin_branch(cgen, branch, var, false);
 
     cstr_t while_or_until = branch->condition_negated ? "until" : "while";
     cgen_indent(cgen);
     cgen_condition_and_open_block(cgen, branch, while_or_until);
     cgen_indent(cgen);
-
-    if (branch->code_jmp_label.length == 0) {
-        branch->code_jmp_label = string_copy(cgen_next_label(cgen, "blockend"), &cgen->ast->allocator);
-    }
 
     cgen_then(cgen, branch, var);
 
@@ -568,9 +563,8 @@ static void cgen_while(cgen_t *cgen, ast_node_t *branch, cgen_var_t var)  {
 
     cgen_add_indent(cgen);
     sb_add_cstr(&cgen->sb, "}\n");
-    if (!skip_else) {
-        cgen_statement(cgen, an_else(branch), cgen_var_used(var), true);
-    }
+
+    cgen_statement(cgen, an_else(branch), cgen_var_used(var), true);
 
     cgen_end_branch(cgen);
 
@@ -580,23 +574,49 @@ static void cgen_while(cgen_t *cgen, ast_node_t *branch, cgen_var_t var)  {
 }
 
 static void cgen_do(cgen_t *cgen, ast_node_t *branch, cgen_var_t var) {
+    ASSERT(branch->requires_tmp_for_cgen, "branches always require a tmp");
+    cgen_begin_branch(cgen, branch, var, false);
+
+    cgen_indent(cgen);
+
+    cgen_add_indent(cgen);
+    sb_add_cstr(&cgen->sb, "do {\n");
+
+    cgen_indent(cgen);
+
+    cgen_then(cgen, branch, var);
+
+    cgen_unindent(cgen);
+
+    cgen_add_indent(cgen);
+    sb_add_cstr(&cgen->sb, "} while(false); \n");
+
+    cgen_statement(cgen, an_else(branch), cgen_var_used(var), true);
+
+    cgen_end_branch(cgen);
+
+    sb_add_cstr(&cgen->sb, " ");
+    cgen_jmp_label(cgen, branch->code_jmp_label);
 }
 
 static void cgen_branching(cgen_t *cgen, ast_node_t *branch, cgen_var_t var) {
     switch (branch->branch_type) {
+        case BRANCH_TYPE_LOOPING:
         case BRANCH_TYPE_DO: {
-            cgen_do(cgen, branch, var);
+            if (has_var(var)) {
+                branch->code_cvar_name = cstr2string(cgen_var(cgen, cgen_var_used(var)), &cgen->ast->allocator);
+            }
+            branch->code_jmp_label = string_copy(cgen_next_label(cgen, "blockend"), &cgen->ast->allocator);
+            if (branch->branch_type == BRANCH_TYPE_LOOPING) {
+                cgen_while(cgen, branch, var);
+            } else {
+                cgen_do(cgen, branch, var);
+            }
             break;
         }
 
         case BRANCH_TYPE_IFTHEN: {
             cgen_if(cgen, branch, var);
-            break;
-        }
-
-        case BRANCH_TYPE_LOOPING: {
-            branch->code_cvar_name = cstr2string(cgen_var(cgen, cgen_var_used(var)), &cgen->ast->allocator);
-            cgen_while(cgen, branch, var);
             break;
         }
     }
@@ -643,7 +663,10 @@ static void cgen_continue_jmp(cgen_t *cgen, ast_node_t *jmp) {
             sb_add_cstr(&cgen->sb, "continue");
             break;
         }
-        case BRANCH_TYPE_DO:
+        case BRANCH_TYPE_DO: {
+            sb_add_cstr(&cgen->sb, "break");
+            break;
+        }
         case BRANCH_TYPE_IFTHEN: UNREACHABLE();
     }
 }

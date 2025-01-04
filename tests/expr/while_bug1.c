@@ -8,7 +8,7 @@ i64 result_; {
         b_ = (sum_ = (sum_ - 1));
       }
       b_ = ((sum_ = (sum_ + 1)));
-    };
+    } blockend1_:;
 
     result_ = b_;
 ;

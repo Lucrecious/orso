@@ -15,13 +15,11 @@ i64 result_; {
               tmp1 = 100;
               goto blockend2_;
             }
-          };
-
+          }
         };
       }
       tmp1 = 0;
-      blockend2_:
-    };
+    } blockend2_:;
     (count_ = tmp1);
 
     {
@@ -32,7 +30,6 @@ i64 result_; {
 
     result_ = sum_;
 ;
-
   };
 
   return result_;

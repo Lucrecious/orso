@@ -12,17 +12,17 @@ i64 result_; {
         {
           (sum_ = (sum_ + x_));
 
-          i64 tmp2; {
-            tmp2 = x_;
+          i64 tmp3; {
+            tmp3 = x_;
 ;
           };
-          i64 tmp3 = 1;
-          i64 tmp1 = tmp2 + tmp3;
-          (x_ = tmp1);
+          i64 tmp4 = 1;
+          i64 tmp2 = tmp3 + tmp4;
+          (x_ = tmp2);
         };
       }
       sum_;
-    };
+    } blockend1_:;
 
     i64 count_ = 10;
 
@@ -31,7 +31,7 @@ i64 result_; {
         (sum_ = (sum_ + 1));
       }
       0;
-    };
+    } blockend5_:;
 
     (count_ = 10);
 
@@ -40,7 +40,7 @@ i64 result_; {
         a_ = (sum_ = (sum_ + 1));
       }
       a_ = 0;
-    };
+    } blockend6_:;
 
     {
       if (a_ == 0) {
@@ -55,7 +55,7 @@ i64 result_; {
         b_ = (sum_ = (sum_ - 1));
       }
       b_ = ((sum_ = (sum_ + 1)));
-    };
+    } blockend7_:;
 
     {
       if (b_ == 1) {
