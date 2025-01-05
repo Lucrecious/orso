@@ -144,6 +144,22 @@ i64 result_; {
     i64 tmp10 = div_(tmp11, tmp12);
     (a_ = tmp10);
 
+    (a_ = div_(a_, 0));
+
+    {
+      if ((a_ == 0)) {
+        (sum_ = (sum_ + 1));
+      }
+    };
+
+    (a_ = div_(0, 0));
+
+    {
+      if ((a_ == 0)) {
+        (sum_ = (sum_ + 1));
+      }
+    };
+
     result_ = sum_;
 ;
   };
