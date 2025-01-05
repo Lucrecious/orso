@@ -35,6 +35,8 @@
 
     a = -5 % -2;
 
+    a;
+
     if a == 1 then sum = sum + 1;
 
     a = 10 %% 6;
@@ -53,5 +55,11 @@
 
     if a == -4 then sum = sum + 1;
 
-    sum == 13;
+    a = 5 + 6/4;
+
+    if a == 6 then sum = sum + 1;
+
+    a = a / {1;};
+
+    sum;
 }

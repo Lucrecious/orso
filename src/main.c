@@ -6,6 +6,9 @@
 #undef sv_eq
 #undef NOB_IMPLEMENTATION
 
+#define INTRINSICS_IMPLEMENTATION
+#include "intrinsics.h"
+
 #define VM_IMPLEMENTATION
 #include "vm.h"
 

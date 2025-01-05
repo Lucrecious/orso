@@ -374,7 +374,7 @@ void vm_step(vm_t *vm) {
             byte c = in.as.bin_reg_to_reg.reg_result;
 
             b = b < 0 ? -b : b;
-            vm->registers[c].as.i = ((a % b) + b) % b;
+            vm->registers[c].as.i = modi_(a, b);
 
             IP_ADV(1);
             break;
@@ -391,8 +391,7 @@ void vm_step(vm_t *vm) {
             u64 b = vm->registers[in.as.bin_reg_to_reg.reg_op2].as.u;
             byte c = in.as.bin_reg_to_reg.reg_result;
 
-            b = b < 0 ? -b : b;
-            vm->registers[c].as.u = ((a % b) + b) % b;
+            vm->registers[c].as.u = a%b;
 
             IP_ADV(1);
             break;
@@ -408,7 +407,7 @@ void vm_step(vm_t *vm) {
             byte b = in.as.bin_reg_to_reg.reg_op2;
             byte c = in.as.bin_reg_to_reg.reg_result;
 
-            vm->registers[c].as.d = fmod(vm->registers[a].as.d, vm->registers[b].as.d);
+            vm->registers[c].as.d = remd_(vm->registers[a].as.d, vm->registers[b].as.d);
 
             IP_ADV(1);
             break;
@@ -420,7 +419,7 @@ void vm_step(vm_t *vm) {
             byte c = in.as.bin_reg_to_reg.reg_result;
 
             b = b < 0 ? -b : b;
-            vm->registers[c].as.d = fmod(fmod(a, b) + b, b);
+            vm->registers[c].as.d = modd_(a, b);
 
             IP_ADV(1);
             break;

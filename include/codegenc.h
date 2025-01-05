@@ -164,13 +164,66 @@ static void *memarr_value_at(memarr_t *memarr, value_index_t value_index) {
 
 static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t tmp_var);
 
-static void cgen_cache_requires_tmp(ast_node_t *expression) {
+static bool cgen_binary_is_macro(token_type_t type, type_info_t *type_info, cstr_t *operator_or_func_name) {
+    #define set_op(lit, is_func) { if (operator_or_func_name) *operator_or_func_name = (lit); return (is_func); } break
+    switch (type) {
+        case TOKEN_PLUS: set_op("+", false);
+        case TOKEN_MINUS: set_op("-", false);
+        case TOKEN_STAR: set_op("*", false);
+        case TOKEN_GREATER: set_op(">", false);
+        case TOKEN_GREATER_EQUAL: set_op(">=", false);
+        case TOKEN_LESS: set_op("<", false);
+        case TOKEN_LESS_EQUAL: set_op("<=", false);
+        case TOKEN_EQUAL_EQUAL: set_op("==", false);
+        case TOKEN_BANG_EQUAL: set_op("!=", false);
+        case TOKEN_AND: set_op("and", false);
+        case TOKEN_OR: set_op("or", false);
+
+        case TOKEN_SLASH: set_op("div_", true);
+
+        case TOKEN_PERCENT_PERCENT: {
+            ASSERT(type_info->kind == TYPE_NUMBER, "must be a number");
+            switch (type_info->data.num) {
+                case NUM_TYPE_FLOAT: set_op("remd_", true);
+
+                case NUM_TYPE_UNSIGNED:
+                case NUM_TYPE_SIGNED: set_op("%", false);
+            }
+            break;
+        }
+
+        case TOKEN_PERCENT: {
+            switch (type_info->data.num) {
+                case NUM_TYPE_FLOAT: set_op("modd_", true);
+                case NUM_TYPE_SIGNED: set_op("modi_", true);
+                case NUM_TYPE_UNSIGNED: set_op("modu_", true);
+            }
+        }
+
+        default: UNREACHABLE();
+    }
+}
+
+static void cgen_cache_requires_tmp(type_infos_t *types, ast_node_t *expression) {
     switch (expression->node_type) {
         case AST_NODE_TYPE_EXPRESSION_BRANCHING:
         case AST_NODE_TYPE_EXPRESSION_JMP:
         case AST_NODE_TYPE_EXPRESSION_BLOCK: {
             expression->requires_tmp_for_cgen = true;
             break;
+        }
+
+        case AST_NODE_TYPE_EXPRESSION_BINARY: {
+            type_info_t *type_info = get_type_info(types, expression->value_type);
+            if (cgen_binary_is_macro(expression->operator.type, type_info, NULL)) {
+                if (an_lhs(expression)->node_type == AST_NODE_TYPE_EXPRESSION_PRIMARY && an_rhs(expression)->node_type == AST_NODE_TYPE_EXPRESSION_PRIMARY) {
+                    expression->requires_tmp_for_cgen = false;
+                } else {
+                    expression->requires_tmp_for_cgen = true;
+                }
+            } else {
+                expression->requires_tmp_for_cgen = false;
+            }
         }
 
         default:  {
@@ -181,7 +234,7 @@ static void cgen_cache_requires_tmp(ast_node_t *expression) {
 
     for (size_t i = 0; i < expression->children.count; ++i) {
         ast_node_t *child = expression->children.items[i];
-        cgen_cache_requires_tmp(child);
+        cgen_cache_requires_tmp(types, child);
         if (child->requires_tmp_for_cgen) {
             expression->requires_tmp_for_cgen = true;
         }
@@ -242,26 +295,6 @@ static void cgen_primary(cgen_t *cgen, value_index_t value_index, type_info_t *t
     #undef value_at
 }
 
-static cstr_t token2opcstr(token_t op) {
-    switch (op.type) {
-        case TOKEN_PLUS: return "+";
-        case TOKEN_MINUS: return "-";
-        case TOKEN_STAR: return "*";
-        case TOKEN_SLASH: return "/";
-
-        case TOKEN_GREATER: return ">";
-        case TOKEN_GREATER_EQUAL: return ">=";
-        case TOKEN_LESS: return "<";
-        case TOKEN_LESS_EQUAL: return "<=";
-        case TOKEN_EQUAL_EQUAL: return "==";
-        case TOKEN_BANG_EQUAL: return "!=";
-
-        default: UNREACHABLE(); break;
-    }
-
-    return "+";
-}
-
 static void cgen_semicolon_nl(cgen_t *cgen) {
     sb_add_cstr(&cgen->sb, ";\n");
 }
@@ -296,19 +329,30 @@ static void cgen_declaration(cgen_t *cgen, ast_node_t *declaration) {
 }
 
 static void cgen_binary(cgen_t *cgen, ast_node_t *binary, cgen_var_t var) {
+    cstr_t operator_or_function_name = NULL;
+
+    type_info_t *type_info = get_type_info(&cgen->ast->type_set.types, binary->value_type);
+    bool is_macro = cgen_binary_is_macro(binary->operator.type, type_info, &operator_or_function_name);
+
     unless (binary->requires_tmp_for_cgen) {
-        if (has_var(var))
-        {
+        if (has_var(var)) {
             sb_add_format(&cgen->sb, "%s = ", cgen_var(cgen, var));
         }
 
+        if (is_macro) {
+            sb_add_format(&cgen->sb, "%s", operator_or_function_name);
+        }
         sb_add_cstr(&cgen->sb, "(");
 
         cgen_expression(cgen, an_lhs(binary), nil_cvar);
 
-        sb_add_cstr(&cgen->sb, " ");
-        sb_add_cstr(&cgen->sb, token2opcstr(binary->operator));
-        sb_add_cstr(&cgen->sb, " ");
+        if (is_macro) {
+            sb_add_cstr(&cgen->sb, ", ");
+        } else {
+            sb_add_cstr(&cgen->sb, " ");
+            sb_add_format(&cgen->sb, "%s", operator_or_function_name);
+            sb_add_cstr(&cgen->sb, " ");
+        }
 
         cgen_expression(cgen, an_rhs(binary), nil_cvar);
 
@@ -322,14 +366,48 @@ static void cgen_binary(cgen_t *cgen, ast_node_t *binary, cgen_var_t var) {
         cgen_statement(cgen, an_rhs(binary), rhs_var, true);
 
         cgen_add_indent(cgen);
-        if (has_var(var))
-        {
+        if (has_var(var)) {
             sb_add_format(&cgen->sb, "%s = ", cgen_var(cgen, var));
         }
 
-        cstr_t opcstr = token2opcstr(binary->operator);
-        sb_add_format(&cgen->sb, "%s %s %s", cgen_var_name(cgen, lhs_var), opcstr, cgen_var_name(cgen, rhs_var));
+        if (is_macro) {
+            sb_add_format(&cgen->sb, "%s(%s, %s)", operator_or_function_name, cgen_var_name(cgen, lhs_var), cgen_var_name(cgen, rhs_var));
+        } else {
+            sb_add_format(&cgen->sb, "%s %s %s", cgen_var_name(cgen, lhs_var), operator_or_function_name, cgen_var_name(cgen, rhs_var));
+        }
     }
+}
+
+static cstr_t cgen_token2unary(token_type_t type) {
+    switch (type) {
+        case TOKEN_MINUS: return "-";
+        case TOKEN_NOT: return "!";
+
+        default: UNREACHABLE(); return "";
+    }
+}
+
+static void cgen_unary(cgen_t *cgen, ast_node_t *unary, cgen_var_t var) {
+    unless (unary->requires_tmp_for_cgen) {
+        if (has_var(var)) {
+            sb_add_format(&cgen->sb, "%s = ", cgen_var(cgen, var));
+        }
+
+        sb_add_format(&cgen->sb, "%s(", cgen_token2unary(unary->operator.type));
+        cgen_expression(cgen, an_operand(unary), var);
+        sb_add_cstr(&cgen->sb, ")");
+    } else {
+        cgen_var_t op_var = cgen_next_tmpid(cgen, an_operand(unary)->value_type);
+        cgen_statement(cgen, an_operand(unary), var, false);
+
+        cgen_add_indent(cgen);
+
+        if (has_var(var)) {
+            sb_add_format(&cgen->sb, "%s = ", cgen_var(cgen, var));
+        }
+
+        sb_add_format(&cgen->sb, "%s%s", cgen_token2unary(unary->operator.type), cgen_var_name(cgen, op_var));
+    } 
 }
 
 static void cgen_assignment(cgen_t *cgen, ast_node_t *assignment, cgen_var_t var) {
@@ -678,6 +756,11 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
             break;
         }
 
+        case AST_NODE_TYPE_EXPRESSION_UNARY: {
+            cgen_unary(cgen, expression, var);
+            break;
+        }
+
         case AST_NODE_TYPE_EXPRESSION_ASSIGNMENT: {
             cgen_assignment(cgen, expression, var);
             break;
@@ -730,13 +813,15 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
 
 string_t compile_expr_to_c(ast_t *ast, arena_t *arena) {
     ast_node_t *expr_node = ast->root;
-    cgen_cache_requires_tmp(expr_node);
+    cgen_cache_requires_tmp(&ast->type_set.types, expr_node);
     
     tmp_arena_t *tmp_arena = allocator_borrow();
     cgen_t cgen = {.ast = ast, .tmp_count = 0 };
     cgen.sb.allocator = &cgen.tmp_arena;
 
+    sb_add_cstr(&cgen.sb, "#define INTRINSICS_IMPLEMENTATION\n");
     cgen_add_include(&cgen, "intrinsics.h");
+    sb_add_cstr(&cgen.sb, "\n");
 
     sb_add_format(&cgen.sb, "%s expr(void) {\n", cgen_type_name(&cgen, expr_node->value_type));
     cgen_indent(&cgen);
