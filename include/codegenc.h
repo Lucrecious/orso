@@ -641,7 +641,7 @@ static void cgen_def_value(cgen_t *cgen, ast_node_t *def_value, cgen_var_t var) 
     }
 }
 
-static void cgen_break_or_continue(cgen_t *cgen, ast_node_t *jmp, cgen_var_t var, token_type_t type) {
+static void cgen_break_or_continue(cgen_t *cgen, ast_node_t *jmp, token_type_t type) {
     ASSERT(jmp->requires_tmp_for_cgen, "requires a tmp because its leaving the scope");
 
     cgen_var_t jmp_var = nil_cvar;
@@ -713,7 +713,7 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
             switch (expression->start.type) {
                 case TOKEN_CONTINUE:
                 case TOKEN_BREAK: {
-                    cgen_break_or_continue(cgen, expression, var, expression->start.type);
+                    cgen_break_or_continue(cgen, expression, expression->start.type);
                     break;
                 }
 

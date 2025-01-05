@@ -104,16 +104,28 @@ static type_t resolve_unary_type(ast_t* ast, token_type_t operator, type_t opera
 
     switch (operator) {
         case TOKEN_MINUS: {
-            if (type_is_number(operand, false)) {
+            if (type_is_number(operand, false) && operand->data.num != NUM_TYPE_UNSIGNED) {
                 return operand_id;
-            } else if (operand_id.i == TYPE_BOOL) {
-                return ast->type_set.i32_;
             } else {
                 return typeid(TYPE_INVALID);
             }
         }
-        case TOKEN_NOT:
-            return typeid(TYPE_BOOL);
+        case TOKEN_NOT: {
+            if (typeid_eq(typeid(TYPE_BOOL), operand_id)) {
+                return typeid(TYPE_BOOL);
+            } else {
+                return typeid(TYPE_INVALID);
+            }
+        }
+
+        case TOKEN_PLUS_PLUS:
+        case TOKEN_MINUS_MINUS: {
+            return typeid(TYPE_INVALID);
+            // if (type_is_number(operand, false)) {
+            //     return operand_id;
+            // }
+        }
+
         case TOKEN_AMPERSAND: {
             type_t type = type_set_fetch_pointer(&ast->type_set, operand_id);
             return type;

@@ -1,0 +1,39 @@
+{
+    a := true;
+    b := false;
+
+    sum := 0;
+
+    ab := a and b;
+    if not ab then ++sum;
+
+    a = true;
+    b = false;
+
+    // short circuit
+    ab = false and (b = true);
+    if not b then ++sum;
+
+    a = true;
+    b = false;
+
+    ab = a or b;
+    if ab then ++sum;
+
+    a = false;
+    b = true;
+    if ab then ++sum;
+
+    a = false;
+    b = false;
+    if not ab then ++sum;
+
+    a = true;
+    b = true;
+    if ab then ++sum;
+
+    ab = true or (b = true);
+    if not b then ++sum;
+
+    sum == 7;
+}

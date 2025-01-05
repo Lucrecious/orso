@@ -263,6 +263,74 @@ static void emit_binary(text_location_t text_location, function_t *function, tok
     emit_instruction(function, text_location, instruction);
 }
 
+static void emit_unary(text_location_t text_location, function_t *function, token_type_t token_type, type_info_t *type_info, reg_t op1, reg_t result) {
+    instruction_t in = {0};
+    in.as.unary_reg_to_reg.reg_op = op1;
+    in.as.unary_reg_to_reg.reg_result = result;
+
+    switch (token_type) {
+        case TOKEN_NOT: {
+            switch (type_info->kind) {
+                case TYPE_BOOL: in.op = OP_NOT; break;
+                default: UNREACHABLE();
+            }
+            break;
+        }
+
+        case TOKEN_MINUS: {
+            switch (type_info->kind) {
+                case TYPE_NUMBER: {
+                    switch (type_info->data.num) {
+                        case NUM_TYPE_FLOAT: in.op = OP_NEGATED; break;
+                        case NUM_TYPE_SIGNED: in.op = OP_NEGATEI; break;
+                        case NUM_TYPE_UNSIGNED: UNREACHABLE(); break;
+                    }
+                    break;
+                }
+
+                default: UNREACHABLE();
+            }
+            break;
+        }
+
+        case TOKEN_PLUS_PLUS: {
+            switch (type_info->kind) {
+                case TYPE_NUMBER: {
+                    switch (type_info->data.num) {
+                        case NUM_TYPE_FLOAT: in.op = OP_INCREMENTD; break;
+                        case NUM_TYPE_SIGNED: in.op = OP_INCREMENTI; break;
+                        case NUM_TYPE_UNSIGNED: in.op = OP_INCREMENTU; break;
+                    }
+                    break;
+                }
+
+                default: UNREACHABLE();
+            }
+            break;
+        }
+
+        case TOKEN_MINUS_MINUS: {
+            switch (type_info->kind) {
+                case TYPE_NUMBER: {
+                    switch (type_info->data.num) {
+                        case NUM_TYPE_FLOAT: in.op = OP_DECREMENTD; break;
+                        case NUM_TYPE_SIGNED: in.op = OP_DECREMENTI; break;
+                        case NUM_TYPE_UNSIGNED: in.op = OP_DECREMENTU; break;
+                    }
+                    break;
+                }
+
+                default: UNREACHABLE();
+            }
+            break;
+        }
+
+        default: UNREACHABLE();
+    }
+
+    emit_instruction(function, text_location, in);
+}
+
 static void emit_return(text_location_t text_location, function_t *function) {
     instruction_t instruction = {0};
     instruction.op = OP_RETURN;
@@ -295,6 +363,15 @@ static void gen_binary(gen_t *gen, function_t *function, ast_node_t *binary) {
     type_info_t *expr_type_info = get_type_info(&gen->ast->type_set.types, an_lhs(binary)->value_type);
 
     emit_binary(token_end_location(&binary->end), function, binary->operator.type, expr_type_info, REG_TMP, REG_RESULT, REG_RESULT);
+}
+
+static void gen_unary(gen_t *gen, function_t *function, ast_node_t *unary) {
+    ast_node_t *expr = an_expression(unary);
+    gen_expression(gen, function, expr);
+
+    type_info_t *expr_type_info = get_type_info(&gen->ast->type_set.types, expr->value_type);
+
+    emit_unary(token_end_location(&unary->end), function, unary->operator.type, expr_type_info, REG_RESULT, REG_RESULT);
 }
 
 static value_index_t add_constant(function_t *function, void *data, size_t size) {
@@ -620,6 +697,11 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
             break;
         }
 
+        case AST_NODE_TYPE_EXPRESSION_UNARY: {
+            gen_unary(gen, function, expression);
+            break;
+        }
+
         case AST_NODE_TYPE_EXPRESSION_GROUPING: {
             gen_expression(gen, function, an_operand(expression));
             break;
@@ -659,7 +741,6 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
         case AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE:
         case AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION:
         case AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER:
-        case AST_NODE_TYPE_EXPRESSION_UNARY:
         case AST_NODE_TYPE_DECLARATION_STATEMENT:
         case AST_NODE_TYPE_NONE:
         case AST_NODE_TYPE_DECLARATION_DEFINITION:

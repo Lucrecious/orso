@@ -64,6 +64,18 @@ enum op_code_t {
     OP_JMP,
     OP_LOOP,
 
+    OP_NOT,
+
+    OP_NEGATEI,
+    OP_NEGATED,
+
+    OP_INCREMENTD,
+    OP_DECREMENTD,
+    OP_INCREMENTI,
+    OP_DECREMENTI,
+    OP_INCREMENTU,
+    OP_DECREMENTU,
+
     OP_RETURN,
 };
 
@@ -113,6 +125,11 @@ struct instruction_t {
             byte reg_destination;
             byte reg_source;
         } mov_reg_to_reg;
+
+        struct {
+            byte reg_op;
+            byte reg_result;
+        } unary_reg_to_reg;
     } as;
 };
 
@@ -374,6 +391,25 @@ void vm_step(vm_t *vm) {
         case_bin_reg_reg(LED, d, <=);
         case_bin_reg_reg(EQD, d, ==);
         case_bin_reg_reg(NQD, d, !=);
+
+        #define case_unary_reg_reg(name, m, op) case OP_##name: {\
+            byte a = in.as.unary_reg_to_reg.reg_op;\
+            byte result = in.as.unary_reg_to_reg.reg_result;\
+            vm->registers[result].as.m = op(vm->registers[a].as.m);\
+            IP_ADV(1); \
+        } break
+
+        case_unary_reg_reg(NOT, u, !);
+
+        case_unary_reg_reg(NEGATEI, i, -);
+        case_unary_reg_reg(NEGATED, d, -);
+
+        case_unary_reg_reg(INCREMENTD, d, ++);
+        case_unary_reg_reg(DECREMENTD, d, --);
+        case_unary_reg_reg(INCREMENTI, i, ++);
+        case_unary_reg_reg(DECREMENTI, i, --);
+        case_unary_reg_reg(INCREMENTU, u, ++);
+        case_unary_reg_reg(DECREMENTU, u, --);
 
         case OP_RETURN: {
             vm->halted = true;

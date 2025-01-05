@@ -347,7 +347,9 @@ token_t _lexer_next_token(lexer_t *lexer) {
         case ']': return create_token(lexer, TOKEN_BRACKET_CLOSE);
         case ',': return create_token(lexer, TOKEN_COMMA);
         case '.': return create_token(lexer, TOKEN_DOT);
-        case '-': return create_token(lexer, match(lexer, '>') ? TOKEN_ARROW_RIGHT : TOKEN_MINUS);
+        case '-': return create_token(lexer, match(lexer, '>') ? TOKEN_ARROW_RIGHT :
+                                            (match(lexer, '-') ? TOKEN_MINUS_MINUS : 
+                                                                 TOKEN_MINUS));
         case '*': return create_token(lexer, TOKEN_STAR);
         case '/': return create_token(lexer, TOKEN_SLASH);
         case ':': return create_token(lexer, TOKEN_COLON);

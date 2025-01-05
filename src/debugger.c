@@ -117,6 +117,24 @@ static string_t disassemble_instruction(instruction_t in, arena_t *allocator) {
 
         #undef OP_BIN_REG_REG
 
+        #define OP_UNARY_REG_REG(type) string_format("OP_"#type"_REG_REG(reg_op: %lu, reg_result: %lu)", allocator,\
+                (u32)in.as.unary_reg_to_reg.reg_op,\
+                (u32)in.as.unary_reg_to_reg.reg_result)
+        
+        case OP_NOT: return OP_UNARY_REG_REG(NOT);
+
+        case OP_NEGATEI: return OP_UNARY_REG_REG(NEGATEI);
+        case OP_NEGATED: return OP_UNARY_REG_REG(NEGATED);
+
+        case OP_INCREMENTD: return OP_UNARY_REG_REG(INCREMENTD);
+        case OP_DECREMENTD: return OP_UNARY_REG_REG(DECREMENTD);
+        case OP_INCREMENTI: return OP_UNARY_REG_REG(INCREMENTI);
+        case OP_DECREMENTI: return OP_UNARY_REG_REG(DECREMENTI);
+        case OP_INCREMENTU: return OP_UNARY_REG_REG(INCREMENTU);
+        case OP_DECREMENTU: return OP_UNARY_REG_REG(DECREMENTU);
+        
+        #undef OP_UNARY_REG_REG
+
         case OP_RETURN: return lit2str("OP_RETURN");
     }
 }
