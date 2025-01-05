@@ -158,7 +158,7 @@ static void emit_popn_words(gen_t *gen, function_t *function, u32 pop_size_words
     emit_instruction(function, location, in);
 }
 
-static void emit_binary(text_location_t text_location, function_t *function, token_type_t token_type, type_info_t *type_info, reg_t op1, reg_t op2, reg_t result) {
+static void emit_bin_arithmetic(text_location_t text_location, function_t *function, token_type_t token_type, type_info_t *type_info, reg_t op1, reg_t op2, reg_t result) {
     instruction_t instruction = {0};
     ASSERT(type_info->kind == TYPE_NUMBER, "for now only numbers");
 
@@ -349,20 +349,75 @@ static void emit_mov_reg_to_reg(function_t *function, text_location_t location, 
 
 static void gen_expression(gen_t *gen, function_t *function, ast_node_t *expression);
 
+static size_t gen_jmp_if_reg(function_t *function, text_location_t location, reg_t condition_reg, bool jmp_condition) {
+    instruction_t instruction = {0};
+    instruction.op = OP_JMP_IF_REG_CONDITION;
+    instruction.as.jmp.amount = 0;
+    instruction.as.jmp.condition_reg = condition_reg;
+    instruction.as.jmp.check_for = jmp_condition;
+
+    size_t index = function->code.count;
+    emit_instruction(function, location, instruction);
+    return index;
+}
+
+static void gen_patch_jmp(gen_t *gen, function_t *function, size_t index) {
+    size_t amount = function->code.count - index;
+    if (amount > UINT32_MAX) {
+        gen_error(gen, make_error(ERROR_CODEGEN_JMP_TOO_LARGE));
+        return;
+    }
+
+    instruction_t *instruction = &function->code.items[index];
+    instruction->as.jmp.amount = (u32)amount;
+}
+
 static void gen_binary(gen_t *gen, function_t *function, ast_node_t *binary) {
-    ast_node_t *lhs = an_lhs(binary);
-    gen_expression(gen, function, lhs);
+    switch (binary->operator.type) {
+        case TOKEN_EQUAL_EQUAL:
+        case TOKEN_BANG_EQUAL:
+        case TOKEN_GREATER:
+        case TOKEN_GREATER_EQUAL:
+        case TOKEN_LESS:
+        case TOKEN_LESS_EQUAL:
 
-    emit_push_wordreg(gen, token_end_location(&lhs->end), function, REG_RESULT);
+        case TOKEN_PLUS:
+        case TOKEN_MINUS:
+        case TOKEN_STAR:
+        case TOKEN_SLASH: {
+            ast_node_t *lhs = an_lhs(binary);
+            gen_expression(gen, function, lhs);
 
-    ast_node_t *rhs = an_rhs(binary);
-    gen_expression(gen, function, rhs);
+            emit_push_wordreg(gen, token_end_location(&lhs->end), function, REG_RESULT);
 
-    emit_pop_to_wordreg(gen, token_end_location(&rhs->end), function, REG_TMP);
+            ast_node_t *rhs = an_rhs(binary);
+            gen_expression(gen, function, rhs);
 
-    type_info_t *expr_type_info = get_type_info(&gen->ast->type_set.types, an_lhs(binary)->value_type);
+            emit_pop_to_wordreg(gen, token_end_location(&rhs->end), function, REG_TMP);
 
-    emit_binary(token_end_location(&binary->end), function, binary->operator.type, expr_type_info, REG_TMP, REG_RESULT, REG_RESULT);
+            type_info_t *expr_type_info = get_type_info(&gen->ast->type_set.types, an_lhs(binary)->value_type);
+
+            emit_bin_arithmetic(token_end_location(&binary->end), function, binary->operator.type, expr_type_info, REG_TMP, REG_RESULT, REG_RESULT);
+            break;
+        }
+
+        case TOKEN_AND:
+        case TOKEN_OR: {
+            ast_node_t *lhs = an_lhs(binary);
+            gen_expression(gen, function, lhs);
+
+            bool jmp_condition = (binary->operator.type == TOKEN_AND) ? false : true;
+            size_t and_or_jmp = gen_jmp_if_reg(function, token_end_location(&lhs->end), REG_RESULT, jmp_condition);
+
+            ast_node_t *rhs = an_rhs(binary);
+            gen_expression(gen, function, rhs);
+            
+            gen_patch_jmp(gen, function, and_or_jmp);
+            break;
+        }
+
+        default: UNREACHABLE(); break;
+    }
 }
 
 static void gen_unary(gen_t *gen, function_t *function, ast_node_t *unary) {
@@ -528,18 +583,6 @@ static void gen_def_value(gen_t *gen, function_t *function, ast_node_t *def) {
     }
 }
 
-static size_t gen_jmp_if_reg(function_t *function, text_location_t location, reg_t condition_reg, bool jmp_condition) {
-    instruction_t instruction = {0};
-    instruction.op = OP_JMP_IF_REG_CONDITION;
-    instruction.as.jmp.amount = 0;
-    instruction.as.jmp.condition_reg = condition_reg;
-    instruction.as.jmp.check_for = jmp_condition;
-
-    size_t index = function->code.count;
-    emit_instruction(function, location, instruction);
-    return index;
-}
-
 static size_t gen_jmp(function_t *function, text_location_t location) {
     instruction_t instruction = {0};
     instruction.op = OP_JMP;
@@ -560,17 +603,6 @@ static void gen_loop(gen_t *gen, function_t *function, text_location_t location,
     in.op = OP_LOOP;
     in.as.jmp.amount = (u32)amount;
     emit_instruction(function, location, in);
-}
-
-static void gen_patch_jmp(gen_t *gen, function_t *function, size_t index) {
-    size_t amount = function->code.count - index;
-    if (amount > UINT32_MAX) {
-        gen_error(gen, make_error(ERROR_CODEGEN_JMP_TOO_LARGE));
-        return;
-    }
-
-    instruction_t *instruction = &function->code.items[index];
-    instruction->as.jmp.amount = (u32)amount;
 }
 
 static void gen_patch_jmps(gen_t *gen, function_t *function, ast_node_t *expr, token_type_t jmp_type) {

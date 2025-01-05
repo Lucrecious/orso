@@ -5,35 +5,39 @@
     sum := 0;
 
     ab := a and b;
-    if not ab then ++sum;
+    if not ab then sum = sum + 1;
 
     a = true;
     b = false;
 
     // short circuit
     ab = false and (b = true);
-    if not b then ++sum;
+    if not b then sum = sum + 1;
 
     a = true;
     b = false;
 
     ab = a or b;
-    if ab then ++sum;
+    if ab then sum = sum + 1;
 
     a = false;
     b = true;
-    if ab then ++sum;
+    ab = a or b;
+    if ab then sum = sum + 1;
 
     a = false;
     b = false;
-    if not ab then ++sum;
+    ab = a or b;
+    if not ab then sum = sum + 1;
 
     a = true;
     b = true;
-    if ab then ++sum;
+    ab = a or b;
+    if ab then sum = sum + 1;
 
+    b = false;
     ab = true or (b = true);
-    if not b then ++sum;
+    if not b then sum = sum + 1;
 
     sum == 7;
 }

@@ -490,11 +490,6 @@ static void fold_constants_via_runtime(
     
     UNUSED(analyzer);
 
-    // // TODO: we need to figure how a better way to figure out if an expression needs to be refolded
-    // if (IS_FOLDED(expression)) {
-    //     return;
-    // }
-
     resolve_foldable(analyzer, ast, state, expression);
 
     if (IS_FOLDED(expression)) {
@@ -977,17 +972,7 @@ void resolve_expression(
                 }
 
                 case TOKEN_BAR: {
-                    if (typeid_eq(left->value_type, right->value_type) && typeid_eq(left->value_type, typeid(TYPE_TYPE))) {
-                        cast_left = typeid(TYPE_TYPE);
-                        cast_right = typeid(TYPE_TYPE);
-
-                        expression->value_type = typeid(TYPE_TYPE);
-                    } else {
-                        cast_left = typeid(TYPE_INVALID);
-                        cast_right = typeid(TYPE_INVALID);
-
-                        INVALIDATE(expression);
-                    }
+                    INVALIDATE(expression);
                     break;
                 }
 
@@ -1074,8 +1059,6 @@ void resolve_expression(
                 type_t new_type = resolve_unary_type(ast, expression->operator.type, an_operand(expression)->value_type);
                 expression->value_type = new_type;
                 
-                // TODO: Must negate the new type implications if the unary operation is NOT
-
                 if (TYPE_IS_INVALID(expression->value_type)) {
                     stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_UNARY_OPERAND, expression));
                     break;
