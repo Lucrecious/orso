@@ -36,8 +36,12 @@
     if ab then sum = sum + 1;
 
     b = false;
-    ab = true or (b = true);
+    ab = true or { (b = true); };
     if not b then sum = sum + 1;
 
-    sum == 7;
+    b = false;
+    ab = { x := false; y := true; x or y; } and (b = true);
+    if not b then sum = sum + 1;
+
+    sum;
 }

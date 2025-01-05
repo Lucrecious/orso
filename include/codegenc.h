@@ -153,6 +153,10 @@ static string_t cgen_next_label(cgen_t *cgen, cstr_t label_name) {
     return label;
 }
 
+static void cgen_jmp_label(cgen_t *cgen, string_t label) {
+    sb_add_format(&cgen->sb, "%s:", label.cstr);
+}
+
 static void *memarr_value_at(memarr_t *memarr, value_index_t value_index) {
     if (value_index.exists && value_index.index < memarr->count) {
         return memarr_get_ptr(memarr, value_index);
@@ -176,8 +180,8 @@ static bool cgen_binary_is_macro(token_type_t type, type_info_t *type_info, cstr
         case TOKEN_LESS_EQUAL: set_op("<=", false);
         case TOKEN_EQUAL_EQUAL: set_op("==", false);
         case TOKEN_BANG_EQUAL: set_op("!=", false);
-        case TOKEN_AND: set_op("and", false);
-        case TOKEN_OR: set_op("or", false);
+        case TOKEN_AND: set_op("&&", false);
+        case TOKEN_OR: set_op("||", false);
 
         case TOKEN_SLASH: set_op("div_", true);
 
@@ -334,6 +338,9 @@ static void cgen_binary(cgen_t *cgen, ast_node_t *binary, cgen_var_t var) {
     type_info_t *type_info = get_type_info(&cgen->ast->type_set.types, binary->value_type);
     bool is_macro = cgen_binary_is_macro(binary->operator.type, type_info, &operator_or_function_name);
 
+    ast_node_t *lhs = an_lhs(binary);
+    ast_node_t *rhs = an_rhs(binary);
+
     unless (binary->requires_tmp_for_cgen) {
         if (has_var(var)) {
             sb_add_format(&cgen->sb, "%s = ", cgen_var(cgen, var));
@@ -344,7 +351,7 @@ static void cgen_binary(cgen_t *cgen, ast_node_t *binary, cgen_var_t var) {
         }
         sb_add_cstr(&cgen->sb, "(");
 
-        cgen_expression(cgen, an_lhs(binary), nil_cvar);
+        cgen_expression(cgen, lhs, nil_cvar);
 
         if (is_macro) {
             sb_add_cstr(&cgen->sb, ", ");
@@ -354,16 +361,74 @@ static void cgen_binary(cgen_t *cgen, ast_node_t *binary, cgen_var_t var) {
             sb_add_cstr(&cgen->sb, " ");
         }
 
-        cgen_expression(cgen, an_rhs(binary), nil_cvar);
+        cgen_expression(cgen, rhs, nil_cvar);
 
         sb_add_cstr(&cgen->sb, ")");
 
     } else {
-        cgen_var_t lhs_var = cgen_next_tmpid(cgen, an_lhs(binary)->value_type);
-        cgen_statement(cgen, an_lhs(binary), lhs_var, false);
+        cgen_var_t lhs_var = cgen_next_tmpid(cgen, lhs->value_type);
+        cgen_var_t rhs_var = cgen_next_tmpid(cgen, rhs->value_type);
 
-        cgen_var_t rhs_var = cgen_next_tmpid(cgen, an_rhs(binary)->value_type);
-        cgen_statement(cgen, an_rhs(binary), rhs_var, true);
+        // only for logical ops
+        switch (binary->operator.type) {
+            case TOKEN_AND:
+            case TOKEN_OR: {
+                sb_add_format(&cgen->sb, "%s = false", cgen_var(cgen, lhs_var));
+                cgen_semicolon_nl(cgen);
+
+                cgen_add_indent(cgen);
+                sb_add_format(&cgen->sb, "%s = false;\n", cgen_var(cgen, rhs_var));
+                cgen_semicolon_nl(cgen);
+
+                cgen_add_indent(cgen);
+
+                lhs_var = cgen_var_used(lhs_var);
+                rhs_var = cgen_var_used(rhs_var);
+                break;
+            }
+
+            default: break;
+        }
+
+        cgen_statement(cgen, lhs, lhs_var, false);
+
+        switch (binary->operator.type) {
+            case TOKEN_AND: {
+                cgen_add_indent(cgen);
+
+                sb_add_format(&cgen->sb, "if (%s) ", cgen_var_name(cgen, lhs_var));
+                break;
+            }
+
+            case TOKEN_OR: {
+                cgen_add_indent(cgen);
+
+                sb_add_format(&cgen->sb, "unless (%s) ", cgen_var_name(cgen, lhs_var));
+                break;
+            }
+
+            default: {
+                cgen_add_indent(cgen);
+                break;
+            }
+        }
+
+        cgen_statement(cgen, rhs, rhs_var, false);
+        
+        // // only for logical ops
+        // switch (binary->operator.type) {
+        //     case TOKEN_AND:
+        //     case TOKEN_OR: {
+        //         cgen_add_indent(cgen);
+
+        //         cgen_jmp_label(cgen, jmp_label);
+
+        //         cgen_semicolon_nl(cgen);
+        //         break;
+        //     }
+
+        //     default: break;
+        // }
 
         cgen_add_indent(cgen);
         if (has_var(var)) {
@@ -616,10 +681,6 @@ static void cgen_if(cgen_t *cgen, ast_node_t *branch, cgen_var_t var) {
     sb_add_cstr(&cgen->sb, "}\n");
 
     cgen_end_branch(cgen);
-}
-
-static void cgen_jmp_label(cgen_t *cgen, string_t label) {
-    sb_add_format(&cgen->sb, "%s:", label.cstr);
 }
 
 static void cgen_while(cgen_t *cgen, ast_node_t *branch, cgen_var_t var)  {
