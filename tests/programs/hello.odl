@@ -1,0 +1,5 @@
+io :: #load("io");
+
+main :: () {
+    io.println("hello, world!");
+};

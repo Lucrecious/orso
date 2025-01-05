@@ -1,4 +1,6 @@
+#define INTRINSICS_IMPLEMENTATION
 #include "intrinsics.h"
+
 i64 expr(void) {
 i64 result_; {
     i64 count_ = 10;
@@ -66,7 +68,7 @@ i64 result_; {
           (count_ = (count_ - 1));
 
           {
-            if ((((count_ / 2) + 1) == (((count_ + 1)) / 2))) {
+            if (((div_(count_, 2) + 1) == div_(((count_ + 1)), 2))) {
               {
                 (odds_ = (odds_ + 1));
 

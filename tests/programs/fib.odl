@@ -1,0 +1,15 @@
+fib :: (n: i32) -> i32{
+    return
+        if n == 0       then 0
+        else if n == 1  then 1
+        else            fib(n - 1) + fib(n - 2);
+};
+
+io :: #load("io");
+using _ :: #load("arena");
+
+main :: () {
+    n := 10;
+    arena := arena_t.{};
+    io.println("fib(\{b}) = \{fib(n)}"(&arena));
+};

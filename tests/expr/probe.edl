@@ -1,11 +1,17 @@
 {
-    a := -1;
+    x := 50;
 
-    b := not (a >= 0);
+    y := 0.0;
 
-    c := --a;
+    y = cast(x, f64);
 
-    d := ++a;
+    sum := 0;
 
-    true;
+    if y == 50.0 then sum = sum + 1;
+
+    x = cast(y, i64);
+
+    if x == 50 then sum = sum + 1;
+
+    sum;
 }
