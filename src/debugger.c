@@ -83,16 +83,22 @@ static string_t disassemble_instruction(instruction_t in, arena_t *allocator) {
         case OP_SUBI_REG_REG: return OP_BIN_REG_REG(SUBI);
         case OP_MULI_REG_REG: return OP_BIN_REG_REG(MULI);
         case OP_DIVI_REG_REG: return OP_BIN_REG_REG(DIVI);
+        case OP_REMI_REG_REG: return OP_BIN_REG_REG(REMI);
+        case OP_MODI_REG_REG: return OP_BIN_REG_REG(MODI);
 
         case OP_ADDU_REG_REG: return OP_BIN_REG_REG(ADDU);
         case OP_SUBU_REG_REG: return OP_BIN_REG_REG(SUBU);
         case OP_MULU_REG_REG: return OP_BIN_REG_REG(MULU);
         case OP_DIVU_REG_REG: return OP_BIN_REG_REG(DIVU);
+        case OP_REMU_REG_REG: return OP_BIN_REG_REG(REMU);
+        case OP_MODU_REG_REG: return OP_BIN_REG_REG(MODU);
 
         case OP_ADDD_REG_REG: return OP_BIN_REG_REG(ADDD);
         case OP_SUBD_REG_REG: return OP_BIN_REG_REG(SUBD);
         case OP_MULD_REG_REG: return OP_BIN_REG_REG(MULD);
         case OP_DIVD_REG_REG: return OP_BIN_REG_REG(DIVD);
+        case OP_REMD_REG_REG: return OP_BIN_REG_REG(REMD);
+        case OP_MODD_REG_REG: return OP_BIN_REG_REG(MODD);
 
         case OP_GTU_REG_REG: return OP_BIN_REG_REG(GTU);
         case OP_GEU_REG_REG: return OP_BIN_REG_REG(GEU);

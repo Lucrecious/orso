@@ -189,11 +189,30 @@ static void emit_bin_arithmetic(text_location_t text_location, function_t *funct
             }
             break;
         }
+        
         case TOKEN_SLASH: {
             switch (type_info->data.num) {
                 case NUM_TYPE_FLOAT: instruction.op = OP_DIVD_REG_REG; break;
                 case NUM_TYPE_SIGNED: instruction.op = OP_DIVI_REG_REG; break;
                 case NUM_TYPE_UNSIGNED: instruction.op = OP_DIVU_REG_REG; break;
+            }
+            break;
+        }
+
+        case TOKEN_PERCENT: {
+            switch (type_info->data.num) {
+                case NUM_TYPE_FLOAT: instruction.op = OP_MODD_REG_REG; break;
+                case NUM_TYPE_SIGNED: instruction.op = OP_MODI_REG_REG; break;
+                case NUM_TYPE_UNSIGNED: instruction.op = OP_MODU_REG_REG; break;
+            }
+            break;
+        }
+
+        case TOKEN_PERCENT_PERCENT: {
+            switch (type_info->data.num) {
+                case NUM_TYPE_FLOAT: instruction.op = OP_REMD_REG_REG; break;
+                case NUM_TYPE_SIGNED: instruction.op = OP_REMI_REG_REG; break;
+                case NUM_TYPE_UNSIGNED: instruction.op = OP_REMU_REG_REG; break;
             }
             break;
         }
@@ -381,6 +400,8 @@ static void gen_binary(gen_t *gen, function_t *function, ast_node_t *binary) {
         case TOKEN_LESS:
         case TOKEN_LESS_EQUAL:
 
+        case TOKEN_PERCENT_PERCENT:
+        case TOKEN_PERCENT:
         case TOKEN_PLUS:
         case TOKEN_MINUS:
         case TOKEN_STAR:

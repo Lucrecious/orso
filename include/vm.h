@@ -28,16 +28,22 @@ enum op_code_t {
     OP_SUBI_REG_REG,
     OP_MULI_REG_REG,
     OP_DIVI_REG_REG,
+    OP_REMI_REG_REG,
+    OP_MODI_REG_REG,
 
     OP_ADDU_REG_REG,
     OP_SUBU_REG_REG,
     OP_MULU_REG_REG,
     OP_DIVU_REG_REG,
+    OP_REMU_REG_REG,
+    OP_MODU_REG_REG,
 
     OP_ADDD_REG_REG,
     OP_SUBD_REG_REG,
     OP_MULD_REG_REG,
     OP_DIVD_REG_REG,
+    OP_REMD_REG_REG,
+    OP_MODD_REG_REG,
 
     OP_GTD_REG_REG,
     OP_GED_REG_REG,
@@ -178,8 +184,8 @@ void vm_step(vm_t *vm);
 
 #endif
 
-// #define VM_IMPLEMENTATION
 #ifdef VM_IMPLEMENTATION
+#include <math.h>
 
 function_t *new_function(string_t file_path, memarr_t *memory, arena_t *arena) {
     function_t *function = arena_alloc(arena, sizeof(function_t));
@@ -360,16 +366,65 @@ void vm_step(vm_t *vm) {
         case_bin_reg_reg(SUBI, i, -);
         case_bin_reg_reg(MULI, i, *);
         case_bin_reg_reg(DIVI, i, /);
+        case_bin_reg_reg(REMI, i, %);
+
+        case OP_MODI_REG_REG: {
+            i64 a = vm->registers[in.as.bin_reg_to_reg.reg_op1].as.i;
+            i64 b = vm->registers[in.as.bin_reg_to_reg.reg_op2].as.i;
+            byte c = in.as.bin_reg_to_reg.reg_result;
+
+            b = b < 0 ? -b : b;
+            vm->registers[c].as.i = ((a % b) + b) % b;
+
+            IP_ADV(1);
+            break;
+        }
 
         case_bin_reg_reg(ADDU, u, +);
         case_bin_reg_reg(SUBU, u, -);
         case_bin_reg_reg(MULU, u, *);
         case_bin_reg_reg(DIVU, u, /);
+        case_bin_reg_reg(REMU, i, %);
+
+        case OP_MODU_REG_REG: {
+            u64 a = vm->registers[in.as.bin_reg_to_reg.reg_op1].as.u;
+            u64 b = vm->registers[in.as.bin_reg_to_reg.reg_op2].as.u;
+            byte c = in.as.bin_reg_to_reg.reg_result;
+
+            b = b < 0 ? -b : b;
+            vm->registers[c].as.u = ((a % b) + b) % b;
+
+            IP_ADV(1);
+            break;
+        }
 
         case_bin_reg_reg(ADDD, d, +);
         case_bin_reg_reg(SUBD, d, -);
         case_bin_reg_reg(MULD, d, *);
         case_bin_reg_reg(DIVD, d, /);
+
+        case OP_REMD_REG_REG: {
+            byte a = in.as.bin_reg_to_reg.reg_op1;
+            byte b = in.as.bin_reg_to_reg.reg_op2;
+            byte c = in.as.bin_reg_to_reg.reg_result;
+
+            vm->registers[c].as.d = fmod(vm->registers[a].as.d, vm->registers[b].as.d);
+
+            IP_ADV(1);
+            break;
+        }
+
+        case OP_MODD_REG_REG: {
+            f64 a = vm->registers[in.as.bin_reg_to_reg.reg_op1].as.d;
+            f64 b = vm->registers[in.as.bin_reg_to_reg.reg_op2].as.d;
+            byte c = in.as.bin_reg_to_reg.reg_result;
+
+            b = b < 0 ? -b : b;
+            vm->registers[c].as.d = fmod(fmod(a, b) + b, b);
+
+            IP_ADV(1);
+            break;
+        }
 
         case_bin_reg_reg(GTI, i, >);
         case_bin_reg_reg(GEI, i, >=);

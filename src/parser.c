@@ -779,12 +779,12 @@ static ast_node_t *parse_unary(parser_t *parser, bool inside_type_context) {
 }
 
 static ast_node_t *parse_binary(parser_t *parser, bool inside_type_context) {
-    ast_node_t* expression_node = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_BINARY, inside_type_context, parser->previous);
+    ast_node_t *expression_node = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_BINARY, inside_type_context, parser->previous);
 
     token_t operator = parser->previous;
     expression_node->operator = operator;
 
-    parse_rule_t* rule = parser_get_rule(operator.type);
+    parse_rule_t *rule = parser_get_rule(operator.type);
 
     expression_node->start = parser->previous;
 
@@ -858,6 +858,8 @@ parse_rule_t rules[] = {
     [TOKEN_STAR]                    = { NULL,               parse_binary,       PREC_FACTOR },
     [TOKEN_SLASH]                   = { NULL,               parse_binary,       PREC_FACTOR },
     [TOKEN_COLON]                   = { NULL,               NULL,               PREC_NONE },
+    [TOKEN_PERCENT]                 = { NULL,               parse_binary,       PREC_TERM },
+    [TOKEN_PERCENT_PERCENT]         = { NULL,               parse_binary,       PREC_TERM },
     [TOKEN_EQUAL]                   = { NULL,               parse_assignment,   PREC_ASSIGNMENT},
     [TOKEN_BANG]                    = { NULL,               NULL,               PREC_NONE },
     [TOKEN_LESS]                    = { NULL,               parse_binary,       PREC_COMPARISON },

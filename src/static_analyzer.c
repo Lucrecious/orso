@@ -956,6 +956,8 @@ void resolve_expression(
             bool is_logical_operator = false;
 
             switch (expression->operator.type) {
+                case TOKEN_PERCENT_PERCENT:
+                case TOKEN_PERCENT:
                 case TOKEN_PLUS:
                 case TOKEN_MINUS:
                 case TOKEN_STAR:

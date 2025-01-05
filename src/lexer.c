@@ -351,6 +351,7 @@ token_t _lexer_next_token(lexer_t *lexer) {
                                             (match(lexer, '-') ? TOKEN_MINUS_MINUS : 
                                                                  TOKEN_MINUS));
         case '*': return create_token(lexer, TOKEN_STAR);
+        case '%': return create_token(lexer, match(lexer, '%') ? TOKEN_PERCENT_PERCENT : TOKEN_PERCENT);
         case '/': return create_token(lexer, TOKEN_SLASH);
         case ':': return create_token(lexer, TOKEN_COLON);
         case ';': return create_token(lexer, TOKEN_SEMICOLON);

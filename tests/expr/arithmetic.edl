@@ -1,13 +1,57 @@
 {
-    1 + 2;
+    sum := 0;
 
-    {1;} + {2;};
+    a := 1 + 2;
 
-    {1;} + 2;
+    if a == 3 then sum = sum + 1;
 
-    1 + {2;};
+    a = {1;} + {2;};
 
-    1 + 2 * 3;
+    if a == 3 then sum = sum + 1;
 
-    (1+2)*3;
+    a = {1;} + 2;
+
+    if a == 3 then sum = sum + 1;
+
+    a = 1 + {2;};
+
+    if a == 3 then sum = sum + 1;
+
+    a = 1 + 2 * 3;
+    
+    if a == 7 then sum = sum + 1;
+
+    a = (1+2)*3;
+
+    if a == 9 then sum = sum + 1;
+
+    a = 5 % 2;
+
+    if a == 1 then sum = sum + 1;
+
+    a = -5 % 2;
+
+    if a == 1 then sum = sum + 1;
+
+    a = -5 % -2;
+
+    if a == 1 then sum = sum + 1;
+
+    a = 10 %% 6;
+
+    if a == 4 then sum = sum + 1; 
+
+    a = -10 %% 6;
+
+    if a == -4 then sum = sum + 1;
+
+    a = 10 %% -6;
+
+    if a == 4 then sum = sum + 1;
+
+    a = -10 %% -6;
+
+    if a == -4 then sum = sum + 1;
+
+    sum == 13;
 }
