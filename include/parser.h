@@ -92,15 +92,6 @@ case AST_NODE_TYPE_EXPRESSION_UNARY: \
 case AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER: \
 case AST_NODE_TYPE_EXPRESSION_DOT
 
-typedef struct ast_function_t {
-    ast_nodes_t parameter_nodes;
-    ast_node_t *return_type_expression;
-
-    ast_node_t *block;
-
-    bool compilable;
-} ast_function_t;
-
 typedef struct ast_struct_t {
     ast_nodes_t declarations;
 } ast_struct_t;
@@ -109,11 +100,6 @@ typedef struct ast_call_t {
     ast_node_t *callee;
     ast_nodes_t arguments;
 } ast_call_t;
-
-typedef struct ast_binary_t {
-    ast_node_t *lhs;
-    ast_node_t *rhs;
-} ast_binary_t;
 
 typedef struct ast_member_access_t {
     ast_node_t *lhs;
@@ -151,6 +137,13 @@ ast_node_t nil_node;
 #define an_condition(n) ((n)->children.items[0])
 #define an_then(n) ((n)->children.items[1])
 #define an_else(n) ((n)->children.items[2])
+#define an_func_def_arg_start(n) (0)
+#define an_func_def_arg_end(n) ((n)->children.count-3)
+#define an_func_def_return(n) ((n)->children.items[(n)->children.count-2])
+#define an_func_def_block(n) ((n)->children.items[(n)->children.count-1])
+#define an_callee(n) ((n)->children.items[0])
+#define an_call_arg_start(n) (1)
+#define an_call_arg_end(n) ((n)->children.count)
 
 #define an_is_none(n)    ((n)->node_type == AST_NODE_TYPE_NONE)
 #define an_is_notnone(n) ((n)->node_type != AST_NODE_TYPE_NONE)
@@ -201,11 +194,6 @@ struct ast_node_t {
     string_t ccode_var_name;
 
     union {
-        ast_call_t call;
-
-        // function signatures and defintions
-        ast_function_t function;
-
         // structs
         ast_struct_t struct_;
 

@@ -130,7 +130,7 @@ FORCE_INLINE bool orso_type_is_unsigned_integer_type(type_info_t *type, bool inc
     return false;
 }
 
-size_t bytes_to_slots(i32 byte_count);
+size_t bytes_to_words(i32 byte_count);
 
 struct_field_t *type_struct_find_field(type_info_t *struct_, const char *name, size_t name_length);
 

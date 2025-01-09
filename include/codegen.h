@@ -8,7 +8,7 @@
 
 bool compile_program(vm_t *vm, ast_t *ast);
 
-bool compile_expr_to_function(function_t *function, ast_t *expr_ast, error_function_t error_fn);
+bool compile_expr_to_function(function_t *function, ast_t *expr_ast, error_function_t error_fn, arena_t *function_arena);
 
 #endif
 
@@ -27,6 +27,8 @@ struct gen_t {
     ast_t *ast;
     size_t stack_size;
     size_t scope_level;
+    arena_t *gen_arena;
+    arena_t *function_arena;
 
     struct {
         local_t *items;
@@ -544,14 +546,13 @@ static void push_scope(gen_t *gen) {
 }
 
 static void gen_pop_scope(gen_t *gen, function_t *function, text_location_t location) {
-    size_t pop_size_bytes = 0;
+    size_t truncate_to = gen->stack_size;
     size_t pop_amount = 0;
     for (size_t i = gen->locals.count; i > 0; --i) {
         size_t i_ = i-1;
         local_t *local = &gen->locals.items[i_];
         if (local->scope_level >= gen->scope_level) {
-            type_info_t *type_info = get_type_info(&gen->ast->type_set.types, local->ref_decl->value_type);
-            pop_size_bytes += type_info->size;
+            truncate_to = local->stack_location;
             ++pop_amount;
         }
     }
@@ -559,7 +560,10 @@ static void gen_pop_scope(gen_t *gen, function_t *function, text_location_t loca
     gen->locals.count -= pop_amount;
     --gen->scope_level;
 
-    size_t pop_size_words = (pop_size_bytes + WORD_SIZE/2)/WORD_SIZE;
+    size_t pop_size_bytes = gen->stack_size - truncate_to;
+    ASSERT(pop_size_bytes % WORD_SIZE == 0, "stuff being popped off stack should be word aligned");
+
+    size_t pop_size_words = (pop_size_bytes + (WORD_SIZE-1))/WORD_SIZE;
     emit_popn_words(gen, function, pop_size_words, location);
 }
 
@@ -735,6 +739,35 @@ static void gen_jmp_expr(gen_t *gen, function_t *function, ast_node_t *jmp_expr)
     }
 }
 
+static gen_t make_gen(ast_t *ast, error_function_t error_fn, arena_t *gen_arena, arena_t *function_arena) {
+    gen_t gen = {0};
+    gen.ast = ast;
+    gen.error_fn = error_fn;
+    gen.gen_arena = gen_arena;
+    gen.locals.allocator = gen_arena;
+    gen.function_arena = function_arena;
+
+    return gen;
+}
+
+static void gen_function_def(gen_t *parent_gen, function_t *parent_function, ast_node_t *function_def) {
+    function_t *function = new_function(parent_function->file_path, parent_function->memory, parent_gen->function_arena);
+
+    gen_t gen = make_gen(parent_gen->ast, parent_gen->error_fn, parent_gen->locals.allocator, parent_gen->function_arena);
+
+    for (size_t i = an_func_def_arg_start(function_def); i < an_func_def_arg_end(function_def); ++i) {
+        ast_node_t *arg = function_def->children.items[i];
+        gen_add_local(&gen, arg, gen.stack_size);
+        type_info_t *type_info = get_type_info(&gen.ast->type_set.types, arg->value_type);
+        gen.stack_size += bytes_to_words(type_info->size);
+    }
+
+    gen_block(&gen, function, an_func_def_block(function_def));
+}
+
+static void gen_call(gen_t *gen, function_t *function, ast_node_t *call) {
+}
+
 static void gen_expression(gen_t *gen, function_t *function, ast_node_t *expression) {
     ASSERT(ast_node_type_is_expression(expression->node_type), "must be expression");
 
@@ -787,10 +820,19 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
             break;
         }
 
-        case AST_NODE_TYPE_EXPRESSION_CALL:
+        case AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION: {
+            gen_function_def(gen, function, expression);
+            break;
+        }
+
+        case AST_NODE_TYPE_EXPRESSION_CALL: {
+            gen_call(gen, function, expression);
+            break;
+        }
+
+
         case AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT:
         case AST_NODE_TYPE_EXPRESSION_DOT:
-        case AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION:
         case AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE:
         case AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION:
         case AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER:
@@ -807,19 +849,10 @@ static void gen_return(gen_t *gen, text_location_t location, function_t *functio
     emit_return(location, function);
 }
 
-static gen_t make_gen(ast_t *ast, error_function_t error_fn, arena_t *arena) {
-    gen_t gen = {0};
-    gen.ast = ast;
-    gen.error_fn = error_fn;
-    gen.locals.allocator = arena;
-
-    return gen;
-}
-
-bool compile_expr_to_function(function_t *function, ast_t *ast, error_function_t error_fn) {
+bool compile_expr_to_function(function_t *function, ast_t *ast, error_function_t error_fn, arena_t *function_arena) {
     arena_t arena = {0};
 
-    gen_t gen = make_gen(ast, error_fn, &arena);
+    gen_t gen = make_gen(ast, error_fn, &arena, function_arena);
 
     gen_expression(&gen, function, ast->root);
 

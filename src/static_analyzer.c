@@ -202,18 +202,18 @@ if (sv_eq(identifier, lit2sv(#TYPE_STRING))){\
 #undef RETURN_IF_TYPE
 }
 
-static bool can_call(type_infos_t types, type_t type, ast_nodes_t arguments) {
+static bool can_call(type_infos_t types, type_t type, ast_nodes_t arguments, size_t arg_start, size_t arg_end) {
     ASSERT(type_is_function(types, type), "must be a function type");
 
     type_info_t *type_info = get_type_info(&types, type);
 
-    if (type_info->data.function.argument_types.count != arguments.count) {
+    if (type_info->data.function.argument_types.count != (arg_end - arg_start)) {
         return false;
     }
 
     for (size_t i = 0; i < type_info->data.function.argument_types.count; ++i) {
         type_t parameter_type = type_info->data.function.argument_types.items[i];
-        type_t argument_type = arguments.items[i]->value_type;
+        type_t argument_type = arguments.items[arg_start+i]->value_type;
         unless (typeid_eq(parameter_type, argument_type)) {
             return false;
         }
@@ -405,7 +405,7 @@ static void resolve_foldable(
             // At this point, we are in folding time, and if a function cannot be compiled
             // we should probably let the user know and also not allow them to fold something
             // that has an invalid thing.
-            if (type_is_function(ast->type_set.types, expression->as.call.callee->value_type)) {
+            if (type_is_function(ast->type_set.types, an_callee(expression)->value_type)) {
                 ASSERT(false, "todo");
                 // value_index_t value_index = expression->as.call.callee->value_index;
                 // function_t* function = NULL;
@@ -427,14 +427,14 @@ static void resolve_foldable(
                 // }
             }
 
-            foldable = expression->as.call.callee->foldable;
+            foldable = an_callee(expression)->foldable;
 
             unless (foldable) {
                 break;
             }
 
-            for (size_t i = 0; i < expression->as.call.arguments.count; ++i) {
-                foldable &= expression->as.call.arguments.items[i]->foldable;
+            for (size_t i = an_call_arg_start(expression); i < an_call_arg_end(expression); ++i) {
+                foldable &= expression->children.items[i]->foldable;
                 unless (foldable) {
                     break;
                 }
@@ -512,23 +512,23 @@ static void fold_constants_via_runtime(
 static void fold_function_signature(analyzer_t *analyzer, ast_t *ast, ast_node_t *expression) {
     ASSERT(expression->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE, "must be a function signature");
 
-    unless (!expression->as.function.return_type_expression || IS_FOLDED(expression->as.function.return_type_expression)) {
-        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_EXPECTED_CONSTANT, expression->as.function.return_type_expression));
+    unless (IS_FOLDED(an_func_def_return(expression))) {
+        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_EXPECTED_CONSTANT, an_func_def_return(expression)));
         return;
     }
 
     bool hit_error = false;
     types_t parameter_types = {.allocator=&ast->allocator};
 
-    for (size_t i = 0; i < expression->as.function.parameter_nodes.count; i++) {
-        ast_node_t *parameter = expression->as.function.parameter_nodes.items[i];
+    for (size_t i = an_func_def_arg_start(expression); i < an_func_def_arg_end(expression); ++i) {
+        ast_node_t *parameter = expression->children.items[i];
         unless (IS_FOLDED(parameter)) {
             hit_error = true;
             stan_error(analyzer, make_error_node(ERROR_ANALYSIS_EXPECTED_CONSTANT, parameter));
             break;
         }
 
-        if (!TYPE_IS_TYPE(parameter->value_type)) {
+        unless (TYPE_IS_TYPE(parameter->value_type)) {
             hit_error = true;
             stan_error(analyzer, make_error_node(ERROR_ANALYSIS_EXPECTED_TYPE, parameter));
             break;
@@ -544,7 +544,7 @@ static void fold_function_signature(analyzer_t *analyzer, ast_t *ast, ast_node_t
         return;
     }
 
-    ast_node_t *return_type_expression = expression->as.function.return_type_expression;
+    ast_node_t *return_type_expression = an_func_def_return(expression);
     if (return_type_expression && !TYPE_IS_TYPE(return_type_expression->value_type)) {
         stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_RETURN_TYPE, return_type_expression));
         return;
@@ -828,29 +828,29 @@ void resolve_expression(
         analyzer_t *analyzer,
         ast_t *ast,
         analysis_state_t state,
-        ast_node_t *expression) {
+        ast_node_t *expr) {
     
-    ASSERT(ast_node_type_is_expression(expression->node_type), "should be only expressions");
+    ASSERT(ast_node_type_is_expression(expr->node_type), "should be only expressions");
 
-    unless (TYPE_IS_UNRESOLVED(expression->value_type)) {
+    unless (TYPE_IS_UNRESOLVED(expr->value_type)) {
         return;
     }
 
-    if (expression->fold) {
+    if (expr->fold) {
         ++state.fold_level;
         state.mode |= MODE_FOLDING_TIME;
     }
 
-    switch (expression->node_type) {
+    switch (expr->node_type) {
         case AST_NODE_TYPE_EXPRESSION_GROUPING: {
-            resolve_expression(analyzer, ast, state, an_operand(expression));
-            expression->lvalue_node = an_operand(expression);
-            expression->value_type = an_operand(expression)->value_type;
+            resolve_expression(analyzer, ast, state, an_operand(expr));
+            expr->lvalue_node = an_operand(expr);
+            expr->value_type = an_operand(expr)->value_type;
             break;
         }
 
         case AST_NODE_TYPE_EXPRESSION_NIL: {
-            if (TYPE_IS_UNRESOLVED(expression->value_type)) {
+            if (TYPE_IS_UNRESOLVED(expr->value_type)) {
                 // todo
                 UNREACHABLE();
             }
@@ -858,34 +858,34 @@ void resolve_expression(
         }
 
         case AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER: {
-            resolve_expression(analyzer, ast, state, expression->as.initiailizer.type);
+            resolve_expression(analyzer, ast, state, expr->as.initiailizer.type);
 
-            unless (TYPE_IS_TYPE(expression->as.initiailizer.type->value_type)) {
-                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_EXPECTED_TYPE, expression->as.initiailizer.type));
-                INVALIDATE(expression);
+            unless (TYPE_IS_TYPE(expr->as.initiailizer.type->value_type)) {
+                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_EXPECTED_TYPE, expr->as.initiailizer.type));
+                INVALIDATE(expr);
                 break;
             }
 
-            unless (expression->as.initiailizer.type->value_index.exists) {
-                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_EXPECTED_CONSTANT, expression->as.initiailizer.type));
-                INVALIDATE(expression);
+            unless (expr->as.initiailizer.type->value_index.exists) {
+                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_EXPECTED_CONSTANT, expr->as.initiailizer.type));
+                INVALIDATE(expr);
                 break;
             }
 
-            type_t type = get_folded_type(ast, expression->as.initiailizer.type->value_index);
+            type_t type = get_folded_type(ast, expr->as.initiailizer.type->value_index);
             type_info_t *type_info = get_type_info(&ast->type_set.types, type);
 
             if (type_info->kind == TYPE_STRUCT) {
-                int arg_count = expression->as.initiailizer.arguments.count;
+                int arg_count = expr->as.initiailizer.arguments.count;
                 if (type_info->data.struct_.field_count < arg_count) {
-                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_TOO_MANY_STRUCT_ARGUMENTS, expression));
-                    INVALIDATE(expression);
+                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_TOO_MANY_STRUCT_ARGUMENTS, expr));
+                    INVALIDATE(expr);
                     break;
                 }
 
                 bool is_invalidated = false;
                 for (int i = 0; i < arg_count; ++i) {
-                    ast_node_t *arg = expression->as.initiailizer.arguments.items[i];
+                    ast_node_t *arg = expr->as.initiailizer.arguments.items[i];
                     unless (arg) continue;
                     resolve_expression(analyzer, ast, state, arg);
                     if (TYPE_IS_INVALID(arg->value_type)) {
@@ -900,7 +900,7 @@ void resolve_expression(
                             if (can_cast_implicit(ast->type_set.types, arg_type, field_type)) {
                                 ast_node_t *casted = implicit_cast(ast, arg, field_type);
                                 fold_constants_via_runtime(analyzer, ast, state, casted);
-                                expression->as.initiailizer.arguments.items[i] = casted;
+                                expr->as.initiailizer.arguments.items[i] = casted;
                             } else {
                                 printf("TODO: need to look up struct field and compare, first arg should be struct field ast node");
                                 stan_error(analyzer, make_type_mismatch_error(arg, arg));
@@ -912,35 +912,35 @@ void resolve_expression(
                 }
 
                 if (is_invalidated) {
-                    INVALIDATE(expression);
+                    INVALIDATE(expr);
                     break;
                 }
 
-                type_t type = get_folded_type(ast, expression->as.initiailizer.type->value_index);
-                expression->value_type = type;
+                type_t type = get_folded_type(ast, expr->as.initiailizer.type->value_index);
+                expr->value_type = type;
                 break;
             } else {
                 printf("need to look up field arg from struct as well for first arg");
-                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_TYPE_FOR_TYPE_INITIALIZER_LIST, expression));
-                INVALIDATE(expression);
+                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_TYPE_FOR_TYPE_INITIALIZER_LIST, expr));
+                INVALIDATE(expr);
                 break;
             }
         }
 
         case AST_NODE_TYPE_EXPRESSION_PRIMARY: {
-            INVALIDATE(expression);
+            INVALIDATE(expr);
             break;
         }
 
         case AST_NODE_TYPE_EXPRESSION_BINARY: {
-            ast_node_t *left = an_lhs(expression);
+            ast_node_t *left = an_lhs(expr);
             resolve_expression(analyzer, ast, state, left);
 
-            ast_node_t *right = an_rhs(expression);
+            ast_node_t *right = an_rhs(expr);
             resolve_expression(analyzer, ast, state, right);
 
             if (TYPE_IS_INVALID(left->value_type) || TYPE_IS_INVALID(right->value_type)) {
-                INVALIDATE(expression);
+                INVALIDATE(expr);
                 break;
             }
 
@@ -951,11 +951,11 @@ void resolve_expression(
             type_t cast_left = typeid(TYPE_INVALID);
             type_t cast_right = typeid(TYPE_INVALID);
 
-            expression->value_type = typeid(TYPE_UNRESOLVED);
+            expr->value_type = typeid(TYPE_UNRESOLVED);
 
             bool is_logical_operator = false;
 
-            switch (expression->operator.type) {
+            switch (expr->operator.type) {
                 case TOKEN_PERCENT_PERCENT:
                 case TOKEN_PERCENT:
                 case TOKEN_PLUS:
@@ -966,7 +966,7 @@ void resolve_expression(
                     if (typeid_eq(left->value_type, right->value_type)) {
                         combined_type = left->value_type;
                     }
-                    expression->value_type = combined_type;
+                    expr->value_type = combined_type;
 
                     cast_left = combined_type;
                     cast_right = combined_type;
@@ -974,7 +974,7 @@ void resolve_expression(
                 }
 
                 case TOKEN_BAR: {
-                    INVALIDATE(expression);
+                    INVALIDATE(expr);
                     break;
                 }
 
@@ -985,9 +985,9 @@ void resolve_expression(
                     if (typeid_eq(left->value_type, right->value_type)) {
                         cast_left = left->value_type;
                         cast_right = right->value_type;
-                        expression->value_type = typeid(TYPE_BOOL);
+                        expr->value_type = typeid(TYPE_BOOL);
                     } else {
-                        expression->value_type = typeid(TYPE_INVALID);
+                        expr->value_type = typeid(TYPE_INVALID);
                     }
                     break;
                 }
@@ -996,9 +996,9 @@ void resolve_expression(
                     if (typeid_eq(left->value_type, right->value_type)) {
                         cast_left = left->value_type;
                         cast_right = right->value_type;
-                        expression->value_type = typeid(TYPE_BOOL);
+                        expr->value_type = typeid(TYPE_BOOL);
                     } else {
-                        expression->value_type = typeid(TYPE_INVALID);
+                        expr->value_type = typeid(TYPE_INVALID);
                     }
                     break;
                 }
@@ -1009,7 +1009,7 @@ void resolve_expression(
                     cast_left = left->value_type;
                     cast_right = right->value_type;
 
-                    expression->value_type = typeid(TYPE_BOOL);
+                    expr->value_type = typeid(TYPE_BOOL);
                     break;
                 }
 
@@ -1017,52 +1017,52 @@ void resolve_expression(
             }
 
             if (TYPE_IS_INVALID(cast_left) || TYPE_IS_INVALID(cast_right)) {
-                INVALIDATE(expression);
+                INVALIDATE(expr);
                 stan_error(analyzer, make_error_nodes(ERROR_ANALYSIS_INVALID_BINARY_OPERANDS, left, right));
                 break;
             }
 
             if (!is_logical_operator) {
                 if (!typeid_eq(cast_left, left->value_type)) {
-                    an_lhs(expression) = implicit_cast(ast, left, cast_left);
-                    fold_constants_via_runtime(analyzer, ast, state, an_lhs(expression));
+                    an_lhs(expr) = implicit_cast(ast, left, cast_left);
+                    fold_constants_via_runtime(analyzer, ast, state, an_lhs(expr));
                 }
 
 
                 if (!typeid_eq(cast_right, right->value_type)) {
-                    an_rhs(expression) = implicit_cast(ast, right, cast_right);
-                    fold_constants_via_runtime(analyzer, ast, state, an_rhs(expression));
+                    an_rhs(expr) = implicit_cast(ast, right, cast_right);
+                    fold_constants_via_runtime(analyzer, ast, state, an_rhs(expr));
                 }
             }
             break;
         }
 
         case AST_NODE_TYPE_EXPRESSION_UNARY: {
-            resolve_expression(analyzer, ast, state, an_operand(expression));
+            resolve_expression(analyzer, ast, state, an_operand(expr));
 
-            if (TYPE_IS_INVALID(an_operand(expression)->value_type)) {
-                INVALIDATE(expression);
+            if (TYPE_IS_INVALID(an_operand(expr)->value_type)) {
+                INVALIDATE(expr);
                 break;
             }
 
-            if (expression->inside_type_context && expression->operator.type == TOKEN_AMPERSAND) {
-                if (!TYPE_IS_TYPE(an_operand(expression)->value_type)) {
-                    INVALIDATE(expression);
-                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_UNARY_OPERAND, expression));
+            if (expr->inside_type_context && expr->operator.type == TOKEN_AMPERSAND) {
+                if (!TYPE_IS_TYPE(an_operand(expr)->value_type)) {
+                    INVALIDATE(expr);
+                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_UNARY_OPERAND, expr));
                     break;
                 }
 
-                unless (IS_FOLDED(an_operand(expression))) {
-                    INVALIDATE(expression);
-                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_EXPECTED_CONSTANT, an_operand(expression)));
+                unless (IS_FOLDED(an_operand(expr))) {
+                    INVALIDATE(expr);
+                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_EXPECTED_CONSTANT, an_operand(expr)));
                     break;
                 }
             } else {
-                type_t new_type = resolve_unary_type(ast, expression->operator.type, an_operand(expression)->value_type);
-                expression->value_type = new_type;
+                type_t new_type = resolve_unary_type(ast, expr->operator.type, an_operand(expr)->value_type);
+                expr->value_type = new_type;
                 
-                if (TYPE_IS_INVALID(expression->value_type)) {
-                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_UNARY_OPERAND, expression));
+                if (TYPE_IS_INVALID(expr->value_type)) {
+                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_UNARY_OPERAND, expr));
                     break;
                 }
             }
@@ -1070,40 +1070,40 @@ void resolve_expression(
         }
 
         case AST_NODE_TYPE_EXPRESSION_DEF_VALUE: {
-            expression->lvalue_node = expression;
+            expr->lvalue_node = expr;
 
             scope_t *def_scope;
             def_query_t query = {
-                .search_type = expression->inside_type_context ? typeid(TYPE_TYPE) : typeid(TYPE_INVALID),
+                .search_type = expr->inside_type_context ? typeid(TYPE_TYPE) : typeid(TYPE_INVALID),
                 .skip_mutable = (state.mode & MODE_CONSTANT_TIME),
-                .flags = expression->inside_type_context ? QUERY_FLAG_MATCH_TYPE : QUERY_FLAG_MATCH_ANY,
+                .flags = expr->inside_type_context ? QUERY_FLAG_MATCH_TYPE : QUERY_FLAG_MATCH_ANY,
             };
 
-            definition_t *definition = get_resolved_def_by_identifier(analyzer, ast, state, expression->identifier, &query, &def_scope);
+            definition_t *definition = get_resolved_def_by_identifier(analyzer, ast, state, expr->identifier, &query, &def_scope);
 
             if (definition == NULL) {
-                INVALIDATE(expression);
+                INVALIDATE(expr);
                 break;
             }
 
             // keep for constant folding so not redo definition look up and simplify work there
-            expression->ref_decl = definition->node;
+            expr->ref_decl = definition->node;
 
-            expression->value_type = def_type(definition);
+            expr->value_type = def_type(definition);
 
             if (definition->node == NULL) {
-                expression->foldable = true;
-                expression->value_index = definition->value_index;
+                expr->foldable = true;
+                expr->value_index = definition->value_index;
             }
             break;
         }
 
         case AST_NODE_TYPE_EXPRESSION_DOT: {
-            ast_node_t *left = an_lhs(expression);
+            ast_node_t *left = an_lhs(expr);
             ASSERT(left, "for now left must be present");
 
-            if (an_is_notnone(expression->ref_decl)) {
-                expression->value_type = expression->ref_decl->value_type;
+            if (an_is_notnone(expr->ref_decl)) {
+                expr->value_type = expr->ref_decl->value_type;
                 break;
             }
 
@@ -1111,7 +1111,7 @@ void resolve_expression(
             // expression->lvalue_node = expression;
 
             if (TYPE_IS_INVALID(left->value_type)) {
-                INVALIDATE(expression);
+                INVALIDATE(expr);
                 break;
             }
 
@@ -1124,8 +1124,8 @@ void resolve_expression(
                 table_get(type2ns, ast->type_to_creation_node, struct_type, &node_and_scope);
                 skip_mutable = true;
             } else {
-                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_MEMBER_ACCESS, expression));
-                INVALIDATE(expression);
+                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_MEMBER_ACCESS, expr));
+                INVALIDATE(expr);
                 break;
             }
 
@@ -1137,19 +1137,19 @@ void resolve_expression(
                 }
 
                 token_t declaration_name = declaration->identifier;
-                if (sv_eq(declaration_name.view, expression->identifier.view)) {
+                if (sv_eq(declaration_name.view, expr->identifier.view)) {
                     break;
                 }
             }
 
             if (referencing_declaration == NULL) {
-                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_MEMBER_DOES_NOT_EXIST, expression));
-                INVALIDATE(expression);
+                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_MEMBER_DOES_NOT_EXIST, expr));
+                INVALIDATE(expr);
                 break;
             }
 
             // keep until constant folding so no need to redo the definition look up
-            expression->ref_decl = referencing_declaration;
+            expr->ref_decl = referencing_declaration;
 
             unless (is_declaration_resolved(referencing_declaration)) {
                 analysis_state_t search_state = state;
@@ -1161,36 +1161,36 @@ void resolve_expression(
                 };
 
                 scope_t* found_scope;
-                definition_t* definition = get_resolved_def_by_identifier(analyzer, ast, search_state, expression->identifier, &query, &found_scope);
+                definition_t* definition = get_resolved_def_by_identifier(analyzer, ast, search_state, expr->identifier, &query, &found_scope);
 
                 unless (definition) {
-                    INVALIDATE(expression);
+                    INVALIDATE(expr);
                     break;
                 }
 
-                expression->value_type = definition->node->value_type;
+                expr->value_type = definition->node->value_type;
                 break;
             }
 
-            expression->value_type = referencing_declaration->value_type;
+            expr->value_type = referencing_declaration->value_type;
             break;
         }
 
         case AST_NODE_TYPE_EXPRESSION_ASSIGNMENT: {
-            ast_node_t *rhs = an_rhs(expression);
+            ast_node_t *rhs = an_rhs(expr);
             resolve_expression(analyzer, ast, state, rhs);
 
             if (TYPE_IS_INVALID(rhs->value_type)) {
-                INVALIDATE(expression);
+                INVALIDATE(expr);
                 break;
             }
 
-            ast_node_t *lhs = an_lhs(expression);
+            ast_node_t *lhs = an_lhs(expr);
             resolve_expression(analyzer, ast, state, lhs);
             ast_node_t *lvalue_node = lhs->lvalue_node;
             if (an_is_none(lvalue_node)) {
                 stan_error(analyzer, make_error_node(ERROR_ANALYSIS_EXPECTED_LVALUE, lhs));
-                INVALIDATE(expression);
+                INVALIDATE(expr);
                 break;
             } 
 
@@ -1202,11 +1202,11 @@ void resolve_expression(
 
                 
                 if (def == NULL) {
-                    INVALIDATE(expression);
+                    INVALIDATE(expr);
                     break;
                 }
 
-                expression->value_type = def_type(def);
+                expr->value_type = def_type(def);
 
                 type_t rhs_type = rhs->value_type;
                 unless (typeid_eq(def_type(def), rhs_type)) {
@@ -1214,7 +1214,7 @@ void resolve_expression(
                     break;
                 }
 
-                expression->value_type = rhs_type;
+                expr->value_type = rhs_type;
 
             } else if (lvalue_node->node_type == AST_NODE_TYPE_EXPRESSION_DOT) {
                 // todo
@@ -1224,7 +1224,7 @@ void resolve_expression(
                 // resolve_expression(analyzer, ast, state, lvalue_node);
 
                 if (TYPE_IS_INVALID(lvalue_node->value_type)) {
-                    INVALIDATE(expression);
+                    INVALIDATE(expr);
                     break;
                 }
 
@@ -1233,7 +1233,7 @@ void resolve_expression(
                     break;
                 }
 
-                expression->value_type = lvalue_node->value_type;
+                expr->value_type = lvalue_node->value_type;
 
             } else {
                 UNREACHABLE();
@@ -1242,21 +1242,21 @@ void resolve_expression(
         }
 
         case AST_NODE_TYPE_EXPRESSION_BLOCK: {
-            i32 declarations_count = expression->children.count;
+            i32 declarations_count = expr->children.count;
 
             scope_t block_scope;
-            scope_init(&block_scope, &analyzer->allocator, SCOPE_TYPE_BLOCK, state.scope, expression);
+            scope_init(&block_scope, &analyzer->allocator, SCOPE_TYPE_BLOCK, state.scope, expr);
 
-            forward_scan_declaration_names(analyzer, &block_scope, expression->children, declarations_count);
+            forward_scan_declaration_names(analyzer, &block_scope, expr->children, declarations_count);
 
             analysis_state_t block_state = state;
             block_state.scope = &block_scope;
             block_state.mode = MODE_RUNTIME | (state.mode & MODE_FOLDING_TIME);
-            resolve_declarations(analyzer, ast, block_state, expression->children, declarations_count);
+            resolve_declarations(analyzer, ast, block_state, expr->children, declarations_count);
 
-            size_t last_unreachable_index = expression->children.count;
-            for (size_t i = 0; i < expression->children.count; ++i) {
-                ast_node_t *decl = expression->children.items[i];
+            size_t last_unreachable_index = expr->children.count;
+            for (size_t i = 0; i < expr->children.count; ++i) {
+                ast_node_t *decl = expr->children.items[i];
                 if (TYPE_IS_UNREACHABLE(decl->value_type)) {
                     last_unreachable_index = i;
                     break;
@@ -1264,18 +1264,18 @@ void resolve_expression(
             }
 
             // discard everything past an unreachable type
-            if (last_unreachable_index < expression->children.count) {
-                expression->children.count = last_unreachable_index+1;
+            if (last_unreachable_index < expr->children.count) {
+                expr->children.count = last_unreachable_index+1;
 
                 // todo: add a warning for this
             }
 
-            size_t last_decl_def = expression->children.count;
-            size_t last_non_void_decl_stmt = expression->children.count;
-            size_t last_decl_stmt = expression->children.count;
+            size_t last_decl_def = expr->children.count;
+            size_t last_non_void_decl_stmt = expr->children.count;
+            size_t last_decl_stmt = expr->children.count;
 
-            for (size_t i = 0; i < expression->children.count; ++i) {
-                ast_node_t *decl = expression->children.items[i];
+            for (size_t i = 0; i < expr->children.count; ++i) {
+                ast_node_t *decl = expr->children.items[i];
                 switch (decl->node_type) {
                     case AST_NODE_TYPE_DECLARATION_DEFINITION: {
                         last_decl_def = i;
@@ -1294,38 +1294,38 @@ void resolve_expression(
                 }
             }
 
-            if (last_non_void_decl_stmt < expression->children.count && (last_decl_def == expression->children.count || last_decl_def < last_non_void_decl_stmt)) {
-                expression->last_statement = expression->children.items[last_non_void_decl_stmt];
-            } else if (last_decl_stmt < expression->children.count && (last_decl_def == expression->children.count || last_decl_def < last_decl_stmt)) {
-                expression->last_statement = expression->children.items[last_decl_stmt];
+            if (last_non_void_decl_stmt < expr->children.count && (last_decl_def == expr->children.count || last_decl_def < last_non_void_decl_stmt)) {
+                expr->last_statement = expr->children.items[last_non_void_decl_stmt];
+            } else if (last_decl_stmt < expr->children.count && (last_decl_def == expr->children.count || last_decl_def < last_decl_stmt)) {
+                expr->last_statement = expr->children.items[last_decl_stmt];
             } else {
-                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_BLOCKS_MUST_BE_EMPTY_OR_END_IN_STATEMENT, expression));
-                INVALIDATE(expression);
+                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_BLOCKS_MUST_BE_EMPTY_OR_END_IN_STATEMENT, expr));
+                INVALIDATE(expr);
                 break;
             }
 
-            expression->value_type = expression->last_statement->value_type;
+            expr->value_type = expr->last_statement->value_type;
             break;
         }
 
         case AST_NODE_TYPE_EXPRESSION_BRANCHING: {
             {
                 scope_t condition_scope = {0};
-                scope_init(&condition_scope, &ast->allocator, SCOPE_TYPE_CONDITION, state.scope, an_condition(expression));
+                scope_init(&condition_scope, &ast->allocator, SCOPE_TYPE_CONDITION, state.scope, an_condition(expr));
 
                 analysis_state_t cond_state = state;
                 cond_state.scope = &condition_scope;
 
-                resolve_expression(analyzer, ast, cond_state, an_condition(expression));
+                resolve_expression(analyzer, ast, cond_state, an_condition(expr));
             }
 
             scope_t return_scope = {0};
             analysis_state_t return_state = state;
 
-            switch (expression->branch_type) {
+            switch (expr->branch_type) {
                 case BRANCH_TYPE_DO:
                 case BRANCH_TYPE_LOOPING: {
-                    scope_init(&return_scope, &analyzer->allocator, SCOPE_TYPE_RETURN_BRANCH, state.scope, expression);
+                    scope_init(&return_scope, &analyzer->allocator, SCOPE_TYPE_RETURN_BRANCH, state.scope, expr);
 
                     return_state = state;
                     return_state.scope = &return_scope;
@@ -1336,44 +1336,44 @@ void resolve_expression(
                 case BRANCH_TYPE_IFTHEN: break;
             }
 
-            resolve_expression(analyzer, ast, return_state, an_then(expression));
+            resolve_expression(analyzer, ast, return_state, an_then(expr));
 
-            resolve_expression(analyzer, ast, state, an_else(expression));
+            resolve_expression(analyzer, ast, state, an_else(expr));
 
-            type_t branch_type = resolve_block_return_types(expression);
-            expression->value_type = branch_type;
+            type_t branch_type = resolve_block_return_types(expr);
+            expr->value_type = branch_type;
 
             if (!TYPE_IS_UNREACHABLE(branch_type)) {
-                if (TYPE_IS_VOID(an_then(expression)->value_type) && an_then(expression)->node_type == AST_NODE_TYPE_EXPRESSION_NIL) {
-                    an_then(expression) = ast_create_implicit_nil_node(ast, branch_type, an_then(expression)->start);
+                if (TYPE_IS_VOID(an_then(expr)->value_type) && an_then(expr)->node_type == AST_NODE_TYPE_EXPRESSION_NIL) {
+                    an_then(expr) = ast_create_implicit_nil_node(ast, branch_type, an_then(expr)->start);
                 }
 
-                if (TYPE_IS_VOID(an_else(expression)->value_type) && an_else(expression)->node_type == AST_NODE_TYPE_EXPRESSION_NIL) {
-                    an_else(expression) = ast_create_implicit_nil_node(ast, branch_type, an_else(expression)->start);
+                if (TYPE_IS_VOID(an_else(expr)->value_type) && an_else(expr)->node_type == AST_NODE_TYPE_EXPRESSION_NIL) {
+                    an_else(expr) = ast_create_implicit_nil_node(ast, branch_type, an_else(expr)->start);
                 }
             }
 
             if (TYPE_IS_INVALID(branch_type)) {
-                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_BLOCK_RETURNS_MISMATCH, expression));
-                INVALIDATE(expression);
+                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_BLOCK_RETURNS_MISMATCH, expr));
+                INVALIDATE(expr);
             }
 
-            if (TYPE_IS_INVALID(an_then(expression)->value_type) || TYPE_IS_INVALID(an_else(expression)->value_type)) {
-                INVALIDATE(expression);
+            if (TYPE_IS_INVALID(an_then(expr)->value_type) || TYPE_IS_INVALID(an_else(expr)->value_type)) {
+                INVALIDATE(expr);
             }
 
-            unless (typeid_eq(an_condition(expression)->value_type, typeid(TYPE_BOOL))) {
-                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CONDITION_MUST_BE_BOOL, an_condition(expression)));
-                INVALIDATE(expression);
+            unless (typeid_eq(an_condition(expr)->value_type, typeid(TYPE_BOOL))) {
+                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CONDITION_MUST_BE_BOOL, an_condition(expr)));
+                INVALIDATE(expr);
             }
 
             break;
         }
 
         case AST_NODE_TYPE_EXPRESSION_JMP: {
-            resolve_expression(analyzer, ast, state, an_expression(expression));
+            resolve_expression(analyzer, ast, state, an_expression(expr));
 
-            switch (expression->start.type) {
+            switch (expr->start.type) {
                 case TOKEN_RETURN: {
                     scope_t *function_scope = get_closest_outer_function_scope(&ast->type_set.types, state.scope);
                     ASSERT(function_scope, "right now all scopes should be under a function scope");
@@ -1382,9 +1382,9 @@ void resolve_expression(
                     type_info_t *function_type_info = ast->type_set.types.items[function_type.i];
 
                     type_t function_return_type = function_scope ? function_type_info->data.function.return_type : typeid(TYPE_VOID);
-                    unless (TYPE_IS_INVALID(an_expression(expression)->value_type) || !typeid_eq(function_return_type, an_expression(expression)->value_type)) {
+                    unless (TYPE_IS_INVALID(an_expression(expr)->value_type) || !typeid_eq(function_return_type, an_expression(expr)->value_type)) {
                         printf("todo: another case where i need to put in the right nodes here... the expected should be the expression of the ufnction return value\n");
-                        stan_error(analyzer, make_type_mismatch_error(an_expression(expression), an_expression(expression)));
+                        stan_error(analyzer, make_type_mismatch_error(an_expression(expr), an_expression(expr)));
                     }
                     break;
                 }
@@ -1392,12 +1392,12 @@ void resolve_expression(
                 case TOKEN_BREAK: {
 
                     scope_t *found_scope = NULL;
-                    bool success = get_nearest_scope_in_func_or_error(analyzer, expression, state.scope, SCOPE_TYPE_RETURN_BRANCH, expression->identifier.view, &found_scope);
+                    bool success = get_nearest_scope_in_func_or_error(analyzer, expr, state.scope, SCOPE_TYPE_RETURN_BRANCH, expr->identifier.view, &found_scope);
                     unless (success) {
-                        INVALIDATE(expression);
+                        INVALIDATE(expr);
                     } else {
-                        expression->jmp_out_scope_node = found_scope->creator;
-                        array_push(&found_scope->creator->jmp_nodes, expression);
+                        expr->jmp_out_scope_node = found_scope->creator;
+                        array_push(&found_scope->creator->jmp_nodes, expr);
                         ASSERT(found_scope->creator->node_type == AST_NODE_TYPE_EXPRESSION_BRANCHING, "only supports branches rn");
                     }
                     break;
@@ -1407,14 +1407,14 @@ void resolve_expression(
             }
 
 
-            expression->value_type = typeid(TYPE_UNREACHABLE);
+            expr->value_type = typeid(TYPE_UNREACHABLE);
             break;
         }
 
         case AST_NODE_TYPE_EXPRESSION_CALL: {
             bool argument_invalid = false;
-            for (size_t i = 0; i < expression->as.call.arguments.count; ++i) {
-                ast_node_t *argument = expression->as.call.arguments.items[i];
+            for (size_t i = an_call_arg_start(expr); i < an_call_arg_end(expr); ++i) {
+                ast_node_t *argument = expr->children.items[i];
                 resolve_expression(analyzer, ast, state, argument);
                 unless (TYPE_IS_INVALID(argument->value_type)) {
                     continue;
@@ -1423,41 +1423,42 @@ void resolve_expression(
                 argument_invalid = true;
             }
 
-            resolve_expression(analyzer, ast, state, expression->as.call.callee);
+            resolve_expression(analyzer, ast, state, an_callee(expr));
 
-            if (argument_invalid || TYPE_IS_INVALID(expression->as.call.callee->value_type)) {
-                INVALIDATE(expression);
+            if (argument_invalid || TYPE_IS_INVALID(an_callee(expr)->value_type)) {
+                INVALIDATE(expr);
                 break;
             }
 
-            type_t narrowed_callee_type = expression->as.call.callee->value_type;
-            if ((!type_is_function(ast->type_set.types, narrowed_callee_type) && !type_is_native_function(ast->type_set.types, narrowed_callee_type)) || !can_call(ast->type_set.types, narrowed_callee_type, expression->as.call.arguments)) {
-                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_EXPECTED_CALLABLE, expression->as.call.callee));
+            type_t callee_type = an_callee(expr)->value_type;
+
+            if ((!type_is_function(ast->type_set.types, callee_type) && !type_is_native_function(ast->type_set.types, callee_type)) || !can_call(ast->type_set.types, callee_type, expr->children, an_call_arg_start(expr), an_call_arg_end(expr))) {
+                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_EXPECTED_CALLABLE, an_callee(expr)));
                 break;
             }
 
-            type_info_t *narrowed_callee_type_info = ast->type_set.types.items[narrowed_callee_type.i];
-            expression->value_type = narrowed_callee_type_info->data.function.return_type;
+            type_info_t *callee_type_info = ast->type_set.types.items[callee_type.i];
+            expr->value_type = callee_type_info->data.function.return_type;
             break;
         }
 
         case AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION: {
-            resolve_function_expression(analyzer, ast, state, expression);
+            resolve_function_expression(analyzer, ast, state, expr);
             break;
         }
 
         case AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION: {
             // since structs are boundaries for circular dependencies, they will never be the cause of one.
-            push_dependency(analyzer, expression, state.fold_level, is_value_circular_dependency);
-            resolve_struct_definition(analyzer, ast, state, expression);
+            push_dependency(analyzer, expr, state.fold_level, is_value_circular_dependency);
+            resolve_struct_definition(analyzer, ast, state, expr);
             pop_dependency(analyzer);
             break;
         }
         
          case AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE: {
             bool invalid_parameter = false;
-            for (size_t i = 0; i < expression->as.function.parameter_nodes.count; i++) {
-                ast_node_t *parameter = expression->as.function.parameter_nodes.items[i];
+            for (size_t i = an_func_def_arg_start(expr); i < an_func_def_arg_end(expr); ++i) {
+                ast_node_t *parameter = expr->children.items[i];
                 resolve_expression(analyzer, ast, state, parameter);
 
                 if (TYPE_IS_INVALID(parameter->value_type)) {
@@ -1465,17 +1466,16 @@ void resolve_expression(
                 }
             }
 
-            ASSERT(expression->as.function.return_type_expression, "during static analysis, function signatures should not have a null return type, that's only valid for function definitions after parsing");
-            resolve_expression(analyzer, ast, state, expression->as.function.return_type_expression);
+            resolve_expression(analyzer, ast, state, an_func_def_return(expr));
 
-            if (invalid_parameter || TYPE_IS_INVALID(expression->as.function.return_type_expression->value_type)) {
-                INVALIDATE(expression);
+            if (invalid_parameter || TYPE_IS_INVALID(an_func_def_return(expr)->value_type)) {
+                INVALIDATE(expr);
                 break;
             }
 
-            fold_function_signature(analyzer, ast, expression);
+            fold_function_signature(analyzer, ast, expr);
 
-            expression->value_type = typeid(TYPE_TYPE);
+            expr->value_type = typeid(TYPE_TYPE);
             break;
         }
 
@@ -1490,11 +1490,11 @@ void resolve_expression(
     }
 
     // we shouldn't fold expressions that are undefined (blocks or ifelses that return)
-    if (TYPE_IS_UNDEFINED(expression->value_type) || TYPE_IS_INVALID(expression->value_type)) {
+    if (TYPE_IS_UNDEFINED(expr->value_type) || TYPE_IS_INVALID(expr->value_type)) {
         return;
     }
 
-    fold_constants_via_runtime(analyzer, ast, state, expression);
+    fold_constants_via_runtime(analyzer, ast, state, expr);
 }
 
 static void declare_definition(analyzer_t *analyzer, scope_t *scope, ast_node_t *definition) {
@@ -2016,102 +2016,85 @@ static void resolve_function_expression(
         analyzer_t *analyzer,
         ast_t *ast,
         analysis_state_t state,
-        ast_node_t *function_definition_expression) {
-    ASSERT(function_definition_expression->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION, "must be function declaration at this point");
+        ast_node_t *func_def) {
+    ASSERT(func_def->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION, "must be function declaration at this point");
 
-    if (IS_FOLDED(function_definition_expression)) {
+    if (IS_FOLDED(func_def)) {
         return;
     }
 
-    ast_function_t *definition = &function_definition_expression->as.function;
-
-    i32 parameter_count = definition->parameter_nodes.count;
-
     scope_t function_parameter_scope;
-    scope_init(&function_parameter_scope, &analyzer->allocator, SCOPE_TYPE_FUNCTION_PARAMETERS, state.scope, function_definition_expression);
+    scope_init(&function_parameter_scope, &analyzer->allocator, SCOPE_TYPE_FUNCTION_PARAMETERS, state.scope, func_def);
     types_t parameter_types = {.allocator=&ast->allocator};
 
-    forward_scan_declaration_names(analyzer, &function_parameter_scope, definition->parameter_nodes, parameter_count);
+    {
+        size_t parameter_count = func_def->children.count-2;
+        tmp_arena_t *tmp = allocator_borrow();
+
+        ast_nodes_t parameters = {.allocator=tmp->allocator};
+        for (size_t i = an_func_def_arg_start(func_def); i < an_func_def_arg_end(func_def); ++i) {
+            array_push(&parameters, func_def->children.items[i]);
+        }
+
+        forward_scan_declaration_names(analyzer, &function_parameter_scope, parameters, parameter_count);
+
+        allocator_return(tmp);
+    }
 
     bool parameter_invalid = false;
 
     // Resolves parameters for function type
-    for (i32 i = 0; i < parameter_count; ++i) {
+    for (size_t i = an_func_def_arg_start(func_def); i < an_func_def_arg_end(func_def); ++i) {
         analysis_state_t new_state = state;
         // parameters look syntacticly like mutables, but their initial expressions should be constants
         new_state.mode = MODE_CONSTANT_TIME | (state.mode & MODE_FOLDING_TIME);
         new_state.scope = &function_parameter_scope;
-        resolve_declaration_definition(analyzer, ast, new_state, definition->parameter_nodes.items[i]);
-        array_push(&parameter_types, definition->parameter_nodes.items[i]->value_type);
+        resolve_declaration_definition(analyzer, ast, new_state, func_def->children.items[i]);
+        array_push(&parameter_types, func_def->children.items[i]->value_type);
         
 
-        if (TYPE_IS_INVALID(definition->parameter_nodes.items[i]->value_type)) {
+        if (TYPE_IS_INVALID(func_def->children.items[i]->value_type)) {
             parameter_invalid = true;
         }
     }
 
     type_t return_type = typeid(TYPE_VOID);
-    if (definition->return_type_expression) {
-        bool pushed = push_dependency(analyzer, definition->return_type_expression, state.fold_level, is_value_circular_dependency);
-        if (pushed) {
-            analysis_state_t new_state = state;
-            new_state.mode = MODE_CONSTANT_TIME | (state.mode & MODE_FOLDING_TIME);
-            resolve_expression(analyzer, ast, state, definition->return_type_expression);
-            pop_dependency(analyzer);
-        }
+    bool pushed = push_dependency(analyzer, an_func_def_return(func_def), state.fold_level, is_value_circular_dependency);
+    if (pushed) {
+        analysis_state_t new_state = state;
+        new_state.mode = MODE_CONSTANT_TIME | (state.mode & MODE_FOLDING_TIME);
+        resolve_expression(analyzer, ast, state, an_func_def_return(func_def));
+        pop_dependency(analyzer);
+    }
 
-        if (!TYPE_IS_TYPE(definition->return_type_expression->value_type)) {
-            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_RETURN_TYPE, definition->return_type_expression));
-        } else {
-            return_type = get_folded_type(ast, definition->return_type_expression->value_index);
-        }
+    unless (TYPE_IS_TYPE(an_func_def_return(func_def)->value_type)) {
+        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_RETURN_TYPE, an_func_def_return(func_def)));
     } else {
-        if (!TYPE_IS_UNRESOLVED(function_definition_expression->value_type)) {
-            type_info_t *signature = ast->type_set.types.items[function_definition_expression->value_type.i];
-            return_type = signature->data.function.return_type;
-        }
+        return_type = get_folded_type(ast, an_func_def_return(func_def)->value_index);
     }
 
     if (parameter_invalid || TYPE_IS_INVALID(return_type)) {
-        INVALIDATE(function_definition_expression);
+        INVALIDATE(func_def);
         return;
     }
 
     type_t function_type = type_set_fetch_function(&ast->type_set, return_type, parameter_types);
-    // todo
-    // function_t_ *function = orso_new_function(function_definition_expression->start.file_path, &analyzer->allocator);
-    // function->signature = function_type;
+    func_def->value_type = function_type;
 
-    // array_push(&ast->function_definition_pairs, ((function_definition_pair_t){
-    //     .ast_defintion = function_definition_expression,
-    //     .function = function
-    // }));
-
-    
-    // function_definition_expression->foldable = true;
-    // word_t function_slot_value = WORDP(function);
-    // value_index_t function_constant_index = add_value_to_ast_constant_stack(ast, &function_slot_value, function_type);
-    // function_definition_expression->value_index = function_constant_index;
-
-    // TODO: Maybe use a marco defined for this file for setting both the value and type, maybe an inlined function
-    function_definition_expression->value_type = function_type;
-
-    ASSERT(definition->block->node_type == AST_NODE_TYPE_EXPRESSION_BLOCK, "must be block expression");
-
-    bool pushed = push_dependency(analyzer, function_definition_expression, state.fold_level, is_value_circular_dependency);
+    pushed = push_dependency(analyzer, func_def, state.fold_level, is_value_circular_dependency);
     if (pushed) {
         analysis_state_t new_state = state;
         new_state.mode = MODE_RUNTIME;
 
         scope_t function_scope;
-        scope_init(&function_scope, &analyzer->allocator, SCOPE_TYPE_FUNCTION_BODY, &function_parameter_scope, function_definition_expression);
+        scope_init(&function_scope, &analyzer->allocator, SCOPE_TYPE_FUNCTION_BODY, &function_parameter_scope, func_def);
         new_state.scope = &function_scope;
-        resolve_expression(analyzer, ast, new_state, definition->block);
+        resolve_expression(analyzer, ast, new_state, an_func_def_block(func_def));
         pop_dependency(analyzer);
     }
 
-    if (!TYPE_IS_UNREACHABLE(definition->block->value_type)) {
-        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_FUNCTION_MUST_RETURN_ON_ALL_BRANCHES, function_definition_expression));
+    unless (TYPE_IS_UNREACHABLE(an_func_def_block(func_def)->value_type)) {
+        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_FUNCTION_MUST_RETURN_ON_ALL_BRANCHES, func_def));
     }
 }
 
@@ -2350,7 +2333,7 @@ static void resolve_struct_definition(analyzer_t *analyzer, ast_t *ast, analysis
 
         ASSERT(complete_struct_type_info->data.struct_.field_count == field_count, "completed struct must have the same number as fields as ast field declaration nodes");
 
-        u64 size_in_slots = bytes_to_slots(complete_struct_type_info->size);
+        u64 size_in_slots = bytes_to_words(complete_struct_type_info->size);
         byte struct_data[size_in_slots * sizeof(word_t)];
         for (u64 i = 0; i < size_in_slots * sizeof(word_t); i++) {
             struct_data[i] = 0;

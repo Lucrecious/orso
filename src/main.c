@@ -222,7 +222,7 @@ void compile_expr_to_vm(vm_t *vm, ast_t *ast, arena_t *arena, error_function_t e
     
     function_t *expr_function = new_function(lit2str("<none>"), memory, arena);
 
-    compile_expr_to_function(expr_function, ast, error_fn);
+    compile_expr_to_function(expr_function, ast, error_fn, arena);
 
     vm_init(vm);
     vm->registers[REG_STACK_FRAME].as.u = stack_size;

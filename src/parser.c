@@ -217,8 +217,8 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type
         }
         
         case AST_NODE_TYPE_EXPRESSION_CALL: {
-            node->as.call.callee = NULL;
-            node->as.call.arguments = (ast_nodes_t){.allocator=&ast->allocator};
+            array_push(&node->children, &nil_node);
+            array_push(&node->children, &nil_node);
             break;
         }
         
@@ -239,10 +239,9 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type
         
         case AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE:
         case AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION: {
-            node->as.function.block = NULL;
-            node->as.function.compilable = false;
-            node->as.function.parameter_nodes = (ast_nodes_t){.allocator=&ast->allocator};
-            node->as.function.return_type_expression = NULL;
+            array_push(&node->children, &nil_node);
+            array_push(&node->children, &nil_node);
+            array_push(&node->children, &nil_node);
             break;
         }
 
@@ -494,13 +493,13 @@ static ast_node_t *convert_assignment_expression(parser_t *parser, ast_node_t *l
 
 static ast_node_t *convert_call_expression(ast_node_t *left_operand, ast_node_t *call) {
     call->start = left_operand->start;
-    call->as.call.callee = left_operand;
+    an_callee(call) = left_operand;
     return call;
 }
 
-static ast_node_t *convert_function_definition(parser_t *parser, ast_node_t *left_operand, ast_node_t *function_definition) {
-    for (size_t i = 0; i < left_operand->as.function.parameter_nodes.count; i++) {
-        ast_node_t *parameter = left_operand->as.function.parameter_nodes.items[i];
+static ast_node_t *convert_function_definition(parser_t *parser, ast_node_t *left_operand, ast_node_t *func_def) {
+    for (size_t i = an_func_def_arg_start(left_operand); i < an_func_def_arg_end(left_operand); ++i) {
+        ast_node_t *parameter = left_operand->children.items[i];
         if (parameter->node_type != AST_NODE_TYPE_DECLARATION_DEFINITION) {
             parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_DECLARATION, parameter->start));
             left_operand->node_type = AST_NODE_TYPE_NONE;
@@ -508,13 +507,21 @@ static ast_node_t *convert_function_definition(parser_t *parser, ast_node_t *lef
         }
     }
 
-    function_definition->as.function.parameter_nodes = left_operand->as.function.parameter_nodes;
-    function_definition->as.function.return_type_expression = left_operand->as.function.return_type_expression;
+    ast_node_t *block = an_func_def_block(func_def);
+
+    func_def->children.count = 0;
+
+    for (size_t i = an_func_def_arg_start(left_operand); i < an_func_def_arg_end(left_operand); ++i) {
+        array_push(&func_def->children, func_def->children.items[i]);
+    }
+
+    array_push(&func_def->children, an_func_def_return(left_operand));
+    array_push(&func_def->children, block);
 
     // prevents freeing the node  parameter and return expressions
     left_operand->node_type = AST_NODE_TYPE_NONE;
 
-    return function_definition;
+    return func_def;
 }
 
 static ast_node_t *parse_assignment(parser_t *parser, bool inside_type_context) {
@@ -666,43 +673,49 @@ static bool is_incoming_declaration_declaration(parser_t* parser) {
 
 static ast_node_t* definition_declaration(parser_t* parser, bool as_parameter);
 
-static ast_nodes_t parse_parameters(parser_t *parser) {
-    ast_nodes_t parameters = {.allocator=&parser->ast->allocator};
+static void parse_parameters(parser_t *parser, ast_nodes_t *children) {
+    ASSERT(children->count == 0, "must be cleared first");
+
     until (check(parser, TOKEN_PARENTHESIS_CLOSE)) {
         if (is_incoming_declaration_declaration(parser)) {
-            array_push(&parameters, definition_declaration(parser, true));
+            array_push(children, definition_declaration(parser, true));
         } else {
-            array_push(&parameters, parse_expression(parser, true));
+            array_push(children, parse_expression(parser, true));
         }
         if (match(parser, TOKEN_COMMA)) {
             continue;
         }
     }
 
-    return parameters;
+    if (children->count == 0) {
+        array_push(children, ast_create_implicit_nil_node(parser->ast, typeid(TYPE_VOID), parser->previous));
+    }
 }
 
-static void parse_function_signature(parser_t *parser, ast_node_t *function_definition) {
-    ASSERT(function_definition->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE, "must be a function signature");
-    function_definition->as.function.parameter_nodes = (ast_nodes_t){.allocator=&parser->ast->allocator};
-    function_definition->as.function.return_type_expression = NULL;
+static void parse_function_signature(parser_t *parser, ast_node_t *func_sig) {
+    ASSERT(func_sig->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE, "must be a function signature");
+    func_sig->children.count = 0;
 
-    function_definition->as.function.parameter_nodes = parse_parameters(parser);
+    parse_parameters(parser, &func_sig->children);
+
+    array_push(&func_sig->children, &nil_node);
+    array_push(&func_sig->children, &nil_node);
 
     consume(parser, TOKEN_PARENTHESIS_CLOSE);
 
     if (match(parser, TOKEN_ARROW_RIGHT)) {
-        function_definition->as.function.return_type_expression = parse_expression(parser, true);
+        an_func_def_return(func_sig) = parse_expression(parser, true);
+    } else {
+        an_func_def_return(func_sig) = ast_create_implicit_nil_node(parser->ast, typeid(TYPE_VOID), func_sig->end);
     }
 }
 
 static ast_node_t *parse_function_definition(parser_t *parser, bool inside_type_context) {
-    ast_node_t *function_definition_expression = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION, inside_type_context, parser->previous);
-    function_definition_expression->as.function.compilable = true;
-    function_definition_expression->as.function.block = parse_block(parser, inside_type_context);
-    function_definition_expression->end = parser->previous;
+    ast_node_t *func_def = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION, inside_type_context, parser->previous);
+    an_func_def_block(func_def) = parse_block(parser, inside_type_context);
+    func_def->end = parser->previous;
 
-    return function_definition_expression;
+    return func_def;
 }
 
 static ast_node_t *parse_grouping_or_function_signature_or_definition(parser_t *parser, bool inside_type_context) {
@@ -738,34 +751,31 @@ static ast_node_t *parse_grouping_or_function_signature_or_definition(parser_t *
     return expression_node;
 }
 
-static ast_nodes_t parse_arguments(parser_t* parser, bool inside_type_context) {
-    ast_nodes_t arguments = {.allocator = &parser->ast->allocator};
-
-    if (!check(parser, TOKEN_PARENTHESIS_CLOSE)) {
+static void parse_arguments(parser_t* parser, bool inside_type_context, ast_nodes_t *ret_args) {
+    unless (check(parser, TOKEN_PARENTHESIS_CLOSE)) {
         do {
             ast_node_t *argument = parse_expression(parser, inside_type_context);
-            array_push(&arguments, argument);
+            array_push(ret_args, argument);
         } while (match(parser, TOKEN_COMMA));
     }
 
     consume(parser, TOKEN_PARENTHESIS_CLOSE);
 
-    if (arguments.count > MAX_PARAMETERS - 1) {
+    if (ret_args->count > MAX_PARAMETERS - 1) {
         error_t error = make_error(ERROR_PARSER_TOO_MANY_PARAMETERS);
         parser_error(parser, error);
     }
-
-    return arguments;
 }
 
 static ast_node_t *parse_call(parser_t *parser, bool inside_type_context) {
-    ast_node_t *expression_node = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_CALL, inside_type_context, parser->previous);
+    ast_node_t *call = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_CALL, inside_type_context, parser->previous);
 
-    expression_node->as.call.callee = NULL;
-    expression_node->as.call.arguments = parse_arguments(parser, inside_type_context);
-    expression_node->end = parser->previous;
+    an_callee(call) = ast_create_implicit_nil_node(parser->ast, typeid(TYPE_VOID), parser->previous);
+    call->children.count = an_call_arg_start(call);
+    parse_arguments(parser, inside_type_context, &call->children);
+    call->end = parser->previous;
 
-    return expression_node;
+    return call;
 }
 
 static ast_node_t *parse_unary(parser_t *parser, bool inside_type_context) {
@@ -977,8 +987,8 @@ static ast_node_t *parse_precedence(parser_t *parser, bool inside_type_context, 
      * restrictive grammar.
      */
     if (left_operand->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE) {
-        for (size_t i = 0; i < left_operand->as.function.parameter_nodes.count; ++i) {
-            ast_node_t *parameter = left_operand->as.function.parameter_nodes.items[i];
+        for (size_t i = an_func_def_arg_start(left_operand); i < an_func_def_arg_end(left_operand); ++i) {
+            ast_node_t *parameter = left_operand->children.items[i];
             if (!ast_node_type_is_expression(parameter->node_type)) {
                 parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_TYPE, parameter->start));
                 break;
@@ -1148,7 +1158,7 @@ value_index_t zero_value(ast_t *ast, type_t type) {
 
     type_info_t *type_info = ast->type_set.types.items[type.i];
 
-    word_t value[bytes_to_slots(type_info->size)];
+    word_t value[bytes_to_words(type_info->size)];
 
     switch (type_info->kind) {
         case TYPE_VOID:
@@ -1169,7 +1179,7 @@ value_index_t zero_value(ast_t *ast, type_t type) {
             break;
 
         case TYPE_STRUCT: {
-            for (size_t i = 0; i < bytes_to_slots(type_info->size); i++) {
+            for (size_t i = 0; i < bytes_to_words(type_info->size); i++) {
                 value[i] = WORDI(0);
             }
             break;
@@ -1388,13 +1398,13 @@ static void ast_print_ast_node(type_infos_t types, ast_node_t *node, u32 level) 
 
             print_indent(level+1);
             print_line("callee");
-            ast_print_ast_node(types, node->as.call.callee, level + 2);
+            ast_print_ast_node(types, an_callee(node), level + 2);
             
             print_indent(level+1);
             print_line("arguments");
 
-            for (size_t i = 0; i < node->as.call.arguments.count; ++i) {
-                ast_node_t *arg = node->as.call.arguments.items[i];
+            for (size_t i = an_call_arg_start(node); i < an_call_arg_end(node); ++i) {
+                ast_node_t *arg = node->children.items[i];
                 ast_print_ast_node(types, arg, level+2);
             }
             break;
@@ -1405,7 +1415,7 @@ static void ast_print_ast_node(type_infos_t types, ast_node_t *node, u32 level) 
 
             print_indent(level + 1);
             print_line("definition");
-            ast_print_ast_node(types, node->as.function.block, level + 2);
+            ast_print_ast_node(types, an_func_def_block(node), level + 2);
             break;
         }
         case AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION: {

@@ -112,7 +112,7 @@ bool type_is_number(type_info_t *type, bool include_bool) {
     return type_is_float(type) || type_is_integer(type, include_bool);
 }
 
-size_t bytes_to_slots(i32 byte_count) {
+size_t bytes_to_words(i32 byte_count) {
     if (byte_count == 0) {
         return 1;
     }
@@ -137,7 +137,7 @@ struct_field_t *type_struct_find_field(type_info_t *struct_, const char *name, s
 }
 
 size_t type_slot_count(type_info_t *type) {
-    return bytes_to_slots(type->size);
+    return bytes_to_words(type->size);
 }
 
 bool type_fits(type_info_t* storage_type, type_info_t* value_type) {
