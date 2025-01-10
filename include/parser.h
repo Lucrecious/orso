@@ -258,7 +258,7 @@ ast_node_t *ast_nil(ast_t *ast, type_t value_type, token_t token_location);
 bool ast_node_type_is_decl_or_stmt(ast_node_type_t node_type);
 bool ast_node_type_is_expression(ast_node_type_t node_type);
 
-token_t make_token_implicit(token_t token);
+token_t token_implicit_at_end(token_t token);
 
 value_index_t zero_value(ast_t *ast, type_t type);
 

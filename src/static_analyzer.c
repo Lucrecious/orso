@@ -1267,11 +1267,11 @@ void resolve_expression(
 
             if (!TYPE_IS_UNREACHABLE(branch_type)) {
                 if (TYPE_IS_VOID(an_then(expr)->value_type) && an_then(expr)->node_type == AST_NODE_TYPE_EXPRESSION_NIL) {
-                    an_then(expr) = ast_nil(ast, branch_type, make_token_implicit(an_then(expr)->start));
+                    an_then(expr) = ast_nil(ast, branch_type, token_implicit_at_end(an_then(expr)->start));
                 }
 
                 if (TYPE_IS_VOID(an_else(expr)->value_type) && an_else(expr)->node_type == AST_NODE_TYPE_EXPRESSION_NIL) {
-                    an_else(expr) = ast_nil(ast, branch_type, make_token_implicit(an_else(expr)->start));
+                    an_else(expr) = ast_nil(ast, branch_type, token_implicit_at_end(an_else(expr)->start));
                 }
             }
 
