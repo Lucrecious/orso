@@ -48,7 +48,7 @@ bool memarr_push(memarr_t *arr, void *data, size_t size_bytes, size_t *out_index
 
 bool memarr_get(memarr_t *arr, size_t index, size_t size_bytes, void *out_result) {
     if (index >= arr->count) return false;
-    if ((index + size_bytes) >= arr->count) return false;
+    if ((index + size_bytes) > arr->count) return false;
 
     memcpy(out_result, arr->data+index, size_bytes);
     return true;

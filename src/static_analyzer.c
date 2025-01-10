@@ -1621,14 +1621,14 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
     }
 
     unless (declaration->is_mutable) {
-        if (!an_is_none(an_decl_expr(declaration)) && type_is_function(ast->type_set.types, an_decl_expr(declaration)->value_type)) {
-            function_t *function = NULL;
-            if (memarr_get(&ast->constants, an_decl_expr(declaration)->value_index.index, sizeof(function_t*), &function)) {
-                ASSERT(false, "todo");
-            }
+        // if (!an_is_none(an_decl_expr(declaration)) && type_is_function(ast->type_set.types, an_decl_expr(declaration)->value_type)) {
+        //     function_t *function = NULL;
+        //     if (memarr_get(&ast->constants, an_decl_expr(declaration)->value_index.index, sizeof(function_t*), &function)) {
+        //         ASSERT(false, "todo");
+        //     }
 
-            // todo bind name to a function?? 
-        }
+        //     // todo bind name to a function?? 
+        // }
 
         if (!an_is_none(an_decl_expr(declaration))
         && type_is_struct(ast->type_set.types, an_decl_expr(declaration)->value_type)
@@ -1736,64 +1736,6 @@ static ast_node_t *get_builtin_decl(ast_t *ast, string_view_t identifier) {
     return decl;
 }
 
-/*
- * This is the big boy function. The meat of compile time expression evaluation. This language has a couple of rules it must
- * follow for this to work correctly.
- *     1. There are only "declarations" and "expressions" in this language
- *         Declarations: Declarations store values in memory in a region called the scope
- *             - There are two types (1) named declarations and (2) anonymous declarations
- *             - Named declarations are accessible through their identifiers.
- *             - Anonymous declarations are not accessible since they have no identifier and thus should cause
- *                 side-effects to be useful
- *             - Named declarations can be made constant, which requires their expression to be made up of literals recursively
- *                 (symbols, strings, numbers, types, void, arrays, maps, functions, structs, other constants)
- *         Expressions: Expressions do computations and "return" a value
- * 
- *     2. Expressions can only access named declarations from their own scope or an outer one
- * 
- *     3. Expressions can only create inner scopes
- *     
- *     4. Declarations are NOT expressions
- * 
- *     5. Expression operations can only be composed of other expressions on the same scope (therefore, expressions cannot make declarations in the same scope)
- * 
- *     6. Expressions for a mutable declaration can only access name declarations within
- *         (1) their function definition and (2) the file scope
- * 
- * The way compile time expression evaluation works is by recursively figuring out what to solve next.
- * Jon Blow uses some sort of "dependency system" for this. From what I understand he does not scan forward
- * in the scope to gather declaration names, and instead uses some sort of queue system. The reason he told me he
- * doesn't scan the scope first is because sometimes the name of a variable is not known anyways due to it being 
- * in a far off module or something. I disagree and I think scanning the scope names is the solution to doing this
- * without a ton of overhead.
- * After scanning the scope for the names, now the current scope and all inner scopes will know what entities
- * exist in the program. When an expression is being resolved and requests the type or value of a named definition
- * this is the function that is called. An expression can be dependant on resursively on other named entities.
- * 
- *       {
- *           B :: A;
- *           A :: C * 2;
- *       };
- *       C :: 60;
- * 
- * In the case above when resolving what B is, expression A needs to be resolved, but resolving A requires
- * resolving C. Using forward scanning allows me to resolve the expressions in the right order without having
- * to use a queue. All identifiers exist and therefore if a name cannot be found it does not exist.
- * 
- * However, things can get tricker with structs and modules... but not that tricky.
- * 
- *       
- *       {
- *           B :: A.x * 2;
- *           A :: C { x = 60 };
- *       };
- *       C :: struct { x: i32; y: string; }; 
- * 
- * In this case to resolve B -> A.x -> A -> C -> x. When the expression evaluator is ran on A.x * 2, a partially imcomplete
- * struct will be used since y is not accessed
- * 
- * This function below is what does this recursive dependency thing.
-*/
 static ast_node_t *get_resolved_def_by_identifier(
         analyzer_t *analyzer,
         ast_t *ast,
@@ -1867,76 +1809,10 @@ static ast_node_t *get_resolved_def_by_identifier(
             return NULL;
         }
 
-        if (type_is_function(ast->type_set.types, decl->value_type)) {
-            /*
-            * Okay... Time to do some explaining. This is a complicated one. Let's begin with the context.
-            *
-            * In a regular compiler that does not care about compile time evaluation of arbitrary expressions,
-            * they need not worry about *when* a function's body has been analyzed[1], only that it needs to be
-            * analyzed *eventually*. This is because in a regular compile, the assumption is that all functions
-            * run *after* everything already has been analyzed *and* compiled. This means that once we know a
-            * function's address in memory, every time we need to reference the function we can safely use its address.
-            * This is true even if we haven't fully compiled a function's body too. This is useful for recursion because
-            * while analyzing (mainly constant folding) a function's body, the body might call a function that references
-            * the current function's body that you're analyzing. You can simply place a function's address where ever it's
-            * references, and continue analyzing. This is an example of not having to care *when* a function's body gets analyzed
-            * since it doesn't interfere with the rest of the compilation. 
-            * 
-            * When a language cares about compile time expression evaluation (CTEE) things get a little more complicated... Despite 
-            * only needing to solve *when* it is possible to do CTEE this one problem is very complex to solve.
-            * 
-            * While solving recursion was straight forward with a regular compiler, it's not as clear with a CTEE compiler. Any
-            * expression composed of only constant values can be CTEEed. This is different from constant folding which reduces
-            * but doesn't run functions (even if its parameters are constants). This means functions can be ran while certain
-            * portions of the program are still compiling. Again, this is in contrast while a regular compiler where *all* analysis
-            * is done before *any* function is called ever.
-            * 
-            * So *when* can we perform CTEE? First, all entities of the expression being folded must
-            *      1. be constant
-            *      2. a mutable variable that was declared in the same fold level as the expression
-            * 
-            * The first requirement is trivial. You cannot fold an expression if the entities do not hold a concrete value.
-            * The second is less obvious. In Orso, entities can be defined inside blocks, and blocks are expressions. This means
-            * that the declarations in the block get run in order, inlined. Unlike a function that can be called at any time.
-            * This means blocks undergoing constant folding can still access variables that were created during the fold level
-            * since everything in the same fold level must be able to run on its own (assuming all constants are resolved)
-            * 
-            * The constant rule (1) only applies outside function boundaries. When resolving the inside of a function
-            * all declarations are localized to that function, and the function cannot access local variables at higher
-            * scope. So while the (2) rule must still apply, functions already restrict access to mutable variables outside
-            * the their body. That said, the second rule still comes into play when a resolving a function under any folding level
-            * and trying to access the global state. The global state starts at fold level 0, and so if a function is being folded it
-            * will never be able to access the global state (i.e. must be a pure function). 
-            * 
-            * Rule A: Remember that when folding happens, the expression *must* be able to run on its own aside from constants.
-            * i.e. the expression can be put into a compiler with the given folded constants and compile perfect.
-            * 
-            * Another issues arises when you can nest folds. i.e. in the following case
-            * 
-            *      T :: #fold foo();
-            *       
-            *      foo :: () -> i32 {
-            *          return T;
-            *      };
-            * 
-            * Even though T is a constant, because T requires the body of foo to fold, this creates a circular dependency.
-            * However, how do you know when there is a circualr dependency like this or we are just recursioning and only
-            * need the function address? If we are currently resolving the body of the function and we increase the fold level
-            * this implies that whatever is being folded must be able to run on its own (as per Rule A). If we need to call
-            * a function we need to check if its currently being resolved at a different fold level - because if it is, then
-            * we cannot call the function during compile time.
-            * 
-            * Anyways, that's what the we are doing below. If the function definition was processed during
-            * the same fold level that we are currenty on, then we are good. We are doing a regular function call.
-            * 
-            * However, if we are on a different fold level, we need to check if the definition is in the process of
-            * being resolved because it needs to be compiled before running, and since it's in the middle of being resolved
-            * it cannot be compiled won't ever be due to the circular dependency.
-            * 
-            *     [1] by analyzed I mean type checked, type flowed, constants folded, etc. i.e. getting the ast ready for codegen.
-            */
+        // footnote(folding-functions)
+        // if (type_is_function(ast->type_set.types, decl->value_type)) {
 
-            UNREACHABLE();
+            // UNREACHABLE();
 
             // function_t_ *function = arena_array_get_t(&ast->constants, definition->node->as.declaration.initial_value_expression->value_index, function_t_*);
             // for (size_t i = 0; i < analyzer->dependencies.count; ++i) {
@@ -1955,7 +1831,7 @@ static ast_node_t *get_resolved_def_by_identifier(
             //         }
             //     }
             // }
-        }
+        // }
 
         if (!query) {
             return decl;
