@@ -123,7 +123,7 @@ struct value_index_t {
 #define value_index_(i) ((value_index_t){.exists=true, .index=(i)})
 #define value_index_nil() ((value_index_t){.exists=false, .index=0})
 
-bool memarr_push_value(memarr_t *arr, void *data, size_t size_bytes, value_index_t *out_index);
+value_index_t memarr_push_value(memarr_t *arr, void *data, size_t size_bytes);
 
 ast_node_t nil_node;
 
@@ -232,6 +232,9 @@ typedef struct ast_t {
     fd_pairs_t function_definition_pairs;
 
     ast_node_t *root;
+    
+    arena_t constant_arena;
+
     memarr_t constants;
 
     table_t(ptr2sizet) *type_to_zero_index;

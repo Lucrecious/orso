@@ -125,8 +125,7 @@ void ast_init(ast_t *ast, size_t memory_size_bytes) {
 
     {
         u64 zero = 0;
-        size_t _unused;
-        memarr_push(&ast->constants, &zero, (sizeof(u64)), &_unused);
+        memarr_push(&ast->constants, &zero, sizeof(u64));
     }
 
     ast->symbols = table_new(s2w, &ast->allocator);
@@ -393,15 +392,39 @@ token_t make_token_implicit(token_t token) {
     return token;
 }
 
-bool memarr_push_value(memarr_t *arr, void *data, size_t size_bytes, value_index_t *out_index) {
-    size_t index = 0;
-    if (memarr_push(arr, data, size_bytes, &index)) {
-        *out_index = value_index_(index);
-        return true;
-    }
+value_index_t memarr_push_value(memarr_t *arr, void *data, size_t size_bytes) {
+    size_t index = memarr_push(arr, data, size_bytes);
+    value_index_t vi = value_index_(index);
+    return vi;
+}
 
-    *out_index = value_index_nil();
-    return false;
+static ast_node_t *ast_primaryi(ast_t *ast, i64 value, ast_node_t extra_params) {
+    ast_node_t *primary = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_PRIMARY, extra_params.inside_type_context, extra_params.start);
+
+    primary->value_index = memarr_push_value(&ast->constants, &value, sizeof(i64));
+    primary->value_type = ast->type_set.i64_;
+
+    return primary;
+}
+
+static ast_node_t *ast_primaryf(ast_t *ast, f64 value, ast_node_t extra_params) {
+    ast_node_t *primary = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_PRIMARY, extra_params.inside_type_context, extra_params.start);
+
+    primary->value_index = memarr_push_value(&ast->constants, &value, sizeof(f64));
+    primary->value_type = ast->type_set.f64_;
+
+    return primary;
+}
+
+static ast_node_t *ast_primaryb(ast_t *ast, bool value, ast_node_t extra_params) {
+    ast_node_t *primary = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_PRIMARY, extra_params.inside_type_context, extra_params.start);
+
+    byte byte_value = (byte)value;
+
+    primary->value_index = memarr_push_value(&ast->constants, &byte_value, sizeof(byte));
+    primary->value_type = typeid(TYPE_BOOL);
+
+    return primary;
 }
 
 static ast_node_t *parse_number(parser_t *parser, bool inside_type_context) {
@@ -409,19 +432,26 @@ static ast_node_t *parse_number(parser_t *parser, bool inside_type_context) {
 
     switch (parser->previous.type)  {
         case TOKEN_INTEGER: {
+
             i64 value = cstrn_to_i64(parser->previous.view.data, parser->previous.view.length);
-            expression_node->value_type = parser->ast->type_set.i64_;
-            unless (memarr_push_value(&parser->ast->constants, &value, sizeof(i64), &expression_node->value_index)) {
-                parser_error(parser, make_error_token(ERROR_PARSER_NOT_ENOUGH_MEMORY, parser->current));
-            }
-            break;
+
+            ast_node_t *primary = ast_primaryi(parser->ast, value, (ast_node_t){
+                .inside_type_context = inside_type_context,
+                .start = parser->previous,
+            });
+
+            return primary;
         }
+
         case TOKEN_FLOAT: {
             f64 value = cstrn_to_f64(parser->previous.view.data, parser->previous.view.length);
-            expression_node->value_type = parser->ast->type_set.f64_;
-            unless (memarr_push_value(&parser->ast->constants, &value, sizeof(f64), &expression_node->value_index)) {
-            }
-            break;
+
+            ast_node_t *primary = ast_primaryf(parser->ast, value, (ast_node_t){
+                .inside_type_context = inside_type_context,
+                .start = parser->previous,
+            });
+
+            return primary;
         }
         default: UNREACHABLE();
     }
@@ -455,18 +485,14 @@ static ast_node_t *parse_jmp(parser_t *parser, bool inside_type_context) {
 }
 
 static ast_node_t *parse_literal(parser_t *parser, bool inside_type_context) {
-    ast_node_t *expression_node = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_PRIMARY, inside_type_context, parser->previous);
-
     switch (parser->previous.type) {
         case TOKEN_FALSE:
         case TOKEN_TRUE: {
-            expression_node->value_type = typeid(TYPE_BOOL);
-
             bool is_true = parser->previous.type == TOKEN_TRUE;
-            byte value = (byte)is_true;
-            unless (memarr_push_value(&parser->ast->constants, &value, sizeof(byte), &expression_node->value_index)) {
-                parser_error(parser, make_error_token(ERROR_PARSER_NOT_ENOUGH_MEMORY, parser->current));
-            }
+            return ast_primaryb(parser->ast, is_true, (ast_node_t) {
+                .inside_type_context = inside_type_context,
+                .start = parser->previous,
+            });
             break;
         }
 
@@ -484,8 +510,8 @@ static ast_node_t *parse_literal(parser_t *parser, bool inside_type_context) {
             UNREACHABLE();
     }
 
+    ast_node_t *expression_node = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_PRIMARY, inside_type_context, parser->previous);
     expression_node->foldable = true;
-
     return expression_node;
 }
 
@@ -1127,13 +1153,7 @@ bool parse(ast_t *ast, string_t file_path, string_view_t source, error_function_
 value_index_t add_value_to_ast_constant_stack(ast_t *ast, void *data, type_t type) {
     type_info_t *type_info = get_type_info(&ast->type_set.types, type);
     size_t size = type_info->size;
-
-    size_t index;
-    if (memarr_push(&ast->constants, data, size, &index)) {
-        return value_index_(index);
-    }
-
-    return value_index_nil();
+    return memarr_push_value(&ast->constants, data, size);
 }
 
 value_index_t zero_value(ast_t *ast, type_t type) {

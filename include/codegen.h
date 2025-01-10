@@ -450,11 +450,7 @@ static void gen_unary(gen_t *gen, function_t *function, ast_node_t *unary) {
 }
 
 static value_index_t add_constant(function_t *function, void *data, size_t size) {
-    size_t index;
-    unless (memarr_push(function->memory, data, size, &index)) {
-        return value_index_nil();
-    }
-
+    size_t index = memarr_push(function->memory, data, size);
     return value_index_(index);
 }
 
