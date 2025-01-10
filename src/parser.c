@@ -323,6 +323,7 @@ static ast_node_t *ast_break(ast_t *ast, ast_node_t *expr, token_t label, token_
 
 static ast_node_t *ast_continue(ast_t *ast, token_t label, token_t start) {
     ast_node_t *continue_ = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_JMP, start);
+    an_expression(continue_) = ast_nil(ast, typeid(TYPE_VOID), token_implicit_at_end(label));
     continue_->identifier = label;
     continue_->end = label;
     return continue_;
@@ -541,7 +542,7 @@ static ast_node_t *parse_jmp(parser_t *parser) {
     token_t start_token = parser->previous;
     token_type_t jmp_type = parser->previous.type;
 
-    token_t label = nil_token;
+    token_t label = token_implicit_at_end(start_token);
     if (jmp_type == TOKEN_BREAK || jmp_type == TOKEN_CONTINUE) {
         if (match(parser, TOKEN_COLON)) {
             consume(parser, TOKEN_IDENTIFIER);

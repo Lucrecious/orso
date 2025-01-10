@@ -613,11 +613,12 @@ static bool get_nearest_scope_in_func_or_error(
             if (check_label) {
                 if (sv_eq(label, scope->creator->identifier.view)) {
                     *found_scope = scope;
+                    return true;
                 }
             } else {
                 *found_scope = scope;
+                return true;
             }
-            return true;
         }
 
         if (search_type != SCOPE_TYPE_FUNC_DEF && scope->type == SCOPE_TYPE_FUNC_DEF_BODY) {
