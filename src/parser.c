@@ -83,10 +83,12 @@ implement_table(s2w, string_t, word_t, fnv1_hash__, streq___)
 
 typedef struct parser_t {
     error_function_t error_fn;
-    ast_t* ast; // TODO: Consider moving this outside parser and instead passed through arguments
+    ast_t *ast;
     lexer_t lexer;
     token_t previous;
     token_t current;
+
+    bool inside_type_context;
 
     bool had_error;
     bool panic_mode;
@@ -108,7 +110,7 @@ typedef enum {
     PREC_PRIMARY
 } Precedence;
 
-typedef ast_node_t* (*ParseFn)(parser_t*, bool inside_type_context);
+typedef ast_node_t* (*ParseFn)(parser_t*);
 
 typedef struct {
     ParseFn prefix;
@@ -161,7 +163,7 @@ ast_node_t nil_node = {
     .last_statement = &nil_node,
 };
 
-ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type_context, token_t start) {
+ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start) {
     ast_node_t *node = (ast_node_t*)arena_alloc(&ast->allocator, sizeof(ast_node_t));
     *node = (ast_node_t){0};
     
@@ -177,8 +179,6 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type
     node->ccode_break_label = lit2str("");
     node->ccode_continue_label = lit2str("");
     node->ccode_var_name = lit2str("");
-
-    node->inside_type_context = inside_type_context;
 
     node->fold = false;
     node->foldable = false;
@@ -278,10 +278,39 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type
 }
 
 ast_node_t *ast_nil(ast_t *ast, type_t value_type, token_t token_location) {
-    ast_node_t *nil_node = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_NIL, false, make_token_implicit(token_location));
+    ast_node_t *nil_node = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_NIL, token_location);
     nil_node->value_type = value_type;
     nil_node->value_index = zero_value(ast, value_type);
     return nil_node;
+}
+
+static ast_node_t *ast_primaryi(ast_t *ast, i64 value, ast_node_t extra_params) {
+    ast_node_t *primary = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_PRIMARY, extra_params.start);
+
+    primary->value_index = memarr_push_value(&ast->constants, &value, sizeof(i64));
+    primary->value_type = ast->type_set.i64_;
+
+    return primary;
+}
+
+static ast_node_t *ast_primaryf(ast_t *ast, f64 value, ast_node_t extra_params) {
+    ast_node_t *primary = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_PRIMARY, extra_params.start);
+
+    primary->value_index = memarr_push_value(&ast->constants, &value, sizeof(f64));
+    primary->value_type = ast->type_set.f64_;
+
+    return primary;
+}
+
+static ast_node_t *ast_primaryb(ast_t *ast, bool value, ast_node_t extra_params) {
+    ast_node_t *primary = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_PRIMARY, extra_params.start);
+
+    byte byte_value = (byte)value;
+
+    primary->value_index = memarr_push_value(&ast->constants, &byte_value, sizeof(byte));
+    primary->value_type = typeid(TYPE_BOOL);
+
+    return primary;
 }
 
 static void parser_init(parser_t *parser, ast_t *ast, string_t file_path, string_view_t source, error_function_t error_fn) {
@@ -290,6 +319,7 @@ static void parser_init(parser_t *parser, ast_t *ast, string_t file_path, string
     parser->error_fn = error_fn;
     parser->had_error = false;
     parser->panic_mode = false;
+    parser->inside_type_context = false;
 }
 
 static void parser_error(parser_t *parser, error_t error) {
@@ -353,11 +383,11 @@ static void synchronize(parser_t* parser) {
 }
 
 static ast_node_t *parse_decl(parser_t* parser, bool is_top_level);
-static ast_node_t *parse_expression(parser_t* parser, bool inside_type_context);
+static ast_node_t *parse_expression(parser_t* parser);
 static ast_node_t *parse_statement(parser_t* parser);
 static parse_rule_t *parser_get_rule(token_type_t type);
 static bool check_expression(parser_t* parser);
-static ast_node_t* parse_precedence(parser_t* parser, bool inside_type_context, Precedence precedence);
+static ast_node_t* parse_precedence(parser_t* parser, Precedence precedence);
 
 bool ast_node_type_is_decl_or_stmt(ast_node_type_t node_type) {
     switch (node_type) {
@@ -398,37 +428,8 @@ value_index_t memarr_push_value(memarr_t *arr, void *data, size_t size_bytes) {
     return vi;
 }
 
-static ast_node_t *ast_primaryi(ast_t *ast, i64 value, ast_node_t extra_params) {
-    ast_node_t *primary = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_PRIMARY, extra_params.inside_type_context, extra_params.start);
-
-    primary->value_index = memarr_push_value(&ast->constants, &value, sizeof(i64));
-    primary->value_type = ast->type_set.i64_;
-
-    return primary;
-}
-
-static ast_node_t *ast_primaryf(ast_t *ast, f64 value, ast_node_t extra_params) {
-    ast_node_t *primary = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_PRIMARY, extra_params.inside_type_context, extra_params.start);
-
-    primary->value_index = memarr_push_value(&ast->constants, &value, sizeof(f64));
-    primary->value_type = ast->type_set.f64_;
-
-    return primary;
-}
-
-static ast_node_t *ast_primaryb(ast_t *ast, bool value, ast_node_t extra_params) {
-    ast_node_t *primary = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_PRIMARY, extra_params.inside_type_context, extra_params.start);
-
-    byte byte_value = (byte)value;
-
-    primary->value_index = memarr_push_value(&ast->constants, &byte_value, sizeof(byte));
-    primary->value_type = typeid(TYPE_BOOL);
-
-    return primary;
-}
-
-static ast_node_t *parse_number(parser_t *parser, bool inside_type_context) {
-    ast_node_t *expression_node = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_PRIMARY, inside_type_context, parser->previous);
+static ast_node_t *parse_number(parser_t *parser) {
+    ast_node_t *expression_node = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_PRIMARY, parser->previous);
 
     switch (parser->previous.type)  {
         case TOKEN_INTEGER: {
@@ -436,7 +437,6 @@ static ast_node_t *parse_number(parser_t *parser, bool inside_type_context) {
             i64 value = cstrn_to_i64(parser->previous.view.data, parser->previous.view.length);
 
             ast_node_t *primary = ast_primaryi(parser->ast, value, (ast_node_t){
-                .inside_type_context = inside_type_context,
                 .start = parser->previous,
             });
 
@@ -447,7 +447,6 @@ static ast_node_t *parse_number(parser_t *parser, bool inside_type_context) {
             f64 value = cstrn_to_f64(parser->previous.view.data, parser->previous.view.length);
 
             ast_node_t *primary = ast_primaryf(parser->ast, value, (ast_node_t){
-                .inside_type_context = inside_type_context,
                 .start = parser->previous,
             });
 
@@ -461,8 +460,8 @@ static ast_node_t *parse_number(parser_t *parser, bool inside_type_context) {
     return expression_node;
 }
 
-static ast_node_t *parse_jmp(parser_t *parser, bool inside_type_context) {
-    ast_node_t *jmp_expr = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_JMP, inside_type_context, parser->previous);
+static ast_node_t *parse_jmp(parser_t *parser) {
+    ast_node_t *jmp_expr = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_JMP, parser->previous);
 
     if (jmp_expr->start.type == TOKEN_BREAK || jmp_expr->start.type == TOKEN_CONTINUE) {
         if (match(parser, TOKEN_COLON)) {
@@ -474,9 +473,9 @@ static ast_node_t *parse_jmp(parser_t *parser, bool inside_type_context) {
     bool has_expr = jmp_expr->start.type == TOKEN_BREAK || jmp_expr->start.type == TOKEN_RETURN;
 
     if (has_expr && check_expression(parser)) {
-        an_expression(jmp_expr) = parse_expression(parser, inside_type_context);
+        an_expression(jmp_expr) = parse_expression(parser);
     } else {
-        an_expression(jmp_expr) = ast_nil(parser->ast, typeid(TYPE_VOID), an_expression(jmp_expr)->end);
+        an_expression(jmp_expr) = ast_nil(parser->ast, typeid(TYPE_VOID), make_token_implicit(an_expression(jmp_expr)->end));
     }
 
     jmp_expr->end = an_expression(jmp_expr)->end;
@@ -484,13 +483,12 @@ static ast_node_t *parse_jmp(parser_t *parser, bool inside_type_context) {
     return jmp_expr;
 }
 
-static ast_node_t *parse_literal(parser_t *parser, bool inside_type_context) {
+static ast_node_t *parse_literal(parser_t *parser) {
     switch (parser->previous.type) {
         case TOKEN_FALSE:
         case TOKEN_TRUE: {
             bool is_true = parser->previous.type == TOKEN_TRUE;
             return ast_primaryb(parser->ast, is_true, (ast_node_t) {
-                .inside_type_context = inside_type_context,
                 .start = parser->previous,
             });
             break;
@@ -510,7 +508,7 @@ static ast_node_t *parse_literal(parser_t *parser, bool inside_type_context) {
             UNREACHABLE();
     }
 
-    ast_node_t *expression_node = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_PRIMARY, inside_type_context, parser->previous);
+    ast_node_t *expression_node = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_PRIMARY, parser->previous);
     expression_node->foldable = true;
     return expression_node;
 }
@@ -555,18 +553,18 @@ static ast_node_t *convert_function_definition(parser_t *parser, ast_node_t *lef
     return func_def;
 }
 
-static ast_node_t *parse_assignment(parser_t *parser, bool inside_type_context) {
-    ast_node_t *expression_node = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_ASSIGNMENT, inside_type_context, parser->previous);
+static ast_node_t *parse_assignment(parser_t *parser) {
+    ast_node_t *expression_node = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_ASSIGNMENT, parser->previous);
 
-    ast_node_t *rhs = parse_expression(parser, inside_type_context);
+    ast_node_t *rhs = parse_expression(parser);
     an_rhs(expression_node) = rhs;
     expression_node->end = parser->previous;
 
     return expression_node;
 }
 
-static ast_node_t *parse_def_value(parser_t *parser, bool inside_type_context) {
-    ast_node_t *expression_node = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_DEF_VALUE, inside_type_context, parser->previous);
+static ast_node_t *parse_def_value(parser_t *parser) {
+    ast_node_t *expression_node = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_DEF_VALUE, parser->previous);
     expression_node->identifier = parser->previous;
     return expression_node;
 }
@@ -582,10 +580,8 @@ static void parse_block_(parser_t *parser, ast_node_t *block) {
     consume(parser, TOKEN_BRACE_CLOSE);
 }
 
-static ast_node_t *parse_block(parser_t *parser, bool inside_type_context) {
-    (void)inside_type_context;
-
-    ast_node_t *expression_node = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_BLOCK, inside_type_context, parser->previous);
+static ast_node_t *parse_block(parser_t *parser) {
+    ast_node_t *expression_node = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_BLOCK, parser->previous);
 
     parse_block_(parser, expression_node);
     expression_node->end = parser->previous;
@@ -598,8 +594,8 @@ static ast_node_t *parse_block(parser_t *parser, bool inside_type_context) {
     return expression_node;
 }
 
-static ast_node_t *parse_branch(parser_t *parser, bool inside_type_context) {
-    ast_node_t *branch = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_BRANCHING, inside_type_context, parser->previous);
+static ast_node_t *parse_branch(parser_t *parser) {
+    ast_node_t *branch = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_BRANCHING, parser->previous);
     branch->condition_negated = false;
     branch->branch_type = BRANCH_TYPE_IFTHEN;
 
@@ -607,19 +603,19 @@ static ast_node_t *parse_branch(parser_t *parser, bool inside_type_context) {
     if (branch->start.type == TOKEN_DO) {
         branch->branch_type = BRANCH_TYPE_DO;
 
-        an_condition(branch) = ast_nil(parser->ast, typeid(TYPE_BOOL), branch->end);
+        an_condition(branch) = ast_nil(parser->ast, typeid(TYPE_BOOL), make_token_implicit(branch->end));
 
         if (match(parser, TOKEN_COLON)) {
             consume(parser, TOKEN_IDENTIFIER);
             branch->identifier = parser->previous;
         }
 
-        an_then(branch) = parse_expression(parser, inside_type_context);
+        an_then(branch) = parse_expression(parser);
 
         unless (match(parser, TOKEN_THEN)) {
-            an_else(branch) = ast_nil(parser->ast, typeid(TYPE_VOID), an_then(branch)->end);
+            an_else(branch) = ast_nil(parser->ast, typeid(TYPE_VOID), make_token_implicit(an_then(branch)->end));
         } else {
-            an_else(branch) = parse_expression(parser, inside_type_context);
+            an_else(branch) = parse_expression(parser);
             branch->end = an_else(branch)->end;
         }
     } else {
@@ -633,9 +629,9 @@ static ast_node_t *parse_branch(parser_t *parser, bool inside_type_context) {
             branch->branch_type = BRANCH_TYPE_IFTHEN;
         }
 
-        an_condition(branch) = parse_expression(parser, inside_type_context);
+        an_condition(branch) = parse_expression(parser);
         if (match(parser, TOKEN_BRACE_OPEN)) {
-            an_then(branch) = parse_block(parser, inside_type_context);
+            an_then(branch) = parse_block(parser);
         } else {
             if (branch->branch_type == BRANCH_TYPE_LOOPING) {
                 consume(parser, TOKEN_DO);
@@ -643,14 +639,14 @@ static ast_node_t *parse_branch(parser_t *parser, bool inside_type_context) {
                 consume(parser, TOKEN_THEN);
             }
 
-            ast_node_t *then_expression = parse_expression(parser, inside_type_context);
+            ast_node_t *then_expression = parse_expression(parser);
             an_then(branch) = then_expression;
         }
 
         unless (match(parser, TOKEN_ELSE)) {
-            an_else(branch) = ast_nil(parser->ast, typeid(TYPE_VOID), an_then(branch)->end);
+            an_else(branch) = ast_nil(parser->ast, typeid(TYPE_VOID), make_token_implicit(an_then(branch)->end));
         } else {
-            ast_node_t *else_expression = parse_expression(parser, inside_type_context);
+            ast_node_t *else_expression = parse_expression(parser);
             an_else(branch) = else_expression;
 
             branch->end = parser->previous;
@@ -713,7 +709,10 @@ static void parse_parameters(parser_t *parser, ast_nodes_t *children) {
         if (is_incoming_decl_def(parser)) {
             array_push(children, parse_decl_def(parser));
         } else {
-            array_push(children, parse_expression(parser, true));
+            bool inside_type_context = parser->inside_type_context;
+            parser->inside_type_context = true;
+            array_push(children, parse_expression(parser));
+            parser->inside_type_context = inside_type_context;
         }
         if (match(parser, TOKEN_COMMA)) {
             continue;
@@ -721,7 +720,7 @@ static void parse_parameters(parser_t *parser, ast_nodes_t *children) {
     }
 
     if (children->count == 0) {
-        array_push(children, ast_nil(parser->ast, typeid(TYPE_VOID), parser->previous));
+        array_push(children, ast_nil(parser->ast, typeid(TYPE_VOID), make_token_implicit(parser->previous)));
     }
 }
 
@@ -737,21 +736,24 @@ static void parse_function_signature(parser_t *parser, ast_node_t *func_sig) {
     consume(parser, TOKEN_PARENTHESIS_CLOSE);
 
     if (match(parser, TOKEN_ARROW_RIGHT)) {
-        an_func_def_return(func_sig) = parse_expression(parser, true);
+        bool inside_type_context = parser->inside_type_context;
+        parser->inside_type_context = true;
+        an_func_def_return(func_sig) = parse_expression(parser);
+        parser->inside_type_context = inside_type_context;
     } else {
-        an_func_def_return(func_sig) = ast_nil(parser->ast, typeid(TYPE_VOID), func_sig->end);
+        an_func_def_return(func_sig) = ast_nil(parser->ast, typeid(TYPE_VOID), make_token_implicit(func_sig->end));
     }
 }
 
-static ast_node_t *parse_function_definition(parser_t *parser, bool inside_type_context) {
-    ast_node_t *func_def = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION, inside_type_context, parser->previous);
-    an_func_def_block(func_def) = parse_block(parser, inside_type_context);
+static ast_node_t *parse_function_definition(parser_t *parser) {
+    ast_node_t *func_def = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION, parser->previous);
+    an_func_def_block(func_def) = parse_block(parser);
     func_def->end = parser->previous;
 
     return func_def;
 }
 
-static ast_node_t *parse_grouping_or_function_signature_or_definition(parser_t *parser, bool inside_type_context) {
+static ast_node_t *parse_grouping_or_function_signature_or_definition(parser_t *parser) {
     ast_node_type_t node_type;
     if (is_incoming_function_signature(parser)) {
         node_type = AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE;
@@ -759,7 +761,7 @@ static ast_node_t *parse_grouping_or_function_signature_or_definition(parser_t *
         node_type = AST_NODE_TYPE_EXPRESSION_GROUPING;
     }
 
-    ast_node_t* expression_node = ast_node_new(parser->ast, node_type, inside_type_context, parser->previous);
+    ast_node_t* expression_node = ast_node_new(parser->ast, node_type, parser->previous);
 
     if (node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE) {
         parse_function_signature(parser, expression_node);
@@ -768,11 +770,11 @@ static ast_node_t *parse_grouping_or_function_signature_or_definition(parser_t *
         expression_node->end = parser->previous;
 
         if (match(parser, TOKEN_BRACE_OPEN)) {
-            ast_node_t *definition = parse_function_definition(parser, inside_type_context);
+            ast_node_t *definition = parse_function_definition(parser);
             expression_node = convert_function_definition(parser, expression_node, definition);
         }
     } else {
-        an_operand(expression_node) = parse_expression(parser, inside_type_context);
+        an_operand(expression_node) = parse_expression(parser);
 
         consume(parser, TOKEN_PARENTHESIS_CLOSE);
 
@@ -784,10 +786,10 @@ static ast_node_t *parse_grouping_or_function_signature_or_definition(parser_t *
     return expression_node;
 }
 
-static void parse_arguments(parser_t* parser, bool inside_type_context, ast_nodes_t *ret_args) {
+static void parse_arguments(parser_t* parser, ast_nodes_t *ret_args) {
     unless (check(parser, TOKEN_PARENTHESIS_CLOSE)) {
         do {
-            ast_node_t *argument = parse_expression(parser, inside_type_context);
+            ast_node_t *argument = parse_expression(parser);
             array_push(ret_args, argument);
         } while (match(parser, TOKEN_COMMA));
     }
@@ -800,29 +802,29 @@ static void parse_arguments(parser_t* parser, bool inside_type_context, ast_node
     }
 }
 
-static ast_node_t *parse_call(parser_t *parser, bool inside_type_context) {
-    ast_node_t *call = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_CALL, inside_type_context, parser->previous);
+static ast_node_t *parse_call(parser_t *parser) {
+    ast_node_t *call = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_CALL, parser->previous);
 
-    an_callee(call) = ast_nil(parser->ast, typeid(TYPE_VOID), parser->previous);
+    an_callee(call) = ast_nil(parser->ast, typeid(TYPE_VOID), make_token_implicit(parser->previous));
     call->children.count = an_call_arg_start(call);
-    parse_arguments(parser, inside_type_context, &call->children);
+    parse_arguments(parser, &call->children);
     call->end = parser->previous;
 
     return call;
 }
 
-static ast_node_t *parse_unary(parser_t *parser, bool inside_type_context) {
-    ast_node_t *expression_node = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_UNARY, inside_type_context, parser->previous);
+static ast_node_t *parse_unary(parser_t *parser) {
+    ast_node_t *expression_node = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_UNARY, parser->previous);
     expression_node->operator = parser->previous;
 
-    an_operand(expression_node) = parse_precedence(parser, inside_type_context, PREC_UNARY);
+    an_operand(expression_node) = parse_precedence(parser, PREC_UNARY);
     expression_node->end = parser->previous;
 
     return expression_node;
 }
 
-static ast_node_t *parse_binary(parser_t *parser, bool inside_type_context) {
-    ast_node_t *expression_node = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_BINARY, inside_type_context, parser->previous);
+static ast_node_t *parse_binary(parser_t *parser) {
+    ast_node_t *expression_node = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_BINARY, parser->previous);
 
     token_t operator = parser->previous;
     expression_node->operator = operator;
@@ -831,17 +833,15 @@ static ast_node_t *parse_binary(parser_t *parser, bool inside_type_context) {
 
     expression_node->start = parser->previous;
 
-    ast_node_t *rhs = parse_precedence(parser, inside_type_context, (Precedence)(rule->precedence + 1));
+    ast_node_t *rhs = parse_precedence(parser, (Precedence)(rule->precedence + 1));
     an_rhs(expression_node) = rhs;
     expression_node->end = parser->previous;
 
     return expression_node;
 }
 
-static ast_node_t *parse_struct_def(parser_t *parser, bool inside_type_context) {
-    (void)inside_type_context;
-
-    ast_node_t *struct_definition = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION, inside_type_context, parser->previous);
+static ast_node_t *parse_struct_def(parser_t *parser) {
+    ast_node_t *struct_definition = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION, parser->previous);
 
     consume(parser, TOKEN_BRACE_OPEN);
 
@@ -858,15 +858,15 @@ static ast_node_t *parse_struct_def(parser_t *parser, bool inside_type_context) 
     return struct_definition;
 }
 
-static ast_node_t *parse_dot(parser_t* parser, bool inside_type_context) {
+static ast_node_t *parse_dot(parser_t* parser) {
     if (match(parser, TOKEN_BRACE_OPEN)) {
-        ast_node_t *initiailizer = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER, inside_type_context, parser->previous);
+        ast_node_t *initiailizer = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER, parser->previous);
         if (!match(parser, TOKEN_BRACE_CLOSE)) {
             do {
                 if (check(parser, TOKEN_COMMA) || check(parser, TOKEN_BRACE_CLOSE)) {
                     array_push(&initiailizer->as.initiailizer.arguments, NULL);
                 } else {
-                    ast_node_t *argument = parse_expression(parser, inside_type_context);
+                    ast_node_t *argument = parse_expression(parser);
                     array_push(&initiailizer->as.initiailizer.arguments, argument);
                 }
 
@@ -879,7 +879,7 @@ static ast_node_t *parse_dot(parser_t* parser, bool inside_type_context) {
 
         return initiailizer;
     } else {
-        ast_node_t *dot_expression = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_DOT, inside_type_context, parser->previous);
+        ast_node_t *dot_expression = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_DOT, parser->previous);
         consume(parser, TOKEN_IDENTIFIER);
         dot_expression->identifier = parser->previous;
         dot_expression->end = parser->current;
@@ -950,7 +950,7 @@ static bool check_expression(parser_t *parser) {
     return parser_get_rule(parser->current.type)->prefix != NULL;
 }
 
-static ast_node_t *parse_precedence(parser_t *parser, bool inside_type_context, Precedence precedence) {
+static ast_node_t *parse_precedence(parser_t *parser, Precedence precedence) {
     advance(parser);
 
     ParseFn prefix_rule = parser_get_rule(parser->previous.type)->prefix;
@@ -959,17 +959,15 @@ static ast_node_t *parse_precedence(parser_t *parser, bool inside_type_context, 
     if (prefix_rule == NULL) {
         error_t error = make_error_token(ERROR_PARSER_EXPECTED_EXPRESSION, parser->previous);
         parser_error(parser, error);
-        left_operand = ast_node_new(parser->ast, AST_NODE_TYPE_NONE, inside_type_context, parser->previous);
+        left_operand = ast_node_new(parser->ast, AST_NODE_TYPE_NONE, parser->previous);
     } else {
-        left_operand = prefix_rule(parser, inside_type_context);
-        left_operand->inside_type_context = inside_type_context;
+        left_operand = prefix_rule(parser);
     }
 
     while (precedence <= parser_get_rule(parser->current.type)->precedence) {
         advance(parser);
         ParseFn infix_rule = parser_get_rule(parser->previous.type)->infix;
-        ast_node_t *right_operand = infix_rule(parser, inside_type_context);
-        right_operand->inside_type_context = inside_type_context;
+        ast_node_t *right_operand = infix_rule(parser);
 
         switch (right_operand->node_type) {
             case AST_NODE_TYPE_EXPRESSION_BINARY: {
@@ -1037,27 +1035,30 @@ static parse_rule_t *parser_get_rule(token_type_t type) {
     return &rules[type];
 }
 
-static ast_node_t *parse_expression(parser_t *parser, bool inside_type_context) {
+static ast_node_t *parse_expression(parser_t *parser) {
     bool fold = false;
+    bool is_type_directive = false;
     if (match(parser, TOKEN_DIRECTIVE)) {
         token_t directive = parser->previous;
         fold = (directive.view.length - 1 == strlen("fold") && strncmp(directive.view.data + 1, "fold", 4) == 0);
 
-        bool is_type_directive = (directive.view.length - 1 == strlen("type") && strncmp(directive.view.data + 1, "type", 4) == 0);
-        if (is_type_directive) {
-            inside_type_context = is_type_directive;
-        }
+        is_type_directive = (directive.view.length - 1 == strlen("type") && strncmp(directive.view.data + 1, "type", 4) == 0);
     }
 
-    ast_node_t *expression_node = parse_precedence(parser, inside_type_context, inside_type_context ? PREC_OR : PREC_ASSIGNMENT);
+    bool inside_type_context = parser->inside_type_context;
+    parser->inside_type_context = is_type_directive || inside_type_context;
+
+    ast_node_t *expression_node = parse_precedence(parser, parser->inside_type_context ? PREC_OR : PREC_ASSIGNMENT);
     expression_node->fold = fold;
+
+    parser->inside_type_context = inside_type_context;
 
     return expression_node;
 }
 
 static ast_node_t *parse_statement(parser_t *parser) {
-    ast_node_t *statement_node = ast_node_new(parser->ast, AST_NODE_TYPE_DECLARATION_STATEMENT, false, parser->current);
-    an_expression(statement_node) = parse_expression(parser, false);
+    ast_node_t *statement_node = ast_node_new(parser->ast, AST_NODE_TYPE_DECLARATION_STATEMENT, parser->current);
+    an_expression(statement_node) = parse_expression(parser);
 
     statement_node->end = parser->previous;
 
@@ -1065,7 +1066,7 @@ static ast_node_t *parse_statement(parser_t *parser) {
 }
 
 static ast_node_t *parse_decl_def(parser_t *parser) {
-    ast_node_t *definition_node = ast_node_new(parser->ast, AST_NODE_TYPE_DECLARATION_DEFINITION, false, parser->current);
+    ast_node_t *definition_node = ast_node_new(parser->ast, AST_NODE_TYPE_DECLARATION_DEFINITION, parser->current);
 
     advance(parser);
 
@@ -1078,7 +1079,10 @@ static ast_node_t *parse_decl_def(parser_t *parser) {
     consume(parser, TOKEN_COLON);
 
     if (!check(parser, TOKEN_EQUAL) && !check(parser, TOKEN_COLON)) {
-        an_decl_type(definition_node) = parse_expression(parser, true);
+        bool inside_type_context = parser->inside_type_context;
+        parser->inside_type_context = true;
+        an_decl_type(definition_node) = parse_expression(parser);
+        parser->inside_type_context = inside_type_context;
     }
 
     // TODO: try to do constant vs variable detection a little more clever...
@@ -1091,7 +1095,10 @@ static ast_node_t *parse_decl_def(parser_t *parser) {
     }
 
     if (requires_expression) {
-        an_decl_expr(definition_node) = parse_expression(parser, false);
+        bool inside_type_context = parser->inside_type_context;
+        parser->inside_type_context = false;
+        an_decl_expr(definition_node) = parse_expression(parser);
+        parser->inside_type_context = inside_type_context;
     }
 
     definition_node->end = parser->previous;
@@ -1124,7 +1131,8 @@ bool parse_expr(ast_t *ast, string_t file_path, string_view_t source, error_func
 
     advance(&parser);
 
-    ast->root = parse_precedence(&parser, false, PREC_BLOCK);
+    parser.inside_type_context = false;
+    ast->root = parse_precedence(&parser, PREC_BLOCK);
 
     consume(&parser, TOKEN_EOF);
 
@@ -1137,7 +1145,7 @@ bool parse(ast_t *ast, string_t file_path, string_view_t source, error_function_
 
     advance(&parser);
 
-    ast->root = ast_node_new(parser.ast, AST_NODE_TYPE_EXPRESSION_BLOCK, false, parser.previous);
+    ast->root = ast_node_new(parser.ast, AST_NODE_TYPE_EXPRESSION_BLOCK, parser.previous);
 
     while (!match(&parser, TOKEN_EOF)) {
         ast_node_t *declaration_node = parse_decl_def(&parser);

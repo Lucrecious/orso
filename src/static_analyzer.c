@@ -52,7 +52,7 @@ static void add_definition(scope_t *scope, arena_t *allocator, string_view_t ide
 }
 
 static ast_node_t *add_builtin_definition(ast_t *ast, string_view_t identifier, type_t type, value_index_t value_index) {
-    ast_node_t *decl = ast_node_new(ast, AST_NODE_TYPE_DECLARATION_DEFINITION, false, nil_token);
+    ast_node_t *decl = ast_node_new(ast, AST_NODE_TYPE_DECLARATION_DEFINITION, nil_token);
     decl->value_type = type;
     decl->value_index = value_index;
     decl->is_mutable = false;
@@ -124,7 +124,7 @@ static type_t resolve_unary_type(ast_t* ast, token_type_t operator, type_t opera
 }
 
 static ast_node_t *implicit_cast(ast_t *ast, ast_node_t *operand, type_t value_type) {
-    ast_node_t *implicit_cast = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT, operand->inside_type_context, operand->start);
+    ast_node_t *implicit_cast = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT, operand->start);
     implicit_cast->end = operand->end;
 
     implicit_cast->value_type = value_type;
@@ -319,7 +319,9 @@ static void resolve_foldable(
             foldable = an_operand(expression)->foldable;
 
             if (expression->operator.type == TOKEN_AMPERSAND) {
-                if (expression->inside_type_context) {
+                // todo: check if inside type context
+                bool is_inside_type_context = false;
+                if (is_inside_type_context) {
                     type_t type = get_folded_type(ast, an_operand(expression)->value_index);
 
                     type_t pointer_type = type_set_fetch_pointer(&ast->type_set, type);
@@ -960,7 +962,9 @@ void resolve_expression(
                 break;
             }
 
-            if (expr->inside_type_context && expr->operator.type == TOKEN_AMPERSAND) {
+            // todo: find a better way to check inside type context
+            bool is_inside_type_context = false;
+            if (is_inside_type_context && expr->operator.type == TOKEN_AMPERSAND) {
                 if (!TYPE_IS_TYPE(an_operand(expr)->value_type)) {
                     INVALIDATE(expr);
                     stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_UNARY_OPERAND, expr));
@@ -988,10 +992,13 @@ void resolve_expression(
             expr->lvalue_node = expr;
 
             scope_t *def_scope;
+            bool is_inside_type_context = false;
             def_query_t query = {
-                .search_type = expr->inside_type_context ? typeid(TYPE_TYPE) : typeid(TYPE_INVALID),
+                // todo: find a better way to keep track of if inside type context
+                // if looking for type it should have a search type for type
+                .search_type = is_inside_type_context ? typeid(TYPE_TYPE) : typeid(TYPE_INVALID),
                 .skip_mutable = (state.mode & MODE_CONSTANT_TIME),
-                .flags = expr->inside_type_context ? QUERY_FLAG_MATCH_TYPE : QUERY_FLAG_MATCH_ANY,
+                .flags = is_inside_type_context ? QUERY_FLAG_MATCH_TYPE : QUERY_FLAG_MATCH_ANY,
             };
 
             ast_node_t *decl = get_resolved_def_by_identifier(analyzer, ast, state, expr->identifier, &query, &def_scope);
@@ -1260,11 +1267,11 @@ void resolve_expression(
 
             if (!TYPE_IS_UNREACHABLE(branch_type)) {
                 if (TYPE_IS_VOID(an_then(expr)->value_type) && an_then(expr)->node_type == AST_NODE_TYPE_EXPRESSION_NIL) {
-                    an_then(expr) = ast_nil(ast, branch_type, an_then(expr)->start);
+                    an_then(expr) = ast_nil(ast, branch_type, make_token_implicit(an_then(expr)->start));
                 }
 
                 if (TYPE_IS_VOID(an_else(expr)->value_type) && an_else(expr)->node_type == AST_NODE_TYPE_EXPRESSION_NIL) {
-                    an_else(expr) = ast_nil(ast, branch_type, an_else(expr)->start);
+                    an_else(expr) = ast_nil(ast, branch_type, make_token_implicit(an_else(expr)->start));
                 }
             }
 
@@ -1555,7 +1562,7 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
         if (!an_is_none(an_decl_expr(declaration))
         && type_is_struct(ast->type_set.types, an_decl_expr(declaration)->value_type)
         && (TYPE_IS_UNRESOLVED(declaration_type) || TYPE_IS_TYPE(declaration_type))) {
-            ast_node_t *to_struct_type = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT, an_decl_expr(declaration)->inside_type_context, an_decl_expr(declaration)->start);
+            ast_node_t *to_struct_type = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT, an_decl_expr(declaration)->start);
             to_struct_type->value_type = typeid(TYPE_TYPE);
             an_operand(to_struct_type) = an_decl_expr(declaration);
 
