@@ -25,9 +25,9 @@ struct ast_nodes_t {
 typedef enum scope_type_t {
     SCOPE_TYPE_NONE                     = 0,
     SCOPE_TYPE_MODULE                   = 1 << 0,
-    SCOPE_TYPE_FUNCTION_PARAMETERS      = 1 << 1,
-    SCOPE_TYPE_FUNCTION_BODY            = 1 << 2,
-    SCOPE_TYPE_RETURN_BRANCH            = 1 << 3,
+    SCOPE_TYPE_FUNC_DEF                 = 1 << 1,
+    SCOPE_TYPE_FUNC_DEF_BODY            = 1 << 2,
+    SCOPE_TYPE_JMPABLE            = 1 << 3,
     SCOPE_TYPE_BLOCK                    = 1 << 4,
     SCOPE_TYPE_STRUCT                   = 1 << 5,
     SCOPE_TYPE_CONDITION                = 1 << 6,
@@ -188,7 +188,7 @@ struct ast_node_t {
 
     ast_node_t *jmp_out_scope_node;
     ast_nodes_t jmp_nodes;
-    size_t ccode_jmp_index;
+    size_t vm_jmp_index;
     string_t ccode_break_label;
     string_t ccode_continue_label;
     string_t ccode_var_name;

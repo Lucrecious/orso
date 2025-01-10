@@ -166,7 +166,7 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type
     node->condition_negated = false;
     node->branch_type = BRANCH_TYPE_IFTHEN;
     node->requires_tmp_for_cgen = true;
-    node->ccode_jmp_index = 0;
+    node->vm_jmp_index = 0;
     node->ccode_break_label = lit2str("");
     node->ccode_continue_label = lit2str("");
     node->ccode_var_name = lit2str("");
@@ -272,7 +272,7 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type
 
 ast_node_t *ast_create_implicit_nil_node(ast_t *ast, type_t value_type, token_t token_location) {
     token_t implicit_token = token_location;
-    implicit_token.location = token_end_location(&token_location);
+    implicit_token.loc = token_end_location(&token_location);
     implicit_token.type = TOKEN_IMPLICIT;
     implicit_token.view.data += implicit_token.view.length;
     implicit_token.view.length = 0;

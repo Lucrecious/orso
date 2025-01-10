@@ -38,6 +38,7 @@ struct gen_t {
     } locals;
 
     bool had_error;
+    bool breached_stack_limit;
 };
 
 typedef enum reg_t reg_t;
@@ -57,12 +58,12 @@ static void gen_error(gen_t *gen, error_t error) {
     if (gen->error_fn) gen->error_fn(gen->ast, error);
 }
 
-static void emit_instruction(function_t *function, text_location_t location, instruction_t instruction) {
+static void emit_instruction(function_t *function, texloc_t location, instruction_t instruction) {
     array_push(&function->code, instruction);
     array_push(&function->locations, location);
 }
 
-static void emit_read_memory_to_reg(text_location_t location, function_t *function, reg_t destination, memaddr_t address, type_info_t *type_info) {
+static void emit_read_memory_to_reg(texloc_t location, function_t *function, reg_t destination, memaddr_t address, type_info_t *type_info) {
     ASSERT(type_info->size <= WORD_SIZE, "only word-sized values or smaller can go into registers");
 
     if (type_info->size == 0) {
@@ -104,30 +105,38 @@ static void emit_read_memory_to_reg(text_location_t location, function_t *functi
     emit_instruction(function, location, instruction);
 }
 
-void emit_push_wordreg(gen_t *gen, text_location_t text_location, function_t *function, reg_t reg_source) {
+static void emit_binu_reg_im(function_t *function, texloc_t loc, byte reg_dest, byte reg_op, u32 immediate, char plus_or_minus) {
+    instruction_t in = {0};
+    in.op = plus_or_minus == '-' ? OP_SUBU_REG_IM32 : OP_ADDU_REG_IM32;
+    in.as.binu_reg_immediate.immediate = immediate;
+    in.as.binu_reg_immediate.reg_operand = reg_op;
+    in.as.binu_reg_immediate.reg_result = reg_dest;
+
+    emit_instruction(function, loc, in);
+}
+
+void emit_push_wordreg(gen_t *gen, texloc_t loc, function_t *function, reg_t reg_source) {
     gen->stack_size += sizeof(word_t);
 
-    instruction_t instruction = {0};
-
-    {
-        instruction.op = OP_SUBU_REG_IM32;
-        instruction.as.binu_reg_immediate.reg_operand = REG_STACK_BOTTOM;
-        instruction.as.binu_reg_immediate.reg_result = REG_STACK_BOTTOM;
-        instruction.as.binu_reg_immediate.immediate = (u32)sizeof(word_t);
-
-        emit_instruction(function, text_location, instruction);
+    if (gen->stack_size > UINT32_MAX && !gen->breached_stack_limit) {
+        gen->breached_stack_limit = true;
+        gen_error(gen, make_error(ERROR_CODEGEN_STACK_SIZE_GROWS_LARGER_THAN_UINT32_MAX));
+        
     }
 
+    emit_binu_reg_im(function, loc, REG_STACK_BOTTOM, REG_STACK_BOTTOM, (u32)sizeof(word_t), '-');
+
+    instruction_t instruction = {0};
     {
         instruction.op = OP_MOVWORD_REG_TO_REGMEM;
         instruction.as.mov_reg_to_regmem.reg_source = reg_source;
         instruction.as.mov_reg_to_regmem.regmem_destination = REG_STACK_BOTTOM;
 
-        emit_instruction(function, text_location, instruction);
+        emit_instruction(function, loc, instruction);
     }
 }
 
-void emit_pop_to_wordreg(gen_t *gen, text_location_t text_location, function_t *function, reg_t reg_destination) {
+void emit_pop_to_wordreg(gen_t *gen, texloc_t loc, function_t *function, reg_t reg_destination) {
     gen->stack_size -= sizeof(word_t);
     instruction_t instruction = {0};
 
@@ -136,31 +145,19 @@ void emit_pop_to_wordreg(gen_t *gen, text_location_t text_location, function_t *
         instruction.as.mov_regmem_to_reg.regmem_source = REG_STACK_BOTTOM;
         instruction.as.mov_regmem_to_reg.reg_destination = reg_destination;
 
-        emit_instruction(function, text_location, instruction);
+        emit_instruction(function, loc, instruction);
     }
 
-    {
-        instruction.op = OP_ADDU_REG_IM32;
-        instruction.as.binu_reg_immediate.reg_operand = REG_STACK_BOTTOM;
-        instruction.as.binu_reg_immediate.reg_result = REG_STACK_BOTTOM;
-        instruction.as.binu_reg_immediate.immediate = (u32)sizeof(word_t);
-
-        emit_instruction(function, text_location, instruction);
-    }
+    emit_binu_reg_im(function, loc, REG_STACK_BOTTOM, REG_STACK_BOTTOM, (u32)sizeof(word_t), '+');
 }
 
-static void emit_popn_words(gen_t *gen, function_t *function, u32 pop_size_words, text_location_t location) {
+static void emit_popn_words(gen_t *gen, function_t *function, u32 pop_size_words, texloc_t loc) {
     gen->stack_size -= pop_size_words*WORD_SIZE;
-    instruction_t in = {0};
-    in.op = OP_ADDU_REG_IM32;
-    in.as.binu_reg_immediate.immediate = pop_size_words*WORD_SIZE;
-    in.as.binu_reg_immediate.reg_operand = REG_STACK_BOTTOM;
-    in.as.binu_reg_immediate.reg_result = REG_STACK_BOTTOM;
 
-    emit_instruction(function, location, in);
+    emit_binu_reg_im(function, loc, REG_STACK_BOTTOM, REG_STACK_BOTTOM, pop_size_words*WORD_SIZE, '+');
 }
 
-static void emit_bin_arithmetic(text_location_t text_location, function_t *function, token_type_t token_type, type_info_t *type_info, reg_t op1, reg_t op2, reg_t result) {
+static void emit_bin_arithmetic(texloc_t loc, function_t *function, token_type_t token_type, type_info_t *type_info, reg_t op1, reg_t op2, reg_t result) {
     instruction_t instruction = {0};
     ASSERT(type_info->kind == TYPE_NUMBER, "for now only numbers");
 
@@ -281,10 +278,10 @@ static void emit_bin_arithmetic(text_location_t text_location, function_t *funct
     instruction.as.bin_reg_to_reg.reg_op2 = (byte)op2;
     instruction.as.bin_reg_to_reg.reg_result = (byte)result;
 
-    emit_instruction(function, text_location, instruction);
+    emit_instruction(function, loc, instruction);
 }
 
-static void emit_unary(text_location_t text_location, function_t *function, token_type_t token_type, type_info_t *type_info, reg_t op1, reg_t result) {
+static void emit_unary(texloc_t loc, function_t *function, token_type_t token_type, type_info_t *type_info, reg_t op1, reg_t result) {
     instruction_t in = {0};
     in.as.unary_reg_to_reg.reg_op = op1;
     in.as.unary_reg_to_reg.reg_result = result;
@@ -349,17 +346,17 @@ static void emit_unary(text_location_t text_location, function_t *function, toke
         default: UNREACHABLE();
     }
 
-    emit_instruction(function, text_location, in);
+    emit_instruction(function, loc, in);
 }
 
-static void emit_return(text_location_t text_location, function_t *function) {
+static void emit_return(texloc_t loc, function_t *function) {
     instruction_t instruction = {0};
     instruction.op = OP_RETURN;
 
-    emit_instruction(function, text_location, instruction);
+    emit_instruction(function, loc, instruction);
 }
 
-static void emit_mov_reg_to_reg(function_t *function, text_location_t location, byte reg_dest, byte reg_src) {
+static void emit_mov_reg_to_reg(function_t *function, texloc_t location, byte reg_dest, byte reg_src) {
     instruction_t in = {0};
     in.op = OP_MOV_REG_TO_REG;
     in.as.mov_reg_to_reg.reg_destination = reg_dest;
@@ -370,7 +367,7 @@ static void emit_mov_reg_to_reg(function_t *function, text_location_t location, 
 
 static void gen_expression(gen_t *gen, function_t *function, ast_node_t *expression);
 
-static size_t gen_jmp_if_reg(function_t *function, text_location_t location, reg_t condition_reg, bool jmp_condition) {
+static size_t gen_jmp_if_reg(function_t *function, texloc_t location, reg_t condition_reg, bool jmp_condition) {
     instruction_t instruction = {0};
     instruction.op = OP_JMP_IF_REG_CONDITION;
     instruction.as.jmp.amount = 0;
@@ -461,7 +458,7 @@ static value_index_t add_constant(function_t *function, void *data, size_t size)
     return value_index_(index);
 }
 
-static void gen_constant(text_location_t location, function_t *function, void *data, type_info_t *type_info) {
+static void gen_constant(texloc_t location, function_t *function, void *data, type_info_t *type_info) {
     value_index_t value_index = add_constant(function, data, type_info->size);
 
     if (type_info->size <= WORD_SIZE) {
@@ -486,7 +483,7 @@ static void gen_folded_value(gen_t *gen, function_t *function, ast_node_t *expre
     }
 
     void *data = memarr_get_ptr(&gen->ast->constants, expression->value_index);
-    gen_constant(expression->start.location, function, data, type_info);
+    gen_constant(expression->start.loc, function, data, type_info);
 }
 
 static void gen_add_local(gen_t *gen, ast_node_t *declaration, size_t stack_location) {
@@ -545,7 +542,7 @@ static void push_scope(gen_t *gen) {
     ++gen->scope_level;
 }
 
-static void gen_pop_scope(gen_t *gen, function_t *function, text_location_t location) {
+static void gen_pop_scope(gen_t *gen, function_t *function, texloc_t location) {
     size_t truncate_to = gen->stack_size;
     size_t pop_amount = 0;
     for (size_t i = gen->locals.count; i > 0; --i) {
@@ -583,22 +580,9 @@ static local_t *find_local(gen_t *gen, ast_node_t *ref_decl) {
 static void gen_def_value(gen_t *gen, function_t *function, ast_node_t *def) {
     local_t *local = find_local(gen, def->ref_decl);
 
-    if (local->stack_location > UINT32_MAX) {
-        // todo
-        UNREACHABLE();
-        return;
-    }
+    emit_binu_reg_im(function, def->start.loc, REG_RESULT, REG_STACK_FRAME, (u32)local->stack_location, '-');
 
     instruction_t instruction = {0};
-    {
-        instruction.op = OP_SUBU_REG_IM32;
-        instruction.as.binu_reg_immediate.immediate = (u32)local->stack_location;
-        instruction.as.binu_reg_immediate.reg_operand = REG_STACK_FRAME;
-        instruction.as.binu_reg_immediate.reg_result = REG_RESULT;
-
-        emit_instruction(function, def->start.location, instruction);
-    }
-
     {
         instruction.op = OP_MOVWORD_REGMEM_TO_REG;
         instruction.as.mov_regmem_to_reg.regmem_source = REG_RESULT;
@@ -608,7 +592,7 @@ static void gen_def_value(gen_t *gen, function_t *function, ast_node_t *def) {
     }
 }
 
-static size_t gen_jmp(function_t *function, text_location_t location) {
+static size_t gen_jmp(function_t *function, texloc_t location) {
     instruction_t instruction = {0};
     instruction.op = OP_JMP;
     instruction.as.jmp.amount = 0;
@@ -618,7 +602,7 @@ static size_t gen_jmp(function_t *function, text_location_t location) {
     return index;
 }
 
-static void gen_loop(gen_t *gen, function_t *function, text_location_t location, u32 loop_index) {
+static void gen_loop(gen_t *gen, function_t *function, texloc_t location, u32 loop_index) {
     size_t amount = function->code.count - loop_index;
     if (amount > UINT32_MAX) {
         gen_error(gen, make_error(ERROR_CODEGEN_JMP_TOO_LARGE));
@@ -634,13 +618,13 @@ static void gen_patch_jmps(gen_t *gen, function_t *function, ast_node_t *expr, t
     for (size_t i = 0; i < expr->jmp_nodes.count; ++i) {
         ast_node_t *jmp_node = expr->jmp_nodes.items[i];
         if (jmp_node->start.type != jmp_type) continue;
-        size_t code_jmp_index = jmp_node->ccode_jmp_index;
+        size_t code_jmp_index = jmp_node->vm_jmp_index;
         gen_patch_jmp(gen, function, code_jmp_index);
     }
 }
 
 static size_t gen_condition(gen_t *gen, ast_node_t *branch, function_t *function) {
-    emit_push_wordreg(gen, branch->start.location, function, REG_RESULT);
+    emit_push_wordreg(gen, branch->start.loc, function, REG_RESULT);
 
     gen_expression(gen, function, an_condition(branch));
 
@@ -702,16 +686,9 @@ static void gen_assignment(gen_t *gen, function_t *function, ast_node_t *assignm
 
     local_t *local = find_local(gen, ref_decl);
 
+    emit_binu_reg_im(function, assignment->end.loc, REG_TMP, REG_STACK_FRAME, (u32)local->stack_location, '-');
+
     instruction_t in = {0};
-    {
-        in.op = OP_SUBU_REG_IM32;
-        in.as.binu_reg_immediate.immediate = local->stack_location;
-        in.as.binu_reg_immediate.reg_operand = REG_STACK_FRAME;
-        in.as.binu_reg_immediate.reg_result = REG_TMP;
-
-        emit_instruction(function, assignment->end.location, in);
-    }
-
     {
         in.op = OP_MOVWORD_REG_TO_REGMEM;
         in.as.mov_reg_to_regmem.reg_source = REG_RESULT;
@@ -721,18 +698,20 @@ static void gen_assignment(gen_t *gen, function_t *function, ast_node_t *assignm
     }
 }
 
+
 static void gen_jmp_expr(gen_t *gen, function_t *function, ast_node_t *jmp_expr) {
     gen_expression(gen, function, an_expression(jmp_expr));
     switch (jmp_expr->start.type) {
+        case TOKEN_CONTINUE:
         case TOKEN_BREAK: {
-            jmp_expr->ccode_jmp_index = gen_jmp(function, jmp_expr->start.location);
+            jmp_expr->vm_jmp_index = gen_jmp(function, token_end_location(&jmp_expr->end));
             break;
         }
-        case TOKEN_CONTINUE: {
-            jmp_expr->ccode_jmp_index = gen_jmp(function, jmp_expr->start.location);
+
+        case TOKEN_RETURN: {
+            emit_return(token_end_location(&jmp_expr->end), function);
             break;
         }
-        case TOKEN_RETURN: UNREACHABLE();
 
         default: UNREACHABLE();
 
@@ -746,6 +725,7 @@ static gen_t make_gen(ast_t *ast, error_function_t error_fn, arena_t *gen_arena,
     gen.gen_arena = gen_arena;
     gen.locals.allocator = gen_arena;
     gen.function_arena = function_arena;
+    gen.breached_stack_limit = false;
 
     return gen;
 }
@@ -766,6 +746,35 @@ static void gen_function_def(gen_t *parent_gen, function_t *parent_function, ast
 }
 
 static void gen_call(gen_t *gen, function_t *function, ast_node_t *call) {
+    size_t argument_size_words = 0;
+    unless (TYPE_IS_VOID(call->children.items[an_call_arg_start(call)]->value_type)) {
+        for (size_t i = an_call_arg_start(call); i < an_call_arg_end(call); ++i) {
+            ast_node_t *arg = call->children.items[i];
+            gen_expression(gen, function, arg);
+            emit_push_wordreg(gen, token_end_location(&arg->end), function, REG_RESULT);
+            ++argument_size_words;
+        }
+    }
+
+    // store and replace stack frame
+    {
+        emit_push_wordreg(gen, call->start.loc, function, REG_STACK_FRAME);
+        emit_mov_reg_to_reg(function, call->start.loc, REG_STACK_FRAME, REG_STACK_BOTTOM);
+        emit_binu_reg_im(function, call->start.loc, REG_STACK_FRAME, REG_STACK_FRAME, argument_size_words+1, '+');
+    }
+
+    gen_expression(gen, function, an_callee(call));
+
+    instruction_t in = {0};
+    in.op = OP_CALL;
+    in.as.call.reg_op = REG_RESULT;
+    emit_instruction(function, token_end_location(&call->end), in);
+
+    // restore stack frame and pop arguments
+    {
+        emit_pop_to_wordreg(gen, token_end_location(&call->end), function, REG_STACK_FRAME);
+        emit_popn_words(gen, function, argument_size_words, token_end_location(&call->end));
+    }
 }
 
 static void gen_expression(gen_t *gen, function_t *function, ast_node_t *expression) {
@@ -843,12 +852,6 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
     }
 }
 
-static void gen_return(gen_t *gen, text_location_t location, function_t *function, type_t type) {
-    UNUSED(gen);
-    UNUSED(type);
-    emit_return(location, function);
-}
-
 bool compile_expr_to_function(function_t *function, ast_t *ast, error_function_t error_fn, arena_t *function_arena) {
     arena_t arena = {0};
 
@@ -856,7 +859,7 @@ bool compile_expr_to_function(function_t *function, ast_t *ast, error_function_t
 
     gen_expression(&gen, function, ast->root);
 
-    gen_return(&gen, token_end_location(&ast->root->end), function, ast->root->value_type);
+    emit_return(token_end_location(&ast->root->end), function);
     
     return gen.had_error;
 }

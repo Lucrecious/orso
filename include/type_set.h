@@ -21,6 +21,7 @@ struct type_table_t {
     type_t f64_;
     type_t i32_;
     type_t i64_;
+    type_t u64_;
     type_t string_;
     type_t symbol_;
     type_t type_;

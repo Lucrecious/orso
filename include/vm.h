@@ -82,6 +82,7 @@ enum op_code_t {
     OP_INCREMENTU,
     OP_DECREMENTU,
 
+    OP_CALL,
     OP_RETURN,
 };
 
@@ -136,6 +137,10 @@ struct instruction_t {
             byte reg_op;
             byte reg_result;
         } unary_reg_to_reg;
+
+        struct {
+            byte reg_op;
+        } call;
     } as;
 };
 
@@ -146,7 +151,7 @@ typedef struct function_t function_t;
 struct function_t {
     string_t file_path;
     struct {
-        text_location_t *items;
+        texloc_t *items;
         size_t count;
         size_t capacity;
         arena_t *allocator;
@@ -171,6 +176,8 @@ struct call_frame_t {
 
 typedef struct vm_t vm_t;
 struct vm_t {
+    call_frame_t call_frames[UINT8_MAX];
+    size_t call_frame_count;
     call_frame_t call_frame;
     word_t registers[REGISTER_COUNT];
     bool halted;
@@ -200,7 +207,6 @@ function_t *new_function(string_t file_path, memarr_t *memory, arena_t *arena) {
 
 void vm_init(vm_t *vm) {
     *vm = (vm_t){0};
-    // vm->pc = 0;
 }
 
 void vm_set_entry_point(vm_t *vm, function_t *entry_point) {
@@ -496,8 +502,27 @@ void vm_step(vm_t *vm) {
         case_unary_reg_reg(INCREMENTU, u, ++);
         case_unary_reg_reg(DECREMENTU, u, --);
 
+        case OP_CALL: {
+            void *ptr = vm->registers[in.as.call.reg_op].as.p;
+            function_t *func = (function_t*)ptr;
+            call_frame_t call_frame = {0};
+            call_frame.function = func;
+            call_frame.pc = 0;
+
+            vm->call_frames[vm->call_frame_count] = vm->call_frame;
+            vm->call_frame_count++;
+            vm->call_frame = call_frame;
+            break;
+        }
+
         case OP_RETURN: {
-            vm->halted = true;
+            if (vm->call_frame_count > 0) {
+                --vm->call_frame_count;
+                vm->call_frame = vm->call_frames[vm->call_frame_count];
+                IP_ADV(1);
+            } else {
+                vm->halted = true;
+            }
             break;
         }
     }

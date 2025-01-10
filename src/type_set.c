@@ -132,6 +132,7 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
     static type_info_t type_f64 = {.kind=TYPE_NUMBER, .size=sizeof(f64), .data.num = NUM_TYPE_FLOAT};
     static type_info_t type_i32 = {.kind=TYPE_NUMBER, .size=sizeof(i32), .data.num = NUM_TYPE_SIGNED};
     static type_info_t type_i64 = {.kind=TYPE_NUMBER, .size=sizeof(i64), .data.num = NUM_TYPE_SIGNED};
+    static type_info_t type_u64 = {.kind=TYPE_NUMBER, .size=sizeof(u64), .data.num = NUM_TYPE_UNSIGNED};
     static type_info_t type_string = {.kind=TYPE_STRING, .size=sizeof(void*)};
     static type_info_t type_type = {.kind=TYPE_TYPE, .size=sizeof(type_t)};
     static type_info_t empty_function = {.kind = TYPE_FUNCTION, .size = sizeof(void*), .data.function.return_type = typeid(TYPE_VOID)};
@@ -174,6 +175,9 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
 
     set->i64_ = typeid(set->types.count);
     array_push(&set->types, &type_i64);
+
+    set->u64_ = typeid(set->types.count);
+    array_push(&set->types, &type_u64);
 
     set->empty_function_ = typeid(set->types.count);
     array_push(&set->types, &empty_function);

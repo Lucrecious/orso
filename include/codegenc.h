@@ -868,6 +868,10 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
             break;
         }
 
+        case AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION:
+        case AST_NODE_TYPE_EXPRESSION_CALL:
+            break;
+
         default: UNREACHABLE(); break;
     }
 }

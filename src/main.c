@@ -70,8 +70,8 @@ string_view_t get_line(string_view_t source, string_view_t somewhere_in_source) 
 void myerror(ast_t *ast, error_t error) {
     UNUSED(ast);
 
-    size_t line = error.token.location.line + 1;
-    size_t column = error.token.location.column + 1;
+    size_t line = error.token.loc.line + 1;
+    size_t column = error.token.loc.column + 1;
     // cstr_t file = error.first.file_path.cstr;
 
     string_view_t source_line = get_line(error.token.source, error.token.view);

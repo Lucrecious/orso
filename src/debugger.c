@@ -141,6 +141,7 @@ static string_t disassemble_instruction(instruction_t in, arena_t *allocator) {
         
         #undef OP_UNARY_REG_REG
 
+        case OP_CALL: return lit2str("OP_CALL");
         case OP_RETURN: return lit2str("OP_RETURN");
     }
 }
@@ -166,7 +167,7 @@ static void show_line(vm_t *vm, size_t bytecode_around) {
             printf("-> ");
         }
 
-        text_location_t location = function->locations.items[i];
+        texloc_t location = function->locations.items[i];
         string_t as_string = disassemble_instruction(function->code.items[i], tmp_arena->allocator);
         printf("%04zu:%04zu:%04zu: %s\n", i, location.line+1, location.column+1, as_string.cstr);
     }
@@ -285,7 +286,7 @@ source_location_t vm_find_source_location(vm_t *vm) {
     size_t index = vm->call_frame.pc;
 
     string_t file_path = function->file_path;
-    text_location_t text_location = function->locations.items[index];
+    texloc_t text_location = function->locations.items[index];
 
     return (source_location_t){
         .file_path = file_path,

@@ -39,33 +39,33 @@ enum token_type_t {
     TOKEN_SIZE,
 };
 
-typedef struct text_location_t text_location_t;
-struct text_location_t {
+typedef struct texloc_t texloc_t;
+struct texloc_t {
     size_t line;
     size_t column;
 };
 
-#define texloc(line_, col) ((text_location_t){.line=(line_), .column=(col)})
+#define texloc(line_, col) ((texloc_t){.line=(line_), .column=(col)})
 
 typedef struct token_t token_t;
 struct token_t {
     string_view_t source;
     string_view_t view;
-    text_location_t location;
+    texloc_t loc;
     token_type_t type;
 };
 
 #define nil_token (token_t){\
     .source = lit2sv(""),\
-    .location.line = 0,\
-    .location.column= 0,\
+    .loc.line = 0,\
+    .loc.column= 0,\
     .view = lit2sv(""),\
     .type = TOKEN_ERROR\
 }
 
-#define token_end_location(token) ((text_location_t){\
-    .line = ((token)->location.line),\
-    .column=(((token)->location.column + (token)->view.length))\
+#define token_end_location(token) ((texloc_t){\
+    .line = ((token)->loc.line),\
+    .column=(((token)->loc.column + (token)->view.length))\
 })
 
 typedef struct lexer_t lexer_t;

@@ -10,7 +10,7 @@ static token_t create_token(lexer_t *lexer, token_type_t type) {
         .source = lexer->source,
         .type = type,
         .view = {.length=lexer->current-lexer->start, .data = lexer->start},
-        .location = texloc(lexer->line, lexer->start - lexer->line_start),
+        .loc = texloc(lexer->line, lexer->start - lexer->line_start),
     };
 
     return token;
@@ -21,7 +21,7 @@ static token_t error_token(lexer_t *lexer, string_view_t message_view) {
         .source = lexer->source,
         .type = TOKEN_ERROR,
         .view = message_view,
-        .location = texloc(lexer->line, lexer->current - lexer->line_start),
+        .loc = texloc(lexer->line, lexer->current - lexer->line_start),
     };
     
     return token;

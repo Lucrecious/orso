@@ -689,25 +689,24 @@ static void pop_dependency(analyzer_t *analyzer) {
     --analyzer->dependencies.count;
 }
 
-static scope_t *get_closest_outer_function_scope(type_infos_t *types, scope_t *scope) {
-    while (scope && scope->creator && !type_is_function(*types, scope->creator->value_type)) {
-        scope = scope->outer;
-    }
-
-    return scope;
-}
-
-
 static bool get_nearest_scope_in_func_or_error(
         analyzer_t *analyzer, ast_node_t *jmp_node, scope_t *scope,
         scope_type_t search_type, string_view_t label, scope_t **found_scope) {
+    
+    bool check_label = label.length > 0;
     while (scope->outer) {
-        if (scope->type == search_type && sv_eq(label, scope->creator->identifier.view)) {
-            *found_scope = scope;
+        if (scope->type == search_type) {
+            if (check_label) {
+                if (sv_eq(label, scope->creator->identifier.view)) {
+                    *found_scope = scope;
+                }
+            } else {
+                *found_scope = scope;
+            }
             return true;
         }
 
-        if (scope->type == SCOPE_TYPE_FUNCTION_BODY) {
+        if (search_type != SCOPE_TYPE_FUNC_DEF && scope->type == SCOPE_TYPE_FUNC_DEF_BODY) {
             break;
         }
 
@@ -719,10 +718,14 @@ static bool get_nearest_scope_in_func_or_error(
         scope = scope->outer;
     }
 
-    if (label.length != 0) {
-        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CANNOT_FIND_JMP_LABEL, jmp_node));
+    if (search_type == SCOPE_TYPE_FUNC_DEF) {
+        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CANNOT_RETURN_OUTSIDE_FUNC_DEF, jmp_node));
     } else {
-        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_NO_VALID_JMP_BLOCK, jmp_node));
+        if (label.length != 0) {
+            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CANNOT_FIND_JMP_LABEL, jmp_node));
+        } else {
+            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_NO_VALID_JMP_BLOCK, jmp_node));
+        }
     }
     return false;
 }
@@ -799,7 +802,7 @@ static void resolve_declaration_statement(
     analysis_state_t state,
     ast_node_t *statement);
 
-static void resolve_function_expression(
+static void resolve_func_def(
         analyzer_t *analyzer,
         ast_t *ast,
         analysis_state_t state,
@@ -1325,7 +1328,7 @@ void resolve_expression(
             switch (expr->branch_type) {
                 case BRANCH_TYPE_DO:
                 case BRANCH_TYPE_LOOPING: {
-                    scope_init(&return_scope, &analyzer->allocator, SCOPE_TYPE_RETURN_BRANCH, state.scope, expr);
+                    scope_init(&return_scope, &analyzer->allocator, SCOPE_TYPE_JMPABLE, state.scope, expr);
 
                     return_state = state;
                     return_state.scope = &return_scope;
@@ -1375,24 +1378,21 @@ void resolve_expression(
 
             switch (expr->start.type) {
                 case TOKEN_RETURN: {
-                    scope_t *function_scope = get_closest_outer_function_scope(&ast->type_set.types, state.scope);
-                    ASSERT(function_scope, "right now all scopes should be under a function scope");
-
-                    type_t function_type = function_scope->creator->value_type;
-                    type_info_t *function_type_info = ast->type_set.types.items[function_type.i];
-
-                    type_t function_return_type = function_scope ? function_type_info->data.function.return_type : typeid(TYPE_VOID);
-                    unless (TYPE_IS_INVALID(an_expression(expr)->value_type) || !typeid_eq(function_return_type, an_expression(expr)->value_type)) {
-                        printf("todo: another case where i need to put in the right nodes here... the expected should be the expression of the ufnction return value\n");
-                        stan_error(analyzer, make_type_mismatch_error(an_expression(expr), an_expression(expr)));
+                    scope_t *func_def_scope = NULL;
+                    bool success = get_nearest_scope_in_func_or_error(analyzer, expr, state.scope, SCOPE_TYPE_FUNC_DEF, lit2sv(""), &func_def_scope);
+                    unless (success) {
+                        INVALIDATE(expr);
+                    } else {
+                        expr->jmp_out_scope_node = func_def_scope->creator;
+                        array_push(&func_def_scope->creator->jmp_nodes, expr);
                     }
                     break;
                 }
+
                 case TOKEN_CONTINUE:
                 case TOKEN_BREAK: {
-
                     scope_t *found_scope = NULL;
-                    bool success = get_nearest_scope_in_func_or_error(analyzer, expr, state.scope, SCOPE_TYPE_RETURN_BRANCH, expr->identifier.view, &found_scope);
+                    bool success = get_nearest_scope_in_func_or_error(analyzer, expr, state.scope, SCOPE_TYPE_JMPABLE, expr->identifier.view, &found_scope);
                     unless (success) {
                         INVALIDATE(expr);
                     } else {
@@ -1443,7 +1443,7 @@ void resolve_expression(
         }
 
         case AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION: {
-            resolve_function_expression(analyzer, ast, state, expr);
+            resolve_func_def(analyzer, ast, state, expr);
             break;
         }
 
@@ -1537,10 +1537,10 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
         if (TYPE_IS_UNRESOLVED(an_decl_expr(declaration)->value_type)) {
             analysis_state_t new_state = state;
             switch (state.scope->type) {
-                case SCOPE_TYPE_FUNCTION_BODY:
+                case SCOPE_TYPE_FUNC_DEF_BODY:
                 case SCOPE_TYPE_BLOCK:
                 case SCOPE_TYPE_CONDITION:
-                case SCOPE_TYPE_RETURN_BRANCH:
+                case SCOPE_TYPE_JMPABLE:
                 case SCOPE_TYPE_MODULE: {
                     folding_mode_t mode = declaration->is_mutable ? MODE_RUNTIME : MODE_CONSTANT_TIME;
                     mode = mode | (state.mode & MODE_FOLDING_TIME);
@@ -1549,7 +1549,7 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
                 }
 
                 case SCOPE_TYPE_STRUCT:
-                case SCOPE_TYPE_FUNCTION_PARAMETERS: {
+                case SCOPE_TYPE_FUNC_DEF: {
                     new_state.mode = MODE_CONSTANT_TIME | (state.mode & MODE_FOLDING_TIME);
                     break;
                 }
@@ -1843,7 +1843,7 @@ static definition_t *get_resolved_def_by_identifier(
     *search_scope = state.scope;
 
     while (*search_scope) {
-        bool is_function_scope = (*search_scope)->type == SCOPE_TYPE_FUNCTION_PARAMETERS;
+        bool is_function_scope = (*search_scope)->type == SCOPE_TYPE_FUNC_DEF;
 
     #define NEXT_SCOPE() \
         if (is_function_scope) { passed_local_mutable_access_barrier = true; }\
@@ -2012,7 +2012,7 @@ static definition_t *get_resolved_def_by_identifier(
     return NULL;
 }
 
-static void resolve_function_expression(
+static void resolve_func_def(
         analyzer_t *analyzer,
         ast_t *ast,
         analysis_state_t state,
@@ -2024,7 +2024,7 @@ static void resolve_function_expression(
     }
 
     scope_t function_parameter_scope;
-    scope_init(&function_parameter_scope, &analyzer->allocator, SCOPE_TYPE_FUNCTION_PARAMETERS, state.scope, func_def);
+    scope_init(&function_parameter_scope, &analyzer->allocator, SCOPE_TYPE_FUNC_DEF, state.scope, func_def);
     types_t parameter_types = {.allocator=&ast->allocator};
 
     {
@@ -2087,7 +2087,7 @@ static void resolve_function_expression(
         new_state.mode = MODE_RUNTIME;
 
         scope_t function_scope;
-        scope_init(&function_scope, &analyzer->allocator, SCOPE_TYPE_FUNCTION_BODY, &function_parameter_scope, func_def);
+        scope_init(&function_scope, &analyzer->allocator, SCOPE_TYPE_FUNC_DEF_BODY, &function_parameter_scope, func_def);
         new_state.scope = &function_scope;
         resolve_expression(analyzer, ast, new_state, an_func_def_block(func_def));
         pop_dependency(analyzer);
@@ -2095,6 +2095,20 @@ static void resolve_function_expression(
 
     unless (TYPE_IS_UNREACHABLE(an_func_def_block(func_def)->value_type)) {
         stan_error(analyzer, make_error_node(ERROR_ANALYSIS_FUNCTION_MUST_RETURN_ON_ALL_BRANCHES, func_def));
+    }
+
+    
+
+    for (size_t i = 0; i < func_def->jmp_nodes.count; ++i) {
+        ast_node_t *jmp = func_def->jmp_nodes.items[i];
+        
+        ast_node_t *ret_expr = an_expression(jmp);
+
+        type_t ret_expr_type = ret_expr->value_type;
+        unless (typeid_eq(ret_expr_type, return_type)) {
+            stan_error(analyzer, make_type_mismatch_error(an_func_def_return(func_def), ret_expr));
+            INVALIDATE(func_def);
+        }
     }
 }
 
