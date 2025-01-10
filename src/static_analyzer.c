@@ -37,16 +37,8 @@ typedef struct analysis_state_t {
     scope_t *scope;
 } analysis_state_t;
 
-typedef struct definition_t {
-    ast_node_t *node;
-    
-    // for builtins
-    type_t declared_type;
-    value_index_t value_index;
-
-} definition_t;
-
-#define def_type(e) (((e)->node->node_type == AST_NODE_TYPE_NONE) ? ((e)->declared_type) : ((e)->node->value_type))
+// #define def_type(e) (((e)->node->node_type == AST_NODE_TYPE_NONE) ? ((e)->declared_type) : ((e)->node->value_type))
+#define def_type(e) ((e)->declared_type)
 
 static void scope_init(scope_t *scope, arena_t *allocator, scope_type_t type, scope_t *outer, ast_node_t *creator_expression) {
     scope->outer = outer;
@@ -55,23 +47,19 @@ static void scope_init(scope_t *scope, arena_t *allocator, scope_type_t type, sc
     scope->definitions = table_new(s2w, allocator);
 }
 
-static void add_definition(scope_t *scope, arena_t *allocator, string_view_t identifier, ast_node_t *declaration_node) {
-    definition_t *def = arena_alloc(allocator, sizeof(definition_t));
-    def->node = declaration_node;
-    def->value_index = value_index_nil();
-
-    table_put(s2w, scope->definitions, sv2string(identifier, allocator), WORDP(def));
+static void add_definition(scope_t *scope, arena_t *allocator, string_view_t identifier, ast_node_t *decl) {
+    table_put(s2w, scope->definitions, sv2string(identifier, allocator), WORDP(decl));
 }
 
-static definition_t *add_builtin_definition(ast_t *ast, string_view_t identifier, type_t type, value_index_t value_index) {
-    definition_t *def = arena_alloc(&ast->allocator, sizeof(definition_t));
-    def->node = &nil_node;
-    def->value_index = value_index;
-    def->declared_type = type;
+static ast_node_t *add_builtin_definition(ast_t *ast, string_view_t identifier, type_t type, value_index_t value_index) {
+    ast_node_t *decl = ast_node_new(ast, AST_NODE_TYPE_DECLARATION_DEFINITION, false, nil_token);
+    decl->value_type = type;
+    decl->value_index = value_index;
+    decl->is_mutable = false;
 
-    table_put(s2w, ast->builtins, sv2string(identifier, &ast->allocator), WORDP(def));
+    table_put(s2w, ast->builtins, sv2string(identifier, &ast->allocator), WORDP(decl));
 
-    return def;
+    return decl;
 }
 
 // static void function_dependencies_cannot_be_compiled(analyzer_t *analyzer) {
@@ -164,7 +152,7 @@ struct def_query_t  {
     bool skip_mutable;
 };
 
-static definition_t *get_resolved_def_by_identifier(
+static ast_node_t *get_resolved_def_by_identifier(
         analyzer_t *analyzer,
         ast_t *ast,
         analysis_state_t state,
@@ -352,7 +340,9 @@ static void resolve_foldable(
             ast_node_t *referencing_declaration = expression->ref_decl;
 
             // this happens when the referencing declaration cannot be found OR for a builtin type
-            unless (referencing_declaration) {
+            if (an_is_implicit(referencing_declaration)) {
+                ASSERT(expression->value_index.exists, "must already be folded");
+
                 foldable = expression->foldable;
                 folded_index = expression->value_index;
                 break;
@@ -1082,21 +1072,21 @@ void resolve_expression(
                 .flags = expr->inside_type_context ? QUERY_FLAG_MATCH_TYPE : QUERY_FLAG_MATCH_ANY,
             };
 
-            definition_t *definition = get_resolved_def_by_identifier(analyzer, ast, state, expr->identifier, &query, &def_scope);
+            ast_node_t *decl = get_resolved_def_by_identifier(analyzer, ast, state, expr->identifier, &query, &def_scope);
 
-            if (definition == NULL) {
+            if (decl == NULL) {
                 INVALIDATE(expr);
                 break;
             }
 
             // keep for constant folding so not redo definition look up and simplify work there
-            expr->ref_decl = definition->node;
+            expr->ref_decl = decl;
 
-            expr->value_type = def_type(definition);
+            expr->value_type = decl->value_type;
 
-            if (definition->node == NULL) {
+            if (!decl->is_mutable) {
                 expr->foldable = true;
-                expr->value_index = definition->value_index;
+                expr->value_index = decl->value_index;
             }
             break;
         }
@@ -1164,14 +1154,14 @@ void resolve_expression(
                 };
 
                 scope_t* found_scope;
-                definition_t* definition = get_resolved_def_by_identifier(analyzer, ast, search_state, expr->identifier, &query, &found_scope);
+                ast_node_t *decl = get_resolved_def_by_identifier(analyzer, ast, search_state, expr->identifier, &query, &found_scope);
 
-                unless (definition) {
+                unless (decl) {
                     INVALIDATE(expr);
                     break;
                 }
 
-                expr->value_type = definition->node->value_type;
+                expr->value_type = decl->value_type;
                 break;
             }
 
@@ -1199,7 +1189,7 @@ void resolve_expression(
 
             if (lvalue_node->node_type == AST_NODE_TYPE_EXPRESSION_DEF_VALUE) {
                 scope_t *def_scope;
-                definition_t *def;
+                ast_node_t *def;
                 token_t identifier = lvalue_node->identifier;
                 def = get_resolved_def_by_identifier(analyzer, ast, state, identifier, NULL, &def_scope);
 
@@ -1209,10 +1199,10 @@ void resolve_expression(
                     break;
                 }
 
-                expr->value_type = def_type(def);
+                expr->value_type = def->value_type;
 
                 type_t rhs_type = rhs->value_type;
-                unless (typeid_eq(def_type(def), rhs_type)) {
+                unless (typeid_eq(def->value_type, rhs_type)) {
                     stan_error(analyzer, make_type_mismatch_error(lhs, rhs));
                     break;
                 }
@@ -1348,11 +1338,11 @@ void resolve_expression(
 
             if (!TYPE_IS_UNREACHABLE(branch_type)) {
                 if (TYPE_IS_VOID(an_then(expr)->value_type) && an_then(expr)->node_type == AST_NODE_TYPE_EXPRESSION_NIL) {
-                    an_then(expr) = ast_create_implicit_nil_node(ast, branch_type, an_then(expr)->start);
+                    an_then(expr) = ast_nil(ast, branch_type, an_then(expr)->start);
                 }
 
                 if (TYPE_IS_VOID(an_else(expr)->value_type) && an_else(expr)->node_type == AST_NODE_TYPE_EXPRESSION_NIL) {
-                    an_else(expr) = ast_create_implicit_nil_node(ast, branch_type, an_else(expr)->start);
+                    an_else(expr) = ast_nil(ast, branch_type, an_else(expr)->start);
                 }
             }
 
@@ -1423,14 +1413,15 @@ void resolve_expression(
                 argument_invalid = true;
             }
 
-            resolve_expression(analyzer, ast, state, an_callee(expr));
+            ast_node_t *callee = an_callee(expr);
+            resolve_expression(analyzer, ast, state, callee);
 
-            if (argument_invalid || TYPE_IS_INVALID(an_callee(expr)->value_type)) {
+            if (argument_invalid || TYPE_IS_INVALID(callee->value_type)) {
                 INVALIDATE(expr);
                 break;
             }
 
-            type_t callee_type = an_callee(expr)->value_type;
+            type_t callee_type = callee->value_type;
 
             if ((!type_is_function(ast->type_set.types, callee_type) && !type_is_native_function(ast->type_set.types, callee_type)) || !can_call(ast->type_set.types, callee_type, expr->children, an_call_arg_start(expr), an_call_arg_end(expr))) {
                 stan_error(analyzer, make_error_node(ERROR_ANALYSIS_EXPECTED_CALLABLE, an_callee(expr)));
@@ -1578,23 +1569,6 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
         }
     }
 
-    word_t def_word;
-
-    {
-        tmp_arena_t *tmp = allocator_borrow();
-        string_t name = sv2string(declaration->identifier.view, tmp->allocator);
-
-        ASSERT(table_get(s2w, state.scope->definitions, name, &def_word), "should be forward_declared already");
-
-        table_get(s2w, state.scope->definitions, name, &def_word);
-
-        allocator_return(tmp);
-    }
-
-    
-
-    definition_t *def = (definition_t*)def_word.as.p;
-
     // we are resolved
     if (is_declaration_resolved(declaration)) {
         if (!TYPE_IS_TYPE(declaration->value_type)) {
@@ -1715,25 +1689,26 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
     if (an_is_none(an_decl_expr(declaration))) {
         value_index_t value_index = value_index_nil();
 
-        unless (TYPE_IS_INVALID(def->node->value_type)) {
-            value_index = zero_value(ast, def->node->value_type);
+        unless (TYPE_IS_INVALID(declaration->value_type)) {
+            value_index = zero_value(ast, declaration->value_type);
         }
 
-        def->node->value_index = value_index;
-        def->node->foldable = value_index.exists;
+        declaration->value_index = value_index;
+        declaration->foldable = value_index.exists;
     } else {
         if (IS_FOLDED(an_decl_expr(declaration))) {
-            def->node->value_index = an_decl_expr(declaration)->value_index;
-            def->node->foldable = an_decl_expr(declaration)->value_index.exists;
+            declaration->value_index = an_decl_expr(declaration)->value_index;
+            declaration->foldable = an_decl_expr(declaration)->value_index.exists;
         }
     }
 
 }
 
-static definition_t *get_builtin_def(ast_t *ast, string_view_t identifier) {
+static ast_node_t *get_builtin_decl(ast_t *ast, string_view_t identifier) {
     tmp_arena_t *tmp = allocator_borrow();
     string_t identifier_ = sv2string(identifier, tmp->allocator);
 
+    ast_node_t *decl;
     word_t def_slot;
     unless (table_get(s2w, ast->builtins, identifier_, &def_slot)) {
         type_t type;
@@ -1749,17 +1724,16 @@ static definition_t *get_builtin_def(ast_t *ast, string_view_t identifier) {
 
         if (has_value) {
             value_index_t index = add_value_to_ast_constant_stack(ast, &value_slot, value_type);
-            definition_t *definition = add_builtin_definition(ast, identifier, value_type, index);
-            return definition;
+            decl = add_builtin_definition(ast, identifier, value_type, index);
+        } else {
+            decl = NULL;
         }
-
-        return NULL;
+    } else {
+        decl = (ast_node_t*)def_slot.as.p;
     }
 
-    definition_t *definition = (definition_t*)def_slot.as.p;
-
     allocator_return(tmp);
-    return definition;
+    return decl;
 }
 
 /*
@@ -1820,7 +1794,7 @@ static definition_t *get_builtin_def(ast_t *ast, string_view_t identifier) {
  * 
  * This function below is what does this recursive dependency thing.
 */
-static definition_t *get_resolved_def_by_identifier(
+static ast_node_t *get_resolved_def_by_identifier(
         analyzer_t *analyzer,
         ast_t *ast,
         analysis_state_t state,
@@ -1832,10 +1806,10 @@ static definition_t *get_resolved_def_by_identifier(
 
     // early return if looking at a built in type
     {
-        definition_t *definition = get_builtin_def(ast, identifier_token.view);
-        if (definition) {
+        ast_node_t *decl = get_builtin_decl(ast, identifier_token.view);
+        if (decl) {
             search_scope = NULL;
-            return definition;
+            return decl;
         }
     }
 
@@ -1863,37 +1837,37 @@ static definition_t *get_resolved_def_by_identifier(
         }
 
 
-        definition_t *definition = (definition_t*)def_slot.as.p;
+        ast_node_t *decl = (ast_node_t*)def_slot.as.p;
 
-        if (query && query->skip_mutable && definition->node->is_mutable) {
+        if (query && query->skip_mutable && decl->is_mutable) {
             NEXT_SCOPE();
             continue;
         }
 
-        if (passed_local_mutable_access_barrier && (*search_scope)->creator != NULL && definition->node->is_mutable) {
+        if (passed_local_mutable_access_barrier && (*search_scope)->creator != NULL && decl->is_mutable) {
             NEXT_SCOPE();
             continue;
         }
 
         // this means that the declaration is *after* the definition we are trying to resolve
-        if (definition->node->is_mutable && !is_declaration_resolved(definition->node)) {
+        if (decl->is_mutable && !is_declaration_resolved(decl)) {
             NEXT_SCOPE();
             continue;
         }
 
         // ensure that the value is resolved
-        if (an_is_notnone(an_decl_expr(definition->node))) {
+        if (an_is_notnone(an_decl_expr(decl))) {
             analysis_state_t new_state = state;
             new_state.scope = *search_scope;
-            resolve_declaration_definition(analyzer, ast, new_state, definition->node);
+            resolve_declaration_definition(analyzer, ast, new_state, decl);
         }
 
-        if (definition->node->is_mutable && definition->node->fold_level_resolved_at != state.fold_level) {
-            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CANNOT_ACCESS_MUTABLE_ON_DIFFERENT_FOLD_LEVEL, definition->node));
+        if (decl->is_mutable && decl->fold_level_resolved_at != state.fold_level) {
+            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CANNOT_ACCESS_MUTABLE_ON_DIFFERENT_FOLD_LEVEL, decl));
             return NULL;
         }
 
-        if (type_is_function(ast->type_set.types, definition->node->value_type)) {
+        if (type_is_function(ast->type_set.types, decl->value_type)) {
             /*
             * Okay... Time to do some explaining. This is a complicated one. Let's begin with the context.
             *
@@ -1984,21 +1958,21 @@ static definition_t *get_resolved_def_by_identifier(
         }
 
         if (!query) {
-            return definition;
+            return decl;
         }
 
         if (query->flags & QUERY_FLAG_MATCH_ANY) {
-            return definition;
+            return decl;
         }
 
-        type_t type = definition->node->value_type;
+        type_t type = decl->value_type;
 
         if (query->flags & QUERY_FLAG_MATCH_TYPE && typeid_eq(query->search_type, type)) {
-            return definition;
+            return decl;
         }
 
         if (query->flags & QUERY_FLAG_MACH_FUNCTION && type_is_function(ast->type_set.types, type)) {
-            return definition;
+            return decl;
         }
 
         NEXT_SCOPE();
@@ -2067,7 +2041,8 @@ static void resolve_func_def(
         pop_dependency(analyzer);
     }
 
-    unless (TYPE_IS_TYPE(an_func_def_return(func_def)->value_type)) {
+    ast_node_t *ret_expr = an_func_def_return(func_def);
+    unless (TYPE_IS_TYPE(ret_expr->value_type)) {
         stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_RETURN_TYPE, an_func_def_return(func_def)));
     } else {
         return_type = get_folded_type(ast, an_func_def_return(func_def)->value_index);
@@ -2096,8 +2071,6 @@ static void resolve_func_def(
     unless (TYPE_IS_UNREACHABLE(an_func_def_block(func_def)->value_type)) {
         stan_error(analyzer, make_error_node(ERROR_ANALYSIS_FUNCTION_MUST_RETURN_ON_ALL_BRANCHES, func_def));
     }
-
-    
 
     for (size_t i = 0; i < func_def->jmp_nodes.count; ++i) {
         ast_node_t *jmp = func_def->jmp_nodes.items[i];

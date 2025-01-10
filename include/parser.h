@@ -138,7 +138,7 @@ ast_node_t nil_node;
 #define an_then(n) ((n)->children.items[1])
 #define an_else(n) ((n)->children.items[2])
 #define an_func_def_arg_start(n) (0)
-#define an_func_def_arg_end(n) ((n)->children.count-3)
+#define an_func_def_arg_end(n) ((n)->children.count-2)
 #define an_func_def_return(n) ((n)->children.items[(n)->children.count-2])
 #define an_func_def_block(n) ((n)->children.items[(n)->children.count-1])
 #define an_callee(n) ((n)->children.items[0])
@@ -147,6 +147,8 @@ ast_node_t nil_node;
 
 #define an_is_none(n)    ((n)->node_type == AST_NODE_TYPE_NONE)
 #define an_is_notnone(n) ((n)->node_type != AST_NODE_TYPE_NONE)
+
+#define an_is_implicit(n) ((n)->start.view.length == 0)
 
 typedef enum ast_branch_type_t ast_branch_type_t;
 enum ast_branch_type_t {
@@ -249,10 +251,12 @@ void ast_init(ast_t *ast, size_t memory_size_bytes);
 void ast_free(ast_t *ast);
 
 ast_node_t* ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type_context, token_t start);
-ast_node_t *ast_create_implicit_nil_node(ast_t *ast, type_t value_type, token_t token_location);
+ast_node_t *ast_nil(ast_t *ast, type_t value_type, token_t token_location);
 
 bool ast_node_type_is_decl_or_stmt(ast_node_type_t node_type);
 bool ast_node_type_is_expression(ast_node_type_t node_type);
+
+token_t make_token_implicit(token_t token);
 
 value_index_t zero_value(ast_t *ast, type_t type);
 

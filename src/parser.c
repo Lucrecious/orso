@@ -152,6 +152,14 @@ ast_node_t nil_node = {
 
     .value_type = typeid(TYPE_INVALID),
     .lvalue_node = &nil_node,
+    .ref_decl = &nil_node,
+    .jmp_out_scope_node = &nil_node,
+    .branch_type = BRANCH_TYPE_IFTHEN,
+    .ccode_break_label = lit2str(""),
+    .ccode_continue_label = lit2str(""),
+    .ccode_var_name = lit2str(""),
+    .identifier = nil_token,
+    .last_statement = &nil_node,
 };
 
 ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type_context, token_t start) {
@@ -270,15 +278,8 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, bool inside_type
     return node;
 }
 
-ast_node_t *ast_create_implicit_nil_node(ast_t *ast, type_t value_type, token_t token_location) {
-    token_t implicit_token = token_location;
-    implicit_token.loc = token_end_location(&token_location);
-    implicit_token.type = TOKEN_IMPLICIT;
-    implicit_token.view.data += implicit_token.view.length;
-    implicit_token.view.length = 0;
-
-
-    ast_node_t *nil_node = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_NIL, false, implicit_token);
+ast_node_t *ast_nil(ast_t *ast, type_t value_type, token_t token_location) {
+    ast_node_t *nil_node = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_NIL, false, make_token_implicit(token_location));
     nil_node->value_type = value_type;
     nil_node->value_index = zero_value(ast, value_type);
     return nil_node;
@@ -339,11 +340,8 @@ static void synchronize(parser_t* parser) {
     parser->panic_mode = false;
 
     while (!check(parser, TOKEN_EOF)) {
-        if (parser->previous.type == TOKEN_SEMICOLON) {
-            return;
-        }
-
         switch (parser->current.type) {
+            case TOKEN_SEMICOLON:
             case TOKEN_BRACE_CLOSE:
             case TOKEN_PARENTHESIS_CLOSE:
                 return;
@@ -355,9 +353,9 @@ static void synchronize(parser_t* parser) {
     }
 }
 
-static ast_node_t *parse_declaration(parser_t* parser, bool is_top_level);
+static ast_node_t *parse_decl(parser_t* parser, bool is_top_level);
 static ast_node_t *parse_expression(parser_t* parser, bool inside_type_context);
-static ast_node_t *parse_statement(parser_t* parser, bool lack_semicolin);
+static ast_node_t *parse_statement(parser_t* parser);
 static parse_rule_t *parser_get_rule(token_type_t type);
 static bool check_expression(parser_t* parser);
 static ast_node_t* parse_precedence(parser_t* parser, bool inside_type_context, Precedence precedence);
@@ -386,6 +384,13 @@ bool ast_node_type_is_expression(ast_node_type_t node_type) {
         case AST_NODE_TYPE_NONE:
             return false;
     }
+}
+
+token_t make_token_implicit(token_t token) {
+    token.view.data += token.view.length;
+    token.loc.column += token.view.length;
+    token.view.length = 0;
+    return token;
 }
 
 bool memarr_push_value(memarr_t *arr, void *data, size_t size_bytes, value_index_t *out_index) {
@@ -441,7 +446,7 @@ static ast_node_t *parse_jmp(parser_t *parser, bool inside_type_context) {
     if (has_expr && check_expression(parser)) {
         an_expression(jmp_expr) = parse_expression(parser, inside_type_context);
     } else {
-        an_expression(jmp_expr) = ast_create_implicit_nil_node(parser->ast, typeid(TYPE_VOID), an_expression(jmp_expr)->end);
+        an_expression(jmp_expr) = ast_nil(parser->ast, typeid(TYPE_VOID), an_expression(jmp_expr)->end);
     }
 
     jmp_expr->end = an_expression(jmp_expr)->end;
@@ -512,7 +517,7 @@ static ast_node_t *convert_function_definition(parser_t *parser, ast_node_t *lef
     func_def->children.count = 0;
 
     for (size_t i = an_func_def_arg_start(left_operand); i < an_func_def_arg_end(left_operand); ++i) {
-        array_push(&func_def->children, func_def->children.items[i]);
+        array_push(&func_def->children, left_operand->children.items[i]);
     }
 
     array_push(&func_def->children, an_func_def_return(left_operand));
@@ -542,8 +547,10 @@ static ast_node_t *parse_def_value(parser_t *parser, bool inside_type_context) {
 
 static void parse_block_(parser_t *parser, ast_node_t *block) {
     while (!check(parser, TOKEN_BRACE_CLOSE) && !check(parser, TOKEN_EOF)) {
-        ast_node_t *declaration_node = parse_declaration(parser, false);
+        ast_node_t *declaration_node = parse_decl(parser, false);
         array_push(&block->children, declaration_node);
+
+        consume(parser, TOKEN_SEMICOLON);
     }
 
     consume(parser, TOKEN_BRACE_CLOSE);
@@ -574,7 +581,7 @@ static ast_node_t *parse_branch(parser_t *parser, bool inside_type_context) {
     if (branch->start.type == TOKEN_DO) {
         branch->branch_type = BRANCH_TYPE_DO;
 
-        an_condition(branch) = ast_create_implicit_nil_node(parser->ast, typeid(TYPE_BOOL), branch->end);
+        an_condition(branch) = ast_nil(parser->ast, typeid(TYPE_BOOL), branch->end);
 
         if (match(parser, TOKEN_COLON)) {
             consume(parser, TOKEN_IDENTIFIER);
@@ -584,7 +591,7 @@ static ast_node_t *parse_branch(parser_t *parser, bool inside_type_context) {
         an_then(branch) = parse_expression(parser, inside_type_context);
 
         unless (match(parser, TOKEN_THEN)) {
-            an_else(branch) = ast_create_implicit_nil_node(parser->ast, typeid(TYPE_VOID), an_then(branch)->end);
+            an_else(branch) = ast_nil(parser->ast, typeid(TYPE_VOID), an_then(branch)->end);
         } else {
             an_else(branch) = parse_expression(parser, inside_type_context);
             branch->end = an_else(branch)->end;
@@ -615,7 +622,7 @@ static ast_node_t *parse_branch(parser_t *parser, bool inside_type_context) {
         }
 
         unless (match(parser, TOKEN_ELSE)) {
-            an_else(branch) = ast_create_implicit_nil_node(parser->ast, typeid(TYPE_VOID), an_then(branch)->end);
+            an_else(branch) = ast_nil(parser->ast, typeid(TYPE_VOID), an_then(branch)->end);
         } else {
             ast_node_t *else_expression = parse_expression(parser, inside_type_context);
             an_else(branch) = else_expression;
@@ -659,7 +666,7 @@ static bool is_incoming_function_signature(parser_t* parser) {
     return next.type == TOKEN_ARROW_RIGHT || next.type == TOKEN_BRACE_OPEN;
 }
 
-static bool is_incoming_declaration_declaration(parser_t* parser) {
+static bool is_incoming_decl_def(parser_t* parser) {
     if (parser->current.type != TOKEN_IDENTIFIER) {
         return false;
     }
@@ -671,14 +678,14 @@ static bool is_incoming_declaration_declaration(parser_t* parser) {
     return token.type == TOKEN_COLON;
 }
 
-static ast_node_t* definition_declaration(parser_t* parser, bool as_parameter);
+static ast_node_t *parse_decl_def(parser_t *parser);
 
 static void parse_parameters(parser_t *parser, ast_nodes_t *children) {
     ASSERT(children->count == 0, "must be cleared first");
 
     until (check(parser, TOKEN_PARENTHESIS_CLOSE)) {
-        if (is_incoming_declaration_declaration(parser)) {
-            array_push(children, definition_declaration(parser, true));
+        if (is_incoming_decl_def(parser)) {
+            array_push(children, parse_decl_def(parser));
         } else {
             array_push(children, parse_expression(parser, true));
         }
@@ -688,7 +695,7 @@ static void parse_parameters(parser_t *parser, ast_nodes_t *children) {
     }
 
     if (children->count == 0) {
-        array_push(children, ast_create_implicit_nil_node(parser->ast, typeid(TYPE_VOID), parser->previous));
+        array_push(children, ast_nil(parser->ast, typeid(TYPE_VOID), parser->previous));
     }
 }
 
@@ -706,7 +713,7 @@ static void parse_function_signature(parser_t *parser, ast_node_t *func_sig) {
     if (match(parser, TOKEN_ARROW_RIGHT)) {
         an_func_def_return(func_sig) = parse_expression(parser, true);
     } else {
-        an_func_def_return(func_sig) = ast_create_implicit_nil_node(parser->ast, typeid(TYPE_VOID), func_sig->end);
+        an_func_def_return(func_sig) = ast_nil(parser->ast, typeid(TYPE_VOID), func_sig->end);
     }
 }
 
@@ -770,7 +777,7 @@ static void parse_arguments(parser_t* parser, bool inside_type_context, ast_node
 static ast_node_t *parse_call(parser_t *parser, bool inside_type_context) {
     ast_node_t *call = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_CALL, inside_type_context, parser->previous);
 
-    an_callee(call) = ast_create_implicit_nil_node(parser->ast, typeid(TYPE_VOID), parser->previous);
+    an_callee(call) = ast_nil(parser->ast, typeid(TYPE_VOID), parser->previous);
     call->children.count = an_call_arg_start(call);
     parse_arguments(parser, inside_type_context, &call->children);
     call->end = parser->previous;
@@ -813,8 +820,9 @@ static ast_node_t *parse_struct_def(parser_t *parser, bool inside_type_context) 
     consume(parser, TOKEN_BRACE_OPEN);
 
     while (!check(parser, TOKEN_BRACE_CLOSE) && !check(parser, TOKEN_EOF)) {
-        ast_node_t *declaration_node = definition_declaration(parser, false);
+        ast_node_t *declaration_node = parse_decl_def(parser);
         array_push(&struct_definition->children, declaration_node);
+        consume(parser, TOKEN_SEMICOLON);
     }
 
     consume(parser, TOKEN_BRACE_CLOSE);
@@ -1015,26 +1023,22 @@ static ast_node_t *parse_expression(parser_t *parser, bool inside_type_context) 
         }
     }
 
-    ast_node_t* expression_node = parse_precedence(parser, inside_type_context, inside_type_context ? PREC_OR : PREC_ASSIGNMENT);
+    ast_node_t *expression_node = parse_precedence(parser, inside_type_context, inside_type_context ? PREC_OR : PREC_ASSIGNMENT);
     expression_node->fold = fold;
 
     return expression_node;
 }
 
-static ast_node_t *parse_statement(parser_t* parser, bool omit_end_of_statement) {
+static ast_node_t *parse_statement(parser_t *parser) {
     ast_node_t *statement_node = ast_node_new(parser->ast, AST_NODE_TYPE_DECLARATION_STATEMENT, false, parser->current);
     an_expression(statement_node) = parse_expression(parser, false);
-        
-    if (!omit_end_of_statement) {
-        consume(parser, TOKEN_SEMICOLON);
-    }
 
     statement_node->end = parser->previous;
 
     return statement_node;
 }
 
-static ast_node_t *definition_declaration(parser_t *parser, bool as_parameter) {
+static ast_node_t *parse_decl_def(parser_t *parser) {
     ast_node_t *definition_node = ast_node_new(parser->ast, AST_NODE_TYPE_DECLARATION_DEFINITION, false, parser->current);
 
     advance(parser);
@@ -1053,19 +1057,10 @@ static ast_node_t *definition_declaration(parser_t *parser, bool as_parameter) {
 
     // TODO: try to do constant vs variable detection a little more clever...
     bool requires_expression = false;
-    if (an_decl_type(definition_node)->node_type == AST_NODE_TYPE_NONE) {
-        if (match(parser, TOKEN_EQUAL)) {
-            requires_expression = true;
-            definition_node->is_mutable = true;
-        } else if (match(parser, TOKEN_COLON)) {
-            requires_expression = true;
-        }
-    } else {
-        if (match(parser, TOKEN_EQUAL)) {
-            definition_node->is_mutable = true;
-        } else {
-            consume(parser, TOKEN_COLON);
-        }
+    if (match(parser, TOKEN_EQUAL)) {
+        requires_expression = true;
+        definition_node->is_mutable = true;
+    } else if (match(parser, TOKEN_COLON)) {
         requires_expression = true;
     }
 
@@ -1073,25 +1068,17 @@ static ast_node_t *definition_declaration(parser_t *parser, bool as_parameter) {
         an_decl_expr(definition_node) = parse_expression(parser, false);
     }
 
-    if (an_decl_expr(definition_node)->node_type == AST_NODE_TYPE_NONE) {
-        definition_node->is_mutable = true;
-    }
-
-    if (!as_parameter) {
-        consume(parser, TOKEN_SEMICOLON);
-    }
-
     definition_node->end = parser->previous;
     return definition_node;
 }
 
-static ast_node_t *parse_declaration(parser_t *parser, bool is_top_level) {
+static ast_node_t *parse_decl(parser_t *parser, bool is_top_level) {
     ast_node_t *node = NULL;
-    if (is_incoming_declaration_declaration(parser)) {
-        node = definition_declaration(parser, false);
+    if (is_incoming_decl_def(parser)) {
+        node = parse_decl_def(parser);
     } else {
         unless (is_top_level) {
-            node = parse_statement(parser, false);
+            node = parse_statement(parser);
         } else {
             parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_DECLARATION, parser->current));
             advance(parser);
@@ -1127,10 +1114,9 @@ bool parse(ast_t *ast, string_t file_path, string_view_t source, error_function_
     ast->root = ast_node_new(parser.ast, AST_NODE_TYPE_EXPRESSION_BLOCK, false, parser.previous);
 
     while (!match(&parser, TOKEN_EOF)) {
-        ast_node_t *declaration_node = parse_declaration(&parser, true);
-        if (declaration_node) {
-            array_push(&ast->root->children, declaration_node);
-        }
+        ast_node_t *declaration_node = parse_decl_def(&parser);
+        array_push(&ast->root->children, declaration_node);
+        consume(&parser, TOKEN_SEMICOLON);
     }
 
     consume(&parser, TOKEN_EOF);
