@@ -74,29 +74,39 @@ static void emit_read_memory_to_reg(texloc_t location, function_t *function, reg
     instruction_t instruction;
     instruction.op = OP_MOVWORD_MEM_TO_REG;
 
-    if (type_info->kind == TYPE_BOOL) {
-        instruction.op = OP_MOVU8_MEM_TO_REG;
-
-    } else if (type_info->kind == TYPE_NUMBER) {
-        switch (type_info->size) {
-            case 1: UNREACHABLE(); break;
-            case 2: UNREACHABLE(); break;
-
-            case 4: {
-                switch (type_info->data.num) {
-                    case NUM_TYPE_FLOAT: instruction.op = OP_MOVF32_MEM_TO_REG; break;
-                    case NUM_TYPE_SIGNED: instruction.op = OP_MOVF32_MEM_TO_REG; break;
-                    case NUM_TYPE_UNSIGNED: instruction.op = OP_MOVU32_MEM_TO_REG; break;
-                }
-                break;
-            }
-
-            case 8: instruction.op = OP_MOVWORD_MEM_TO_REG; break;
-
-            default: UNREACHABLE();
+    switch (type_info->kind) {
+        case TYPE_BOOL: {
+            instruction.op = OP_MOVU8_MEM_TO_REG;
+            break;
         }
-    } else {
-        UNREACHABLE();
+
+        case TYPE_FUNCTION: {
+            instruction.op = OP_MOVWORD_MEM_TO_REG; break;
+            break;
+        }
+
+        case TYPE_NUMBER: {
+            switch (type_info->size) {
+                case 1: UNREACHABLE(); break;
+                case 2: UNREACHABLE(); break;
+
+                case 4: {
+                    switch (type_info->data.num) {
+                        case NUM_TYPE_FLOAT: instruction.op = OP_MOVF32_MEM_TO_REG; break;
+                        case NUM_TYPE_SIGNED: instruction.op = OP_MOVF32_MEM_TO_REG; break;
+                        case NUM_TYPE_UNSIGNED: instruction.op = OP_MOVU32_MEM_TO_REG; break;
+                    }
+                    break;
+                }
+
+                case 8: instruction.op = OP_MOVWORD_MEM_TO_REG; break;
+
+                default: UNREACHABLE();
+            }
+            break;
+        }
+
+        default: UNREACHABLE();
     }
 
     instruction.as.mov_mem_to_reg.mem_address = address;
@@ -491,7 +501,7 @@ static void gen_add_local(gen_t *gen, ast_node_t *declaration, size_t stack_loca
     array_push(&gen->locals, local);
 }
 
-static void gen_local(gen_t *gen, function_t *function, ast_node_t *declaration) {
+static void gen_local_decl_def(gen_t *gen, function_t *function, ast_node_t *declaration) {
     gen_expression(gen, function, an_decl_expr(declaration));
     emit_push_wordreg(gen, token_end_location(&declaration->end), function, REG_RESULT);
 
@@ -499,9 +509,9 @@ static void gen_local(gen_t *gen, function_t *function, ast_node_t *declaration)
     gen_add_local(gen, declaration, local_location);
 }
 
-static void gen_declaration(gen_t *gen, function_t *function, ast_node_t *declaration, bool is_global) {
+static void gen_decl(gen_t *gen, function_t *function, ast_node_t *decl, bool is_global) {
     if (is_global) {
-        switch (declaration->node_type) {
+        switch (decl->node_type) {
             case AST_NODE_TYPE_DECLARATION_DEFINITION: {
                 // todo
                 UNREACHABLE();
@@ -510,14 +520,14 @@ static void gen_declaration(gen_t *gen, function_t *function, ast_node_t *declar
             default: UNREACHABLE();
         }
     } else {
-        switch (declaration->node_type) {
+        switch (decl->node_type) {
             case AST_NODE_TYPE_DECLARATION_DEFINITION: {
-                gen_local(gen, function, declaration);
+                gen_local_decl_def(gen, function, decl);
                 break;
             }
 
             case AST_NODE_TYPE_DECLARATION_STATEMENT: {
-                ast_node_t *expression = an_expression(declaration);
+                ast_node_t *expression = an_expression(decl);
                 gen_expression(gen, function, expression);
                 break;
             }
@@ -530,7 +540,7 @@ static void gen_declaration(gen_t *gen, function_t *function, ast_node_t *declar
 static void gen_block(gen_t *gen, function_t *function, ast_node_t *block) {
     for (size_t i = 0; i < block->children.count; ++i) {
         ast_node_t *declaration = block->children.items[i];
-        gen_declaration(gen, function, declaration, false);
+        gen_decl(gen, function, declaration, false);
     }
 }
 
@@ -735,13 +745,18 @@ static void gen_function_def(gen_t *parent_gen, function_t *parent_function, ast
         ast_node_t *arg = function_def->children.items[i];
         gen_add_local(&gen, arg, gen.stack_size);
         type_info_t *type_info = get_type_info(&gen.ast->type_set.types, arg->value_type);
-        gen.stack_size += bytes_to_words(type_info->size);
+        gen.stack_size += type_info->size;
     }
 
     gen_block(&gen, function, an_func_def_block(function_def));
+
+    type_info_t *func_type_info = get_type_info(&parent_gen->ast->type_set.types, function_def->value_type);
+    gen_constant(function_def->end.loc, parent_function, &function, func_type_info);
 }
 
 static void gen_call(gen_t *gen, function_t *function, ast_node_t *call) {
+
+    // place on stack for call
     size_t argument_size_words = 0;
     unless (TYPE_IS_VOID(call->children.items[an_call_arg_start(call)]->value_type)) {
         for (size_t i = an_call_arg_start(call); i < an_call_arg_end(call); ++i) {
@@ -752,21 +767,20 @@ static void gen_call(gen_t *gen, function_t *function, ast_node_t *call) {
         }
     }
 
-    // store and replace stack frame
-    {
-        emit_push_wordreg(gen, call->start.loc, function, REG_STACK_FRAME);
-        emit_mov_reg_to_reg(function, call->start.loc, REG_STACK_FRAME, REG_STACK_BOTTOM);
-        emit_binu_reg_im(function, call->start.loc, REG_STACK_FRAME, REG_STACK_FRAME, argument_size_words+1, '+');
-    }
-
     gen_expression(gen, function, an_callee(call));
+
+    // store stack frame
+    emit_push_wordreg(gen, call->start.loc, function, REG_STACK_FRAME);
+
+    // replace stack frame
+    emit_binu_reg_im(function, call->start.loc, REG_STACK_FRAME, REG_STACK_BOTTOM, argument_size_words*WORD_SIZE, '+');
 
     instruction_t in = {0};
     in.op = OP_CALL;
     in.as.call.reg_op = REG_RESULT;
     emit_instruction(function, token_end_location(&call->end), in);
 
-    // restore stack frame and pop arguments
+    // pop arguments and restore stack frame
     {
         emit_pop_to_wordreg(gen, token_end_location(&call->end), function, REG_STACK_FRAME);
         emit_popn_words(gen, function, argument_size_words, token_end_location(&call->end));
