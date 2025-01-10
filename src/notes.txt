@@ -65,3 +65,217 @@ being resolved because it needs to be compiled before running, and since it's in
 it cannot be compiled won't ever be due to the circular dependency.
 
     [1] by analyzed I mean type checked, type flowed, constants folded, etc. i.e. getting the ast ready for codegen.
+
+
+## struct-resolution
+
+At this point in the analysis, we know the type for this struct definition is unknown. Otherwise
+we wouldn't be here trying to resolve it (expression calls this only if the ast is unresolved)
+It's possible for a struct to be defined like this:
+
+          Foo :: struct {
+              i: i32;
+              foo: Foo;
+          };
+
+Despite this being an invalid type (since this creates an infinitely sized struct) I can only find out
+after I figure out *what* Foo is. The first time Foo's assigned value is being analyzed is also the first
+time the analyzer enters the struct and encounters Foo. At this point, it is not obvious what Foo is because
+we are actively in the process of figuring that out!
+
+          Foo :: #fold if PLATFORM == WIN32_ then
+              struct {
+                  platform := WINDOWS;
+                  foo: Foo;
+              };
+          else
+              struct {
+                  platform := UNIX;
+                  foo: Foo;
+              };
+
+
+This looks dumb, and it is, but it's also valid. And it means we cannot know what Foo is until *after* we have
+analyzed the `if` expression (since struct's platform's default value can be WINDOWS or UNIX).
+And for that, we need to loop around and figure out the type for Foo.
+
+         Foo :: #fold generate_foo();
+
+         generate_foo :: (n: i32) -> struct { x: i32; Foo: foo; } { ... }
+         // this fails because of this dependency chain
+         // #fold generate_foo() => (n: i32) -> struct { x: i32, foo: Foo; } => struct { x: i32, foo: Foo; }
+         //      => Foo -> #fold generate_foo() <== this generates a cycle error
+
+Here's another weird example
+
+         Foo :: #fold generate_foo();
+
+         generate_foo :: (n: i32) -> struct { x: i32; } {
+             return struct {
+                 x := Foo.x;
+             };
+         };
+
+         This creates a circular dependency like this:
+         #fold generate_foo() [fold level: 1] => (n: i32) -> struct { x: i32; } { ... }
+             => struct { x := Foo.x } => Foo.x => Foo => #fold generate_foo() [fold level: 2]
+                 => (n: i32) -> struct { x: i32 } { ... } <=== ...
+                     // circular dependency since generate_foo's body is in the dependency list still
+                     // because constructed but on a different fold level
+
+Important to note that if the dependency chain started with generate_foo instead of Foo, the circular
+dependency would be resolved a little earlier. 
+                              
+Here's another *working* example however
+
+         Foo :: #fold generate_foo(10);
+
+         generate_foo() :: (n: i32) -> struct { x: i32; } {
+             return struct {
+                 x := n * 10;
+             };
+         };
+
+In the above example, Foo *should* be a struct like this: struct { x := 100; }, I think that
+makes sense.
+
+Later on, it will be possible to do this based on compile type parameters
+
+         Vector2i :: #fold generate_vector2(i32, 0);
+         Vector2f :: #fold generate_vector2(f32, 0.0);
+         
+         // for now the `!` means the parameter in the function call must be a compile time constnat
+         generate_foo(!t: type, default_value: t) -> struct { x: t; y: t; } {
+             return struct {
+                 x := default_value;
+                 y := default_value;
+             };
+         };
+
+This is an interesting one because this means that generic structs already exist in a similar way they do
+in C++ with templates or C with macros. Howver, there will be actual generic structs.
+
+Here's another complicated one I guess
+
+         Foo :: struct {
+             MyValue :: 10;
+             value := #fold generate_value();
+         };
+
+         generate_value :: () -> i32 {
+             return Foo.MyValue;
+         };
+
+This *should* work I guess?
+struct { MyValue:: 10; value := #fold generate_value(); }; 
+     => #fold generate_value()
+         => () -> i32 { return Foo.MyValue; }
+             => Foo.MyValue => Foo // At this point, get_resolved_def_by_identifier will find
+                                   // Foo points to the "resolved" struct. But at this point, its still
+                                   // potentially incomplete (in this case it is because while we are figuring out
+                                   // what `value` is we are figuring out what is `Foo.MyValue`).
+                                   // However, this should still work because MyValue is a constant that does
+                                   // does not have a ciruclar dependency.
+
+This gets more complicated when accessing a non-constant value:
+
+         Foo :: struct {
+             value1 := 10;
+             value2 := #fold generate_value();
+         };
+
+         (1)
+         generate_value :: () -> i32 {
+             foo := Foo();
+             return foo.value1;
+         };
+
+         (2)
+         generate_value :: () -> i32 {
+             foo := Foo();
+             return foo.value2;
+         };
+
+For (1) this can be "designed" to work since its only accessing resolved fields. In the interpreter, 
+we can easily create an "incomplete" type just for the vm run. And since there were no causes for 
+circular dependencies, the codegen should be fine and the resulting runtime should be as well. This is 
+because the analyzer is so pathological. We know if we resolve a branch of the ast, all the dependencies
+under it are ready. But we will not make this work.
+
+## circular-dependencies
+We stop looking for circular dependencies at function boundaries. This took me a while to reason but this
+is okay to do even with constant folding. We can think about compiling a progarm with a language like in two different ways.
+Right now, the way the compiler works is through a principle I call "eager resolution". Which means that when a problem
+comes up during static analysis (i.e. an unresolved expression) we immediately go to resolve it. For example, a problem
+that may occur is that while trying to resolve the type of an definition, you need to resolve an expression, but to resolve
+that expression, you might need to perform a folding operation. My compiler walks down the line of dependencies and resolves
+all the problems that come along the way.
+
+Circular dependencies are easily to avoid with non-functions but recursion makes things a little weird. Since a function
+can dependent on itself. We can have a weird situation like this:
+         
+         foo();
+
+         foo :: null or (n: i32) -> void {
+             if n < 0 {
+                 return 0;
+             };
+             
+             return foo(n - 1);
+         };
+
+Technically... this should run just fine right? null or function literal, and foo being a constant, means foo 
+should hold the address to the function expression on the right side of the OR. This is allowed and my language
+and should be handled.
+
+The way my dependency system works is through expressions. Expressions always, always, always rely on other expressions.
+In the case above, when foo(n - 1) is about to be analyzed this is how the dependency chain looks like.
+
+         NOTE: so far only the following things create dependencies.
+             - The top level type of a declaration
+             - The top level expression of a declaration
+             - Function definitons
+           this is why the dependency chain is not foo() -> foo, even though foo() technically depends on foo.
+           I could make dependencies from each and all dependencies but that's way too much and I'm pretty sure
+           is unnecessary since a lot of dependencies would be redundant. These are supposed to skip redundant
+           dependencies.
+
+         foo() => // this would not be in the chain, but it's here because it's what kicks off the chain
+             (null or (n: i32) -> void { ... }) => // foo declaration expression
+                 (n: i32) -> void { ... } => // function definition
+                     foo(n - 1) // this would not be in the chain, but again, it kicks off the above since foo is not resolved.
+
+At this point, foo does not have the function address yet during the anaysis! It's still in the process of being resolved...
+BUT once its expression is resolved, it will be good go! At this point, we STILL don't really know what foo is!
+
+
+If I were to naively check of dependencies the chain would contain to look like this (starting from foo(n - 1))
+
+         foo(n - 1) => 
+             (null or (n: i32) -> void { ... }) => // foo declaration expression
+
+Then we've come back and hit an expression we haven't resolved yet (remember the or wasn't resolved
+because we were in the middle of resolving (n: i32) -> void { ... } due to the principle of eager resolution)
+and therefore have a circular dependency, right? However, I found a different to do things that could work.
+
+Imagine if instead of resolving the function block right away, I actually waited until the declaration resolved
+before trying to analysis the function body! Well, then I can use the address of the function, and as long as I
+store the scope and body, I can put it in a queue to analysis later. After I am sure I can safely resolve the
+function body, then I will. This wouldn't have to deal with circular dependencies.
+
+This truth is that the above *should* work (although I haven't tested it) because of part of the proof reasoning below
+but this is, in truth, a little annoying to implement. It means I need to sort of break the recursion scheme and
+eager resolution princple. I have to allocate more memory on the heap. It's just not an ideal soluton and makes
+things much messier...
+
+However, the other reasoning of the proof below suggests that the order in which I resolve expressions shouldn't matter.
+So I can't naively just walk up the dependency chain and check for duplicates, I need to be a tiny bit smarter. Since the
+order in which I resolve things doesn't matter as long as I have the data there (the scope chains basically).
+
+I noticed that if I analyse a function body's when I know it's safe, the circular dependencies *must* be either
+be localized inside the function OR will hit a circular dependency of constants on the outer layer - but in either
+case - these circular dependencies will be a result of unused entities trying to be resolved from *inside* the function.
+
+Therefore instead of a simply looking for duplicate expression pointers in the entire dependency chain, I start
+backwards and when I see a dependency to a function definition, I stop looking. This mimics the behavior of the
+ideal solution but allows me not break any recursion.
