@@ -554,10 +554,11 @@ static void gen_pop_scope(gen_t *gen, function_t *function, texloc_t location) {
     for (size_t i = gen->locals.count; i > 0; --i) {
         size_t i_ = i-1;
         local_t *local = &gen->locals.items[i_];
-        if (local->scope_level >= gen->scope_level) {
-            truncate_to = local->stack_location;
-            ++pop_amount;
+        truncate_to = local->stack_location;
+        if (local->scope_level < gen->scope_level) {
+            break;
         }
+        ++pop_amount;
     }
 
     gen->locals.count -= pop_amount;
@@ -743,9 +744,9 @@ static void gen_function_def(gen_t *parent_gen, function_t *parent_function, ast
 
     for (size_t i = an_func_def_arg_start(function_def); i < an_func_def_arg_end(function_def); ++i) {
         ast_node_t *arg = function_def->children.items[i];
-        gen_add_local(&gen, arg, gen.stack_size);
         type_info_t *type_info = get_type_info(&gen.ast->type_set.types, arg->value_type);
         gen.stack_size += type_info->size;
+        gen_add_local(&gen, arg, gen.stack_size);
     }
 
     gen_block(&gen, function, an_func_def_block(function_def));
@@ -755,6 +756,8 @@ static void gen_function_def(gen_t *parent_gen, function_t *parent_function, ast
 }
 
 static void gen_call(gen_t *gen, function_t *function, ast_node_t *call) {
+    // store stack frame
+    emit_push_wordreg(gen, call->start.loc, function, REG_STACK_FRAME);
 
     // place on stack for call
     size_t argument_size_words = 0;
@@ -769,11 +772,11 @@ static void gen_call(gen_t *gen, function_t *function, ast_node_t *call) {
 
     gen_expression(gen, function, an_callee(call));
 
-    // store stack frame
-    emit_push_wordreg(gen, call->start.loc, function, REG_STACK_FRAME);
+    size_t distance_from_stack_bottom = argument_size_words;
+    distance_from_stack_bottom *= WORD_SIZE;
 
     // replace stack frame
-    emit_binu_reg_im(function, call->start.loc, REG_STACK_FRAME, REG_STACK_BOTTOM, argument_size_words*WORD_SIZE, '+');
+    emit_binu_reg_im(function, call->start.loc, REG_STACK_FRAME, REG_STACK_BOTTOM, distance_from_stack_bottom, '+');
 
     instruction_t in = {0};
     in.op = OP_CALL;
@@ -782,8 +785,8 @@ static void gen_call(gen_t *gen, function_t *function, ast_node_t *call) {
 
     // pop arguments and restore stack frame
     {
-        emit_pop_to_wordreg(gen, token_end_location(&call->end), function, REG_STACK_FRAME);
         emit_popn_words(gen, function, argument_size_words, token_end_location(&call->end));
+        emit_pop_to_wordreg(gen, token_end_location(&call->end), function, REG_STACK_FRAME);
     }
 }
 
