@@ -3,7 +3,15 @@
 
 #include "lexer.h"
 
-#define ERROR_XMACRO(error_type, message) error_type,
+typedef enum error_source_type_t error_source_type_t;
+enum error_source_type_t {
+    ERROR_SOURCE_PARSER,
+    ERROR_SOURCE_PARSEREX,
+    ERROR_SOURCE_ANALYSIS,
+    ERROR_SOURCE_CODEGEN,
+};
+
+#define ERROR_XMACRO(error_type, message, error_source_type) error_type,
 typedef enum error_type_t error_type_t;
 enum error_type_t {
 #include "error.x"
@@ -13,6 +21,7 @@ ERROR_COUNT,
 #undef ERROR_XMACRO
 
 cstr_t const error_messages[ERROR_COUNT];
+error_source_type_t error_sources[ERROR_COUNT];
 
 typedef struct ast_node_t ast_node_t;
 typedef struct error_t {

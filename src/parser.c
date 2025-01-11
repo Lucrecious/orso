@@ -47,11 +47,19 @@ struct_definition        -> `struct` `{` definition* `}`
 type_init                ->  logic_or`{` `}`
 */
 
-#define ERROR_XMACRO(error_type, error_message) [error_type] = error_message,
+#define ERROR_XMACRO(error_type, error_message, error_source) [error_type] = error_message,
 cstr_t const error_messages[] = {
 #include "error.x"
 };
 #undef ERROR_XMACRO
+
+#define ERROR_XMACRO(error_type, error_message, error_source) [error_type] = ERROR_SOURCE_##error_source,
+error_source_type_t error_sources[] = {
+#include "error.x"
+};
+#undef ERROR_XMACRO
+
+
 
 static int type_hash(type_t id) {
     return kh_int64_hash_func((khint64_t)id.i);
