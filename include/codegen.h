@@ -161,8 +161,10 @@ void emit_pop_to_wordreg(gen_t *gen, texloc_t loc, function_t *function, reg_t r
     emit_binu_reg_im(function, loc, REG_STACK_BOTTOM, REG_STACK_BOTTOM, (u32)sizeof(word_t), '+');
 }
 
-static void emit_popn_words(gen_t *gen, function_t *function, u32 pop_size_words, texloc_t loc) {
-    gen->stack_size -= pop_size_words*WORD_SIZE;
+static void emit_popn_words(gen_t *gen, function_t *function, u32 pop_size_words, texloc_t loc, bool decrement_stack) {
+    if (decrement_stack) {
+        gen->stack_size -= pop_size_words*WORD_SIZE;
+    }
 
     emit_binu_reg_im(function, loc, REG_STACK_BOTTOM, REG_STACK_BOTTOM, pop_size_words*WORD_SIZE, '+');
 }
@@ -359,6 +361,14 @@ static void emit_unary(texloc_t loc, function_t *function, token_type_t token_ty
     emit_instruction(function, loc, in);
 }
 
+// call convention is to pass a reg with a function_t* to the call instruction arguments
+static void emit_call(function_t *function, reg_t reg, texloc_t loc) {
+    instruction_t in = {0};
+    in.op = OP_CALL;
+    in.as.call.reg_op = (byte)reg;
+    emit_instruction(function, loc, in);
+}
+
 static void emit_return(texloc_t loc, function_t *function) {
     instruction_t instruction = {0};
     instruction.op = OP_RETURN;
@@ -544,31 +554,36 @@ static void gen_block(gen_t *gen, function_t *function, ast_node_t *block) {
     }
 }
 
-static void push_scope(gen_t *gen) {
-    ++gen->scope_level;
+static size_t push_scope(gen_t *gen) {
+    return ++gen->scope_level;
 }
 
-static void gen_pop_scope(gen_t *gen, function_t *function, texloc_t location) {
+static void gen_pop_scope(gen_t *gen, function_t *function, texloc_t location, size_t pop_scope) {
+    if (pop_scope < 1) {
+        UNREACHABLE();
+        return;
+    }
+
     size_t truncate_to = gen->stack_size;
     size_t pop_amount = 0;
     for (size_t i = gen->locals.count; i > 0; --i) {
         size_t i_ = i-1;
         local_t *local = &gen->locals.items[i_];
         truncate_to = local->stack_location;
-        if (local->scope_level < gen->scope_level) {
+        if (local->scope_level < pop_scope) {
             break;
         }
         ++pop_amount;
     }
 
     gen->locals.count -= pop_amount;
-    --gen->scope_level;
+    gen->scope_level = pop_scope-1;
 
     size_t pop_size_bytes = gen->stack_size - truncate_to;
     ASSERT(pop_size_bytes % WORD_SIZE == 0, "stuff being popped off stack should be word aligned");
 
-    size_t pop_size_words = (pop_size_bytes + (WORD_SIZE-1))/WORD_SIZE;
-    emit_popn_words(gen, function, pop_size_words, location);
+    size_t pop_size_words = bytes_to_words(pop_size_bytes);
+    emit_popn_words(gen, function, pop_size_words, location, true);
 }
 
 static local_t *find_local(gen_t *gen, ast_node_t *ref_decl) {
@@ -645,6 +660,14 @@ static size_t gen_condition(gen_t *gen, ast_node_t *branch, function_t *function
 }
 
 static void gen_branching(gen_t *gen, function_t *function, ast_node_t *branch) {
+    // todo: i don't like how this is done... but i think it works, and might fix later
+    // basically, a branch can either start a new scope level, or it doesn't.  if it doesn't,
+    // then breaks or returns are fine because no locals were created on a scope level that doesn't exist
+    // and if there is a new scope, then it'll have to mach with the given scope level...
+    // ideally, i want to try to store the scope level outside of the ast node though,
+    // and i want this to be more robust i guess.
+
+    branch->vm_stack_location = gen->stack_size;
     switch (branch->branch_type) {
         case BRANCH_TYPE_DO: {
             gen_expression(gen, function, an_then(branch));
@@ -711,12 +734,14 @@ static void gen_jmp_expr(gen_t *gen, function_t *function, ast_node_t *jmp_expr)
     switch (jmp_expr->start.type) {
         case TOKEN_CONTINUE:
         case TOKEN_BREAK: {
+            size_t scope_stack_location = jmp_expr->jmp_out_scope_node->vm_stack_location;
+            emit_popn_words(gen, function, bytes_to_words(gen->stack_size-scope_stack_location), token_end_location(&jmp_expr->end), false);
             jmp_expr->vm_jmp_index = gen_jmp(function, token_end_location(&jmp_expr->end));
             break;
         }
 
         case TOKEN_RETURN: {
-            emit_popn_words(gen, function, bytes_to_words(gen->stack_size), token_end_location(&jmp_expr->end));
+            emit_popn_words(gen, function, bytes_to_words(gen->stack_size), token_end_location(&jmp_expr->end), false);
             emit_return(token_end_location(&jmp_expr->end), function);
             break;
         }
@@ -771,24 +796,19 @@ static void gen_call(gen_t *gen, function_t *function, ast_node_t *call) {
         }
     }
 
+    // prepare callee for call by putting it in the result register
     gen_expression(gen, function, an_callee(call));
 
     // replace stack frame
     emit_binu_reg_im(function, call->start.loc, REG_STACK_FRAME, REG_STACK_BOTTOM, argument_size_words*WORD_SIZE, '+');
 
-    // call convention is to pass a reg with a function_t* to the call instruction arguments
-    instruction_t in = {0};
-    in.op = OP_CALL;
-    in.as.call.reg_op = REG_RESULT;
-    emit_instruction(function, token_end_location(&call->end), in);
+    emit_call(function, REG_RESULT, token_end_location(&call->end));
 
     // call consumes arguments
     gen->stack_size -= argument_size_words*WORD_SIZE;
 
-    // pop arguments and restore stack frame
-    {
-        emit_pop_to_wordreg(gen, token_end_location(&call->end), function, REG_STACK_FRAME);
-    }
+    // restore stack frame
+    emit_pop_to_wordreg(gen, token_end_location(&call->end), function, REG_STACK_FRAME);
 }
 
 static void gen_expression(gen_t *gen, function_t *function, ast_node_t *expression) {
@@ -817,9 +837,9 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
         }
 
         case AST_NODE_TYPE_EXPRESSION_BLOCK: {
-            push_scope(gen);
+            size_t scope_level = push_scope(gen);
             gen_block(gen, function, expression);
-            gen_pop_scope(gen, function, token_end_location(&expression->end));
+            gen_pop_scope(gen, function, token_end_location(&expression->end), scope_level);
             break;
         }
 

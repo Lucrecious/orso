@@ -113,10 +113,6 @@ bool type_is_number(type_info_t *type, bool include_bool) {
 }
 
 size_t bytes_to_words(i32 byte_count) {
-    if (byte_count == 0) {
-        return 1;
-    }
-
     return (byte_count + (WORD_SIZE-1)) / WORD_SIZE;
 }
 
@@ -134,16 +130,6 @@ struct_field_t *type_struct_find_field(type_info_t *struct_, const char *name, s
     }
 
     return NULL;
-}
-
-size_t type_slot_count(type_info_t *type) {
-    return bytes_to_words(type->size);
-}
-
-bool type_fits(type_info_t* storage_type, type_info_t* value_type) {
-    UNUSED(storage_type);
-    UNUSED(value_type);
-    return false;
 }
 
 string_t type_to_string_toplevel(type_infos_t types, type_t type, arena_t *allocator, bool is_toplevel) {
@@ -245,11 +231,6 @@ string_t type_to_string_toplevel(type_infos_t types, type_t type, arena_t *alloc
 
 string_t type_to_string(type_infos_t types, type_t type, arena_t *allocator) {
     return type_to_string_toplevel(types, type, allocator, true);
-}
-
-bool orso_is_gc_type(type_info_t *type) {
-    UNUSED(type);
-    return false;
 }
 
 bool can_cast_implicit(type_infos_t types, type_t type_to_cast, type_t type) {

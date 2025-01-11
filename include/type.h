@@ -134,13 +134,7 @@ size_t bytes_to_words(i32 byte_count);
 
 struct_field_t *type_struct_find_field(type_info_t *struct_, const char *name, size_t name_length);
 
-size_t type_slot_count(type_info_t *type);
-
-bool type_fits(type_info_t *storage_type, type_info_t *value_type);
-
 string_t type_to_string(type_infos_t types, type_t type, arena_t *allocator);
-
-bool orso_is_gc_type(type_info_t *type);
 
 bool can_cast_implicit(type_infos_t types, type_t type_to_cast, type_t type);
 

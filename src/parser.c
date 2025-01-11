@@ -1262,7 +1262,6 @@ value_index_t zero_value(ast_t *ast, type_t type) {
     word_t value[bytes_to_words(type_info->size)];
 
     switch (type_info->kind) {
-        case TYPE_VOID:
         case TYPE_POINTER:
         case TYPE_BOOL: value[0] = WORDI(0); break;
         
@@ -1302,13 +1301,12 @@ value_index_t zero_value(ast_t *ast, type_t type) {
             UNREACHABLE();
             value[0] = WORDI(0);
             break;
+
+        case TYPE_VOID: break;
     }
 
     value_index_t zero_index = add_value_to_ast_constant_stack(ast, value, type);
-    if (zero_index.exists) {
-        table_put(ptr2sizet, ast->type_to_zero_index, type, zero_index.index);
-    }
-
+    table_put(ptr2sizet, ast->type_to_zero_index, type, zero_index.index);
     return zero_index;
 }
 

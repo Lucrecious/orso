@@ -1,0 +1,12 @@
+{
+    x := 2;
+    while x > 0 {
+        t := 5;
+        x = x - 1;
+        if x == 1 then break;
+    };
+
+    y := 10;
+
+    y;
+}
