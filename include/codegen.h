@@ -128,7 +128,7 @@ void emit_push_wordreg(gen_t *gen, texloc_t loc, function_t *function, reg_t reg
 
     if (gen->stack_size > UINT32_MAX && !gen->breached_stack_limit) {
         gen->breached_stack_limit = true;
-        gen_error(gen, make_error(ERROR_CODEGEN_STACK_SIZE_GROWS_LARGER_THAN_UINT32_MAX));
+        gen_error(gen, make_error_no_args(ERROR_CODEGEN_STACK_SIZE_GROWS_LARGER_THAN_UINT32_MAX));
         
     }
 
@@ -400,7 +400,7 @@ static size_t gen_jmp_if_reg(function_t *function, texloc_t location, reg_t cond
 static void gen_patch_jmp(gen_t *gen, function_t *function, size_t index) {
     size_t amount = function->code.count - index;
     if (amount > UINT32_MAX) {
-        gen_error(gen, make_error(ERROR_CODEGEN_JMP_TOO_LARGE));
+        gen_error(gen, make_error_no_args(ERROR_CODEGEN_JMP_TOO_LARGE));
         return;
     }
 
@@ -616,7 +616,7 @@ static size_t gen_jmp(function_t *function, texloc_t location) {
 static void gen_loop(gen_t *gen, function_t *function, texloc_t location, u32 loop_index) {
     size_t amount = function->code.count - loop_index;
     if (amount > UINT32_MAX) {
-        gen_error(gen, make_error(ERROR_CODEGEN_JMP_TOO_LARGE));
+        gen_error(gen, make_error_no_args(ERROR_CODEGEN_JMP_TOO_LARGE));
         return;
     }
     instruction_t in = {0};

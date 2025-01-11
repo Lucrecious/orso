@@ -417,12 +417,6 @@ static void advance(parser_t *parser) {
 
     for (;;) {
         parser->current = lexer_next_token(&parser->lexer);
-        if (parser->current.type != TOKEN_ERROR) {
-            break;
-        }
-
-        error_t error = make_error_token(ERROR_PARSER_ILLEGAL_TOKEN, parser->current);
-        parser_error(parser, error);
     }
 }
 
@@ -432,7 +426,7 @@ static void consume(parser_t *parser, token_type_t type) {
         return;
     }
 
-    error_t error = make_unexpected_error(parser->current, type);
+    error_t error = make_error_token(ERROR_PARSER_UNEXPECTED_TOKEN, parser->current, type);
     parser_error(parser, error);
 }
 
@@ -611,7 +605,7 @@ static ast_node_t *convert_function_definition(parser_t *parser, ast_node_t *lef
     for (size_t i = an_func_def_arg_start(left_operand); i < an_func_def_arg_end(left_operand); ++i) {
         ast_node_t *parameter = left_operand->children.items[i];
         if (parameter->node_type != AST_NODE_TYPE_DECLARATION_DEFINITION) {
-            parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_DECLARATION, parameter->start));
+            parser_error(parser, make_error_node(ERROR_PARSER_EXPECTED_DECLARATION, parameter));
             left_operand->node_type = AST_NODE_TYPE_NONE;
             return left_operand;
         }
@@ -759,7 +753,7 @@ static bool is_incoming_function_signature(parser_t* parser) {
     // get matching close parenthesis
     while (true) {
         if (next.type == TOKEN_EOF) {
-            error_t error = make_unexpected_error(next, TOKEN_PARENTHESIS_CLOSE);
+            error_t error = make_error_token(ERROR_PARSER_UNEXPECTED_TOKEN, next, TOKEN_PARENTHESIS_CLOSE);
             parser_error(parser, error);
             return false;
         }
@@ -880,18 +874,20 @@ static ast_node_t *parse_grouping_or_function_signature_or_definition(parser_t *
     return expression_node;
 }
 
-static void parse_arguments(parser_t* parser, ast_nodes_t *ret_args) {
+static void parse_arguments(parser_t* parser, ast_node_t *parent) {
+    size_t parameter_count = 0;
     unless (check(parser, TOKEN_PARENTHESIS_CLOSE)) {
         do {
             ast_node_t *argument = parse_expression(parser);
-            array_push(ret_args, argument);
+            array_push(&parent->children, argument);
+            ++parameter_count;
         } while (match(parser, TOKEN_COMMA));
     }
 
     consume(parser, TOKEN_PARENTHESIS_CLOSE);
 
-    if (ret_args->count > MAX_PARAMETERS - 1) {
-        error_t error = make_error(ERROR_PARSER_TOO_MANY_PARAMETERS);
+    if (parameter_count > MAX_PARAMETERS - 1) {
+        error_t error = make_error_node(ERROR_PARSER_TOO_MANY_PARAMETERS, parent);
         parser_error(parser, error);
     }
 }
@@ -901,7 +897,7 @@ static ast_node_t *parse_call(parser_t *parser) {
 
     an_callee(call) = ast_nil(parser->ast, typeid(TYPE_VOID), token_implicit_at_end(parser->previous));
     call->children.count = an_call_arg_start(call);
-    parse_arguments(parser, &call->children);
+    parse_arguments(parser, an_callee(call));
     call->end = parser->previous;
 
     return call;
@@ -1051,9 +1047,9 @@ static ast_node_t *parse_precedence(parser_t *parser, Precedence precedence) {
     ast_node_t *left_operand;
 
     if (prefix_rule == NULL) {
-        error_t error = make_error_token(ERROR_PARSER_EXPECTED_EXPRESSION, parser->previous);
-        parser_error(parser, error);
         left_operand = ast_node_new(parser->ast, AST_NODE_TYPE_NONE, parser->previous);
+        error_t error = make_error_node(ERROR_PARSER_EXPECTED_EXPRESSION, left_operand);
+        parser_error(parser, error);
     } else {
         left_operand = prefix_rule(parser);
     }
@@ -1115,8 +1111,8 @@ static ast_node_t *parse_precedence(parser_t *parser, Precedence precedence) {
     if (left_operand->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE) {
         for (size_t i = an_func_def_arg_start(left_operand); i < an_func_def_arg_end(left_operand); ++i) {
             ast_node_t *parameter = left_operand->children.items[i];
-            if (!ast_node_type_is_expression(parameter->node_type)) {
-                parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_TYPE, parameter->start));
+            unless (ast_node_type_is_expression(parameter->node_type)) {
+                parser_error(parser, make_error_node(ERROR_PARSER_EXPECTED_TYPE, parameter));
                 break;
             }
         }
@@ -1204,10 +1200,9 @@ static ast_node_t *parse_decl(parser_t *parser, bool is_top_level) {
     if (is_incoming_decl_def(parser)) {
         node = parse_decl_def(parser);
     } else {
-        unless (is_top_level) {
-            node = parse_statement(parser);
-        } else {
-            parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_DECLARATION, parser->current));
+        node = parse_statement(parser);
+        if (is_top_level) {
+            parser_error(parser, make_error_node(ERROR_PARSER_EXPECTED_DECLARATION, node));
             advance(parser);
         }
     }

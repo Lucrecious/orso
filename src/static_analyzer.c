@@ -821,7 +821,7 @@ void resolve_expression(
                                 expr->as.initiailizer.arguments.items[i] = casted;
                             } else {
                                 printf("TODO: need to look up struct field and compare, first arg should be struct field ast node");
-                                stan_error(analyzer, make_type_mismatch_error(arg, arg));
+                                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_TYPE_MISMATCH,  expr));
                                 is_invalidated = true;
                                 continue;
                             }
@@ -936,7 +936,7 @@ void resolve_expression(
 
             if (TYPE_IS_INVALID(cast_left) || TYPE_IS_INVALID(cast_right)) {
                 INVALIDATE(expr);
-                stan_error(analyzer, make_error_nodes(ERROR_ANALYSIS_INVALID_BINARY_OPERANDS, left, right));
+                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_BINARY_OPERANDS, expr));
                 break;
             }
 
@@ -1133,7 +1133,7 @@ void resolve_expression(
 
                 type_t rhs_type = rhs->value_type;
                 unless (typeid_eq(def->value_type, rhs_type)) {
-                    stan_error(analyzer, make_type_mismatch_error(lhs, rhs));
+                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_TYPE_MISMATCH, expr));
                     break;
                 }
 
@@ -1152,7 +1152,7 @@ void resolve_expression(
                 }
 
                 unless (typeid_eq(lvalue_node->value_type, rhs->value_type)) {
-                    stan_error(analyzer, make_type_mismatch_error(lhs, rhs));
+                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_TYPE_MISMATCH, expr));
                     break;
                 }
 
@@ -1611,7 +1611,7 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
     } else {
         unless (an_is_none(an_decl_expr(declaration)) || typeid_eq(declaration->value_type, an_decl_expr(declaration)->value_type)) {
             unless (TYPE_IS_INVALID(an_decl_expr(declaration)->value_type)) {
-                stan_error(analyzer, make_type_mismatch_error(an_decl_type(declaration), an_decl_expr(declaration)));
+                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_TYPE_MISMATCH, declaration));
             }
         }
     }
@@ -1885,7 +1885,7 @@ static void resolve_func_def(
 
         type_t ret_expr_type = ret_expr->value_type;
         unless (typeid_eq(ret_expr_type, return_type)) {
-            stan_error(analyzer, make_type_mismatch_error(an_func_def_return(func_def), ret_expr));
+            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_TYPE_MISMATCH, func_def));
             INVALIDATE(func_def);
         }
     }
