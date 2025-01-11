@@ -191,7 +191,7 @@ struct ast_node_t {
     ast_nodes_t jmp_nodes;
 
     size_t vm_jmp_index;
-    size_t vm_stack_location;
+    size_t vm_stack_point;
     string_t ccode_break_label;
     string_t ccode_continue_label;
     string_t ccode_var_name;
