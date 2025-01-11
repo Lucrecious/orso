@@ -117,7 +117,7 @@ size_t bytes_to_words(i32 byte_count) {
         return 1;
     }
 
-    return (byte_count / WORD_SIZE) + ((byte_count % WORD_SIZE != 0));
+    return (byte_count + (WORD_SIZE-1)) / WORD_SIZE;
 }
 
 struct_field_t *type_struct_find_field(type_info_t *struct_, const char *name, size_t name_length) {

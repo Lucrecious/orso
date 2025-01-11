@@ -12,8 +12,8 @@
             b;
         };
     };
-    
-    result := fib(10);
+
+    result := fib(4);
 
     result;
 }

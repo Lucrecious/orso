@@ -716,6 +716,7 @@ static void gen_jmp_expr(gen_t *gen, function_t *function, ast_node_t *jmp_expr)
         }
 
         case TOKEN_RETURN: {
+            emit_popn_words(gen, function, bytes_to_words(gen->stack_size), token_end_location(&jmp_expr->end));
             emit_return(token_end_location(&jmp_expr->end), function);
             break;
         }
@@ -759,7 +760,7 @@ static void gen_call(gen_t *gen, function_t *function, ast_node_t *call) {
     // store stack frame
     emit_push_wordreg(gen, call->start.loc, function, REG_STACK_FRAME);
 
-    // place on stack for call
+    // place arguments on stack for call
     size_t argument_size_words = 0;
     unless (TYPE_IS_VOID(call->children.items[an_call_arg_start(call)]->value_type)) {
         for (size_t i = an_call_arg_start(call); i < an_call_arg_end(call); ++i) {
@@ -772,20 +773,20 @@ static void gen_call(gen_t *gen, function_t *function, ast_node_t *call) {
 
     gen_expression(gen, function, an_callee(call));
 
-    size_t distance_from_stack_bottom = argument_size_words;
-    distance_from_stack_bottom *= WORD_SIZE;
-
     // replace stack frame
-    emit_binu_reg_im(function, call->start.loc, REG_STACK_FRAME, REG_STACK_BOTTOM, distance_from_stack_bottom, '+');
+    emit_binu_reg_im(function, call->start.loc, REG_STACK_FRAME, REG_STACK_BOTTOM, argument_size_words*WORD_SIZE, '+');
 
+    // call convention is to pass a reg with a function_t* to the call instruction arguments
     instruction_t in = {0};
     in.op = OP_CALL;
     in.as.call.reg_op = REG_RESULT;
     emit_instruction(function, token_end_location(&call->end), in);
 
+    // call consumes arguments
+    gen->stack_size -= argument_size_words*WORD_SIZE;
+
     // pop arguments and restore stack frame
     {
-        emit_popn_words(gen, function, argument_size_words, token_end_location(&call->end));
         emit_pop_to_wordreg(gen, token_end_location(&call->end), function, REG_STACK_FRAME);
     }
 }
