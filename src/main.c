@@ -77,7 +77,7 @@ void myerror(ast_t *ast, error_t error) {
     string_view_t source_line = get_line(error.token.source, error.token.view);
 
 
-    fprintf(stderr, "%s:%lu:%lu: %s\n", "todo", line, column, error.message);
+    fprintf(stderr, "%s:%lu:%lu: %s\n", "<filename>", line, column, error.message);
     fprintf(stderr, "%.*s\n", (int)source_line.length, source_line.data);
 
     tmp_arena_t *tmp_arena = allocator_borrow();

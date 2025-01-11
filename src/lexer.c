@@ -9,8 +9,8 @@ static token_t create_token(lexer_t *lexer, token_type_t type) {
     token_t token = { 
         .source = lexer->source,
         .type = type,
-        .view = {.length=lexer->current-lexer->start, .data = lexer->start},
-        .loc = texloc(lexer->line, lexer->start - lexer->line_start),
+        .view = {.length=lexer->current - lexer->start, .data = lexer->start},
+        .loc = texloc(lexer->line, lexer->start - (lexer->line_start + 1)),
     };
 
     return token;
