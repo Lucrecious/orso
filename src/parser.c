@@ -414,10 +414,7 @@ static void parser_error(parser_t *parser, error_t error) {
 
 static void advance(parser_t *parser) {
     parser->previous = parser->current;
-
-    for (;;) {
-        parser->current = lexer_next_token(&parser->lexer);
-    }
+    parser->current = lexer_next_token(&parser->lexer);
 }
 
 static void consume(parser_t *parser, token_type_t type) {
