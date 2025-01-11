@@ -6,7 +6,7 @@
     while x < n {
         sum = sum + x;
         x = {x;} + 1;
-    } else sum;
+    } then sum;
 
     count := 10;
     while (count = count - 1) > 0 do sum = sum + 1;
@@ -16,7 +16,7 @@
 
     if a == 0 then sum = sum - 65 else sum = sum + 1;
 
-    b := while sum > 0 do sum = sum - 1 else sum = sum + 1;
+    b := while sum > 0 do sum = sum - 1 then sum = sum + 1;
 
     if b == 1 then 1 else 0;
 }

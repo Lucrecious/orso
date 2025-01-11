@@ -719,7 +719,14 @@ static ast_node_t *parse_branch(parser_t *parser) {
             then_branch = parse_expression(parser);
         }
 
-        unless (match(parser, TOKEN_ELSE)) {
+        token_type_t next_token_check = TOKEN_ERROR;
+        switch (branch_type) {
+            case BRANCH_TYPE_LOOPING: next_token_check = TOKEN_THEN; break;
+            case BRANCH_TYPE_IFTHEN: next_token_check = TOKEN_ELSE; break;
+            default: UNREACHABLE();
+        }
+
+        unless (match(parser, next_token_check)) {
             else_branch = ast_nil(parser->ast, typeid(TYPE_VOID), token_implicit_at_end(then_branch->end));
         } else {
             else_branch = parse_expression(parser);

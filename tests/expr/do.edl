@@ -81,7 +81,7 @@
         while a > 0 {
             if a == 3 then continue:outer;
             a = a - 1;
-        } else {
+        } then {
             a = 10;
         };
     } then {

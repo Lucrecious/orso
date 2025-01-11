@@ -158,11 +158,11 @@ i64 result_; {
             };
             continue20_:;
           }
-          0;
+          (a_ = 0);
         } break19_:;
       continue18_:;
       } while(false); 
-      (a_ = 0);
+      0;
     } break17_:;
 
     {

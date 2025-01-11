@@ -30,7 +30,7 @@
             continue;
         };
         evens = evens + 1;
-    } else {
+    } then {
         count = 69;
     };
 
@@ -55,7 +55,7 @@
         };
 
         found_others = found_others + 1;
-    } else {
+    } then {
         420;
     };
 

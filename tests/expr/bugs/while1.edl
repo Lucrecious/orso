@@ -2,7 +2,7 @@
     sum := 0-1;
     b := while sum > 0 do
         sum = sum - 1
-    else
-        sum = sum + 1;
+    then sum = sum + 1;
+
     b;
 }
