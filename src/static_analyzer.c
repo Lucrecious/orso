@@ -2,7 +2,6 @@
 
 #include <stdio.h>
 
-#include "mathutils.h"
 #include "type_set.h"
 #include "error.h"
 #include "vm.h"
