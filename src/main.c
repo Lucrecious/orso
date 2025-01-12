@@ -67,6 +67,29 @@ string_view_t get_line(string_view_t source, string_view_t somewhere_in_source) 
     return view;
 }
 
+static void print_error_location_hint(token_t line_token, size_t column_hint) {
+    string_view_t source_line = get_line(line_token.source, line_token.view);
+    fprintf(stderr, "%.*s\n", (int)source_line.length, source_line.data);
+    tmp_arena_t *tmp_arena = allocator_borrow();
+    string_builder_t sb = {.allocator=tmp_arena->allocator};
+
+    for (size_t i = 0; i < source_line.length; ++i) {
+        if (i == column_hint) {
+            sb_add_char(&sb, '^');
+        } else {
+            sb_add_char(&sb, ' ');
+        }
+    }
+
+    if (column_hint == source_line.length) {
+        sb_add_char(&sb, '^');
+    }
+
+    fprintf(stderr, "%.*s\n", (int)sb.count, sb.items);
+
+    allocator_return(tmp_arena);
+}
+
 void myerror(ast_t *ast, error_t error) {
     UNUSED(ast);
 
@@ -74,36 +97,31 @@ void myerror(ast_t *ast, error_t error) {
     size_t column = error.after_token.loc.column + 1;
     // cstr_t file = error.first.file_path.cstr;
 
-    string_view_t source_line = get_line(error.after_token.source, error.after_token.view);
-
     fprintf(stderr, "%s:%lu:%lu: %s\n", "<filename>", line, column, error.message);
 
     error_source_t error_source = error_sources[error.type];
     switch (error_source) {
     case ERROR_SOURCE_PARSER: {
-        fprintf(stderr, "%.*s\n", (int)source_line.length, source_line.data);
-        tmp_arena_t *tmp_arena = allocator_borrow();
-        string_builder_t sb = {.allocator=tmp_arena->allocator};
-
-        for (size_t i = 0; i < source_line.length; ++i) {
-            if (i == column-1) {
-                sb_add_char(&sb, '^');
-            } else {
-                sb_add_char(&sb, ' ');
-            }
-        }
-
-        if (column-1 == source_line.length) {
-            sb_add_char(&sb, '^');
-        }
-
-        fprintf(stderr, "%.*s\n", (int)sb.count, sb.items);
-
-        allocator_return(tmp_arena);
+        print_error_location_hint(error.after_token, column-1);
         break;
     }
 
     case ERROR_SOURCE_PARSEREX: {
+        switch (error.type) {
+        case ERROR_PARSEREX_EXPECTED_SEMICOLON_AFTER_DECLARATION: {
+            print_error_location_hint(error.got_token, token_end_location(&error.got_token).column);
+            break;
+        }
+
+        case ERROR_PARSEREX_EXPECTED_SEMICOLON_AFTER_STRUCT_DECLARATION:
+        case ERROR_PARSEREX_EXPECTED_DECLARATION:
+        case ERROR_PARSEREX_EXPECTED_EXPRESSION:
+        case ERROR_PARSEREX_EXPECTED_TYPE:
+        case ERROR_PARSEREX_TOO_MANY_PARAMETERS:
+        case ERROR_PARSEREX_EXPECTED_EOF_AFTER_MODULE: break;
+
+        default:UNREACHABLE();
+        }
         break;
     }
 
