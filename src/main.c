@@ -76,28 +76,40 @@ void myerror(ast_t *ast, error_t error) {
 
     string_view_t source_line = get_line(error.after_token.source, error.after_token.view);
 
-
     fprintf(stderr, "%s:%lu:%lu: %s\n", "<filename>", line, column, error.message);
-    fprintf(stderr, "%.*s\n", (int)source_line.length, source_line.data);
 
-    tmp_arena_t *tmp_arena = allocator_borrow();
-    string_builder_t sb = {.allocator=tmp_arena->allocator};
+    error_source_type_t error_source = error_sources[error.type];
+    switch (error_source) {
+    case ERROR_SOURCE_PARSER: {
+        fprintf(stderr, "%.*s\n", (int)source_line.length, source_line.data);
+        tmp_arena_t *tmp_arena = allocator_borrow();
+        string_builder_t sb = {.allocator=tmp_arena->allocator};
 
-    for (size_t i = 0; i < source_line.length; ++i) {
-        if (i == column-1) {
-            sb_add_char(&sb, '^');
-        } else {
-            sb_add_char(&sb, ' ');
+        for (size_t i = 0; i < source_line.length; ++i) {
+            if (i == column-1) {
+                sb_add_char(&sb, '^');
+            } else {
+                sb_add_char(&sb, ' ');
+            }
         }
+
+        if (column-1 == source_line.length) {
+            sb_add_char(&sb, '^');
+        }
+
+        fprintf(stderr, "%.*s\n", (int)sb.count, sb.items);
+
+        allocator_return(tmp_arena);
+        break;
     }
 
-    if (column-1 == source_line.length) {
-        sb_add_char(&sb, '^');
+    case ERROR_SOURCE_PARSEREX: {
+        break;
     }
 
-    fprintf(stderr, "%.*s\n", (int)sb.count, sb.items);
-
-    allocator_return(tmp_arena);
+    case ERROR_SOURCE_ANALYSIS:
+    case ERROR_SOURCE_CODEGEN: break;
+    }
 }
 
 void mywrite(cstr_t chars) {
