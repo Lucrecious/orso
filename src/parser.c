@@ -1350,7 +1350,7 @@ value_index_t zero_value(ast_t *ast, type_t type) {
     return zero_index;
 }
 
-type_t get_folded_type(ast_t *ast, value_index_t index) {
+type_t valin2type(ast_t *ast, value_index_t index) {
     ASSERT(index.exists, "must be there");
 
     type_t type;

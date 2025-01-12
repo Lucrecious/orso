@@ -36,9 +36,6 @@ typedef struct analysis_state_t {
     scope_t *scope;
 } analysis_state_t;
 
-// #define def_type(e) (((e)->node->node_type == AST_NODE_TYPE_NONE) ? ((e)->declared_type) : ((e)->node->value_type))
-#define def_type(e) ((e)->declared_type)
-
 static void scope_init(scope_t *scope, arena_t *allocator, scope_type_t type, scope_t *outer, ast_node_t *creator_expression) {
     scope->outer = outer;
     scope->creator = creator_expression;
@@ -284,7 +281,7 @@ static void resolve_foldable(
         case AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER: {
             if (expression->as.initiailizer.arguments.count == 0) {
                 foldable = true;
-                type_t type = get_folded_type(ast, expression->as.initiailizer.type->value_index);
+                type_t type = valin2type(ast, expression->as.initiailizer.type->value_index);
                 value_index_t value_index = zero_value(ast, type);
                 folded_index = value_index;
             } else {
@@ -321,7 +318,7 @@ static void resolve_foldable(
                 // todo: check if inside type context
                 bool is_inside_type_context = false;
                 if (is_inside_type_context) {
-                    type_t type = get_folded_type(ast, an_operand(expression)->value_index);
+                    type_t type = valin2type(ast, an_operand(expression)->value_index);
 
                     type_t pointer_type = type_set_fetch_pointer(&ast->type_set, type);
 
@@ -527,7 +524,7 @@ static void fold_function_signature(analyzer_t *analyzer, ast_t *ast, ast_node_t
 
         value_index_t index = parameter->value_index;
 
-        type_t type = get_folded_type(ast, index);
+        type_t type = valin2type(ast, index);
         array_push(&parameter_types, type);
     }
 
@@ -545,7 +542,7 @@ static void fold_function_signature(analyzer_t *analyzer, ast_t *ast, ast_node_t
     {
         if (return_type_expression) {
             value_index_t index = return_type_expression->value_index;
-            return_type = get_folded_type(ast, index);
+            return_type = valin2type(ast, index);
         } else {
             return_type = typeid(TYPE_VOID);
         }
@@ -789,7 +786,7 @@ void resolve_expression(
                 break;
             }
 
-            type_t type = get_folded_type(ast, expr->as.initiailizer.type->value_index);
+            type_t type = valin2type(ast, expr->as.initiailizer.type->value_index);
             type_info_t *type_info = get_type_info(&ast->type_set.types, type);
 
             if (type_info->kind == TYPE_STRUCT) {
@@ -814,16 +811,9 @@ void resolve_expression(
                         type_t field_type = type_info->data.struct_.fields[i].type;
                         type_t arg_type = arg->value_type;
                         unless (typeid_eq(field_type, arg_type)) {
-                            if (can_cast_implicit(ast->type_set.types, arg_type, field_type)) {
-                                ast_node_t *casted = implicit_cast(ast, arg, field_type);
-                                fold_constants_via_runtime(analyzer, ast, state, casted);
-                                expr->as.initiailizer.arguments.items[i] = casted;
-                            } else {
-                                printf("TODO: need to look up struct field and compare, first arg should be struct field ast node");
-                                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_TYPE_MISMATCH,  expr));
-                                is_invalidated = true;
-                                continue;
-                            }
+                            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_TYPE_MISMATCH,  arg));
+                            is_invalidated = true;
+                            continue;
                         }
                     }
                 }
@@ -833,7 +823,7 @@ void resolve_expression(
                     break;
                 }
 
-                type_t type = get_folded_type(ast, expr->as.initiailizer.type->value_index);
+                type_t type = valin2type(ast, expr->as.initiailizer.type->value_index);
                 expr->value_type = type;
                 break;
             } else {
@@ -1041,8 +1031,8 @@ void resolve_expression(
             bool skip_mutable = false;
             if (type_is_struct(ast->type_set.types, left->value_type)) {
                 table_get(type2ns, ast->type_to_creation_node, left->value_type, &node_and_scope);
-            } else if (TYPE_IS_TYPE(left->value_type) && type_is_struct(ast->type_set.types, get_folded_type(ast, left->value_index))) {
-                type_t struct_type = get_folded_type(ast, left->value_index);
+            } else if (TYPE_IS_TYPE(left->value_type) && type_is_struct(ast->type_set.types, valin2type(ast, left->value_index))) {
+                type_t struct_type = valin2type(ast, left->value_index);
                 table_get(type2ns, ast->type_to_creation_node, struct_type, &node_and_scope);
                 skip_mutable = true;
             } else {
@@ -1446,7 +1436,7 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
             analysis_state_t new_state = state;
             new_state.mode = MODE_CONSTANT_TIME | (state.mode & MODE_FOLDING_TIME);
             resolve_expression(analyzer, ast, new_state, an_decl_type(declaration));
-            declaration_type = get_folded_type(ast, an_decl_type(declaration)->value_index);
+            declaration_type = valin2type(ast, an_decl_type(declaration)->value_index);
             pop_dependency(analyzer);
         } else {
             declaration_type = typeid(TYPE_INVALID);
@@ -1505,7 +1495,7 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
         }
 
         // This must be available at compile time
-        type_t struct_type = get_folded_type(ast, declaration->value_index);
+        type_t struct_type = valin2type(ast, declaration->value_index);
         type_info_t *struct_type_info = ast->type_set.types.items[struct_type.i];
         unless (struct_type_is_incomplete(struct_type_info) && struct_type_info->data.struct_.name) {
             return;
@@ -1850,7 +1840,7 @@ static void resolve_func_def(
     unless (TYPE_IS_TYPE(ret_expr->value_type)) {
         stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_RETURN_TYPE, an_func_def_return(func_def)));
     } else {
-        return_type = get_folded_type(ast, an_func_def_return(func_def)->value_index);
+        return_type = valin2type(ast, an_func_def_return(func_def)->value_index);
     }
 
     if (parameter_invalid || TYPE_IS_INVALID(return_type)) {
@@ -2082,6 +2072,7 @@ void resolve_declarations(analyzer_t* analyzer, ast_t* ast, analysis_state_t sta
 
 bool resolve_ast(analyzer_t *analyzer, ast_t *ast) {
     if (ast->root->node_type == AST_NODE_TYPE_MODULE) {
+        UNREACHABLE();
         if (ast->root->children.items == NULL) {
             ast->resolved = false;
             // error(analyzer, 0, "No code to run. Akin to having no main function.");
@@ -2105,6 +2096,8 @@ bool resolve_ast(analyzer_t *analyzer, ast_t *ast) {
 
         return ast->resolved;
     } else {
+        tmp_arena_t *tmp = allocator_borrow();
+
         scope_t global_scope = {0};
         scope_init(&global_scope, &analyzer->allocator, SCOPE_TYPE_MODULE, NULL, NULL);
 

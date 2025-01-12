@@ -249,7 +249,7 @@ void ast_print(ast_t *ast, const char *name);
 value_index_t add_value_to_ast_constant_stack(ast_t *ast, void *data, type_t type);
 bool parse_expr(ast_t *ast, string_t file_path, string_view_t source, error_function_t error_fn);
 bool parse(ast_t *ast, string_t file_path, string_view_t source, error_function_t error_fn);
-type_t get_folded_type(ast_t *ast, value_index_t index);
+type_t valin2type(ast_t *ast, value_index_t index);
 
 void ast_init(ast_t *ast, size_t memory_size_bytes);
 void ast_free(ast_t *ast);
