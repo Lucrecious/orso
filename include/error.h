@@ -28,8 +28,8 @@ typedef struct error_t {
     error_type_t type;
     cstr_t message;
     ast_node_t *node;
-    token_t token;
-    token_type_t expected_token_type;
+    token_t got_token;
+    token_t after_token;
 } error_t;
 
 #define MAX_PARAMETERS 100
@@ -37,9 +37,9 @@ typedef struct error_t {
 typedef struct ast_t ast_t;
 typedef void (*error_function_t)(ast_t *ast, error_t error);
 
-#define make_error(et, n, t, ett) ((error_t){ .type = (et), .message = error_messages[et], .node = (n), .token = (t), .expected_token_type = (ett) })
-#define make_error_no_args(et) make_error(et, &nil_node, nil_token, TOKEN_ERROR)
-#define make_error_token(et, t, ett) make_error(et, &nil_node, t, ett)
-#define make_error_node(et, n) make_error(et, n, (n)->start, (n)->start.type)
+#define make_error(et, n, gt, at) ((error_t){ .type = (et), .message = error_messages[et], .node = (n), .got_token = (gt), .after_token = (at) })
+#define make_error_no_args(et) make_error(et, &nil_node, nil_token, nil_token)
+#define make_error_token(et, gt, at) make_error(et, &nil_node, gt, at)
+#define make_error_node(et, n) make_error(et, n, (n)->end, (n)->start)
 
 #endif
