@@ -769,7 +769,6 @@ static bool is_incoming_function_signature(parser_t* parser) {
     // get matching close parenthesis
     while (true) {
         if (next.type == TOKEN_EOF) {
-            parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_CLOSE_PARENTHESIS_AFTER_PARAMETERS, next, parser->previous));
             return false;
         }
 
@@ -837,7 +836,7 @@ static void parse_function_signature(parser_t *parser, ast_node_t *func_sig) {
     array_push(&func_sig->children, &nil_node);
 
     unless (consume(parser, TOKEN_PARENTHESIS_CLOSE)) {
-        parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_CLOSE_PARENTHESIS_AFTER_PARAMETERS, parser->current, parser->previous));
+        parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_CLOSE_PARENTHESIS, parser->current, parser->previous));
     }
 
     if (match(parser, TOKEN_ARROW_RIGHT)) {
@@ -882,7 +881,7 @@ static ast_node_t *parse_grouping_or_function_signature_or_definition(parser_t *
         an_operand(expr) = parse_expression(parser);
 
         unless (consume(parser, TOKEN_PARENTHESIS_CLOSE)) {
-            parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_CLOSE_PARENTHESIS_AFTER_GROUPING, parser->current, parser->previous));
+            parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_CLOSE_PARENTHESIS, parser->current, an_operand(expr)->end));
         }
 
         expr->value_type = an_operand(expr)->value_type;
@@ -904,7 +903,7 @@ static void parse_arguments(parser_t* parser, ast_node_t *parent) {
     }
 
     unless (consume(parser, TOKEN_PARENTHESIS_CLOSE)) {
-        parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_CLOSE_PARENTHESIS_AFTER_ARGUMENTS, parser->current, parser->previous));
+        parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_CLOSE_PARENTHESIS, parser->current, parser->previous));
     }
 
     if (parameter_count > MAX_PARAMETERS - 1) {

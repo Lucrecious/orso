@@ -41,11 +41,12 @@ enum token_type_t {
 
 typedef struct texloc_t texloc_t;
 struct texloc_t {
+    string_t filepath;
     size_t line;
     size_t column;
 };
 
-#define texloc(line_, col) ((texloc_t){.line=(line_), .column=(col)})
+#define texloc(filepath_, line_, col) ((texloc_t){.filepath=(filepath_), .line=(line_), .column=(col)})
 
 typedef struct token_t token_t;
 struct token_t {

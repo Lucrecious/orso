@@ -95,14 +95,14 @@ void myerror(ast_t *ast, error_t error) {
 
     size_t line = error.after_token.loc.line + 1;
     size_t column = error.after_token.loc.column + 1;
-    // cstr_t file = error.first.file_path.cstr;
+    cstr_t file_path = error.after_token.loc.filepath.cstr;
 
-    fprintf(stderr, "%s:%lu:%lu: %s\n", "<filename>", line, column, error.message);
+    fprintf(stderr, "%s:%lu:%lu: %s\n", file_path, line, column, error.message);
 
     error_source_t error_source = error_sources[error.type];
     switch (error_source) {
     case ERROR_SOURCE_PARSER: {
-        print_error_location_hint(error.after_token, column-1);
+        print_error_location_hint(error.after_token, token_end_location(&error.after_token).column);
         break;
     }
 

@@ -220,7 +220,7 @@ bool debugger_step(debugger_t *debugger, vm_t *vm) {
         string_t line_number = command_n_args.items[2];
         size_t line = string2size(line_number);
 
-        array_push(&debugger->breakpoints, ((source_location_t){.file_path=file_path, .text_location = texloc(line, 0) }));
+        array_push(&debugger->breakpoints, ((source_location_t){.file_path=file_path, .text_location = texloc(file_path, line, 0) }));
     } else if (cstr_eq(command.cstr, "stepo") || cstr_eq(command.cstr, "o")) {
         source_location_t bp = vm_find_source_location(vm);
 
@@ -279,7 +279,7 @@ bool debugger_step(debugger_t *debugger, vm_t *vm) {
 
 source_location_t vm_find_source_location(vm_t *vm) {
     if (vm->call_frame.function == NULL) {
-        return (source_location_t){.text_location = texloc(0, 0), .file_path=lit2str("<none>")};
+        return (source_location_t){.text_location = texloc(lit2str("<nofile>"), 0, 0), .file_path=lit2str("<nofile>")};
     }
     
     function_t *function = vm->call_frame.function;
