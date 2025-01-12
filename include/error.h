@@ -3,8 +3,8 @@
 
 #include "lexer.h"
 
-typedef enum error_source_type_t error_source_type_t;
-enum error_source_type_t {
+typedef enum error_source_t error_source_t;
+enum error_source_t {
     ERROR_SOURCE_PARSER,
     ERROR_SOURCE_PARSEREX,
     ERROR_SOURCE_ANALYSIS,
@@ -21,7 +21,7 @@ ERROR_COUNT,
 #undef ERROR_XMACRO
 
 cstr_t const error_messages[ERROR_COUNT];
-error_source_type_t error_sources[ERROR_COUNT];
+error_source_t error_sources[ERROR_COUNT];
 
 typedef struct ast_node_t ast_node_t;
 typedef struct error_t {

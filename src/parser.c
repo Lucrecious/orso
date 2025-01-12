@@ -54,7 +54,7 @@ cstr_t const error_messages[] = {
 #undef ERROR_XMACRO
 
 #define ERROR_XMACRO(error_type, error_message, error_source) [error_type] = ERROR_SOURCE_##error_source,
-error_source_type_t error_sources[] = {
+error_source_t error_sources[] = {
 #include "error.x"
 };
 #undef ERROR_XMACRO

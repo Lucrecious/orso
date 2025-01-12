@@ -78,7 +78,7 @@ void myerror(ast_t *ast, error_t error) {
 
     fprintf(stderr, "%s:%lu:%lu: %s\n", "<filename>", line, column, error.message);
 
-    error_source_type_t error_source = error_sources[error.type];
+    error_source_t error_source = error_sources[error.type];
     switch (error_source) {
     case ERROR_SOURCE_PARSER: {
         fprintf(stderr, "%.*s\n", (int)source_line.length, source_line.data);
