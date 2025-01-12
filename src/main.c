@@ -108,17 +108,20 @@ void myerror(ast_t *ast, error_t error) {
 
     case ERROR_SOURCE_PARSEREX: {
         switch (error.type) {
+        case ERROR_PARSEREX_EXPECTED_EOF_AFTER_MODULE:
+        case ERROR_PARSEREX_EXPECTED_SEMICOLON_AFTER_STRUCT_DECLARATION:
         case ERROR_PARSEREX_EXPECTED_SEMICOLON_AFTER_DECLARATION: {
-            print_error_location_hint(error.got_token, token_end_location(&error.got_token).column);
+            print_error_location_hint(error.node->end, token_end_location(&error.node->end).column);
             break;
         }
 
-        case ERROR_PARSEREX_EXPECTED_SEMICOLON_AFTER_STRUCT_DECLARATION:
-        case ERROR_PARSEREX_EXPECTED_DECLARATION:
-        case ERROR_PARSEREX_EXPECTED_EXPRESSION:
         case ERROR_PARSEREX_EXPECTED_TYPE:
+        case ERROR_PARSEREX_EXPECTED_EXPRESSION:
         case ERROR_PARSEREX_TOO_MANY_PARAMETERS:
-        case ERROR_PARSEREX_EXPECTED_EOF_AFTER_MODULE: break;
+        case ERROR_PARSEREX_EXPECTED_DECLARATION: {
+            print_error_location_hint(error.node->start, error.node->start.loc.column);
+            break;
+        }
 
         default:UNREACHABLE();
         }
