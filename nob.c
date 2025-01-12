@@ -144,7 +144,7 @@ int main(int argc, char **argv) {
 
     cb_flags(&cb, 2, "-ggdb", "-DDEBUG");
 
-    cb.output = nob_temp_sprintf("./bin/test");
+    cb.output = nob_temp_sprintf("./bin/orso");
 
     for (size_t i = 0; i < sizeof(SOURCES) / sizeof(SOURCES[0]); i++) {
         cb_source(&cb, SOURCES[i]);
