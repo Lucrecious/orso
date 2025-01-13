@@ -21,13 +21,12 @@ struct types_t {
 };
 
 typedef struct type_infos_t type_infos_t;
-typedef struct type_info_t type_info_t;
+typedef struct typedata_t typedata_t;
 
 typedef enum type_kind_t {
     TYPE_INVALID = 0,      // error type
     TYPE_UNRESOLVED,       // unresolved (not undefined, not error, not defined)
     TYPE_UNDEFINED,
-
 
     // simple types (types that do not require type info)
     TYPE_UNREACHABLE,      // for jmp expressions (return, break, continue)
@@ -62,7 +61,7 @@ typedef struct struct_constant_t {
 } struct_constant_t;
 
 struct type_infos_t {
-    type_info_t **items;
+    typedata_t **items;
     size_t count;
     size_t capacity;
     arena_t *allocator;
@@ -75,7 +74,15 @@ enum num_type_t {
     NUM_TYPE_FLOAT,
 };
 
-struct type_info_t {
+typedef enum num_size_t num_size_t;
+enum num_size_t {
+    NUM_SIZE_BYTE = sizeof(byte),
+    NUM_SIZE_SHORT = sizeof(u16),
+    NUM_SIZE_SINGLE = sizeof(u32),
+    NUM_SIZE_LONG = sizeof(u64),
+};
+
+struct typedata_t {
     type_kind_t kind;
     size_t size; // not serialized
     union {
@@ -117,25 +124,14 @@ struct type_info_t {
 
 struct type_table_t;
 
-bool struct_type_is_incomplete(type_info_t *type);
+bool struct_type_is_incomplete(typedata_t *type);
 
-bool type_equal(type_info_t *a, type_info_t *b);
-
-bool type_is_float(type_info_t *type);
-bool type_is_integer(type_info_t *type, bool include_bool);
-bool type_is_number(type_info_t *type, bool include_bool);
-FORCE_INLINE bool orso_type_is_unsigned_integer_type(type_info_t *type, bool include_bool){
-    (void)type;
-    (void)include_bool;
-    return false;
-}
+bool type_equal(typedata_t *a, typedata_t *b);
 
 size_t bytes_to_words(i32 byte_count);
 
-struct_field_t *type_struct_find_field(type_info_t *struct_, const char *name, size_t name_length);
+struct_field_t *type_struct_find_field(typedata_t *struct_, const char *name, size_t name_length);
 
 string_t type_to_string(type_infos_t types, type_t type, arena_t *allocator);
-
-bool can_cast_implicit(type_infos_t types, type_t type_to_cast, type_t type);
 
 #endif

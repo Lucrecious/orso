@@ -33,12 +33,55 @@ typedef const char *cstr_t;
 #define modi_(a, b) (modi(a, b))
 #define modu_(a, b) (modu(a, b))
 
+i8 cast_i64_to_i8(i64 i);
+i16 cast_i64_to_i16(i64 i);
+i32 cast_i64_to_i32(i64 i);
+
+u8 cast_u64_to_u8(u64 u);
+u16 cast_u64_to_u16(u64 u);
+u32 cast_u64_to_u32(u64 u);
+
+f32 cast_f64_to_f32(f64 d);
+
 f64 modd(f64 a, f64 b);
 f64 remd(f64 a, f64 b);
 i64 modi(i64 a, i64 b);
 u64 modu(u64 a, u64 b);
 
 #ifdef INTRINSICS_IMPLEMENTATION
+
+#define clamp_(value, low, high) ((value) < (low) ? (low) : (((value) > (high) ? (high) : (value))))
+
+i8 cast_i64_to_i8(i64 i) {
+    return (i8)i;
+}
+
+i16 cast_i64_to_i16(i64 i) {
+    return (i16)i;
+}
+
+i32 cast_i64_to_i32(i64 i) {
+    return (i32)i;
+}
+
+u8 cast_u64_to_u8(u64 u) {
+    return (u8)u;
+}
+
+u16 cast_u64_to_u16(u64 u) {
+    return (u16)u;
+}
+
+u32 cast_u64_to_u32(u64 u) {
+    return (u32)u;
+}
+
+f32 cast_f64_to_f32(f64 d) {
+    return (f32)d;
+}
+
+
+#undef clamp_
 
 f64 modd(f64 a, f64 b) {
     f64 b_ = b < 0 ? -b : b;

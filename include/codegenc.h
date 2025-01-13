@@ -80,14 +80,14 @@ static void cgen_add_include(cgen_t *cgen, cstr_t include_path) {
 }
 
 static cstr_t cgen_type_name(cgen_t *cgen, type_t type) {
-    type_info_t *type_info = get_type_info(&cgen->ast->type_set.types, type);
+    typedata_t *type_info = type2typedata(&cgen->ast->type_set.types, type);
 
     switch (type_info->kind) {
         case TYPE_NUMBER: {
-            switch (type_info->size) {
-                case 1: UNREACHABLE(); return "byte";
-                case 2: UNREACHABLE(); return "u16";
-                case 4: {
+            switch ((num_size_t)type_info->size) {
+                case NUM_SIZE_BYTE: UNREACHABLE(); return "byte";
+                case NUM_SIZE_SHORT: UNREACHABLE(); return "u16";
+                case NUM_SIZE_SINGLE: {
                     switch (type_info->data.num) {
                         case NUM_TYPE_FLOAT: return "f32";
                         case NUM_TYPE_SIGNED: return "i32";
@@ -96,7 +96,7 @@ static cstr_t cgen_type_name(cgen_t *cgen, type_t type) {
                     break;
                 }
 
-                case 8: {
+                case NUM_SIZE_LONG: {
                     switch (type_info->data.num) {
                         case NUM_TYPE_FLOAT: return "f64";
                         case NUM_TYPE_SIGNED: return "i64";
@@ -168,7 +168,7 @@ static void *memarr_value_at(memarr_t *memarr, value_index_t value_index) {
 
 static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t tmp_var);
 
-static bool cgen_binary_is_macro(token_type_t type, type_info_t *type_info, cstr_t *operator_or_func_name) {
+static bool cgen_binary_is_macro(token_type_t type, typedata_t *type_info, cstr_t *operator_or_func_name) {
     #define set_op(lit, is_func) { if (operator_or_func_name) *operator_or_func_name = (lit); return (is_func); } break
     switch (type) {
         case TOKEN_PLUS: set_op("+", false);
@@ -218,7 +218,7 @@ static void cgen_cache_requires_tmp(type_infos_t *types, ast_node_t *expression)
         }
 
         case AST_NODE_TYPE_EXPRESSION_BINARY: {
-            type_info_t *type_info = get_type_info(types, expression->value_type);
+            typedata_t *type_info = type2typedata(types, expression->value_type);
             if (cgen_binary_is_macro(expression->operator.type, type_info, NULL)) {
                 if (an_lhs(expression)->node_type == AST_NODE_TYPE_EXPRESSION_PRIMARY && an_rhs(expression)->node_type == AST_NODE_TYPE_EXPRESSION_PRIMARY) {
                     expression->requires_tmp_for_cgen = false;
@@ -245,15 +245,15 @@ static void cgen_cache_requires_tmp(type_infos_t *types, ast_node_t *expression)
     }
 }
 
-static void cgen_primary(cgen_t *cgen, value_index_t value_index, type_info_t *type_info) {
+static void cgen_primary(cgen_t *cgen, value_index_t value_index, typedata_t *type_info) {
     #define value_at(ty) (*((ty*)(memarr_value_at(&cgen->ast->constants, value_index))))
 
     switch (type_info->kind) {
         case TYPE_NUMBER: {
-            switch (type_info->size) {
-                case 1: UNREACHABLE(); break;
-                case 2: UNREACHABLE(); break;
-                case 4: {
+            switch ((num_size_t)type_info->size) {
+                case NUM_SIZE_BYTE: UNREACHABLE(); break;
+                case NUM_SIZE_SHORT: UNREACHABLE(); break;
+                case NUM_SIZE_SINGLE: {
                     switch (type_info->data.num) {
                         case NUM_TYPE_FLOAT: sb_add_format(&cgen->sb, "%g", value_at(f32)); break;
                         case NUM_TYPE_SIGNED: sb_add_format(&cgen->sb, "%lu", value_at(u32)); break;
@@ -261,7 +261,7 @@ static void cgen_primary(cgen_t *cgen, value_index_t value_index, type_info_t *t
                     }
                     break;
                 }
-                case 8: {
+                case NUM_SIZE_LONG: {
                     switch (type_info->data.num) {
                         case NUM_TYPE_FLOAT: sb_add_format(&cgen->sb, "%lg", value_at(f64)); break;
                         case NUM_TYPE_SIGNED: sb_add_format(&cgen->sb, "%llu", value_at(u64)); break;
@@ -335,7 +335,7 @@ static void cgen_declaration(cgen_t *cgen, ast_node_t *declaration) {
 static void cgen_binary(cgen_t *cgen, ast_node_t *binary, cgen_var_t var) {
     cstr_t operator_or_function_name = NULL;
 
-    type_info_t *type_info = get_type_info(&cgen->ast->type_set.types, binary->value_type);
+    typedata_t *type_info = type2typedata(&cgen->ast->type_set.types, binary->value_type);
     bool is_macro = cgen_binary_is_macro(binary->operator.type, type_info, &operator_or_function_name);
 
     ast_node_t *lhs = an_lhs(binary);
@@ -520,7 +520,7 @@ static void cgen_assignment(cgen_t *cgen, ast_node_t *assignment, cgen_var_t var
 static void cgen_primary_or_nil(cgen_t *cgen, ast_node_t *primary_or_nil, cgen_var_t var) {
     ASSERT(!primary_or_nil->requires_tmp_for_cgen, "primaries should never require tmps");
 
-    type_info_t *type_info = get_type_info(&cgen->ast->type_set.types, primary_or_nil->value_type);
+    typedata_t *type_info = type2typedata(&cgen->ast->type_set.types, primary_or_nil->value_type);
 
     if (TYPE_IS_VOID(primary_or_nil->value_type)) {
         // ASSERT(!has_var(var), "shouldnt have a var since its void");

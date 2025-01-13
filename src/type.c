@@ -5,11 +5,11 @@
 #include "tmp.h"
 
 
-bool struct_type_is_incomplete(type_info_t *type) {
+bool struct_type_is_incomplete(typedata_t *type) {
     return type->kind == TYPE_STRUCT && type->data.struct_.field_count < 0;
 }
 
-bool type_equal(type_info_t *a, type_info_t *b) {
+bool type_equal(typedata_t *a, typedata_t *b) {
     if (a->kind != b->kind) return false;
 
     if (a->size != b->size) return false;
@@ -99,24 +99,11 @@ bool type_in_list(types_t list, type_t find) {
     return false;
 }
 
-bool type_is_float(type_info_t *type) {
-    return type->data.num == NUM_TYPE_FLOAT;
-}
-
-bool type_is_integer(type_info_t *type, bool include_bool) {
-    if (type->kind == TYPE_BOOL && include_bool) return true;
-    return type->data.num == NUM_TYPE_SIGNED;
-}
-
-bool type_is_number(type_info_t *type, bool include_bool) {
-    return type_is_float(type) || type_is_integer(type, include_bool);
-}
-
 size_t bytes_to_words(i32 byte_count) {
     return (byte_count + (WORD_SIZE-1)) / WORD_SIZE;
 }
 
-struct_field_t *type_struct_find_field(type_info_t *struct_, const char *name, size_t name_length) {
+struct_field_t *type_struct_find_field(typedata_t *struct_, const char *name, size_t name_length) {
     for (i32 i = 0; i < struct_->data.struct_.field_count; i++) {
         if (strlen(struct_->data.struct_.fields[i].name) != name_length) {
             continue;
@@ -137,7 +124,7 @@ string_t type_to_string_toplevel(type_infos_t types, type_t type, arena_t *alloc
 
     string_builder_t sb = {.allocator = tmp_arena->allocator};
 
-    type_info_t *type_info = get_type_info(&types, type);
+    typedata_t *type_info = type2typedata(&types, type);
 
     if (type_is_function(types, type) || type_is_native_function(types, type)) {
         sb_add_char(&sb, '(');
@@ -231,25 +218,4 @@ string_t type_to_string_toplevel(type_infos_t types, type_t type, arena_t *alloc
 
 string_t type_to_string(type_infos_t types, type_t type, arena_t *allocator) {
     return type_to_string_toplevel(types, type, allocator, true);
-}
-
-bool can_cast_implicit(type_infos_t types, type_t type_to_cast, type_t type) {
-
-    if (TYPE_IS_INVALID(type_to_cast)) return false;
-    if (TYPE_IS_INVALID(type)) return false;
-
-    if (typeid_eq(type_to_cast, type)) return true;
-
-    type_info_t *type_info_to_cast = get_type_info(&types, type_to_cast);
-    type_info_t *type_info = get_type_info(&types, type);
-
-    u32 type_to_cast_size = type_info_to_cast->size;
-    u32 type_size = type_info->size;
-    if (type_is_number(type_info_to_cast, true) && type_is_number(type_info, true) && type_to_cast_size <= type_size) {
-        if (type_is_integer(type_info_to_cast, true) || (type_is_float(type_info_to_cast) && type_is_float(type_info))) {
-            return true;
-        }
-    }
-
-    return false;
 }

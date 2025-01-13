@@ -22,8 +22,6 @@
 typedef u8 byte;
 typedef void* ptr;
 
-#define cast(void_ptr, type) (*((type*)void_ptr))
-
 #define unless(condition) if (!(condition))
 #define until(condition) while (!(condition))
 

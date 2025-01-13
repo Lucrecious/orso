@@ -1,3 +1,5 @@
+// note i can optionally give a command that gives you more information on error
+
 ERROR_XMACRO(ERROR_PARSER_EXPECTED_JMP_LABEL, "expected a jump label", PARSER)
 ERROR_XMACRO(ERROR_PARSER_EXPECTED_CLOSE_BRACE_FOR_BLOCK, "expected close brace for block", PARSER)
 ERROR_XMACRO(ERROR_PARSER_EXPECTED_DO_OR_BRACE_AFTER_LOOP_CONDITION, "expected 'do' or '{' after while/until condition", PARSER)
@@ -19,6 +21,17 @@ ERROR_XMACRO(ERROR_PARSEREX_EXPECTED_EXPRESSION, "expected expression", PARSEREX
 ERROR_XMACRO(ERROR_PARSEREX_TOO_MANY_PARAMETERS, "too many parameters", PARSEREX)
 
 ERROR_XMACRO(ERROR_ANALYSIS_INVALID_UNARY_OPERAND, "invalid unary operand", ANALYSIS)
+ERROR_XMACRO(ERROR_ANALYSIS_INVALID_ARITHMETIC_OPERAND_TYPES, "only number operands are allowed for arithmetic operations", ANALYSIS)
+ERROR_XMACRO(ERROR_ANALYSIS_INVALID_COMPARISON_OPERAND_TYPES, "only number and booleans operands are allowed for comparison operations", ANALYSIS)
+ERROR_XMACRO(ERROR_ANALYSIS_INVALID_LOGICAL_OPERAND_TYPES, "only booleans operands are allowed for logical operations", ANALYSIS)
+ERROR_XMACRO(ERROR_ANALYSIS_ARITHMETIC_OPERANDS_REQUIRES_EXPLICIT_CAST, "arithmetic operands requires explicit cast", ANALYSIS)
+ERROR_XMACRO(ERROR_ANALYSIS_COMPARISON_OPERANDS_REQUIRES_EXPLICIT_CAST, "comparison operands requires explicit cast", ANALYSIS)
+ERROR_XMACRO(ERROR_ANALYSIS_LOGICAL_OPERANDS_REQUIRES_EXPLICIT_CAST, "logical operands requires explicit cast", ANALYSIS)
+ERROR_XMACRO(ERROR_ANALYSIS_INVALID_NOT_OPERAND, "invalid 'not' operand", ANALYSIS)
+ERROR_XMACRO(ERROR_ANALYSIS_INVALID_MINUS_OPERAND, "invalid '-' operand", ANALYSIS)
+ERROR_XMACRO(ERROR_ANALYSIS_CANNOT_NEGATE_UNSIGNED_NUMBER, "cannot negate unsigned number", ANALYSIS)
+ERROR_XMACRO(ERROR_ANALYSIS_NUMBER_ARGS_CALL_FUNC_MISTMATCH, "number of arguments for call do not match function type's parameter count", ANALYSIS)
+ERROR_XMACRO(ERROR_ANALYSIS_ARG_VS_PARAM_FUNC_CALL_MISMATCH, "argument type does not match function parameter type", ANALYSIS)
 ERROR_XMACRO(ERROR_ANALYSIS_INVALID_BINARY_OPERANDS, "invalid binary operands", ANALYSIS)
 ERROR_XMACRO(ERROR_ANALYSIS_INVALID_MEMBER_ACCESS, "invalid member access", ANALYSIS)
 ERROR_XMACRO(ERROR_ANALYSIS_INVALID_RETURN_TYPE, "invalid return type", ANALYSIS)

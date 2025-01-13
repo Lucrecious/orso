@@ -1285,8 +1285,8 @@ bool parse(ast_t *ast, string_t file_path, string_view_t source, error_function_
     return !parser.had_error;
 }
 
-value_index_t add_value_to_ast_constant_stack(ast_t *ast, void *data, type_t type) {
-    type_info_t *type_info = get_type_info(&ast->type_set.types, type);
+value_index_t ast_push_constant(ast_t *ast, void *data, type_t type) {
+    typedata_t *type_info = type2typedata(&ast->type_set.types, type);
     size_t size = type_info->size;
     return memarr_push_value(&ast->constants, data, size);
 }
@@ -1297,7 +1297,7 @@ value_index_t zero_value(ast_t *ast, type_t type) {
         return value_index_(result);
     }
 
-    type_info_t *type_info = ast->type_set.types.items[type.i];
+    typedata_t *type_info = ast->type_set.types.items[type.i];
 
     word_t value[bytes_to_words(type_info->size)];
 
@@ -1345,7 +1345,7 @@ value_index_t zero_value(ast_t *ast, type_t type) {
         case TYPE_VOID: break;
     }
 
-    value_index_t zero_index = add_value_to_ast_constant_stack(ast, value, type);
+    value_index_t zero_index = ast_push_constant(ast, value, type);
     table_put(ptr2sizet, ast->type_to_zero_index, type, zero_index.index);
     return zero_index;
 }
@@ -1359,6 +1359,193 @@ type_t valin2type(ast_t *ast, value_index_t index) {
     }
 
     return typeid(TYPE_INVALID);
+}
+
+i64 valin2i(ast_t *ast, value_index_t index, num_size_t numsize) {
+    if (!index.exists) return 0;
+
+    i64 result = 0;
+
+    switch (numsize) {
+    case NUM_SIZE_BYTE: {
+        i8 value;
+        unless (memarr_get(&ast->constants, index.index, NUM_SIZE_BYTE, &value)) break;
+        result = value;
+        break;
+    }
+
+    case NUM_SIZE_SHORT: {
+        i16 value;
+        unless (memarr_get(&ast->constants, index.index, NUM_SIZE_SHORT, &value)) break;
+        result = value;
+        break;
+    }
+
+    case NUM_SIZE_SINGLE: {
+        i32 value;
+        unless (memarr_get(&ast->constants, index.index, NUM_SIZE_SINGLE, &value)) break;
+        result = value;
+        break;
+    }
+
+    case NUM_SIZE_LONG: {
+        i64 value;
+        unless (memarr_get(&ast->constants, index.index, NUM_SIZE_LONG, &value)) break;
+        result = value;
+        break;
+    }
+
+    default: UNREACHABLE();
+    }
+
+    return result;
+}
+
+u64 valin2u(ast_t *ast, value_index_t index, num_size_t num_size) {
+    if (!index.exists) return 0;
+
+    u64 result = 0;
+
+    switch (num_size) {
+    case NUM_SIZE_BYTE: {
+        u8 value;
+        unless (memarr_get(&ast->constants, index.index, NUM_SIZE_BYTE, &value)) break;
+        result = value;
+        break;
+    }
+
+    case NUM_SIZE_SHORT: {
+        u16 value;
+        unless (memarr_get(&ast->constants, index.index, NUM_SIZE_SHORT, &value)) break;
+        result = value;
+        break;
+    }
+
+    case NUM_SIZE_SINGLE: {
+        u32 value;
+        unless (memarr_get(&ast->constants, index.index, NUM_SIZE_SINGLE, &value)) break;
+        result = value;
+        break;
+    }
+
+    case NUM_SIZE_LONG: {
+        u64 value;
+        unless (memarr_get(&ast->constants, index.index, NUM_SIZE_LONG, &value)) break;
+        result = value;
+        break;
+    }
+
+    default: UNREACHABLE();
+    }
+
+    return result;
+}
+
+f64 valin2d(ast_t *ast, value_index_t index, num_size_t num_size) {
+    if (!index.exists) return 0.0;
+
+    f64 result = 0.0;
+
+    switch (num_size) {
+    case NUM_SIZE_BYTE: UNREACHABLE(); break;
+    case NUM_SIZE_SHORT: UNREACHABLE(); break;
+
+    case NUM_SIZE_SINGLE: {
+        f32 value;
+        unless (memarr_get(&ast->constants, index.index, NUM_SIZE_SINGLE, &value)) break;
+        result = value;
+        break;
+    }
+
+    case NUM_SIZE_LONG: {
+        f64 value;
+        unless (memarr_get(&ast->constants, index.index, NUM_SIZE_LONG, &value)) break;
+        result = value;
+        break;
+    }
+
+    default: UNREACHABLE();
+    }
+
+    return result;
+}
+
+value_index_t i2valin(ast_t *ast, i64 value, num_size_t num_size) {
+    switch (num_size) {
+    case NUM_SIZE_BYTE: {
+        i8 v = cast_i64_to_i8(value);
+        return memarr_push_value(&ast->constants, &v, NUM_SIZE_BYTE);
+    }
+
+    case NUM_SIZE_SHORT: {
+        i16 v = cast_i64_to_i16(value);
+        return memarr_push_value(&ast->constants, &v, NUM_SIZE_SHORT);
+    }
+
+    case NUM_SIZE_SINGLE: {
+        i32 v = cast_i64_to_i32(value);
+        return memarr_push_value(&ast->constants, &v, NUM_SIZE_SINGLE);
+    }
+
+    case NUM_SIZE_LONG: {
+        return memarr_push_value(&ast->constants, &value, NUM_SIZE_LONG);
+    }
+
+    default: UNREACHABLE();
+    }
+}
+
+value_index_t u2valin(ast_t *ast, u64 value, num_size_t num_size) {
+    switch (num_size) {
+    case NUM_SIZE_BYTE: {
+        u8 v = cast_u64_to_u8(value);
+        return memarr_push_value(&ast->constants, &v, NUM_SIZE_BYTE);
+    }
+
+    case NUM_SIZE_SHORT: {
+        u16 v = cast_u64_to_u16(value);
+        return memarr_push_value(&ast->constants, &v, NUM_SIZE_SHORT);
+    }
+
+    case NUM_SIZE_SINGLE: {
+        u32 v = cast_u64_to_u32(value);
+        return memarr_push_value(&ast->constants, &v, NUM_SIZE_SINGLE);
+    }
+
+    case NUM_SIZE_LONG: {
+        return memarr_push_value(&ast->constants, &value, NUM_SIZE_LONG);
+    }
+    }
+}
+
+value_index_t d2valin(ast_t *ast, f64 value, num_size_t num_size) {
+    switch (num_size) {
+    case NUM_SIZE_BYTE: UNREACHABLE(); return value_index_nil();
+
+    case NUM_SIZE_SHORT: UNREACHABLE(); return value_index_nil();
+
+    case NUM_SIZE_SINGLE: {
+        f32 v = cast_f64_to_f32(value);
+        return memarr_push_value(&ast->constants, &v, NUM_SIZE_SINGLE);
+    }
+
+    case NUM_SIZE_LONG: {
+        return memarr_push_value(&ast->constants, &value, NUM_SIZE_LONG);
+    }
+    }
+}
+
+bool valin2bool(ast_t *ast, value_index_t value_index) {
+    u8 resultb = 0;
+    bool result = false;
+    unless (memarr_get(&ast->constants, value_index.index, NUM_SIZE_BYTE, &resultb)) return false;
+    result = resultb;
+    return result;
+}
+
+value_index_t bool2valin(ast_t *ast, bool value) {
+    byte val = (u8)value;
+    return memarr_push_value(&ast->constants, &val, NUM_SIZE_BYTE);
 }
 
 static void print_indent(u32 level) {

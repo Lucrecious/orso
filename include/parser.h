@@ -25,12 +25,13 @@ struct ast_nodes_t {
 typedef enum scope_type_t {
     SCOPE_TYPE_NONE                     = 0,
     SCOPE_TYPE_MODULE                   = 1 << 0,
-    SCOPE_TYPE_FUNC_DEF                 = 1 << 1,
+    SCOPE_TYPE_FUNCDEF                 = 1 << 1,
     SCOPE_TYPE_FUNC_DEF_BODY            = 1 << 2,
-    SCOPE_TYPE_JMPABLE            = 1 << 3,
+    SCOPE_TYPE_JMPABLE                  = 1 << 3,
     SCOPE_TYPE_BLOCK                    = 1 << 4,
     SCOPE_TYPE_STRUCT                   = 1 << 5,
     SCOPE_TYPE_CONDITION                = 1 << 6,
+    SCOPE_TYPE_TYPE_CONTEXT             = 1 << 7
 } scope_type_t;
 
 declare_table(s2w, string_t, word_t)
@@ -246,10 +247,22 @@ typedef struct ast_t {
 
 void ast_print(ast_t *ast, const char *name);
 
-value_index_t add_value_to_ast_constant_stack(ast_t *ast, void *data, type_t type);
+value_index_t ast_push_constant(ast_t *ast, void *data, type_t type);
 bool parse_expr(ast_t *ast, string_t file_path, string_view_t source, error_function_t error_fn);
 bool parse(ast_t *ast, string_t file_path, string_view_t source, error_function_t error_fn);
+
 type_t valin2type(ast_t *ast, value_index_t index);
+i64 valin2i(ast_t *ast, value_index_t index, num_size_t numsize);
+value_index_t i2valin(ast_t *ast, i64 value, num_size_t numsize);
+
+u64 valin2u(ast_t *ast, value_index_t index, num_size_t numsize);
+value_index_t u2valin(ast_t *ast, u64 value, num_size_t numsize);
+
+f64 valin2d(ast_t *ast, value_index_t index, num_size_t numsize);
+value_index_t d2valin(ast_t *ast, f64 value, num_size_t numsize);
+
+bool valin2bool(ast_t *ast, value_index_t value_index);
+value_index_t bool2valin(ast_t *ast, bool value);
 
 void ast_init(ast_t *ast, size_t memory_size_bytes);
 void ast_free(ast_t *ast);

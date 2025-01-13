@@ -61,7 +61,7 @@ static void emit_instruction(function_t *function, texloc_t location, instructio
     array_push(&function->locations, location);
 }
 
-static void emit_read_memory_to_reg(texloc_t location, function_t *function, reg_t destination, memaddr_t address, type_info_t *type_info) {
+static void emit_read_memory_to_reg(texloc_t location, function_t *function, reg_t destination, memaddr_t address, typedata_t *type_info) {
     ASSERT(type_info->size <= WORD_SIZE, "only word-sized values or smaller can go into registers");
 
     if (type_info->size == 0) {
@@ -84,11 +84,11 @@ static void emit_read_memory_to_reg(texloc_t location, function_t *function, reg
         }
 
         case TYPE_NUMBER: {
-            switch (type_info->size) {
-                case 1: UNREACHABLE(); break;
-                case 2: UNREACHABLE(); break;
+            switch ((num_size_t)type_info->size) {
+                case NUM_SIZE_BYTE: UNREACHABLE(); break;
+                case NUM_SIZE_SHORT: break;
 
-                case 4: {
+                case NUM_SIZE_SINGLE: {
                     switch (type_info->data.num) {
                         case NUM_TYPE_FLOAT: instruction.op = OP_MOVF32_MEM_TO_REG; break;
                         case NUM_TYPE_SIGNED: instruction.op = OP_MOVF32_MEM_TO_REG; break;
@@ -97,7 +97,7 @@ static void emit_read_memory_to_reg(texloc_t location, function_t *function, reg
                     break;
                 }
 
-                case 8: instruction.op = OP_MOVWORD_MEM_TO_REG; break;
+                case NUM_SIZE_LONG: break;
 
                 default: UNREACHABLE();
             }
@@ -167,7 +167,7 @@ static void emit_popn_bytes(gen_t *gen, function_t *function, u32 pop_size_bytes
     emit_binu_reg_im(function, loc, REG_STACK_BOTTOM, REG_STACK_BOTTOM, pop_size_bytes, '+');
 }
 
-static void emit_bin_arithmetic(texloc_t loc, function_t *function, token_type_t token_type, type_info_t *type_info, reg_t op1, reg_t op2, reg_t result) {
+static void emit_bin_arithmetic(texloc_t loc, function_t *function, token_type_t token_type, typedata_t *type_info, reg_t op1, reg_t op2, reg_t result) {
     instruction_t instruction = {0};
     ASSERT(type_info->kind == TYPE_NUMBER, "for now only numbers");
 
@@ -291,7 +291,7 @@ static void emit_bin_arithmetic(texloc_t loc, function_t *function, token_type_t
     emit_instruction(function, loc, instruction);
 }
 
-static void emit_unary(texloc_t loc, function_t *function, token_type_t token_type, type_info_t *type_info, reg_t op1, reg_t result) {
+static void emit_unary(texloc_t loc, function_t *function, token_type_t token_type, typedata_t *type_info, reg_t op1, reg_t result) {
     instruction_t in = {0};
     in.as.unary_reg_to_reg.reg_op = op1;
     in.as.unary_reg_to_reg.reg_result = result;
@@ -433,7 +433,7 @@ static void gen_binary(gen_t *gen, function_t *function, ast_node_t *binary) {
 
             emit_pop_to_wordreg(gen, token_end_location(&rhs->end), function, REG_TMP);
 
-            type_info_t *expr_type_info = get_type_info(&gen->ast->type_set.types, an_lhs(binary)->value_type);
+            typedata_t *expr_type_info = type2typedata(&gen->ast->type_set.types, an_lhs(binary)->value_type);
 
             emit_bin_arithmetic(token_end_location(&binary->end), function, binary->operator.type, expr_type_info, REG_TMP, REG_RESULT, REG_RESULT);
             break;
@@ -462,7 +462,7 @@ static void gen_unary(gen_t *gen, function_t *function, ast_node_t *unary) {
     ast_node_t *expr = an_expression(unary);
     gen_expression(gen, function, expr);
 
-    type_info_t *expr_type_info = get_type_info(&gen->ast->type_set.types, expr->value_type);
+    typedata_t *expr_type_info = type2typedata(&gen->ast->type_set.types, expr->value_type);
 
     emit_unary(token_end_location(&unary->end), function, unary->operator.type, expr_type_info, REG_RESULT, REG_RESULT);
 }
@@ -472,7 +472,7 @@ static value_index_t add_constant(function_t *function, void *data, size_t size)
     return value_index_(index);
 }
 
-static void gen_constant(texloc_t location, function_t *function, void *data, type_info_t *type_info) {
+static void gen_constant(texloc_t location, function_t *function, void *data, typedata_t *type_info) {
     value_index_t value_index = add_constant(function, data, type_info->size);
 
     if (type_info->size <= WORD_SIZE) {
@@ -489,7 +489,7 @@ static void gen_folded_value(gen_t *gen, function_t *function, ast_node_t *expre
     }
     ASSERT(expression->value_index.exists, "must contain concrete value");
 
-    type_info_t *type_info = get_type_info(&gen->ast->type_set.types, expression->value_type);
+    typedata_t *type_info = type2typedata(&gen->ast->type_set.types, expression->value_type);
 
     // this ensures the data is always indexable
     if (function->memory->count+type_info->size >= function->memory->capacity) {
@@ -753,7 +753,7 @@ static void gen_function_def(gen_t *parent_gen, function_t *parent_function, ast
 
     for (size_t i = an_func_def_arg_start(function_def); i < an_func_def_arg_end(function_def); ++i) {
         ast_node_t *arg = function_def->children.items[i];
-        type_info_t *type_info = get_type_info(&gen.ast->type_set.types, arg->value_type);
+        typedata_t *type_info = type2typedata(&gen.ast->type_set.types, arg->value_type);
         gen.stack_size += type_info->size;
         gen_add_local(&gen, arg, gen.stack_size);
     }
@@ -761,7 +761,7 @@ static void gen_function_def(gen_t *parent_gen, function_t *parent_function, ast
     ast_node_t *block = an_func_def_block(function_def);
     gen_block(&gen, function, block);
 
-    type_info_t *func_type_info = get_type_info(&parent_gen->ast->type_set.types, function_def->value_type);
+    typedata_t *func_type_info = type2typedata(&parent_gen->ast->type_set.types, function_def->value_type);
     gen_constant(function_def->end.loc, parent_function, &function, func_type_info);
 }
 

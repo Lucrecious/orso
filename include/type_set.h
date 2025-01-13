@@ -9,7 +9,7 @@
 #define typeid(INDEX) (type_t){.i=INDEX}
 #define typeid_eq(ID1, ID2) ((ID1).i == (ID2).i)
 
-declare_table(type2u64, type_info_t*, type_t);
+declare_table(type2u64, typedata_t*, type_t);
 
 typedef struct type_table_t type_table_t;
 struct type_table_t {
@@ -30,12 +30,11 @@ struct type_table_t {
 
 void type_set_init(type_table_t *set, arena_t *allocator);
 
-type_info_t *get_type_info(type_infos_t *types, type_t type);
+typedata_t *type2typedata(type_infos_t *types, type_t type);
 bool type_is_function(type_infos_t types, type_t type);
 bool type_is_native_function(type_infos_t types, type_t type);
 bool type_is_struct(type_infos_t types, type_t type);
 bool type_is_pointer(type_infos_t types, type_t type);
-bool type_is_number_(type_infos_t types, type_t type);
 
 type_t type_set_fetch_function(
     type_table_t *set,
@@ -54,7 +53,7 @@ type_t type_set_fetch_anonymous_struct(
 
 type_t type_set_fetch_pointer(type_table_t *set, type_t type);
 
-type_t type_create_struct(type_table_t *set, cstr_t name, i32 name_length, type_info_t *anonymous_struct);
+type_t type_create_struct(type_table_t *set, cstr_t name, i32 name_length, typedata_t *anonymous_struct);
 
 type_t type_unique_incomplete_struct_type(type_table_t *set);
 
