@@ -1,0 +1,17 @@
+{
+    fib :: (n: i64) -> i64 {
+        a := 0;
+        b := 1;
+
+        return while n > 1 {
+            t := a;
+            a = b;
+            b = b + t;
+            n = n - 1;
+        } then {
+            b;
+        };
+    };
+
+    fib(10);
+}

@@ -917,7 +917,7 @@ static ast_node_t *parse_call(parser_t *parser) {
 
     an_callee(call) = ast_nil(parser->ast, typeid(TYPE_VOID), token_implicit_at_end(parser->previous));
     call->children.count = an_call_arg_start(call);
-    parse_arguments(parser, an_callee(call));
+    parse_arguments(parser, call);
     call->end = parser->previous;
 
     return call;

@@ -139,7 +139,7 @@ static bool check_call_on_func(analyzer_t *analyzer, ast_t *ast, ast_node_t *cal
     for (size_t i = 0; i < func_td->data.function.argument_types.count; ++i) {
         type_t parameter_type = func_td->data.function.argument_types.items[i];
 
-        ast_node_t *arg = callee->children.items[arg_start+i];
+        ast_node_t *arg = call->children.items[arg_start + i];
         type_t argument_type = arg->value_type;
         unless (typeid_eq(parameter_type, argument_type)) {
             errored = true;
