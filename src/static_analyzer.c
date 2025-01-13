@@ -60,18 +60,6 @@ static ast_node_t *add_builtin_definition(ast_t *ast, string_view_t identifier, 
     return decl;
 }
 
-// static void function_dependencies_cannot_be_compiled(analyzer_t *analyzer) {
-//     for (size_t i = 0; i < analyzer->dependencies.count; ++i) {
-//         analysis_dependency_t *dependency = &analyzer->dependencies.items[i];
-//         ast_node_t *node = dependency->ast_node;
-//         if (node->node_type != AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION) {
-//             continue;
-//         }
-
-//         node->as.function.compilable = false;
-//     }
-// }
-
 #define type2td(ast, type) type2typedata(&((ast)->type_set.types), (type))
 
 static void stan_error(analyzer_t *analyzer, error_t error) {

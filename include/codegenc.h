@@ -245,7 +245,7 @@ static void cgen_cache_requires_tmp(type_infos_t *types, ast_node_t *expression)
     }
 }
 
-static void cgen_primary(cgen_t *cgen, value_index_t value_index, typedata_t *type_info) {
+static void cgen_constant(cgen_t *cgen, value_index_t value_index, typedata_t *type_info) {
     #define value_at(ty) (*((ty*)(memarr_value_at(&cgen->ast->constants, value_index))))
 
     switch (type_info->kind) {
@@ -256,16 +256,16 @@ static void cgen_primary(cgen_t *cgen, value_index_t value_index, typedata_t *ty
                 case NUM_SIZE_SINGLE: {
                     switch (type_info->data.num) {
                         case NUM_TYPE_FLOAT: sb_add_format(&cgen->sb, "%g", value_at(f32)); break;
-                        case NUM_TYPE_SIGNED: sb_add_format(&cgen->sb, "%lu", value_at(u32)); break;
-                        case NUM_TYPE_UNSIGNED: sb_add_format(&cgen->sb, "%d", value_at(i32)); break;
+                        case NUM_TYPE_SIGNED: sb_add_format(&cgen->sb, "%ld", value_at(i32)); break;
+                        case NUM_TYPE_UNSIGNED: sb_add_format(&cgen->sb, "%u", value_at(u32)); break;
                     }
                     break;
                 }
                 case NUM_SIZE_LONG: {
                     switch (type_info->data.num) {
                         case NUM_TYPE_FLOAT: sb_add_format(&cgen->sb, "%lg", value_at(f64)); break;
-                        case NUM_TYPE_SIGNED: sb_add_format(&cgen->sb, "%llu", value_at(u64)); break;
-                        case NUM_TYPE_UNSIGNED: sb_add_format(&cgen->sb, "%lld", value_at(i64)); break;
+                        case NUM_TYPE_SIGNED: sb_add_format(&cgen->sb, "%lld", value_at(i64)); break;
+                        case NUM_TYPE_UNSIGNED: sb_add_format(&cgen->sb, "%llu", value_at(u64)); break;
                     }
                     break;
                 }
@@ -517,12 +517,12 @@ static void cgen_assignment(cgen_t *cgen, ast_node_t *assignment, cgen_var_t var
     }
 }
 
-static void cgen_primary_or_nil(cgen_t *cgen, ast_node_t *primary_or_nil, cgen_var_t var) {
-    ASSERT(!primary_or_nil->requires_tmp_for_cgen, "primaries should never require tmps");
+static void cgen_constant_or_nil(cgen_t *cgen, ast_node_t *constant_or_nil, cgen_var_t var) {
+    ASSERT(!constant_or_nil->requires_tmp_for_cgen, "primaries should never require tmps");
 
-    typedata_t *type_info = type2typedata(&cgen->ast->type_set.types, primary_or_nil->value_type);
+    typedata_t *type_info = type2typedata(&cgen->ast->type_set.types, constant_or_nil->value_type);
 
-    if (TYPE_IS_VOID(primary_or_nil->value_type)) {
+    if (TYPE_IS_VOID(constant_or_nil->value_type)) {
         // ASSERT(!has_var(var), "shouldnt have a var since its void");
         // if (has_var(var)) sb_add_cstr(&cgen->sb, "");
         // sb_add_cstr(&cgen->sb, "NOP()\n");
@@ -531,7 +531,7 @@ static void cgen_primary_or_nil(cgen_t *cgen, ast_node_t *primary_or_nil, cgen_v
             sb_add_format(&cgen->sb, "%s = ", cgen_var(cgen, var));
         }
 
-        cgen_primary(cgen, primary_or_nil->value_index, type_info);
+        cgen_constant(cgen, constant_or_nil->value_index, type_info);
     }
 }
 
@@ -811,7 +811,18 @@ static void cgen_break_or_continue(cgen_t *cgen, ast_node_t *jmp, token_type_t t
 }
 
 static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var) {
+    if (expression->value_index.exists) {
+        cgen_constant_or_nil(cgen, expression, var);
+        return;
+    }
+
     switch (expression->node_type) {
+        case AST_NODE_TYPE_EXPRESSION_NIL:
+        case AST_NODE_TYPE_EXPRESSION_PRIMARY: {
+            cgen_constant_or_nil(cgen, expression, var);
+            break;
+        }
+
         case AST_NODE_TYPE_EXPRESSION_BINARY: {
             cgen_binary(cgen, expression, var);
             break;
@@ -824,12 +835,6 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
 
         case AST_NODE_TYPE_EXPRESSION_ASSIGNMENT: {
             cgen_assignment(cgen, expression, var);
-            break;
-        }
-
-        case AST_NODE_TYPE_EXPRESSION_NIL:
-        case AST_NODE_TYPE_EXPRESSION_PRIMARY: {
-            cgen_primary_or_nil(cgen, expression, var);
             break;
         }
 

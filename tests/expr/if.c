@@ -4,19 +4,19 @@
 i64 expr(void) {
 i64 result_; {
     {
-      if ((1 < 2)) {
+      if (true) {
         ;
       }
     };
 
     {
-      if ((1 < 2)) {
+      if (true) {
         ;
       }
     };
 
     {
-      if ((1 < 2)) {
+      if (true) {
         {
           3;
         };
@@ -24,7 +24,7 @@ i64 result_; {
     };
 
     {
-      if ((1 < 2)) {
+      if (true) {
         0;
       } else {
         {
@@ -34,7 +34,7 @@ i64 result_; {
     };
 
     {
-      if ((1 < 2)) {
+      if (true) {
         {
           3;
         };
@@ -47,7 +47,7 @@ i64 result_; {
 
     {
       bool_ tmp1; {
-        tmp1 = (1 < 2);
+        tmp1 = true;
       };
       if (tmp1) {
         ;
@@ -56,7 +56,7 @@ i64 result_; {
 
     {
       bool_ tmp2; {
-        tmp2 = (1 < 2);
+        tmp2 = true;
       };
       if (tmp2) {
         ;
@@ -65,7 +65,7 @@ i64 result_; {
 
     {
       bool_ tmp3; {
-        tmp3 = (1 < 2);
+        tmp3 = true;
       };
       if (tmp3) {
         {
@@ -76,7 +76,7 @@ i64 result_; {
 
     {
       bool_ tmp4; {
-        tmp4 = (1 < 2);
+        tmp4 = true;
       };
       if (tmp4) {
         {
@@ -90,20 +90,20 @@ i64 result_; {
     };
 
     {
-      if ((1 < 2)) {
+      if (true) {
         ;
       }
     };
 
     {
-      if ((1 < 2)) {
+      if (true) {
         ;
       }
     };
 
     i64 c_ = 0;
 ; {
-      if ((1 < 2)) {
+      if (true) {
         {
           c_ = 3;
         };
@@ -111,7 +111,7 @@ i64 result_; {
     };
 
     i64 d_; {
-      if ((1 < 2)) {
+      if (true) {
         d_ = 0;
       } else {
         {
@@ -121,7 +121,7 @@ i64 result_; {
     };
 
     i64 e_; {
-      if ((1 < 2)) {
+      if (true) {
         {
           e_ = 3;
         };
@@ -134,7 +134,7 @@ i64 result_; {
 
     {
       bool_ tmp5; {
-        tmp5 = (1 < 2);
+        tmp5 = true;
       };
       if (tmp5) {
         ;
@@ -143,7 +143,7 @@ i64 result_; {
 
     {
       bool_ tmp6; {
-        tmp6 = (1 < 2);
+        tmp6 = true;
       };
       if (tmp6) {
         ;
@@ -153,7 +153,7 @@ i64 result_; {
     i64 h_ = 0;
 ; {
       bool_ tmp7; {
-        tmp7 = (1 < 2);
+        tmp7 = true;
       };
       if (tmp7) {
         {
@@ -164,7 +164,7 @@ i64 result_; {
 
     i64 i_; {
       bool_ tmp8; {
-        tmp8 = (1 < 2);
+        tmp8 = true;
       };
       if (tmp8) {
         {
