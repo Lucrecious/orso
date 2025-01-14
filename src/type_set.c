@@ -126,13 +126,26 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
     static typedata_t type_unreachable = {.kind=TYPE_UNREACHABLE, .size=0};
 
     static typedata_t type_void = {.kind=TYPE_VOID, .size=0};
-    static typedata_t type_label = { .kind=TYPE_LABEL, .size=sizeof(u64) };
-    static typedata_t type_bool = {.kind=TYPE_BOOL, .size=NUM_SIZE_BYTE};
-    static typedata_t type_f32 = {.kind=TYPE_NUMBER, .size=NUM_SIZE_SINGLE, .data.num = NUM_TYPE_FLOAT};
-    static typedata_t type_f64 = {.kind=TYPE_NUMBER, .size=NUM_SIZE_LONG, .data.num = NUM_TYPE_FLOAT};
-    static typedata_t type_i32 = {.kind=TYPE_NUMBER, .size=NUM_SIZE_SINGLE, .data.num = NUM_TYPE_SIGNED};
-    static typedata_t type_i64 = {.kind=TYPE_NUMBER, .size=NUM_SIZE_LONG, .data.num = NUM_TYPE_SIGNED};
-    static typedata_t type_u64 = {.kind=TYPE_NUMBER, .size=NUM_SIZE_LONG, .data.num = NUM_TYPE_UNSIGNED};
+    static typedata_t type_bool = {.kind=TYPE_BOOL, .size=NUM_SIZE_8};
+    static typedata_t type_f32 = {.kind=TYPE_NUMBER, .size=NUM_SIZE_32, .data.num = NUM_TYPE_FLOAT};
+    static typedata_t type_f64 = {.kind=TYPE_NUMBER, .size=NUM_SIZE_64, .data.num = NUM_TYPE_FLOAT};
+
+    static typedata_t type_i8 = {.kind=TYPE_NUMBER, .size=NUM_SIZE_8, .data.num = NUM_TYPE_SIGNED};
+    static typedata_t type_u8 = {.kind=TYPE_NUMBER, .size=NUM_SIZE_8, .data.num = NUM_TYPE_UNSIGNED};
+
+    static typedata_t type_i16 = {.kind=TYPE_NUMBER, .size=NUM_SIZE_16, .data.num = NUM_TYPE_SIGNED};
+    static typedata_t type_u16 = {.kind=TYPE_NUMBER, .size=NUM_SIZE_16, .data.num = NUM_TYPE_UNSIGNED};
+
+    static typedata_t type_i32 = {.kind=TYPE_NUMBER, .size=NUM_SIZE_32, .data.num = NUM_TYPE_SIGNED};
+    static typedata_t type_u32 = {.kind=TYPE_NUMBER, .size=NUM_SIZE_32, .data.num = NUM_TYPE_UNSIGNED};
+
+    static typedata_t type_i64 = {.kind=TYPE_NUMBER, .size=NUM_SIZE_64, .data.num = NUM_TYPE_SIGNED};
+    static typedata_t type_u64 = {.kind=TYPE_NUMBER, .size=NUM_SIZE_64, .data.num = NUM_TYPE_UNSIGNED};
+
+    static typedata_t type_int = {.kind=TYPE_NUMBER, .size=sizeof(int), .data.num = NUM_TYPE_SIGNED};
+    static typedata_t type_uint = {.kind=TYPE_NUMBER, .size=sizeof(unsigned int), .data.num = NUM_TYPE_UNSIGNED};
+    static typedata_t type_size_t = {.kind=TYPE_NUMBER, .size=sizeof(size_t), .data.num = NUM_TYPE_UNSIGNED};
+
     static typedata_t type_string = {.kind=TYPE_STRING, .size=sizeof(void*)};
     static typedata_t type_type = {.kind=TYPE_TYPE, .size=sizeof(type_t)};
     static typedata_t empty_function = {.kind = TYPE_FUNCTION, .size = sizeof(void*), .data.function.return_type = typeid(TYPE_VOID)};
@@ -148,9 +161,6 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
 
     type_t unreachable = typeid(set->types.count);
     array_push(&set->types, &type_unreachable);
-
-    type_t label = typeid(set->types.count);
-    array_push(&set->types, &type_label);
 
     type_t void_ = typeid(set->types.count);
     array_push(&set->types, &type_void);
@@ -170,14 +180,38 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
     set->f64_ = typeid(set->types.count);
     array_push(&set->types, &type_f64);
 
+    set->i8_ = typeid(set->types.count);
+    array_push(&set->types, &type_i8);
+
+    set->u8_ = typeid(set->types.count);
+    array_push(&set->types, &type_u8);
+
+    set->i16_ = typeid(set->types.count);
+    array_push(&set->types, &type_i16);
+
+    set->u16_ = typeid(set->types.count);
+    array_push(&set->types, &type_u16);
+
     set->i32_ = typeid(set->types.count);
     array_push(&set->types, &type_i32);
+
+    set->u32_ = typeid(set->types.count);
+    array_push(&set->types, &type_u32);
 
     set->i64_ = typeid(set->types.count);
     array_push(&set->types, &type_i64);
 
     set->u64_ = typeid(set->types.count);
     array_push(&set->types, &type_u64);
+
+    set->int_ = typeid(set->types.count);
+    array_push(&set->types, &type_int);
+
+    set->uint_ = typeid(set->types.count);
+    array_push(&set->types, &type_uint);
+
+    set->size_t_ = typeid(set->types.count);
+    array_push(&set->types, &type_size_t);
 
     set->empty_function_ = typeid(set->types.count);
     array_push(&set->types, &empty_function);
@@ -186,7 +220,6 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
     ASSERT(unresolved.i == TYPE_UNRESOLVED, "must be same as type unresolved");
     ASSERT(undefined.i == TYPE_UNDEFINED, "must be same as type undefined");
     ASSERT(unreachable.i == TYPE_UNREACHABLE, "must be same as type unreachable");
-    ASSERT(label.i == TYPE_LABEL, "must be same as type jmp location");
     ASSERT(void_.i == TYPE_VOID, "must be same as type void");
     ASSERT(bool_.i == TYPE_BOOL, "must be same as type bool");
     ASSERT(string_.i == TYPE_STRING, "must be same as type string");

@@ -17,11 +17,25 @@ struct type_table_t {
     table_t(type2u64) *types2index;
     arena_t *allocator;
 
+    type_t i8_;
+    type_t u8_;
+
+    type_t i16_;
+    type_t u16_;
+
+    type_t i32_;
+    type_t u32_;
+
+    type_t u64_;
+    type_t i64_;
+
     type_t f32_;
     type_t f64_;
-    type_t i32_;
-    type_t i64_;
-    type_t u64_;
+
+    type_t int_;
+    type_t uint_;
+    type_t size_t_;
+
     type_t string_;
     type_t symbol_;
     type_t type_;

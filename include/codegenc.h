@@ -85,9 +85,9 @@ static cstr_t cgen_type_name(cgen_t *cgen, type_t type) {
     switch (type_info->kind) {
         case TYPE_NUMBER: {
             switch ((num_size_t)type_info->size) {
-                case NUM_SIZE_BYTE: UNREACHABLE(); return "byte";
-                case NUM_SIZE_SHORT: UNREACHABLE(); return "u16";
-                case NUM_SIZE_SINGLE: {
+                case NUM_SIZE_8: UNREACHABLE(); return "byte";
+                case NUM_SIZE_16: UNREACHABLE(); return "u16";
+                case NUM_SIZE_32: {
                     switch (type_info->data.num) {
                         case NUM_TYPE_FLOAT: return "f32";
                         case NUM_TYPE_SIGNED: return "i32";
@@ -96,7 +96,7 @@ static cstr_t cgen_type_name(cgen_t *cgen, type_t type) {
                     break;
                 }
 
-                case NUM_SIZE_LONG: {
+                case NUM_SIZE_64: {
                     switch (type_info->data.num) {
                         case NUM_TYPE_FLOAT: return "f64";
                         case NUM_TYPE_SIGNED: return "i64";
@@ -118,7 +118,6 @@ static cstr_t cgen_type_name(cgen_t *cgen, type_t type) {
         case TYPE_FUNCTION:
         case TYPE_NATIVE_FUNCTION:
         case TYPE_POINTER:
-        case TYPE_LABEL:
         case TYPE_STRUCT: UNREACHABLE(); return "void";
 
         case TYPE_INVALID:
@@ -251,9 +250,9 @@ static void cgen_constant(cgen_t *cgen, value_index_t value_index, typedata_t *t
     switch (type_info->kind) {
         case TYPE_NUMBER: {
             switch ((num_size_t)type_info->size) {
-                case NUM_SIZE_BYTE: UNREACHABLE(); break;
-                case NUM_SIZE_SHORT: UNREACHABLE(); break;
-                case NUM_SIZE_SINGLE: {
+                case NUM_SIZE_8: UNREACHABLE(); break;
+                case NUM_SIZE_16: UNREACHABLE(); break;
+                case NUM_SIZE_32: {
                     switch (type_info->data.num) {
                         case NUM_TYPE_FLOAT: sb_add_format(&cgen->sb, "%g", value_at(f32)); break;
                         case NUM_TYPE_SIGNED: sb_add_format(&cgen->sb, "%ld", value_at(i32)); break;
@@ -261,7 +260,7 @@ static void cgen_constant(cgen_t *cgen, value_index_t value_index, typedata_t *t
                     }
                     break;
                 }
-                case NUM_SIZE_LONG: {
+                case NUM_SIZE_64: {
                     switch (type_info->data.num) {
                         case NUM_TYPE_FLOAT: sb_add_format(&cgen->sb, "%lg", value_at(f64)); break;
                         case NUM_TYPE_SIGNED: sb_add_format(&cgen->sb, "%lld", value_at(i64)); break;
@@ -280,7 +279,6 @@ static void cgen_constant(cgen_t *cgen, value_index_t value_index, typedata_t *t
             break;
         }
 
-        case TYPE_LABEL:
         case TYPE_VOID:
         case TYPE_STRING:
         case TYPE_TYPE:

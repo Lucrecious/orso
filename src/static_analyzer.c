@@ -98,10 +98,25 @@ if (sv_eq(identifier, lit2sv(#TYPE_STRING))) {\
     return true; \
 }
 
-    RETURN_IF_TYPE(identifier, i32, t->i32_)
-    RETURN_IF_TYPE(identifier, i64, t->i64_)
     RETURN_IF_TYPE(identifier, f32, t->f32_)
     RETURN_IF_TYPE(identifier, f64, t->f64_)
+
+    RETURN_IF_TYPE(identifier, u8, t->u8_)
+    RETURN_IF_TYPE(identifier, i8, t->i8_)
+
+    RETURN_IF_TYPE(identifier, u16, t->u16_)
+    RETURN_IF_TYPE(identifier, i16, t->i16_)
+
+    RETURN_IF_TYPE(identifier, i32, t->i32_)
+    RETURN_IF_TYPE(identifier, u32, t->u32_)
+
+    RETURN_IF_TYPE(identifier, u64, t->u64_)
+    RETURN_IF_TYPE(identifier, i64, t->i64_)
+
+    RETURN_IF_TYPE(identifier, int, t->int_)
+    RETURN_IF_TYPE(identifier, uint, t->uint_)
+    RETURN_IF_TYPE(identifier, size_t, t->size_t_)
+
 #undef RETURN_IF_TYPE
 
 #define RETURN_IF_TYPE(SYMBOL, TYPE_STRING, TYPE) \
@@ -112,7 +127,6 @@ if (sv_eq(identifier, lit2sv(#TYPE_STRING))){\
 
     RETURN_IF_TYPE(identifier, void, TYPE_INVALID)
     RETURN_IF_TYPE(identifier, bool, TYPE_BOOL)
-    RETURN_IF_TYPE(identifier, string, TYPE_STRING)
     RETURN_IF_TYPE(identifier, type, TYPE_TYPE)
 #undef RETURN_IF_TYPE
 

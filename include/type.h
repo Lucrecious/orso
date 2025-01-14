@@ -30,7 +30,6 @@ typedef enum type_kind_t {
 
     // simple types (types that do not require type info)
     TYPE_UNREACHABLE,      // for jmp expressions (return, break, continue)
-    TYPE_LABEL,     // for do labels
 
     TYPE_VOID,             // null
     TYPE_BOOL,             // true false
@@ -76,10 +75,10 @@ enum num_type_t {
 
 typedef enum num_size_t num_size_t;
 enum num_size_t {
-    NUM_SIZE_BYTE = sizeof(byte),
-    NUM_SIZE_SHORT = sizeof(u16),
-    NUM_SIZE_SINGLE = sizeof(u32),
-    NUM_SIZE_LONG = sizeof(u64),
+    NUM_SIZE_8 = sizeof(byte),
+    NUM_SIZE_16 = sizeof(u16),
+    NUM_SIZE_32 = sizeof(u32),
+    NUM_SIZE_64 = sizeof(u64),
 };
 
 struct typedata_t {

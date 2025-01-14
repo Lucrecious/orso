@@ -1,0 +1,73 @@
+{
+    check := 0;
+
+    a1 := 100u8;
+    a2: u8;
+
+    if typeof(a1) == u8 then check = check + 1;
+    if typeof(a2) == u8 then check = check + 1;
+
+    b1 := 100i8;
+    b2: i8;
+
+    if typeof(b1) == i8 then check = check + 1;
+    if typeof(b2) == i8 then check = check + 1;
+
+    c1 := 10000u16;
+    c2: u16;
+
+    if typeof(c1) == u16 then check = check + 1;
+    if typeof(c2) == u16 then check = check + 1;
+
+    d1 := 10000i16;
+    d2: i16;
+
+    if typeof(d1) == i16 then check = check + 1;
+    if typeof(d2) == i16 then check = check + 1;
+
+    e1 := 100_000u32;
+    e2: u32;
+
+    if typeof(e1) == u32 then check = check + 1;
+    if typeof(e2) == u32 then check = check + 1;
+
+    f1 := 100_000i32;
+    f2: i32;
+
+    if typeof(f1) == i32 then check = check + 1;
+    if typeof(f2) == i32 then check = check + 1;
+
+    g1 := 100_000_000u64;
+    g2: u64;
+
+    if typeof(g1) == u64 then check = check + 1;
+    if typeof(g2) == u64 then check = check + 1;
+
+    h1 := 100_000_000i64;
+    h2: i64;
+
+    if typeof(h1) == i64 then check = check + 1;
+    if typeof(h2) == i64 then check = check + 1;
+
+    j1 := 100u;
+    j2: uint;
+
+    if typeof(j1) == uint then check = check + 1;
+    if typeof(j2) == uint then check = check + 1;
+
+    i1 := 100;
+    i2: int;
+    i3 := 420i;
+
+    if typeof(i1) == int then check = check + 1;
+    if typeof(i2) == int then check = check + 1;
+    if typeof(i3) == int then check = check + 1;
+
+    s1 := 100sz;
+    s2: size_t;
+
+    if typeof(s1) == size_t then check = check + 1;
+    if typeof(s2) == size_t then check = check + 1;
+
+    check;
+}

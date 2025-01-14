@@ -85,10 +85,10 @@ static void emit_read_memory_to_reg(texloc_t location, function_t *function, reg
 
         case TYPE_NUMBER: {
             switch ((num_size_t)type_info->size) {
-                case NUM_SIZE_BYTE: UNREACHABLE(); break;
-                case NUM_SIZE_SHORT: break;
+                case NUM_SIZE_8: UNREACHABLE(); break;
+                case NUM_SIZE_16: break;
 
-                case NUM_SIZE_SINGLE: {
+                case NUM_SIZE_32: {
                     switch (type_info->data.num) {
                         case NUM_TYPE_FLOAT: instruction.op = OP_MOVF32_MEM_TO_REG; break;
                         case NUM_TYPE_SIGNED: instruction.op = OP_MOVF32_MEM_TO_REG; break;
@@ -97,7 +97,7 @@ static void emit_read_memory_to_reg(texloc_t location, function_t *function, reg
                     break;
                 }
 
-                case NUM_SIZE_LONG: break;
+                case NUM_SIZE_64: break;
 
                 default: UNREACHABLE();
             }

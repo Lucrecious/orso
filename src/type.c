@@ -78,7 +78,6 @@ bool type_equal(typedata_t *a, typedata_t *b) {
         case TYPE_STRING:
         case TYPE_VOID:
         case TYPE_UNREACHABLE:
-        case TYPE_LABEL:
         case TYPE_TYPE: return true;
 
         case TYPE_COUNT:
@@ -188,7 +187,6 @@ string_t type_to_string_toplevel(type_infos_t types, type_t type, arena_t *alloc
                 break;
             }
 
-            case TYPE_LABEL: type_name = "label"; break;
             case TYPE_STRING: type_name = "string"; break;
             case TYPE_VOID: type_name = "void"; break;
             case TYPE_TYPE: type_name = "type"; break;

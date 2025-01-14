@@ -1325,11 +1325,6 @@ value_index_t zero_value(ast_t *ast, type_t type) {
             break;
         }
 
-        case TYPE_LABEL: {
-            UNREACHABLE();
-            break;
-        }
-
         case TYPE_COUNT:
         case TYPE_UNDEFINED:
         case TYPE_UNREACHABLE:
@@ -1367,30 +1362,30 @@ i64 valin2i(ast_t *ast, value_index_t index, num_size_t numsize) {
     i64 result = 0;
 
     switch (numsize) {
-    case NUM_SIZE_BYTE: {
+    case NUM_SIZE_8: {
         i8 value;
-        unless (memarr_get(&ast->constants, index.index, NUM_SIZE_BYTE, &value)) break;
+        unless (memarr_get(&ast->constants, index.index, NUM_SIZE_8, &value)) break;
         result = value;
         break;
     }
 
-    case NUM_SIZE_SHORT: {
+    case NUM_SIZE_16: {
         i16 value;
-        unless (memarr_get(&ast->constants, index.index, NUM_SIZE_SHORT, &value)) break;
+        unless (memarr_get(&ast->constants, index.index, NUM_SIZE_16, &value)) break;
         result = value;
         break;
     }
 
-    case NUM_SIZE_SINGLE: {
+    case NUM_SIZE_32: {
         i32 value;
-        unless (memarr_get(&ast->constants, index.index, NUM_SIZE_SINGLE, &value)) break;
+        unless (memarr_get(&ast->constants, index.index, NUM_SIZE_32, &value)) break;
         result = value;
         break;
     }
 
-    case NUM_SIZE_LONG: {
+    case NUM_SIZE_64: {
         i64 value;
-        unless (memarr_get(&ast->constants, index.index, NUM_SIZE_LONG, &value)) break;
+        unless (memarr_get(&ast->constants, index.index, NUM_SIZE_64, &value)) break;
         result = value;
         break;
     }
@@ -1407,30 +1402,30 @@ u64 valin2u(ast_t *ast, value_index_t index, num_size_t num_size) {
     u64 result = 0;
 
     switch (num_size) {
-    case NUM_SIZE_BYTE: {
+    case NUM_SIZE_8: {
         u8 value;
-        unless (memarr_get(&ast->constants, index.index, NUM_SIZE_BYTE, &value)) break;
+        unless (memarr_get(&ast->constants, index.index, NUM_SIZE_8, &value)) break;
         result = value;
         break;
     }
 
-    case NUM_SIZE_SHORT: {
+    case NUM_SIZE_16: {
         u16 value;
-        unless (memarr_get(&ast->constants, index.index, NUM_SIZE_SHORT, &value)) break;
+        unless (memarr_get(&ast->constants, index.index, NUM_SIZE_16, &value)) break;
         result = value;
         break;
     }
 
-    case NUM_SIZE_SINGLE: {
+    case NUM_SIZE_32: {
         u32 value;
-        unless (memarr_get(&ast->constants, index.index, NUM_SIZE_SINGLE, &value)) break;
+        unless (memarr_get(&ast->constants, index.index, NUM_SIZE_32, &value)) break;
         result = value;
         break;
     }
 
-    case NUM_SIZE_LONG: {
+    case NUM_SIZE_64: {
         u64 value;
-        unless (memarr_get(&ast->constants, index.index, NUM_SIZE_LONG, &value)) break;
+        unless (memarr_get(&ast->constants, index.index, NUM_SIZE_64, &value)) break;
         result = value;
         break;
     }
@@ -1447,19 +1442,19 @@ f64 valin2d(ast_t *ast, value_index_t index, num_size_t num_size) {
     f64 result = 0.0;
 
     switch (num_size) {
-    case NUM_SIZE_BYTE: UNREACHABLE(); break;
-    case NUM_SIZE_SHORT: UNREACHABLE(); break;
+    case NUM_SIZE_8: UNREACHABLE(); break;
+    case NUM_SIZE_16: UNREACHABLE(); break;
 
-    case NUM_SIZE_SINGLE: {
+    case NUM_SIZE_32: {
         f32 value;
-        unless (memarr_get(&ast->constants, index.index, NUM_SIZE_SINGLE, &value)) break;
+        unless (memarr_get(&ast->constants, index.index, NUM_SIZE_32, &value)) break;
         result = value;
         break;
     }
 
-    case NUM_SIZE_LONG: {
+    case NUM_SIZE_64: {
         f64 value;
-        unless (memarr_get(&ast->constants, index.index, NUM_SIZE_LONG, &value)) break;
+        unless (memarr_get(&ast->constants, index.index, NUM_SIZE_64, &value)) break;
         result = value;
         break;
     }
@@ -1472,23 +1467,23 @@ f64 valin2d(ast_t *ast, value_index_t index, num_size_t num_size) {
 
 value_index_t i2valin(ast_t *ast, i64 value, num_size_t num_size) {
     switch (num_size) {
-    case NUM_SIZE_BYTE: {
+    case NUM_SIZE_8: {
         i8 v = cast_i64_to_i8(value);
-        return memarr_push_value(&ast->constants, &v, NUM_SIZE_BYTE);
+        return memarr_push_value(&ast->constants, &v, NUM_SIZE_8);
     }
 
-    case NUM_SIZE_SHORT: {
+    case NUM_SIZE_16: {
         i16 v = cast_i64_to_i16(value);
-        return memarr_push_value(&ast->constants, &v, NUM_SIZE_SHORT);
+        return memarr_push_value(&ast->constants, &v, NUM_SIZE_16);
     }
 
-    case NUM_SIZE_SINGLE: {
+    case NUM_SIZE_32: {
         i32 v = cast_i64_to_i32(value);
-        return memarr_push_value(&ast->constants, &v, NUM_SIZE_SINGLE);
+        return memarr_push_value(&ast->constants, &v, NUM_SIZE_32);
     }
 
-    case NUM_SIZE_LONG: {
-        return memarr_push_value(&ast->constants, &value, NUM_SIZE_LONG);
+    case NUM_SIZE_64: {
+        return memarr_push_value(&ast->constants, &value, NUM_SIZE_64);
     }
 
     default: UNREACHABLE();
@@ -1497,40 +1492,40 @@ value_index_t i2valin(ast_t *ast, i64 value, num_size_t num_size) {
 
 value_index_t u2valin(ast_t *ast, u64 value, num_size_t num_size) {
     switch (num_size) {
-    case NUM_SIZE_BYTE: {
+    case NUM_SIZE_8: {
         u8 v = cast_u64_to_u8(value);
-        return memarr_push_value(&ast->constants, &v, NUM_SIZE_BYTE);
+        return memarr_push_value(&ast->constants, &v, NUM_SIZE_8);
     }
 
-    case NUM_SIZE_SHORT: {
+    case NUM_SIZE_16: {
         u16 v = cast_u64_to_u16(value);
-        return memarr_push_value(&ast->constants, &v, NUM_SIZE_SHORT);
+        return memarr_push_value(&ast->constants, &v, NUM_SIZE_16);
     }
 
-    case NUM_SIZE_SINGLE: {
+    case NUM_SIZE_32: {
         u32 v = cast_u64_to_u32(value);
-        return memarr_push_value(&ast->constants, &v, NUM_SIZE_SINGLE);
+        return memarr_push_value(&ast->constants, &v, NUM_SIZE_32);
     }
 
-    case NUM_SIZE_LONG: {
-        return memarr_push_value(&ast->constants, &value, NUM_SIZE_LONG);
+    case NUM_SIZE_64: {
+        return memarr_push_value(&ast->constants, &value, NUM_SIZE_64);
     }
     }
 }
 
 value_index_t d2valin(ast_t *ast, f64 value, num_size_t num_size) {
     switch (num_size) {
-    case NUM_SIZE_BYTE: UNREACHABLE(); return value_index_nil();
+    case NUM_SIZE_8: UNREACHABLE(); return value_index_nil();
 
-    case NUM_SIZE_SHORT: UNREACHABLE(); return value_index_nil();
+    case NUM_SIZE_16: UNREACHABLE(); return value_index_nil();
 
-    case NUM_SIZE_SINGLE: {
+    case NUM_SIZE_32: {
         f32 v = cast_f64_to_f32(value);
-        return memarr_push_value(&ast->constants, &v, NUM_SIZE_SINGLE);
+        return memarr_push_value(&ast->constants, &v, NUM_SIZE_32);
     }
 
-    case NUM_SIZE_LONG: {
-        return memarr_push_value(&ast->constants, &value, NUM_SIZE_LONG);
+    case NUM_SIZE_64: {
+        return memarr_push_value(&ast->constants, &value, NUM_SIZE_64);
     }
     }
 }
@@ -1538,14 +1533,14 @@ value_index_t d2valin(ast_t *ast, f64 value, num_size_t num_size) {
 bool valin2bool(ast_t *ast, value_index_t value_index) {
     u8 resultb = 0;
     bool result = false;
-    unless (memarr_get(&ast->constants, value_index.index, NUM_SIZE_BYTE, &resultb)) return false;
+    unless (memarr_get(&ast->constants, value_index.index, NUM_SIZE_8, &resultb)) return false;
     result = resultb;
     return result;
 }
 
 value_index_t bool2valin(ast_t *ast, bool value) {
     byte val = (u8)value;
-    return memarr_push_value(&ast->constants, &val, NUM_SIZE_BYTE);
+    return memarr_push_value(&ast->constants, &val, NUM_SIZE_8);
 }
 
 static void print_indent(u32 level) {
