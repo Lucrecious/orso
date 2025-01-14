@@ -174,22 +174,14 @@ string_t type_to_string_toplevel(type_infos_t types, type_t type, arena_t *alloc
     } else {
         cstr_t type_name;
         switch (type_info->kind) {
-            case TYPE_BOOL: type_name = "bool"; break;
-            case TYPE_NUMBER: {
-                switch (type_info->data.num) {
-                    case NUM_TYPE_FLOAT: sb_add_char(&sb, 'f'); break;
-                    case NUM_TYPE_SIGNED: sb_add_char(&sb, 'i'); break;
-                    case NUM_TYPE_UNSIGNED: sb_add_char(&sb, 'u'); break;
-                }
-
-                string_t s = string_format("%llu", tmp_arena->allocator, (type_info->size*8));
-                type_name = s.cstr;
+            case TYPE_NUMBER:
+            case TYPE_BOOL:
+            case TYPE_STRING:
+            case TYPE_VOID:
+            case TYPE_TYPE: {
+                type_name = type_info->name.cstr;
                 break;
             }
-
-            case TYPE_STRING: type_name = "string"; break;
-            case TYPE_VOID: type_name = "void"; break;
-            case TYPE_TYPE: type_name = "type"; break;
 
             case TYPE_INVALID: type_name = "<invalid>"; break;
             case TYPE_UNRESOLVED: type_name = "<unresolved>"; break;

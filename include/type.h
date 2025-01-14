@@ -75,13 +75,14 @@ enum num_type_t {
 
 typedef enum num_size_t num_size_t;
 enum num_size_t {
-    NUM_SIZE_8 = sizeof(byte),
+    NUM_SIZE_8 = sizeof(u8),
     NUM_SIZE_16 = sizeof(u16),
     NUM_SIZE_32 = sizeof(u32),
     NUM_SIZE_64 = sizeof(u64),
 };
 
 struct typedata_t {
+    string_t name;
     type_kind_t kind;
     size_t size; // not serialized
     union {
