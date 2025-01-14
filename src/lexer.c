@@ -200,6 +200,39 @@ static token_t number(lexer_t *lexer) {
         while (is_digit(peek(lexer)) || peek(lexer) == '_') {
             advance(lexer);
         }
+    } else if (peek(lexer) == 'i' || peek(lexer) == 'u') {
+        advance(lexer);
+
+        switch (peek(lexer)) {
+        case '8': advance(lexer); break;
+        case '1': {
+            switch (peek_next(lexer)) {
+            case '6': advance(lexer); advance(lexer); break;
+            default: break;
+            }
+            break;
+        }
+
+        case '3': {
+            switch (peek_next(lexer)) {
+            case '2': advance(lexer); advance(lexer); break;
+            default: break;
+            }
+            break;
+        }
+
+        case '6': {
+            switch (peek_next(lexer)) {
+            case '4': advance(lexer); advance(lexer); break;
+            default: break;
+            }
+        }
+
+        default: break;
+        }
+    } else if (peek(lexer) == 's' && peek_next(lexer) == 'z') {
+        advance(lexer);
+        advance(lexer);
     }
 
     return create_token(lexer, is_float ? TOKEN_FLOAT : TOKEN_INTEGER);
@@ -248,6 +281,7 @@ static token_type_t identifier_type(lexer_t *lexer) {
                 switch(lexer->start[1]) {
                     case 'h': return check_keyword(lexer, 2, 2, "en", TOKEN_THEN);
                     case 'r': return check_keyword(lexer, 2, 2, "ue", TOKEN_TRUE);
+                    case 'y': return check_keyword(lexer, 2, 4, "peof", TOKEN_TYPEOF);
                 }
             }
             break;

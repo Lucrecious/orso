@@ -50,13 +50,14 @@ string_t string_copy(string_t s, arena_t *allocator);
 
 size_t string2size(string_t s);
 
-i64 cstrn_to_i64(const char* text, i32 length);
+i64 cstrn_to_u64(const char* text, i32 length);
 f64 cstrn_to_f64(const char* text, i32 length);
 
 #define cstr2sv(cstr) (string_view_t){.data=(cstr), .length=strlen(cstr)}
 string_view_t string2sv(string_t string);
 string_t sv2string(string_view_t sv, arena_t *allocator);
 string_view_t sv_filename(string_view_t sv);
+bool sv_ends_with(string_view_t sv, cstr_t cstr);
 
 void sb_add_char(string_builder_t *sb, char c);
 void sb_add_cstr(string_builder_t *sb, cstr_t cstr);
@@ -242,7 +243,7 @@ string_t sb_render(string_builder_t *builder, arena_t *allocator) {
     return cstrn2string(builder->items, builder->count, allocator);
 }
 
-i64 cstrn_to_i64(const char* text, i32 length) {
+i64 cstrn_to_u64(const char* text, i32 length) {
     i64 integer = 0;
 
     for (i32 i = 0; i < length; i++) {

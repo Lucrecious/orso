@@ -30,6 +30,8 @@ enum token_type_t {
 
     TOKEN_RETURN, TOKEN_BREAK, TOKEN_CONTINUE,
 
+    TOKEN_TYPEOF,
+
     TOKEN_IMPLICIT,
 
     TOKEN_EOF,

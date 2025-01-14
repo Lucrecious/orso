@@ -296,7 +296,7 @@ static ast_node_t *ast_primaryi(ast_t *ast, i64 value, ast_node_t extra_params) 
     ast_node_t *primary = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_PRIMARY, extra_params.start);
 
     primary->value_index = memarr_push_value(&ast->constants, &value, sizeof(i64));
-    primary->value_type = ast->type_set.i64_;
+    primary->value_type = ast->type_set.int_;
 
     return primary;
 }
@@ -513,11 +513,37 @@ static ast_node_t *parse_number(parser_t *parser) {
     switch (parser->previous.type)  {
         case TOKEN_INTEGER: {
 
-            i64 value = cstrn_to_i64(parser->previous.view.data, parser->previous.view.length);
+            
+            string_view_t numsv = parser->previous.view;
+            i64 value = cstrn_to_u64(numsv.data, numsv.length);
 
             ast_node_t *primary = ast_primaryi(parser->ast, value, (ast_node_t){
                 .start = parser->previous,
             });
+
+            if (sv_ends_with(numsv, "i")) {
+                primary->value_type = parser->ast->type_set.int_;
+            } else if (sv_ends_with(numsv, "u")) {
+                primary->value_type = parser->ast->type_set.uint_;
+            } else if (sv_ends_with(numsv, "i8")) {
+                primary->value_type = parser->ast->type_set.i8_;
+            } else if (sv_ends_with(numsv, "u8")) {
+                primary->value_type = parser->ast->type_set.u8_;
+            } else if (sv_ends_with(numsv, "i16")) {
+                primary->value_type = parser->ast->type_set.i16_;
+            } else if (sv_ends_with(numsv, "u16")) {
+                primary->value_type = parser->ast->type_set.u16_;
+            } else if (sv_ends_with(numsv, "i32")) {
+                primary->value_type = parser->ast->type_set.i32_;
+            } else if (sv_ends_with(numsv, "u32")) {
+                primary->value_type = parser->ast->type_set.u32_;
+            } else if (sv_ends_with(numsv, "i64")) {
+                primary->value_type = parser->ast->type_set.i64_;
+            } else if (sv_ends_with(numsv, "u64")) {
+                primary->value_type = parser->ast->type_set.u64_;
+            } else if (sv_ends_with(numsv, "sz")) {
+                primary->value_type = parser->ast->type_set.size_t_;
+            } 
 
             return primary;
         }
