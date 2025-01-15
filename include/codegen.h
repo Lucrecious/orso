@@ -78,20 +78,40 @@ static void emit_read_memory_to_reg(texloc_t location, function_t *function, reg
             break;
         }
 
+        case TYPE_TYPE:
         case TYPE_FUNCTION: {
-            instruction.op = OP_MOVWORD_MEM_TO_REG; break;
+            if (type_info->size != WORD_SIZE) {
+                TODO("other than numbers, type should be solely handled by size");
+            }
+
+            instruction.op = OP_MOVWORD_MEM_TO_REG;
             break;
         }
 
         case TYPE_NUMBER: {
             switch ((num_size_t)type_info->size) {
-                case NUM_SIZE_8: UNREACHABLE(); break;
-                case NUM_SIZE_16: break;
+                case NUM_SIZE_8: {
+                    switch (type_info->data.num) {
+                        case NUM_TYPE_FLOAT: UNREACHABLE(); break;
+                        case NUM_TYPE_SIGNED: instruction.op = OP_MOVI8_MEM_TO_REG; break;
+                        case NUM_TYPE_UNSIGNED: instruction.op = OP_MOVU8_MEM_TO_REG; break;
+                    }
+                    break;
+                }
+
+                case NUM_SIZE_16: {
+                    switch (type_info->data.num) {
+                        case NUM_TYPE_FLOAT: UNREACHABLE(); break;
+                        case NUM_TYPE_SIGNED: instruction.op = OP_MOVI16_MEM_TO_REG; break;
+                        case NUM_TYPE_UNSIGNED: instruction.op = OP_MOVU16_MEM_TO_REG; break;
+                    }
+                    break;
+                }
 
                 case NUM_SIZE_32: {
                     switch (type_info->data.num) {
                         case NUM_TYPE_FLOAT: instruction.op = OP_MOVF32_MEM_TO_REG; break;
-                        case NUM_TYPE_SIGNED: instruction.op = OP_MOVF32_MEM_TO_REG; break;
+                        case NUM_TYPE_SIGNED: instruction.op = OP_MOVI32_MEM_TO_REG; break;
                         case NUM_TYPE_UNSIGNED: instruction.op = OP_MOVU32_MEM_TO_REG; break;
                     }
                     break;
@@ -169,119 +189,146 @@ static void emit_popn_bytes(gen_t *gen, function_t *function, u32 pop_size_bytes
 
 static void emit_bin_arithmetic(texloc_t loc, function_t *function, token_type_t token_type, typedata_t *type_info, reg_t op1, reg_t op2, reg_t result) {
     instruction_t instruction = {0};
-    ASSERT(type_info->kind == TYPE_NUMBER, "for now only numbers");
 
-    switch (token_type) {
-        case TOKEN_PLUS: {
-            switch (type_info->data.num) {
-                case NUM_TYPE_FLOAT: instruction.op = OP_ADDD_REG_REG; break;
-                case NUM_TYPE_SIGNED: instruction.op = OP_ADDI_REG_REG; break;
-                case NUM_TYPE_UNSIGNED: instruction.op = OP_ADDU_REG_REG; break;
-            }
-            break;
-        }
+    switch (type_info->kind) {
+    case TYPE_TYPE:
+    case TYPE_BOOL: {
+        switch (token_type) {
+            case TOKEN_PLUS: instruction.op = OP_ADDU_REG_REG; break;
+            case TOKEN_MINUS: instruction.op = OP_SUBU_REG_REG; break;
+            case TOKEN_STAR: instruction.op = OP_MULU_REG_REG; break;
+            case TOKEN_SLASH: instruction.op = OP_DIVU_REG_REG; break;
+            case TOKEN_PERCENT: instruction.op = OP_MODU_REG_REG; break;
+            case TOKEN_PERCENT_PERCENT: instruction.op = OP_REMU_REG_REG; break;
+            case TOKEN_GREATER: instruction.op = OP_GTU_REG_REG; break;
+            case TOKEN_GREATER_EQUAL: instruction.op = OP_GEU_REG_REG; break;
+            case TOKEN_LESS: instruction.op = OP_LTU_REG_REG; break;
+            case TOKEN_LESS_EQUAL: instruction.op = OP_LEU_REG_REG; break;
+            case TOKEN_EQUAL_EQUAL: instruction.op = OP_EQU_REG_REG; break;
+            case TOKEN_BANG_EQUAL: instruction.op = OP_NQU_REG_REG; break;
 
-        case TOKEN_MINUS: {
-            switch (type_info->data.num) {
-                case NUM_TYPE_FLOAT: instruction.op = OP_SUBD_REG_REG; break;
-                case NUM_TYPE_SIGNED: instruction.op = OP_SUBI_REG_REG; break;
-                case NUM_TYPE_UNSIGNED: instruction.op = OP_SUBU_REG_REG; break;
-            }
-            break;
+            default: UNREACHABLE(); break;
         }
+        break;
+    }
 
-        case TOKEN_STAR: {
-            switch (type_info->data.num) {
-                case NUM_TYPE_FLOAT: instruction.op = OP_MULD_REG_REG; break;
-                case NUM_TYPE_SIGNED: instruction.op = OP_MULI_REG_REG; break;
-                case NUM_TYPE_UNSIGNED: instruction.op = OP_MULU_REG_REG; break;
+    case TYPE_NUMBER: {
+        switch (token_type) {
+            case TOKEN_PLUS: {
+                switch (type_info->data.num) {
+                    case NUM_TYPE_FLOAT: instruction.op = OP_ADDD_REG_REG; break;
+                    case NUM_TYPE_SIGNED: instruction.op = OP_ADDI_REG_REG; break;
+                    case NUM_TYPE_UNSIGNED: instruction.op = OP_ADDU_REG_REG; break;
+                }
+                break;
             }
-            break;
-        }
-        
-        case TOKEN_SLASH: {
-            switch (type_info->data.num) {
-                case NUM_TYPE_FLOAT: instruction.op = OP_DIVD_REG_REG; break;
-                case NUM_TYPE_SIGNED: instruction.op = OP_DIVI_REG_REG; break;
-                case NUM_TYPE_UNSIGNED: instruction.op = OP_DIVU_REG_REG; break;
-            }
-            break;
-        }
 
-        case TOKEN_PERCENT: {
-            switch (type_info->data.num) {
-                case NUM_TYPE_FLOAT: instruction.op = OP_MODD_REG_REG; break;
-                case NUM_TYPE_SIGNED: instruction.op = OP_MODI_REG_REG; break;
-                case NUM_TYPE_UNSIGNED: instruction.op = OP_MODU_REG_REG; break;
+            case TOKEN_MINUS: {
+                switch (type_info->data.num) {
+                    case NUM_TYPE_FLOAT: instruction.op = OP_SUBD_REG_REG; break;
+                    case NUM_TYPE_SIGNED: instruction.op = OP_SUBI_REG_REG; break;
+                    case NUM_TYPE_UNSIGNED: instruction.op = OP_SUBU_REG_REG; break;
+                }
+                break;
             }
-            break;
-        }
 
-        case TOKEN_PERCENT_PERCENT: {
-            switch (type_info->data.num) {
-                case NUM_TYPE_FLOAT: instruction.op = OP_REMD_REG_REG; break;
-                case NUM_TYPE_SIGNED: instruction.op = OP_REMI_REG_REG; break;
-                case NUM_TYPE_UNSIGNED: instruction.op = OP_REMU_REG_REG; break;
+            case TOKEN_STAR: {
+                switch (type_info->data.num) {
+                    case NUM_TYPE_FLOAT: instruction.op = OP_MULD_REG_REG; break;
+                    case NUM_TYPE_SIGNED: instruction.op = OP_MULI_REG_REG; break;
+                    case NUM_TYPE_UNSIGNED: instruction.op = OP_MULU_REG_REG; break;
+                }
+                break;
             }
-            break;
-        }
-
-        case TOKEN_GREATER: {
-            switch (type_info->data.num) {
-                case NUM_TYPE_FLOAT: instruction.op = OP_GTD_REG_REG; break;
-                case NUM_TYPE_SIGNED: instruction.op = OP_GTI_REG_REG; break;
-                case NUM_TYPE_UNSIGNED: instruction.op = OP_GTU_REG_REG; break;
+            
+            case TOKEN_SLASH: {
+                switch (type_info->data.num) {
+                    case NUM_TYPE_FLOAT: instruction.op = OP_DIVD_REG_REG; break;
+                    case NUM_TYPE_SIGNED: instruction.op = OP_DIVI_REG_REG; break;
+                    case NUM_TYPE_UNSIGNED: instruction.op = OP_DIVU_REG_REG; break;
+                }
+                break;
             }
-            break;
-        }
 
-        case TOKEN_GREATER_EQUAL: {
-            switch (type_info->data.num) {
-                case NUM_TYPE_FLOAT: instruction.op = OP_GED_REG_REG; break;
-                case NUM_TYPE_SIGNED: instruction.op = OP_GEI_REG_REG; break;
-                case NUM_TYPE_UNSIGNED: instruction.op = OP_GEU_REG_REG; break;
+            case TOKEN_PERCENT: {
+                switch (type_info->data.num) {
+                    case NUM_TYPE_FLOAT: instruction.op = OP_MODD_REG_REG; break;
+                    case NUM_TYPE_SIGNED: instruction.op = OP_MODI_REG_REG; break;
+                    case NUM_TYPE_UNSIGNED: instruction.op = OP_MODU_REG_REG; break;
+                }
+                break;
             }
-            break;
-        }
 
-        case TOKEN_LESS:{
-            switch (type_info->data.num) {
-                case NUM_TYPE_FLOAT: instruction.op = OP_LTD_REG_REG; break;
-                case NUM_TYPE_SIGNED: instruction.op = OP_LTI_REG_REG; break;
-                case NUM_TYPE_UNSIGNED: instruction.op = OP_LTU_REG_REG; break;
+            case TOKEN_PERCENT_PERCENT: {
+                switch (type_info->data.num) {
+                    case NUM_TYPE_FLOAT: instruction.op = OP_REMD_REG_REG; break;
+                    case NUM_TYPE_SIGNED: instruction.op = OP_REMI_REG_REG; break;
+                    case NUM_TYPE_UNSIGNED: instruction.op = OP_REMU_REG_REG; break;
+                }
+                break;
             }
-            break;
-        }
 
-        case TOKEN_LESS_EQUAL: {
-            switch (type_info->data.num) {
-                case NUM_TYPE_FLOAT: instruction.op = OP_LED_REG_REG; break;
-                case NUM_TYPE_SIGNED: instruction.op = OP_LEI_REG_REG; break;
-                case NUM_TYPE_UNSIGNED: instruction.op = OP_LEU_REG_REG; break;
+            case TOKEN_GREATER: {
+                switch (type_info->data.num) {
+                    case NUM_TYPE_FLOAT: instruction.op = OP_GTD_REG_REG; break;
+                    case NUM_TYPE_SIGNED: instruction.op = OP_GTI_REG_REG; break;
+                    case NUM_TYPE_UNSIGNED: instruction.op = OP_GTU_REG_REG; break;
+                }
+                break;
             }
-            break;
-        }
 
-        case TOKEN_EQUAL_EQUAL: {
-            switch (type_info->data.num) {
-                case NUM_TYPE_FLOAT: instruction.op = OP_EQD_REG_REG; break;
-                case NUM_TYPE_SIGNED: instruction.op = OP_EQI_REG_REG; break;
-                case NUM_TYPE_UNSIGNED: instruction.op = OP_EQU_REG_REG; break;
+            case TOKEN_GREATER_EQUAL: {
+                switch (type_info->data.num) {
+                    case NUM_TYPE_FLOAT: instruction.op = OP_GED_REG_REG; break;
+                    case NUM_TYPE_SIGNED: instruction.op = OP_GEI_REG_REG; break;
+                    case NUM_TYPE_UNSIGNED: instruction.op = OP_GEU_REG_REG; break;
+                }
+                break;
             }
-            break;
-        }
 
-        case TOKEN_BANG_EQUAL: {
-            switch (type_info->data.num) {
-                case NUM_TYPE_FLOAT: instruction.op = OP_NQD_REG_REG; break;
-                case NUM_TYPE_SIGNED: instruction.op = OP_NQI_REG_REG; break;
-                case NUM_TYPE_UNSIGNED: instruction.op = OP_NQU_REG_REG; break;
+            case TOKEN_LESS:{
+                switch (type_info->data.num) {
+                    case NUM_TYPE_FLOAT: instruction.op = OP_LTD_REG_REG; break;
+                    case NUM_TYPE_SIGNED: instruction.op = OP_LTI_REG_REG; break;
+                    case NUM_TYPE_UNSIGNED: instruction.op = OP_LTU_REG_REG; break;
+                }
+                break;
             }
-            break;
-        }
 
-        default:
-            UNREACHABLE();
+            case TOKEN_LESS_EQUAL: {
+                switch (type_info->data.num) {
+                    case NUM_TYPE_FLOAT: instruction.op = OP_LED_REG_REG; break;
+                    case NUM_TYPE_SIGNED: instruction.op = OP_LEI_REG_REG; break;
+                    case NUM_TYPE_UNSIGNED: instruction.op = OP_LEU_REG_REG; break;
+                }
+                break;
+            }
+
+            case TOKEN_EQUAL_EQUAL: {
+                switch (type_info->data.num) {
+                    case NUM_TYPE_FLOAT: instruction.op = OP_EQD_REG_REG; break;
+                    case NUM_TYPE_SIGNED: instruction.op = OP_EQI_REG_REG; break;
+                    case NUM_TYPE_UNSIGNED: instruction.op = OP_EQU_REG_REG; break;
+                }
+                break;
+            }
+
+            case TOKEN_BANG_EQUAL: {
+                switch (type_info->data.num) {
+                    case NUM_TYPE_FLOAT: instruction.op = OP_NQD_REG_REG; break;
+                    case NUM_TYPE_SIGNED: instruction.op = OP_NQI_REG_REG; break;
+                    case NUM_TYPE_UNSIGNED: instruction.op = OP_NQU_REG_REG; break;
+                }
+                break;
+            }
+
+            default:
+                UNREACHABLE();
+        }
+        break;
+    }
+    
+    default: UNREACHABLE(); break;
     }
 
     instruction.as.bin_reg_to_reg.reg_op1 = (byte)op1;
@@ -482,12 +529,12 @@ static void gen_constant(texloc_t location, function_t *function, void *data, ty
     }
 }
 
-static void gen_folded_value(gen_t *gen, function_t *function, ast_node_t *expression) {
+static void gen_valin(gen_t *gen, function_t *function, ast_node_t *expression, value_index_t valin_override) {
     if (TYPE_IS_VOID(expression->value_type)) {
         // nop
         return;
     }
-    ASSERT(expression->value_index.exists, "must contain concrete value");
+    ASSERT(expression->value_index.exists || valin_override.exists, "must contain concrete value");
 
     typedata_t *type_info = type2typedata(&gen->ast->type_set.types, expression->value_type);
 
@@ -496,7 +543,10 @@ static void gen_folded_value(gen_t *gen, function_t *function, ast_node_t *expre
         gen_error(gen, make_error_node(ERROR_CODEGEN_MEMORY_SIZE_TOO_BIG, expression));
     }
 
-    void *data = memarr_get_ptr(&gen->ast->constants, expression->value_index);
+    value_index_t valin = expression->value_index;
+    if (valin_override.exists) valin = valin_override;
+
+    void *data = memarr_get_ptr(&gen->ast->constants, valin);
     gen_constant(expression->start.loc, function, data, type_info);
 }
 
@@ -795,13 +845,37 @@ static void gen_call(gen_t *gen, function_t *function, ast_node_t *call) {
     emit_pop_to_wordreg(gen, token_end_location(&call->end), function, REG_STACK_FRAME);
 }
 
+static void gen_bcall(gen_t *gen, function_t *function, ast_node_t *call) {
+    for (size_t i = an_bcall_arg_start(call); i < an_bcall_arg_end(call); ++i) {
+        ast_node_t *arg = call->children.items[i];
+        gen_expression(gen, function, arg);
+    }
+
+    switch (call->identifier.type) {
+    case TOKEN_TYPEOF: {
+        // slight inefficient but convenient way since these mechanisms already exist...
+        // might change in the future
+        value_index_t now = ast_push_constant(gen->ast, &call->children.items[0]->value_type, typeid(TYPE_TYPE));
+        gen_valin(gen, function, call, now);
+        break;
+    }
+
+    default: UNREACHABLE(); break;
+    }
+}
+
 static void gen_expression(gen_t *gen, function_t *function, ast_node_t *expression) {
     ASSERT(ast_node_type_is_expression(expression->node_type), "must be expression");
+
+    if (expression->value_index.index) {
+        gen_valin(gen, function, expression, value_index_nil());
+        return;
+    }
 
     switch (expression->node_type) {
         case AST_NODE_TYPE_EXPRESSION_NIL:
         case AST_NODE_TYPE_EXPRESSION_PRIMARY: {
-            gen_folded_value(gen, function, expression);
+            gen_valin(gen, function, expression, value_index_nil());
             break;
         }
 
@@ -854,6 +928,11 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
 
         case AST_NODE_TYPE_EXPRESSION_CALL: {
             gen_call(gen, function, expression);
+            break;
+        }
+
+        case AST_NODE_TYPE_EXPRESSION_BUILTIN_CALL: {
+            gen_bcall(gen, function, expression);
             break;
         }
 

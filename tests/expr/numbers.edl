@@ -18,6 +18,7 @@
 
     if typeof(c1) == u16 then check = check + 1;
     if typeof(c2) == u16 then check = check + 1;
+    
 
     d1 := 10000i16;
     d2: i16;

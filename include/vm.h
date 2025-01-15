@@ -11,11 +11,19 @@ typedef enum op_code_t op_code_t;
 enum op_code_t {
     OP_NOP,
 
+    OP_MOVI8_MEM_TO_REG,
     OP_MOVU8_MEM_TO_REG,
+
+    OP_MOVI16_MEM_TO_REG,
+    OP_MOVU16_MEM_TO_REG,
+
     OP_MOVI32_MEM_TO_REG,
     OP_MOVU32_MEM_TO_REG,
+
     OP_MOVF32_MEM_TO_REG,
+
     OP_MOVWORD_MEM_TO_REG,
+
     OP_MOV_REG_TO_REG,
 
     OP_MOVWORD_REG_TO_REGMEM,
@@ -250,10 +258,40 @@ void vm_step(vm_t *vm) {
             break;
         }
 
+        case OP_MOVI8_MEM_TO_REG: {
+            memaddr_t memaddr = in.as.mov_mem_to_reg.mem_address;
+            byte reg = in.as.mov_mem_to_reg.reg_result;
+            i8 value = *((i8*)(MEMORY->data + memaddr));
+            vm->registers[reg].as.i = value;
+
+            IP_ADV(1);
+            break;
+        }
+
         case OP_MOVU8_MEM_TO_REG: {
             memaddr_t memaddr = in.as.mov_mem_to_reg.mem_address;
             byte reg = in.as.mov_mem_to_reg.reg_result;
             byte value = MEMORY->data[memaddr];
+            vm->registers[reg].as.u = value;
+
+            IP_ADV(1);
+            break;
+        }
+
+        case OP_MOVI16_MEM_TO_REG: {
+            memaddr_t memaddr = in.as.mov_mem_to_reg.mem_address;
+            byte reg = in.as.mov_mem_to_reg.reg_result;
+            i16 value = *((i16*)(MEMORY->data + memaddr));
+            vm->registers[reg].as.i = value;
+
+            IP_ADV(1);
+            break;
+        }
+
+        case OP_MOVU16_MEM_TO_REG: {
+            memaddr_t memaddr = in.as.mov_mem_to_reg.mem_address;
+            byte reg = in.as.mov_mem_to_reg.reg_result;
+            u16 value = *((u16*)(MEMORY->data + memaddr));
             vm->registers[reg].as.u = value;
 
             IP_ADV(1);

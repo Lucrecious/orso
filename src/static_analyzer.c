@@ -536,7 +536,7 @@ value_index_t constant_fold_bin_comparison(ast_t *ast, token_type_t operator, ty
     case TYPE_BOOL: {
         bool lhsb = valin2bool(ast, a);
         bool rhsb = valin2bool(ast, b);
-        bool result = 0;
+        bool result = false;
 
         switch (operator) {
         case TOKEN_EQUAL_EQUAL: result = (lhsb == rhsb); break;
@@ -545,6 +545,24 @@ value_index_t constant_fold_bin_comparison(ast_t *ast, token_type_t operator, ty
         case TOKEN_GREATER_EQUAL: result = (lhsb >= rhsb); break;
         case TOKEN_LESS: result = (lhsb < rhsb); break;
         case TOKEN_LESS_EQUAL: result = (lhsb <= rhsb); break;
+        default: UNREACHABLE();
+        }
+
+        return bool2valin(ast, result);
+    }
+
+    case TYPE_TYPE: {
+        type_t lhst = valin2type(ast, a);
+        type_t rhst = valin2type(ast, b);
+        bool result = false;
+
+        switch (operator) {
+        case TOKEN_EQUAL_EQUAL: result = typeid_eq(lhst, rhst); break;
+        case TOKEN_BANG_EQUAL: result = !typeid_eq(lhst, rhst); break;
+        case TOKEN_GREATER: result = (lhst.i > rhst.i); break;
+        case TOKEN_GREATER_EQUAL: result = (lhst.i >= rhst.i); break;
+        case TOKEN_LESS: result = (lhst.i < rhst.i); break;
+        case TOKEN_LESS_EQUAL: result = (lhst.i <= rhst.i); break;
         default: UNREACHABLE();
         }
 
@@ -711,13 +729,13 @@ void resolve_expression(
             case TOKEN_GREATER_EQUAL:
             case TOKEN_LESS:
             case TOKEN_LESS_EQUAL: {
-                if (left_td->kind != TYPE_NUMBER && left_td->kind != TYPE_BOOL) {
+                if (left_td->kind != TYPE_NUMBER && left_td->kind != TYPE_BOOL && left_td->kind != TYPE_TYPE) {
                     stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_COMPARISON_OPERAND_TYPES, left));
                     INVALIDATE(expr);
                     break;
                 }
 
-                if (right_td->kind != TYPE_NUMBER && right_td->kind != TYPE_BOOL) {
+                if (right_td->kind != TYPE_NUMBER && right_td->kind != TYPE_BOOL && right_td->kind != TYPE_TYPE) {
                     stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_COMPARISON_OPERAND_TYPES, right));
                     INVALIDATE(expr);
                     break;
@@ -1279,6 +1297,37 @@ void resolve_expression(
             break;
         }
 
+        case AST_NODE_TYPE_EXPRESSION_BUILTIN_CALL: {
+            size_t arg_start = an_bcall_arg_start(expr);
+            size_t arg_end = an_bcall_arg_end(expr);
+            size_t count = arg_end - arg_start;
+            switch (expr->identifier.type) {
+            case TOKEN_TYPEOF: {
+                unless (count == 1) {
+                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_TYPEOF_REQUIRES_ONE_ARG, expr));
+                    INVALIDATE(expr);
+                    break;
+                }
+
+                ast_node_t *expr_arg = expr->children.items[arg_start];
+                resolve_expression(analyzer, ast, state, expr_arg);
+
+                if (TYPE_IS_INVALID(expr_arg->value_type)) {
+                    INVALIDATE(expr);
+                    break;
+                }
+
+                expr->value_type = typeid(TYPE_TYPE);
+                if (expr_arg->value_index.exists) {
+                    expr->value_index = type2valin(ast, expr_arg->value_type);
+                }
+                break;
+            }
+            default: UNREACHABLE(); break;
+            }
+            break;
+        }
+
         case AST_NODE_TYPE_NONE:
         case AST_NODE_TYPE_DECLARATION_DEFINITION:
         case AST_NODE_TYPE_DECLARATION_STATEMENT:
@@ -1379,6 +1428,8 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
             //     INVALIDATE(declaration->data.declaration.initial_value_expression);
             // }
         }
+    } else {
+        an_decl_expr(declaration) = ast_nil(ast, declaration_type, token_implicit_at_end(declaration->end));
     }
 
     // we are resolved

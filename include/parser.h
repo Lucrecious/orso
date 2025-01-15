@@ -61,6 +61,7 @@ typedef enum ast_node_type_t {
     AST_NODE_TYPE_EXPRESSION_DOT,
     AST_NODE_TYPE_EXPRESSION_UNARY,
     AST_NODE_TYPE_EXPRESSION_GROUPING,
+    AST_NODE_TYPE_EXPRESSION_BUILTIN_CALL,
     AST_NODE_TYPE_EXPRESSION_CALL,
     AST_NODE_TYPE_EXPRESSION_PRIMARY,
     AST_NODE_TYPE_EXPRESSION_DEF_VALUE,
@@ -79,6 +80,7 @@ AST_NODE_TYPE_EXPRESSION_ASSIGNMENT: \
 case AST_NODE_TYPE_EXPRESSION_BINARY: \
 case AST_NODE_TYPE_EXPRESSION_BLOCK: \
 case AST_NODE_TYPE_EXPRESSION_BRANCHING: \
+case AST_NODE_TYPE_EXPRESSION_BUILTIN_CALL: \
 case AST_NODE_TYPE_EXPRESSION_CALL: \
 case AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT: \
 case AST_NODE_TYPE_EXPRESSION_DEF_VALUE: \
@@ -145,6 +147,8 @@ ast_node_t nil_node;
 #define an_callee(n) ((n)->children.items[0])
 #define an_call_arg_start(n) (1)
 #define an_call_arg_end(n) ((n)->children.count)
+#define an_bcall_arg_start(n) (0)
+#define an_bcall_arg_end(n) ((n)->children.count)
 
 #define an_is_none(n)    ((n)->node_type == AST_NODE_TYPE_NONE)
 #define an_is_notnone(n) ((n)->node_type != AST_NODE_TYPE_NONE)
@@ -252,6 +256,8 @@ bool parse_expr(ast_t *ast, string_t file_path, string_view_t source, error_func
 bool parse(ast_t *ast, string_t file_path, string_view_t source, error_function_t error_fn);
 
 type_t valin2type(ast_t *ast, value_index_t index);
+value_index_t type2valin(ast_t *ast, type_t t);
+
 i64 valin2i(ast_t *ast, value_index_t index, num_size_t numsize);
 value_index_t i2valin(ast_t *ast, i64 value, num_size_t numsize);
 

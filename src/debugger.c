@@ -27,9 +27,15 @@ static string_t disassemble_instruction(instruction_t in, arena_t *allocator) {
                 (u32)in.as.mov_mem_to_reg.mem_address,\
                 (u32)in.as.mov_mem_to_reg.reg_result)
 
+        case OP_MOVI8_MEM_TO_REG: return OP_MOV_MEM_TO_REG(I8);
         case OP_MOVU8_MEM_TO_REG: return OP_MOV_MEM_TO_REG(U8);
+
+        case OP_MOVI16_MEM_TO_REG: return OP_MOV_MEM_TO_REG(I16);
+        case OP_MOVU16_MEM_TO_REG: return OP_MOV_MEM_TO_REG(U16);
+
         case OP_MOVI32_MEM_TO_REG: return OP_MOV_MEM_TO_REG(I32);
         case OP_MOVU32_MEM_TO_REG: return OP_MOV_MEM_TO_REG(U32);
+
         case OP_MOVF32_MEM_TO_REG: return OP_MOV_MEM_TO_REG(F32);
         case OP_MOVWORD_MEM_TO_REG: return OP_MOV_MEM_TO_REG(WORD);
 

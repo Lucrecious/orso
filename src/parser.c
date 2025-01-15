@@ -230,6 +230,11 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start) {
             array_push(&node->children, &nil_node);
             break;
         }
+
+        case AST_NODE_TYPE_EXPRESSION_BUILTIN_CALL: {
+            array_push(&node->children, &nil_node);
+            break;
+        }
         
         case AST_NODE_TYPE_EXPRESSION_CALL: {
             array_push(&node->children, &nil_node);
@@ -619,6 +624,42 @@ static ast_node_t *parse_literal(parser_t *parser) {
     }
 }
 
+static void parse_arguments(parser_t* parser, ast_node_t *parent) {
+    size_t parameter_count = 0;
+    unless (check(parser, TOKEN_PARENTHESIS_CLOSE)) {
+        do {
+            ast_node_t *argument = parse_expression(parser);
+            array_push(&parent->children, argument);
+            ++parameter_count;
+        } while (match(parser, TOKEN_COMMA));
+    }
+
+    unless (consume(parser, TOKEN_PARENTHESIS_CLOSE)) {
+        parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_CLOSE_PARENTHESIS, parser->current, parser->previous));
+    }
+
+    if (parameter_count > MAX_PARAMETERS - 1) {
+        error_t error = make_error_node(ERROR_PARSEREX_TOO_MANY_PARAMETERS, parent);
+        parser_error(parser, error);
+    }
+}
+
+static ast_node_t *parse_builtin_call(parser_t *parser) {
+    token_t identifier = parser->previous;
+
+    unless (consume(parser, TOKEN_PARENTHESIS_OPEN)) {
+        parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_OPEN_PARENTHESIS_BUILTIN_FUNC, parser->previous, identifier));
+    }
+
+    ast_node_t *n = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_BUILTIN_CALL, identifier);
+    n->children.count = 0;
+    n->identifier = identifier;
+    parse_arguments(parser, n);
+    n->end = parser->previous;
+
+    return n;
+}
+
 static ast_node_t *convert_assignment_expression(parser_t *parser, ast_node_t *left, ast_node_t *assignment) {
     (void)parser;
     assignment->start = left->start;
@@ -918,26 +959,6 @@ static ast_node_t *parse_grouping_or_function_signature_or_definition(parser_t *
     return expr;
 }
 
-static void parse_arguments(parser_t* parser, ast_node_t *parent) {
-    size_t parameter_count = 0;
-    unless (check(parser, TOKEN_PARENTHESIS_CLOSE)) {
-        do {
-            ast_node_t *argument = parse_expression(parser);
-            array_push(&parent->children, argument);
-            ++parameter_count;
-        } while (match(parser, TOKEN_COMMA));
-    }
-
-    unless (consume(parser, TOKEN_PARENTHESIS_CLOSE)) {
-        parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_CLOSE_PARENTHESIS, parser->current, parser->previous));
-    }
-
-    if (parameter_count > MAX_PARAMETERS - 1) {
-        error_t error = make_error_node(ERROR_PARSEREX_TOO_MANY_PARAMETERS, parent);
-        parser_error(parser, error);
-    }
-}
-
 static ast_node_t *parse_call(parser_t *parser) {
     ast_node_t *call = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_CALL, parser->previous);
 
@@ -1085,6 +1106,7 @@ parse_rule_t rules[] = {
     [TOKEN_ELSE]                    = { NULL,               NULL,               PREC_NONE },
     [TOKEN_TRUE]                    = { parse_literal,      NULL,               PREC_NONE },
     [TOKEN_FALSE]                   = { parse_literal,      NULL,               PREC_NONE },
+    [TOKEN_TYPEOF]                  = { parse_builtin_call, NULL,               PREC_NONE },
     [TOKEN_RETURN]                  = { parse_jmp,          NULL,               PREC_NONE },
     [TOKEN_BREAK]                   = { parse_jmp,          NULL,               PREC_NONE },
     [TOKEN_CONTINUE]                = { parse_jmp,          NULL,               PREC_NONE },
@@ -1240,6 +1262,9 @@ static ast_node_t *parse_decl_def(parser_t *parser) {
         definition_node->is_mutable = true;
     } else if (match(parser, TOKEN_COLON)) {
         requires_expression = true;
+        definition_node->is_mutable = false;
+    } else {
+        definition_node->is_mutable = true;
     }
 
     if (requires_expression) {
@@ -1351,12 +1376,16 @@ value_index_t zero_value(ast_t *ast, type_t type) {
             break;
         }
 
+        case TYPE_TYPE: {
+            value[0] = WORDU(typeid(TYPE_VOID).i);
+            break;
+        }
+
         case TYPE_COUNT:
         case TYPE_UNDEFINED:
         case TYPE_UNREACHABLE:
         case TYPE_FUNCTION:
         case TYPE_NATIVE_FUNCTION:
-        case TYPE_TYPE:
         case TYPE_INVALID:
         case TYPE_UNRESOLVED:
             UNREACHABLE();
@@ -1380,6 +1409,10 @@ type_t valin2type(ast_t *ast, value_index_t index) {
     }
 
     return typeid(TYPE_INVALID);
+}
+
+value_index_t type2valin(ast_t *ast, type_t t) {
+    return memarr_push_value(&ast->constants, &t, sizeof(type_t));
 }
 
 i64 valin2i(ast_t *ast, value_index_t index, num_size_t numsize) {
@@ -1739,6 +1772,20 @@ static void ast_print_ast_node(type_infos_t types, ast_node_t *node, u32 level) 
             }
             break;
         }
+        case AST_NODE_TYPE_EXPRESSION_BUILTIN_CALL: {
+            print_indent(level);
+            print_line("builtin-call(%.*s): %s", node->identifier.view.length, node->identifier.view.data, type2cstr(node));
+            
+            print_indent(level+1);
+            print_line("arguments");
+
+            for (size_t i = an_bcall_arg_start(node); i < an_bcall_arg_end(node); ++i) {
+                ast_node_t *arg = node->children.items[i];
+                ast_print_ast_node(types, arg, level+2);
+            }
+            break;
+        }
+
         case AST_NODE_TYPE_EXPRESSION_CALL: {
             print_indent(level);
             print_line("call: %s", type2cstr(node));
