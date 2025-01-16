@@ -248,8 +248,6 @@ static void cgen_cache_requires_tmp(type_infos_t *types, ast_node_t *expression)
 static void cgen_constant(cgen_t *cgen, value_index_t value_index, typedata_t *type_info) {
     #define value_at(ty) (*((ty*)(memarr_value_at(&cgen->ast->constants, value_index))))
 
-    i32 x = value_at(i32);
-
     switch (type_info->kind) {
         case TYPE_NUMBER: {
             switch ((num_size_t)type_info->size) {
