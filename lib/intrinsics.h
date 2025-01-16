@@ -31,6 +31,10 @@ typedef const char *cstr_t;
 #endif
 
 #define div_(a, b) ((b) != 0 ? ((a)/(b)) : 0)
+#define divi_(a, b, imin) ((a == imin && b == -1) ? (imin) : (div_(a, b)))
+#define opi_(a, b, i, u, op) ((i)(((u)a) op (u)b))
+#define opu_(a, b, u, op) (((u)a) op ((u)b))
+#define opf_(a, b, op) (((f32)a) op ((f32)b)) 
 #define min_(a, b) ((a) < (b) ? (a) : (b))
 #define max_(a, b) ((a) > (b) ? (a) : (b))
 #define modd_(a, b)  (modd(a, b))

@@ -119,6 +119,7 @@ struct instruction_t {
             byte reg_result;
             byte reg_op1;
             byte reg_op2;
+            byte size;
         } bin_reg_to_reg;
 
         struct {
@@ -396,28 +397,72 @@ void vm_step(vm_t *vm) {
             break;
         }
 
-        #define case_bin_reg_reg(name, v, op) case OP_##name##_REG_REG: {\
-            byte a = in.as.bin_reg_to_reg.reg_op1; \
-            byte b = in.as.bin_reg_to_reg.reg_op2; \
+        // conversion to unsigned for wrapped operation on overflow but converted back to integer after (c is ub for signed overflow)
+        #define case_bini_reg_reg(name, opi, op) case OP_##name##_REG_REG: {\
+            i64 a = vm->registers[in.as.bin_reg_to_reg.reg_op1].as.i; \
+            i64 b = vm->registers[in.as.bin_reg_to_reg.reg_op2].as.i; \
             byte c = in.as.bin_reg_to_reg.reg_result; \
-            vm->registers[c].as.v = vm->registers[a].as.v op vm->registers[b].as.v;\
+            num_size_t sz = in.as.bin_reg_to_reg.size; \
+            i64 result = 0; \
+            switch (sz) {\
+            case NUM_SIZE_8: {\
+                result = opi(a, b, i8, u8, op);\
+                break;\
+            }\
+            case NUM_SIZE_16: {\
+                result = opi(a, b, i16, u16, op);\
+                break;\
+            }\
+            case NUM_SIZE_32: {\
+                result = opi(a, b, i32, u32, op);\
+                break;\
+            }\
+            case NUM_SIZE_64: {\
+                result = opi(a, b, i64, u64, op);\
+                break;\
+            }\
+            }\
+            vm->registers[c].as.i = result;\
             IP_ADV(1); \
             break; \
         }\
         break
 
-        case_bin_reg_reg(ADDI, i, +);
-        case_bin_reg_reg(SUBI, i, -);
-        case_bin_reg_reg(MULI, i, *);
-        case_bin_reg_reg(REMI, i, %);
+        case_bini_reg_reg(ADDI, opi_, +);
+        case_bini_reg_reg(SUBI, opi_, -);
+        case_bini_reg_reg(MULI, opi_, *);
+        case_bini_reg_reg(REMI, opi_, %);
+
+        #undef case_bini_reg_reg
+
 
         case OP_DIVI_REG_REG: {
             i64 a = vm->registers[in.as.bin_reg_to_reg.reg_op1].as.i;
             i64 b = vm->registers[in.as.bin_reg_to_reg.reg_op2].as.i;
             byte c = in.as.bin_reg_to_reg.reg_result;
+            num_size_t sz = in.as.bin_reg_to_reg.size;
 
-            b = b < 0 ? -b : b;
-            vm->registers[c].as.i = div_(a, b);
+            switch (sz) {
+            case NUM_SIZE_8: {
+                vm->registers[c].as.i = divi_(a, b, INT8_MIN);
+                break;
+            }
+
+            case NUM_SIZE_16: {
+                vm->registers[c].as.i = divi_(a, b, INT16_MIN);
+                break;
+            }
+  
+            case NUM_SIZE_32: {
+                vm->registers[c].as.i = divi_(a, b, INT32_MIN);
+                break;
+            }
+
+            case NUM_SIZE_64: {
+                vm->registers[c].as.i = divi_(a, b, INT64_MIN);
+                break;
+            }
+            }
 
             IP_ADV(1);
             break;
@@ -435,11 +480,42 @@ void vm_step(vm_t *vm) {
             break;
         }
 
-        case_bin_reg_reg(ADDU, u, +);
-        case_bin_reg_reg(SUBU, u, -);
-        case_bin_reg_reg(MULU, u, *);
-        case_bin_reg_reg(REMU, i, %);
+        #define case_binu_reg_reg(name, op) case OP_##name##_REG_REG: { \
+            u64 a = vm->registers[in.as.bin_reg_to_reg.reg_op1].as.u; \
+            u64 b = vm->registers[in.as.bin_reg_to_reg.reg_op2].as.u; \
+            byte c = in.as.bin_reg_to_reg.reg_result; \
+            num_size_t sz = in.as.bin_reg_to_reg.size; \
+            u64 result = 0; \
+            switch (sz) { \
+            case NUM_SIZE_8: { \
+                result = opu_(a, b, u8, op); \
+                break; \
+            } \
+            case NUM_SIZE_16: { \
+                result = opu_(a, b, u16, op); \
+                break; \
+            } \
+            case NUM_SIZE_32: { \
+                result = opu_(a, b, u32, op); \
+                break; \
+            } \
+            case NUM_SIZE_64: { \
+                result = opu_(a, b, u64, op); \
+                break; \
+            } \
+            } \
+            vm->registers[c].as.u = result; \
+            break; \
+        } break
 
+        case_binu_reg_reg(ADDU, +);
+        case_binu_reg_reg(SUBU, -);
+        case_binu_reg_reg(MULU, *);
+        case_binu_reg_reg(REMU, %);
+
+        #undef case_binu_reg_reg
+
+        // no need to handle overflows on integer divisions since they must always get smaller
         case OP_DIVU_REG_REG: {
             u64 a = vm->registers[in.as.bin_reg_to_reg.reg_op1].as.u;
             u64 b = vm->registers[in.as.bin_reg_to_reg.reg_op2].as.u;
@@ -462,9 +538,33 @@ void vm_step(vm_t *vm) {
             break;
         }
 
-        case_bin_reg_reg(ADDD, d, +);
-        case_bin_reg_reg(SUBD, d, -);
-        case_bin_reg_reg(MULD, d, *);
+        #define case_bind_reg_reg(name, op) case OP_##name##_REG_REG: { \
+            f64 a = vm->registers[in.as.bin_reg_to_reg.reg_op1].as.d; \
+            f64 b = vm->registers[in.as.bin_reg_to_reg.reg_op2].as.d; \
+            byte c = in.as.bin_reg_to_reg.reg_result; \
+            num_size_t sz = in.as.bin_reg_to_reg.size; \
+            f64 result = 0.0; \
+            switch (sz) { \
+            case NUM_SIZE_32: { \
+                result = ((f32)a) + ((f32)b); \
+                break; \
+            } \
+            case NUM_SIZE_64: { \
+                result = a + b; \
+                break; \
+            } \
+            default: UNREACHABLE(); break; \
+            } \
+            vm->registers[c].as.d = result; \
+            IP_ADV(1); \
+            break; \
+        } break
+
+        case_bind_reg_reg(ADDD, +);
+        case_bind_reg_reg(SUBD, -);
+        case_bind_reg_reg(MULD, *);
+
+        #undef case_bind_reg_reg
 
         case OP_DIVD_REG_REG: {
             byte a = in.as.bin_reg_to_reg.reg_op1;
@@ -500,26 +600,37 @@ void vm_step(vm_t *vm) {
             break;
         }
 
-        case_bin_reg_reg(GTI, i, >);
-        case_bin_reg_reg(GEI, i, >=);
-        case_bin_reg_reg(LTI, i, <);
-        case_bin_reg_reg(LEI, i, <=);
-        case_bin_reg_reg(EQI, i, ==);
-        case_bin_reg_reg(NQI, i, !=);
+        #define case_binc_reg_reg(name, v, op) case OP_##name##_REG_REG: { \
+            byte a = in.as.bin_reg_to_reg.reg_op1; \
+            byte b = in.as.bin_reg_to_reg.reg_op2; \
+            byte c = in.as.bin_reg_to_reg.reg_result; \
+            vm->registers[c].as.u = vm->registers[a].as.v op vm->registers[b].as.v; \
+            IP_ADV(1); \
+            break; \
+        } break
 
-        case_bin_reg_reg(GTU, u, >);
-        case_bin_reg_reg(GEU, u, >=);
-        case_bin_reg_reg(LTU, u, <);
-        case_bin_reg_reg(LEU, u, <=);
-        case_bin_reg_reg(EQU, u, ==);
-        case_bin_reg_reg(NQU, u, !=);
+        case_binc_reg_reg(GTI, i, >);
+        case_binc_reg_reg(GEI, i, >=);
+        case_binc_reg_reg(LTI, i, <);
+        case_binc_reg_reg(LEI, i, <=);
+        case_binc_reg_reg(EQI, i, ==);
+        case_binc_reg_reg(NQI, i, !=);
 
-        case_bin_reg_reg(GTD, d, >);
-        case_bin_reg_reg(GED, d, >=);
-        case_bin_reg_reg(LTD, d, <);
-        case_bin_reg_reg(LED, d, <=);
-        case_bin_reg_reg(EQD, d, ==);
-        case_bin_reg_reg(NQD, d, !=);
+        case_binc_reg_reg(GTU, u, >);
+        case_binc_reg_reg(GEU, u, >=);
+        case_binc_reg_reg(LTU, u, <);
+        case_binc_reg_reg(LEU, u, <=);
+        case_binc_reg_reg(EQU, u, ==);
+        case_binc_reg_reg(NQU, u, !=);
+
+        case_binc_reg_reg(GTD, d, >);
+        case_binc_reg_reg(GED, d, >=);
+        case_binc_reg_reg(LTD, d, <);
+        case_binc_reg_reg(LED, d, <=);
+        case_binc_reg_reg(EQD, d, ==);
+        case_binc_reg_reg(NQD, d, !=);
+
+        #undef case_binc_reg_reg
 
         #define case_unary_reg_reg(name, m, op) case OP_##name: {\
             byte a = in.as.unary_reg_to_reg.reg_op;\
@@ -539,6 +650,8 @@ void vm_step(vm_t *vm) {
         case_unary_reg_reg(DECREMENTI, i, --);
         case_unary_reg_reg(INCREMENTU, u, ++);
         case_unary_reg_reg(DECREMENTU, u, --);
+
+        #undef case_unary_reg_reg
 
         case OP_CALL: {
             void *ptr = vm->registers[in.as.call.reg_op].as.p;
