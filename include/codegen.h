@@ -336,6 +336,7 @@ static void emit_bin_op(texloc_t loc, function_t *function, token_type_t token_t
     instruction.as.bin_reg_to_reg.reg_op1 = (byte)op1;
     instruction.as.bin_reg_to_reg.reg_op2 = (byte)op2;
     instruction.as.bin_reg_to_reg.reg_result = (byte)result;
+    instruction.as.bin_reg_to_reg.size = (byte)type_info->size;
 
     emit_instruction(function, loc, instruction);
 }
@@ -788,7 +789,7 @@ static void gen_function_def(gen_t *parent_gen, function_t *parent_function, ast
     for (size_t i = an_func_def_arg_start(function_def); i < an_func_def_arg_end(function_def); ++i) {
         ast_node_t *arg = function_def->children.items[i];
         typedata_t *type_info = type2typedata(&gen.ast->type_set.types, arg->value_type);
-        gen.stack_size += type_info->size;
+        gen.stack_size += bytes_to_words(type_info->size)*WORD_SIZE;
         gen_add_local(&gen, arg, gen.stack_size);
     }
 
