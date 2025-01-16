@@ -187,29 +187,31 @@ static void emit_popn_bytes(gen_t *gen, function_t *function, u32 pop_size_bytes
     emit_binu_reg_im(function, loc, REG_STACK_BOTTOM, REG_STACK_BOTTOM, pop_size_bytes, '+');
 }
 
-static void emit_bin_arithmetic(texloc_t loc, function_t *function, token_type_t token_type, typedata_t *type_info, reg_t op1, reg_t op2, reg_t result) {
+static void emit_bin_op(texloc_t loc, function_t *function, token_type_t token_type, typedata_t *type_info, reg_t op1, reg_t op2, reg_t result) {
     instruction_t instruction = {0};
 
     switch (type_info->kind) {
     case TYPE_TYPE:
-    case TYPE_BOOL: {
+    case TYPE_BOOL:
+    case TYPE_FUNCTION: {
         switch (token_type) {
-            case TOKEN_PLUS: instruction.op = OP_ADDU_REG_REG; break;
-            case TOKEN_MINUS: instruction.op = OP_SUBU_REG_REG; break;
-            case TOKEN_STAR: instruction.op = OP_MULU_REG_REG; break;
-            case TOKEN_SLASH: instruction.op = OP_DIVU_REG_REG; break;
-            case TOKEN_PERCENT: instruction.op = OP_MODU_REG_REG; break;
-            case TOKEN_PERCENT_PERCENT: instruction.op = OP_REMU_REG_REG; break;
-            case TOKEN_GREATER: instruction.op = OP_GTU_REG_REG; break;
-            case TOKEN_GREATER_EQUAL: instruction.op = OP_GEU_REG_REG; break;
-            case TOKEN_LESS: instruction.op = OP_LTU_REG_REG; break;
-            case TOKEN_LESS_EQUAL: instruction.op = OP_LEU_REG_REG; break;
+            case TOKEN_PLUS:
+            case TOKEN_MINUS: 
+            case TOKEN_SLASH:
+            case TOKEN_STAR:
+            case TOKEN_PERCENT:
+            case TOKEN_PERCENT_PERCENT: UNREACHABLE(); break;
+
+            case TOKEN_GREATER:
+            case TOKEN_GREATER_EQUAL:
+            case TOKEN_LESS:
+            case TOKEN_LESS_EQUAL: UNREACHABLE(); break;
+
             case TOKEN_EQUAL_EQUAL: instruction.op = OP_EQU_REG_REG; break;
             case TOKEN_BANG_EQUAL: instruction.op = OP_NQU_REG_REG; break;
 
             default: UNREACHABLE(); break;
         }
-        break;
     }
 
     case TYPE_NUMBER: {
@@ -456,52 +458,34 @@ static void gen_patch_jmp(gen_t *gen, function_t *function, size_t index) {
 }
 
 static void gen_binary(gen_t *gen, function_t *function, ast_node_t *binary) {
-    switch (binary->operator.type) {
-        case TOKEN_EQUAL_EQUAL:
-        case TOKEN_BANG_EQUAL:
-        case TOKEN_GREATER:
-        case TOKEN_GREATER_EQUAL:
-        case TOKEN_LESS:
-        case TOKEN_LESS_EQUAL:
+    token_type_t op = binary->operator.type;
+    if (operator_is_arithmetic(op) || operator_is_comparing(op) || operator_is_equating(op)) {
+        ast_node_t *lhs = an_lhs(binary);
+        gen_expression(gen, function, lhs);
 
-        case TOKEN_PERCENT_PERCENT:
-        case TOKEN_PERCENT:
-        case TOKEN_PLUS:
-        case TOKEN_MINUS:
-        case TOKEN_STAR:
-        case TOKEN_SLASH: {
-            ast_node_t *lhs = an_lhs(binary);
-            gen_expression(gen, function, lhs);
+        emit_push_wordreg(gen, token_end_location(&lhs->end), function, REG_RESULT);
 
-            emit_push_wordreg(gen, token_end_location(&lhs->end), function, REG_RESULT);
+        ast_node_t *rhs = an_rhs(binary);
+        gen_expression(gen, function, rhs);
 
-            ast_node_t *rhs = an_rhs(binary);
-            gen_expression(gen, function, rhs);
+        emit_pop_to_wordreg(gen, token_end_location(&rhs->end), function, REG_TMP);
 
-            emit_pop_to_wordreg(gen, token_end_location(&rhs->end), function, REG_TMP);
+        typedata_t *expr_type_info = type2typedata(&gen->ast->type_set.types, an_lhs(binary)->value_type);
 
-            typedata_t *expr_type_info = type2typedata(&gen->ast->type_set.types, an_lhs(binary)->value_type);
+        emit_bin_op(token_end_location(&binary->end), function, binary->operator.type, expr_type_info, REG_TMP, REG_RESULT, REG_RESULT);
+    } else if (operator_is_logical(op)) {
+        ast_node_t *lhs = an_lhs(binary);
+        gen_expression(gen, function, lhs);
 
-            emit_bin_arithmetic(token_end_location(&binary->end), function, binary->operator.type, expr_type_info, REG_TMP, REG_RESULT, REG_RESULT);
-            break;
-        }
+        bool jmp_condition = (binary->operator.type == TOKEN_AND) ? false : true;
+        size_t and_or_jmp = gen_jmp_if_reg(function, token_end_location(&lhs->end), REG_RESULT, jmp_condition);
 
-        case TOKEN_AND:
-        case TOKEN_OR: {
-            ast_node_t *lhs = an_lhs(binary);
-            gen_expression(gen, function, lhs);
-
-            bool jmp_condition = (binary->operator.type == TOKEN_AND) ? false : true;
-            size_t and_or_jmp = gen_jmp_if_reg(function, token_end_location(&lhs->end), REG_RESULT, jmp_condition);
-
-            ast_node_t *rhs = an_rhs(binary);
-            gen_expression(gen, function, rhs);
-            
-            gen_patch_jmp(gen, function, and_or_jmp);
-            break;
-        }
-
-        default: UNREACHABLE(); break;
+        ast_node_t *rhs = an_rhs(binary);
+        gen_expression(gen, function, rhs);
+        
+        gen_patch_jmp(gen, function, and_or_jmp);
+    } else {
+        UNREACHABLE();
     }
 }
 

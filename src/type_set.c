@@ -125,30 +125,30 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
     static typedata_t type_undefined = {.name=lit2str("<undefined>"), .kind=TYPE_UNDEFINED, .size=0};
     static typedata_t type_unreachable = {.name=lit2str("<unreachable>"), .kind=TYPE_UNREACHABLE, .size=0};
 
-    static typedata_t type_void = {.name=lit2str("void"), .kind=TYPE_VOID, .size=0};
-    static typedata_t type_bool = {.name=lit2str("bool"), .kind=TYPE_BOOL, .size=NUM_SIZE_8};
-    static typedata_t type_f32 = {.name=lit2str("f32"), .kind=TYPE_NUMBER, .size=NUM_SIZE_32, .data.num = NUM_TYPE_FLOAT};
-    static typedata_t type_f64 = {.name=lit2str("f64"), .kind=TYPE_NUMBER, .size=NUM_SIZE_64, .data.num = NUM_TYPE_FLOAT};
+    static typedata_t type_void = {.name=lit2str("void"), .kind=TYPE_VOID, .size=0, .capabilities=TYPE_CAP_NONE};
+    static typedata_t type_bool = {.name=lit2str("bool"), .kind=TYPE_BOOL, .size=NUM_SIZE_8, .capabilities=TYPE_CAP_LOGICAL};
+    static typedata_t type_f32 = {.name=lit2str("f32"), .kind=TYPE_NUMBER, .size=NUM_SIZE_32, .data.num = NUM_TYPE_FLOAT, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
+    static typedata_t type_f64 = {.name=lit2str("f64"), .kind=TYPE_NUMBER, .size=NUM_SIZE_64, .data.num = NUM_TYPE_FLOAT, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
 
-    static typedata_t type_i8 = {.name=lit2str("i8"), .kind=TYPE_NUMBER, .size=NUM_SIZE_8, .data.num = NUM_TYPE_SIGNED};
+    static typedata_t type_i8 = {.name=lit2str("i8"), .kind=TYPE_NUMBER, .size=NUM_SIZE_8, .data.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
     static typedata_t type_u8 = {.name=lit2str("u8"), .kind=TYPE_NUMBER, .size=NUM_SIZE_8, .data.num = NUM_TYPE_UNSIGNED};
 
-    static typedata_t type_i16 = {.name=lit2str("i16"), .kind=TYPE_NUMBER, .size=NUM_SIZE_16, .data.num = NUM_TYPE_SIGNED};
-    static typedata_t type_u16 = {.name=lit2str("u16"), .kind=TYPE_NUMBER, .size=NUM_SIZE_16, .data.num = NUM_TYPE_UNSIGNED};
+    static typedata_t type_i16 = {.name=lit2str("i16"), .kind=TYPE_NUMBER, .size=NUM_SIZE_16, .data.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
+    static typedata_t type_u16 = {.name=lit2str("u16"), .kind=TYPE_NUMBER, .size=NUM_SIZE_16, .data.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
 
-    static typedata_t type_i32 = {.name=lit2str("i32"), .kind=TYPE_NUMBER, .size=NUM_SIZE_32, .data.num = NUM_TYPE_SIGNED};
-    static typedata_t type_u32 = {.name=lit2str("u32"), .kind=TYPE_NUMBER, .size=NUM_SIZE_32, .data.num = NUM_TYPE_UNSIGNED};
+    static typedata_t type_i32 = {.name=lit2str("i32"), .kind=TYPE_NUMBER, .size=NUM_SIZE_32, .data.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
+    static typedata_t type_u32 = {.name=lit2str("u32"), .kind=TYPE_NUMBER, .size=NUM_SIZE_32, .data.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
 
-    static typedata_t type_i64 = {.name=lit2str("i64"), .kind=TYPE_NUMBER, .size=NUM_SIZE_64, .data.num = NUM_TYPE_SIGNED};
-    static typedata_t type_u64 = {.name=lit2str("u64"), .kind=TYPE_NUMBER, .size=NUM_SIZE_64, .data.num = NUM_TYPE_UNSIGNED};
+    static typedata_t type_i64 = {.name=lit2str("i64"), .kind=TYPE_NUMBER, .size=NUM_SIZE_64, .data.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
+    static typedata_t type_u64 = {.name=lit2str("u64"), .kind=TYPE_NUMBER, .size=NUM_SIZE_64, .data.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
 
-    static typedata_t type_int = {.name=lit2str("int"), .kind=TYPE_NUMBER, .size=sizeof(int), .data.num = NUM_TYPE_SIGNED};
-    static typedata_t type_uint = {.name=lit2str("uint"), .kind=TYPE_NUMBER, .size=sizeof(unsigned int), .data.num = NUM_TYPE_UNSIGNED};
-    static typedata_t type_size_t = {.name=lit2str("size_t"), .kind=TYPE_NUMBER, .size=sizeof(size_t), .data.num = NUM_TYPE_UNSIGNED};
+    static typedata_t type_int = {.name=lit2str("int"), .kind=TYPE_NUMBER, .size=sizeof(int), .data.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
+    static typedata_t type_uint = {.name=lit2str("uint"), .kind=TYPE_NUMBER, .size=sizeof(unsigned int), .data.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
+    static typedata_t type_size_t = {.name=lit2str("size_t"), .kind=TYPE_NUMBER, .size=sizeof(size_t), .data.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
 
-    static typedata_t type_string = {.name=lit2str("string"), .kind=TYPE_STRING, .size=sizeof(void*)};
-    static typedata_t type_type = {.name=lit2str("type"), .kind=TYPE_TYPE, .size=sizeof(type_t)};
-    static typedata_t empty_function = {.name=lit2str(""), .kind = TYPE_FUNCTION, .size = sizeof(void*), .data.function.return_type = typeid(TYPE_VOID)};
+    static typedata_t type_string = {.name=lit2str("string"), .kind=TYPE_STRING, .size=sizeof(void*), .capabilities=(TYPE_CAP_COMPARABLE)};
+    static typedata_t type_type = {.name=lit2str("type"), .kind=TYPE_TYPE, .size=sizeof(type_t), .capabilities=(TYPE_CAP_NONE)};
+    static typedata_t empty_function = {.name=lit2str(""), .kind = TYPE_FUNCTION, .size = sizeof(void*), .data.function.return_type = typeid(TYPE_VOID), .capabilities=(TYPE_CAP_NONE)};
 
     type_t invalid = typeid(set->types.count);
     array_push(&set->types, &type_invalid);

@@ -41,6 +41,27 @@ enum token_type_t {
     TOKEN_SIZE,
 };
 
+typedef enum operator_type_t operator_type_t;
+enum operator_type_t {
+    OPERATOR_TYPE_NONE = 0,
+    OPERATOR_TYPE_ARITHMETIC = 1,
+    OPERATOR_TYPE_EQUALITY = 1 << 1,
+    OPERATOR_TYPE_COMPARISON = 1 << 2,
+    OPERATOR_TYPE_LOGICAL = 1 << 3,
+};
+
+typedef struct operator_t operator_t;
+struct operator_t {
+    operator_type_t type;
+};
+
+operator_t operators[TOKEN_SIZE];
+
+#define operator_is_arithmetic(op) (operators[op].type == OPERATOR_TYPE_ARITHMETIC)
+#define operator_is_comparing(op) (operators[op].type == OPERATOR_TYPE_COMPARISON)
+#define operator_is_equating(op) (operators[op].type == OPERATOR_TYPE_EQUALITY)
+#define operator_is_logical(op) (operators[op].type == OPERATOR_TYPE_LOGICAL)
+
 typedef struct texloc_t texloc_t;
 struct texloc_t {
     string_t filepath;

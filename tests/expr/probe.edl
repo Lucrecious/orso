@@ -1,4 +1,9 @@
 {
-    a2: u8;
-    typeof(a2);
+    sum := 0;
+
+    a := 1;
+
+    if a == -4 then sum = sum + 1;
+
+    sum;
 }

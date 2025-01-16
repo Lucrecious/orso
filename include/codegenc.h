@@ -4,6 +4,7 @@
 #include "stringt.h"
 #include "parser.h"
 #include "tmp.h"
+#include <inttypes.h>
 
 string_t compile_expr_to_c(ast_t *ast, arena_t *allocator);
 
@@ -247,6 +248,8 @@ static void cgen_cache_requires_tmp(type_infos_t *types, ast_node_t *expression)
 static void cgen_constant(cgen_t *cgen, value_index_t value_index, typedata_t *type_info) {
     #define value_at(ty) (*((ty*)(memarr_value_at(&cgen->ast->constants, value_index))))
 
+    i32 x = value_at(i32);
+
     switch (type_info->kind) {
         case TYPE_NUMBER: {
             switch ((num_size_t)type_info->size) {
@@ -255,16 +258,16 @@ static void cgen_constant(cgen_t *cgen, value_index_t value_index, typedata_t *t
                 case NUM_SIZE_32: {
                     switch (type_info->data.num) {
                         case NUM_TYPE_FLOAT: sb_add_format(&cgen->sb, "%g", value_at(f32)); break;
-                        case NUM_TYPE_SIGNED: sb_add_format(&cgen->sb, "%ld", value_at(i32)); break;
-                        case NUM_TYPE_UNSIGNED: sb_add_format(&cgen->sb, "%u", value_at(u32)); break;
+                        case NUM_TYPE_SIGNED: sb_add_format(&cgen->sb, "%"PRIi32, value_at(i32)); break;
+                        case NUM_TYPE_UNSIGNED: sb_add_format(&cgen->sb, "%"PRIu32, value_at(u32)); break;
                     }
                     break;
                 }
                 case NUM_SIZE_64: {
                     switch (type_info->data.num) {
                         case NUM_TYPE_FLOAT: sb_add_format(&cgen->sb, "%lg", value_at(f64)); break;
-                        case NUM_TYPE_SIGNED: sb_add_format(&cgen->sb, "%lld", value_at(i64)); break;
-                        case NUM_TYPE_UNSIGNED: sb_add_format(&cgen->sb, "%llu", value_at(u64)); break;
+                        case NUM_TYPE_SIGNED: sb_add_format(&cgen->sb, "%"PRIi64, value_at(i64)); break;
+                        case NUM_TYPE_UNSIGNED: sb_add_format(&cgen->sb, "%"PRIu64, value_at(u64)); break;
                     }
                     break;
                 }

@@ -17,6 +17,11 @@ typedef double f64;
 typedef u8 bool_;
 typedef const char *cstr_t;
 
+#define __IS_TWO_COMPLIMENT ((-1 & 3) == 3)
+#if !__IS_TWO_COMPLIMENT
+#error "compiler is only defined for machines that use 2's compliment"
+#endif
+
 #define true 1
 #define false 0
 

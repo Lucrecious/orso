@@ -412,61 +412,71 @@ value_index_t constant_fold_bin_arithmetic(ast_t *ast, token_type_t operator, ty
 
     typedata_t *numtype = type2td(ast, type);
 
-    switch (numtype->data.num) {
-    case NUM_TYPE_SIGNED: {
-        i64 lhsi = valin2i(ast, l, numtype->size);
-        i64 rhsi = valin2i(ast, r, numtype->size);
-        i64 result = 0;
+    switch (numtype->kind) {
+    case TYPE_NUMBER: {
+        switch (numtype->data.num) {
+        case NUM_TYPE_SIGNED: {
+            i64 lhsi = valin2i(ast, l, numtype->size);
+            i64 rhsi = valin2i(ast, r, numtype->size);
+            i64 result = 0;
 
-        switch (operator) {
-        case TOKEN_PLUS: result = lhsi + rhsi; break;
-        case TOKEN_MINUS: result = lhsi - rhsi; break;
-        case TOKEN_SLASH: result = div_(lhsi, rhsi); break;
-        case TOKEN_STAR: result = lhsi * rhsi; break;
-        case TOKEN_PERCENT: result = modi_(lhsi, rhsi); break;
-        case TOKEN_PERCENT_PERCENT: result = lhsi % rhsi; break;
-        default: UNREACHABLE();
+            switch (operator) {
+            case TOKEN_PLUS: result = lhsi + rhsi; break;
+            case TOKEN_MINUS: result = lhsi - rhsi; break;
+            case TOKEN_SLASH: result = div_(lhsi, rhsi); break;
+            case TOKEN_STAR: result = lhsi * rhsi; break;
+            case TOKEN_PERCENT: result = modi_(lhsi, rhsi); break;
+            case TOKEN_PERCENT_PERCENT: result = lhsi % rhsi; break;
+            default: UNREACHABLE();
+            }
+
+            return i2valin(ast, result, numtype->size);
+        }
+        
+        case NUM_TYPE_UNSIGNED: {
+            u64 lhsu = valin2u(ast, l, numtype->size);
+            u64 rhsu = valin2u(ast, r, numtype->size);
+            u64 result = 0;
+
+            switch (operator) {
+            case TOKEN_PLUS: result = lhsu + rhsu; break;
+            case TOKEN_MINUS: result = lhsu - rhsu; break;
+            case TOKEN_SLASH: result = div_(lhsu, rhsu); break;
+            case TOKEN_STAR: result = lhsu * rhsu; break;
+            case TOKEN_PERCENT: result = modu_(lhsu, rhsu); break;
+            case TOKEN_PERCENT_PERCENT: result = lhsu % rhsu; break;
+            default: UNREACHABLE();
+            }
+
+            return u2valin(ast, result, numtype->size);
         }
 
-        return i2valin(ast, result, numtype->size);
-    }
-    
-    case NUM_TYPE_UNSIGNED: {
-        u64 lhsu = valin2u(ast, l, numtype->size);
-        u64 rhsu = valin2u(ast, r, numtype->size);
-        u64 result = 0;
+        case NUM_TYPE_FLOAT: {
+            f64 lhsf = valin2d(ast, l, numtype->size);
+            f64 rhsf = valin2d(ast, r, numtype->size);
+            f64 result = 0;
 
-        switch (operator) {
-        case TOKEN_PLUS: result = lhsu + rhsu; break;
-        case TOKEN_MINUS: result = lhsu - rhsu; break;
-        case TOKEN_SLASH: result = div_(lhsu, rhsu); break;
-        case TOKEN_STAR: result = lhsu * rhsu; break;
-        case TOKEN_PERCENT: result = modu_(lhsu, rhsu); break;
-        case TOKEN_PERCENT_PERCENT: result = lhsu % rhsu; break;
-        default: UNREACHABLE();
+            switch (operator) {
+            case TOKEN_PLUS: result = lhsf + rhsf; break;
+            case TOKEN_MINUS: result = lhsf - rhsf; break;
+            case TOKEN_SLASH: result = div_(lhsf, rhsf); break;
+            case TOKEN_STAR: result = lhsf * rhsf; break;
+            case TOKEN_PERCENT: result = modd_(lhsf, rhsf); break;
+            case TOKEN_PERCENT_PERCENT: result = remd_(lhsf, rhsf); break;
+            default: UNREACHABLE();
+            }
+
+            return d2valin(ast, result, numtype->size);
         }
-
-        return u2valin(ast, result, numtype->size);
-    }
-
-    case NUM_TYPE_FLOAT: {
-        f64 lhsf = valin2d(ast, l, numtype->size);
-        f64 rhsf = valin2d(ast, r, numtype->size);
-        f64 result = 0;
-
-        switch (operator) {
-        case TOKEN_PLUS: result = lhsf + rhsf; break;
-        case TOKEN_MINUS: result = lhsf - rhsf; break;
-        case TOKEN_SLASH: result = div_(lhsf, rhsf); break;
-        case TOKEN_STAR: result = lhsf * rhsf; break;
-        case TOKEN_PERCENT: result = modd_(lhsf, rhsf); break;
-        case TOKEN_PERCENT_PERCENT: result = remd_(lhsf, rhsf); break;
-        default: UNREACHABLE();
         }
+        break;
+    }
 
-        return d2valin(ast, result, numtype->size);
+    case TYPE_STRUCT: UNREACHABLE(); /*todo*/ break;
+
+    default: UNREACHABLE(); break;
     }
-    }
+
 }
 
 value_index_t constant_fold_bin_comparison(ast_t *ast, token_type_t operator, type_t type, value_index_t a, value_index_t b) {
@@ -483,8 +493,6 @@ value_index_t constant_fold_bin_comparison(ast_t *ast, token_type_t operator, ty
             bool result = 0;
 
             switch (operator) {
-            case TOKEN_EQUAL_EQUAL: result = (lhsi == rhsi); break;
-            case TOKEN_BANG_EQUAL: result = (lhsi != rhsi); break;
             case TOKEN_GREATER: result = (lhsi > rhsi); break;
             case TOKEN_GREATER_EQUAL: result = (lhsi >= rhsi); break;
             case TOKEN_LESS: result = (lhsi < rhsi); break;
@@ -533,41 +541,7 @@ value_index_t constant_fold_bin_comparison(ast_t *ast, token_type_t operator, ty
         }
     }
 
-    case TYPE_BOOL: {
-        bool lhsb = valin2bool(ast, a);
-        bool rhsb = valin2bool(ast, b);
-        bool result = false;
-
-        switch (operator) {
-        case TOKEN_EQUAL_EQUAL: result = (lhsb == rhsb); break;
-        case TOKEN_BANG_EQUAL: result = (lhsb != rhsb); break;
-        case TOKEN_GREATER: result = (lhsb > rhsb); break;
-        case TOKEN_GREATER_EQUAL: result = (lhsb >= rhsb); break;
-        case TOKEN_LESS: result = (lhsb < rhsb); break;
-        case TOKEN_LESS_EQUAL: result = (lhsb <= rhsb); break;
-        default: UNREACHABLE();
-        }
-
-        return bool2valin(ast, result);
-    }
-
-    case TYPE_TYPE: {
-        type_t lhst = valin2type(ast, a);
-        type_t rhst = valin2type(ast, b);
-        bool result = false;
-
-        switch (operator) {
-        case TOKEN_EQUAL_EQUAL: result = typeid_eq(lhst, rhst); break;
-        case TOKEN_BANG_EQUAL: result = !typeid_eq(lhst, rhst); break;
-        case TOKEN_GREATER: result = (lhst.i > rhst.i); break;
-        case TOKEN_GREATER_EQUAL: result = (lhst.i >= rhst.i); break;
-        case TOKEN_LESS: result = (lhst.i < rhst.i); break;
-        case TOKEN_LESS_EQUAL: result = (lhst.i <= rhst.i); break;
-        default: UNREACHABLE();
-        }
-
-        return bool2valin(ast, result);
-    }
+    case TYPE_STRUCT: UNREACHABLE(); /*todo*/ return value_index_nil();
 
     default: UNREACHABLE(); return value_index_nil();
     }
@@ -690,21 +664,13 @@ void resolve_expression(
             typedata_t *left_td = type2td(ast, left->value_type);
             typedata_t *right_td = type2td(ast, right->value_type);
 
-            switch (expr->operator.type) {
-            // arithmetic
-            case TOKEN_PLUS:
-            case TOKEN_MINUS:
-            case TOKEN_SLASH:
-            case TOKEN_STAR:
-            case TOKEN_PERCENT:
-            case TOKEN_PERCENT_PERCENT: {
-                if (left_td->kind != TYPE_NUMBER) {
+            if (operator_is_arithmetic(expr->operator.type)) {
+                unless (left_td->capabilities&TYPE_CAP_ARITHMETIC) {
                     stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_ARITHMETIC_OPERAND_TYPES, left));
                     INVALIDATE(expr);
-                    break;
                 }
 
-                if (right_td->kind != TYPE_NUMBER) {
+                unless (right_td->capabilities&TYPE_CAP_ARITHMETIC) {
                     stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_ARITHMETIC_OPERAND_TYPES, right));
                     INVALIDATE(expr);
                     break;
@@ -718,53 +684,64 @@ void resolve_expression(
 
                 expr->value_type = left->value_type;
                 expr->value_index = constant_fold_bin_arithmetic(ast, expr->operator.type, left->value_type, left->value_index, right->value_index);
-                break;
-            }
-            
-            // comparisons
-            case TOKEN_BANG_EQUAL:
-            case TOKEN_EQUAL_EQUAL:
-            case TOKEN_BANG:
-            case TOKEN_GREATER:
-            case TOKEN_GREATER_EQUAL:
-            case TOKEN_LESS:
-            case TOKEN_LESS_EQUAL: {
-                if (left_td->kind != TYPE_NUMBER && left_td->kind != TYPE_BOOL && left_td->kind != TYPE_TYPE) {
-                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_COMPARISON_OPERAND_TYPES, left));
+            } else if (operator_is_equating(expr->operator.type)) {
+                // everything is equatable but they need to be the same type
+                unless (typeid_eq(left->value_type, right->value_type)) {
+                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_ARITHMETIC_OPERANDS_REQUIRES_EXPLICIT_CAST, expr));
                     INVALIDATE(expr);
                     break;
                 }
 
-                if (right_td->kind != TYPE_NUMBER && right_td->kind != TYPE_BOOL && right_td->kind != TYPE_TYPE) {
+                expr->value_type = typeid(TYPE_BOOL);
+                
+                // constant fold
+                if (left->value_index.exists && right->value_index.exists) {
+                    void *lhs = memarr_get_ptr(&ast->constants, left->value_index);
+                    void *rhs = memarr_get_ptr(&ast->constants, right->value_index);
+
+                    typedata_t *td = type2td(ast, left->value_type);
+
+                    bool result = (memcmp(lhs, rhs, td->size) == 0);
+
+                    expr->value_index = bool2valin(ast, result);
+                }
+            } else if (operator_is_comparing(expr->operator.type)) {
+                unless (left_td->capabilities&TYPE_CAP_COMPARABLE) {
+                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_COMPARISON_OPERAND_TYPES, left));
+                    INVALIDATE(expr);
+                }
+
+                if (right_td->capabilities&TYPE_CAP_COMPARABLE) {
                     stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_COMPARISON_OPERAND_TYPES, right));
                     INVALIDATE(expr);
                     break;
                 }
 
                 unless (typeid_eq(left->value_type, right->value_type)) {
-                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_COMPARISON_OPERANDS_REQUIRES_EXPLICIT_CAST, expr));
+                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_ARITHMETIC_OPERANDS_REQUIRES_EXPLICIT_CAST, expr));
                     INVALIDATE(expr);
                     break;
                 }
+
 
                 expr->value_type = typeid(TYPE_BOOL);
                 expr->value_index = constant_fold_bin_comparison(ast, expr->operator.type, left->value_type, left->value_index, right->value_index);
-                break;
-            }
-
-            // logical
-            case TOKEN_OR:
-            case TOKEN_AND: {
-                if (left_td->kind != TYPE_BOOL) {
+            } else if (operator_is_logical(expr->operator.type)) {
+                unless (left_td->capabilities&TYPE_CAP_LOGICAL) {
                     stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_LOGICAL_OPERAND_TYPES, right));
                     INVALIDATE(expr);
                     break;
                 }
 
-                if (right_td->kind != TYPE_BOOL) {
+                if (right_td->capabilities&TYPE_CAP_LOGICAL) {
                     stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_LOGICAL_OPERAND_TYPES, right));
                     INVALIDATE(expr);
                     break;
+                }
+
+                if (expr->value_type.i != TYPE_BOOL) {
+                    // todo
+                    UNREACHABLE();
                 }
                 
                 expr->value_type = typeid(TYPE_BOOL);
@@ -783,12 +760,9 @@ void resolve_expression(
 
                     expr->value_index = bool2valin(ast, result);
                 }
-                break;
+            } else {
+                UNREACHABLE();
             }
-
-            default: UNREACHABLE();
-            }
-
             break;
         }
 

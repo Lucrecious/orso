@@ -1,33 +1,19 @@
 #define INTRINSICS_IMPLEMENTATION
 #include "intrinsics.h"
 
-i64 expr(void) {
-i64 result_; {
-    i64 x_ = 2;
+i32 expr(void) {
+i32 result_; {
+    i32 sum_ = i;
+
+    i32 a_ = i;
 
     {
-      while ((x_ > 0)) {
-        {
-          i64 t_ = 0;
-
-          (x_ = (x_ - 1));
-
-          {
-            if ((x_ == 1)) {
-              ;
-              goto break1_;
-            }
-          };
-
-        };
-        continue2_:;
+      if ((a_ == i)) {
+        (sum_ = (sum_ + i));
       }
-      0;
-    } break1_:;
+    };
 
-    i64 y_ = 10;
-
-    result_ = y_;
+    result_ = sum_;
 ;
   };
 

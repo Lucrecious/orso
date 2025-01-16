@@ -5,6 +5,27 @@
 #include <string.h>
 #include <stdlib.h>
 
+operator_t operators[TOKEN_SIZE] = {
+    [TOKEN_PLUS] = {.type=OPERATOR_TYPE_ARITHMETIC},
+    [TOKEN_MINUS] = {.type=OPERATOR_TYPE_ARITHMETIC},
+    [TOKEN_SLASH] = {.type=OPERATOR_TYPE_ARITHMETIC},
+    [TOKEN_STAR] = {.type=OPERATOR_TYPE_ARITHMETIC},
+    [TOKEN_PERCENT] = {.type=OPERATOR_TYPE_ARITHMETIC},
+    [TOKEN_PERCENT_PERCENT] = {.type=OPERATOR_TYPE_ARITHMETIC},
+
+    [TOKEN_EQUAL_EQUAL] = {.type=OPERATOR_TYPE_EQUALITY},
+    [TOKEN_BANG_EQUAL] = {.type=OPERATOR_TYPE_EQUALITY},
+
+    [TOKEN_GREATER] = {.type=OPERATOR_TYPE_COMPARISON},
+    [TOKEN_GREATER_EQUAL] = {.type=OPERATOR_TYPE_COMPARISON},
+    [TOKEN_LESS] = {.type=OPERATOR_TYPE_COMPARISON},
+    [TOKEN_LESS_EQUAL] = {.type=OPERATOR_TYPE_COMPARISON},
+
+    [TOKEN_AND] = {.type=OPERATOR_TYPE_LOGICAL},
+    [TOKEN_OR] = {.type=OPERATOR_TYPE_LOGICAL},
+    [TOKEN_NOT] = {.type=OPERATOR_TYPE_LOGICAL},
+};
+
 static token_t create_token(lexer_t *lexer, token_type_t type) {
     token_t token = { 
         .source = lexer->source,

@@ -81,9 +81,18 @@ enum num_size_t {
     NUM_SIZE_64 = sizeof(u64),
 };
 
+typedef enum type_caps_t type_caps_t;
+enum type_caps_t {
+    TYPE_CAP_NONE           = 0,
+    TYPE_CAP_ARITHMETIC     = 1,
+    TYPE_CAP_COMPARABLE     = 1 << 2,
+    TYPE_CAP_LOGICAL        = 1 << 3,
+};
+
 struct typedata_t {
     string_t name;
     type_kind_t kind;
+    type_caps_t capabilities;
     size_t size; // not serialized
     union {
         num_type_t num;

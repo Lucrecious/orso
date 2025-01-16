@@ -1,11 +1,11 @@
 #define INTRINSICS_IMPLEMENTATION
 #include "intrinsics.h"
 
-i64 expr(void) {
-i64 result_; {
-    i64 sum_ = 0;
+i32 expr(void) {
+i32 result_; {
+    i32 sum_ = 0;
 
-    i64 a_ = 3;
+    i32 a_ = 3;
 
     {
       if ((a_ == 3)) {
@@ -13,13 +13,13 @@ i64 result_; {
       }
     };
 
-    i64 tmp2; {
+    i32 tmp2; {
       tmp2 = 1;
     };
-    i64 tmp3; {
+    i32 tmp3; {
       tmp3 = 2;
     };
-    i64 tmp1 = tmp2 + tmp3;
+    i32 tmp1 = tmp2 + tmp3;
     (a_ = tmp1);
 
     {
@@ -28,11 +28,11 @@ i64 result_; {
       }
     };
 
-    i64 tmp5; {
+    i32 tmp5; {
       tmp5 = 1;
     };
-    i64 tmp6 = 2;
-    i64 tmp4 = tmp5 + tmp6;
+    i32 tmp6 = 2;
+    i32 tmp4 = tmp5 + tmp6;
     (a_ = tmp4);
 
     {
@@ -41,11 +41,11 @@ i64 result_; {
       }
     };
 
-    i64 tmp8 = 1;
-    i64 tmp9; {
+    i32 tmp8 = 1;
+    i32 tmp9; {
       tmp9 = 2;
     };
-    i64 tmp7 = tmp8 + tmp9;
+    i32 tmp7 = tmp8 + tmp9;
     (a_ = tmp7);
 
     {
@@ -136,12 +136,12 @@ i64 result_; {
       }
     };
 
-    i64 tmp11 = a_;
+    i32 tmp11 = a_;
 ;
-    i64 tmp12; {
+    i32 tmp12; {
       tmp12 = 1;
     };
-    i64 tmp10 = div_(tmp11, tmp12);
+    i32 tmp10 = div_(tmp11, tmp12);
     (a_ = tmp10);
 
     (a_ = div_(a_, 0));
