@@ -1,15 +1,15 @@
 #define INTRINSICS_IMPLEMENTATION
 #include "intrinsics.h"
 
-i64 expr(void) {
-i64 result_; {
-    i64 x_ = 0;
+i32 expr(void) {
+i32 result_; {
+    i32 x_ = 0;
 
-    i64 n_ = 10;
+    i32 n_ = 10;
 
     (x_ = n_);
 
-    i64 sum_ = 0;
+    i32 sum_ = 0;
 
     {
       if ((x_ == n_)) {
@@ -17,12 +17,12 @@ i64 result_; {
       }
     };
 
-    i64 d_; {
-      i64 a_ = 1;
+    i32 d_; {
+      i32 a_ = 1;
 
-      i64 b_ = 2;
+      i32 b_ = 2;
 
-      i64 c_ = 3;
+      i32 c_ = 3;
 
       d_ = ((a_ = (b_ = c_)));
     };
@@ -33,17 +33,17 @@ i64 result_; {
       }
     };
 
-    i64 e_; {
-      i64 a_ = 1;
+    i32 e_; {
+      i32 a_ = 1;
 
-      i64 b_ = 2;
+      i32 b_ = 2;
 
-      i64 c_ = 3;
+      i32 c_ = 3;
 
-      i64 tmp2; {
+      i32 tmp2; {
         tmp2 = ((a_ + b_) + c_);
       };
-      i64 tmp1 = (b_ = tmp2);
+      i32 tmp1 = (b_ = tmp2);
       e_ = (a_ = tmp1);
     };
 

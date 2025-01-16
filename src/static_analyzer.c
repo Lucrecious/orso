@@ -711,7 +711,7 @@ void resolve_expression(
                     INVALIDATE(expr);
                 }
 
-                if (right_td->capabilities&TYPE_CAP_COMPARABLE) {
+                unless (right_td->capabilities&TYPE_CAP_COMPARABLE) {
                     stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_COMPARISON_OPERAND_TYPES, right));
                     INVALIDATE(expr);
                     break;
@@ -733,13 +733,13 @@ void resolve_expression(
                     break;
                 }
 
-                if (right_td->capabilities&TYPE_CAP_LOGICAL) {
+                unless (right_td->capabilities&TYPE_CAP_LOGICAL) {
                     stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_LOGICAL_OPERAND_TYPES, right));
                     INVALIDATE(expr);
                     break;
                 }
 
-                if (expr->value_type.i != TYPE_BOOL) {
+                if (left_td->kind != TYPE_BOOL) {
                     // todo
                     UNREACHABLE();
                 }

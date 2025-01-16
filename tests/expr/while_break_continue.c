@@ -1,11 +1,11 @@
 #define INTRINSICS_IMPLEMENTATION
 #include "intrinsics.h"
 
-i64 expr(void) {
-i64 result_; {
-    i64 count_ = 10;
+i32 expr(void) {
+i32 result_; {
+    i32 count_ = 10;
 
-    i64 sum_ = 0;
+    i32 sum_ = 0;
 
     {
       until ((count_ <= 0)) {
@@ -31,7 +31,7 @@ i64 result_; {
       }
     };
 
-    i64 tmp3; {
+    i32 tmp3; {
       while ((count_ > 0)) {
         {
           tmp3 = ((count_ = (count_ - 1)));
@@ -58,9 +58,9 @@ i64 result_; {
 
     (count_ = 10);
 
-    i64 odds_ = 0;
+    i32 odds_ = 0;
 
-    i64 evens_ = 0;
+    i32 evens_ = 0;
 
     {
       while ((count_ > 0)) {
@@ -107,11 +107,11 @@ i64 result_; {
 
     (count_ = 10);
 
-    i64 found2_ = 0;
+    i32 found2_ = 0;
 
-    i64 found_others_ = 0;
+    i32 found_others_ = 0;
 
-    i64 tmp8; {
+    i32 tmp8; {
       while ((count_ > 0)) {
         {
           (count_ = (count_ - 1));

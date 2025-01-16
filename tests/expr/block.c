@@ -1,24 +1,24 @@
 #define INTRINSICS_IMPLEMENTATION
 #include "intrinsics.h"
 
-i64 expr(void) {
-i64 result_; {
+i32 expr(void) {
+i32 result_; {
     {
-      i64 x_ = 10;
+      i32 x_ = 10;
 
-      i64 y_ = 20;
+      i32 y_ = 20;
 
-      i64 z_ = 30;
+      i32 z_ = 30;
 
       ((x_ + y_) + z_);
     };
 
-    i64 a_; {
-      i64 x_ = 10;
+    i32 a_; {
+      i32 x_ = 10;
 
-      i64 y_ = 20;
+      i32 y_ = 20;
 
-      i64 z_ = 30;
+      i32 z_ = 30;
 
       a_ = ((x_ + y_) + z_);
     };
@@ -26,7 +26,7 @@ i64 result_; {
     ;
 
     {
-      i64 a_; {
+      i32 a_; {
         {
           a_ = 5;
         };
@@ -35,8 +35,8 @@ i64 result_; {
       a_;
     };
 
-    i64 b_; {
-      i64 a_; {
+    i32 b_; {
+      i32 a_; {
         {
           a_ = 5;
         };
@@ -46,7 +46,7 @@ i64 result_; {
 ;
     };
 
-    i64 c_; {
+    i32 c_; {
       {
         {
           {

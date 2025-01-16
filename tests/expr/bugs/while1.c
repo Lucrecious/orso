@@ -1,11 +1,11 @@
 #define INTRINSICS_IMPLEMENTATION
 #include "intrinsics.h"
 
-i64 expr(void) {
-i64 result_; {
-    i64 sum_ = (0 - 1);
+i32 expr(void) {
+i32 result_; {
+    i32 sum_ = -1;
 
-    i64 b_; {
+    i32 b_; {
       while ((sum_ > 0)) {
         b_ = (sum_ = (sum_ - 1));
         continue2_:;

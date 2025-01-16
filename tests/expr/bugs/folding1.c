@@ -1,9 +1,9 @@
 #define INTRINSICS_IMPLEMENTATION
 #include "intrinsics.h"
 
-i64 expr(void) {
-i64 result_; {
-    i64 a_ = 0;
+i32 expr(void) {
+i32 result_; {
+    i32 a_ = 0;
 
     (a_ = -1);
 

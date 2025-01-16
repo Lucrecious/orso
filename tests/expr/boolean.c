@@ -1,13 +1,13 @@
 #define INTRINSICS_IMPLEMENTATION
 #include "intrinsics.h"
 
-i64 expr(void) {
-i64 result_; {
+i32 expr(void) {
+i32 result_; {
     bool_ a_ = true;
 
     bool_ b_ = false;
 
-    i64 sum_ = 0;
+    i32 sum_ = 0;
 
     bool_ ab_ = (a_ && b_);
 

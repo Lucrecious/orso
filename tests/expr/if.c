@@ -1,8 +1,8 @@
 #define INTRINSICS_IMPLEMENTATION
 #include "intrinsics.h"
 
-i64 expr(void) {
-i64 result_; {
+i32 expr(void) {
+i32 result_; {
     {
       if (true) {
         ;
@@ -101,7 +101,7 @@ i64 result_; {
       }
     };
 
-    i64 c_ = 0;
+    i32 c_ = 0;
 ; {
       if (true) {
         {
@@ -110,7 +110,7 @@ i64 result_; {
       }
     };
 
-    i64 d_; {
+    i32 d_; {
       if (true) {
         d_ = 0;
       } else {
@@ -120,7 +120,7 @@ i64 result_; {
       }
     };
 
-    i64 e_; {
+    i32 e_; {
       if (true) {
         {
           e_ = 3;
@@ -150,7 +150,7 @@ i64 result_; {
       }
     };
 
-    i64 h_ = 0;
+    i32 h_ = 0;
 ; {
       bool_ tmp7; {
         tmp7 = true;
@@ -162,7 +162,7 @@ i64 result_; {
       }
     };
 
-    i64 i_; {
+    i32 i_; {
       bool_ tmp8; {
         tmp8 = true;
       };

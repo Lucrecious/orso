@@ -1,14 +1,14 @@
 #define INTRINSICS_IMPLEMENTATION
 #include "intrinsics.h"
 
-i64 expr(void) {
-i64 result_; {
-    i64 x_ = 2;
+i32 expr(void) {
+i32 result_; {
+    i32 x_ = 2;
 
     {
       while ((x_ > 0)) {
         {
-          i64 t_ = 5;
+          i32 t_ = 5;
 
           (x_ = (x_ - 1));
 
@@ -25,7 +25,7 @@ i64 result_; {
       0;
     } break1_:;
 
-    i64 y_ = 10;
+    i32 y_ = 10;
 
     result_ = y_;
 ;
