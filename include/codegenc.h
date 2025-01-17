@@ -170,10 +170,66 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t tmp
 
 static bool cgen_binary_is_macro(token_type_t type, typedata_t *type_info, cstr_t *operator_or_func_name) {
     #define set_op(lit, is_func) { if (operator_or_func_name) *operator_or_func_name = (lit); return (is_func); } break
-    switch (type) {
-        case TOKEN_PLUS: set_op("+", false);
-        case TOKEN_MINUS: set_op("-", false);
-        case TOKEN_STAR: set_op("*", false);
+
+    #define case_block(numtype) switch (type) {\
+        case TOKEN_PLUS: set_op("add"#numtype"_", true); break; \
+        case TOKEN_MINUS: set_op("sub"#numtype"_", true); \
+        case TOKEN_SLASH: set_op("div"#numtype"_", true); \
+        case TOKEN_STAR: set_op("mul"#numtype"_", true); \
+        case TOKEN_PERCENT: set_op("mod"#numtype"_", true); \
+        case TOKEN_PERCENT_PERCENT: set_op("rem"#numtype"_", true); \
+        default: set_op("", false); \
+    }
+
+    if (operator_is_arithmetic(type)) {
+        switch (type_info->kind) {
+        case TYPE_NUMBER: {
+            switch ((num_size_t)type_info->size) {
+            case NUM_SIZE_8: {
+                switch (type_info->data.num) {
+                case NUM_TYPE_SIGNED: case_block(i8) break;
+                case NUM_TYPE_UNSIGNED: case_block(u8) break;
+                default: UNREACHABLE(); break;
+                }
+                break;
+            }
+
+            case NUM_SIZE_16: {
+                switch (type_info->data.num) {
+                case NUM_TYPE_SIGNED: case_block(i16) break;
+                case NUM_TYPE_UNSIGNED: case_block(u16) break;
+                default: UNREACHABLE(); break;
+                }
+                break;
+            }
+
+            case NUM_SIZE_32: {
+                switch (type_info->data.num) {
+                case NUM_TYPE_SIGNED: case_block(i32) break;
+                case NUM_TYPE_UNSIGNED: case_block(u32) break;
+                case NUM_TYPE_FLOAT: case_block(f) break;
+                }
+                break;
+            }
+
+            case NUM_SIZE_64: {
+                switch (type_info->data.num) {
+                case NUM_TYPE_SIGNED: case_block(i64) break;
+                case NUM_TYPE_UNSIGNED: case_block(u64) break;
+                case NUM_TYPE_FLOAT: case_block(d) break;
+                }
+                break;
+            }
+
+            }
+            break;
+        }
+
+        // only numbers have arithmetic right now
+        default: UNREACHABLE(); break;
+        }
+    } else {
+        switch (type) {
         case TOKEN_GREATER: set_op(">", false);
         case TOKEN_GREATER_EQUAL: set_op(">=", false);
         case TOKEN_LESS: set_op("<", false);
@@ -183,28 +239,8 @@ static bool cgen_binary_is_macro(token_type_t type, typedata_t *type_info, cstr_
         case TOKEN_AND: set_op("&&", false);
         case TOKEN_OR: set_op("||", false);
 
-        case TOKEN_SLASH: set_op("div_", true);
-
-        case TOKEN_PERCENT_PERCENT: {
-            ASSERT(type_info->kind == TYPE_NUMBER, "must be a number");
-            switch (type_info->data.num) {
-                case NUM_TYPE_FLOAT: set_op("remd_", true);
-
-                case NUM_TYPE_UNSIGNED:
-                case NUM_TYPE_SIGNED: set_op("%", false);
-            }
-            break;
+        default: set_op("", false); UNREACHABLE();
         }
-
-        case TOKEN_PERCENT: {
-            switch (type_info->data.num) {
-                case NUM_TYPE_FLOAT: set_op("modd_", true);
-                case NUM_TYPE_SIGNED: set_op("modi_", true);
-                case NUM_TYPE_UNSIGNED: set_op("modu_", true);
-            }
-        }
-
-        default: UNREACHABLE();
     }
 }
 

@@ -398,145 +398,51 @@ void vm_step(vm_t *vm) {
         }
 
         // conversion to unsigned for wrapped operation on overflow but converted back to integer after (c is ub for signed overflow)
-        #define case_bini_reg_reg(name, opi, op) case OP_##name##_REG_REG: {\
-            i64 a = vm->registers[in.as.bin_reg_to_reg.reg_op1].as.i; \
-            i64 b = vm->registers[in.as.bin_reg_to_reg.reg_op2].as.i; \
+        #define case_bini_reg_reg(name, op, type) case OP_##name##_REG_REG: {\
+            i64 a = vm->registers[in.as.bin_reg_to_reg.reg_op1].as.type; \
+            i64 b = vm->registers[in.as.bin_reg_to_reg.reg_op2].as.type; \
             byte c = in.as.bin_reg_to_reg.reg_result; \
             num_size_t sz = in.as.bin_reg_to_reg.size; \
             i64 result = 0; \
             switch (sz) {\
             case NUM_SIZE_8: {\
-                result = opi(a, b, i8, u8, op);\
+                result = op##type##8_(a, b);\
                 break;\
             }\
             case NUM_SIZE_16: {\
-                result = opi(a, b, i16, u16, op);\
+                result = op##type##16_(a, b);\
                 break;\
             }\
             case NUM_SIZE_32: {\
-                result = opi(a, b, i32, u32, op);\
+                result = op##type##32_(a, b);\
                 break;\
             }\
             case NUM_SIZE_64: {\
-                result = opi(a, b, i64, u64, op);\
+                result = op##type##64_(a, b);\
                 break;\
             }\
             }\
-            vm->registers[c].as.i = result;\
+            vm->registers[c].as.type = result;\
             IP_ADV(1); \
             break; \
         }\
         break
 
-        case_bini_reg_reg(ADDI, opi_, +);
-        case_bini_reg_reg(SUBI, opi_, -);
-        case_bini_reg_reg(MULI, opi_, *);
-        case_bini_reg_reg(REMI, opi_, %);
+        case_bini_reg_reg(ADDI, add, i);
+        case_bini_reg_reg(SUBI, sub, i);
+        case_bini_reg_reg(MULI, mul, i);
+        case_bini_reg_reg(DIVI, mul, i);
+        case_bini_reg_reg(MODI, rem, i);
+        case_bini_reg_reg(REMI, rem, i);
+
+        case_bini_reg_reg(ADDU, add, u);
+        case_bini_reg_reg(SUBU, sub, u);
+        case_bini_reg_reg(MULU, mul, u);
+        case_bini_reg_reg(DIVU, mul, u);
+        case_bini_reg_reg(MODU, rem, u);
+        case_bini_reg_reg(REMU, rem, u);
 
         #undef case_bini_reg_reg
-
-
-        case OP_DIVI_REG_REG: {
-            i64 a = vm->registers[in.as.bin_reg_to_reg.reg_op1].as.i;
-            i64 b = vm->registers[in.as.bin_reg_to_reg.reg_op2].as.i;
-            byte c = in.as.bin_reg_to_reg.reg_result;
-            num_size_t sz = in.as.bin_reg_to_reg.size;
-
-            switch (sz) {
-            case NUM_SIZE_8: {
-                vm->registers[c].as.i = divi_(a, b, INT8_MIN);
-                break;
-            }
-
-            case NUM_SIZE_16: {
-                vm->registers[c].as.i = divi_(a, b, INT16_MIN);
-                break;
-            }
-  
-            case NUM_SIZE_32: {
-                vm->registers[c].as.i = divi_(a, b, INT32_MIN);
-                break;
-            }
-
-            case NUM_SIZE_64: {
-                vm->registers[c].as.i = divi_(a, b, INT64_MIN);
-                break;
-            }
-            }
-
-            IP_ADV(1);
-            break;
-        }
-
-        case OP_MODI_REG_REG: {
-            i64 a = vm->registers[in.as.bin_reg_to_reg.reg_op1].as.i;
-            i64 b = vm->registers[in.as.bin_reg_to_reg.reg_op2].as.i;
-            byte c = in.as.bin_reg_to_reg.reg_result;
-
-            b = b < 0 ? -b : b;
-            vm->registers[c].as.i = modi_(a, b);
-
-            IP_ADV(1);
-            break;
-        }
-
-        #define case_binu_reg_reg(name, op) case OP_##name##_REG_REG: { \
-            u64 a = vm->registers[in.as.bin_reg_to_reg.reg_op1].as.u; \
-            u64 b = vm->registers[in.as.bin_reg_to_reg.reg_op2].as.u; \
-            byte c = in.as.bin_reg_to_reg.reg_result; \
-            num_size_t sz = in.as.bin_reg_to_reg.size; \
-            u64 result = 0; \
-            switch (sz) { \
-            case NUM_SIZE_8: { \
-                result = opu_(a, b, u8, op); \
-                break; \
-            } \
-            case NUM_SIZE_16: { \
-                result = opu_(a, b, u16, op); \
-                break; \
-            } \
-            case NUM_SIZE_32: { \
-                result = opu_(a, b, u32, op); \
-                break; \
-            } \
-            case NUM_SIZE_64: { \
-                result = opu_(a, b, u64, op); \
-                break; \
-            } \
-            } \
-            vm->registers[c].as.u = result; \
-            break; \
-        } break
-
-        case_binu_reg_reg(ADDU, +);
-        case_binu_reg_reg(SUBU, -);
-        case_binu_reg_reg(MULU, *);
-        case_binu_reg_reg(REMU, %);
-
-        #undef case_binu_reg_reg
-
-        // no need to handle overflows on integer divisions since they must always get smaller
-        case OP_DIVU_REG_REG: {
-            u64 a = vm->registers[in.as.bin_reg_to_reg.reg_op1].as.u;
-            u64 b = vm->registers[in.as.bin_reg_to_reg.reg_op2].as.u;
-            byte c = in.as.bin_reg_to_reg.reg_result;
-
-            vm->registers[c].as.u = div_(a, b);
-
-            IP_ADV(1);
-            break;
-        }
-
-        case OP_MODU_REG_REG: {
-            u64 a = vm->registers[in.as.bin_reg_to_reg.reg_op1].as.u;
-            u64 b = vm->registers[in.as.bin_reg_to_reg.reg_op2].as.u;
-            byte c = in.as.bin_reg_to_reg.reg_result;
-
-            vm->registers[c].as.u = a%b;
-
-            IP_ADV(1);
-            break;
-        }
 
         #define case_bind_reg_reg(name, op) case OP_##name##_REG_REG: { \
             f64 a = vm->registers[in.as.bin_reg_to_reg.reg_op1].as.d; \
@@ -546,11 +452,11 @@ void vm_step(vm_t *vm) {
             f64 result = 0.0; \
             switch (sz) { \
             case NUM_SIZE_32: { \
-                result = ((f32)a) + ((f32)b); \
+                result = op##f_(a, b); \
                 break; \
             } \
             case NUM_SIZE_64: { \
-                result = a + b; \
+                result = op##d_(a, b); \
                 break; \
             } \
             default: UNREACHABLE(); break; \
@@ -560,45 +466,14 @@ void vm_step(vm_t *vm) {
             break; \
         } break
 
-        case_bind_reg_reg(ADDD, +);
-        case_bind_reg_reg(SUBD, -);
-        case_bind_reg_reg(MULD, *);
+        case_bind_reg_reg(ADDD, add);
+        case_bind_reg_reg(SUBD, sub);
+        case_bind_reg_reg(MULD, mul);
+        case_bind_reg_reg(DIVD, div);
+        case_bind_reg_reg(MODD, mod);
+        case_bind_reg_reg(REMD, rem);
 
         #undef case_bind_reg_reg
-
-        case OP_DIVD_REG_REG: {
-            byte a = in.as.bin_reg_to_reg.reg_op1;
-            byte b = in.as.bin_reg_to_reg.reg_op2;
-            byte c = in.as.bin_reg_to_reg.reg_result;
-
-            vm->registers[c].as.d = div_(vm->registers[a].as.d, vm->registers[b].as.d);
-
-            IP_ADV(1);
-            break;
-        }
-
-        case OP_REMD_REG_REG: {
-            byte a = in.as.bin_reg_to_reg.reg_op1;
-            byte b = in.as.bin_reg_to_reg.reg_op2;
-            byte c = in.as.bin_reg_to_reg.reg_result;
-
-            vm->registers[c].as.d = remd_(vm->registers[a].as.d, vm->registers[b].as.d);
-
-            IP_ADV(1);
-            break;
-        }
-
-        case OP_MODD_REG_REG: {
-            f64 a = vm->registers[in.as.bin_reg_to_reg.reg_op1].as.d;
-            f64 b = vm->registers[in.as.bin_reg_to_reg.reg_op2].as.d;
-            byte c = in.as.bin_reg_to_reg.reg_result;
-
-            b = b < 0 ? -b : b;
-            vm->registers[c].as.d = modd_(a, b);
-
-            IP_ADV(1);
-            break;
-        }
 
         #define case_binc_reg_reg(name, v, op) case OP_##name##_REG_REG: { \
             byte a = in.as.bin_reg_to_reg.reg_op1; \
