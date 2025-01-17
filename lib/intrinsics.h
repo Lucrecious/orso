@@ -31,7 +31,7 @@ typedef const char *cstr_t;
 #endif
 
 #define opi_(a, b, i, u, op) ((i)(((u)a) op (u)b))
-#define opu_(a, b, u, op) (((u)a) op ((u)b))
+#define opu_(a, b, u, op) ((u)(((u)a) op ((u)b)))
 #define opf_(a, b, op) (((f32)a) op ((f32)b)) 
 #define modd_(a, b)  (modd(a, b))
 #define remd_(a, b) (remd(a, b))
@@ -44,8 +44,8 @@ typedef const char *cstr_t;
 #define addi8_(a, b) opi_(a, b, i8, u8, +)
 #define subi8_(a, b) opi_(a, b, i8, u8, -)
 #define muli8_(a, b) opi_(a, b, i8, u8, *)
-#define divi8_(a, b) divi_(a, b)
-#define modi8_(a, b) modi_(a, b, INT8_MIN)
+#define divi8_(a, b) divi_(a, b, INT8_MIN)
+#define modi8_(a, b) modi_(a, b)
 #define remi8_(a, b) (a % b)
 
 #define addi16_(a, b) opi_(a, b, i16, u16, +)

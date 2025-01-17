@@ -254,7 +254,7 @@ i64 cstrn_to_u64(const char* text, i32 length) {
 
         i32 ones = text[i] - '0';
         if (ones < 0 || ones > 9) {
-            continue;
+            break;
         }
 
         integer *= 10;

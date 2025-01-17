@@ -412,6 +412,16 @@ value_index_t constant_fold_bin_arithmetic(ast_t *ast, token_type_t operator, ty
 
     typedata_t *numtype = type2td(ast, type);
 
+    #define case_block(type, l, r) do { switch (operator) { \
+        case TOKEN_PLUS: result = add##type##_(l, r); break; \
+        case TOKEN_MINUS: result = sub##type##_(l, r); break; \
+        case TOKEN_SLASH: result = div##type##_(l, r); break; \
+        case TOKEN_STAR: result = mul##type##_(l, r); break; \
+        case TOKEN_PERCENT: result = mod##type##_(l, r); break; \
+        case TOKEN_PERCENT_PERCENT: result = rem##type##_(l, r); break; \
+        default: UNREACHABLE(); \
+        }} while (false)
+
     switch (numtype->kind) {
     case TYPE_NUMBER: {
         switch (numtype->data.num) {
@@ -420,14 +430,11 @@ value_index_t constant_fold_bin_arithmetic(ast_t *ast, token_type_t operator, ty
             i64 rhsi = valin2i(ast, r, numtype->size);
             i64 result = 0;
 
-            switch (operator) {
-            case TOKEN_PLUS: result = lhsi + rhsi; break;
-            case TOKEN_MINUS: result = lhsi - rhsi; break;
-            case TOKEN_SLASH: result = div_(lhsi, rhsi); break;
-            case TOKEN_STAR: result = lhsi * rhsi; break;
-            case TOKEN_PERCENT: result = modi_(lhsi, rhsi); break;
-            case TOKEN_PERCENT_PERCENT: result = lhsi % rhsi; break;
-            default: UNREACHABLE();
+            switch((num_size_t)numtype->size) {
+            case NUM_SIZE_8: case_block(i8, lhsi, rhsi); break;
+            case NUM_SIZE_16: case_block(i16, lhsi, rhsi); break;
+            case NUM_SIZE_32: case_block(i32, lhsi, rhsi); break;
+            case NUM_SIZE_64: case_block(i64, lhsi, rhsi); break;
             }
 
             return i2valin(ast, result, numtype->size);
@@ -438,14 +445,11 @@ value_index_t constant_fold_bin_arithmetic(ast_t *ast, token_type_t operator, ty
             u64 rhsu = valin2u(ast, r, numtype->size);
             u64 result = 0;
 
-            switch (operator) {
-            case TOKEN_PLUS: result = lhsu + rhsu; break;
-            case TOKEN_MINUS: result = lhsu - rhsu; break;
-            case TOKEN_SLASH: result = div_(lhsu, rhsu); break;
-            case TOKEN_STAR: result = lhsu * rhsu; break;
-            case TOKEN_PERCENT: result = modu_(lhsu, rhsu); break;
-            case TOKEN_PERCENT_PERCENT: result = lhsu % rhsu; break;
-            default: UNREACHABLE();
+            switch((num_size_t)numtype->size) {
+            case NUM_SIZE_8: case_block(u8, lhsu, rhsu); break;
+            case NUM_SIZE_16: case_block(u16, lhsu, rhsu); break;
+            case NUM_SIZE_32: case_block(u32, lhsu, rhsu); break;
+            case NUM_SIZE_64: case_block(u64, lhsu, rhsu); break;
             }
 
             return u2valin(ast, result, numtype->size);
@@ -455,15 +459,10 @@ value_index_t constant_fold_bin_arithmetic(ast_t *ast, token_type_t operator, ty
             f64 lhsf = valin2d(ast, l, numtype->size);
             f64 rhsf = valin2d(ast, r, numtype->size);
             f64 result = 0;
-
-            switch (operator) {
-            case TOKEN_PLUS: result = lhsf + rhsf; break;
-            case TOKEN_MINUS: result = lhsf - rhsf; break;
-            case TOKEN_SLASH: result = div_(lhsf, rhsf); break;
-            case TOKEN_STAR: result = lhsf * rhsf; break;
-            case TOKEN_PERCENT: result = modd_(lhsf, rhsf); break;
-            case TOKEN_PERCENT_PERCENT: result = remd_(lhsf, rhsf); break;
-            default: UNREACHABLE();
+            switch((num_size_t)numtype->size) {
+            case NUM_SIZE_32: case_block(f, lhsf, rhsf); break;
+            case NUM_SIZE_64: case_block(d, lhsf, rhsf); break;
+            default: UNREACHABLE(); break;
             }
 
             return d2valin(ast, result, numtype->size);
@@ -477,6 +476,7 @@ value_index_t constant_fold_bin_arithmetic(ast_t *ast, token_type_t operator, ty
     default: UNREACHABLE(); break;
     }
 
+    #undef case_block
 }
 
 value_index_t constant_fold_bin_comparison(ast_t *ast, token_type_t operator, type_t type, value_index_t a, value_index_t b) {
