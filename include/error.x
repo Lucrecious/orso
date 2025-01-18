@@ -1,5 +1,7 @@
 // note i can optionally give a command that gives you more information on error
 
+ERROR_XMACRO(ERROR_NONE, "none", PARSER)
+
 ERROR_XMACRO(ERROR_PARSER_EXPECTED_JMP_LABEL, "expected a jump label", PARSER)
 ERROR_XMACRO(ERROR_PARSER_EXPECTED_CLOSE_BRACE_FOR_BLOCK, "expected close brace for block", PARSER)
 ERROR_XMACRO(ERROR_PARSER_EXPECTED_DO_OR_BRACE_AFTER_LOOP_CONDITION, "expected 'do' or '{' after while/until condition", PARSER)

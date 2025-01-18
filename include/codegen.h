@@ -49,8 +49,6 @@ enum reg_t {
     REG_STACK_FRAME = 35,
 };
 
-declare_table(str2cf, string_t, call_frame_t)
-
 static void gen_error(gen_t *gen, error_t error) {
     gen->had_error = true;
     if (gen->error_fn) gen->error_fn(gen->ast, error);

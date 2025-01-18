@@ -297,20 +297,123 @@ ast_node_t *ast_nil(ast_t *ast, type_t value_type, token_t token_location) {
     return nil_node;
 }
 
-static ast_node_t *ast_primaryi(ast_t *ast, i64 value, ast_node_t extra_params) {
-    ast_node_t *primary = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_PRIMARY, extra_params.start);
+static ast_node_t *ast_primaryu(ast_t *ast, u64 value, type_t type, token_t token) {
+    if (TYPE_IS_UNRESOLVED(type)) {
+        if (value < UINT_MAX) {
+            type = ast->type_set.uint_;
+        } else {
+            type = ast->type_set.u64_;
+        }
+    }
 
-    primary->value_index = memarr_push_value(&ast->constants, &value, sizeof(i64));
-    primary->value_type = ast->type_set.int_;
+    typedata_t *td = type2typedata(&ast->type_set.types, type);
+
+    value_index_t valin;
+    switch ((num_size_t)td->size) {
+    case NUM_SIZE_8: {
+        u8 v = cast(u8, value);
+        valin = ast_push_constant(ast, &v, ast->type_set.u8_);
+        break;
+    }
+
+    case NUM_SIZE_16: {
+        u16 v = cast(u16, value);
+        valin = ast_push_constant(ast, &v, ast->type_set.u16_);
+        break;
+    }
+
+    case NUM_SIZE_32: {
+        u32 v = cast(u32, value);
+        valin = ast_push_constant(ast, &v, ast->type_set.u32_);
+        break;
+    }
+
+    case NUM_SIZE_64: {
+        valin = ast_push_constant(ast, &value, ast->type_set.u64_);
+        break;
+    }
+
+    default: UNREACHABLE();
+    }
+
+    ast_node_t *primary = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_PRIMARY, token);
+    primary->value_type = type;
+    primary->value_index = valin;
 
     return primary;
 }
 
-static ast_node_t *ast_primaryf(ast_t *ast, f64 value, ast_node_t extra_params) {
-    ast_node_t *primary = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_PRIMARY, extra_params.start);
+static ast_node_t *ast_primaryi(ast_t *ast, i64 value, type_t type, token_t token) {
+    if (TYPE_IS_UNRESOLVED(type)) {
+        if (value >= INT_MIN && value <= INT_MAX) {
+            type = ast->type_set.int_;
+        } else {
+            type = ast->type_set.i64_;
+        }
+    }
 
-    primary->value_index = memarr_push_value(&ast->constants, &value, sizeof(f64));
-    primary->value_type = ast->type_set.f64_;
+    typedata_t *td = type2typedata(&ast->type_set.types, type);
+
+    value_index_t valin;
+    switch ((num_size_t)td->size) {
+    case NUM_SIZE_8: {
+        i8 v = cast(i8, value);
+        valin = ast_push_constant(ast, &v, ast->type_set.i8_);
+        break;
+    }
+
+    case NUM_SIZE_16: {
+        i16 v = cast(i16, value);
+        valin = ast_push_constant(ast, &v, ast->type_set.i16_);
+        break;
+    }
+
+    case NUM_SIZE_32: {
+        i32 v = cast(i32, value);
+        valin = ast_push_constant(ast, &v, ast->type_set.i32_);
+        break;
+    }
+
+    case NUM_SIZE_64: {
+        valin = ast_push_constant(ast, &value, ast->type_set.i64_);
+        break;
+    }
+
+    default: UNREACHABLE();
+    }
+
+    ast_node_t *primary = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_PRIMARY, token);
+    primary->value_index = valin;
+    primary->value_type = type;
+
+    return primary;
+}
+
+static ast_node_t *ast_primaryf(ast_t *ast, f64 value, type_t type, token_t token) {
+    if (TYPE_IS_UNRESOLVED(type)) {
+        type = ast->type_set.f32_;
+    }
+
+    typedata_t *td = type2typedata(&ast->type_set.types, type);
+
+    value_index_t valin;
+    switch ((num_size_t)td->size) {
+    case NUM_SIZE_8: UNREACHABLE(); break;
+    case NUM_SIZE_16: UNREACHABLE(); break;
+    case NUM_SIZE_32: {
+        f32 v = (f32)v;
+        valin = ast_push_constant(ast, &v, type);
+        break;
+    }
+
+    case NUM_SIZE_64: {
+        valin = ast_push_constant(ast, &value, type);
+        break;
+    }
+    }
+    ast_node_t *primary = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_PRIMARY, token);
+    primary->value_index = valin;
+    primary->value_type = type;
 
     return primary;
 }
@@ -517,51 +620,102 @@ value_index_t memarr_push_value(memarr_t *arr, void *data, size_t size_bytes) {
 static ast_node_t *parse_number(parser_t *parser) {
     switch (parser->previous.type)  {
         case TOKEN_INTEGER: {
+            token_t token = parser->previous;
+            string_view_t numsv = token.view;
+            // todo: check for overflow on u64 and i64
+            u64 value = cstrn_to_u64(numsv.data, numsv.length);
 
-            
-            string_view_t numsv = parser->previous.view;
-            i64 value = cstrn_to_u64(numsv.data, numsv.length);
-
-            ast_node_t *primary = ast_primaryi(parser->ast, value, (ast_node_t){
-                .start = parser->previous,
-            });
-
+            type_t type = typeid(TYPE_UNRESOLVED);
             if (sv_ends_with(numsv, "i")) {
-                primary->value_type = parser->ast->type_set.int_;
+                type = parser->ast->type_set.int_;
             } else if (sv_ends_with(numsv, "u")) {
-                primary->value_type = parser->ast->type_set.uint_;
+                type = parser->ast->type_set.uint_;
             } else if (sv_ends_with(numsv, "i8")) {
-                primary->value_type = parser->ast->type_set.i8_;
+                type = parser->ast->type_set.i8_;
             } else if (sv_ends_with(numsv, "u8")) {
-                primary->value_type = parser->ast->type_set.u8_;
+                type = parser->ast->type_set.u8_;
             } else if (sv_ends_with(numsv, "i16")) {
-                primary->value_type = parser->ast->type_set.i16_;
+                type = parser->ast->type_set.i16_;
             } else if (sv_ends_with(numsv, "u16")) {
-                primary->value_type = parser->ast->type_set.u16_;
+                type = parser->ast->type_set.u16_;
             } else if (sv_ends_with(numsv, "i32")) {
-                primary->value_type = parser->ast->type_set.i32_;
+                type = parser->ast->type_set.i32_;
             } else if (sv_ends_with(numsv, "u32")) {
-                primary->value_type = parser->ast->type_set.u32_;
+                type = parser->ast->type_set.u32_;
             } else if (sv_ends_with(numsv, "i64")) {
-                primary->value_type = parser->ast->type_set.i64_;
+                type = parser->ast->type_set.i64_;
             } else if (sv_ends_with(numsv, "u64")) {
-                primary->value_type = parser->ast->type_set.u64_;
+                type = parser->ast->type_set.u64_;
             } else if (sv_ends_with(numsv, "sz")) {
-                primary->value_type = parser->ast->type_set.size_t_;
-            } 
+                type = parser->ast->type_set.size_t_;
+            }
+
+            bool do_signed = true;
+            unless (TYPE_IS_UNRESOLVED(type)) {
+                typedata_t *td = type2typedata(&parser->ast->type_set.types, type);
+                do_signed = (td->data.num == NUM_TYPE_SIGNED);
+
+                switch((num_size_t)td->size) {
+                case NUM_SIZE_8: {
+                    if (do_signed) {
+                        if (value > INT8_MAX) {
+                            parser_error(parser, make_warning(WARNING_PARSER_NUMBER_OVERFLOW, token));
+                        }
+                    } else {
+                        if (value > UINT8_MAX) {
+                            parser_error(parser, make_warning(WARNING_PARSER_NUMBER_OVERFLOW, token));
+                        }
+                    }
+                    break;
+                }
+
+                case NUM_SIZE_16: {
+                    if (do_signed) {
+                        if (value > INT16_MAX) {
+                            parser_error(parser, make_warning(WARNING_PARSER_NUMBER_OVERFLOW, token));
+                        }
+                    } else {
+                        if (value > UINT16_MAX) {
+                            parser_error(parser, make_warning(WARNING_PARSER_NUMBER_OVERFLOW, token));
+                        }
+                    }
+                    break;
+                }
+
+                case NUM_SIZE_32: {
+                    if (do_signed) {
+                        if (value > INT32_MAX) {
+                            parser_error(parser, make_warning(WARNING_PARSER_NUMBER_OVERFLOW, token));
+                        }
+                    } else {
+                        if (value > UINT32_MAX) {
+                            parser_error(parser, make_warning(WARNING_PARSER_NUMBER_OVERFLOW, token));
+                        }
+                    }
+                    break;
+                }
+
+                case NUM_SIZE_64: break;
+                }
+            }
+
+
+            ast_node_t *primary;
+            if (do_signed) {
+                primary = ast_primaryi(parser->ast, value, type, parser->previous);
+            } else {
+                primary = ast_primaryu(parser->ast, value, type, parser->previous);
+            }
 
             return primary;
         }
 
         case TOKEN_FLOAT: {
             f64 value = cstrn_to_f64(parser->previous.view.data, parser->previous.view.length);
-
-            ast_node_t *primary = ast_primaryf(parser->ast, value, (ast_node_t){
-                .start = parser->previous,
-            });
-
+            ast_node_t *primary = ast_primaryf(parser->ast, value, typeid(TYPE_UNRESOLVED), parser->previous);
             return primary;
         }
+
         default: UNREACHABLE();
     }
 }
@@ -1527,17 +1681,17 @@ f64 valin2d(ast_t *ast, value_index_t index, num_size_t num_size) {
 value_index_t i2valin(ast_t *ast, i64 value, num_size_t num_size) {
     switch (num_size) {
     case NUM_SIZE_8: {
-        i8 v = cast_i64_to_i8(value);
+        i8 v = cast(i8, value);
         return memarr_push_value(&ast->constants, &v, NUM_SIZE_8);
     }
 
     case NUM_SIZE_16: {
-        i16 v = cast_i64_to_i16(value);
+        i16 v = cast(i16, value);
         return memarr_push_value(&ast->constants, &v, NUM_SIZE_16);
     }
 
     case NUM_SIZE_32: {
-        i32 v = cast_i64_to_i32(value);
+        i32 v = cast(i32, value);
         return memarr_push_value(&ast->constants, &v, NUM_SIZE_32);
     }
 
@@ -1552,17 +1706,17 @@ value_index_t i2valin(ast_t *ast, i64 value, num_size_t num_size) {
 value_index_t u2valin(ast_t *ast, u64 value, num_size_t num_size) {
     switch (num_size) {
     case NUM_SIZE_8: {
-        u8 v = cast_u64_to_u8(value);
+        u8 v = cast(u8, value);
         return memarr_push_value(&ast->constants, &v, NUM_SIZE_8);
     }
 
     case NUM_SIZE_16: {
-        u16 v = cast_u64_to_u16(value);
+        u16 v = cast(u16, value);
         return memarr_push_value(&ast->constants, &v, NUM_SIZE_16);
     }
 
     case NUM_SIZE_32: {
-        u32 v = cast_u64_to_u32(value);
+        u32 v = cast(u32, value);
         return memarr_push_value(&ast->constants, &v, NUM_SIZE_32);
     }
 
@@ -1579,7 +1733,7 @@ value_index_t d2valin(ast_t *ast, f64 value, num_size_t num_size) {
     case NUM_SIZE_16: UNREACHABLE(); return value_index_nil();
 
     case NUM_SIZE_32: {
-        f32 v = cast_f64_to_f32(value);
+        f32 v = cast(f32, value);
         return memarr_push_value(&ast->constants, &v, NUM_SIZE_32);
     }
 
