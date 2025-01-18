@@ -1257,24 +1257,54 @@ void resolve_expression(
             break;
         }
 
+        case AST_NODE_TYPE_EXPRESSION_CAST: {
+            ast_node_t *cast_expr = an_expression(expr);
+            resolve_expression(analyzer, ast, state, cast_expr);
+            if (TYPE_IS_INVALID(cast_expr->value_type)) {
+                INVALIDATE(expr);
+                break;
+            }
+
+            if (cast_expr->value_index.exists) {
+                typedata_t *desttd = type2td(ast, cast_expr->value_type);
+                typedata_t *sourcetd = type2td(ast, cast_expr->value_type);
+
+                ASSERT(desttd->kind == TYPE_NUMBER && desttd->kind == sourcetd->kind, "must both be number types for now");
+            }
+            break;
+        }
+
         case AST_NODE_TYPE_NONE:
         case AST_NODE_TYPE_DECLARATION_DEFINITION:
         case AST_NODE_TYPE_DECLARATION_STATEMENT:
-        case AST_NODE_TYPE_MODULE:
-        case AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT: {
+        case AST_NODE_TYPE_MODULE: {
             UNREACHABLE();
             break;
         }
     }
+}
 
-    // todo folding via runtime
+static ast_node_t *cast_implicitly_if_necessary(ast_t *ast, type_t destination_type, ast_node_t *expr) {
+    ASSERT(TYPE_IS_RESOLVED(expr->value_type), "expression must be resolved already");
 
-    // // we shouldn't fold expressions that are undefined (blocks or ifelses that return)
-    // if (TYPE_IS_UNDEFINED(expr->value_type) || TYPE_IS_INVALID(expr->value_type)) {
-    //     return;
-    // }
+    if (typeid_eq(destination_type, expr->value_type)) return expr;
 
-    // fold_constants_via_runtime(analyzer, ast, state, expr);
+    typedata_t *destinationtd = type2td(ast, destination_type);
+    typedata_t *exprtd = type2td(ast, expr->value_type);
+    
+    // for now only numbers can be cast/promoted implicitly
+    if (destinationtd->kind != TYPE_NUMBER) return expr;
+    if (exprtd->kind != TYPE_NUMBER) return expr;
+
+    // cannot implicitly convert between number types
+    if (exprtd->data.num != destinationtd->data.num) return expr;
+
+    // cannot store a type in storage with a smaller size
+    if (exprtd->size > destinationtd->size) return expr;
+
+    ast_node_t *cast = ast_cast(ast, destination_type, expr, token_implicit_at_start(expr->start));
+
+    return cast;
 }
 
 static void declare_definition(analyzer_t *analyzer, scope_t *scope, ast_node_t *definition) {
@@ -1296,9 +1326,6 @@ static void declare_definition(analyzer_t *analyzer, scope_t *scope, ast_node_t 
 }
 
 static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, analysis_state_t state, ast_node_t *declaration) {
-// due to the way structs are resolved, it is possible for the initial value expression to be swapped out with another
-// this is simply a safer way of accessing the initial value expression
-
     type_t declaration_type = typeid(TYPE_UNRESOLVED);
     if (TYPE_IS_UNRESOLVED(declaration->value_type) && !an_is_none(an_decl_type(declaration))) {
         analysis_state_t new_state = state;
@@ -1353,7 +1380,7 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
         }
 
         ast_node_t *cast_node = an_decl_expr(declaration);
-        ASSERT(cast_node->node_type == AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT, "must be implicit casting node");
+        ASSERT(cast_node->node_type == AST_NODE_TYPE_EXPRESSION_CAST, "must be implicit casting node");
         
         type_t completed_struct_type = an_operand(cast_node)->value_type;
         
@@ -1376,12 +1403,7 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
     }
 
 
-
-    if ((TYPE_IS_UNDEFINED(an_decl_expr(declaration)->value_type) || TYPE_IS_INVALID(an_decl_expr(declaration)->value_type))) {
-        if (TYPE_IS_UNDEFINED(an_decl_expr(declaration)->value_type)) {
-            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_EXPECTED_RESOLVED, an_decl_expr(declaration)));
-        }
-        
+    if (TYPE_IS_INVALID(an_decl_expr(declaration)->value_type)) {
         INVALIDATE(declaration);
     }
 
@@ -1391,18 +1413,9 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
     }
 
     unless (declaration->is_mutable) {
-        // if (!an_is_none(an_decl_expr(declaration)) && type_is_function(ast->type_set.types, an_decl_expr(declaration)->value_type)) {
-        //     function_t *function = NULL;
-        //     if (memarr_get(&ast->constants, an_decl_expr(declaration)->value_index.index, sizeof(function_t*), &function)) {
-        //         ASSERT(false, "todo");
-        //     }
-
-        //     // todo bind name to a function?? 
-        // }
-
         if (type_is_struct(ast->type_set.types, an_decl_expr(declaration)->value_type)
         && (TYPE_IS_UNRESOLVED(declaration_type) || TYPE_IS_TYPE(declaration_type))) {
-            ast_node_t *to_struct_type = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT, an_decl_expr(declaration)->start);
+            ast_node_t *to_struct_type = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_CAST, an_decl_expr(declaration)->start);
             to_struct_type->value_type = typeid(TYPE_TYPE);
             an_operand(to_struct_type) = an_decl_expr(declaration);
 
@@ -1438,8 +1451,13 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
     if (TYPE_IS_UNRESOLVED(declaration->value_type)) {
         type_t expression_type = an_decl_expr(declaration)->value_type;
         declaration->value_type = expression_type;
-    } else {
-        unless (typeid_eq(declaration->value_type, an_decl_expr(declaration)->value_type)) {
+    }
+
+    {
+        type_t declared_type = declaration->value_type;
+        type_t expr_type = an_decl_expr(declaration)->value_type;
+        ast_node_t *casted_expr = implicit_cast_if_necessary(declared_type, an_decl_expr(declaration));
+        unless (typeid_eq(declared_type, casted_expr->value_type)) {
             unless (TYPE_IS_INVALID(an_decl_expr(declaration)->value_type)) {
                 stan_error(analyzer, make_error_node(ERROR_ANALYSIS_TYPE_MISMATCH, declaration));
             }

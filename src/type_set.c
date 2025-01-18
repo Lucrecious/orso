@@ -122,7 +122,6 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
 
     static typedata_t type_invalid = {.name=lit2str("<invalid>"), .kind=TYPE_INVALID, .size=0};
     static typedata_t type_unresolved = {.name=lit2str("<unresolved>"), .kind=TYPE_UNRESOLVED, .size=0};
-    static typedata_t type_undefined = {.name=lit2str("<undefined>"), .kind=TYPE_UNDEFINED, .size=0};
     static typedata_t type_unreachable = {.name=lit2str("<unreachable>"), .kind=TYPE_UNREACHABLE, .size=0};
 
     static typedata_t type_void = {.name=lit2str("void"), .kind=TYPE_VOID, .size=0, .capabilities=TYPE_CAP_NONE};
@@ -155,9 +154,6 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
 
     type_t unresolved = typeid(set->types.count);
     array_push(&set->types, &type_unresolved);
-
-    type_t undefined = typeid(set->types.count);
-    array_push(&set->types, &type_undefined);
 
     type_t unreachable = typeid(set->types.count);
     array_push(&set->types, &type_unreachable);
@@ -218,7 +214,6 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
     
     ASSERT(invalid.i == TYPE_INVALID, "must be same as type invalid");
     ASSERT(unresolved.i == TYPE_UNRESOLVED, "must be same as type unresolved");
-    ASSERT(undefined.i == TYPE_UNDEFINED, "must be same as type undefined");
     ASSERT(unreachable.i == TYPE_UNREACHABLE, "must be same as type unreachable");
     ASSERT(void_.i == TYPE_VOID, "must be same as type void");
     ASSERT(bool_.i == TYPE_BOOL, "must be same as type bool");

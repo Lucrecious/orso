@@ -26,7 +26,6 @@ typedef struct typedata_t typedata_t;
 typedef enum type_kind_t {
     TYPE_INVALID = 0,      // error type
     TYPE_UNRESOLVED,       // unresolved (not undefined, not error, not defined)
-    TYPE_UNDEFINED,
 
     // simple types (types that do not require type info)
     TYPE_UNREACHABLE,      // for jmp expressions (return, break, continue)
@@ -126,7 +125,6 @@ struct typedata_t {
 #define TYPE_IS_VOID(TYPE) ((TYPE).i == TYPE_VOID)
 #define TYPE_IS_TYPE(TYPE) ((TYPE).i == TYPE_TYPE)
 #define TYPE_IS_INVALID(TYPE) ((TYPE).i == TYPE_INVALID)
-#define TYPE_IS_UNDEFINED(TYPE) ((TYPE).i == TYPE_UNDEFINED)
 #define TYPE_IS_LABEL(TYPE) ((TYPE).i == TYPE_LABEL)
 #define TYPE_IS_UNREACHABLE(TYPE) ((TYPE).i == TYPE_UNREACHABLE)
 #define TYPE_IS_UNRESOLVED(TYPE) ((TYPE).i == TYPE_UNRESOLVED)

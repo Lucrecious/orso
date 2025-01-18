@@ -29,6 +29,24 @@ enum op_code_t {
     OP_MOVWORD_REG_TO_REGMEM,
     OP_MOVWORD_REGMEM_TO_REG,
 
+    OP_CAST_D2F,
+    OP_CAST_D2UL,
+    OP_CAST_D2L,
+
+    OP_CAST_UL2UB,
+    OP_CAST_UL2US,
+    OP_CAST_UL2U,
+    OP_CAST_UL2L,
+    OP_CAST_UL2F,
+    OP_CAST_UL2D,
+
+    OP_CAST_L2B,
+    OP_CAST_L2S,
+    OP_CAST_L2I,
+    OP_CAST_L2UL,
+    OP_CAST_L2F,
+    OP_CAST_L2D,
+
     OP_SUBU_REG_IM32,
     OP_ADDU_REG_IM32,
 
@@ -150,6 +168,11 @@ struct instruction_t {
         struct {
             byte reg_op;
         } call;
+
+        struct {
+            byte reg_op;
+            byte reg_result;
+        } casting;
     } as;
 };
 

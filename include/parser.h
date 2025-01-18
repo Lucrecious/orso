@@ -56,7 +56,7 @@ typedef enum ast_node_type_t {
     AST_NODE_TYPE_DECLARATION_STATEMENT, // for expressions
 
     AST_NODE_TYPE_EXPRESSION_JMP, // return, break, continue
-    AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT,
+    AST_NODE_TYPE_EXPRESSION_CAST,
     AST_NODE_TYPE_EXPRESSION_BINARY,
     AST_NODE_TYPE_EXPRESSION_DOT,
     AST_NODE_TYPE_EXPRESSION_UNARY,
@@ -82,7 +82,7 @@ case AST_NODE_TYPE_EXPRESSION_BLOCK: \
 case AST_NODE_TYPE_EXPRESSION_BRANCHING: \
 case AST_NODE_TYPE_EXPRESSION_BUILTIN_CALL: \
 case AST_NODE_TYPE_EXPRESSION_CALL: \
-case AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT: \
+case AST_NODE_TYPE_EXPRESSION_CAST: \
 case AST_NODE_TYPE_EXPRESSION_DEF_VALUE: \
 case AST_NODE_TYPE_EXPRESSION_NIL: \
 case AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION: \
@@ -275,10 +275,12 @@ void ast_free(ast_t *ast);
 
 ast_node_t* ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start);
 ast_node_t *ast_nil(ast_t *ast, type_t value_type, token_t token_location);
+ast_node_t *ast_cast(ast_t *ast, type_t destination_type, ast_node_t *expr, token_t cast_token);
 
 bool ast_node_type_is_decl_or_stmt(ast_node_type_t node_type);
 bool ast_node_type_is_expression(ast_node_type_t node_type);
 
+token_t token_implicit_at_start(token_t token);
 token_t token_implicit_at_end(token_t token);
 
 value_index_t zero_value(ast_t *ast, type_t type);

@@ -82,7 +82,6 @@ bool type_equal(typedata_t *a, typedata_t *b) {
 
         case TYPE_COUNT:
         case TYPE_INVALID:
-        case TYPE_UNDEFINED:
         case TYPE_UNRESOLVED: UNREACHABLE(); return false;
 
     }
@@ -186,7 +185,6 @@ string_t type_to_string_toplevel(type_infos_t types, type_t type, arena_t *alloc
             case TYPE_INVALID: type_name = "<invalid>"; break;
             case TYPE_UNRESOLVED: type_name = "<unresolved>"; break;
             case TYPE_UNREACHABLE: type_name = "<unreachable>"; break;
-            case TYPE_UNDEFINED: type_name = "<undefined>"; break;
             
             case TYPE_COUNT:
             case TYPE_STRUCT:

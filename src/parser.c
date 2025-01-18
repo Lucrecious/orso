@@ -243,7 +243,7 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start) {
         }
         
         case AST_NODE_TYPE_EXPRESSION_UNARY:
-        case AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT:
+        case AST_NODE_TYPE_EXPRESSION_CAST:
         case AST_NODE_TYPE_DECLARATION_STATEMENT:
         case AST_NODE_TYPE_EXPRESSION_JMP:
         case AST_NODE_TYPE_EXPRESSION_GROUPING: {
@@ -295,6 +295,15 @@ ast_node_t *ast_nil(ast_t *ast, type_t value_type, token_t token_location) {
     nil_node->value_type = value_type;
     nil_node->value_index = zero_value(ast, value_type);
     return nil_node;
+}
+
+ast_node_t *ast_cast(ast_t *ast, type_t destination_type, ast_node_t *expr, token_t cast_token) {
+    ast_node_t *cast = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_CAST, cast_token);
+    cast->end = expr->end;
+
+    an_expression(cast) = expr;
+    cast->value_type = destination_type;
+    return cast;
 }
 
 static ast_node_t *ast_primaryu(ast_t *ast, u64 value, type_t type, token_t token) {
@@ -602,6 +611,11 @@ bool ast_node_type_is_expression(ast_node_type_t node_type) {
         case AST_NODE_TYPE_NONE:
             return false;
     }
+}
+
+token_t token_implicit_at_start(token_t token) {
+    token.view.length = 0;
+    return token;
 }
 
 token_t token_implicit_at_end(token_t token) {
@@ -1536,7 +1550,6 @@ value_index_t zero_value(ast_t *ast, type_t type) {
         }
 
         case TYPE_COUNT:
-        case TYPE_UNDEFINED:
         case TYPE_UNREACHABLE:
         case TYPE_FUNCTION:
         case TYPE_NATIVE_FUNCTION:
@@ -1829,9 +1842,9 @@ static void ast_print_ast_node(type_infos_t types, ast_node_t *node, u32 level) 
             break;
         }
 
-        case AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT: {
+        case AST_NODE_TYPE_EXPRESSION_CAST: {
             print_indent(level);
-            print_line("implicit cast: %s", type2cstr(node));
+            print_line("cast: %s", type2cstr(node));
 
             ast_print_ast_node(types, an_operand(node), level + 1);
             break;
