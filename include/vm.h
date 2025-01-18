@@ -420,6 +420,34 @@ void vm_step(vm_t *vm) {
             break;
         }
 
+        #define do_cast(d, s, dtype) do { \
+            byte result = in.as.casting.reg_result; \
+            byte op = in.as.casting.reg_op; \
+            vm->registers[result].as.d = cast(dtype, vm->registers[op].as.s); \
+            IP_ADV(1); \
+            break; \
+        } while(false)
+
+        case OP_CAST_D2UL: do_cast(u, d, u64);
+        case OP_CAST_D2L: do_cast(i, d, i64);
+        case OP_CAST_D2F: do_cast(d, d, f32);
+
+        case OP_CAST_UL2UB: do_cast(u, u, u8);
+        case OP_CAST_UL2US: do_cast(u, u, u16);
+        case OP_CAST_UL2U: do_cast(u, u, u32);
+        case OP_CAST_UL2L: do_cast(i, u, i64);
+        case OP_CAST_UL2F: do_cast(d, u, f32);
+        case OP_CAST_UL2D: do_cast(d, u, f64);
+
+        case OP_CAST_L2B: do_cast(i, i, i8);
+        case OP_CAST_L2S: do_cast(i, i, i16);
+        case OP_CAST_L2I: do_cast(i, i, i32);
+        case OP_CAST_L2UL: do_cast(u, i, u64);
+        case OP_CAST_L2F: do_cast(d, i, f32);
+        case OP_CAST_L2D: do_cast(d, i, f64);
+
+        #undef do_cast
+
         // conversion to unsigned for wrapped operation on overflow but converted back to integer after (c is ub for signed overflow)
         #define case_bini_reg_reg(name, op, type) case OP_##name##_REG_REG: {\
             i64 a = vm->registers[in.as.bin_reg_to_reg.reg_op1].as.type; \

@@ -512,12 +512,13 @@ static void gen_constant(texloc_t location, function_t *function, void *data, ty
     }
 }
 
-static void gen_valin(gen_t *gen, function_t *function, ast_node_t *expression, value_index_t valin_override) {
+static void gen_expr_val(gen_t *gen, function_t *function, ast_node_t *expression, ast_node_val_t val_override) {
     if (TYPE_IS_VOID(expression->value_type)) {
         // nop
         return;
     }
-    ASSERT(expression->value_index.exists || valin_override.exists, "must contain concrete value");
+
+    ASSERT(expression->expr_val.is_concrete || val_override.is_concrete, "must contain concrete value");
 
     typedata_t *type_info = type2typedata(&gen->ast->type_set.types, expression->value_type);
 
@@ -526,11 +527,16 @@ static void gen_valin(gen_t *gen, function_t *function, ast_node_t *expression, 
         gen_error(gen, make_error_node(ERROR_CODEGEN_MEMORY_SIZE_TOO_BIG, expression));
     }
 
-    value_index_t valin = expression->value_index;
-    if (valin_override.exists) valin = valin_override;
+    ast_node_val_t val = expression->expr_val;
+    if (val_override.is_concrete) val = val_override;
 
-    void *data = memarr_get_ptr(&gen->ast->constants, valin);
-    gen_constant(expression->start.loc, function, data, type_info);
+    if (type_info->size > WORD_SIZE) {
+        // todo
+        UNREACHABLE();
+    } else {
+        word_t data = val.word;
+        gen_constant(expression->start.loc, function, &data, type_info);
+    }
 }
 
 static void gen_add_local(gen_t *gen, ast_node_t *declaration, size_t stack_location) {
@@ -836,19 +842,13 @@ static void gen_bcall(gen_t *gen, function_t *function, ast_node_t *call) {
 
     switch (call->identifier.type) {
     case TOKEN_TYPEOF: {
-        // slight inefficient but convenient way since these mechanisms already exist...
-        // might change in the future
-        value_index_t now = ast_push_constant(gen->ast, &call->children.items[0]->value_type, typeid(TYPE_TYPE));
-        gen_valin(gen, function, call, now);
+        ast_node_val_t val = call->children.items[0]->expr_val;
+        gen_expr_val(gen, function, call, val);
         break;
     }
 
     default: UNREACHABLE(); break;
     }
-}
-
-static void _emit_cast(function_t *function, num_size_t src_size, num_size_t dst_size, texloc_t loc, size_t amount, ...) {
-
 }
 
 static void emit_cast(gen_t *gen, function_t *function, type_t dest, type_t source, texloc_t loc) {
@@ -922,15 +922,15 @@ static void gen_cast(gen_t *gen, function_t *function, ast_node_t *cast) {
 static void gen_expression(gen_t *gen, function_t *function, ast_node_t *expression) {
     ASSERT(ast_node_type_is_expression(expression->node_type), "must be expression");
 
-    if (expression->value_index.index) {
-        gen_valin(gen, function, expression, value_index_nil());
+    if (expression->expr_val.is_concrete) {
+        gen_expr_val(gen, function, expression, ast_node_val_nil());
         return;
     }
 
     switch (expression->node_type) {
         case AST_NODE_TYPE_EXPRESSION_NIL:
         case AST_NODE_TYPE_EXPRESSION_PRIMARY: {
-            gen_valin(gen, function, expression, value_index_nil());
+            gen_expr_val(gen, function, expression, ast_node_val_nil());
             break;
         }
 

@@ -16,7 +16,7 @@
 #define INVALIDATE(NODE) do {\
     ast_node_t* node = NODE;\
     node->value_type = typeid(TYPE_INVALID);\
-    node->value_index = value_index_nil();\
+    node->expr_val = ast_node_val_nil();\
 } while(false)
 
 typedef bool (*IsCircularDependencyFunc)(analyzer_t*, ast_node_t*);
@@ -49,10 +49,10 @@ static void add_definition(scope_t *scope, arena_t *allocator, string_view_t ide
     table_put(s2w, scope->definitions, sv2string(identifier, allocator), WORDP(decl));
 }
 
-static ast_node_t *add_builtin_definition(ast_t *ast, string_view_t identifier, type_t type, value_index_t value_index) {
+static ast_node_t *add_builtin_definition(ast_t *ast, string_view_t identifier, type_t type, word_t word) {
     ast_node_t *decl = ast_node_new(ast, AST_NODE_TYPE_DECLARATION_DEFINITION, nil_token);
     decl->value_type = type;
-    decl->value_index = value_index;
+    decl->expr_val = ast_node_val_word(word);
     decl->is_mutable = false;
 
     table_put(s2w, ast->builtins, sv2string(identifier, &ast->allocator), WORDP(decl));
@@ -66,8 +66,6 @@ static void stan_error(analyzer_t *analyzer, error_t error) {
     analyzer->had_error = true;
     if (analyzer->error_fn) analyzer->error_fn(analyzer->ast, error);
 }
-
-#define IS_FOLDED(EXPRESSION_PTR) (EXPRESSION_PTR->value_index.exists)
 
 typedef enum {
     QUERY_FLAG_MATCH_ANY = 0x1,
@@ -169,13 +167,13 @@ static bool is_declaration_resolved(ast_node_t *definition) {
         return true;
     }
 
-    return (definition->value_index.exists || (an_decl_expr(definition)->node_type != AST_NODE_TYPE_NONE && !TYPE_IS_UNRESOLVED(an_decl_expr(definition)->value_type))) && !TYPE_IS_UNRESOLVED(definition->value_type);
+    return (definition->expr_val.is_concrete|| (an_decl_expr(definition)->node_type != AST_NODE_TYPE_NONE && !TYPE_IS_UNRESOLVED(an_decl_expr(definition)->value_type))) && !TYPE_IS_UNRESOLVED(definition->value_type);
 }
 
 static bool fold_funcsig_or_error(analyzer_t *analyzer, ast_t *ast, ast_node_t *expression) {
     ASSERT(expression->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE, "must be a function signature");
 
-    unless (an_func_def_return(expression)->value_index.exists) {
+    unless (an_func_def_return(expression)->expr_val.is_concrete) {
         stan_error(analyzer, make_error_node(ERROR_ANALYSIS_EXPECTED_CONSTANT, an_func_def_return(expression)));
         return false;
     }
@@ -185,7 +183,7 @@ static bool fold_funcsig_or_error(analyzer_t *analyzer, ast_t *ast, ast_node_t *
 
     for (size_t i = an_func_def_arg_start(expression); i < an_func_def_arg_end(expression); ++i) {
         ast_node_t *parameter = expression->children.items[i];
-        unless (parameter->value_index.exists) {
+        unless (parameter->expr_val.is_concrete) {
             hit_error = true;
             stan_error(analyzer, make_error_node(ERROR_ANALYSIS_EXPECTED_CONSTANT, parameter));
             break;
@@ -197,9 +195,7 @@ static bool fold_funcsig_or_error(analyzer_t *analyzer, ast_t *ast, ast_node_t *
             break;
         }
 
-        value_index_t index = parameter->value_index;
-
-        type_t type = valin2type(ast, index);
+        type_t type = typeid(parameter->expr_val.word.as.u);
         array_push(&parameter_types, type);
     }
 
@@ -213,16 +209,14 @@ static bool fold_funcsig_or_error(analyzer_t *analyzer, ast_t *ast, ast_node_t *
         return false;
     }
 
-    value_index_t ret_type_valin = return_type_expression->value_index;
-    type_t return_type = valin2type(ast, ret_type_valin);
+    type_t return_type = typeid(return_type_expression->expr_val.word.as.u);
 
     type_t function_type = type_set_fetch_function(&ast->type_set, return_type, parameter_types);
 
     word_t funcsig_word = WORDU(function_type.i);
-    value_index_t index = ast_push_constant(ast, &funcsig_word, typeid(TYPE_TYPE));
 
     expression->foldable = true;
-    expression->value_index = index;
+    expression->expr_val = ast_node_val_word(funcsig_word);
 
     return true;
 }
@@ -365,9 +359,7 @@ static void forward_scan_declaration_names(analyzer_t *analyzer, scope_t *scope,
     }
 }
 
-value_index_t constant_fold_bin_arithmetic(ast_t *ast, token_type_t operator, type_t type, value_index_t l, value_index_t r) {
-    if (!l.exists || !r.exists) return value_index_nil();
-
+word_t constant_fold_bin_arithmetic(ast_t *ast, token_type_t operator, type_t type, word_t l, word_t r) {
     typedata_t *numtype = type2td(ast, type);
 
     #define case_block(type, l, r) do { switch (operator) { \
@@ -384,8 +376,8 @@ value_index_t constant_fold_bin_arithmetic(ast_t *ast, token_type_t operator, ty
     case TYPE_NUMBER: {
         switch (numtype->data.num) {
         case NUM_TYPE_SIGNED: {
-            i64 lhsi = valin2i(ast, l, numtype->size);
-            i64 rhsi = valin2i(ast, r, numtype->size);
+            i64 lhsi = l.as.i;
+            i64 rhsi = r.as.i;
             i64 result = 0;
 
             switch((num_size_t)numtype->size) {
@@ -395,12 +387,12 @@ value_index_t constant_fold_bin_arithmetic(ast_t *ast, token_type_t operator, ty
             case NUM_SIZE_64: case_block(i64, lhsi, rhsi); break;
             }
 
-            return i2valin(ast, result, numtype->size);
+            return WORDI(result);
         }
         
         case NUM_TYPE_UNSIGNED: {
-            u64 lhsu = valin2u(ast, l, numtype->size);
-            u64 rhsu = valin2u(ast, r, numtype->size);
+            u64 lhsu = l.as.u;
+            u64 rhsu = l.as.u;
             u64 result = 0;
 
             switch((num_size_t)numtype->size) {
@@ -410,12 +402,12 @@ value_index_t constant_fold_bin_arithmetic(ast_t *ast, token_type_t operator, ty
             case NUM_SIZE_64: case_block(u64, lhsu, rhsu); break;
             }
 
-            return u2valin(ast, result, numtype->size);
+            return WORDU(result);
         }
 
         case NUM_TYPE_FLOAT: {
-            f64 lhsf = valin2d(ast, l, numtype->size);
-            f64 rhsf = valin2d(ast, r, numtype->size);
+            f64 lhsf = l.as.d;
+            f64 rhsf = r.as.d;
             f64 result = 0;
             switch((num_size_t)numtype->size) {
             case NUM_SIZE_32: case_block(f, lhsf, rhsf); break;
@@ -423,7 +415,7 @@ value_index_t constant_fold_bin_arithmetic(ast_t *ast, token_type_t operator, ty
             default: UNREACHABLE(); break;
             }
 
-            return d2valin(ast, result, numtype->size);
+            return WORDD(result);
         }
         }
         break;
@@ -437,17 +429,15 @@ value_index_t constant_fold_bin_arithmetic(ast_t *ast, token_type_t operator, ty
     #undef case_block
 }
 
-value_index_t constant_fold_bin_comparison(ast_t *ast, token_type_t operator, type_t type, value_index_t a, value_index_t b) {
-    if (!a.exists || !b.exists) return value_index_nil();
-
+word_t constant_fold_bin_comparison(ast_t *ast, token_type_t operator, type_t type, word_t a, word_t b) {
     typedata_t *typedata = type2td(ast, type);
 
     switch (typedata->kind) {
     case TYPE_NUMBER: {
         switch (typedata->data.num) {
         case NUM_TYPE_SIGNED: {
-            i64 lhsi = valin2i(ast, a, typedata->size);
-            i64 rhsi = valin2i(ast, b, typedata->size);
+            i64 lhsi = a.as.i;
+            i64 rhsi = b.as.i;
             bool result = 0;
 
             switch (operator) {
@@ -458,12 +448,12 @@ value_index_t constant_fold_bin_comparison(ast_t *ast, token_type_t operator, ty
             default: UNREACHABLE();
             }
 
-            return bool2valin(ast, result);
+            return WORDU((u64)result);
         }
         
         case NUM_TYPE_UNSIGNED: {
-            u64 lhsu = valin2u(ast, a, typedata->size);
-            u64 rhsu = valin2u(ast, b, typedata->size);
+            u64 lhsu = a.as.u;
+            u64 rhsu = b.as.u;
             bool result = 0;
 
             switch (operator) {
@@ -476,12 +466,12 @@ value_index_t constant_fold_bin_comparison(ast_t *ast, token_type_t operator, ty
             default: UNREACHABLE();
             }
 
-            return bool2valin(ast, result);
+            return WORDU((u64)result);
         }
 
         case NUM_TYPE_FLOAT: {
-            f64 lhsf = valin2d(ast, a, typedata->size);
-            f64 rhsf = valin2d(ast, b, typedata->size);
+            f64 lhsf = a.as.d;
+            f64 rhsf = b.as.d;
             bool result = 0;
 
             switch (operator) {
@@ -494,14 +484,14 @@ value_index_t constant_fold_bin_comparison(ast_t *ast, token_type_t operator, ty
             default: UNREACHABLE();
             }
 
-            return bool2valin(ast, result);
+            return WORDU((u64)result);
         }
         }
     }
 
-    case TYPE_STRUCT: UNREACHABLE(); /*todo*/ return value_index_nil();
+    case TYPE_STRUCT: UNREACHABLE(); /*todo*/ return (word_t){0};
 
-    default: UNREACHABLE(); return value_index_nil();
+    default: UNREACHABLE(); return (word_t){0};
     }
 }
 
@@ -527,7 +517,7 @@ void resolve_expression(
             resolve_expression(analyzer, ast, state, an_operand(expr));
             expr->lvalue_node = an_operand(expr);
             expr->value_type = an_operand(expr)->value_type;
-            expr->value_index = an_operand(expr)->value_index;
+            expr->expr_val = an_operand(expr)->expr_val;
             break;
         }
 
@@ -548,13 +538,13 @@ void resolve_expression(
                 break;
             }
 
-            unless (expr->as.initiailizer.type->value_index.exists) {
+            unless (expr->as.initiailizer.type->expr_val.is_concrete) {
                 stan_error(analyzer, make_error_node(ERROR_ANALYSIS_EXPECTED_CONSTANT, expr->as.initiailizer.type));
                 INVALIDATE(expr);
                 break;
             }
 
-            type_t type = valin2type(ast, expr->as.initiailizer.type->value_index);
+            type_t type = typeid(expr->as.initiailizer.type->expr_val.word.as.u);
             typedata_t *typedata = type2td(ast, type);
 
             if (typedata->kind == TYPE_STRUCT) {
@@ -591,7 +581,7 @@ void resolve_expression(
                     break;
                 }
 
-                type_t type = valin2type(ast, expr->as.initiailizer.type->value_index);
+                type_t type = typeid(expr->as.initiailizer.type->expr_val.word.as.u);
                 expr->value_type = type;
                 break;
             } else {
@@ -641,7 +631,10 @@ void resolve_expression(
                 }
 
                 expr->value_type = left->value_type;
-                expr->value_index = constant_fold_bin_arithmetic(ast, expr->operator.type, left->value_type, left->value_index, right->value_index);
+                if (left->expr_val.is_concrete && right->expr_val.is_concrete) {
+                    word_t word = constant_fold_bin_arithmetic(ast, expr->operator.type, left->value_type, left->expr_val.word, right->expr_val.word);
+                    expr->expr_val = ast_node_val_word(word);
+                }
             } else if (operator_is_equating(expr->operator.type)) {
                 // everything is equatable but they need to be the same type
                 unless (typeid_eq(left->value_type, right->value_type)) {
@@ -653,15 +646,18 @@ void resolve_expression(
                 expr->value_type = typeid(TYPE_BOOL);
                 
                 // constant fold
-                if (left->value_index.exists && right->value_index.exists) {
-                    void *lhs = memarr_get_ptr(&ast->constants, left->value_index);
-                    void *rhs = memarr_get_ptr(&ast->constants, right->value_index);
+                if (left->expr_val.is_concrete && right->expr_val.is_concrete) {
+                    word_t wordl = left->expr_val.word;
+                    word_t wordr = right->expr_val.word;
 
                     typedata_t *td = type2td(ast, left->value_type);
-
-                    bool result = (memcmp(lhs, rhs, td->size) == 0);
-
-                    expr->value_index = bool2valin(ast, result);
+                    if (td->size > WORD_SIZE) {
+                        // todo
+                        UNREACHABLE();
+                    } else {
+                        u8 result = (u8)(memcmp(&wordl, &wordr, WORD_SIZE) == 0);
+                        expr->expr_val = ast_node_val_word(WORDU(result));
+                    }
                 }
             } else if (operator_is_comparing(expr->operator.type)) {
                 unless (left_td->capabilities&TYPE_CAP_COMPARABLE) {
@@ -683,7 +679,10 @@ void resolve_expression(
 
 
                 expr->value_type = typeid(TYPE_BOOL);
-                expr->value_index = constant_fold_bin_comparison(ast, expr->operator.type, left->value_type, left->value_index, right->value_index);
+                if (left->expr_val.is_concrete && right->expr_val.is_concrete) {
+                    word_t word = constant_fold_bin_comparison(ast, expr->operator.type, left->value_type, left->expr_val.word, right->expr_val.word);
+                    expr->expr_val = ast_node_val_word(word);
+                }
             } else if (operator_is_logical(expr->operator.type)) {
                 unless (left_td->capabilities&TYPE_CAP_LOGICAL) {
                     stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_LOGICAL_OPERAND_TYPES, right));
@@ -705,9 +704,9 @@ void resolve_expression(
                 expr->value_type = typeid(TYPE_BOOL);
 
                 // constant fold
-                if (left->value_index.exists && right->value_index.exists) {
-                    bool lhsb = valin2bool(ast, left->value_index);
-                    bool rhsb = valin2bool(ast, right->value_index);
+                if (left->expr_val.is_concrete && right->expr_val.is_concrete) {
+                    bool lhsb = left->expr_val.word.as.u;
+                    bool rhsb = right->expr_val.word.as.u;
                     bool result = false;
 
                     switch (expr->operator.type) {
@@ -716,7 +715,7 @@ void resolve_expression(
                     default: UNREACHABLE();
                     }
 
-                    expr->value_index = bool2valin(ast, result);
+                    expr->expr_val = ast_node_val_word(WORDU((u64)result));
                 }
             } else {
                 UNREACHABLE();
@@ -740,7 +739,7 @@ void resolve_expression(
                     break;
                 }
 
-                unless (an_operand(expr)->value_index.exists) {
+                unless (an_operand(expr)->expr_val.is_concrete) {
                     INVALIDATE(expr);
                     stan_error(analyzer, make_error_node(ERROR_ANALYSIS_EXPECTED_CONSTANT, an_operand(expr)));
                     break;
@@ -761,10 +760,10 @@ void resolve_expression(
 
                     expr->value_type = an_operand(expr)->value_type;
 
-                    if (expr->value_index.exists) {
-                        bool value = valin2bool(ast, expr->value_index);
+                    if (an_operand(expr)->expr_val.is_concrete) {
+                        bool value = an_operand(expr)->expr_val.word.as.u;
                         value = !value;
-                        expr->value_index = bool2valin(ast, value);
+                        an_operand(expr)->expr_val = ast_node_val_word(WORDU((u64)value));
                     }
 
                     break;
@@ -783,24 +782,23 @@ void resolve_expression(
                         break;
                     }
 
-                    expr->value_type = an_operand(expr)->value_type;
-
-                    value_index_t op_valin = an_operand(expr)->value_index;
+                    ast_node_t *operand = an_operand(expr);
+                    expr->value_type = operand->value_type;
 
                     // constand fold
-                    if (op_valin.exists) {
+                    if (an_operand(expr)->expr_val.is_concrete) {
                         switch (operand_td->data.num) {
                         case NUM_TYPE_SIGNED: {
-                            i64 val = valin2i(ast, op_valin, operand_td->size);
+                            i64 val = operand->expr_val.word.as.i;
                             val = -val;
-                            expr->value_index = i2valin(ast, val, operand_td->size);
+                            operand->expr_val = ast_node_val_word(WORDI(val));
                             break;
                         }
 
                         case NUM_TYPE_FLOAT: {
-                            f64 val = valin2d(ast, op_valin, operand_td->size);
+                            f64 val = operand->expr_val.word.as.d;
                             val = -val;
-                            expr->value_index = d2valin(ast, val, operand_td->size);
+                            operand->expr_val = ast_node_val_word(WORDD(val));
                             break;
                         }
 
@@ -840,7 +838,7 @@ void resolve_expression(
 
             if (!decl->is_mutable) {
                 expr->foldable = true;
-                expr->value_index = decl->value_index;
+                expr->expr_val = decl->expr_val;
             }
             break;
         }
@@ -862,8 +860,8 @@ void resolve_expression(
             bool skip_mutable = false;
             if (type_is_struct(ast->type_set.types, left->value_type)) {
                 table_get(type2ns, ast->type_to_creation_node, left->value_type, &node_and_scope);
-            } else if (TYPE_IS_TYPE(left->value_type) && type_is_struct(ast->type_set.types, valin2type(ast, left->value_index))) {
-                type_t struct_type = valin2type(ast, left->value_index);
+            } else if (TYPE_IS_TYPE(left->value_type) && type_is_struct(ast->type_set.types, typeid(left->expr_val.word.as.u))) {
+                type_t struct_type = typeid(left->expr_val.word.as.u);
                 table_get(type2ns, ast->type_to_creation_node, struct_type, &node_and_scope);
                 skip_mutable = true;
             } else {
@@ -1247,8 +1245,8 @@ void resolve_expression(
                 }
 
                 expr->value_type = typeid(TYPE_TYPE);
-                if (expr_arg->value_index.exists) {
-                    expr->value_index = type2valin(ast, expr_arg->value_type);
+                if (expr_arg->expr_val.is_concrete) {
+                    expr->expr_val = ast_node_val_word(WORDT(expr_arg->value_type));
                 }
                 break;
             }
@@ -1265,7 +1263,7 @@ void resolve_expression(
                 break;
             }
 
-            if (cast_expr->value_index.exists) {
+            if (cast_expr->expr_val.is_concrete) {
                 typedata_t *desttd = type2td(ast, cast_expr->value_type);
                 typedata_t *sourcetd = type2td(ast, cast_expr->value_type);
 
@@ -1331,7 +1329,9 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
         analysis_state_t new_state = state;
         new_state.mode = MODE_CONSTANT_TIME | (state.mode & MODE_FOLDING_TIME);
         resolve_expression(analyzer, ast, new_state, an_decl_type(declaration));
-        declaration_type = valin2type(ast, an_decl_type(declaration)->value_index);
+
+        ast_node_t *decl_type = an_decl_type(declaration);
+        declaration_type = decl_type->expr_val.word.as.t;
     }
 
     unless (an_is_none(an_decl_expr(declaration))) {
@@ -1373,7 +1373,7 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
         }
 
         // This must be available at compile time
-        type_t struct_type = valin2type(ast, declaration->value_index);
+        type_t struct_type = declaration->expr_val.word.as.t;
         typedata_t *struct_type_info = ast->type_set.types.items[struct_type.i];
         unless (struct_type_is_incomplete(struct_type_info) && struct_type_info->data.struct_.name) {
             return;
@@ -1423,8 +1423,7 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
             to_struct_type->foldable = true;
             typedata_t *initial_expression_type_info = type2typedata(&ast->type_set.types, an_decl_expr(declaration)->value_type);
             type_t named_struct_id = type_create_struct(&ast->type_set, declaration->start.view.data, declaration->start.view.length, initial_expression_type_info);
-            word_t struct_type_slot = WORDU(named_struct_id.i);
-            to_struct_type->value_index = ast_push_constant(ast, &struct_type_slot, typeid(TYPE_TYPE));
+            to_struct_type->expr_val = ast_node_val_word(WORDT(named_struct_id));
 
             type_t initial_expression_type = an_decl_expr(declaration)->value_type;
 
@@ -1437,9 +1436,8 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
             table_put(type2ns, ast->type_to_creation_node, named_struct_id, node_and_scope);
             
             {
-                value_index_t value_index = an_operand(to_struct_type)->value_index;
-                ASSERT(value_index.exists, "must be the value of the anonymous type");
-                table_put(ptr2sizet, ast->type_to_zero_index, named_struct_id, value_index.index);
+                // todo: add zero value for structs
+                UNREACHABLE();
             }
         }
     }
@@ -1453,20 +1451,20 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
         declaration->value_type = expression_type;
     }
 
+    ast_node_t *decl_expr = an_decl_expr(declaration);
     {
         type_t declared_type = declaration->value_type;
-        type_t expr_type = an_decl_expr(declaration)->value_type;
-        ast_node_t *casted_expr = implicit_cast_if_necessary(declared_type, an_decl_expr(declaration));
+
+        ast_node_t *casted_expr = cast_implicitly_if_necessary(ast, declared_type, decl_expr);
         unless (typeid_eq(declared_type, casted_expr->value_type)) {
-            unless (TYPE_IS_INVALID(an_decl_expr(declaration)->value_type)) {
+            unless (TYPE_IS_INVALID(decl_expr->value_type)) {
                 stan_error(analyzer, make_error_node(ERROR_ANALYSIS_TYPE_MISMATCH, declaration));
             }
         }
     }
 
-    if (IS_FOLDED(an_decl_expr(declaration))) {
-        declaration->value_index = an_decl_expr(declaration)->value_index;
-        declaration->foldable = an_decl_expr(declaration)->value_index.exists;
+    if (decl_expr->expr_val.is_concrete) {
+        declaration->expr_val = decl_expr->expr_val;
     }
 }
 
@@ -1484,13 +1482,12 @@ static ast_node_t *get_builtin_decl(ast_t *ast, string_view_t identifier) {
         word_t value_slot;
         if (is_builtin_type(&ast->type_set, identifier, &type)) {
             has_value = true;
-            value_slot = WORDU(type.i);
+            value_slot = WORDT(type);
             value_type = typeid(TYPE_TYPE);
         }
 
         if (has_value) {
-            value_index_t index = ast_push_constant(ast, &value_slot, value_type);
-            decl = add_builtin_definition(ast, identifier, value_type, index);
+            decl = add_builtin_definition(ast, identifier, value_type, value_slot);
         } else {
             decl = NULL;
         }
@@ -1635,7 +1632,7 @@ static void resolve_funcdef(
         ast_node_t *funcdef) {
     ASSERT(funcdef->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION, "must be function declaration at this point");
 
-    if (funcdef->value_index.exists) {
+    if (funcdef->expr_val.is_concrete) {
         return;
     }
 
@@ -1682,7 +1679,7 @@ static void resolve_funcdef(
     unless (TYPE_IS_TYPE(ret_expr->value_type)) {
         stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_RETURN_TYPE, an_func_def_return(funcdef)));
     } else {
-        return_type = valin2type(ast, an_func_def_return(funcdef)->value_index);
+        return_type = an_func_def_return(funcdef)->expr_val.word.as.t;
     }
 
     if (parameter_invalid || TYPE_IS_INVALID(return_type)) {
@@ -1735,8 +1732,9 @@ static void resolve_struct_definition(analyzer_t *analyzer, ast_t *ast, analysis
     type_t incomplete_struct_id = type_unique_incomplete_struct_type(&ast->type_set);
     struct_definition->value_type = incomplete_struct_id;
 
-    struct_definition->foldable = true;
-    struct_definition->value_index = value_index_(0);
+    // todo: correct value
+    UNREACHABLE();
+    // struct_definition->value_index = value_index_(0);
 
     ast_node_and_scope_t node_and_scope = {
         .node = struct_definition,
@@ -1827,20 +1825,24 @@ static void resolve_struct_definition(analyzer_t *analyzer, ast_t *ast, analysis
             struct_data[i] = 0;
         }
 
-        for (i32 i = 0; i < field_count; i++) {
-            type_t field_type = complete_struct_type_info->data.struct_.fields[i].type;
-            u32 offset = complete_struct_type_info->data.struct_.fields[i].offset;
-            ast_node_t *declaration = ast_fields[i];
+        // for (i32 i = 0; i < field_count; i++) {
+            // type_t field_type = complete_struct_type_info->data.struct_.fields[i].type;
+            // u32 offset = complete_struct_type_info->data.struct_.fields[i].offset;
+            // ast_node_t *declaration = ast_fields[i];
 
-            typedata_t *field_type_info = type2typedata(&ast->type_set.types, field_type);
+            // typedata_t *field_type_info = type2typedata(&ast->type_set.types, field_type);
 
-            u32 bytes_to_copy = field_type_info->size;
+            // u32 bytes_to_copy = field_type_info->size;
 
-            void *value_src = ast->constants.data + declaration->value_index.index;
-            memcpy(struct_data + offset, value_src, bytes_to_copy);
-        }
+            UNREACHABLE();
+            // todo: struct copy
+            // void *value_src = ast->constants.data + declaration->value_index.index;
+            // memcpy(struct_data + offset, value_src, bytes_to_copy);
+        // }
 
-        struct_definition->value_index = ast_push_constant(ast, struct_data, complete_struct_type);
+        UNREACHABLE();
+        // todo: store struct value somewhere
+        // struct_definition->value_index = ast_push_constant(ast, struct_data, complete_struct_type);
 
         node_and_scope.scope = NULL;
         table_put(type2ns, ast->type_to_creation_node, complete_struct_type, node_and_scope);

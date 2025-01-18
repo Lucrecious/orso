@@ -41,6 +41,26 @@ static string_t disassemble_instruction(instruction_t in, arena_t *allocator) {
 
         #undef OP_MOV_MEM_TO_REG
 
+        #define OP_CAST(suffix) string_format("OP_CAST"#suffix"(reg_result: %lu, reg_op: %lu)", allocator, (u32)in.as.casting.reg_result, (u32)in.as.casting.reg_op);
+
+        case OP_CAST_D2F: return OP_CAST(D2F);
+        case OP_CAST_D2UL: return OP_CAST(D2UL);
+        case OP_CAST_D2L: return OP_CAST(D2L);
+
+        case OP_CAST_UL2UB: return OP_CAST(UL2UB);
+        case OP_CAST_UL2US: return OP_CAST(UL2US);
+        case OP_CAST_UL2U: return OP_CAST(UL2U);
+        case OP_CAST_UL2L: return OP_CAST(UL2L);
+        case OP_CAST_UL2F: return OP_CAST(UL2F);
+        case OP_CAST_UL2D: return OP_CAST(UL2D);
+
+        case OP_CAST_L2B: return OP_CAST(L2B);
+        case OP_CAST_L2S: return OP_CAST(L2S);
+        case OP_CAST_L2I: return OP_CAST(L2I);
+        case OP_CAST_L2UL: return OP_CAST(L2UL);
+        case OP_CAST_L2F: return OP_CAST(L2F);
+        case OP_CAST_L2D: return OP_CAST(L2D);
+
         case OP_JMP_IF_REG_CONDITION:
             return string_format("OP_JMP_IF_REG_CONDITION(condition_reg: %lu, check_for: %lu, amount: %lu)", allocator,
                     (u32)in.as.jmp.condition_reg, (u32)in.as.jmp.check_for, in.as.jmp.amount);

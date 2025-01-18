@@ -69,7 +69,7 @@ static int type_equal_(type_t a, type_t b) {
     return typeid_eq(a, b);
 }
 
-implement_table(ptr2sizet, type_t, size_t, type_hash, type_equal_)
+implement_table(ptr2word, type_t, word_t, type_hash, type_equal_)
 implement_table(type2ns, type_t, ast_node_and_scope_t, type_hash, type_equal_)
 
 static bool streq___(const string_t a, const string_t b) {
@@ -145,7 +145,7 @@ void ast_init(ast_t *ast, size_t memory_size_bytes) {
 
     ast->builtins = table_new(s2w, &ast->allocator);
 
-    ast->type_to_zero_index = table_new(ptr2sizet, &ast->allocator);
+    ast->type_to_zero_word = table_new(ptr2word, &ast->allocator);
     ast->type_to_creation_node = table_new(type2ns, &ast->allocator);
 }
 
@@ -199,7 +199,7 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start) {
     node->jmp_out_scope_node = &nil_node;
 
     node->lvalue_node = &nil_node;
-    node->value_index = value_index_nil();
+    node->expr_val = ast_node_val_nil();
 
     node->last_statement = &nil_node;
 
@@ -293,7 +293,7 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start) {
 ast_node_t *ast_nil(ast_t *ast, type_t value_type, token_t token_location) {
     ast_node_t *nil_node = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_NIL, token_location);
     nil_node->value_type = value_type;
-    nil_node->value_index = zero_value(ast, value_type);
+    nil_node->expr_val = zero_value(ast, value_type);
     return nil_node;
 }
 
@@ -317,28 +317,28 @@ static ast_node_t *ast_primaryu(ast_t *ast, u64 value, type_t type, token_t toke
 
     typedata_t *td = type2typedata(&ast->type_set.types, type);
 
-    value_index_t valin;
+    word_t word = {0};
     switch ((num_size_t)td->size) {
     case NUM_SIZE_8: {
         u8 v = cast(u8, value);
-        valin = ast_push_constant(ast, &v, ast->type_set.u8_);
+        word.as.u = v;
         break;
     }
 
     case NUM_SIZE_16: {
         u16 v = cast(u16, value);
-        valin = ast_push_constant(ast, &v, ast->type_set.u16_);
+        word.as.u = v;
         break;
     }
 
     case NUM_SIZE_32: {
         u32 v = cast(u32, value);
-        valin = ast_push_constant(ast, &v, ast->type_set.u32_);
+        word.as.u = v;
         break;
     }
 
     case NUM_SIZE_64: {
-        valin = ast_push_constant(ast, &value, ast->type_set.u64_);
+        word.as.u = value;
         break;
     }
 
@@ -347,7 +347,7 @@ static ast_node_t *ast_primaryu(ast_t *ast, u64 value, type_t type, token_t toke
 
     ast_node_t *primary = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_PRIMARY, token);
     primary->value_type = type;
-    primary->value_index = valin;
+    primary->expr_val = ast_node_val_word(word);
 
     return primary;
 }
@@ -363,28 +363,28 @@ static ast_node_t *ast_primaryi(ast_t *ast, i64 value, type_t type, token_t toke
 
     typedata_t *td = type2typedata(&ast->type_set.types, type);
 
-    value_index_t valin;
+    word_t word = {0};
     switch ((num_size_t)td->size) {
     case NUM_SIZE_8: {
         i8 v = cast(i8, value);
-        valin = ast_push_constant(ast, &v, ast->type_set.i8_);
+        word.as.i = v;
         break;
     }
 
     case NUM_SIZE_16: {
         i16 v = cast(i16, value);
-        valin = ast_push_constant(ast, &v, ast->type_set.i16_);
+        word.as.i = v;
         break;
     }
 
     case NUM_SIZE_32: {
         i32 v = cast(i32, value);
-        valin = ast_push_constant(ast, &v, ast->type_set.i32_);
+        word.as.i = v;
         break;
     }
 
     case NUM_SIZE_64: {
-        valin = ast_push_constant(ast, &value, ast->type_set.i64_);
+        word.as.i = value;
         break;
     }
 
@@ -392,7 +392,7 @@ static ast_node_t *ast_primaryi(ast_t *ast, i64 value, type_t type, token_t toke
     }
 
     ast_node_t *primary = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_PRIMARY, token);
-    primary->value_index = valin;
+    primary->expr_val = ast_node_val_word(word);
     primary->value_type = type;
 
     return primary;
@@ -405,23 +405,24 @@ static ast_node_t *ast_primaryf(ast_t *ast, f64 value, type_t type, token_t toke
 
     typedata_t *td = type2typedata(&ast->type_set.types, type);
 
-    value_index_t valin;
+    word_t word = {0};
     switch ((num_size_t)td->size) {
     case NUM_SIZE_8: UNREACHABLE(); break;
     case NUM_SIZE_16: UNREACHABLE(); break;
     case NUM_SIZE_32: {
-        f32 v = (f32)v;
-        valin = ast_push_constant(ast, &v, type);
+        f32 v = (f32)value;
+        word.as.d = v;
         break;
     }
 
     case NUM_SIZE_64: {
-        valin = ast_push_constant(ast, &value, type);
+        word.as.d = value;
         break;
     }
     }
+
     ast_node_t *primary = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_PRIMARY, token);
-    primary->value_index = valin;
+    primary->expr_val = ast_node_val_word(word);
     primary->value_type = type;
 
     return primary;
@@ -430,9 +431,10 @@ static ast_node_t *ast_primaryf(ast_t *ast, f64 value, type_t type, token_t toke
 static ast_node_t *ast_primaryb(ast_t *ast, bool value, ast_node_t extra_params) {
     ast_node_t *primary = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_PRIMARY, extra_params.start);
 
-    byte byte_value = (byte)value;
+    u8 byte_value = (u8)value;
+    word_t word = {.as.u=byte_value};
 
-    primary->value_index = memarr_push_value(&ast->constants, &byte_value, sizeof(byte));
+    primary->expr_val = ast_node_val_word(word);
     primary->value_type = typeid(TYPE_BOOL);
 
     return primary;
@@ -1408,7 +1410,7 @@ static ast_node_t *parse_decl_def(parser_t *parser) {
 
     definition_node->value_type = typeid(TYPE_UNRESOLVED);
 
-    definition_node->value_index = value_index_nil();
+    definition_node->expr_val.is_concrete = false;
 
     definition_node->identifier = parser->previous;
 
@@ -1504,16 +1506,16 @@ bool parse(ast_t *ast, string_t file_path, string_view_t source, error_function_
     return !parser.had_error;
 }
 
-value_index_t ast_push_constant(ast_t *ast, void *data, type_t type) {
+value_index_t ast_push_constant_(ast_t *ast, void *data, type_t type) {
     typedata_t *type_info = type2typedata(&ast->type_set.types, type);
     size_t size = type_info->size;
     return memarr_push_value(&ast->constants, data, size);
 }
 
-value_index_t zero_value(ast_t *ast, type_t type) {
-    size_t result = 0;
-    if (table_get(ptr2sizet, ast->type_to_zero_index, type, &result)) {
-        return value_index_(result);
+ast_node_val_t zero_value(ast_t *ast, type_t type) {
+    word_t result = {0};
+    if (table_get(ptr2word, ast->type_to_zero_word, type, &result)) {
+        return ast_node_val_word(result);
     }
 
     typedata_t *type_info = ast->type_set.types.items[type.i];
@@ -1562,9 +1564,9 @@ value_index_t zero_value(ast_t *ast, type_t type) {
         case TYPE_VOID: break;
     }
 
-    value_index_t zero_index = ast_push_constant(ast, value, type);
-    table_put(ptr2sizet, ast->type_to_zero_index, type, zero_index.index);
-    return zero_index;
+    ast_node_val_t val = ast_node_val_word(value[0]);
+    table_put(ptr2word, ast->type_to_zero_word, type, value[0]);
+    return val;
 }
 
 type_t valin2type(ast_t *ast, value_index_t index) {

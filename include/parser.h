@@ -162,6 +162,15 @@ enum ast_branch_type_t {
     BRANCH_TYPE_DO,
 };
 
+typedef struct ast_node_val_t ast_node_val_t;
+struct ast_node_val_t {
+    bool is_concrete;
+    word_t word;
+};
+
+#define ast_node_val_nil() ((ast_node_val_t){0})
+#define ast_node_val_word(w) ((ast_node_val_t){.word = (w)});
+
 struct ast_node_t {
     ast_node_type_t node_type;
 
@@ -181,8 +190,7 @@ struct ast_node_t {
     bool foldable;
     i32 fold_level_resolved_at;
 
-    // primary, folding value, declaration default value
-    value_index_t value_index;
+    ast_node_val_t expr_val;
 
     ast_node_t *lvalue_node;
 
@@ -210,7 +218,7 @@ struct ast_node_t {
     } as;
 };
 
-declare_table(ptr2sizet, type_t, size_t)
+declare_table(ptr2word, type_t, word_t)
 
 typedef struct ast_node_and_scope_t {
     ast_node_t *node;
@@ -243,7 +251,7 @@ typedef struct ast_t {
 
     memarr_t constants;
 
-    table_t(ptr2sizet) *type_to_zero_index;
+    table_t(ptr2word) *type_to_zero_word;
     table_t(type2ns) *type_to_creation_node;
 
     table_t(s2w) *symbols;
@@ -251,7 +259,7 @@ typedef struct ast_t {
 
 void ast_print(ast_t *ast, const char *name);
 
-value_index_t ast_push_constant(ast_t *ast, void *data, type_t type);
+value_index_t ast_push_constant_(ast_t *ast, void *data, type_t type);
 bool parse_expr(ast_t *ast, string_t file_path, string_view_t source, error_function_t error_fn);
 bool parse(ast_t *ast, string_t file_path, string_view_t source, error_function_t error_fn);
 
@@ -283,6 +291,6 @@ bool ast_node_type_is_expression(ast_node_type_t node_type);
 token_t token_implicit_at_start(token_t token);
 token_t token_implicit_at_end(token_t token);
 
-value_index_t zero_value(ast_t *ast, type_t type);
+ast_node_val_t zero_value(ast_t *ast, type_t type);
 
 #endif

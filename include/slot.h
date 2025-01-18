@@ -11,6 +11,7 @@ struct word_t {
         f64 d;
         ptr p;
         u64 u;
+        type_t t;
     } as;
 };
 
@@ -20,5 +21,6 @@ struct word_t {
 #define WORDU(value) ((word_t){.as.u=(value)})
 #define WORDD(value) ((word_t){.as.d=(value)})
 #define WORDP(value) ((word_t){.as.p=(value)})
+#define WORDT(value) ((word_t){.as.t=(value)})
 
 #endif

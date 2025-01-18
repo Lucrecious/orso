@@ -156,15 +156,6 @@ static void cgen_jmp_label(cgen_t *cgen, string_t label) {
     sb_add_format(&cgen->sb, "%s:", label.cstr);
 }
 
-static void *memarr_value_at(memarr_t *memarr, value_index_t value_index) {
-    if (value_index.exists && value_index.index < memarr->count) {
-        return memarr_get_ptr(memarr, value_index);
-    }
-
-    UNREACHABLE();
-    return NULL;
-}
-
 static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t tmp_var);
 
 static bool cgen_binary_is_macro(token_type_t type, typedata_t *type_info, cstr_t *operator_or_func_name) {
@@ -282,9 +273,7 @@ static void cgen_cache_requires_tmp(type_infos_t *types, ast_node_t *expression)
     }
 }
 
-static void cgen_constant(cgen_t *cgen, value_index_t value_index, typedata_t *type_info) {
-    #define value_at(ty) (*((ty*)(memarr_value_at(&cgen->ast->constants, value_index))))
-
+static void cgen_constant(cgen_t *cgen, word_t word, typedata_t *type_info) {
     switch (type_info->kind) {
         case TYPE_NUMBER: {
             switch ((num_size_t)type_info->size) {
@@ -292,17 +281,17 @@ static void cgen_constant(cgen_t *cgen, value_index_t value_index, typedata_t *t
                 case NUM_SIZE_16: UNREACHABLE(); break;
                 case NUM_SIZE_32: {
                     switch (type_info->data.num) {
-                        case NUM_TYPE_FLOAT: sb_add_format(&cgen->sb, "%g", value_at(f32)); break;
-                        case NUM_TYPE_SIGNED: sb_add_format(&cgen->sb, "%"PRIi32, value_at(i32)); break;
-                        case NUM_TYPE_UNSIGNED: sb_add_format(&cgen->sb, "%"PRIu32, value_at(u32)); break;
+                        case NUM_TYPE_FLOAT: sb_add_format(&cgen->sb, "%g", (f32)word.as.d); break;
+                        case NUM_TYPE_SIGNED: sb_add_format(&cgen->sb, "%"PRIi32, (i32)word.as.i); break;
+                        case NUM_TYPE_UNSIGNED: sb_add_format(&cgen->sb, "%"PRIu32, (u32)word.as.u); break;
                     }
                     break;
                 }
                 case NUM_SIZE_64: {
                     switch (type_info->data.num) {
-                        case NUM_TYPE_FLOAT: sb_add_format(&cgen->sb, "%lg", value_at(f64)); break;
-                        case NUM_TYPE_SIGNED: sb_add_format(&cgen->sb, "%"PRIi64, value_at(i64)); break;
-                        case NUM_TYPE_UNSIGNED: sb_add_format(&cgen->sb, "%"PRIu64, value_at(u64)); break;
+                        case NUM_TYPE_FLOAT: sb_add_format(&cgen->sb, "%lg", (f64)word.as.d); break;
+                        case NUM_TYPE_SIGNED: sb_add_format(&cgen->sb, "%"PRIi64, (i64)word.as.i); break;
+                        case NUM_TYPE_UNSIGNED: sb_add_format(&cgen->sb, "%"PRIu64, (u64)word.as.u); break;
                     }
                     break;
                 }
@@ -313,7 +302,7 @@ static void cgen_constant(cgen_t *cgen, value_index_t value_index, typedata_t *t
         }
 
         case TYPE_BOOL: {
-            sb_add_format(&cgen->sb, "%s", (value_at(byte) == 1) ? "true" : "false");
+            sb_add_format(&cgen->sb, "%s", (word.as.u != 0) ? "true" : "false");
             break;
         }
 
@@ -566,7 +555,7 @@ static void cgen_constant_or_nil(cgen_t *cgen, ast_node_t *constant_or_nil, cgen
             sb_add_format(&cgen->sb, "%s = ", cgen_var(cgen, var));
         }
 
-        cgen_constant(cgen, constant_or_nil->value_index, type_info);
+        cgen_constant(cgen, constant_or_nil->expr_val.word, type_info);
     }
 }
 
@@ -846,7 +835,7 @@ static void cgen_break_or_continue(cgen_t *cgen, ast_node_t *jmp, token_type_t t
 }
 
 static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var) {
-    if (expression->value_index.exists) {
+    if (expression->expr_val.is_concrete) {
         cgen_constant_or_nil(cgen, expression, var);
         return;
     }
