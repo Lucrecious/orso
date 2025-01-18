@@ -1,0 +1,133 @@
+{
+    sum := 0;
+
+    min8 := -128i8;
+	max8 := 127i8;
+
+    {
+        a := min8;
+        a = a - 1i8;
+
+        if a == max8 then
+            sum = sum + 1;
+
+        a = a + 1i8;
+
+        if a == min8 then
+            sum = sum + 1;
+    };
+
+	minu8 := 0u8;
+	maxu8 := 255u8;
+
+    {
+        a := minu8;
+        a = a - 1u8;
+
+        if a == maxu8 then
+            sum = sum + 1;
+
+        a = a + 1u8;
+
+        if a == minu8 then
+            sum = sum + 1;
+    };
+
+	min16 := -32768i16;
+	max16 := 32767i16;
+
+    {
+        a := min16;
+        a = a - 1i16;
+
+        if a == max16 then
+            sum = sum + 1;
+
+        a = a + 1i16;
+
+        if a == min16 then
+            sum = sum + 1;
+    };
+
+	minu16 := 0u16;
+	maxu16 := 65535u16;
+
+    {
+        a := minu16;
+        a = a - 1u16;
+
+        if a == maxu16 then
+            sum = sum + 1;
+
+        a = a + 1u16;
+
+        if a == minu16 then
+            sum = sum + 1;
+    };
+
+	min32 := -2147483648i32;
+	max32 := 2147483647i32;
+
+    {
+        a := min32;
+        a = a - 1i32;
+
+        if a == max32 then
+            sum = sum + 1;
+
+        a = a + 1i32;
+
+        if a == min32 then
+            sum = sum + 1;
+    };
+
+	minu32 := 0u32;
+	maxu32 := 4294967295u32;
+
+    {
+        a := minu32;
+        a = a - 1u32;
+
+        if a == maxu32 then
+            sum = sum + 1;
+
+        a = a + 1u32;
+
+        if a == minu32 then
+            sum = sum + 1;
+    };
+
+	min64 := -9223372036854775808i64;
+	max64 := 9223372036854775807i64;
+
+    {
+        a := min64;
+        a = a - 1i64;
+
+        if a == max64 then
+            sum = sum + 1;
+
+        a = a + 1i64;
+
+        if a == min64 then
+            sum = sum + 1;
+    };
+
+	minu64 := 0u64;
+	maxu64 := 18446744073709551615u64;
+
+    {
+        a := minu64;
+        a = a - 1u64;
+
+        if a == maxu64 then
+            sum = sum + 1;
+
+        a = a + 1u64;
+
+        if a == minu64 then
+            sum = sum + 1;
+    };
+
+    sum;
+}
