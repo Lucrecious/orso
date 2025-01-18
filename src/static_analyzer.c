@@ -227,48 +227,6 @@ static bool fold_funcsig_or_error(analyzer_t *analyzer, ast_t *ast, ast_node_t *
     return true;
 }
 
-// footnote(circular-dependencies)
-static bool is_value_circular_dependency(analyzer_t* analyzer, ast_node_t* new_dependency) {
-    for (size_t i_ = 0; i_ < analyzer->dependencies.count; ++i_) {
-        size_t i = analyzer->dependencies.count-i_-1;
-        analysis_dependency_t *dependency = &analyzer->dependencies.items[i];
-
-        if (dependency->ast_node->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION) {
-            return false;
-        }
-
-        if (dependency->ast_node->node_type == AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION) {
-            return false;
-        }
-
-        if (dependency->ast_node == new_dependency) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-static bool push_dependency(analyzer_t* analyzer, ast_node_t* node, int fold_level, IsCircularDependencyFunc is_circular_dependency) {
-    if (is_circular_dependency(analyzer, node)) {
-        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_FOLDING_LOOP, node));
-        return false;
-    }
-
-    analysis_dependency_t dependency = {
-        .fold_level = fold_level,
-        .ast_node = node,
-    };
-
-    array_push(&analyzer->dependencies, dependency);
-
-    return true;
-}
-
-static void pop_dependency(analyzer_t *analyzer) {
-    --analyzer->dependencies.count;
-}
-
 static bool get_nearest_scope_in_func_or_error(
         analyzer_t *analyzer, ast_node_t *jmp_node, scope_t *scope,
         scope_type_t search_type, string_view_t label, scope_t **found_scope) {
@@ -1236,10 +1194,7 @@ void resolve_expression(
         }
 
         case AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION: {
-            // since structs are boundaries for circular dependencies, they will never be the cause of one.
-            push_dependency(analyzer, expr, state.fold_level, is_value_circular_dependency);
             resolve_struct_definition(analyzer, ast, state, expr);
-            pop_dependency(analyzer);
             break;
         }
         
@@ -1346,19 +1301,13 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
 
     type_t declaration_type = typeid(TYPE_UNRESOLVED);
     if (TYPE_IS_UNRESOLVED(declaration->value_type) && !an_is_none(an_decl_type(declaration))) {
-        bool pushed = push_dependency(analyzer, an_decl_type(declaration), state.fold_level, is_value_circular_dependency);
-        if (pushed) {
-            analysis_state_t new_state = state;
-            new_state.mode = MODE_CONSTANT_TIME | (state.mode & MODE_FOLDING_TIME);
-            resolve_expression(analyzer, ast, new_state, an_decl_type(declaration));
-            declaration_type = valin2type(ast, an_decl_type(declaration)->value_index);
-            pop_dependency(analyzer);
-        } else {
-            declaration_type = typeid(TYPE_INVALID);
-        }
+        analysis_state_t new_state = state;
+        new_state.mode = MODE_CONSTANT_TIME | (state.mode & MODE_FOLDING_TIME);
+        resolve_expression(analyzer, ast, new_state, an_decl_type(declaration));
+        declaration_type = valin2type(ast, an_decl_type(declaration)->value_index);
     }
 
-    if (!an_is_none(an_decl_expr(declaration))) {
+    unless (an_is_none(an_decl_expr(declaration))) {
         if (TYPE_IS_UNRESOLVED(an_decl_expr(declaration)->value_type)) {
             analysis_state_t new_state = state;
             switch (state.scope->type) {
@@ -1383,32 +1332,16 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
             case SCOPE_TYPE_NONE: UNREACHABLE(); break;
             }
 
-            bool pushed = push_dependency(analyzer, an_decl_expr(declaration), new_state.fold_level, is_value_circular_dependency);
-            if (pushed) {
-                resolve_expression(analyzer, ast, new_state, an_decl_expr(declaration));
-                pop_dependency(analyzer);
-            } else {
-                unless (TYPE_IS_UNRESOLVED(declaration_type)) {
-                    declaration->value_type = declaration_type;
-                }
-                INVALIDATE(an_decl_expr(declaration));
-            }
-        } else {
-            // if (is_sizing_circular_dependency(analyzer, initial_expression)) {
-            //     unless (TYPE_IS_UNRESOLVED(declaration_type)) {
-            //         declaration->value_type = declaration_type;
-            //     }
-            //     error_range(analyzer, declaration->start, declaration->end, "Circular dependency (definition declaration)");
-            //     INVALIDATE(declaration->data.declaration.initial_value_expression);
-            // }
+            resolve_expression(analyzer, ast, new_state, an_decl_expr(declaration));
         }
     } else {
+        ASSERT(TYPE_IS_RESOLVED(declaration_type), "must be resolved from explicit type");
         an_decl_expr(declaration) = ast_nil(ast, declaration_type, token_implicit_at_end(declaration->end));
     }
 
     // we are resolved
     if (is_declaration_resolved(declaration)) {
-        if (!TYPE_IS_TYPE(declaration->value_type)) {
+        unless (TYPE_IS_TYPE(declaration->value_type)) {
             return;
         }
 
@@ -1444,7 +1377,7 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
 
 
 
-    if (!an_is_none(an_decl_expr(declaration)) && (TYPE_IS_UNDEFINED(an_decl_expr(declaration)->value_type) || TYPE_IS_INVALID(an_decl_expr(declaration)->value_type))) {
+    if ((TYPE_IS_UNDEFINED(an_decl_expr(declaration)->value_type) || TYPE_IS_INVALID(an_decl_expr(declaration)->value_type))) {
         if (TYPE_IS_UNDEFINED(an_decl_expr(declaration)->value_type)) {
             stan_error(analyzer, make_error_node(ERROR_ANALYSIS_EXPECTED_RESOLVED, an_decl_expr(declaration)));
         }
@@ -1467,8 +1400,7 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
         //     // todo bind name to a function?? 
         // }
 
-        if (!an_is_none(an_decl_expr(declaration))
-        && type_is_struct(ast->type_set.types, an_decl_expr(declaration)->value_type)
+        if (type_is_struct(ast->type_set.types, an_decl_expr(declaration)->value_type)
         && (TYPE_IS_UNRESOLVED(declaration_type) || TYPE_IS_TYPE(declaration_type))) {
             ast_node_t *to_struct_type = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_CAST_IMPLICIT, an_decl_expr(declaration)->start);
             to_struct_type->value_type = typeid(TYPE_TYPE);
@@ -1501,44 +1433,23 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
 
     // Could be resolved could be unresolved at this point.
     declaration->value_type = declaration_type;
-
     declaration->fold_level_resolved_at = state.fold_level;
 
-    // TODO: Outer if should be if the expression is null or not
     if (TYPE_IS_UNRESOLVED(declaration->value_type)) {
-        ASSERT(!an_is_none(an_decl_expr(declaration)), "this should be a parsing error.");
-
         type_t expression_type = an_decl_expr(declaration)->value_type;
-
-        if (typeid_eq(expression_type, typeid(TYPE_BOOL)) || typeid_eq(expression_type, ast->type_set.i32_)) {
-            declaration->value_type = expression_type;
-        } else {
-            declaration->value_type = expression_type;
-        }
+        declaration->value_type = expression_type;
     } else {
-        unless (an_is_none(an_decl_expr(declaration)) || typeid_eq(declaration->value_type, an_decl_expr(declaration)->value_type)) {
+        unless (typeid_eq(declaration->value_type, an_decl_expr(declaration)->value_type)) {
             unless (TYPE_IS_INVALID(an_decl_expr(declaration)->value_type)) {
                 stan_error(analyzer, make_error_node(ERROR_ANALYSIS_TYPE_MISMATCH, declaration));
             }
         }
     }
 
-    if (an_is_none(an_decl_expr(declaration))) {
-        value_index_t value_index = value_index_nil();
-
-        unless (TYPE_IS_INVALID(declaration->value_type)) {
-            value_index = zero_value(ast, declaration->value_type);
-        }
-
-        declaration->value_index = value_index;
-        declaration->foldable = value_index.exists;
-    } else {
-        if (IS_FOLDED(an_decl_expr(declaration))) {
-            declaration->value_index = an_decl_expr(declaration)->value_index;
-            declaration->foldable = an_decl_expr(declaration)->value_index.exists;
-        }
+    if (IS_FOLDED(an_decl_expr(declaration))) {
+        declaration->value_index = an_decl_expr(declaration)->value_index;
+        declaration->foldable = an_decl_expr(declaration)->value_index.exists;
     }
-
 }
 
 static ast_node_t *get_builtin_decl(ast_t *ast, string_view_t identifier) {
@@ -1730,10 +1641,8 @@ static void resolve_funcdef(
 
     bool parameter_invalid = false;
 
-    // resolves parameters for function type
     for (size_t i = an_func_def_arg_start(funcdef); i < an_func_def_arg_end(funcdef); ++i) {
         analysis_state_t new_state = state;
-        // parameters look syntacticly like mutables, but their initial expressions should be constants
         new_state.mode = MODE_CONSTANT_TIME | (state.mode & MODE_FOLDING_TIME);
         new_state.scope = &funcdef_scope;
         resolve_declaration_definition(analyzer, ast, new_state, funcdef->children.items[i]);
@@ -1745,12 +1654,10 @@ static void resolve_funcdef(
     }
 
     type_t return_type = typeid(TYPE_VOID);
-    bool pushed = push_dependency(analyzer, an_func_def_return(funcdef), state.fold_level, is_value_circular_dependency);
-    if (pushed) {
+    {
         analysis_state_t new_state = state;
         new_state.mode = MODE_CONSTANT_TIME | (state.mode & MODE_FOLDING_TIME);
         resolve_expression(analyzer, ast, state, an_func_def_return(funcdef));
-        pop_dependency(analyzer);
     }
 
     ast_node_t *ret_expr = an_func_def_return(funcdef);
@@ -1768,8 +1675,7 @@ static void resolve_funcdef(
     type_t function_type = type_set_fetch_function(&ast->type_set, return_type, parameter_types);
     funcdef->value_type = function_type;
 
-    pushed = push_dependency(analyzer, funcdef, state.fold_level, is_value_circular_dependency);
-    if (pushed) {
+    {
         analysis_state_t new_state = state;
         new_state.mode = MODE_RUNTIME;
 
@@ -1777,7 +1683,6 @@ static void resolve_funcdef(
         scope_init(&function_scope, &analyzer->allocator, SCOPE_TYPE_FUNC_DEF_BODY, &funcdef_scope, funcdef);
         new_state.scope = &function_scope;
         resolve_expression(analyzer, ast, new_state, an_func_def_block(funcdef));
-        pop_dependency(analyzer);
     }
 
     unless (TYPE_IS_UNREACHABLE(an_func_def_block(funcdef)->value_type)) {
