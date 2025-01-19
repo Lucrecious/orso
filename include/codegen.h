@@ -786,7 +786,14 @@ static gen_t make_gen(ast_t *ast, error_function_t error_fn, arena_t *gen_arena,
 }
 
 static void gen_function_def(gen_t *parent_gen, function_t *parent_function, ast_node_t *function_def) {
-    function_t *function = new_function(parent_function->file_path, parent_function->memory, parent_gen->function_arena);
+    function_t *function = NULL;
+    if (function_def->expr_val.is_concrete) {
+        function = (function_t*)function_def->expr_val.word.as.p;
+        if (function_is_compiled(function)) return;
+        function_init(function, parent_function->file_path, parent_function->memory, parent_gen->function_arena);
+    } else {
+        function = new_function(parent_function->file_path, parent_function->memory, parent_gen->function_arena);
+    } 
 
     gen_t gen = make_gen(parent_gen->ast, parent_gen->error_fn, parent_gen->locals.allocator, parent_gen->function_arena);
 
@@ -923,16 +930,19 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
     ASSERT(ast_node_type_is_expression(expression->node_type), "must be expression");
 
     if (expression->expr_val.is_concrete) {
+        if (expression->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION) {
+            gen_function_def(gen, function, expression);
+        }
+
         gen_expr_val(gen, function, expression, ast_node_val_nil());
         return;
     }
 
     switch (expression->node_type) {
+        case AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION:
         case AST_NODE_TYPE_EXPRESSION_NIL:
-        case AST_NODE_TYPE_EXPRESSION_PRIMARY: {
-            gen_expr_val(gen, function, expression, ast_node_val_nil());
-            break;
-        }
+        case AST_NODE_TYPE_EXPRESSION_PRIMARY: UNREACHABLE(); break;
+
 
         case AST_NODE_TYPE_EXPRESSION_BINARY: {
             gen_binary(gen, function, expression);
@@ -973,11 +983,6 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
 
         case AST_NODE_TYPE_EXPRESSION_JMP: {
             gen_jmp_expr(gen, function, expression);
-            break;
-        }
-
-        case AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION: {
-            gen_function_def(gen, function, expression);
             break;
         }
 

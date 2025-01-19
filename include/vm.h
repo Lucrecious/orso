@@ -199,6 +199,8 @@ struct function_t {
 };
 
 function_t *new_function(string_t file_path, memarr_t *memory, arena_t *arena);
+void function_init(function_t *function, string_t file_path, memarr_t *memory, arena_t *arena);
+bool function_is_compiled(function_t *function);
 
 typedef struct call_frame_t call_frame_t;
 struct call_frame_t {
@@ -215,7 +217,6 @@ struct vm_t {
     bool halted;
 };
 
-
 void vm_init(vm_t *vm);
 
 void vm_set_entry_point(vm_t *vm, function_t *entry_point);
@@ -229,12 +230,24 @@ void vm_step(vm_t *vm);
 function_t *new_function(string_t file_path, memarr_t *memory, arena_t *arena) {
     function_t *function = arena_alloc(arena, sizeof(function_t));
     *function = (function_t){0};
+    function_init(function, file_path, memory, arena);
+    return function;
+}
+
+void function_init(function_t *function, string_t file_path, memarr_t *memory, arena_t *arena) {
     function->memory = memory;
-    function->file_path = string_copy(file_path, arena);
+    if (file_path.length == 0) {
+        function->file_path = lit2str("");
+    } else {
+        function->file_path = string_copy(file_path, arena);
+    }
 
     function->locations.allocator = arena;
     function->code.allocator = arena;
-    return function;
+}
+
+bool function_is_compiled(function_t *function) {
+    return function->code.capacity > 0 && function->memory != NULL;
 }
 
 void vm_init(vm_t *vm) {

@@ -235,6 +235,7 @@ bool parse_expr_file(ast_t *ast, string_t expr_file, arena_t *arena) {
     code = string2sv(sv2string(code, arena));
 
     ast_init(ast, megabytes(2));
+    ast->function_arena = arena;
 
     success = parse_expr_cstr(ast, code, expr_file);
     unless (success) {
@@ -276,7 +277,6 @@ void test_expr_file(string_t expr_file, arena_t *arena) {
     i64 resultvm = INT64_MIN;
     if (true)
     {
-
         vm_t vm = {0};
         compile_expr_to_vm(&vm, &ast, arena, myerror);
 

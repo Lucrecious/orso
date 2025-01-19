@@ -5,5 +5,5 @@
         else return fib(n - 1) + fib(n - 2);
     };
 
-    fib(4u);
+    fib(10u);
 }

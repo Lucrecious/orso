@@ -244,12 +244,11 @@ typedef struct ast_t {
 
     table_t(s2w) *builtins;
 
-    fd_pairs_t function_definition_pairs;
+    arena_t *function_arena;
 
     ast_node_t *root;
     
     arena_t constant_arena;
-
     memarr_t constants;
 
     table_t(ptr2word) *type_to_zero_word;

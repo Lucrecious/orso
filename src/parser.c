@@ -140,7 +140,7 @@ void ast_init(ast_t *ast, size_t memory_size_bytes) {
 
     ast->symbols = table_new(s2w, &ast->allocator);
 
-    ast->function_definition_pairs = (fd_pairs_t){.allocator=&ast->allocator};
+    ast->function_arena = &ast->allocator;
     type_set_init(&ast->type_set, &ast->allocator);
 
     ast->builtins = table_new(s2w, &ast->allocator);

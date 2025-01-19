@@ -1578,7 +1578,7 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
 
             ast_node_and_scope_t node_and_scope;
             bool found = table_get(type2ns, ast->type_to_creation_node, initial_expression_type, &node_and_scope);
-            ASSERT(found, "this shoudl always find something");
+            ASSERT(found, "this should always find something");
 
             an_decl_expr(declaration) = to_struct_type;
 
@@ -1724,11 +1724,7 @@ static ast_node_t *get_def_by_identifier_or_error(
     return NULL;
 }
 
-static void resolve_funcdef(
-        analyzer_t *analyzer,
-        ast_t *ast,
-        analysis_state_t state,
-        ast_node_t *funcdef) {
+static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t state, ast_node_t *funcdef) {
     ASSERT(funcdef->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION, "must be function declaration at this point");
 
     scope_t funcdef_scope;
@@ -1784,6 +1780,12 @@ static void resolve_funcdef(
 
     type_t function_type = type_set_fetch_function(&ast->type_set, return_type, parameter_types);
     funcdef->value_type = function_type;
+
+    // create empty placeholder function immeidately in case definition is recursive
+    unless (TYPE_IS_INVALID(an_func_def_block(funcdef)->value_type)) {
+        function_t *function = new_function(funcdef->start.loc.filepath, NULL, ast->function_arena);
+        funcdef->expr_val = ast_node_val_word(WORDP(function));
+    }
 
     {
         analysis_state_t new_state = state;
