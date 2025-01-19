@@ -1,6 +1,9 @@
 {
-    a: i8 = 100;
-    b := 100u;
+    fib :: (n: uint) -> uint {
+        if n <= 1 then return 1u
+        else if n <= 2 then return 1u
+        else return fib(n - 1) + fib(n - 2);
+    };
 
-    a == b;
+    fib(4u);
 }

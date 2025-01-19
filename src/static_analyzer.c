@@ -67,26 +67,11 @@ static void stan_error(analyzer_t *analyzer, error_t error) {
     if (analyzer->error_fn) analyzer->error_fn(analyzer->ast, error);
 }
 
-typedef enum {
-    QUERY_FLAG_MATCH_ANY = 0x1,
-    QUERY_FLAG_MATCH_ONLY_IN_GIVEN_SCOPE = 0x2,
-    QUERY_FLAG_MATCH_TYPE = 0x4,
-    QUERY_FLAG_MACH_FUNCTION = 0x8,
-} QueryFlags;
-
-typedef struct def_query_t def_query_t;
-struct def_query_t  {
-    QueryFlags flags;
-    type_t search_type;
-    bool skip_mutable;
-};
-
 static ast_node_t *get_def_by_identifier_or_error(
         analyzer_t *analyzer,
         ast_t *ast,
         analysis_state_t state,
         token_t identifier_token,
-        def_query_t *query,
         scope_t **found_scope);
 
 static bool is_builtin_type(type_table_t *t, string_view_t identifier, type_t *type) {
@@ -167,7 +152,7 @@ static bool is_declaration_resolved(ast_node_t *definition) {
         return true;
     }
 
-    return (definition->expr_val.is_concrete|| (an_decl_expr(definition)->node_type != AST_NODE_TYPE_NONE && !TYPE_IS_UNRESOLVED(an_decl_expr(definition)->value_type))) && !TYPE_IS_UNRESOLVED(definition->value_type);
+    return (definition->expr_val.is_concrete || (an_decl_expr(definition)->node_type != AST_NODE_TYPE_NONE && TYPE_IS_RESOLVED(an_decl_expr(definition)->value_type))) && TYPE_IS_RESOLVED(definition->value_type);
 }
 
 static bool fold_funcsig_or_error(analyzer_t *analyzer, ast_t *ast, ast_node_t *expression) {
@@ -683,7 +668,7 @@ void resolve_expression(
     
     ASSERT(ast_node_type_is_expression(expr->node_type), "should be only expressions");
 
-    unless (TYPE_IS_UNRESOLVED(expr->value_type)) {
+    if (TYPE_IS_RESOLVED(expr->value_type)) {
         return;
     }
 
@@ -1008,14 +993,8 @@ void resolve_expression(
             expr->lvalue_node = expr;
 
             scope_t *def_scope;
-            bool is_inside_type_context = state.scope->type == SCOPE_TYPE_TYPE_CONTEXT;
-            def_query_t query = {
-                .search_type = is_inside_type_context ? typeid(TYPE_TYPE) : typeid(TYPE_INVALID),
-                .skip_mutable = (state.mode & MODE_CONSTANT_TIME),
-                .flags = is_inside_type_context ? QUERY_FLAG_MATCH_TYPE : QUERY_FLAG_MATCH_ANY,
-            };
 
-            ast_node_t *decl = get_def_by_identifier_or_error(analyzer, ast, state, expr->identifier, &query, &def_scope);
+            ast_node_t *decl = get_def_by_identifier_or_error(analyzer, ast, state, expr->identifier, &def_scope);
 
             if (decl == NULL) {
                 INVALIDATE(expr);
@@ -1086,13 +1065,8 @@ void resolve_expression(
                 analysis_state_t search_state = state;
                 search_state.scope = node_and_scope.scope;
 
-                def_query_t query = {
-                    .flags = QUERY_FLAG_MATCH_ANY | QUERY_FLAG_MATCH_ONLY_IN_GIVEN_SCOPE,
-                    .skip_mutable = skip_mutable,
-                };
-
                 scope_t* found_scope;
-                ast_node_t *decl = get_def_by_identifier_or_error(analyzer, ast, search_state, expr->identifier, &query, &found_scope);
+                ast_node_t *decl = get_def_by_identifier_or_error(analyzer, ast, search_state, expr->identifier, &found_scope);
 
                 unless (decl) {
                     INVALIDATE(expr);
@@ -1129,7 +1103,7 @@ void resolve_expression(
                 scope_t *def_scope;
                 ast_node_t *def;
                 token_t identifier = lvalue_node->identifier;
-                def = get_def_by_identifier_or_error(analyzer, ast, state, identifier, NULL, &def_scope);
+                def = get_def_by_identifier_or_error(analyzer, ast, state, identifier, &def_scope);
 
                 
                 if (def == NULL) {
@@ -1681,7 +1655,6 @@ static ast_node_t *get_def_by_identifier_or_error(
         ast_t *ast,
         analysis_state_t state,
         token_t identifier_token,
-        def_query_t *query,
         scope_t **search_scope) { // TODO: consider removing search scope from params, check if it's actually used
 
     bool passed_local_mutable_access_barrier = false;
@@ -1703,7 +1676,6 @@ static ast_node_t *get_def_by_identifier_or_error(
 
     #define NEXT_SCOPE() \
         if (is_function_scope) { passed_local_mutable_access_barrier = true; }\
-        if (query && query->flags & QUERY_FLAG_MATCH_ONLY_IN_GIVEN_SCOPE) { break; }\
         *search_scope = (*search_scope)->outer
 
         {
@@ -1720,11 +1692,6 @@ static ast_node_t *get_def_by_identifier_or_error(
 
 
         ast_node_t *decl = (ast_node_t*)def_slot.as.p;
-
-        if (query && query->skip_mutable && decl->is_mutable) {
-            NEXT_SCOPE();
-            continue;
-        }
 
         if (passed_local_mutable_access_barrier && (*search_scope)->creator != NULL && decl->is_mutable) {
             NEXT_SCOPE();
@@ -1749,55 +1716,10 @@ static ast_node_t *get_def_by_identifier_or_error(
             return NULL;
         }
 
-        // footnote(folding-functions)
-        // if (type_is_function(ast->type_set.types, decl->value_type)) {
+        return decl;
 
-            // UNREACHABLE();
-
-            // function_t_ *function = arena_array_get_t(&ast->constants, definition->node->as.declaration.initial_value_expression->value_index, function_t_*);
-            // for (size_t i = 0; i < analyzer->dependencies.count; ++i) {
-            //     i32 i_ = analyzer->dependencies.count - 1 - i;
-            //     analysis_dependency_t *dependency = &analyzer->dependencies.items[i_];
-            //     ast_node_t *node = dependency->ast_node;
-            //     if (node->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION) {
-            //         function_t_ *folded_function = arena_array_get_t(&ast->constants, node->value_index, function_t_*);
-            //         if (folded_function == function && dependency->fold_level != state.fold_level) {
-            //             // TODO: Use better system to figure out whether function definition can be compiled or not
-            //             // In this case, it cannot because of the fold level circular dependency.
-            //             node->as.function.compilable = false;
-
-            //             error_range(analyzer, node->start, node->end, ERROR_ANALYSIS_FOLDING_LOOP);
-            //             return NULL;
-            //         }
-            //     }
-            // }
-        // }
-
-        if (!query) {
-            return decl;
-        }
-
-        if (query->flags & QUERY_FLAG_MATCH_ANY) {
-            return decl;
-        }
-
-        type_t type = decl->value_type;
-
-        if (query->flags & QUERY_FLAG_MATCH_TYPE && typeid_eq(query->search_type, type)) {
-            return decl;
-        }
-
-        if (query->flags & QUERY_FLAG_MACH_FUNCTION && type_is_function(ast->type_set.types, type)) {
-            return decl;
-        }
-
-        NEXT_SCOPE();
-
-#undef NEXT_SCOPE
+    #undef NEXT_SCOPE
     }
-
-    printf("todo: cannot be nil node;\n");
-    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_EXPECTED_RESOLVED, &nil_node));
 
     return NULL;
 }
@@ -1808,10 +1730,6 @@ static void resolve_funcdef(
         analysis_state_t state,
         ast_node_t *funcdef) {
     ASSERT(funcdef->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION, "must be function declaration at this point");
-
-    if (funcdef->expr_val.is_concrete) {
-        return;
-    }
 
     scope_t funcdef_scope;
     scope_init(&funcdef_scope, &analyzer->allocator, SCOPE_TYPE_FUNCDEF, state.scope, funcdef);
@@ -1889,7 +1807,6 @@ static void resolve_funcdef(
         type_t ret_expr_type = ret_expr->value_type;
         unless (typeid_eq(ret_expr_type, return_type)) {
             stan_error(analyzer, make_error_node(ERROR_ANALYSIS_TYPE_MISMATCH, funcdef));
-            INVALIDATE(funcdef);
         }
     }
 }
