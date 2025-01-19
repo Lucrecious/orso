@@ -80,52 +80,72 @@ static void cgen_add_include(cgen_t *cgen, cstr_t include_path) {
     sb_add_format(&cgen->sb, "#include \"%s\"\n", include_path);
 }
 
-static cstr_t cgen_type_name(cgen_t *cgen, type_t type) {
-    typedata_t *type_info = type2typedata(&cgen->ast->type_set.types, type);
-
-    switch (type_info->kind) {
-        case TYPE_NUMBER: {
-            switch ((num_size_t)type_info->size) {
-                case NUM_SIZE_8: UNREACHABLE(); return "byte";
-                case NUM_SIZE_16: UNREACHABLE(); return "u16";
-                case NUM_SIZE_32: {
-                    switch (type_info->data.num) {
-                        case NUM_TYPE_FLOAT: return "f32";
-                        case NUM_TYPE_SIGNED: return "i32";
-                        case NUM_TYPE_UNSIGNED: return "u32";
-                    }
-                    break;
+static cstr_t cgen_typedata_name(typedata_t *typedata) {
+    switch (typedata->kind) {
+    case TYPE_NUMBER: {
+        switch ((num_size_t)typedata->size) {
+            case NUM_SIZE_8: {
+                switch (typedata->data.num) {
+                case NUM_TYPE_FLOAT: UNREACHABLE(); break;
+                case NUM_TYPE_SIGNED: return "i8";
+                case NUM_TYPE_UNSIGNED: return "u8";
                 }
-
-                case NUM_SIZE_64: {
-                    switch (type_info->data.num) {
-                        case NUM_TYPE_FLOAT: return "f64";
-                        case NUM_TYPE_SIGNED: return "i64";
-                        case NUM_TYPE_UNSIGNED: return "u64";
-                    }
-                    break;
-                }
-
-                default: UNREACHABLE(); return "void";
+                break;
             }
+
+            case NUM_SIZE_16:  {
+                switch (typedata->data.num) {
+                case NUM_TYPE_FLOAT: UNREACHABLE(); break;
+                case NUM_TYPE_SIGNED: return "i16";
+                case NUM_TYPE_UNSIGNED: return "u16";
+                }
+                break;
+            }
+
+            case NUM_SIZE_32: {
+                switch (typedata->data.num) {
+                case NUM_TYPE_FLOAT: return "f32";
+                case NUM_TYPE_SIGNED: return "i32";
+                case NUM_TYPE_UNSIGNED: return "u32";
+                }
+                break;
+            }
+
+            case NUM_SIZE_64: {
+                switch (typedata->data.num) {
+                    case NUM_TYPE_FLOAT: return "f64";
+                    case NUM_TYPE_SIGNED: return "i64";
+                    case NUM_TYPE_UNSIGNED: return "u64";
+                }
+                break;
+            }
+
+            default: UNREACHABLE(); return "void";
         }
-
-        case TYPE_BOOL: return "bool_";
-
-        case TYPE_VOID: return "void";
-
-        case TYPE_STRING:
-        case TYPE_TYPE:
-        case TYPE_FUNCTION:
-        case TYPE_NATIVE_FUNCTION:
-        case TYPE_POINTER:
-        case TYPE_STRUCT: UNREACHABLE(); return "void";
-
-        case TYPE_INVALID:
-        case TYPE_UNRESOLVED:
-        case TYPE_UNREACHABLE:
-        case TYPE_COUNT: UNREACHABLE(); return "void";
     }
+
+    case TYPE_BOOL: return "bool_";
+
+    case TYPE_VOID: return "void";
+
+    case TYPE_STRING:
+    case TYPE_TYPE:
+    case TYPE_FUNCTION:
+    case TYPE_NATIVE_FUNCTION:
+    case TYPE_POINTER:
+    case TYPE_STRUCT: UNREACHABLE(); return "void";
+
+    case TYPE_INVALID:
+    case TYPE_UNRESOLVED:
+    case TYPE_UNREACHABLE:
+    case TYPE_COUNT: UNREACHABLE(); return "void";
+    }
+}
+
+static cstr_t cgen_type_name(cgen_t *cgen, type_t type) {
+    typedata_t *typedata = type2typedata(&cgen->ast->type_set.types, type);
+    cstr_t value = cgen_typedata_name(typedata);
+    return value;
 }
 
 static cstr_t cgen_var_name(cgen_t *cgen, cgen_var_t var) {
@@ -273,22 +293,40 @@ static void cgen_cache_requires_tmp(type_infos_t *types, ast_node_t *expression)
     }
 }
 
-static void cgen_constant(cgen_t *cgen, word_t word, typedata_t *type_info) {
-    switch (type_info->kind) {
+static void cgen_constant(cgen_t *cgen, word_t word, typedata_t *typedata) {
+    switch (typedata->kind) {
         case TYPE_NUMBER: {
-            switch ((num_size_t)type_info->size) {
-                case NUM_SIZE_8: UNREACHABLE(); break;
-                case NUM_SIZE_16: UNREACHABLE(); break;
-                case NUM_SIZE_32: {
-                    switch (type_info->data.num) {
-                        case NUM_TYPE_FLOAT: sb_add_format(&cgen->sb, "%g", (f32)word.as.d); break;
-                        case NUM_TYPE_SIGNED: sb_add_format(&cgen->sb, "%"PRIi32, (i32)word.as.i); break;
-                        case NUM_TYPE_UNSIGNED: sb_add_format(&cgen->sb, "%"PRIu32, (u32)word.as.u); break;
+            cstr_t numtype = cgen_typedata_name(typedata);
+            switch ((num_size_t)typedata->size) {
+                case NUM_SIZE_8: {
+                    switch (typedata->data.num) {
+                    case NUM_TYPE_FLOAT: UNREACHABLE(); break;
+                    case NUM_TYPE_SIGNED: sb_add_format(&cgen->sb, "%s_(%"PRIi32")", numtype, (i32)word.as.i); break;
+                    case NUM_TYPE_UNSIGNED: sb_add_format(&cgen->sb, "%s_(%"PRIu32")", numtype, (u32)word.as.u); break;
                     }
                     break;
                 }
+
+                case NUM_SIZE_16: {
+                    switch (typedata->data.num) {
+                    case NUM_TYPE_FLOAT: UNREACHABLE(); break;
+                    case NUM_TYPE_SIGNED: sb_add_format(&cgen->sb, "%s_(%"PRIi32")", numtype, (i32)word.as.i); break;
+                    case NUM_TYPE_UNSIGNED: sb_add_format(&cgen->sb, "%s_(%"PRIu32")", numtype, (u32)word.as.u); break;
+                    }
+                    break;
+                }
+
+                case NUM_SIZE_32: {
+                    switch (typedata->data.num) {
+                    case NUM_TYPE_FLOAT: sb_add_format(&cgen->sb, "%s_(%g)", numtype, (f32)word.as.d); break;
+                    case NUM_TYPE_SIGNED: sb_add_format(&cgen->sb, "%s_(%"PRIi32")", numtype, (i32)word.as.i); break;
+                    case NUM_TYPE_UNSIGNED: sb_add_format(&cgen->sb, "%s_(%"PRIu32")", numtype, (u32)word.as.u); break;
+                    }
+                    break;
+                }
+
                 case NUM_SIZE_64: {
-                    switch (type_info->data.num) {
+                    switch (typedata->data.num) {
                         case NUM_TYPE_FLOAT: sb_add_format(&cgen->sb, "%lg", (f64)word.as.d); break;
                         case NUM_TYPE_SIGNED: sb_add_format(&cgen->sb, "%"PRIi64, (i64)word.as.i); break;
                         case NUM_TYPE_UNSIGNED: sb_add_format(&cgen->sb, "%"PRIu64, (u64)word.as.u); break;
@@ -306,9 +344,13 @@ static void cgen_constant(cgen_t *cgen, word_t word, typedata_t *type_info) {
             break;
         }
 
+        case TYPE_TYPE: {
+            sb_add_format(&cgen->sb, "typeid(%"PRIu64")", word.as.t.i);
+            break;
+        }
+
         case TYPE_VOID:
         case TYPE_STRING:
-        case TYPE_TYPE:
         case TYPE_NATIVE_FUNCTION:
         case TYPE_POINTER:
         case TYPE_FUNCTION:
@@ -834,6 +876,14 @@ static void cgen_break_or_continue(cgen_t *cgen, ast_node_t *jmp, token_type_t t
     }
 }
 
+static void cgen_builtin_call(cgen_t *cgen, ast_node_t *bcall, cgen_var_t var) {
+    // since typeof is the only builtin call (might change to directive later)
+    UNUSED(cgen);
+    UNUSED(bcall);
+    UNUSED(var);
+    UNREACHABLE();
+}
+
 static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var) {
     if (expression->expr_val.is_concrete) {
         cgen_constant_or_nil(cgen, expression, var);
@@ -894,6 +944,11 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
 
                 default: UNREACHABLE();
             }
+            break;
+        }
+
+        case AST_NODE_TYPE_EXPRESSION_BUILTIN_CALL: {
+            cgen_builtin_call(cgen, expression, var);
             break;
         }
 

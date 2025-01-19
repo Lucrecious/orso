@@ -17,6 +17,25 @@ typedef double f64;
 typedef u8 bool_;
 typedef const char *cstr_t;
 
+#define i8_(lit) ((i8)lit)
+#define u8_(lit) ((u8)lit)
+#define i16_(lit) ((i16)lit)
+#define u16_(lit) ((u16)lit)
+#define i32_(lit) ((i32)lit)
+#define u32_(lit) ((u32)lit)
+#define f32_(lit) ((f32)lit)
+#define i64_(lit) ((i64)lit)
+#define u64_(lit) ((u64)lit)
+#define f64_(lit) ((f64)lit)
+
+typedef struct type_t type_t;
+struct type_t {
+    u64 i;
+};
+
+#define typeid(index) (type_t){.i=(index)}
+#define typeid_eq(t1, t2) ((t1).i == (t2).i)
+
 typedef unsigned int uint;
 
 #define __IS_TWO_COMPLIMENT ((-1 & 3) == 3)

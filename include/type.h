@@ -3,14 +3,8 @@
 
 #include <stdio.h>
 
-#include "def.h"
-#include "lexer.h"
+#include "intrinsics.h"
 #include "stringt.h"
-
-typedef struct type_t type_t;
-struct type_t {
-    u64 i;
-};
 
 typedef struct types_t types_t;
 struct types_t {

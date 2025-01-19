@@ -1409,9 +1409,7 @@ void resolve_expression(
                 }
 
                 expr->value_type = typeid(TYPE_TYPE);
-                if (expr_arg->expr_val.is_concrete) {
-                    expr->expr_val = ast_node_val_word(WORDT(expr_arg->value_type));
-                }
+                expr->expr_val = ast_node_val_word(WORDT(expr_arg->value_type));
                 break;
             }
             default: UNREACHABLE(); break;

@@ -1,7 +1,7 @@
 #ifndef LEXER_H_
 #define LEXER_H_
 
-#include "def.h"
+#include "intrinsics.h"
 #include "stringt.h"
 
 typedef enum token_type_t token_type_t;

@@ -6,9 +6,6 @@
 #include "arena.h"
 #include "table.h"
 
-#define typeid(INDEX) (type_t){.i=INDEX}
-#define typeid_eq(ID1, ID2) ((ID1).i == (ID2).i)
-
 declare_table(type2u64, typedata_t*, type_t);
 
 typedef struct type_table_t type_table_t;
