@@ -857,7 +857,7 @@ static void emit_cast(gen_t *gen, function_t *function, type_t dest, type_t sour
 
     ASSERT(desttd->kind == TYPE_NUMBER && desttd->kind == sourcetd->kind, "must both be number types for now");
 
-    #define EMIT_CAST(dst_sz, loc, ...) if (desttd->size == (dst_sz)) { \
+    #define EMIT_CAST(dst_sz, ...) if (desttd->size == (dst_sz)) { \
         op_code_t ins[] = {__VA_ARGS__}; \
         size_t amount = sizeof((op_code_t[]){__VA_ARGS__}); \
         for (size_t i = 0; i < amount; ++i) { \
@@ -871,42 +871,42 @@ static void emit_cast(gen_t *gen, function_t *function, type_t dest, type_t sour
 
     // registers only hold 64bit numbers, so all lower bit types are automatically widened when put into a register
 
-    if (desttd->data.num == NUM_TYPE_FLOAT && sourcetd->data.num == NUM_TYPE_FLOAT) {
-        EMIT_CAST(NUM_SIZE_32, loc, OP_CAST_D2F);
-    } else if (desttd->data.num == NUM_TYPE_UNSIGNED && sourcetd->data.num == NUM_TYPE_UNSIGNED) {
-        EMIT_CAST(NUM_SIZE_8, loc, OP_CAST_UL2UB);
-        EMIT_CAST(NUM_SIZE_16, loc, OP_CAST_UL2US);
-        EMIT_CAST(NUM_SIZE_32, loc, OP_CAST_UL2U);
-    } else if (desttd->data.num == NUM_TYPE_SIGNED && sourcetd->data.num == NUM_TYPE_SIGNED) {
-        EMIT_CAST(NUM_SIZE_8, loc, OP_CAST_L2B);
-        EMIT_CAST(NUM_SIZE_16, loc, OP_CAST_L2S);
-        EMIT_CAST(NUM_SIZE_32, loc, OP_CAST_L2I);
-    } else if (desttd->data.num == NUM_TYPE_SIGNED && sourcetd->data.num == NUM_TYPE_UNSIGNED) {
-        EMIT_CAST(NUM_SIZE_8, loc, OP_CAST_UL2L, OP_CAST_L2B);
-        EMIT_CAST(NUM_SIZE_16, loc, OP_CAST_UL2L, OP_CAST_L2S);
-        EMIT_CAST(NUM_SIZE_32, loc, OP_CAST_UL2L, OP_CAST_L2I);
-        EMIT_CAST(NUM_SIZE_64, loc, OP_CAST_UL2L);
+    if (desttd->data.num == NUM_TYPE_SIGNED && sourcetd->data.num == NUM_TYPE_SIGNED) {
+        EMIT_CAST(NUM_SIZE_8, OP_CAST_L2B);
+        EMIT_CAST(NUM_SIZE_16, OP_CAST_L2S);
+        EMIT_CAST(NUM_SIZE_32, OP_CAST_L2I);
     } else if (desttd->data.num == NUM_TYPE_UNSIGNED && sourcetd->data.num == NUM_TYPE_SIGNED) {
-        EMIT_CAST(NUM_SIZE_8, loc, OP_CAST_L2UL, OP_CAST_UL2UB);
-        EMIT_CAST(NUM_SIZE_16, loc, OP_CAST_L2UL, OP_CAST_UL2US);
-        EMIT_CAST(NUM_SIZE_32, loc, OP_CAST_L2UL, OP_CAST_UL2U);
-        EMIT_CAST(NUM_SIZE_64, loc, OP_CAST_L2UL);
-    } else if (desttd->data.num == NUM_TYPE_FLOAT && sourcetd->data.num == NUM_TYPE_UNSIGNED) {
-        EMIT_CAST(NUM_SIZE_32, loc, OP_CAST_UL2F);
-        EMIT_CAST(NUM_SIZE_64, loc, OP_CAST_UL2D);
+        EMIT_CAST(NUM_SIZE_8, OP_CAST_L2UL, OP_CAST_UL2UB);
+        EMIT_CAST(NUM_SIZE_16, OP_CAST_L2UL, OP_CAST_UL2US);
+        EMIT_CAST(NUM_SIZE_32, OP_CAST_L2UL, OP_CAST_UL2U);
+        EMIT_CAST(NUM_SIZE_64, OP_CAST_L2UL);
     } else if (desttd->data.num == NUM_TYPE_FLOAT && sourcetd->data.num == NUM_TYPE_SIGNED) {
-        EMIT_CAST(NUM_SIZE_32, loc, OP_CAST_L2F);
-        EMIT_CAST(NUM_SIZE_64, loc, OP_CAST_L2D);
+        EMIT_CAST(NUM_SIZE_32, OP_CAST_L2F);
+        EMIT_CAST(NUM_SIZE_64, OP_CAST_L2D);
+    } else if (desttd->data.num == NUM_TYPE_UNSIGNED && sourcetd->data.num == NUM_TYPE_UNSIGNED) {
+        EMIT_CAST(NUM_SIZE_8, OP_CAST_UL2UB);
+        EMIT_CAST(NUM_SIZE_16, OP_CAST_UL2US);
+        EMIT_CAST(NUM_SIZE_32, OP_CAST_UL2U);
+    } else if (desttd->data.num == NUM_TYPE_SIGNED && sourcetd->data.num == NUM_TYPE_UNSIGNED) {
+        EMIT_CAST(NUM_SIZE_8, OP_CAST_UL2L, OP_CAST_L2B);
+        EMIT_CAST(NUM_SIZE_16, OP_CAST_UL2L, OP_CAST_L2S);
+        EMIT_CAST(NUM_SIZE_32, OP_CAST_UL2L, OP_CAST_L2I);
+        EMIT_CAST(NUM_SIZE_64, OP_CAST_UL2L);
+    } else if (desttd->data.num == NUM_TYPE_FLOAT && sourcetd->data.num == NUM_TYPE_UNSIGNED) {
+        EMIT_CAST(NUM_SIZE_32, OP_CAST_UL2F);
+        EMIT_CAST(NUM_SIZE_64, OP_CAST_UL2D);
+    } else if (desttd->data.num == NUM_TYPE_FLOAT && sourcetd->data.num == NUM_TYPE_FLOAT) {
+        EMIT_CAST(NUM_SIZE_32, OP_CAST_D2F);
     } else if (desttd->data.num == NUM_TYPE_UNSIGNED && sourcetd->data.num == NUM_TYPE_FLOAT) {
-        EMIT_CAST(NUM_SIZE_8, loc, OP_CAST_D2UL, OP_CAST_UL2UB);
-        EMIT_CAST(NUM_SIZE_16, loc, OP_CAST_D2UL, OP_CAST_UL2US);
-        EMIT_CAST(NUM_SIZE_32, loc, OP_CAST_D2UL, OP_CAST_UL2U);
-        EMIT_CAST(NUM_SIZE_64, loc, OP_CAST_D2UL);
+        EMIT_CAST(NUM_SIZE_8, OP_CAST_D2UL, OP_CAST_UL2UB);
+        EMIT_CAST(NUM_SIZE_16, OP_CAST_D2UL, OP_CAST_UL2US);
+        EMIT_CAST(NUM_SIZE_32, OP_CAST_D2UL, OP_CAST_UL2U);
+        EMIT_CAST(NUM_SIZE_64, OP_CAST_D2UL);
     } else if (desttd->data.num == NUM_TYPE_SIGNED && sourcetd->data.num == NUM_TYPE_FLOAT) {
-        EMIT_CAST(NUM_SIZE_8, loc, OP_CAST_D2L, OP_CAST_L2B);
-        EMIT_CAST(NUM_SIZE_16, loc, OP_CAST_D2L, OP_CAST_L2S);
-        EMIT_CAST(NUM_SIZE_32, loc, OP_CAST_D2L, OP_CAST_L2I);
-        EMIT_CAST(NUM_SIZE_64, loc, OP_CAST_D2L);
+        EMIT_CAST(NUM_SIZE_8, OP_CAST_D2L, OP_CAST_L2B);
+        EMIT_CAST(NUM_SIZE_16, OP_CAST_D2L, OP_CAST_L2S);
+        EMIT_CAST(NUM_SIZE_32, OP_CAST_D2L, OP_CAST_L2I);
+        EMIT_CAST(NUM_SIZE_64, OP_CAST_D2L);
     }
 
     #undef EMIT_CAST

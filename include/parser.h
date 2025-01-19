@@ -169,7 +169,7 @@ struct ast_node_val_t {
 };
 
 #define ast_node_val_nil() ((ast_node_val_t){0})
-#define ast_node_val_word(w) ((ast_node_val_t){.word = (w)});
+#define ast_node_val_word(w) ((ast_node_val_t){.word = (w), .is_concrete=true});
 
 struct ast_node_t {
     ast_node_type_t node_type;

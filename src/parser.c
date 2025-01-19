@@ -298,12 +298,12 @@ ast_node_t *ast_nil(ast_t *ast, type_t value_type, token_t token_location) {
 }
 
 ast_node_t *ast_cast(ast_t *ast, type_t destination_type, ast_node_t *expr, token_t cast_token) {
-    ast_node_t *cast = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_CAST, cast_token);
-    cast->end = expr->end;
+    ast_node_t *cast_ = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_CAST, cast_token);
+    cast_->end = expr->end;
 
-    an_expression(cast) = expr;
-    cast->value_type = destination_type;
-    return cast;
+    an_expression(cast_) = expr;
+    cast_->value_type = destination_type;
+    return cast_;
 }
 
 static ast_node_t *ast_primaryu(ast_t *ast, u64 value, type_t type, token_t token) {
@@ -1520,17 +1520,17 @@ ast_node_val_t zero_value(ast_t *ast, type_t type) {
 
     typedata_t *type_info = ast->type_set.types.items[type.i];
 
-    word_t value[bytes_to_words(type_info->size)];
+    word_t value = {0};
 
     switch (type_info->kind) {
         case TYPE_POINTER:
-        case TYPE_BOOL: value[0] = WORDI(0); break;
+        case TYPE_BOOL: value = WORDI(0); break;
         
         case TYPE_NUMBER: {
             switch (type_info->data.num) {
                 case NUM_TYPE_SIGNED:
-                case NUM_TYPE_UNSIGNED: value[0] = WORDI(0); break;
-                case NUM_TYPE_FLOAT: value[0] = WORDD(0); break;
+                case NUM_TYPE_UNSIGNED: value = WORDI(0); break;
+                case NUM_TYPE_FLOAT: value = WORDD(0); break;
             }
             break;
         }
@@ -1540,14 +1540,15 @@ ast_node_val_t zero_value(ast_t *ast, type_t type) {
             break;
 
         case TYPE_STRUCT: {
-            for (size_t i = 0; i < bytes_to_words(type_info->size); i++) {
-                value[i] = WORDI(0);
-            }
+            UNREACHABLE();
+            // for (size_t i = 0; i < bytes_to_words(type_info->size); i++) {
+            //     value[i] = WORDI(0);
+            // }
             break;
         }
 
         case TYPE_TYPE: {
-            value[0] = WORDU(typeid(TYPE_VOID).i);
+            value = WORDT(typeid(TYPE_VOID));
             break;
         }
 
@@ -1558,14 +1559,14 @@ ast_node_val_t zero_value(ast_t *ast, type_t type) {
         case TYPE_INVALID:
         case TYPE_UNRESOLVED:
             UNREACHABLE();
-            value[0] = WORDI(0);
+            value = WORDI(0);
             break;
 
         case TYPE_VOID: break;
     }
 
-    ast_node_val_t val = ast_node_val_word(value[0]);
-    table_put(ptr2word, ast->type_to_zero_word, type, value[0]);
+    ast_node_val_t val = ast_node_val_word(value);
+    table_put(ptr2word, ast->type_to_zero_word, type, value);
     return val;
 }
 

@@ -495,6 +495,74 @@ word_t constant_fold_bin_comparison(ast_t *ast, token_type_t operator, type_t ty
     }
 }
 
+static word_t constant_fold_cast(ast_t *ast, word_t in, type_t dst, type_t src) {
+    typedata_t *desttd = type2td(ast, dst);
+    typedata_t *sourcetd = type2td(ast, src);
+    ASSERT(desttd->kind == TYPE_NUMBER && desttd->kind == sourcetd->kind, "must both be number types for now");
+
+    #define CASTING(src_type, dst_type) (sourcetd->data.num == NUM_TYPE_##src_type && desttd->data.num == NUM_TYPE_##dst_type)
+    #define DSIZE(size_) (desttd->size == (size_))
+    #define VALU (in.as.u)
+    #define VALI (in.as.i)
+    #define VALF (in.as.d)
+
+    word_t result = {0};
+    if (CASTING(SIGNED, SIGNED)) {
+        if (DSIZE(8)) result.as.i = cast(i8, VALI);
+        else if (DSIZE(16)) result.as.i = cast(i16, VALI);
+        else if (DSIZE(32)) result.as.i = cast(i32, VALI);
+        else result.as.i = VALI;
+    } else if (CASTING(SIGNED, UNSIGNED)) {
+        if (DSIZE(8)) result.as.u = cast(u8, cast(u64, VALI));
+        else if (DSIZE(16)) result.as.u = cast(u16, cast(u64, VALI));
+        else if (DSIZE(32)) result.as.u = cast(u32, cast(u64, VALI));
+        else if (DSIZE(64)) result.as.u = cast(u64, VALI);
+        else UNREACHABLE();
+    } else if (CASTING(SIGNED, FLOAT)) {
+        if (DSIZE(32)) result.as.d = cast(f32, VALI);
+        else if (DSIZE(64)) result.as.d = cast(f64, VALI);
+        else UNREACHABLE();
+    } else if (CASTING(UNSIGNED, UNSIGNED)) {
+        if (DSIZE(8)) result.as.u = cast(u8, VALU);
+        else if (DSIZE(16)) result.as.u = cast(u16, VALU);
+        else if (DSIZE(32)) result.as.u = cast(u32, VALU);
+        else result.as.u = VALU;
+    } else if (CASTING(UNSIGNED, SIGNED)) {
+        if (DSIZE(8)) result.as.i = cast(i8, cast(i64, VALU));
+        else if (DSIZE(16)) result.as.i = cast(i16, cast(i64, VALU));
+        else if (DSIZE(32)) result.as.i = cast(i32, cast(i64, VALU));
+        else if (DSIZE(64)) result.as.i = cast(i64, VALU);
+        else UNREACHABLE();
+    } else if (CASTING(UNSIGNED, FLOAT)) {
+        if (DSIZE(32)) result.as.d = cast(f32, VALU);
+        else if (DSIZE(64)) result.as.d = cast(f64, VALU);
+        else UNREACHABLE();
+    } else if (CASTING(FLOAT, FLOAT)) {
+        if (DSIZE(32)) result.as.d = cast(f32, VALF);
+        else result.as.d = VALF;
+    } else if (CASTING(FLOAT, SIGNED)) {
+        if (DSIZE(8)) result.as.u = cast(u8, cast(u64, VALF));
+        else if (DSIZE(16)) result.as.u = cast(u16, cast(u64, VALF));
+        else if (DSIZE(32)) result.as.u = cast(u32, cast(u64, VALF));
+        else if (DSIZE(64)) result.as.u = cast(u64, VALF);
+        else UNREACHABLE();
+    } else if (CASTING(FLOAT, SIGNED)) {
+        if (DSIZE(8)) result.as.i = cast(i8, cast(i64, VALF));
+        else if (DSIZE(16)) result.as.i = cast(i16, cast(i64, VALF));
+        else if (DSIZE(32)) result.as.i = cast(i32, cast(i64, VALF));
+        else if (DSIZE(64)) result.as.i = cast(i64, VALF);
+        else UNREACHABLE();
+    } else UNREACHABLE();
+
+    #undef VALF
+    #undef VALI
+    #undef VALU
+    #undef DSIZE
+    #undef CASTING
+
+    return result;
+}
+
 void resolve_expression(
         analyzer_t *analyzer,
         ast_t *ast,
@@ -791,14 +859,14 @@ void resolve_expression(
                         case NUM_TYPE_SIGNED: {
                             i64 val = operand->expr_val.word.as.i;
                             val = -val;
-                            operand->expr_val = ast_node_val_word(WORDI(val));
+                            expr->expr_val = ast_node_val_word(WORDI(val));
                             break;
                         }
 
                         case NUM_TYPE_FLOAT: {
                             f64 val = operand->expr_val.word.as.d;
                             val = -val;
-                            operand->expr_val = ast_node_val_word(WORDD(val));
+                            expr->expr_val = ast_node_val_word(WORDD(val));
                             break;
                         }
 
@@ -1104,7 +1172,7 @@ void resolve_expression(
                 INVALIDATE(expr);
             }
 
-            unless (typeid_eq(an_condition(expr)->value_type, typeid(TYPE_BOOL))) {
+            if (!TYPE_IS_INVALID(an_condition(expr)->value_type) && !typeid_eq(an_condition(expr)->value_type, typeid(TYPE_BOOL))) {
                 stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CONDITION_MUST_BE_BOOL, an_condition(expr)));
                 INVALIDATE(expr);
             }
@@ -1263,11 +1331,18 @@ void resolve_expression(
                 break;
             }
 
-            if (cast_expr->expr_val.is_concrete) {
-                typedata_t *desttd = type2td(ast, cast_expr->value_type);
-                typedata_t *sourcetd = type2td(ast, cast_expr->value_type);
+            typedata_t *desttd = type2td(ast, cast_expr->value_type);
+            typedata_t *sourcetd = type2td(ast, cast_expr->value_type);
 
-                ASSERT(desttd->kind == TYPE_NUMBER && desttd->kind == sourcetd->kind, "must both be number types for now");
+            if (desttd->kind != TYPE_NUMBER || sourcetd->kind != TYPE_NUMBER) {
+                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_OPERAND_CANNOT_CASTED, expr));
+                INVALIDATE(expr);
+                break;
+            }
+
+            if (cast_expr->expr_val.is_concrete) {
+                word_t result = constant_fold_cast(ast, cast_expr->expr_val.word, expr->value_type, cast_expr->value_type);
+                cast_expr->expr_val = ast_node_val_word(result);
             }
             break;
         }
@@ -1297,10 +1372,46 @@ static ast_node_t *cast_implicitly_if_necessary(ast_t *ast, type_t destination_t
     // cannot implicitly convert between number types
     if (exprtd->data.num != destinationtd->data.num) return expr;
 
-    // cannot store a type in storage with a smaller size
-    if (exprtd->size > destinationtd->size) return expr;
+    // if we now what the value of the number we just implicitly cast it...
+    if (expr->expr_val.is_concrete) {
+        word_t w = expr->expr_val.word;
+        switch (destinationtd->data.num) {
+        case NUM_TYPE_SIGNED:
+            switch ((num_size_t)(destinationtd->size)) {
+            case NUM_SIZE_8: if (w.as.i < INT8_MIN || w.as.i > INT8_MAX) return expr; break;
+            case NUM_SIZE_16: if (w.as.i < INT16_MIN || w.as.i > INT16_MAX) return expr; break;
+            case NUM_SIZE_32: if (w.as.i < INT32_MIN || w.as.i > INT32_MAX) return expr; break;
+            case NUM_SIZE_64: break;
+            }
+            break;
+        case NUM_TYPE_UNSIGNED:
+            switch ((num_size_t)(destinationtd->size)) {
+            case NUM_SIZE_8: if (w.as.u > UINT8_MAX) return expr; break;
+            case NUM_SIZE_16: if (w.as.u > UINT16_MAX) return expr; break;
+            case NUM_SIZE_32: if (w.as.u > UINT32_MAX) return expr; break;
+            case NUM_SIZE_64: break;
+            }
+            break;
+        case NUM_TYPE_FLOAT:
+            switch ((num_size_t)(destinationtd->size)) {
+            case NUM_SIZE_8: if (w.as.u > UINT8_MAX) return expr; break;
+            case NUM_SIZE_16: if (w.as.u > UINT16_MAX) return expr; break;
+            case NUM_SIZE_32: if (w.as.u > UINT32_MAX) return expr; break;
+            case NUM_SIZE_64: return expr;
+            }
+            break;
+        }
+    } else {
+        // cannot store a type in storage with a smaller size
+        if (exprtd->size > destinationtd->size) return expr;
+    }
 
     ast_node_t *cast = ast_cast(ast, destination_type, expr, token_implicit_at_start(expr->start));
+
+    if (expr->expr_val.is_concrete) {
+        word_t result = constant_fold_cast(ast, expr->expr_val.word, destination_type, expr->value_type);
+        cast->expr_val = ast_node_val_word(result);
+    }
 
     return cast;
 }
@@ -1451,8 +1562,8 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
         declaration->value_type = expression_type;
     }
 
-    ast_node_t *decl_expr = an_decl_expr(declaration);
     {
+        ast_node_t *decl_expr = an_decl_expr(declaration);
         type_t declared_type = declaration->value_type;
 
         ast_node_t *casted_expr = cast_implicitly_if_necessary(ast, declared_type, decl_expr);
@@ -1461,10 +1572,12 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
                 stan_error(analyzer, make_error_node(ERROR_ANALYSIS_TYPE_MISMATCH, declaration));
             }
         }
+
+        an_decl_expr(declaration) = casted_expr;
     }
 
-    if (decl_expr->expr_val.is_concrete) {
-        declaration->expr_val = decl_expr->expr_val;
+    if (an_decl_expr(declaration)->expr_val.is_concrete) {
+        declaration->expr_val = an_decl_expr(declaration)->expr_val;
     }
 }
 
