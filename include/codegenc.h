@@ -128,8 +128,9 @@ static cstr_t cgen_typedata_name(typedata_t *typedata) {
 
     case TYPE_VOID: return "void";
 
+    case TYPE_TYPE: return "type_t";
+
     case TYPE_STRING:
-    case TYPE_TYPE:
     case TYPE_FUNCTION:
     case TYPE_NATIVE_FUNCTION:
     case TYPE_POINTER:
@@ -178,7 +179,7 @@ static void cgen_jmp_label(cgen_t *cgen, string_t label) {
 
 static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t tmp_var);
 
-static bool cgen_binary_is_macro(token_type_t type, typedata_t *type_info, cstr_t *operator_or_func_name) {
+static bool cgen_binary_is_macro(token_type_t type, typedata_t *optd, cstr_t *operator_or_func_name) {
     #define set_op(lit, is_func) { if (operator_or_func_name) *operator_or_func_name = (lit); return (is_func); } break
 
     #define case_block(numtype) do { switch (type) {\
@@ -192,11 +193,11 @@ static bool cgen_binary_is_macro(token_type_t type, typedata_t *type_info, cstr_
     }} while (false)
 
     if (operator_is_arithmetic(type)) {
-        switch (type_info->kind) {
+        switch (optd->kind) {
         case TYPE_NUMBER: {
-            switch ((num_size_t)type_info->size) {
+            switch ((num_size_t)optd->size) {
             case NUM_SIZE_8: {
-                switch (type_info->data.num) {
+                switch (optd->data.num) {
                 case NUM_TYPE_SIGNED: case_block(i8); break;
                 case NUM_TYPE_UNSIGNED: case_block(u8); break;
                 default: UNREACHABLE(); break;
@@ -205,7 +206,7 @@ static bool cgen_binary_is_macro(token_type_t type, typedata_t *type_info, cstr_
             }
 
             case NUM_SIZE_16: {
-                switch (type_info->data.num) {
+                switch (optd->data.num) {
                 case NUM_TYPE_SIGNED: case_block(i16); break;
                 case NUM_TYPE_UNSIGNED: case_block(u16); break;
                 default: UNREACHABLE(); break;
@@ -214,7 +215,7 @@ static bool cgen_binary_is_macro(token_type_t type, typedata_t *type_info, cstr_
             }
 
             case NUM_SIZE_32: {
-                switch (type_info->data.num) {
+                switch (optd->data.num) {
                 case NUM_TYPE_SIGNED: case_block(i32); break;
                 case NUM_TYPE_UNSIGNED: case_block(u32); break;
                 case NUM_TYPE_FLOAT: case_block(f); break;
@@ -223,7 +224,7 @@ static bool cgen_binary_is_macro(token_type_t type, typedata_t *type_info, cstr_
             }
 
             case NUM_SIZE_64: {
-                switch (type_info->data.num) {
+                switch (optd->data.num) {
                 case NUM_TYPE_SIGNED: case_block(i64); break;
                 case NUM_TYPE_UNSIGNED: case_block(u64); break;
                 case NUM_TYPE_FLOAT: case_block(d); break;
@@ -244,8 +245,40 @@ static bool cgen_binary_is_macro(token_type_t type, typedata_t *type_info, cstr_
         case TOKEN_GREATER_EQUAL: set_op(">=", false);
         case TOKEN_LESS: set_op("<", false);
         case TOKEN_LESS_EQUAL: set_op("<=", false);
-        case TOKEN_EQUAL_EQUAL: set_op("==", false);
-        case TOKEN_BANG_EQUAL: set_op("!=", false);
+        case TOKEN_EQUAL_EQUAL: {
+            switch (optd->kind) {
+            case TYPE_BOOL:
+            case TYPE_NUMBER: {
+                set_op("==", false);
+                break;
+            }
+
+            case TYPE_TYPE: {
+                set_op("typeid_eq", true);
+                break;
+            }
+
+            default: UNREACHABLE(); break; // todo
+            }
+            break;
+        }
+        case TOKEN_BANG_EQUAL: {
+            switch (optd->kind) {
+            case TYPE_BOOL:
+            case TYPE_NUMBER: {
+                set_op("!=", false);
+                break;
+            }
+
+            case TYPE_TYPE: {
+                set_op("typeid_nq", true);
+                break;
+            }
+
+            default: UNREACHABLE(); break; // todo
+            }
+            break;
+        }
         case TOKEN_AND: set_op("&&", false);
         case TOKEN_OR: set_op("||", false);
 
@@ -266,8 +299,8 @@ static void cgen_cache_requires_tmp(type_infos_t *types, ast_node_t *expression)
         }
 
         case AST_NODE_TYPE_EXPRESSION_BINARY: {
-            typedata_t *type_info = type2typedata(types, expression->value_type);
-            if (cgen_binary_is_macro(expression->operator.type, type_info, NULL)) {
+            typedata_t *operandtd = type2typedata(types, an_lhs(expression)->value_type);
+            if (cgen_binary_is_macro(expression->operator.type, operandtd, NULL)) {
                 if (an_lhs(expression)->node_type == AST_NODE_TYPE_EXPRESSION_PRIMARY && an_rhs(expression)->node_type == AST_NODE_TYPE_EXPRESSION_PRIMARY) {
                     expression->requires_tmp_for_cgen = false;
                 } else {
@@ -401,11 +434,11 @@ static void cgen_declaration(cgen_t *cgen, ast_node_t *declaration) {
 static void cgen_binary(cgen_t *cgen, ast_node_t *binary, cgen_var_t var) {
     cstr_t operator_or_function_name = NULL;
 
-    typedata_t *type_info = type2typedata(&cgen->ast->type_set.types, binary->value_type);
-    bool is_macro = cgen_binary_is_macro(binary->operator.type, type_info, &operator_or_function_name);
-
     ast_node_t *lhs = an_lhs(binary);
     ast_node_t *rhs = an_rhs(binary);
+
+    typedata_t *operandtd = type2typedata(&cgen->ast->type_set.types, lhs->value_type);
+    bool is_macro = cgen_binary_is_macro(binary->operator.type, operandtd, &operator_or_function_name);
 
     unless (binary->requires_tmp_for_cgen) {
         if (has_var(var)) {

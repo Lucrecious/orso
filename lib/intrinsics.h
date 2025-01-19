@@ -33,8 +33,9 @@ struct type_t {
     u64 i;
 };
 
-#define typeid(index) (type_t){.i=(index)}
+#define typeid(index) ((type_t){.i=(index)})
 #define typeid_eq(t1, t2) ((t1).i == (t2).i)
+#define typeid_nq(t1, t2) (!typeid_eq(t1, t2))
 
 typedef unsigned int uint;
 
