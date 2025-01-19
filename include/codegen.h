@@ -857,9 +857,9 @@ static void emit_cast(gen_t *gen, function_t *function, type_t dest, type_t sour
 
     ASSERT(desttd->kind == TYPE_NUMBER && desttd->kind == sourcetd->kind, "must both be number types for now");
 
-    #define EMIT_CAST(dst_sz, ...) if (desttd->size == (dst_sz)) { \
+    #define EMIT_CAST(dst_sz, ...) do { if (desttd->size == (dst_sz)) { \
         op_code_t ins[] = {__VA_ARGS__}; \
-        size_t amount = sizeof((op_code_t[]){__VA_ARGS__}); \
+        size_t amount = sizeof((op_code_t[]){__VA_ARGS__})/sizeof(op_code_t); \
         for (size_t i = 0; i < amount; ++i) { \
             instruction_t in = {0}; \
             in.op = ins[i]; \
@@ -867,7 +867,7 @@ static void emit_cast(gen_t *gen, function_t *function, type_t dest, type_t sour
             in.as.casting.reg_result = REG_RESULT; \
             emit_instruction(function, loc, in); \
         } \
-    }
+    }} while(false)
 
     // registers only hold 64bit numbers, so all lower bit types are automatically widened when put into a register
 

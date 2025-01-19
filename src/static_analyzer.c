@@ -563,6 +563,65 @@ static word_t constant_fold_cast(ast_t *ast, word_t in, type_t dst, type_t src) 
     return result;
 }
 
+static ast_node_t *cast_implicitly_if_necessary(ast_t *ast, type_t destination_type, ast_node_t *expr) {
+    ASSERT(TYPE_IS_RESOLVED(expr->value_type), "expression must be resolved already");
+
+    if (typeid_eq(destination_type, expr->value_type)) return expr;
+
+    typedata_t *destinationtd = type2td(ast, destination_type);
+    typedata_t *exprtd = type2td(ast, expr->value_type);
+    
+    // for now only numbers can be cast/promoted implicitly
+    if (destinationtd->kind != TYPE_NUMBER) return expr;
+    if (exprtd->kind != TYPE_NUMBER) return expr;
+
+    // cannot implicitly convert between number types
+    if (exprtd->data.num != destinationtd->data.num) return expr;
+
+    // if we now what the value of the number we just implicitly cast it...
+    if (expr->expr_val.is_concrete) {
+        word_t w = expr->expr_val.word;
+        switch (destinationtd->data.num) {
+        case NUM_TYPE_SIGNED:
+            switch ((num_size_t)(destinationtd->size)) {
+            case NUM_SIZE_8: if (w.as.i < INT8_MIN || w.as.i > INT8_MAX) return expr; break;
+            case NUM_SIZE_16: if (w.as.i < INT16_MIN || w.as.i > INT16_MAX) return expr; break;
+            case NUM_SIZE_32: if (w.as.i < INT32_MIN || w.as.i > INT32_MAX) return expr; break;
+            case NUM_SIZE_64: break;
+            }
+            break;
+        case NUM_TYPE_UNSIGNED:
+            switch ((num_size_t)(destinationtd->size)) {
+            case NUM_SIZE_8: if (w.as.u > UINT8_MAX) return expr; break;
+            case NUM_SIZE_16: if (w.as.u > UINT16_MAX) return expr; break;
+            case NUM_SIZE_32: if (w.as.u > UINT32_MAX) return expr; break;
+            case NUM_SIZE_64: break;
+            }
+            break;
+        case NUM_TYPE_FLOAT:
+            switch ((num_size_t)(destinationtd->size)) {
+            case NUM_SIZE_8: if (w.as.u > UINT8_MAX) return expr; break;
+            case NUM_SIZE_16: if (w.as.u > UINT16_MAX) return expr; break;
+            case NUM_SIZE_32: if (w.as.u > UINT32_MAX) return expr; break;
+            case NUM_SIZE_64: return expr;
+            }
+            break;
+        }
+    } else {
+        // cannot store a type in storage with a smaller size
+        if (exprtd->size > destinationtd->size) return expr;
+    }
+
+    ast_node_t *cast = ast_cast(ast, destination_type, expr, token_implicit_at_start(expr->start));
+
+    if (expr->expr_val.is_concrete) {
+        word_t result = constant_fold_cast(ast, expr->expr_val.word, destination_type, expr->value_type);
+        cast->expr_val = ast_node_val_word(result);
+    }
+
+    return cast;
+}
+
 void resolve_expression(
         analyzer_t *analyzer,
         ast_t *ast,
@@ -671,6 +730,10 @@ void resolve_expression(
 
             ast_node_t *right = an_rhs(expr);
             resolve_expression(analyzer, ast, state, right);
+
+            an_lhs(expr) = (left = cast_implicitly_if_necessary(ast, right->value_type, left));
+            an_rhs(expr) = (right = cast_implicitly_if_necessary(ast, left->value_type, right));
+
 
             if (TYPE_IS_INVALID(left->value_type) || TYPE_IS_INVALID(right->value_type)) {
                 INVALIDATE(expr);
@@ -1355,65 +1418,6 @@ void resolve_expression(
             break;
         }
     }
-}
-
-static ast_node_t *cast_implicitly_if_necessary(ast_t *ast, type_t destination_type, ast_node_t *expr) {
-    ASSERT(TYPE_IS_RESOLVED(expr->value_type), "expression must be resolved already");
-
-    if (typeid_eq(destination_type, expr->value_type)) return expr;
-
-    typedata_t *destinationtd = type2td(ast, destination_type);
-    typedata_t *exprtd = type2td(ast, expr->value_type);
-    
-    // for now only numbers can be cast/promoted implicitly
-    if (destinationtd->kind != TYPE_NUMBER) return expr;
-    if (exprtd->kind != TYPE_NUMBER) return expr;
-
-    // cannot implicitly convert between number types
-    if (exprtd->data.num != destinationtd->data.num) return expr;
-
-    // if we now what the value of the number we just implicitly cast it...
-    if (expr->expr_val.is_concrete) {
-        word_t w = expr->expr_val.word;
-        switch (destinationtd->data.num) {
-        case NUM_TYPE_SIGNED:
-            switch ((num_size_t)(destinationtd->size)) {
-            case NUM_SIZE_8: if (w.as.i < INT8_MIN || w.as.i > INT8_MAX) return expr; break;
-            case NUM_SIZE_16: if (w.as.i < INT16_MIN || w.as.i > INT16_MAX) return expr; break;
-            case NUM_SIZE_32: if (w.as.i < INT32_MIN || w.as.i > INT32_MAX) return expr; break;
-            case NUM_SIZE_64: break;
-            }
-            break;
-        case NUM_TYPE_UNSIGNED:
-            switch ((num_size_t)(destinationtd->size)) {
-            case NUM_SIZE_8: if (w.as.u > UINT8_MAX) return expr; break;
-            case NUM_SIZE_16: if (w.as.u > UINT16_MAX) return expr; break;
-            case NUM_SIZE_32: if (w.as.u > UINT32_MAX) return expr; break;
-            case NUM_SIZE_64: break;
-            }
-            break;
-        case NUM_TYPE_FLOAT:
-            switch ((num_size_t)(destinationtd->size)) {
-            case NUM_SIZE_8: if (w.as.u > UINT8_MAX) return expr; break;
-            case NUM_SIZE_16: if (w.as.u > UINT16_MAX) return expr; break;
-            case NUM_SIZE_32: if (w.as.u > UINT32_MAX) return expr; break;
-            case NUM_SIZE_64: return expr;
-            }
-            break;
-        }
-    } else {
-        // cannot store a type in storage with a smaller size
-        if (exprtd->size > destinationtd->size) return expr;
-    }
-
-    ast_node_t *cast = ast_cast(ast, destination_type, expr, token_implicit_at_start(expr->start));
-
-    if (expr->expr_val.is_concrete) {
-        word_t result = constant_fold_cast(ast, expr->expr_val.word, destination_type, expr->value_type);
-        cast->expr_val = ast_node_val_word(result);
-    }
-
-    return cast;
 }
 
 static void declare_definition(analyzer_t *analyzer, scope_t *scope, ast_node_t *definition) {

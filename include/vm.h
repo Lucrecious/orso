@@ -425,8 +425,7 @@ void vm_step(vm_t *vm) {
             byte op = in.as.casting.reg_op; \
             vm->registers[result].as.d = cast(dtype, vm->registers[op].as.s); \
             IP_ADV(1); \
-            break; \
-        } while(false)
+        } while(false); break
 
         case OP_CAST_D2UL: do_cast(u, d, u64);
         case OP_CAST_D2L: do_cast(i, d, i64);
