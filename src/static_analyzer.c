@@ -501,7 +501,7 @@ static word_t constant_fold_cast(ast_t *ast, word_t in, type_t dst, type_t src) 
     ASSERT(desttd->kind == TYPE_NUMBER && desttd->kind == sourcetd->kind, "must both be number types for now");
 
     #define CASTING(src_type, dst_type) (sourcetd->data.num == NUM_TYPE_##src_type && desttd->data.num == NUM_TYPE_##dst_type)
-    #define DSIZE(size_) (desttd->size == (size_))
+    #define DSIZE(size_) (desttd->size == (size_/8))
     #define VALU (in.as.u)
     #define VALI (in.as.i)
     #define VALF (in.as.d)
@@ -575,37 +575,86 @@ static ast_node_t *cast_implicitly_if_necessary(ast_t *ast, type_t destination_t
     if (destinationtd->kind != TYPE_NUMBER) return expr;
     if (exprtd->kind != TYPE_NUMBER) return expr;
 
-    // cannot implicitly convert between number types
-    if (exprtd->data.num != destinationtd->data.num) return expr;
+    num_type_t dst_num = destinationtd->data.num;
+    num_type_t expr_num = exprtd->data.num;
 
     // if we now what the value of the number we just implicitly cast it...
     if (expr->expr_val.is_concrete) {
         word_t w = expr->expr_val.word;
-        switch (destinationtd->data.num) {
+        switch (dst_num) {
         case NUM_TYPE_SIGNED:
             switch ((num_size_t)(destinationtd->size)) {
-            case NUM_SIZE_8: if (w.as.i < INT8_MIN || w.as.i > INT8_MAX) return expr; break;
-            case NUM_SIZE_16: if (w.as.i < INT16_MIN || w.as.i > INT16_MAX) return expr; break;
-            case NUM_SIZE_32: if (w.as.i < INT32_MIN || w.as.i > INT32_MAX) return expr; break;
+            case NUM_SIZE_8:
+                switch(expr_num) {
+                case NUM_TYPE_SIGNED: if (w.as.i < INT8_MIN || w.as.i > INT8_MAX) return expr; break;
+                case NUM_TYPE_UNSIGNED: if (w.as.u > INT8_MAX) return expr; break;
+                case NUM_TYPE_FLOAT: if (w.as.d < INT8_MIN || w.as.d > INT8_MAX || w.as.d != ((i8)w.as.d)) return expr; break;
+                }
+                break;
+            
+            case NUM_SIZE_16:
+                switch(expr_num) {
+                case NUM_TYPE_SIGNED: if (w.as.i < INT16_MIN || w.as.i > INT16_MAX) return expr; break;
+                case NUM_TYPE_UNSIGNED: if (w.as.u > INT16_MAX) return expr; break;
+                case NUM_TYPE_FLOAT: if (w.as.d < INT16_MIN || w.as.d > INT16_MAX || w.as.d != ((i16)w.as.d)) return expr; break;
+                }
+                break;
+            
+            case NUM_SIZE_32:
+                switch(expr_num) {
+                case NUM_TYPE_SIGNED: if (w.as.i < INT32_MIN || w.as.i > INT32_MAX) return expr; break;
+                case NUM_TYPE_UNSIGNED: if (w.as.u > INT32_MAX)  return expr; break;
+                case NUM_TYPE_FLOAT: if (w.as.d < INT32_MIN || w.as.d > INT32_MAX || w.as.d != ((i32)w.as.d)) return expr; break;
+                }
+                break;
+            
             case NUM_SIZE_64: break;
+                switch(expr_num) {
+                case NUM_TYPE_SIGNED: break;
+                case NUM_TYPE_UNSIGNED: if (w.as.u > INT64_MAX)  return expr; break;
+                case NUM_TYPE_FLOAT: if (w.as.d < INT64_MIN || w.as.d > INT64_MAX || w.as.d != ((i64)w.as.d)) return expr; break;
+                }
+                break;
             }
             break;
+
         case NUM_TYPE_UNSIGNED:
             switch ((num_size_t)(destinationtd->size)) {
-            case NUM_SIZE_8: if (w.as.u > UINT8_MAX) return expr; break;
-            case NUM_SIZE_16: if (w.as.u > UINT16_MAX) return expr; break;
-            case NUM_SIZE_32: if (w.as.u > UINT32_MAX) return expr; break;
+            case NUM_SIZE_8:
+                switch(expr_num) {
+                case NUM_TYPE_SIGNED: if (w.as.i < 0 || w.as.i > UINT8_MAX) return expr; break;
+                case NUM_TYPE_UNSIGNED: if (w.as.u > UINT8_MAX) return expr; break;
+                case NUM_TYPE_FLOAT: if (w.as.d < 0 || w.as.d > UINT8_MAX || w.as.d != ((u8)w.as.d)) return expr; break;
+                }
+                break;
+            
+            case NUM_SIZE_16:
+                switch(expr_num) {
+                case NUM_TYPE_SIGNED: if (w.as.i < 0 || w.as.i > UINT16_MAX) return expr; break;
+                case NUM_TYPE_UNSIGNED: if (w.as.u > UINT16_MAX) return expr; break;
+                case NUM_TYPE_FLOAT: if (w.as.d < 0 || w.as.d > UINT16_MAX || w.as.d != ((u16)w.as.d)) return expr; break;
+                }
+                break;
+            
+            case NUM_SIZE_32:
+                switch(expr_num) {
+                case NUM_TYPE_SIGNED: if (w.as.i < 0 || w.as.i > UINT32_MAX) return expr; break;
+                case NUM_TYPE_UNSIGNED: if (w.as.u > UINT32_MAX)  return expr; break;
+                case NUM_TYPE_FLOAT: if (w.as.d < 0 || w.as.d > UINT32_MAX || w.as.d != ((u32)w.as.d)) return expr; break;
+                }
+                break;
+            
             case NUM_SIZE_64: break;
+                switch(expr_num) {
+                case NUM_TYPE_SIGNED: if (w.as.i < 0) return expr; break;
+                case NUM_TYPE_UNSIGNED: break;
+                case NUM_TYPE_FLOAT: if (w.as.d < 0 || w.as.d > UINT64_MAX || w.as.d != ((u64)w.as.d)) return expr; break;
+                }
+                break;
             }
             break;
-        case NUM_TYPE_FLOAT:
-            switch ((num_size_t)(destinationtd->size)) {
-            case NUM_SIZE_8: if (w.as.u > UINT8_MAX) return expr; break;
-            case NUM_SIZE_16: if (w.as.u > UINT16_MAX) return expr; break;
-            case NUM_SIZE_32: if (w.as.u > UINT32_MAX) return expr; break;
-            case NUM_SIZE_64: return expr;
-            }
-            break;
+
+        case NUM_TYPE_FLOAT: break;
         }
     } else {
         // cannot store a type in storage with a smaller size
