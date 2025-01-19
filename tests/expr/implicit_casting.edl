@@ -1,0 +1,73 @@
+{
+    sum := 0;
+
+    {
+        a: i8 = -128;
+        if a == -128 then
+            sum = sum + 1;
+    };
+
+    {
+        a: i16 = 10_000;
+
+        if a == 10_000 then
+            sum = sum + 1;
+    };
+
+    {
+        a: i32 = 100_000;
+
+        if a == 100_000 then
+            sum = sum + 1;
+    };
+
+    {
+        a: i64 = 1_000_000;
+
+        if a == 1_000_000 then
+            sum = sum + 1;
+    };
+
+    {
+        a: int = 100_000;
+
+        if a == 100_000 then
+            sum = sum + 1;
+    };
+
+    {
+        a: u8 = 100;
+        if a == 100 then
+            sum = sum + 1;
+    };
+
+    {
+        a: u16 = 10_000;
+
+        if a == 10_000 then
+            sum = sum + 1;
+    };
+
+    {
+        a: u32 = 100_000;
+
+        if a == 100_000 then
+            sum = sum + 1;
+    };
+
+    {
+        a: u64 = 1_000_000;
+
+        if a == 1_000_000 then
+            sum = sum + 1;
+    };
+
+    {
+        a: uint = 100_000;
+
+        if a == 100_000 then
+            sum = sum + 1;
+    };
+
+    sum;
+}

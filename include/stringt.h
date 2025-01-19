@@ -281,7 +281,7 @@ f64 cstrn_to_f64(const char* text, i32 length) {
 
         i32 digit = *c - '0';
         if (digit < 0 || digit > 9) {
-            continue;
+            break;
         }
 
         if (point_seen) {

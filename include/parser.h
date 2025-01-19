@@ -190,6 +190,7 @@ struct ast_node_t {
     bool foldable;
     i32 fold_level_resolved_at;
 
+    bool is_free_number;
     ast_node_val_t expr_val;
 
     ast_node_t *lvalue_node;

@@ -579,7 +579,7 @@ static ast_node_t *cast_implicitly_if_necessary(ast_t *ast, type_t destination_t
     num_type_t expr_num = exprtd->data.num;
 
     // if we now what the value of the number we just implicitly cast it...
-    if (expr->expr_val.is_concrete) {
+    if (expr->expr_val.is_concrete && expr->is_free_number) {
         word_t w = expr->expr_val.word;
         switch (dst_num) {
         case NUM_TYPE_SIGNED:
@@ -657,6 +657,9 @@ static ast_node_t *cast_implicitly_if_necessary(ast_t *ast, type_t destination_t
         case NUM_TYPE_FLOAT: break;
         }
     } else {
+        // if not concrete then they need to be the same data type
+        if (exprtd->data.num != destinationtd->data.num) return expr;
+
         // cannot store a type in storage with a smaller size
         if (exprtd->size > destinationtd->size) return expr;
     }
@@ -666,6 +669,7 @@ static ast_node_t *cast_implicitly_if_necessary(ast_t *ast, type_t destination_t
     if (expr->expr_val.is_concrete) {
         word_t result = constant_fold_cast(ast, expr->expr_val.word, destination_type, expr->value_type);
         cast->expr_val = ast_node_val_word(result);
+        cast->is_free_number = expr->is_free_number;
     }
 
     return cast;
@@ -694,6 +698,7 @@ void resolve_expression(
             expr->lvalue_node = an_operand(expr);
             expr->value_type = an_operand(expr)->value_type;
             expr->expr_val = an_operand(expr)->expr_val;
+            expr->is_free_number = an_operand(expr)->is_free_number;
             break;
         }
 
@@ -814,6 +819,7 @@ void resolve_expression(
                 if (left->expr_val.is_concrete && right->expr_val.is_concrete) {
                     word_t word = constant_fold_bin_arithmetic(ast, expr->operator.type, left->value_type, left->expr_val.word, right->expr_val.word);
                     expr->expr_val = ast_node_val_word(word);
+                    expr->is_free_number = left->is_free_number && right->is_free_number;
                 }
             } else if (operator_is_equating(expr->operator.type)) {
                 // everything is equatable but they need to be the same type
@@ -838,6 +844,8 @@ void resolve_expression(
                         u8 result = (u8)(memcmp(&wordl, &wordr, WORD_SIZE) == 0);
                         expr->expr_val = ast_node_val_word(WORDU(result));
                     }
+
+                    expr->is_free_number = left->is_free_number && right->is_free_number;
                 }
             } else if (operator_is_comparing(expr->operator.type)) {
                 unless (left_td->capabilities&TYPE_CAP_COMPARABLE) {
@@ -857,11 +865,11 @@ void resolve_expression(
                     break;
                 }
 
-
                 expr->value_type = typeid(TYPE_BOOL);
                 if (left->expr_val.is_concrete && right->expr_val.is_concrete) {
                     word_t word = constant_fold_bin_comparison(ast, expr->operator.type, left->value_type, left->expr_val.word, right->expr_val.word);
                     expr->expr_val = ast_node_val_word(word);
+                    expr->is_free_number = left->is_free_number && right->is_free_number;
                 }
             } else if (operator_is_logical(expr->operator.type)) {
                 unless (left_td->capabilities&TYPE_CAP_LOGICAL) {
@@ -896,6 +904,7 @@ void resolve_expression(
                     }
 
                     expr->expr_val = ast_node_val_word(WORDU((u64)result));
+                    expr->is_free_number = left->is_free_number && right->is_free_number;
                 }
             } else {
                 UNREACHABLE();
@@ -943,9 +952,8 @@ void resolve_expression(
                     if (an_operand(expr)->expr_val.is_concrete) {
                         bool value = an_operand(expr)->expr_val.word.as.u;
                         value = !value;
-                        an_operand(expr)->expr_val = ast_node_val_word(WORDU((u64)value));
+                        expr->expr_val = ast_node_val_word(WORDU((u64)value));
                     }
-
                     break;
                 }
 
@@ -984,6 +992,8 @@ void resolve_expression(
 
                         default: UNREACHABLE();
                         }
+
+                        expr->is_free_number = an_operand(expr)->is_free_number;
                     }
                     break;
                 }
@@ -1454,7 +1464,8 @@ void resolve_expression(
 
             if (cast_expr->expr_val.is_concrete) {
                 word_t result = constant_fold_cast(ast, cast_expr->expr_val.word, expr->value_type, cast_expr->value_type);
-                cast_expr->expr_val = ast_node_val_word(result);
+                expr->expr_val = ast_node_val_word(result);
+                expr->is_free_number = cast_expr->is_free_number;
             }
             break;
         }

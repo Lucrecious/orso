@@ -200,6 +200,7 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start) {
 
     node->lvalue_node = &nil_node;
     node->expr_val = ast_node_val_nil();
+    node->is_free_number = false;
 
     node->last_statement = &nil_node;
 
@@ -641,6 +642,8 @@ static ast_node_t *parse_number(parser_t *parser) {
             // todo: check for overflow on u64 and i64
             u64 value = cstrn_to_u64(numsv.data, numsv.length);
 
+            bool is_free_number = false;
+
             type_t type = typeid(TYPE_UNRESOLVED);
             if (sv_ends_with(numsv, "i")) {
                 type = parser->ast->type_set.int_;
@@ -664,6 +667,8 @@ static ast_node_t *parse_number(parser_t *parser) {
                 type = parser->ast->type_set.u64_;
             } else if (sv_ends_with(numsv, "sz")) {
                 type = parser->ast->type_set.size_t_;
+            } else {
+                is_free_number = true;
             }
 
             bool do_signed = true;
@@ -722,13 +727,26 @@ static ast_node_t *parse_number(parser_t *parser) {
             } else {
                 primary = ast_primaryu(parser->ast, value, type, parser->previous);
             }
+            primary->is_free_number = is_free_number;
 
             return primary;
         }
 
         case TOKEN_FLOAT: {
             f64 value = cstrn_to_f64(parser->previous.view.data, parser->previous.view.length);
-            ast_node_t *primary = ast_primaryf(parser->ast, value, typeid(TYPE_UNRESOLVED), parser->previous);
+
+            bool is_number_free = false;
+            type_t type = parser->ast->type_set.f64_;
+            if (sv_ends_with(parser->previous.view, "f")) {
+                type = parser->ast->type_set.f32_;
+            } else if (sv_ends_with(parser->previous.view, "d")) {
+                type = parser->ast->type_set.f64_;
+            } else {
+                is_number_free = true;
+            }
+
+            ast_node_t *primary = ast_primaryf(parser->ast, value, type, parser->previous);
+            primary->is_free_number = is_number_free;
             return primary;
         }
 
