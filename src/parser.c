@@ -262,7 +262,6 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start) {
         case AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION: {
             array_push(&node->children, &nil_node);
             array_push(&node->children, &nil_node);
-            array_push(&node->children, &nil_node);
             break;
         }
 
@@ -875,12 +874,12 @@ static ast_node_t *convert_function_definition(parser_t *parser, ast_node_t *lef
 
     func_def->children.count = 0;
 
+    array_push(&func_def->children, an_func_def_return(left_operand));
+    array_push(&func_def->children, block);
+
     for (size_t i = an_func_def_arg_start(left_operand); i < an_func_def_arg_end(left_operand); ++i) {
         array_push(&func_def->children, left_operand->children.items[i]);
     }
-
-    array_push(&func_def->children, an_func_def_return(left_operand));
-    array_push(&func_def->children, block);
 
     // prevents freeing the node  parameter and return expressions
     left_operand->node_type = AST_NODE_TYPE_NONE;
@@ -1060,8 +1059,6 @@ static bool is_incoming_decl_def(parser_t* parser) {
 static ast_node_t *parse_decl_def(parser_t *parser);
 
 static void parse_parameters(parser_t *parser, ast_nodes_t *children) {
-    ASSERT(children->count == 0, "must be cleared first");
-
     until (check(parser, TOKEN_PARENTHESIS_CLOSE)) {
         if (is_incoming_decl_def(parser)) {
             array_push(children, parse_decl_def(parser));
@@ -1075,20 +1072,16 @@ static void parse_parameters(parser_t *parser, ast_nodes_t *children) {
             continue;
         }
     }
-
-    if (children->count == 0) {
-        array_push(children, ast_nil(parser->ast, typeid(TYPE_VOID), token_implicit_at_end(parser->previous)));
-    }
 }
 
 static void parse_function_signature(parser_t *parser, ast_node_t *func_sig) {
     ASSERT(func_sig->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE, "must be a function signature");
     func_sig->children.count = 0;
 
-    parse_parameters(parser, &func_sig->children);
+    array_push(&func_sig->children, &nil_node);
+    array_push(&func_sig->children, &nil_node);
 
-    array_push(&func_sig->children, &nil_node);
-    array_push(&func_sig->children, &nil_node);
+    parse_parameters(parser, &func_sig->children);
 
     unless (consume(parser, TOKEN_PARENTHESIS_CLOSE)) {
         parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_CLOSE_PARENTHESIS, parser->current, parser->previous));
@@ -1807,7 +1800,7 @@ static void print_line(const cstr_t format, ...) {
 	printf("\n");
 }
 
-static void ast_print_ast_node(type_infos_t types, ast_node_t *node, u32 level) {
+static void ast_print_ast_node(typedatas_t types, ast_node_t *node, u32 level) {
     tmp_arena_t *tmp = allocator_borrow();
 
     #define type2cstr(node) (type_to_string(types, node->value_type, tmp->allocator).cstr)

@@ -28,6 +28,8 @@ typedef const char *cstr_t;
 #define u64_(lit) ((u64)lit)
 #define f64_(lit) ((f64)lit)
 
+#define fn_t_(var_name, return_type, ...) return_type (*var_name)(__VA_ARGS__)
+
 typedef struct type_t type_t;
 struct type_t {
     u64 i;

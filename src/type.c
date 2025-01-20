@@ -117,7 +117,7 @@ struct_field_t *type_struct_find_field(typedata_t *struct_, const char *name, si
     return NULL;
 }
 
-string_t type_to_string_toplevel(type_infos_t types, type_t type, arena_t *allocator, bool is_toplevel) {
+string_t type_to_string_toplevel(typedatas_t types, type_t type, arena_t *allocator, bool is_toplevel) {
     tmp_arena_t *tmp_arena = allocator_borrow();
 
     string_builder_t sb = {.allocator = tmp_arena->allocator};
@@ -204,6 +204,6 @@ string_t type_to_string_toplevel(type_infos_t types, type_t type, arena_t *alloc
     return string;
 }
 
-string_t type_to_string(type_infos_t types, type_t type, arena_t *allocator) {
+string_t type_to_string(typedatas_t types, type_t type, arena_t *allocator) {
     return type_to_string_toplevel(types, type, allocator, true);
 }

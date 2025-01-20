@@ -1,97 +1,22 @@
 {
-    check := 0;
+    add :: (a: int, b: int) -> int {
+        return a + b;
+    };
 
-    a1 := 100u8;
-    a2: u8;
+    sub :: (a: int, b: int) -> int {
+        return a - b;
+    };
 
-    // prevent constant folding the if conditions lol
-    t := u8;
+    foo :: () -> void { return; };
 
-    if typeof(a1) == t then check = check + 1;
-    if typeof(a2) == t then check = check + 1;
+    sum := add;
+    sans := sub;
 
-    b1 := 100i8;
-    b2: i8;
+    add;
 
-    t = i8;
+    sub;
 
-    if typeof(b1) == t then check = check + 1;
-    if typeof(b2) == t then check = check + 1;
+    result := add(1, 2);
 
-    c1 := 10000u16;
-    c2: u16;
-
-    t = u16;
-
-    if typeof(c1) == t then check = check + 1;
-    if typeof(c2) == t then check = check + 1;
-    
-
-    d1 := 10000i16;
-    d2: i16;
-
-    t = i16;
-
-    if typeof(d1) == t then check = check + 1;
-    if typeof(d2) == t then check = check + 1;
-
-    e1 := 100_000u32;
-    e2: u32;
-
-    t = u32;
-
-    if typeof(e1) == t then check = check + 1;
-    if typeof(e2) == t then check = check + 1;
-
-    f1 := 100_000i32;
-    f2: i32;
-
-    t = i32;
-
-    if typeof(f1) == t then check = check + 1;
-    if typeof(f2) == t then check = check + 1;
-
-    g1 := 100_000_000u64;
-    g2: u64;
-
-    t = u64;
-
-    if typeof(g1) == t then check = check + 1;
-    if typeof(g2) == t then check = check + 1;
-
-    h1 := 100_000_000i64;
-    h2: i64;
-
-    t = i64;
-
-    if typeof(h1) == t then check = check + 1;
-    if typeof(h2) == t then check = check + 1;
-
-    j1 := 100u;
-    j2: uint;
-
-    t = uint;
-
-    if typeof(j1) == t then check = check + 1;
-    if typeof(j2) == t then check = check + 1;
-
-    i1 := 100;
-    i2: int;
-    i3 := 420i;
-
-    t = int;
-
-    if typeof(i1) == t then check = check + 1;
-    if typeof(i2) == t then check = check + 1;
-    if typeof(i3) == t then check = check + 1;
-
-    s1 := 100sz;
-    s2: size_t;
-
-    t = size_t;
-
-    if typeof(s1) == t then check = check + 1;
-    if typeof(s2) == t then check = check + 1;
-
-    check;
+    result;
 }

@@ -10,9 +10,12 @@ declare_table(type2u64, typedata_t*, type_t);
 
 typedef struct type_table_t type_table_t;
 struct type_table_t {
-    type_infos_t types;
+    typedatas_t types;
     table_t(type2u64) *types2index;
     arena_t *allocator;
+
+    type_t void_;
+    type_t bool_;
 
     type_t i8_;
     type_t u8_;
@@ -41,11 +44,11 @@ struct type_table_t {
 
 void type_set_init(type_table_t *set, arena_t *allocator);
 
-typedata_t *type2typedata(type_infos_t *types, type_t type);
-bool type_is_function(type_infos_t types, type_t type);
-bool type_is_native_function(type_infos_t types, type_t type);
-bool type_is_struct(type_infos_t types, type_t type);
-bool type_is_pointer(type_infos_t types, type_t type);
+typedata_t *type2typedata(typedatas_t *types, type_t type);
+bool type_is_function(typedatas_t types, type_t type);
+bool type_is_native_function(typedatas_t types, type_t type);
+bool type_is_struct(typedatas_t types, type_t type);
+bool type_is_pointer(typedatas_t types, type_t type);
 
 type_t type_set_fetch_function(
     type_table_t *set,

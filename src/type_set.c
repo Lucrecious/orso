@@ -118,7 +118,7 @@ static type_t track_type(type_table_t *set, typedata_t *type) {
 void type_set_init(type_table_t* set, arena_t *allocator) {
     set->allocator = allocator;
     set->types2index = table_new(type2u64, allocator);
-    set->types = (type_infos_t){.allocator=allocator};
+    set->types = (typedatas_t){.allocator=allocator};
 
     static typedata_t type_invalid = {.name=lit2str("<invalid>"), .kind=TYPE_INVALID, .size=0};
     static typedata_t type_unresolved = {.name=lit2str("<unresolved>"), .kind=TYPE_UNRESOLVED, .size=0};
@@ -158,10 +158,10 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
     type_t unreachable = typeid(set->types.count);
     array_push(&set->types, &type_unreachable);
 
-    type_t void_ = typeid(set->types.count);
+    set->void_ = typeid(set->types.count);
     array_push(&set->types, &type_void);
 
-    type_t bool_ = typeid(set->types.count);
+    set->bool_ = typeid(set->types.count);
     array_push(&set->types, &type_bool);
 
     type_t string_ = typeid(set->types.count);
@@ -215,29 +215,29 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
     ASSERT(invalid.i == TYPE_INVALID, "must be same as type invalid");
     ASSERT(unresolved.i == TYPE_UNRESOLVED, "must be same as type unresolved");
     ASSERT(unreachable.i == TYPE_UNREACHABLE, "must be same as type unreachable");
-    ASSERT(void_.i == TYPE_VOID, "must be same as type void");
-    ASSERT(bool_.i == TYPE_BOOL, "must be same as type bool");
+    ASSERT(set->void_.i == TYPE_VOID, "must be same as type void");
+    ASSERT(set->bool_.i == TYPE_BOOL, "must be same as type bool");
     ASSERT(string_.i == TYPE_STRING, "must be same as type string");
     ASSERT(type_.i == TYPE_TYPE, "must be same as type type");
 }
 
-typedata_t *type2typedata(type_infos_t *types, type_t type) {
+typedata_t *type2typedata(typedatas_t *types, type_t type) {
     return types->items[type.i];
 }
 
-bool type_is_function(type_infos_t types, type_t type) {
+bool type_is_function(typedatas_t types, type_t type) {
     return type2typedata(&types, type)->kind == TYPE_FUNCTION;
 }
 
-bool type_is_native_function(type_infos_t types, type_t type) {
+bool type_is_native_function(typedatas_t types, type_t type) {
     return type2typedata(&types, type)->kind == TYPE_NATIVE_FUNCTION;
 }
 
-bool type_is_struct(type_infos_t types, type_t type) {
+bool type_is_struct(typedatas_t types, type_t type) {
     return type2typedata(&types, type)->kind == TYPE_STRUCT;
 }
 
-bool type_is_pointer(type_infos_t types, type_t type) {
+bool type_is_pointer(typedatas_t types, type_t type) {
     return type2typedata(&types, type)->kind == TYPE_POINTER;
 }
 

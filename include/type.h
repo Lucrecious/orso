@@ -14,7 +14,7 @@ struct types_t {
     arena_t *allocator;
 };
 
-typedef struct type_infos_t type_infos_t;
+typedef struct typedatas_t typedatas_t;
 typedef struct typedata_t typedata_t;
 
 typedef enum type_kind_t {
@@ -52,7 +52,7 @@ typedef struct struct_constant_t {
     type_t type;
 } struct_constant_t;
 
-struct type_infos_t {
+struct typedatas_t {
     typedata_t **items;
     size_t count;
     size_t capacity;
@@ -134,6 +134,6 @@ size_t bytes_to_words(i32 byte_count);
 
 struct_field_t *type_struct_find_field(typedata_t *struct_, const char *name, size_t name_length);
 
-string_t type_to_string(type_infos_t types, type_t type, arena_t *allocator);
+string_t type_to_string(typedatas_t types, type_t type, arena_t *allocator);
 
 #endif

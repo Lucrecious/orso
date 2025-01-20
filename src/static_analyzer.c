@@ -81,6 +81,8 @@ if (sv_eq(identifier, lit2sv(#TYPE_STRING))) {\
     return true; \
 }
 
+    RETURN_IF_TYPE(identifier, void, t->void_)
+
     RETURN_IF_TYPE(identifier, f32, t->f32_)
     RETURN_IF_TYPE(identifier, f64, t->f64_)
 

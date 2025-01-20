@@ -13,6 +13,22 @@ string_t compile_expr_to_c(ast_t *ast, arena_t *allocator);
 #ifdef CODEGENC_IMPLEMENTATION
 #include "memarr.h"
 
+khint64_t hashptr_(void *ptr) {
+    return (u64)ptr;
+}
+
+bool hasheq_(void *a, void *b) {
+    return a == b;
+}
+
+typedef struct funcdata_t funcdata_t;
+struct funcdata_t {
+    string_t name;
+    type_t type;
+};
+
+define_table(p2n, void*, funcdata_t, hashptr_, hasheq_);
+
 typedef struct cgen_t cgen_t;
 struct cgen_t {
     ast_t *ast;
@@ -22,7 +38,10 @@ struct cgen_t {
     arena_t tmp_arena;
 
     string_builder_t sb;
+
+    table_t(p2n) *functions;
 };
+
 
 typedef struct cgen_var_t cgen_var_t;
 struct cgen_var_t {
@@ -40,6 +59,11 @@ static cgen_var_t nil_cvar = {.is_new = false, .id = 0 , .type = typeid(TYPE_INV
 
 static string_t cgen_definition_name(cgen_t *cgen, string_view_t name) {
     string_t r = string_format("%.*s_", &cgen->tmp_arena, (int)name.length, name.data);
+    return r;
+}
+
+static string_t cgen_function_name(cgen_t *cgen, string_view_t name) {
+    string_t r = string_format("%.*s%zu_fn_", &cgen->tmp_arena, (int)name.length, name.data, ++cgen->tmp_count);
     return r;
 }
 
@@ -81,66 +105,8 @@ static void cgen_add_include(cgen_t *cgen, cstr_t include_path) {
 }
 
 static cstr_t cgen_typedata_name(typedata_t *typedata) {
-    switch (typedata->kind) {
-    case TYPE_NUMBER: {
-        switch ((num_size_t)typedata->size) {
-            case NUM_SIZE_8: {
-                switch (typedata->data.num) {
-                case NUM_TYPE_FLOAT: UNREACHABLE(); break;
-                case NUM_TYPE_SIGNED: return "i8";
-                case NUM_TYPE_UNSIGNED: return "u8";
-                }
-                break;
-            }
-
-            case NUM_SIZE_16:  {
-                switch (typedata->data.num) {
-                case NUM_TYPE_FLOAT: UNREACHABLE(); break;
-                case NUM_TYPE_SIGNED: return "i16";
-                case NUM_TYPE_UNSIGNED: return "u16";
-                }
-                break;
-            }
-
-            case NUM_SIZE_32: {
-                switch (typedata->data.num) {
-                case NUM_TYPE_FLOAT: return "f32";
-                case NUM_TYPE_SIGNED: return "i32";
-                case NUM_TYPE_UNSIGNED: return "u32";
-                }
-                break;
-            }
-
-            case NUM_SIZE_64: {
-                switch (typedata->data.num) {
-                    case NUM_TYPE_FLOAT: return "f64";
-                    case NUM_TYPE_SIGNED: return "i64";
-                    case NUM_TYPE_UNSIGNED: return "u64";
-                }
-                break;
-            }
-
-            default: UNREACHABLE(); return "void";
-        }
-    }
-
-    case TYPE_BOOL: return "bool_";
-
-    case TYPE_VOID: return "void";
-
-    case TYPE_TYPE: return "type_t";
-
-    case TYPE_STRING:
-    case TYPE_FUNCTION:
-    case TYPE_NATIVE_FUNCTION:
-    case TYPE_POINTER:
-    case TYPE_STRUCT: UNREACHABLE(); return "void";
-
-    case TYPE_INVALID:
-    case TYPE_UNRESOLVED:
-    case TYPE_UNREACHABLE:
-    case TYPE_COUNT: UNREACHABLE(); return "void";
-    }
+    ASSERT(typedata->name.length > 0, "all types must have a name before calling this");
+    return typedata->name.cstr;
 }
 
 static cstr_t cgen_type_name(cgen_t *cgen, type_t type) {
@@ -289,7 +255,7 @@ static bool cgen_binary_is_macro(token_type_t type, typedata_t *optd, cstr_t *op
     #undef case_block
 }
 
-static void cgen_cache_requires_tmp(type_infos_t *types, ast_node_t *expression) {
+static void cgen_cache_requires_tmp(typedatas_t *types, ast_node_t *expression) {
     switch (expression->node_type) {
         case AST_NODE_TYPE_EXPRESSION_BRANCHING:
         case AST_NODE_TYPE_EXPRESSION_JMP:
@@ -320,10 +286,18 @@ static void cgen_cache_requires_tmp(type_infos_t *types, ast_node_t *expression)
     for (size_t i = 0; i < expression->children.count; ++i) {
         ast_node_t *child = expression->children.items[i];
         cgen_cache_requires_tmp(types, child);
-        if (child->requires_tmp_for_cgen) {
+        if (expression->node_type != AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION && child->requires_tmp_for_cgen) {
             expression->requires_tmp_for_cgen = true;
         }
     }
+}
+
+static string_t cgen_get_function_name(cgen_t *cgen, function_t *function) {
+    funcdata_t result = {.name=lit2str("")};
+    bool success = table_get(p2n, cgen->functions, function, &result);
+    UNUSED(success);
+    ASSERT(success, "the function should be in there already");
+    return result.name;
 }
 
 static void cgen_constant(cgen_t *cgen, word_t word, typedata_t *typedata) {
@@ -382,11 +356,20 @@ static void cgen_constant(cgen_t *cgen, word_t word, typedata_t *typedata) {
             break;
         }
 
+        case TYPE_FUNCTION: {
+            function_t *function = word.as.p;
+            string_t funcname = cgen_get_function_name(cgen, function);
+
+            sb_add_cstr(&cgen->sb, "(");
+            sb_add_format(&cgen->sb, "%s", funcname.cstr);
+            sb_add_cstr(&cgen->sb, ")");
+            break;
+        }
+
         case TYPE_VOID:
         case TYPE_STRING:
         case TYPE_NATIVE_FUNCTION:
         case TYPE_POINTER:
-        case TYPE_FUNCTION:
         case TYPE_STRUCT: UNREACHABLE(); break;
 
         case TYPE_UNREACHABLE:
@@ -514,21 +497,6 @@ static void cgen_binary(cgen_t *cgen, ast_node_t *binary, cgen_var_t var) {
 
         cgen_statement(cgen, rhs, rhs_var, false);
         
-        // // only for logical ops
-        // switch (binary->operator.type) {
-        //     case TOKEN_AND:
-        //     case TOKEN_OR: {
-        //         cgen_add_indent(cgen);
-
-        //         cgen_jmp_label(cgen, jmp_label);
-
-        //         cgen_semicolon_nl(cgen);
-        //         break;
-        //     }
-
-        //     default: break;
-        // }
-
         cgen_add_indent(cgen);
         if (has_var(var)) {
             sb_add_format(&cgen->sb, "%s = ", cgen_var(cgen, var));
@@ -909,6 +877,28 @@ static void cgen_break_or_continue(cgen_t *cgen, ast_node_t *jmp, token_type_t t
     }
 }
 
+static bool cgen_is_void_nil(ast_node_t *expr) {
+    return typeid_eq(typeid(TYPE_VOID), expr->value_type) && expr->node_type == AST_NODE_TYPE_EXPRESSION_NIL;
+}
+
+static void cgen_return(cgen_t *cgen, ast_node_t *ret) {
+    bool is_void_nil = cgen_is_void_nil(an_expression(ret));
+
+    cgen_var_t var;
+    unless (is_void_nil) {
+        var = cgen_next_tmpid(cgen, an_expression(ret)->value_type);
+        cgen_expression(cgen, an_expression(ret), var);
+        cgen_semicolon_nl(cgen);
+        cgen_add_indent(cgen);
+    }
+
+    sb_add_cstr(&cgen->sb, "return");
+
+    unless (is_void_nil) {
+        sb_add_format(&cgen->sb, " %s", cgen_var_name(cgen, var));
+    }
+}
+
 static void cgen_builtin_call(cgen_t *cgen, ast_node_t *bcall, cgen_var_t var) {
     // since typeof is the only builtin call (might change to directive later)
     UNUSED(cgen);
@@ -924,6 +914,8 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
     }
 
     switch (expression->node_type) {
+
+        case AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION:
         case AST_NODE_TYPE_EXPRESSION_NIL:
         case AST_NODE_TYPE_EXPRESSION_PRIMARY: {
             cgen_constant_or_nil(cgen, expression, var);
@@ -973,7 +965,10 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
                     break;
                 }
 
-                case TOKEN_RETURN: UNREACHABLE();
+                case TOKEN_RETURN: {
+                    cgen_return(cgen, expression);
+                    break;
+                }
 
                 default: UNREACHABLE();
             }
@@ -985,7 +980,6 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
             break;
         }
 
-        case AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION:
         case AST_NODE_TYPE_EXPRESSION_CALL:
             break;
 
@@ -993,16 +987,206 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
     }
 }
 
+static void cgen_generate_function_names(cgen_t *cgen, ast_node_t *node) {
+    typedata_t *td = type2typedata(&cgen->ast->type_set.types, node->value_type);
+    if (node->expr_val.is_concrete && td->kind == TYPE_FUNCTION) {
+        function_t *function = node->expr_val.word.as.p;
+        funcdata_t funcdata;
+        unless (table_get(p2n, cgen->functions, function, &funcdata)) {
+            funcdata.type = node->value_type;
+
+            if (node->node_type == AST_NODE_TYPE_DECLARATION_DEFINITION && !node->is_mutable) {
+                funcdata.name = cgen_function_name(cgen, node->identifier.view);
+            } else if (node->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION) {
+                funcdata.name = string_format("func%zu", &cgen->tmp_arena, ++cgen->tmp_count);
+            }
+
+            table_put(p2n, cgen->functions, function, funcdata);
+        }
+    }
+
+    for (size_t i = 0; i < node->children.count; ++i) {
+        ast_node_t *child = node->children.items[i];
+        cgen_generate_function_names(cgen, child);
+    }
+}
+
+void cgen_forward_declare_functions(cgen_t *cgen) {
+    for (size_t i = kh_begin(cgen->functions); i < kh_end(cgen->functions); ++i) {
+        unless (kh_exist(cgen->functions, i)) continue;
+
+        funcdata_t funcdata = kh_val(cgen->functions, i);
+
+        typedata_t *td = type2typedata(&cgen->ast->type_set.types, funcdata.type);
+        type_t rettype = td->data.function.return_type;
+        
+        sb_add_format(&cgen->sb, "%s %s(", cgen_type_name(cgen, rettype), funcdata.name);
+        
+        for (size_t a = 0; a < td->data.function.argument_types.count; ++a) {
+            type_t argtype = td->data.function.argument_types.items[a];
+            if (a != 0) {
+                sb_add_cstr(&cgen->sb, ", ");
+            }
+            sb_add_format(&cgen->sb, "%s", cgen_type_name(cgen, argtype));
+        }
+
+        sb_add_cstr(&cgen->sb, ");\n");
+    }
+}
+
+static void cgen_function_definitions(cgen_t *cgen, ast_node_t *node) {
+    if (node->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION) {
+        // <ret_type> <func_name>(<arg1_type> <arg1_name>, <arg2_type> <arg2_name>, ..., <argn_type> <argn_name>) {
+        typedata_t *td = type2typedata(&cgen->ast->type_set.types, node->value_type);
+
+        typedata_t *rettd = type2typedata(&cgen->ast->type_set.types, td->data.function.return_type);
+
+        sb_add_format(&cgen->sb, "%s ", rettd->name.cstr);
+
+        function_t *function = (function_t*)node->expr_val.word.as.p;
+
+        funcdata_t funcdata;
+        bool success = table_get(p2n, cgen->functions, function, &funcdata);
+        UNUSED(success);
+        ASSERT(success, "the funcdata should already be there");
+
+        sb_add_format(&cgen->sb, "%s(", funcdata.name.cstr);
+
+        for (size_t i = an_func_def_arg_start(node); i < an_func_def_arg_end(node); ++i) {
+            if (i != an_func_def_arg_start(node)) {
+                sb_add_cstr(&cgen->sb, ", ");
+            }
+
+            ast_node_t *arg = node->children.items[i];
+            type_t arg_type = arg->value_type;
+            if (TYPE_IS_VOID(arg_type)) {
+                sb_add_cstr(&cgen->sb, "void");
+            } else {
+                cgen_var_t var = cgen_user_var(cgen, arg->identifier.view, arg_type);
+                sb_add_format(&cgen->sb, "%s", cgen_var(cgen, var));
+            }
+        }
+
+        sb_add_cstr(&cgen->sb, ") {\n");
+        cgen_indent(cgen);
+
+        cgen_add_indent(cgen);
+
+        cgen_expression(cgen, an_func_def_block(node), nil_cvar);
+
+        cgen_semicolon_nl(cgen);
+
+        cgen_unindent(cgen);
+        sb_add_cstr(&cgen->sb, "}\n\n");
+    }
+
+    for (size_t i = 0; i < node->children.count; ++i) {
+        ast_node_t *child = node->children.items[i];
+        cgen_function_definitions(cgen, child);
+    }
+}
+
+void cgen_functions(cgen_t *cgen, ast_t *ast) {
+    cgen_generate_function_names(cgen, ast->root);
+
+    cgen_forward_declare_functions(cgen);
+
+    sb_add_cstr(&cgen->sb, "\n");
+
+    cgen_function_definitions(cgen, ast->root);
+}
+
+static void cgen_generate_cnames_for_types(typedatas_t *tds, arena_t *arena) {
+    for (size_t i = 0; i < tds->count; ++i) {
+        typedata_t *td = tds->items[i];
+        switch(td->kind) {
+        case TYPE_BOOL: td->name = lit2str("bool_"); break;
+        case TYPE_NUMBER: break;
+        case TYPE_TYPE: td->name = lit2str("type_t"); break;
+        case TYPE_VOID: td->name = lit2str("void"); break;
+
+        case TYPE_FUNCTION: {
+            tmp_arena_t *tmp = allocator_borrow();
+            string_builder_t sb = {.allocator=tmp->allocator};
+            // fn_<arg1_type>_<arg2_type>_..._<argn_type>_<ret_type>
+
+            sb_add_cstr(&sb, "fn_");
+
+            for (size_t i = 0; i < td->data.function.argument_types.count; ++i) {
+                type_t arg_type = td->data.function.argument_types.items[i];
+                typedata_t *argtd = type2typedata(tds, arg_type);
+                sb_add_format(&sb, "%s_", argtd->name.cstr);
+            }
+
+            type_t ret_type = td->data.function.return_type;
+            typedata_t *rettd = type2typedata(tds, ret_type);
+
+            sb_add_format(&sb, "%s", rettd->name.cstr);
+
+            td->name = sb_render(&sb, arena);
+
+            allocator_return(tmp);
+            break;
+        }
+
+        default: break;
+        }
+    }
+}
+
+static void cgen_function_typedefs(cgen_t *cgen, typedatas_t *tds) {
+    for (size_t i = 0; i < tds->count; ++i) {
+        typedata_t *td = tds->items[i];
+        switch (td->kind) {
+        case TYPE_FUNCTION: {
+            // typedef <ret_type>(*<type_name>)(<arg1_type>,<arg2_type>, ...,<argn_type>);
+
+            sb_add_cstr(&cgen->sb, "typedef ");
+            typedata_t *rettd = type2typedata(tds, td->data.function.return_type);
+            sb_add_format(&cgen->sb, "%s(*%s)(", rettd->name.cstr, td->name.cstr);
+
+            for (size_t i = 0; i < td->data.function.argument_types.count; ++i) {
+                type_t arg_type = td->data.function.argument_types.items[i];
+                typedata_t *argtd = type2typedata(tds, arg_type);
+
+                if (i != 0) {
+                    sb_add_cstr(&cgen->sb, ",");
+                }
+
+                sb_add_format(&cgen->sb, "%s", argtd->name.cstr);
+            }
+
+            sb_add_format(&cgen->sb, ");\n");
+
+            break;
+        }
+
+        default: break;;
+        }
+    }
+}
+
 string_t compile_expr_to_c(ast_t *ast, arena_t *arena) {
     ast_node_t *expr_node = ast->root;
     cgen_cache_requires_tmp(&ast->type_set.types, expr_node);
+
+    cgen_generate_cnames_for_types(&ast->type_set.types, &ast->allocator);
     
     tmp_arena_t *tmp_arena = allocator_borrow();
     cgen_t cgen = {.ast = ast, .tmp_count = 0 };
     cgen.sb.allocator = &cgen.tmp_arena;
+    cgen.functions = table_new(p2n, &cgen.tmp_arena);
 
     sb_add_cstr(&cgen.sb, "#define INTRINSICS_IMPLEMENTATION\n");
     cgen_add_include(&cgen, "intrinsics.h");
+    sb_add_cstr(&cgen.sb, "\n");
+
+    cgen_function_typedefs(&cgen, &ast->type_set.types);
+
+    sb_add_cstr(&cgen.sb, "\n");
+
+    cgen_functions(&cgen, ast);
+
     sb_add_cstr(&cgen.sb, "\n");
 
     sb_add_format(&cgen.sb, "%s expr(void) {\n", cgen_type_name(&cgen, expr_node->value_type));
