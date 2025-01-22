@@ -1006,6 +1006,12 @@ static void cgen_call(cgen_t *cgen, ast_node_t *call, cgen_var_t var) {
     }
 }
 
+static void cgen_cast(cgen_t *cgen, ast_node_t *cast, cgen_var_t var) {
+    UNUSED(cgen);
+    UNUSED(cast);
+    UNUSED(var);
+}
+
 static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var) {
     if (expression->expr_val.is_concrete) {
         cgen_constant_or_nil(cgen, expression, var);
@@ -1081,6 +1087,11 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
 
         case AST_NODE_TYPE_EXPRESSION_CALL: {
             cgen_call(cgen, expression, var); 
+            break;
+        }
+
+        case AST_NODE_TYPE_EXPRESSION_CAST: {
+            cgen_cast(cgen, expression, var);
             break;
         }
 
