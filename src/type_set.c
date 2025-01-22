@@ -304,6 +304,7 @@ type_t type_set_fetch_function_(type_table_t *set, type_t return_type, types_t a
         .kind = is_native ? TYPE_NATIVE_FUNCTION : TYPE_FUNCTION,
         .data.function.argument_types = arguments,
         .data.function.return_type = return_type,
+        .size = sizeof(void*),
     };
 
     type_t type;

@@ -1,55 +1,59 @@
 #define INTRINSICS_IMPLEMENTATION
 #include "intrinsics.h"
 
-i32 expr(void) {
-i32 result_; {
-    i32 x_ = 0;
+typedef void(*fn_void)();
 
-    i32 n_ = 10;
+
+
+int expr(void) {
+int result_; {
+    int x_ = int_(0);
+
+    int n_ = int_(10);
 
     (x_ = n_);
 
-    i32 sum_ = 0;
+    int sum_ = int_(0);
 
     {
       if ((x_ == n_)) {
-        (sum_ = (sum_ + 1));
+        (sum_ = addi32_(sum_, int_(1)));
       }
     };
 
-    i32 d_; {
-      i32 a_ = 1;
+    int d_; {
+      int a_ = int_(1);
 
-      i32 b_ = 2;
+      int b_ = int_(2);
 
-      i32 c_ = 3;
+      int c_ = int_(3);
 
       d_ = ((a_ = (b_ = c_)));
     };
 
     {
-      if ((d_ == 3)) {
-        (sum_ = (sum_ + 1));
+      if ((d_ == int_(3))) {
+        (sum_ = addi32_(sum_, int_(1)));
       }
     };
 
-    i32 e_; {
-      i32 a_ = 1;
+    int e_; {
+      int a_ = int_(1);
 
-      i32 b_ = 2;
+      int b_ = int_(2);
 
-      i32 c_ = 3;
+      int c_ = int_(3);
 
-      i32 tmp2; {
-        tmp2 = ((a_ + b_) + c_);
+      int tmp2; {
+        tmp2 = addi32_(addi32_(a_, b_), c_);
       };
-      i32 tmp1 = (b_ = tmp2);
+      int tmp1 = (b_ = tmp2);
       e_ = (a_ = tmp1);
     };
 
     {
-      if ((e_ == 9)) {
-        (sum_ = (sum_ + 1));
+      if ((e_ == int_(9))) {
+        (sum_ = addi32_(sum_, int_(1)));
       }
     };
 

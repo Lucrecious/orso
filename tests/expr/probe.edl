@@ -1,22 +1,4 @@
 {
-    add :: (a: int, b: int) -> int {
-        return a + b;
-    };
-
-    sub :: (a: int, b: int) -> int {
-        return a - b;
-    };
-
-    foo :: () -> void { return; };
-
-    sum := add;
-    sans := sub;
-
-    add;
-
-    sub;
-
-    result := add(1, 2);
-
-    result;
+    add :: (a: int, b: int) -> int { return a + b; };
+    add({5;}, 6);
 }

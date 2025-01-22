@@ -907,6 +907,105 @@ static void cgen_builtin_call(cgen_t *cgen, ast_node_t *bcall, cgen_var_t var) {
     UNREACHABLE();
 }
 
+static void cgen_call(cgen_t *cgen, ast_node_t *call, cgen_var_t var) {
+    ast_node_t *callee = an_callee(call);
+
+    /*
+    * the expressions (callee and arguments) need to be evaluated from left to right.
+    * this means that only trailing expressions that can be inlined, can be inlined.
+    * i.e. an expression can only be inlined for the call if it can be inlined itself or
+    * there exists no following expression that cannot be inlined (requires tmp)
+    * otherwise, if we do the tmps first and inline everything else, the order of evaluation
+    * will change resulting in unexpected behaviour.
+    * i could write an algorithm to check whether or not evaluation order matters so i can
+    * inline as much as can, but that would only be for aesthetic reasons, so fuck that.
+    */
+    if (call->requires_tmp_for_cgen) {
+        /*
+        * no matter what, the callee requires a tmp because either it itself requires a tmp
+        * or because an argument following it needs it. which is why we are in this if branch
+        */
+        cgen_var_t callee_tmp = cgen_next_tmpid(cgen, callee->value_type);
+        cgen_statement(cgen, callee, callee_tmp, false);
+
+        size_t arg_start = an_call_arg_start(call);
+        size_t arg_end = an_call_arg_end(call);
+
+        size_t start_inline_index = arg_end;
+        for (size_t i = arg_end; i > arg_start; --i) {
+            size_t i_ = i-1;
+            ast_node_t *child = call->children.items[i_];
+            if (child->requires_tmp_for_cgen) break;
+            start_inline_index = i_;
+        }
+
+        size_t tmp_arg_var_count = (start_inline_index > arg_start) ? (start_inline_index - arg_start) : 0;
+
+        // so this isn't a size 0 array
+        cgen_var_t tmp_arg_vars[tmp_arg_var_count+1];
+
+        // put all arguments before arguments that can be inlined in tmp variables
+        for (size_t i = arg_start; i < start_inline_index; ++i) {
+            ast_node_t *arg = call->children.items[i];
+            cgen_var_t arg_var = cgen_next_tmpid(cgen, arg->value_type);
+
+            size_t tmp_index = i - arg_start;
+            tmp_arg_vars[tmp_index] = arg_var;
+
+            cgen_statement(cgen, arg, arg_var, true);
+        }
+
+        cgen_add_indent(cgen);
+        if (has_var(var)) {
+            sb_add_format(&cgen->sb, "%s = ", cgen_var(cgen, var));
+        }
+
+        sb_add_format(&cgen->sb, "%s(", cgen_var_name(cgen, callee_tmp));
+
+        // tmps
+        for (size_t i = 0; i < tmp_arg_var_count; ++i) {
+            if (i != 0) {
+                sb_add_cstr(&cgen->sb, ", ");
+            }
+
+            cgen_var_t arg_var = tmp_arg_vars[i];
+            sb_add_format(&cgen->sb, "%s", cgen_var_name(cgen, arg_var));
+        }
+
+        // inlined 
+        for (size_t i = start_inline_index; i < arg_end; ++i) {
+            if (i != arg_start) {
+                sb_add_cstr(&cgen->sb, ", ");
+            }
+
+            ast_node_t *arg = call->children.items[i];
+            cgen_expression(cgen, arg, nil_cvar);
+        }
+
+        sb_add_cstr(&cgen->sb, ")");
+    } else {
+        if (has_var(var)) {
+            sb_add_format(&cgen->sb, "%s = ", cgen_var(cgen, var));
+        }
+
+        sb_add_cstr(&cgen->sb, "(");
+
+        cgen_expression(cgen, callee, nil_cvar);
+        sb_add_cstr(&cgen->sb, "(");
+
+        size_t arg_start = an_call_arg_start(call);
+        for (size_t i = arg_start; i < an_call_arg_end(call); ++i) {
+            if (i != arg_start) {
+                sb_add_cstr(&cgen->sb, ", ");
+            }
+            ast_node_t *child = call->children.items[i];
+            cgen_expression(cgen, child, nil_cvar);
+        }
+
+        sb_add_cstr(&cgen->sb, "))");
+    }
+}
+
 static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var) {
     if (expression->expr_val.is_concrete) {
         cgen_constant_or_nil(cgen, expression, var);
@@ -980,8 +1079,10 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
             break;
         }
 
-        case AST_NODE_TYPE_EXPRESSION_CALL:
+        case AST_NODE_TYPE_EXPRESSION_CALL: {
+            cgen_call(cgen, expression, var); 
             break;
+        }
 
         default: UNREACHABLE(); break;
     }

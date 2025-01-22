@@ -1262,7 +1262,7 @@ void resolve_expression(
             }
 
             if (TYPE_IS_INVALID(branch_type)) {
-                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_BLOCK_RETURNS_MISMATCH, expr));
+                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_BLOCKS_TYPE_MISMATCH, expr));
                 INVALIDATE(expr);
             }
 

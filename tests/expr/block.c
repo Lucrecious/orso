@@ -1,44 +1,48 @@
 #define INTRINSICS_IMPLEMENTATION
 #include "intrinsics.h"
 
-i32 expr(void) {
-i32 result_; {
+typedef void(*fn_void)();
+
+
+
+int expr(void) {
+int result_; {
     {
-      i32 x_ = 10;
+      int x_ = int_(10);
 
-      i32 y_ = 20;
+      int y_ = int_(20);
 
-      i32 z_ = 30;
+      int z_ = int_(30);
 
-      ((x_ + y_) + z_);
+      addi32_(addi32_(x_, y_), z_);
     };
 
-    i32 a_; {
-      i32 x_ = 10;
+    int a_; {
+      int x_ = int_(10);
 
-      i32 y_ = 20;
+      int y_ = int_(20);
 
-      i32 z_ = 30;
+      int z_ = int_(30);
 
-      a_ = ((x_ + y_) + z_);
+      a_ = addi32_(addi32_(x_, y_), z_);
     };
 
     ;
 
     {
-      i32 a_; {
+      int a_; {
         {
-          a_ = 5;
+          a_ = int_(5);
         };
       };
 
       a_;
     };
 
-    i32 b_; {
-      i32 a_; {
+    int b_; {
+      int a_; {
         {
-          a_ = 5;
+          a_ = int_(5);
         };
       };
 
@@ -46,12 +50,12 @@ i32 result_; {
 ;
     };
 
-    i32 c_; {
+    int c_; {
       {
         {
           {
             {
-              c_ = 10;
+              c_ = int_(10);
             };
           };
         };

@@ -1,0 +1,37 @@
+{
+    add :: (a: int, b: int) -> int {
+        return a + b;
+    };
+
+    sub :: (a: int, b: int) -> int {
+        return a - b;
+    };
+
+    sum := 0;
+
+    a := add(1, 2);
+
+    if a == 3 then sum = sum + 1;
+
+    b := (if a == 3 then add else sub)(3, 4);
+
+    if b == 7 then sum = sum + 1;
+
+    c := add({5;}, 6);
+
+    if c == 11 then sum = sum + 1;
+
+    d := add(7, {8;});
+
+    if d == 15 then sum = sum + 1;
+
+    e := add({9;}, {10;});
+
+    if e == 19 then sum = sum + 1;
+
+    f := (if e == 19 then add else sub)({11;}, {12;});
+
+    if e == 23 then sum = sum + 1;
+
+    sum;
+}

@@ -15,6 +15,9 @@ typedef uint64_t u64;
 typedef float f32;
 typedef double f64;
 typedef u8 bool_;
+
+typedef unsigned int uint;
+
 typedef const char *cstr_t;
 
 #define i8_(lit) ((i8)lit)
@@ -27,6 +30,8 @@ typedef const char *cstr_t;
 #define i64_(lit) ((i64)lit)
 #define u64_(lit) ((u64)lit)
 #define f64_(lit) ((f64)lit)
+#define int_(lit) ((int)lit)
+#define uint_(lit) ((uint)lit)
 
 #define fn_t_(var_name, return_type, ...) return_type (*var_name)(__VA_ARGS__)
 
@@ -38,8 +43,6 @@ struct type_t {
 #define typeid(index) ((type_t){.i=(index)})
 #define typeid_eq(t1, t2) ((t1).i == (t2).i)
 #define typeid_nq(t1, t2) (!typeid_eq(t1, t2))
-
-typedef unsigned int uint;
 
 #define __IS_TWO_COMPLIMENT ((-1 & 3) == 3)
 #if !__IS_TWO_COMPLIMENT
