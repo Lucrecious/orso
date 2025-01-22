@@ -1,19 +1,23 @@
 #define INTRINSICS_IMPLEMENTATION
 #include "intrinsics.h"
 
-i32 expr(void) {
-i32 result_; {
+typedef void(*fn_void)();
+
+
+
+int expr(void) {
+int result_; {
     bool_ a_ = true;
 
     bool_ b_ = false;
 
-    i32 sum_ = 0;
+    int sum_ = int_(0);
 
     bool_ ab_ = (a_ && b_);
 
     {
       if (!(ab_)) {
-        (sum_ = (sum_ + 1));
+        (sum_ = addi32_(sum_, int_(1)));
       }
     };
 
@@ -25,7 +29,7 @@ i32 result_; {
 
     {
       if (!(b_)) {
-        (sum_ = (sum_ + 1));
+        (sum_ = addi32_(sum_, int_(1)));
       }
     };
 
@@ -37,7 +41,7 @@ i32 result_; {
 
     {
       if (ab_) {
-        (sum_ = (sum_ + 1));
+        (sum_ = addi32_(sum_, int_(1)));
       }
     };
 
@@ -49,7 +53,7 @@ i32 result_; {
 
     {
       if (ab_) {
-        (sum_ = (sum_ + 1));
+        (sum_ = addi32_(sum_, int_(1)));
       }
     };
 
@@ -61,7 +65,7 @@ i32 result_; {
 
     {
       if (!(ab_)) {
-        (sum_ = (sum_ + 1));
+        (sum_ = addi32_(sum_, int_(1)));
       }
     };
 
@@ -73,7 +77,7 @@ i32 result_; {
 
     {
       if (ab_) {
-        (sum_ = (sum_ + 1));
+        (sum_ = addi32_(sum_, int_(1)));
       }
     };
 
@@ -91,7 +95,7 @@ i32 result_; {
 
     {
       if (!(b_)) {
-        (sum_ = (sum_ + 1));
+        (sum_ = addi32_(sum_, int_(1)));
       }
     };
 
@@ -113,7 +117,7 @@ i32 result_; {
 
     {
       if (!(b_)) {
-        (sum_ = (sum_ + 1));
+        (sum_ = addi32_(sum_, int_(1)));
       }
     };
 

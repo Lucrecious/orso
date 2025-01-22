@@ -1,48 +1,52 @@
 #define INTRINSICS_IMPLEMENTATION
 #include "intrinsics.h"
 
-i32 expr(void) {
-i32 result_; {
-    i32 sum_ = 0;
+typedef void(*fn_void)();
 
-    i32 a_ = 0;
+
+
+int expr(void) {
+int result_; {
+    int sum_ = int_(0);
+
+    int a_ = int_(0);
 
     {
       do {
-        (a_ = 1);
+        (a_ = int_(1));
       continue2_:;
       } while(false); 
-      (a_ = 2);
+      (a_ = int_(2));
     } break1_:;
 
     {
-      if ((a_ == 2)) {
-        (sum_ = (sum_ + 1));
+      if ((a_ == int_(2))) {
+        (sum_ = addi32_(sum_, int_(1)));
       }
     };
 
     {
       do {
         {
-          (a_ = 1);
+          (a_ = int_(1));
         };
       continue4_:;
       } while(false); 
       {
-        (a_ = 2);
+        (a_ = int_(2));
       };
     } break3_:;
 
     {
-      if ((a_ == 2)) {
-        (sum_ = (sum_ + 1));
+      if ((a_ == int_(2))) {
+        (sum_ = addi32_(sum_, int_(1)));
       }
     };
 
     {
       do {
         {
-          (a_ = 1);
+          (a_ = int_(1));
 
           ;
           goto break5_;
@@ -50,20 +54,20 @@ i32 result_; {
       continue6_:;
       } while(false); 
       {
-        (a_ = 2);
+        (a_ = int_(2));
       };
     } break5_:;
 
     {
-      if ((a_ == 1)) {
-        (sum_ = (sum_ + 1));
+      if ((a_ == int_(1))) {
+        (sum_ = addi32_(sum_, int_(1)));
       }
     };
 
     {
       do {
         {
-          (a_ = 1);
+          (a_ = int_(1));
 
           ;
           goto continue8_;
@@ -71,20 +75,20 @@ i32 result_; {
       continue8_:;
       } while(false); 
       {
-        (a_ = 3);
+        (a_ = int_(3));
       };
     } break7_:;
 
     {
-      if ((a_ == 3)) {
-        (sum_ = (sum_ + 1));
+      if ((a_ == int_(3))) {
+        (sum_ = addi32_(sum_, int_(1)));
       }
     };
 
     {
       do {
         {
-          (a_ = 2);
+          (a_ = int_(2));
 
           ;
           goto continue10_;
@@ -94,26 +98,26 @@ i32 result_; {
       {
         do {
           {
-            (a_ = 3);
+            (a_ = int_(3));
           };
         continue12_:;
         } while(false); 
         {
-          (a_ = 4);
+          (a_ = int_(4));
         };
       } break11_:;
     } break9_:;
 
     {
-      if ((a_ == 4)) {
-        (sum_ = (sum_ + 1));
+      if ((a_ == int_(4))) {
+        (sum_ = addi32_(sum_, int_(1)));
       }
     };
 
     {
       do {
         {
-          (a_ = 2);
+          (a_ = int_(2));
 
           ;
           goto continue14_;
@@ -123,7 +127,7 @@ i32 result_; {
       {
         do {
           {
-            (a_ = 3);
+            (a_ = int_(3));
 
             ;
             goto break15_;
@@ -131,67 +135,67 @@ i32 result_; {
         continue16_:;
         } while(false); 
         {
-          (a_ = 4);
+          (a_ = int_(4));
         };
       } break15_:;
     } break13_:;
 
     {
-      if ((a_ == 3)) {
-        (sum_ = (sum_ + 1));
+      if ((a_ == int_(3))) {
+        (sum_ = addi32_(sum_, int_(1)));
       }
     };
 
     {
       do {
         {
-          while ((a_ > 0)) {
+          while ((a_ > int_(0))) {
             {
               {
-                if ((a_ == 3)) {
+                if ((a_ == int_(3))) {
                   ;
                   goto break17_;
                 }
               };
 
-              (a_ = (a_ - 1));
+              (a_ = subi32_(a_, int_(1)));
             };
             continue20_:;
           }
-          (a_ = 0);
+          (a_ = int_(0));
         } break19_:;
       continue18_:;
       } while(false); 
-      0;
+      int_(0);
     } break17_:;
 
     {
-      if ((a_ == 3)) {
-        (sum_ = (sum_ + 1));
+      if ((a_ == int_(3))) {
+        (sum_ = addi32_(sum_, int_(1)));
       }
     };
 
     {
       do {
         {
-          if ((a_ == 3)) {
+          if ((a_ == int_(3))) {
             {
               {
-                while ((a_ > 0)) {
+                while ((a_ > int_(0))) {
                   {
                     {
-                      if ((a_ == 3)) {
+                      if ((a_ == int_(3))) {
                         ;
                         goto continue22_;
                       }
                     };
 
-                    (a_ = (a_ - 1));
+                    (a_ = subi32_(a_, int_(1)));
                   };
                   continue24_:;
                 }
                 {
-                  (a_ = 10);
+                  (a_ = int_(10));
                 };
               } break23_:;
             };
@@ -200,51 +204,51 @@ i32 result_; {
       continue22_:;
       } while(false); 
       {
-        (a_ = 4);
+        (a_ = int_(4));
       };
     } break21_:;
 
     {
-      if ((a_ == 4)) {
-        (sum_ = (sum_ + 1));
+      if ((a_ == int_(4))) {
+        (sum_ = addi32_(sum_, int_(1)));
       }
     };
 
-    i32 answer_; {
+    int answer_; {
       do {
         {
           {
             do {
               {
-                5;
+                int_(5);
                 goto break27_;
               };
             continue28_:;
             } while(false); 
-            0;
+            int_(0);
           } break27_:;
 
-          answer_ = 10;
+          answer_ = int_(10);
         };
       continue26_:;
       } while(false); 
-      answer_ = 0;
+      answer_ = int_(0);
     } break25_:;
 
     {
-      if ((answer_ == 0)) {
-        (sum_ = (sum_ + 1));
+      if ((answer_ == int_(0))) {
+        (sum_ = addi32_(sum_, int_(1)));
       }
     };
 
-    i32 tmp29; {
+    int tmp29; {
       do {
         {
           ;
 ; {
-            if ((a_ == 4)) {
+            if ((a_ == int_(4))) {
               {
-                tmp29 = (sum_ + 1);
+                tmp29 = addi32_(sum_, int_(1));
                 goto break30_;
               };
             }
@@ -252,7 +256,7 @@ i32 result_; {
         };
       continue31_:;
       } while(false); 
-      tmp29 = 0;
+      tmp29 = int_(0);
     } break30_:;
     (sum_ = tmp29);
 

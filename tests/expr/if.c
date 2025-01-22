@@ -1,8 +1,12 @@
 #define INTRINSICS_IMPLEMENTATION
 #include "intrinsics.h"
 
-i32 expr(void) {
-i32 result_; {
+typedef void(*fn_void)();
+
+
+
+int expr(void) {
+int result_; {
     {
       if (true) {
         ;
@@ -18,17 +22,17 @@ i32 result_; {
     {
       if (true) {
         {
-          3;
+          int_(3);
         };
       }
     };
 
     {
       if (true) {
-        0;
+        int_(0);
       } else {
         {
-          3;
+          int_(3);
         };
       }
     };
@@ -36,11 +40,11 @@ i32 result_; {
     {
       if (true) {
         {
-          3;
+          int_(3);
         };
       } else {
         {
-          4;
+          int_(4);
         };
       }
     };
@@ -69,7 +73,7 @@ i32 result_; {
       };
       if (tmp3) {
         {
-          3;
+          int_(3);
         };
       }
     };
@@ -80,11 +84,11 @@ i32 result_; {
       };
       if (tmp4) {
         {
-          3;
+          int_(3);
         };
       } else {
         {
-          4;
+          int_(4);
         };
       }
     };
@@ -101,33 +105,33 @@ i32 result_; {
       }
     };
 
-    i32 c_ = 0;
+    int c_ = int_(0);
 ; {
       if (true) {
         {
-          c_ = 3;
+          c_ = int_(3);
         };
       }
     };
 
-    i32 d_; {
+    int d_; {
       if (true) {
-        d_ = 0;
+        d_ = int_(0);
       } else {
         {
-          d_ = 3;
+          d_ = int_(3);
         };
       }
     };
 
-    i32 e_; {
+    int e_; {
       if (true) {
         {
-          e_ = 3;
+          e_ = int_(3);
         };
       } else {
         {
-          e_ = 4;
+          e_ = int_(4);
         };
       }
     };
@@ -150,34 +154,34 @@ i32 result_; {
       }
     };
 
-    i32 h_ = 0;
+    int h_ = int_(0);
 ; {
       bool_ tmp7; {
         tmp7 = true;
       };
       if (tmp7) {
         {
-          h_ = 3;
+          h_ = int_(3);
         };
       }
     };
 
-    i32 i_; {
+    int i_; {
       bool_ tmp8; {
         tmp8 = true;
       };
       if (tmp8) {
         {
-          i_ = 3;
+          i_ = int_(3);
         };
       } else {
         {
-          i_ = 4;
+          i_ = int_(4);
         };
       }
     };
 
-    result_ = 1;
+    result_ = int_(1);
   };
 
   return result_;

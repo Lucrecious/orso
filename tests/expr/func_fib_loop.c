@@ -1,7 +1,7 @@
 #define INTRINSICS_IMPLEMENTATION
 #include "intrinsics.h"
 
-typedef (*fn_)();
+typedef void(*fn_void)();
 typedef int(*fn_int_int)(int);
 
 int fib1_fn_(int);
@@ -40,7 +40,7 @@ int expr(void) {
 int result_; {
     fn_int_int fib_ = (fib1_fn_);
 
-    ;
+    result_ = ((fib1_fn_)(int_(10)));
   };
 
   return result_;
