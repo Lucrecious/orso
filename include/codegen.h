@@ -940,9 +940,12 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
 
     switch (expression->node_type) {
         case AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION:
-        case AST_NODE_TYPE_EXPRESSION_NIL:
         case AST_NODE_TYPE_EXPRESSION_PRIMARY: UNREACHABLE(); break;
 
+        case AST_NODE_TYPE_EXPRESSION_NIL: {
+            ASSERT(TYPE_IS_VOID(expression->value_type), "this should be folded already if not void");
+            break;
+        }
 
         case AST_NODE_TYPE_EXPRESSION_BINARY: {
             gen_binary(gen, function, expression);

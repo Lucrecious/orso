@@ -2,27 +2,68 @@
 #include "intrinsics.h"
 
 typedef void(*fn_void)();
-typedef int(*fn_int_int_int)(int,int);
 
-int add1_fn_(int, int);
-
-int add1_fn_(int a_, int b_) {
-  {
-    int tmp2 = addi32_(a_, b_);
-    return tmp2;
-  };
-}
 
 
 int expr(void) {
 int result_; {
-    fn_int_int_int add_ = (add1_fn_);
+    {
+      int x_ = int_(10);
 
-    fn_int_int_int tmp3 = (add1_fn_);
-    int tmp4; {
-      tmp4 = int_(5);
+      int y_ = int_(20);
+
+      int z_ = int_(30);
+
+      addi32_(addi32_(x_, y_), z_);
     };
-    result_ = tmp3(tmp4, int_(6));
+
+    int a_; {
+      int x_ = int_(10);
+
+      int y_ = int_(20);
+
+      int z_ = int_(30);
+
+      a_ = addi32_(addi32_(x_, y_), z_);
+    };
+
+    ;
+
+    {
+      int a_; {
+        {
+          a_ = int_(5);
+        };
+      };
+
+      a_;
+    };
+
+    int b_; {
+      int a_; {
+        {
+          a_ = int_(5);
+        };
+      };
+
+      b_ = a_;
+;
+    };
+
+    int c_; {
+      {
+        {
+          {
+            {
+              c_ = int_(10);
+            };
+          };
+        };
+      };
+    };
+
+    result_ = c_;
+;
   };
 
   return result_;
