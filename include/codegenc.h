@@ -677,11 +677,27 @@ static void cgen_end_branch(cgen_t *cgen) {
 
 static void cgen_condition_and_open_block(cgen_t *cgen, ast_node_t *branch, cstr_t branch_cstr) {
     if (an_condition(branch)->requires_tmp_for_cgen) {
-        cgen_var_t conditionid = cgen_next_tmpid(cgen, an_condition(branch)->value_type);
-        cgen_statement(cgen, an_condition(branch), conditionid, true);
+        if (branch->branch_type == BRANCH_TYPE_LOOPING) {
+            cgen_add_indent(cgen);
+            sb_add_format(&cgen->sb, "while (true) {\n");
 
-        cgen_add_indent(cgen);
-        sb_add_format(&cgen->sb, "%s (%s) {\n", branch_cstr, cgen_var_name(cgen, conditionid));
+            cgen_indent(cgen);
+
+            cgen_var_t conditionid = cgen_next_tmpid(cgen, an_condition(branch)->value_type);
+            cgen_statement(cgen, an_condition(branch), conditionid, true);
+
+            branch_cstr = branch->condition_negated ? "if" : "unless";
+            cgen_add_indent(cgen);
+            sb_add_format(&cgen->sb, "%s (%s) break;\n", branch_cstr, cgen_var_name(cgen, conditionid));
+        } else {
+            cgen_var_t conditionid = cgen_next_tmpid(cgen, an_condition(branch)->value_type);
+            cgen_statement(cgen, an_condition(branch), conditionid, true);
+
+            cgen_add_indent(cgen);
+            sb_add_format(&cgen->sb, "%s (%s) {\n", branch_cstr, cgen_var_name(cgen, conditionid));
+
+            cgen_indent(cgen);
+        }
         
     } else {
         cgen_add_indent(cgen);
@@ -716,7 +732,6 @@ static void cgen_if(cgen_t *cgen, ast_node_t *branch, cgen_var_t var) {
     cstr_t if_or_unless = branch->condition_negated ? "unless" : "if";
     cgen_indent(cgen);
     cgen_condition_and_open_block(cgen, branch, if_or_unless);
-    cgen_indent(cgen);
 
     cgen_then(cgen, branch, var);
 
@@ -757,7 +772,6 @@ static void cgen_while(cgen_t *cgen, ast_node_t *branch, cgen_var_t var)  {
     cstr_t while_or_until = branch->condition_negated ? "until" : "while";
     cgen_indent(cgen);
     cgen_condition_and_open_block(cgen, branch, while_or_until);
-    cgen_indent(cgen);
 
     cgen_then(cgen, branch, var);
 

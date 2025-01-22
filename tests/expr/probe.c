@@ -7,62 +7,25 @@ typedef void(*fn_void)();
 
 int expr(void) {
 int result_; {
-    {
-      int x_ = int_(10);
-
-      int y_ = int_(20);
-
-      int z_ = int_(30);
-
-      addi32_(addi32_(x_, y_), z_);
-    };
-
-    int a_; {
-      int x_ = int_(10);
-
-      int y_ = int_(20);
-
-      int z_ = int_(30);
-
-      a_ = addi32_(addi32_(x_, y_), z_);
-    };
-
-    ;
+    int x_ = int_(10);
 
     {
-      int a_; {
-        {
-          a_ = int_(5);
+      while (true) {
+        bool_ tmp3; {
+          (x_ = subi32_(x_, int_(1)));
+
+          tmp3 = (x_ > int_(0));
         };
-      };
-
-      a_;
-    };
-
-    int b_; {
-      int a_; {
+        unless (tmp3) break;
         {
-          a_ = int_(5);
+          true;
         };
-      };
+        continue2_:;
+      }
+      false;
+    } break1_:;
 
-      b_ = a_;
-;
-    };
-
-    int c_; {
-      {
-        {
-          {
-            {
-              c_ = int_(10);
-            };
-          };
-        };
-      };
-    };
-
-    result_ = c_;
+    result_ = x_;
 ;
   };
 
