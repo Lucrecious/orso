@@ -1,9 +1,13 @@
 #define INTRINSICS_IMPLEMENTATION
 #include "intrinsics.h"
 
-i32 expr(void) {
-i32 result_; {
-    i32 check_ = i32_(0);
+typedef void(*fn_void)();
+
+
+
+int expr(void) {
+int result_; {
+    int check_ = int_(0);
 
     u8 a1_ = u8_(100);
 
@@ -13,13 +17,13 @@ i32 result_; {
 
     {
       if (typeid_eq(typeid(10), t_)) {
-        (check_ = addi32_(check_, i32_(1)));
+        (check_ = addi32_(check_, int_(1)));
       }
     };
 
     {
       if (typeid_eq(typeid(10), t_)) {
-        (check_ = addi32_(check_, i32_(1)));
+        (check_ = addi32_(check_, int_(1)));
       }
     };
 
@@ -31,13 +35,13 @@ i32 result_; {
 
     {
       if (typeid_eq(typeid(9), t_)) {
-        (check_ = addi32_(check_, i32_(1)));
+        (check_ = addi32_(check_, int_(1)));
       }
     };
 
     {
       if (typeid_eq(typeid(9), t_)) {
-        (check_ = addi32_(check_, i32_(1)));
+        (check_ = addi32_(check_, int_(1)));
       }
     };
 
@@ -49,13 +53,13 @@ i32 result_; {
 
     {
       if (typeid_eq(typeid(12), t_)) {
-        (check_ = addi32_(check_, i32_(1)));
+        (check_ = addi32_(check_, int_(1)));
       }
     };
 
     {
       if (typeid_eq(typeid(12), t_)) {
-        (check_ = addi32_(check_, i32_(1)));
+        (check_ = addi32_(check_, int_(1)));
       }
     };
 
@@ -67,13 +71,13 @@ i32 result_; {
 
     {
       if (typeid_eq(typeid(11), t_)) {
-        (check_ = addi32_(check_, i32_(1)));
+        (check_ = addi32_(check_, int_(1)));
       }
     };
 
     {
       if (typeid_eq(typeid(11), t_)) {
-        (check_ = addi32_(check_, i32_(1)));
+        (check_ = addi32_(check_, int_(1)));
       }
     };
 
@@ -85,13 +89,13 @@ i32 result_; {
 
     {
       if (typeid_eq(typeid(14), t_)) {
-        (check_ = addi32_(check_, i32_(1)));
+        (check_ = addi32_(check_, int_(1)));
       }
     };
 
     {
       if (typeid_eq(typeid(14), t_)) {
-        (check_ = addi32_(check_, i32_(1)));
+        (check_ = addi32_(check_, int_(1)));
       }
     };
 
@@ -103,13 +107,13 @@ i32 result_; {
 
     {
       if (typeid_eq(typeid(13), t_)) {
-        (check_ = addi32_(check_, i32_(1)));
+        (check_ = addi32_(check_, int_(1)));
       }
     };
 
     {
       if (typeid_eq(typeid(13), t_)) {
-        (check_ = addi32_(check_, i32_(1)));
+        (check_ = addi32_(check_, int_(1)));
       }
     };
 
@@ -121,13 +125,13 @@ i32 result_; {
 
     {
       if (typeid_eq(typeid(16), t_)) {
-        (check_ = addi32_(check_, i32_(1)));
+        (check_ = addi32_(check_, int_(1)));
       }
     };
 
     {
       if (typeid_eq(typeid(16), t_)) {
-        (check_ = addi32_(check_, i32_(1)));
+        (check_ = addi32_(check_, int_(1)));
       }
     };
 
@@ -139,75 +143,75 @@ i32 result_; {
 
     {
       if (typeid_eq(typeid(15), t_)) {
-        (check_ = addi32_(check_, i32_(1)));
+        (check_ = addi32_(check_, int_(1)));
       }
     };
 
     {
       if (typeid_eq(typeid(15), t_)) {
-        (check_ = addi32_(check_, i32_(1)));
+        (check_ = addi32_(check_, int_(1)));
       }
     };
 
-    u32 j1_ = u32_(100);
+    uint j1_ = uint_(100);
 
-    u32 j2_ = u32_(0);
+    uint j2_ = uint_(0);
 
     (t_ = typeid(18));
 
     {
       if (typeid_eq(typeid(18), t_)) {
-        (check_ = addi32_(check_, i32_(1)));
+        (check_ = addi32_(check_, int_(1)));
       }
     };
 
     {
       if (typeid_eq(typeid(18), t_)) {
-        (check_ = addi32_(check_, i32_(1)));
+        (check_ = addi32_(check_, int_(1)));
       }
     };
 
-    i32 i1_ = i32_(100);
+    int i1_ = int_(100);
 
-    i32 i2_ = i32_(0);
+    int i2_ = int_(0);
 
-    i32 i3_ = i32_(420);
+    int i3_ = int_(420);
 
     (t_ = typeid(17));
 
     {
       if (typeid_eq(typeid(17), t_)) {
-        (check_ = addi32_(check_, i32_(1)));
+        (check_ = addi32_(check_, int_(1)));
       }
     };
 
     {
       if (typeid_eq(typeid(17), t_)) {
-        (check_ = addi32_(check_, i32_(1)));
+        (check_ = addi32_(check_, int_(1)));
       }
     };
 
     {
       if (typeid_eq(typeid(17), t_)) {
-        (check_ = addi32_(check_, i32_(1)));
+        (check_ = addi32_(check_, int_(1)));
       }
     };
 
-    u64 s1_ = 100;
+    size_t s1_ = 100;
 
-    u64 s2_ = 0;
+    size_t s2_ = 0;
 
     (t_ = typeid(19));
 
     {
       if (typeid_eq(typeid(19), t_)) {
-        (check_ = addi32_(check_, i32_(1)));
+        (check_ = addi32_(check_, int_(1)));
       }
     };
 
     {
       if (typeid_eq(typeid(19), t_)) {
-        (check_ = addi32_(check_, i32_(1)));
+        (check_ = addi32_(check_, int_(1)));
       }
     };
 

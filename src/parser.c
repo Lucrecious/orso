@@ -534,8 +534,11 @@ static void parser_init(parser_t *parser, ast_t *ast, string_t file_path, string
 }
 
 static void parser_error(parser_t *parser, error_t error) {
-    parser->had_error = true;
-    parser->panic_mode = true;
+    if (!error.is_warning) {
+        parser->had_error = true;
+        parser->panic_mode = true;
+    }
+
     if (parser->error_fn) parser->error_fn(parser->ast, error);
 }
 

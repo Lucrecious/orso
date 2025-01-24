@@ -704,6 +704,7 @@ static void cgen_condition_and_open_block(cgen_t *cgen, ast_node_t *branch, cstr
         sb_add_format(&cgen->sb, "%s (", branch_cstr);
         cgen_expression(cgen, an_condition(branch), nil_cvar);
         sb_add_cstr(&cgen->sb, ") {\n");
+        cgen_indent(cgen);
     }
 
 }
@@ -1021,9 +1022,29 @@ static void cgen_call(cgen_t *cgen, ast_node_t *call, cgen_var_t var) {
 }
 
 static void cgen_cast(cgen_t *cgen, ast_node_t *cast, cgen_var_t var) {
-    UNUSED(cgen);
-    UNUSED(cast);
-    UNUSED(var);
+    ast_node_t *castee = an_expression(cast);
+    if (cast->requires_tmp_for_cgen) {
+        cgen_var_t tmp_var = cgen_next_tmpid(cgen, castee->value_type);
+        cgen_statement(cgen, castee, tmp_var, false);
+
+        cgen_add_indent(cgen);
+
+        if (has_var(var)) {
+            sb_add_format(&cgen->sb, "%s = ", cgen_var(cgen, var));
+        }
+
+        sb_add_format(&cgen->sb, "cast(%s, %s)", cgen_type_name(cgen, cast->value_type), cgen_var_name(cgen, tmp_var));
+    } else {
+        if (has_var(var)) {
+            sb_add_format(&cgen->sb, "%s = ", cgen_var(cgen, var));
+        }
+
+        sb_add_format(&cgen->sb, "cast(%s, ", cgen_type_name(cgen, cast->value_type));
+
+        cgen_expression(cgen, castee, nil_cvar);
+
+        sb_add_cstr(&cgen->sb, ")");
+    }
 }
 
 static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var) {

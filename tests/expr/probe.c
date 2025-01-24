@@ -7,26 +7,28 @@ typedef void(*fn_void)();
 
 int expr(void) {
 int result_; {
-    int x_ = int_(10);
+    int sum_ = int_(0);
 
     {
-      while (true) {
-        bool_ tmp3; {
-          (x_ = subi32_(x_, int_(1)));
+      i8 a_ = i8_(-128);
 
-          tmp3 = (x_ > int_(0));
-        };
-        unless (tmp3) break;
-        {
-          true;
-        };
-        continue2_:;
-      }
-      false;
-    } break1_:;
+      {
+        if ((cast(int, a_) == int_(-128))) {
+          (sum_ = addi32_(sum_, int_(1)));
+        }
+      };
+    };
 
-    result_ = x_;
-;
+    {
+      i16 a_ = i16_(10000);
+
+      result_ = int_(0);
+; {
+        if ((cast(int, a_) == int_(10000))) {
+          result_ = (sum_ = addi32_(sum_, int_(1)));
+        }
+      };
+    };
   };
 
   return result_;

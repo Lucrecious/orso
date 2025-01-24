@@ -2,6 +2,7 @@
 #define INTRINSICS_H_
 
 #include <stdint.h>
+#include <stddef.h>
 #include <math.h>
 
 typedef int8_t i8;
