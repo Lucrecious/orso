@@ -1,25 +1,29 @@
 #define INTRINSICS_IMPLEMENTATION
 #include "intrinsics.h"
 
-i32 expr(void) {
-i32 result_; {
-    i32 x_ = 0;
+typedef void(*fn_void)();
 
-    i32 n_ = 10;
 
-    i32 sum_ = 0;
+
+int expr(void) {
+int result_; {
+    int x_ = int_(0);
+
+    int n_ = int_(10);
+
+    int sum_ = int_(0);
 
     {
       while ((x_ < n_)) {
         {
-          (sum_ = (sum_ + x_));
+          (sum_ = addi32_(sum_, x_));
 
-          i32 tmp4; {
+          int tmp4; {
             tmp4 = x_;
 ;
           };
-          i32 tmp5 = 1;
-          i32 tmp3 = tmp4 + tmp5;
+          int tmp5 = int_(1);
+          int tmp3 = addi32_(tmp4, tmp5);
           (x_ = tmp3);
         };
         continue2_:;
@@ -27,47 +31,47 @@ i32 result_; {
       sum_;
     } break1_:;
 
-    i32 count_ = 10;
+    int count_ = int_(10);
 
     {
-      while ((((count_ = (count_ - 1))) > 0)) {
-        (sum_ = (sum_ + 1));
+      while ((((count_ = subi32_(count_, int_(1)))) > int_(0))) {
+        (sum_ = addi32_(sum_, int_(1)));
         continue7_:;
       }
-      0;
+      int_(0);
     } break6_:;
 
-    (count_ = 10);
+    (count_ = int_(10));
 
-    i32 a_; {
-      while ((((count_ = (count_ - 1))) > 0)) {
-        a_ = (sum_ = (sum_ + 1));
+    int a_; {
+      while ((((count_ = subi32_(count_, int_(1)))) > int_(0))) {
+        a_ = (sum_ = addi32_(sum_, int_(1)));
         continue9_:;
       }
-      a_ = 0;
+      a_ = int_(0);
     } break8_:;
 
     {
-      if ((a_ == 0)) {
-        (sum_ = (sum_ - 65));
+      if ((a_ == int_(0))) {
+        (sum_ = subi32_(sum_, int_(65)));
       } else {
-        (sum_ = (sum_ + 1));
+        (sum_ = addi32_(sum_, int_(1)));
       }
     };
 
-    i32 b_; {
-      while ((sum_ > 0)) {
-        b_ = (sum_ = (sum_ - 1));
+    int b_; {
+      while ((sum_ > int_(0))) {
+        b_ = (sum_ = subi32_(sum_, int_(1)));
         continue11_:;
       }
-      b_ = ((sum_ = (sum_ + 1)));
+      b_ = ((sum_ = addi32_(sum_, int_(1))));
     } break10_:;
 
     {
-      if ((b_ == 1)) {
-        result_ = 1;
+      if ((b_ == int_(1))) {
+        result_ = int_(1);
       } else {
-        result_ = 0;
+        result_ = int_(0);
       }
     };
   };

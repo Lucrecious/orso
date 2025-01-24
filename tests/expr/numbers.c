@@ -117,9 +117,9 @@ int result_; {
       }
     };
 
-    u64 g1_ = 100000000;
+    u64 g1_ = 100000000llu;
 
-    u64 g2_ = 0;
+    u64 g2_ = 0llu;
 
     (t_ = typeid(16));
 
@@ -135,9 +135,9 @@ int result_; {
       }
     };
 
-    i64 h1_ = 100000000;
+    i64 h1_ = 100000000ll;
 
-    i64 h2_ = 0;
+    i64 h2_ = 0ll;
 
     (t_ = typeid(15));
 
@@ -197,9 +197,9 @@ int result_; {
       }
     };
 
-    size_t s1_ = 100;
+    size_t s1_ = 100llu;
 
-    size_t s2_ = 0;
+    size_t s2_ = 0llu;
 
     (t_ = typeid(19));
 

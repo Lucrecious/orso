@@ -335,8 +335,16 @@ static void cgen_constant(cgen_t *cgen, word_t word, typedata_t *typedata) {
                 case NUM_SIZE_64: {
                     switch (typedata->data.num) {
                         case NUM_TYPE_FLOAT: sb_add_format(&cgen->sb, "%lg", (f64)word.as.d); break;
-                        case NUM_TYPE_SIGNED: sb_add_format(&cgen->sb, "%"PRIi64, (i64)word.as.i); break;
-                        case NUM_TYPE_UNSIGNED: sb_add_format(&cgen->sb, "%"PRIu64, (u64)word.as.u); break;
+                        case NUM_TYPE_SIGNED: {
+                            if (word.as.i == INT64_MIN) {
+                                // the smallest 64bit integer cannot be expressed as a single number literal
+                                // due to how C99 parses numbers
+                                sb_add_format(&cgen->sb, "INT64_MIN", (i64)word.as.i); break;
+                            } else {
+                                sb_add_format(&cgen->sb, "%"PRIi64"ll", (i64)word.as.i); break;
+                            }
+                        }
+                        case NUM_TYPE_UNSIGNED: sb_add_format(&cgen->sb, "%"PRIu64""PRIu64, (u64)word.as.u); break;
                     }
                     break;
                 }

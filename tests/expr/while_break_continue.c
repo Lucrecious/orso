@@ -1,19 +1,23 @@
 #define INTRINSICS_IMPLEMENTATION
 #include "intrinsics.h"
 
-i32 expr(void) {
-i32 result_; {
-    i32 count_ = 10;
+typedef void(*fn_void)();
 
-    i32 sum_ = 0;
+
+
+int expr(void) {
+int result_; {
+    int count_ = int_(10);
+
+    int sum_ = int_(0);
 
     {
-      until ((count_ <= 0)) {
+      until ((count_ <= int_(0))) {
         {
-          (count_ = (count_ - 1));
+          (count_ = subi32_(count_, int_(1)));
 
           {
-            if ((count_ == 5)) {
+            if ((count_ == int_(5))) {
               ;
               goto break1_;
             }
@@ -22,23 +26,23 @@ i32 result_; {
         };
         continue2_:;
       }
-      0;
+      int_(0);
     } break1_:;
 
     {
-      if ((count_ == 5)) {
-        (sum_ = (sum_ + 1));
+      if ((count_ == int_(5))) {
+        (sum_ = addi32_(sum_, int_(1)));
       }
     };
 
-    i32 tmp3; {
-      while ((count_ > 0)) {
+    int tmp3; {
+      while ((count_ > int_(0))) {
         {
-          tmp3 = ((count_ = (count_ - 1)));
+          tmp3 = ((count_ = subi32_(count_, int_(1))));
 
           {
-            if ((count_ == 3)) {
-              tmp3 = 100;
+            if ((count_ == int_(3))) {
+              tmp3 = int_(100);
               goto break4_;
             }
           };
@@ -46,31 +50,31 @@ i32 result_; {
         };
         continue5_:;
       }
-      tmp3 = 0;
+      tmp3 = int_(0);
     } break4_:;
     (count_ = tmp3);
 
     {
-      if ((count_ == 100)) {
-        (sum_ = (sum_ + 1));
+      if ((count_ == int_(100))) {
+        (sum_ = addi32_(sum_, int_(1)));
       }
     };
 
-    (count_ = 10);
+    (count_ = int_(10));
 
-    i32 odds_ = 0;
+    int odds_ = int_(0);
 
-    i32 evens_ = 0;
+    int evens_ = int_(0);
 
     {
-      while ((count_ > 0)) {
+      while ((count_ > int_(0))) {
         {
-          (count_ = (count_ - 1));
+          (count_ = subi32_(count_, int_(1)));
 
           {
-            if (((div_(count_, 2) + 1) == div_(((count_ + 1)), 2))) {
+            if ((addi32_(divi32_(count_, int_(2)), int_(1)) == divi32_((addi32_(count_, int_(1))), int_(2)))) {
               {
-                (odds_ = (odds_ + 1));
+                (odds_ = addi32_(odds_, int_(1)));
 
                 ;
                 goto continue7_;
@@ -78,48 +82,48 @@ i32 result_; {
             }
           };
 
-          (evens_ = (evens_ + 1));
+          (evens_ = addi32_(evens_, int_(1)));
         };
         continue7_:;
       }
       {
-        (count_ = 69);
+        (count_ = int_(69));
       };
     } break6_:;
 
     {
-      if ((evens_ == 5)) {
-        (sum_ = (sum_ + 1));
+      if ((evens_ == int_(5))) {
+        (sum_ = addi32_(sum_, int_(1)));
       }
     };
 
     {
-      if ((odds_ == 5)) {
-        (sum_ = (sum_ + 1));
+      if ((odds_ == int_(5))) {
+        (sum_ = addi32_(sum_, int_(1)));
       }
     };
 
     {
-      if ((count_ == 69)) {
-        (sum_ = (sum_ + 1));
+      if ((count_ == int_(69))) {
+        (sum_ = addi32_(sum_, int_(1)));
       }
     };
 
-    (count_ = 10);
+    (count_ = int_(10));
 
-    i32 found2_ = 0;
+    int found2_ = int_(0);
 
-    i32 found_others_ = 0;
+    int found_others_ = int_(0);
 
-    i32 tmp8; {
-      while ((count_ > 0)) {
+    int tmp8; {
+      while ((count_ > int_(0))) {
         {
-          (count_ = (count_ - 1));
+          (count_ = subi32_(count_, int_(1)));
 
           {
-            if ((count_ == 2)) {
+            if ((count_ == int_(2))) {
               {
-                (found2_ = 1);
+                (found2_ = int_(1));
 
                 ;
                 goto continue10_;
@@ -127,25 +131,25 @@ i32 result_; {
             }
           };
 
-          tmp8 = ((found_others_ = (found_others_ + 1)));
+          tmp8 = ((found_others_ = addi32_(found_others_, int_(1))));
         };
         continue10_:;
       }
       {
-        tmp8 = 420;
+        tmp8 = int_(420);
       };
     } break9_:;
     (count_ = tmp8);
 
     {
-      if ((found2_ == 1)) {
-        (sum_ = (sum_ + 1));
+      if ((found2_ == int_(1))) {
+        (sum_ = addi32_(sum_, int_(1)));
       }
     };
 
     {
-      if ((found_others_ == 9)) {
-        (sum_ = (sum_ + 1));
+      if ((found_others_ == int_(9))) {
+        (sum_ = addi32_(sum_, int_(1)));
       }
     };
 
