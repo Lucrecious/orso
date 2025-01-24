@@ -494,14 +494,14 @@ void vm_step(vm_t *vm) {
         case_bini_reg_reg(ADDI, add, i);
         case_bini_reg_reg(SUBI, sub, i);
         case_bini_reg_reg(MULI, mul, i);
-        case_bini_reg_reg(DIVI, mul, i);
+        case_bini_reg_reg(DIVI, div, i);
         case_bini_reg_reg(MODI, rem, i);
         case_bini_reg_reg(REMI, rem, i);
 
         case_bini_reg_reg(ADDU, add, u);
         case_bini_reg_reg(SUBU, sub, u);
         case_bini_reg_reg(MULU, mul, u);
-        case_bini_reg_reg(DIVU, mul, u);
+        case_bini_reg_reg(DIVU, div, u);
         case_bini_reg_reg(MODU, rem, u);
         case_bini_reg_reg(REMU, rem, u);
 

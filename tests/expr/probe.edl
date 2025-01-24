@@ -1,3 +1,28 @@
 {
-    true;
+    sum := 0;
+    
+    count := 10;
+    odds := 0;
+    evens := 0;
+
+    while count > 0 do {
+        count = count - 1;
+        a := count/2+1;
+        b := (count+1)/2;
+        if a == b {
+            odds = odds + 1;
+            continue;
+        };
+        evens = evens + 1;
+    } then {
+        count = 69;
+    };
+
+    if evens == 5 then
+        sum = sum + 1;
+    
+    if odds == 5 then
+        sum = sum + 1;
+
+    sum;
 }
