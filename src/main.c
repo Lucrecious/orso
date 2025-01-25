@@ -93,13 +93,23 @@ static void print_error_location_hint(token_t line_token, size_t column_hint) {
 void myerror(ast_t *ast, error_t error) {
     UNUSED(ast);
 
-    size_t line = error.after_token.loc.line + 1;
-    size_t column = error.after_token.loc.column + 1;
-    cstr_t file_path = error.after_token.loc.filepath.cstr;
+    error_source_t error_source = error_sources[error.type];
+
+    size_t line;
+    size_t column;
+    cstr_t file_path;
+    if (error_source == ERROR_SOURCE_ANALYSIS) {
+        line = error.node->start.loc.line + 1;
+        column = error.node->start.loc.column + 1;
+        file_path = error.node->start.loc.filepath.cstr;
+    } else {
+        line = error.after_token.loc.line + 1;
+        column = error.after_token.loc.column + 1;
+        file_path = error.after_token.loc.filepath.cstr;
+    }
 
     fprintf(stderr, "%s:%lu:%lu: %s\n", file_path, line, column, error.message);
 
-    error_source_t error_source = error_sources[error.type];
     switch (error_source) {
     case ERROR_SOURCE_PARSER: {
         print_error_location_hint(error.after_token, token_end_location(&error.after_token).column);
@@ -128,7 +138,10 @@ void myerror(ast_t *ast, error_t error) {
         break;
     }
 
-    case ERROR_SOURCE_ANALYSIS:
+    case ERROR_SOURCE_ANALYSIS: {
+        print_error_location_hint(error.node->start, error.node->start.loc.column);
+        break;
+    }
     case ERROR_SOURCE_CODEGEN: break;
     }
 }
