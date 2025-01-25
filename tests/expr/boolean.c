@@ -17,7 +17,7 @@ int result_; {
 
     {
       if (!(ab_)) {
-        (sum_ = addi32_(sum_, int_(1)));
+        (sum_ = adds32_(sum_, int_(1)));
       }
     };
 
@@ -29,7 +29,7 @@ int result_; {
 
     {
       if (!(b_)) {
-        (sum_ = addi32_(sum_, int_(1)));
+        (sum_ = adds32_(sum_, int_(1)));
       }
     };
 
@@ -41,7 +41,7 @@ int result_; {
 
     {
       if (ab_) {
-        (sum_ = addi32_(sum_, int_(1)));
+        (sum_ = adds32_(sum_, int_(1)));
       }
     };
 
@@ -53,7 +53,7 @@ int result_; {
 
     {
       if (ab_) {
-        (sum_ = addi32_(sum_, int_(1)));
+        (sum_ = adds32_(sum_, int_(1)));
       }
     };
 
@@ -65,7 +65,7 @@ int result_; {
 
     {
       if (!(ab_)) {
-        (sum_ = addi32_(sum_, int_(1)));
+        (sum_ = adds32_(sum_, int_(1)));
       }
     };
 
@@ -77,7 +77,7 @@ int result_; {
 
     {
       if (ab_) {
-        (sum_ = addi32_(sum_, int_(1)));
+        (sum_ = adds32_(sum_, int_(1)));
       }
     };
 
@@ -95,7 +95,7 @@ int result_; {
 
     {
       if (!(b_)) {
-        (sum_ = addi32_(sum_, int_(1)));
+        (sum_ = adds32_(sum_, int_(1)));
       }
     };
 
@@ -117,7 +117,7 @@ int result_; {
 
     {
       if (!(b_)) {
-        (sum_ = addi32_(sum_, int_(1)));
+        (sum_ = adds32_(sum_, int_(1)));
       }
     };
 

@@ -10,10 +10,10 @@
     if typeof(a1) == t then check = check + 1;
     if typeof(a2) == t then check = check + 1;
 
-    b1 := 100i8;
-    b2: i8;
+    b1 := 100s8;
+    b2: s8;
 
-    t = i8;
+    t = s8;
 
     if typeof(b1) == t then check = check + 1;
     if typeof(b2) == t then check = check + 1;
@@ -27,10 +27,10 @@
     if typeof(c2) == t then check = check + 1;
     
 
-    d1 := 10000i16;
-    d2: i16;
+    d1 := 10000s16;
+    d2: s16;
 
-    t = i16;
+    t = s16;
 
     if typeof(d1) == t then check = check + 1;
     if typeof(d2) == t then check = check + 1;
@@ -43,10 +43,10 @@
     if typeof(e1) == t then check = check + 1;
     if typeof(e2) == t then check = check + 1;
 
-    f1 := 100_000i32;
-    f2: i32;
+    f1 := 100_000s32;
+    f2: s32;
 
-    t = i32;
+    t = s32;
 
     if typeof(f1) == t then check = check + 1;
     if typeof(f2) == t then check = check + 1;
@@ -59,10 +59,10 @@
     if typeof(g1) == t then check = check + 1;
     if typeof(g2) == t then check = check + 1;
 
-    h1 := 100_000_000i64;
-    h2: i64;
+    h1 := 100_000_000s64;
+    h2: s64;
 
-    t = i64;
+    t = s64;
 
     if typeof(h1) == t then check = check + 1;
     if typeof(h2) == t then check = check + 1;
@@ -77,7 +77,7 @@
 
     i1 := 100;
     i2: int;
-    i3 := 420i;
+    i3 := 420s;
 
     t = int;
 

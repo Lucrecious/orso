@@ -17,7 +17,7 @@ int result_; {
 
     {
       if ((x_ == n_)) {
-        (sum_ = addi32_(sum_, int_(1)));
+        (sum_ = adds32_(sum_, int_(1)));
       }
     };
 
@@ -33,7 +33,7 @@ int result_; {
 
     {
       if ((d_ == int_(3))) {
-        (sum_ = addi32_(sum_, int_(1)));
+        (sum_ = adds32_(sum_, int_(1)));
       }
     };
 
@@ -45,7 +45,7 @@ int result_; {
       int c_ = int_(3);
 
       int tmp2; {
-        tmp2 = addi32_(addi32_(a_, b_), c_);
+        tmp2 = adds32_(adds32_(a_, b_), c_);
       };
       int tmp1 = (b_ = tmp2);
       e_ = (a_ = tmp1);
@@ -53,7 +53,7 @@ int result_; {
 
     {
       if ((e_ == int_(9))) {
-        (sum_ = addi32_(sum_, int_(1)));
+        (sum_ = adds32_(sum_, int_(1)));
       }
     };
 

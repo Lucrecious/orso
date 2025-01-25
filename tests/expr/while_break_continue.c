@@ -14,7 +14,7 @@ int result_; {
     {
       until ((count_ <= int_(0))) {
         {
-          (count_ = subi32_(count_, int_(1)));
+          (count_ = subs32_(count_, int_(1)));
 
           {
             if ((count_ == int_(5))) {
@@ -31,14 +31,14 @@ int result_; {
 
     {
       if ((count_ == int_(5))) {
-        (sum_ = addi32_(sum_, int_(1)));
+        (sum_ = adds32_(sum_, int_(1)));
       }
     };
 
     int tmp3; {
       while ((count_ > int_(0))) {
         {
-          tmp3 = ((count_ = subi32_(count_, int_(1))));
+          tmp3 = ((count_ = subs32_(count_, int_(1))));
 
           {
             if ((count_ == int_(3))) {
@@ -56,7 +56,7 @@ int result_; {
 
     {
       if ((count_ == int_(100))) {
-        (sum_ = addi32_(sum_, int_(1)));
+        (sum_ = adds32_(sum_, int_(1)));
       }
     };
 
@@ -69,12 +69,12 @@ int result_; {
     {
       while ((count_ > int_(0))) {
         {
-          (count_ = subi32_(count_, int_(1)));
+          (count_ = subs32_(count_, int_(1)));
 
           {
-            if ((addi32_(divi32_(count_, int_(2)), int_(1)) == divi32_((addi32_(count_, int_(1))), int_(2)))) {
+            if ((adds32_(divs32_(count_, int_(2)), int_(1)) == divs32_((adds32_(count_, int_(1))), int_(2)))) {
               {
-                (odds_ = addi32_(odds_, int_(1)));
+                (odds_ = adds32_(odds_, int_(1)));
 
                 ;
                 goto continue7_;
@@ -82,7 +82,7 @@ int result_; {
             }
           };
 
-          (evens_ = addi32_(evens_, int_(1)));
+          (evens_ = adds32_(evens_, int_(1)));
         };
         continue7_:;
       }
@@ -93,19 +93,19 @@ int result_; {
 
     {
       if ((evens_ == int_(5))) {
-        (sum_ = addi32_(sum_, int_(1)));
+        (sum_ = adds32_(sum_, int_(1)));
       }
     };
 
     {
       if ((odds_ == int_(5))) {
-        (sum_ = addi32_(sum_, int_(1)));
+        (sum_ = adds32_(sum_, int_(1)));
       }
     };
 
     {
       if ((count_ == int_(69))) {
-        (sum_ = addi32_(sum_, int_(1)));
+        (sum_ = adds32_(sum_, int_(1)));
       }
     };
 
@@ -118,7 +118,7 @@ int result_; {
     int tmp8; {
       while ((count_ > int_(0))) {
         {
-          (count_ = subi32_(count_, int_(1)));
+          (count_ = subs32_(count_, int_(1)));
 
           {
             if ((count_ == int_(2))) {
@@ -131,7 +131,7 @@ int result_; {
             }
           };
 
-          tmp8 = ((found_others_ = addi32_(found_others_, int_(1))));
+          tmp8 = ((found_others_ = adds32_(found_others_, int_(1))));
         };
         continue10_:;
       }
@@ -143,13 +143,13 @@ int result_; {
 
     {
       if ((found2_ == int_(1))) {
-        (sum_ = addi32_(sum_, int_(1)));
+        (sum_ = adds32_(sum_, int_(1)));
       }
     };
 
     {
       if ((found_others_ == int_(9))) {
-        (sum_ = addi32_(sum_, int_(1)));
+        (sum_ = adds32_(sum_, int_(1)));
       }
     };
 

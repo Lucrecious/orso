@@ -5,13 +5,13 @@
 #include <stddef.h>
 #include <math.h>
 
-typedef int8_t i8;
+typedef int8_t s8;
 typedef uint8_t u8;
-typedef int16_t i16;
+typedef int16_t s16;
 typedef uint16_t u16;
-typedef int32_t i32;
+typedef int32_t s32;
 typedef uint32_t u32;
-typedef int64_t i64;
+typedef int64_t s64;
 typedef uint64_t u64;
 typedef float f32;
 typedef double f64;
@@ -21,14 +21,14 @@ typedef unsigned int uint;
 
 typedef const char *cstr_t;
 
-#define i8_(lit) ((i8)lit)
+#define s8_(lit) ((s8)lit)
 #define u8_(lit) ((u8)lit)
-#define i16_(lit) ((i16)lit)
+#define s16_(lit) ((s16)lit)
 #define u16_(lit) ((u16)lit)
-#define i32_(lit) ((i32)lit)
+#define s32_(lit) ((s32)lit)
 #define u32_(lit) ((u32)lit)
 #define f32_(lit) ((f32)lit)
-#define i64_(lit) ((i64)lit)
+#define s64_(lit) ((s64)lit)
 #define u64_(lit) ((u64)lit)
 #define f64_(lit) ((f64)lit)
 #define int_(lit) ((int)lit)
@@ -68,33 +68,33 @@ struct type_t {
 
 #define divi_(a, b, imin) ((a == imin && b == -1) ? (imin) : (div_(a, b)))
 
-#define addi8_(a, b) opi_(a, b, i8, u8, +)
-#define subi8_(a, b) opi_(a, b, i8, u8, -)
-#define muli8_(a, b) opi_(a, b, i8, u8, *)
-#define divi8_(a, b) divi_(a, b, INT8_MIN)
-#define modi8_(a, b) modi_(a, b)
-#define remi8_(a, b) (a % b)
+#define adds8_(a, b) opi_(a, b, s8, u8, +)
+#define subs8_(a, b) opi_(a, b, s8, u8, -)
+#define muls8_(a, b) opi_(a, b, s8, u8, *)
+#define divs8_(a, b) divi_(a, b, INT8_MIN)
+#define mods8_(a, b) modi_(a, b)
+#define rems8_(a, b) (a % b)
 
-#define addi16_(a, b) opi_(a, b, i16, u16, +)
-#define subi16_(a, b) opi_(a, b, i16, u16, -)
-#define muli16_(a, b) opi_(a, b, i16, u16, *)
-#define divi16_(a, b) divi_(a, b, INT16_MIN)
-#define modi16_(a, b) modi_(a, b)
-#define remi16_(a, b) (a % b)
+#define adds16_(a, b) opi_(a, b, s16, u16, +)
+#define subs16_(a, b) opi_(a, b, s16, u16, -)
+#define muls16_(a, b) opi_(a, b, s16, u16, *)
+#define divs16_(a, b) divi_(a, b, INT16_MIN)
+#define mods16_(a, b) modi_(a, b)
+#define rems16_(a, b) (a % b)
 
-#define addi32_(a, b) opi_(a, b, i32, u32, +)
-#define subi32_(a, b) opi_(a, b, i32, u32, -)
-#define muli32_(a, b) opi_(a, b, i32, u32, *)
-#define divi32_(a, b) divi_(a, b, INT32_MIN)
-#define modi32_(a, b) modi_(a, b)
-#define remi32_(a, b) (a % b)
+#define adds32_(a, b) opi_(a, b, s32, u32, +)
+#define subs32_(a, b) opi_(a, b, s32, u32, -)
+#define muls32_(a, b) opi_(a, b, s32, u32, *)
+#define divs32_(a, b) divi_(a, b, INT32_MIN)
+#define mods32_(a, b) modi_(a, b)
+#define rems32_(a, b) (a % b)
 
-#define addi64_(a, b) opi_(a, b, i64, u64, +)
-#define subi64_(a, b) opi_(a, b, i64, u64, -)
-#define muli64_(a, b) opi_(a, b, i64, u64, *)
-#define divi64_(a, b) divi_(a, b, INT64_MIN)
-#define modi64_(a, b) modi_(a, b)
-#define remi64_(a, b) (a % b)
+#define adds64_(a, b) opi_(a, b, s64, u64, +)
+#define subs64_(a, b) opi_(a, b, s64, u64, -)
+#define muls64_(a, b) opi_(a, b, s64, u64, *)
+#define divs64_(a, b) divi_(a, b, INT64_MIN)
+#define mods64_(a, b) modi_(a, b)
+#define rems64_(a, b) (a % b)
 
 #define addu8_(a, b) opu_(a, b, u8, +)
 #define subu8_(a, b) opu_(a, b, u8, -)
@@ -143,7 +143,7 @@ struct type_t {
 
 f64 modd(f64 a, f64 b);
 f64 remd(f64 a, f64 b);
-i64 modi(i64 a, i64 b);
+s64 modi(s64 a, s64 b);
 u64 modu(u64 a, u64 b);
 
 #ifdef INTRINSICS_IMPLEMENTATION
@@ -157,8 +157,8 @@ f64 remd(f64 a, f64 b) {
     return fmod(a, b);
 }
 
-i64 modi(i64 a, i64 b) {
-    i64 b_ = b < 0 ? -b : b;
+s64 modi(s64 a, s64 b) {
+    s64 b_ = b < 0 ? -b : b;
     return ((a%b) + b_) % b_;
 }
 

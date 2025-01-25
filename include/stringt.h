@@ -50,8 +50,8 @@ string_t string_copy(string_t s, arena_t *allocator);
 
 size_t string2size(string_t s);
 
-i64 cstrn_to_u64(const char* text, i32 length);
-f64 cstrn_to_f64(const char* text, i32 length);
+s64 cstrn_to_u64(const char* text, s32 length);
+f64 cstrn_to_f64(const char* text, s32 length);
 
 #define cstr2sv(cstr) (string_view_t){.data=(cstr), .length=strlen(cstr)}
 string_view_t string2sv(string_t string);
@@ -243,16 +243,16 @@ string_t sb_render(string_builder_t *builder, arena_t *allocator) {
     return cstrn2string(builder->items, builder->count, allocator);
 }
 
-i64 cstrn_to_u64(const char* text, i32 length) {
-    i64 integer = 0;
+s64 cstrn_to_u64(const char* text, s32 length) {
+    s64 integer = 0;
 
-    for (i32 i = 0; i < length; i++) {
+    for (s32 i = 0; i < length; i++) {
         char digit = text[i];
         if (digit == '_') {
             continue;
         }
 
-        i32 ones = text[i] - '0';
+        s32 ones = text[i] - '0';
         if (ones < 0 || ones > 9) {
             break;
         }
@@ -264,7 +264,7 @@ i64 cstrn_to_u64(const char* text, i32 length) {
     return integer;
 }
 
-f64 cstrn_to_f64(const char* text, i32 length) {
+f64 cstrn_to_f64(const char* text, s32 length) {
     f64 value = 0;
     f64 fact = 1;
     bool point_seen = false;
@@ -279,7 +279,7 @@ f64 cstrn_to_f64(const char* text, i32 length) {
             continue;
         }
 
-        i32 digit = *c - '0';
+        s32 digit = *c - '0';
         if (digit < 0 || digit > 9) {
             break;
         }

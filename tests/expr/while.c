@@ -16,14 +16,14 @@ int result_; {
     {
       while ((x_ < n_)) {
         {
-          (sum_ = addi32_(sum_, x_));
+          (sum_ = adds32_(sum_, x_));
 
           int tmp4; {
             tmp4 = x_;
 ;
           };
           int tmp5 = int_(1);
-          int tmp3 = addi32_(tmp4, tmp5);
+          int tmp3 = adds32_(tmp4, tmp5);
           (x_ = tmp3);
         };
         continue2_:;
@@ -34,8 +34,8 @@ int result_; {
     int count_ = int_(10);
 
     {
-      while ((((count_ = subi32_(count_, int_(1)))) > int_(0))) {
-        (sum_ = addi32_(sum_, int_(1)));
+      while ((((count_ = subs32_(count_, int_(1)))) > int_(0))) {
+        (sum_ = adds32_(sum_, int_(1)));
         continue7_:;
       }
       int_(0);
@@ -44,8 +44,8 @@ int result_; {
     (count_ = int_(10));
 
     int a_; {
-      while ((((count_ = subi32_(count_, int_(1)))) > int_(0))) {
-        a_ = (sum_ = addi32_(sum_, int_(1)));
+      while ((((count_ = subs32_(count_, int_(1)))) > int_(0))) {
+        a_ = (sum_ = adds32_(sum_, int_(1)));
         continue9_:;
       }
       a_ = int_(0);
@@ -53,18 +53,18 @@ int result_; {
 
     {
       if ((a_ == int_(0))) {
-        (sum_ = subi32_(sum_, int_(65)));
+        (sum_ = subs32_(sum_, int_(65)));
       } else {
-        (sum_ = addi32_(sum_, int_(1)));
+        (sum_ = adds32_(sum_, int_(1)));
       }
     };
 
     int b_; {
       while ((sum_ > int_(0))) {
-        b_ = (sum_ = subi32_(sum_, int_(1)));
+        b_ = (sum_ = subs32_(sum_, int_(1)));
         continue11_:;
       }
-      b_ = ((sum_ = addi32_(sum_, int_(1))));
+      b_ = ((sum_ = adds32_(sum_, int_(1))));
     } break10_:;
 
     {

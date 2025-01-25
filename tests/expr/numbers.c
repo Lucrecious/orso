@@ -17,31 +17,31 @@ int result_; {
 
     {
       if (typeid_eq(typeid(10), t_)) {
-        (check_ = addi32_(check_, int_(1)));
+        (check_ = adds32_(check_, int_(1)));
       }
     };
 
     {
       if (typeid_eq(typeid(10), t_)) {
-        (check_ = addi32_(check_, int_(1)));
+        (check_ = adds32_(check_, int_(1)));
       }
     };
 
-    i8 b1_ = i8_(100);
+    s8 b1_ = s8_(100);
 
-    i8 b2_ = i8_(0);
+    s8 b2_ = s8_(0);
 
     (t_ = typeid(9));
 
     {
       if (typeid_eq(typeid(9), t_)) {
-        (check_ = addi32_(check_, int_(1)));
+        (check_ = adds32_(check_, int_(1)));
       }
     };
 
     {
       if (typeid_eq(typeid(9), t_)) {
-        (check_ = addi32_(check_, int_(1)));
+        (check_ = adds32_(check_, int_(1)));
       }
     };
 
@@ -53,31 +53,31 @@ int result_; {
 
     {
       if (typeid_eq(typeid(12), t_)) {
-        (check_ = addi32_(check_, int_(1)));
+        (check_ = adds32_(check_, int_(1)));
       }
     };
 
     {
       if (typeid_eq(typeid(12), t_)) {
-        (check_ = addi32_(check_, int_(1)));
+        (check_ = adds32_(check_, int_(1)));
       }
     };
 
-    i16 d1_ = i16_(10000);
+    s16 d1_ = s16_(10000);
 
-    i16 d2_ = i16_(0);
+    s16 d2_ = s16_(0);
 
     (t_ = typeid(11));
 
     {
       if (typeid_eq(typeid(11), t_)) {
-        (check_ = addi32_(check_, int_(1)));
+        (check_ = adds32_(check_, int_(1)));
       }
     };
 
     {
       if (typeid_eq(typeid(11), t_)) {
-        (check_ = addi32_(check_, int_(1)));
+        (check_ = adds32_(check_, int_(1)));
       }
     };
 
@@ -89,31 +89,31 @@ int result_; {
 
     {
       if (typeid_eq(typeid(14), t_)) {
-        (check_ = addi32_(check_, int_(1)));
+        (check_ = adds32_(check_, int_(1)));
       }
     };
 
     {
       if (typeid_eq(typeid(14), t_)) {
-        (check_ = addi32_(check_, int_(1)));
+        (check_ = adds32_(check_, int_(1)));
       }
     };
 
-    i32 f1_ = i32_(100000);
+    s32 f1_ = s32_(100000);
 
-    i32 f2_ = i32_(0);
+    s32 f2_ = s32_(0);
 
     (t_ = typeid(13));
 
     {
       if (typeid_eq(typeid(13), t_)) {
-        (check_ = addi32_(check_, int_(1)));
+        (check_ = adds32_(check_, int_(1)));
       }
     };
 
     {
       if (typeid_eq(typeid(13), t_)) {
-        (check_ = addi32_(check_, int_(1)));
+        (check_ = adds32_(check_, int_(1)));
       }
     };
 
@@ -125,31 +125,31 @@ int result_; {
 
     {
       if (typeid_eq(typeid(16), t_)) {
-        (check_ = addi32_(check_, int_(1)));
+        (check_ = adds32_(check_, int_(1)));
       }
     };
 
     {
       if (typeid_eq(typeid(16), t_)) {
-        (check_ = addi32_(check_, int_(1)));
+        (check_ = adds32_(check_, int_(1)));
       }
     };
 
-    i64 h1_ = 100000000ll;
+    s64 h1_ = 100000000ll;
 
-    i64 h2_ = 0ll;
+    s64 h2_ = 0ll;
 
     (t_ = typeid(15));
 
     {
       if (typeid_eq(typeid(15), t_)) {
-        (check_ = addi32_(check_, int_(1)));
+        (check_ = adds32_(check_, int_(1)));
       }
     };
 
     {
       if (typeid_eq(typeid(15), t_)) {
-        (check_ = addi32_(check_, int_(1)));
+        (check_ = adds32_(check_, int_(1)));
       }
     };
 
@@ -161,13 +161,13 @@ int result_; {
 
     {
       if (typeid_eq(typeid(18), t_)) {
-        (check_ = addi32_(check_, int_(1)));
+        (check_ = adds32_(check_, int_(1)));
       }
     };
 
     {
       if (typeid_eq(typeid(18), t_)) {
-        (check_ = addi32_(check_, int_(1)));
+        (check_ = adds32_(check_, int_(1)));
       }
     };
 
@@ -181,19 +181,19 @@ int result_; {
 
     {
       if (typeid_eq(typeid(17), t_)) {
-        (check_ = addi32_(check_, int_(1)));
+        (check_ = adds32_(check_, int_(1)));
       }
     };
 
     {
       if (typeid_eq(typeid(17), t_)) {
-        (check_ = addi32_(check_, int_(1)));
+        (check_ = adds32_(check_, int_(1)));
       }
     };
 
     {
       if (typeid_eq(typeid(17), t_)) {
-        (check_ = addi32_(check_, int_(1)));
+        (check_ = adds32_(check_, int_(1)));
       }
     };
 
@@ -205,13 +205,13 @@ int result_; {
 
     {
       if (typeid_eq(typeid(19), t_)) {
-        (check_ = addi32_(check_, int_(1)));
+        (check_ = adds32_(check_, int_(1)));
       }
     };
 
     {
       if (typeid_eq(typeid(19), t_)) {
-        (check_ = addi32_(check_, int_(1)));
+        (check_ = adds32_(check_, int_(1)));
       }
     };
 

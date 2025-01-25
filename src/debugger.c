@@ -27,13 +27,13 @@ static string_t disassemble_instruction(instruction_t in, arena_t *allocator) {
                 (u32)in.as.mov_mem_to_reg.mem_address,\
                 (u32)in.as.mov_mem_to_reg.reg_result)
 
-        case OP_MOVI8_MEM_TO_REG: return OP_MOV_MEM_TO_REG(I8);
+        case OP_MOVs8_MEM_TO_REG: return OP_MOV_MEM_TO_REG(s8);
         case OP_MOVU8_MEM_TO_REG: return OP_MOV_MEM_TO_REG(U8);
 
-        case OP_MOVI16_MEM_TO_REG: return OP_MOV_MEM_TO_REG(I16);
+        case OP_MOVs16_MEM_TO_REG: return OP_MOV_MEM_TO_REG(s16);
         case OP_MOVU16_MEM_TO_REG: return OP_MOV_MEM_TO_REG(U16);
 
-        case OP_MOVI32_MEM_TO_REG: return OP_MOV_MEM_TO_REG(I32);
+        case OP_MOVs32_MEM_TO_REG: return OP_MOV_MEM_TO_REG(s32);
         case OP_MOVU32_MEM_TO_REG: return OP_MOV_MEM_TO_REG(U32);
 
         case OP_MOVF32_MEM_TO_REG: return OP_MOV_MEM_TO_REG(F32);
@@ -274,12 +274,12 @@ bool debugger_step(debugger_t *debugger, vm_t *vm) {
         if (number == REGISTER_COUNT) {
             for (size_t i = 0; i < REGISTER_COUNT; ++i) {
                 word_t reg = vm->registers[i];
-                printf("%02zu: %lld, %llu, %lf, %p\n", i, reg.as.i, reg.as.u, reg.as.d, reg.as.p);
+                printf("%02zu: %lld, %llu, %lf, %p\n", i, reg.as.s, reg.as.u, reg.as.d, reg.as.p);
             }
             printf("\n");
         } else {
             word_t reg = vm->registers[number];
-            printf("%02zu: %lld, %llu, %lf, %p\n", number, reg.as.i, reg.as.u, reg.as.d, reg.as.p);
+            printf("%02zu: %lld, %llu, %lf, %p\n", number, reg.as.s, reg.as.u, reg.as.d, reg.as.p);
         }
     } else if (cstr_eq(command.cstr, "mem")) {
         if (command_n_args.count == 2) {

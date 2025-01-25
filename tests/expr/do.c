@@ -21,7 +21,7 @@ int result_; {
 
     {
       if ((a_ == int_(2))) {
-        (sum_ = addi32_(sum_, int_(1)));
+        (sum_ = adds32_(sum_, int_(1)));
       }
     };
 
@@ -39,7 +39,7 @@ int result_; {
 
     {
       if ((a_ == int_(2))) {
-        (sum_ = addi32_(sum_, int_(1)));
+        (sum_ = adds32_(sum_, int_(1)));
       }
     };
 
@@ -60,7 +60,7 @@ int result_; {
 
     {
       if ((a_ == int_(1))) {
-        (sum_ = addi32_(sum_, int_(1)));
+        (sum_ = adds32_(sum_, int_(1)));
       }
     };
 
@@ -81,7 +81,7 @@ int result_; {
 
     {
       if ((a_ == int_(3))) {
-        (sum_ = addi32_(sum_, int_(1)));
+        (sum_ = adds32_(sum_, int_(1)));
       }
     };
 
@@ -110,7 +110,7 @@ int result_; {
 
     {
       if ((a_ == int_(4))) {
-        (sum_ = addi32_(sum_, int_(1)));
+        (sum_ = adds32_(sum_, int_(1)));
       }
     };
 
@@ -142,7 +142,7 @@ int result_; {
 
     {
       if ((a_ == int_(3))) {
-        (sum_ = addi32_(sum_, int_(1)));
+        (sum_ = adds32_(sum_, int_(1)));
       }
     };
 
@@ -158,7 +158,7 @@ int result_; {
                 }
               };
 
-              (a_ = subi32_(a_, int_(1)));
+              (a_ = subs32_(a_, int_(1)));
             };
             continue20_:;
           }
@@ -171,7 +171,7 @@ int result_; {
 
     {
       if ((a_ == int_(3))) {
-        (sum_ = addi32_(sum_, int_(1)));
+        (sum_ = adds32_(sum_, int_(1)));
       }
     };
 
@@ -190,7 +190,7 @@ int result_; {
                       }
                     };
 
-                    (a_ = subi32_(a_, int_(1)));
+                    (a_ = subs32_(a_, int_(1)));
                   };
                   continue24_:;
                 }
@@ -210,7 +210,7 @@ int result_; {
 
     {
       if ((a_ == int_(4))) {
-        (sum_ = addi32_(sum_, int_(1)));
+        (sum_ = adds32_(sum_, int_(1)));
       }
     };
 
@@ -237,7 +237,7 @@ int result_; {
 
     {
       if ((answer_ == int_(0))) {
-        (sum_ = addi32_(sum_, int_(1)));
+        (sum_ = adds32_(sum_, int_(1)));
       }
     };
 
@@ -248,7 +248,7 @@ int result_; {
 ; {
             if ((a_ == int_(4))) {
               {
-                tmp29 = addi32_(sum_, int_(1));
+                tmp29 = adds32_(sum_, int_(1));
                 goto break30_;
               };
             }

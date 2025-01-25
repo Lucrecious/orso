@@ -10,41 +10,41 @@ int result_; {
     int sum_ = int_(0);
 
     {
-      i8 a_ = i8_(-128);
+      s8 a_ = s8_(-128);
 
       {
         if ((cast(int, a_) == int_(-128))) {
-          (sum_ = addi32_(sum_, int_(1)));
+          (sum_ = adds32_(sum_, int_(1)));
         }
       };
     };
 
     {
-      i16 a_ = i16_(10000);
+      s16 a_ = s16_(10000);
 
       {
         if ((cast(int, a_) == int_(10000))) {
-          (sum_ = addi32_(sum_, int_(1)));
+          (sum_ = adds32_(sum_, int_(1)));
         }
       };
     };
 
     {
-      i32 a_ = i32_(100000);
+      s32 a_ = s32_(100000);
 
       {
         if ((cast(int, a_) == int_(100000))) {
-          (sum_ = addi32_(sum_, int_(1)));
+          (sum_ = adds32_(sum_, int_(1)));
         }
       };
     };
 
     {
-      i64 a_ = 1000000ll;
+      s64 a_ = 1000000ll;
 
       {
         if ((a_ == 1000000ll)) {
-          (sum_ = addi32_(sum_, int_(1)));
+          (sum_ = adds32_(sum_, int_(1)));
         }
       };
     };
@@ -54,7 +54,7 @@ int result_; {
 
       {
         if ((a_ == int_(100000))) {
-          (sum_ = addi32_(sum_, int_(1)));
+          (sum_ = adds32_(sum_, int_(1)));
         }
       };
     };
@@ -64,7 +64,7 @@ int result_; {
 
       {
         if ((a_ == u8_(100))) {
-          (sum_ = addi32_(sum_, int_(1)));
+          (sum_ = adds32_(sum_, int_(1)));
         }
       };
     };
@@ -74,7 +74,7 @@ int result_; {
 
       {
         if ((a_ == u16_(10000))) {
-          (sum_ = addi32_(sum_, int_(1)));
+          (sum_ = adds32_(sum_, int_(1)));
         }
       };
     };
@@ -84,7 +84,7 @@ int result_; {
 
       {
         if ((a_ == u32_(100000))) {
-          (sum_ = addi32_(sum_, int_(1)));
+          (sum_ = adds32_(sum_, int_(1)));
         }
       };
     };
@@ -94,7 +94,7 @@ int result_; {
 
       {
         if ((a_ == 1000000llu)) {
-          (sum_ = addi32_(sum_, int_(1)));
+          (sum_ = adds32_(sum_, int_(1)));
         }
       };
     };
@@ -104,7 +104,7 @@ int result_; {
 
       {
         if ((a_ == uint_(100000))) {
-          (sum_ = addi32_(sum_, int_(1)));
+          (sum_ = adds32_(sum_, int_(1)));
         }
       };
     };

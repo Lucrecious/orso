@@ -46,7 +46,7 @@ Another issues arises when you can nest folds. i.e. in the following case
 
      T :: #fold foo();
       
-     foo :: () -> i32 {
+     foo :: () -> s32 {
          return T;
      };
 
@@ -74,7 +74,7 @@ we wouldn't be here trying to resolve it (expression calls this only if the ast 
 It's possible for a struct to be defined like this:
 
           Foo :: struct {
-              i: i32;
+              i: s32;
               foo: Foo;
           };
 
@@ -101,25 +101,25 @@ And for that, we need to loop around and figure out the type for Foo.
 
          Foo :: #fold generate_foo();
 
-         generate_foo :: (n: i32) -> struct { x: i32; Foo: foo; } { ... }
+         generate_foo :: (n: s32) -> struct { x: s32; Foo: foo; } { ... }
          // this fails because of this dependency chain
-         // #fold generate_foo() => (n: i32) -> struct { x: i32, foo: Foo; } => struct { x: i32, foo: Foo; }
+         // #fold generate_foo() => (n: s32) -> struct { x: s32, foo: Foo; } => struct { x: s32, foo: Foo; }
          //      => Foo -> #fold generate_foo() <== this generates a cycle error
 
 Here's another weird example
 
          Foo :: #fold generate_foo();
 
-         generate_foo :: (n: i32) -> struct { x: i32; } {
+         generate_foo :: (n: s32) -> struct { x: s32; } {
              return struct {
                  x := Foo.x;
              };
          };
 
          This creates a circular dependency like this:
-         #fold generate_foo() [fold level: 1] => (n: i32) -> struct { x: i32; } { ... }
+         #fold generate_foo() [fold level: 1] => (n: s32) -> struct { x: s32; } { ... }
              => struct { x := Foo.x } => Foo.x => Foo => #fold generate_foo() [fold level: 2]
-                 => (n: i32) -> struct { x: i32 } { ... } <=== ...
+                 => (n: s32) -> struct { x: s32 } { ... } <=== ...
                      // circular dependency since generate_foo's body is in the dependency list still
                      // because constructed but on a different fold level
 
@@ -130,7 +130,7 @@ Here's another *working* example however
 
          Foo :: #fold generate_foo(10);
 
-         generate_foo() :: (n: i32) -> struct { x: i32; } {
+         generate_foo() :: (n: s32) -> struct { x: s32; } {
              return struct {
                  x := n * 10;
              };
@@ -141,7 +141,7 @@ makes sense.
 
 Later on, it will be possible to do this based on compile type parameters
 
-         Vector2i :: #fold generate_vector2(i32, 0);
+         Vector2i :: #fold generate_vector2(s32, 0);
          Vector2f :: #fold generate_vector2(f32, 0.0);
          
          // for now the `!` means the parameter in the function call must be a compile time constnat
@@ -162,14 +162,14 @@ Here's another complicated one I guess
              value := #fold generate_value();
          };
 
-         generate_value :: () -> i32 {
+         generate_value :: () -> s32 {
              return Foo.MyValue;
          };
 
 This *should* work I guess?
 struct { MyValue:: 10; value := #fold generate_value(); }; 
      => #fold generate_value()
-         => () -> i32 { return Foo.MyValue; }
+         => () -> s32 { return Foo.MyValue; }
              => Foo.MyValue => Foo // At this point, get_resolved_def_by_identifier will find
                                    // Foo points to the "resolved" struct. But at this point, its still
                                    // potentially incomplete (in this case it is because while we are figuring out
@@ -185,13 +185,13 @@ This gets more complicated when accessing a non-constant value:
          };
 
          (1)
-         generate_value :: () -> i32 {
+         generate_value :: () -> s32 {
              foo := Foo();
              return foo.value1;
          };
 
          (2)
-         generate_value :: () -> i32 {
+         generate_value :: () -> s32 {
              foo := Foo();
              return foo.value2;
          };
@@ -216,7 +216,7 @@ can dependent on itself. We can have a weird situation like this:
          
          foo();
 
-         foo :: null or (n: i32) -> void {
+         foo :: null or (n: s32) -> void {
              if n < 0 {
                  return 0;
              };
@@ -241,8 +241,8 @@ In the case above, when foo(n - 1) is about to be analyzed this is how the depen
            dependencies.
 
          foo() => // this would not be in the chain, but it's here because it's what kicks off the chain
-             (null or (n: i32) -> void { ... }) => // foo declaration expression
-                 (n: i32) -> void { ... } => // function definition
+             (null or (n: s32) -> void { ... }) => // foo declaration expression
+                 (n: s32) -> void { ... } => // function definition
                      foo(n - 1) // this would not be in the chain, but again, it kicks off the above since foo is not resolved.
 
 At this point, foo does not have the function address yet during the anaysis! It's still in the process of being resolved...
@@ -252,10 +252,10 @@ BUT once its expression is resolved, it will be good go! At this point, we STILL
 If I were to naively check of dependencies the chain would contain to look like this (starting from foo(n - 1))
 
          foo(n - 1) => 
-             (null or (n: i32) -> void { ... }) => // foo declaration expression
+             (null or (n: s32) -> void { ... }) => // foo declaration expression
 
 Then we've come back and hit an expression we haven't resolved yet (remember the or wasn't resolved
-because we were in the middle of resolving (n: i32) -> void { ... } due to the principle of eager resolution)
+because we were in the middle of resolving (n: s32) -> void { ... } due to the principle of eager resolution)
 and therefore have a circular dependency, right? However, I found a different to do things that could work.
 
 Imagine if instead of resolving the function block right away, I actually waited until the declaration resolved

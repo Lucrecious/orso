@@ -11,13 +11,13 @@ typedef enum op_code_t op_code_t;
 enum op_code_t {
     OP_NOP,
 
-    OP_MOVI8_MEM_TO_REG,
+    OP_MOVs8_MEM_TO_REG,
     OP_MOVU8_MEM_TO_REG,
 
-    OP_MOVI16_MEM_TO_REG,
+    OP_MOVs16_MEM_TO_REG,
     OP_MOVU16_MEM_TO_REG,
 
-    OP_MOVI32_MEM_TO_REG,
+    OP_MOVs32_MEM_TO_REG,
     OP_MOVU32_MEM_TO_REG,
 
     OP_MOVF32_MEM_TO_REG,
@@ -295,11 +295,11 @@ void vm_step(vm_t *vm) {
             break;
         }
 
-        case OP_MOVI8_MEM_TO_REG: {
+        case OP_MOVs8_MEM_TO_REG: {
             memaddr_t memaddr = in.as.mov_mem_to_reg.mem_address;
             byte reg = in.as.mov_mem_to_reg.reg_result;
-            i8 value = *((i8*)(MEMORY->data + memaddr));
-            vm->registers[reg].as.i = value;
+            s8 value = *((s8*)(MEMORY->data + memaddr));
+            vm->registers[reg].as.s = value;
 
             IP_ADV(1);
             break;
@@ -315,11 +315,11 @@ void vm_step(vm_t *vm) {
             break;
         }
 
-        case OP_MOVI16_MEM_TO_REG: {
+        case OP_MOVs16_MEM_TO_REG: {
             memaddr_t memaddr = in.as.mov_mem_to_reg.mem_address;
             byte reg = in.as.mov_mem_to_reg.reg_result;
-            i16 value = *((i16*)(MEMORY->data + memaddr));
-            vm->registers[reg].as.i = value;
+            s16 value = *((s16*)(MEMORY->data + memaddr));
+            vm->registers[reg].as.s = value;
 
             IP_ADV(1);
             break;
@@ -335,11 +335,11 @@ void vm_step(vm_t *vm) {
             break;
         }
 
-        case OP_MOVI32_MEM_TO_REG: {
+        case OP_MOVs32_MEM_TO_REG: {
             memaddr_t memaddr = in.as.mov_mem_to_reg.mem_address;
             byte reg = in.as.mov_mem_to_reg.reg_result;
-            i32 value = *((i32*)(MEMORY->data + memaddr));
-            vm->registers[reg].as.i = value;
+            s32 value = *((s32*)(MEMORY->data + memaddr));
+            vm->registers[reg].as.s = value;
 
             IP_ADV(1);
             break;
@@ -349,7 +349,7 @@ void vm_step(vm_t *vm) {
             memaddr_t memaddr = in.as.mov_mem_to_reg.mem_address;
             byte reg = in.as.mov_mem_to_reg.reg_result;
             u32 value = *((u32*)(MEMORY->data + memaddr));
-            vm->registers[reg].as.i = value;
+            vm->registers[reg].as.s = value;
 
             IP_ADV(1);
             break;
@@ -441,32 +441,32 @@ void vm_step(vm_t *vm) {
         } while(false); break
 
         case OP_CAST_D2UL: do_cast(u, d, u64);
-        case OP_CAST_D2L: do_cast(i, d, i64);
+        case OP_CAST_D2L: do_cast(s, d, s64);
         case OP_CAST_D2F: do_cast(d, d, f32);
 
         case OP_CAST_UL2UB: do_cast(u, u, u8);
         case OP_CAST_UL2US: do_cast(u, u, u16);
         case OP_CAST_UL2U: do_cast(u, u, u32);
-        case OP_CAST_UL2L: do_cast(i, u, i64);
+        case OP_CAST_UL2L: do_cast(s, u, s64);
         case OP_CAST_UL2F: do_cast(d, u, f32);
         case OP_CAST_UL2D: do_cast(d, u, f64);
 
-        case OP_CAST_L2B: do_cast(i, i, i8);
-        case OP_CAST_L2S: do_cast(i, i, i16);
-        case OP_CAST_L2I: do_cast(i, i, i32);
-        case OP_CAST_L2UL: do_cast(u, i, u64);
-        case OP_CAST_L2F: do_cast(d, i, f32);
-        case OP_CAST_L2D: do_cast(d, i, f64);
+        case OP_CAST_L2B: do_cast(s, s, s8);
+        case OP_CAST_L2S: do_cast(s, s, s16);
+        case OP_CAST_L2I: do_cast(s, s, s32);
+        case OP_CAST_L2UL: do_cast(u, s, u64);
+        case OP_CAST_L2F: do_cast(d, s, f32);
+        case OP_CAST_L2D: do_cast(d, s, f64);
 
         #undef do_cast
 
         // conversion to unsigned for wrapped operation on overflow but converted back to integer after (c is ub for signed overflow)
         #define case_bini_reg_reg(name, op, type) case OP_##name##_REG_REG: {\
-            i64 a = vm->registers[in.as.bin_reg_to_reg.reg_op1].as.type; \
-            i64 b = vm->registers[in.as.bin_reg_to_reg.reg_op2].as.type; \
+            s64 a = vm->registers[in.as.bin_reg_to_reg.reg_op1].as.type; \
+            s64 b = vm->registers[in.as.bin_reg_to_reg.reg_op2].as.type; \
             byte c = in.as.bin_reg_to_reg.reg_result; \
             num_size_t sz = in.as.bin_reg_to_reg.size; \
-            i64 result = 0; \
+            s64 result = 0; \
             switch (sz) {\
             case NUM_SIZE_8: {\
                 result = op##type##8_(a, b);\
@@ -491,12 +491,12 @@ void vm_step(vm_t *vm) {
         }\
         break
 
-        case_bini_reg_reg(ADDI, add, i);
-        case_bini_reg_reg(SUBI, sub, i);
-        case_bini_reg_reg(MULI, mul, i);
-        case_bini_reg_reg(DIVI, div, i);
-        case_bini_reg_reg(MODI, rem, i);
-        case_bini_reg_reg(REMI, rem, i);
+        case_bini_reg_reg(ADDI, add, s);
+        case_bini_reg_reg(SUBI, sub, s);
+        case_bini_reg_reg(MULI, mul, s);
+        case_bini_reg_reg(DIVI, div, s);
+        case_bini_reg_reg(MODI, rem, s);
+        case_bini_reg_reg(REMI, rem, s);
 
         case_bini_reg_reg(ADDU, add, u);
         case_bini_reg_reg(SUBU, sub, u);
@@ -547,12 +547,12 @@ void vm_step(vm_t *vm) {
             break; \
         } break
 
-        case_binc_reg_reg(GTI, i, >);
-        case_binc_reg_reg(GEI, i, >=);
-        case_binc_reg_reg(LTI, i, <);
-        case_binc_reg_reg(LEI, i, <=);
-        case_binc_reg_reg(EQI, i, ==);
-        case_binc_reg_reg(NQI, i, !=);
+        case_binc_reg_reg(GTI, s, >);
+        case_binc_reg_reg(GEI, s, >=);
+        case_binc_reg_reg(LTI, s, <);
+        case_binc_reg_reg(LEI, s, <=);
+        case_binc_reg_reg(EQI, s, ==);
+        case_binc_reg_reg(NQI, s, !=);
 
         case_binc_reg_reg(GTU, u, >);
         case_binc_reg_reg(GEU, u, >=);
@@ -579,13 +579,13 @@ void vm_step(vm_t *vm) {
 
         case_unary_reg_reg(NOT, u, !);
 
-        case_unary_reg_reg(NEGATEI, i, -);
+        case_unary_reg_reg(NEGATEI, s, -);
         case_unary_reg_reg(NEGATED, d, -);
 
         case_unary_reg_reg(INCREMENTD, d, ++);
         case_unary_reg_reg(DECREMENTD, d, --);
-        case_unary_reg_reg(INCREMENTI, i, ++);
-        case_unary_reg_reg(DECREMENTI, i, --);
+        case_unary_reg_reg(INCREMENTI, s, ++);
+        case_unary_reg_reg(DECREMENTI, s, --);
         case_unary_reg_reg(INCREMENTU, u, ++);
         case_unary_reg_reg(DECREMENTU, u, --);
 

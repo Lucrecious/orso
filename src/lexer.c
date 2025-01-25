@@ -148,7 +148,7 @@ static bool skip_comments(lexer_t *lexer) {
             }
         }
     } else if (match2(lexer, "/*")) {
-        i32 rings = 1;
+        s32 rings = 1;
 
         while (!is_at_end(lexer)) {
             if (match2(lexer, "*/")) {
@@ -221,7 +221,10 @@ static token_t number(lexer_t *lexer) {
         while (is_digit(peek(lexer)) || peek(lexer) == '_') {
             advance(lexer);
         }
-    } else if (peek(lexer) == 'i' || peek(lexer) == 'u') {
+    } else if (peek(lexer) == 's' && peek_next(lexer) == 'z') {
+        advance(lexer);
+        advance(lexer);
+    } else if (peek(lexer) == 's' || peek(lexer) == 'u') {
         advance(lexer);
 
         switch (peek(lexer)) {
@@ -251,15 +254,12 @@ static token_t number(lexer_t *lexer) {
 
         default: break;
         }
-    } else if (peek(lexer) == 's' && peek_next(lexer) == 'z') {
-        advance(lexer);
-        advance(lexer);
     }
 
     return create_token(lexer, is_float ? TOKEN_FLOAT : TOKEN_INTEGER);
 }
 
-static token_type_t check_keyword(lexer_t *lexer, i32 start, i32 length,
+static token_type_t check_keyword(lexer_t *lexer, s32 start, s32 length,
         const char* rest, token_type_t type) {
     if (lexer->current - lexer->start == start + length &&
         memcmp(lexer->start + start, rest, length)== 0) {

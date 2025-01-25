@@ -33,7 +33,7 @@ typedef enum folding_mode_t {
 } folding_mode_t;
 
 typedef struct analysis_state_t {
-    i32 fold_level;
+    s32 fold_level;
     folding_mode_t mode;
     scope_t *scope;
 } analysis_state_t;
@@ -87,16 +87,16 @@ if (sv_eq(identifier, lit2sv(#TYPE_STRING))) {\
     RETURN_IF_TYPE(identifier, f64, t->f64_)
 
     RETURN_IF_TYPE(identifier, u8, t->u8_)
-    RETURN_IF_TYPE(identifier, i8, t->i8_)
+    RETURN_IF_TYPE(identifier, s8, t->s8_)
 
     RETURN_IF_TYPE(identifier, u16, t->u16_)
-    RETURN_IF_TYPE(identifier, i16, t->i16_)
+    RETURN_IF_TYPE(identifier, s16, t->s16_)
 
-    RETURN_IF_TYPE(identifier, i32, t->i32_)
+    RETURN_IF_TYPE(identifier, s32, t->s32_)
     RETURN_IF_TYPE(identifier, u32, t->u32_)
 
     RETURN_IF_TYPE(identifier, u64, t->u64_)
-    RETURN_IF_TYPE(identifier, i64, t->i64_)
+    RETURN_IF_TYPE(identifier, s64, t->s64_)
 
     RETURN_IF_TYPE(identifier, int, t->int_)
     RETURN_IF_TYPE(identifier, uint, t->uint_)
@@ -307,7 +307,7 @@ static void resolve_declarations(
         ast_t *ast,
         analysis_state_t state,
         ast_nodes_t declarations,
-        i32 count);
+        s32 count);
 
 static void resolve_declaration(
         analyzer_t *analyzer,
@@ -335,8 +335,8 @@ static void resolve_struct_definition(
 
 static void declare_definition(analyzer_t *analyzer, scope_t *scope, ast_node_t *definition);
 
-static void forward_scan_declaration_names(analyzer_t *analyzer, scope_t *scope, ast_nodes_t declarations, i32 count) {
-    for (i32 i = 0; i < count; i++) {
+static void forward_scan_declaration_names(analyzer_t *analyzer, scope_t *scope, ast_nodes_t declarations, s32 count) {
+    for (s32 i = 0; i < count; i++) {
         ast_node_t* declaration = declarations.items[i];
         if (declaration->node_type != AST_NODE_TYPE_DECLARATION_DEFINITION) {
             continue;
@@ -363,15 +363,15 @@ word_t constant_fold_bin_arithmetic(ast_t *ast, token_type_t operator, type_t ty
     case TYPE_NUMBER: {
         switch (numtype->data.num) {
         case NUM_TYPE_SIGNED: {
-            i64 lhsi = l.as.i;
-            i64 rhsi = r.as.i;
-            i64 result = 0;
+            s64 lhsi = l.as.s;
+            s64 rhsi = r.as.s;
+            s64 result = 0;
 
             switch((num_size_t)numtype->size) {
-            case NUM_SIZE_8: case_block(i8, lhsi, rhsi); break;
-            case NUM_SIZE_16: case_block(i16, lhsi, rhsi); break;
-            case NUM_SIZE_32: case_block(i32, lhsi, rhsi); break;
-            case NUM_SIZE_64: case_block(i64, lhsi, rhsi); break;
+            case NUM_SIZE_8: case_block(s8, lhsi, rhsi); break;
+            case NUM_SIZE_16: case_block(s16, lhsi, rhsi); break;
+            case NUM_SIZE_32: case_block(s32, lhsi, rhsi); break;
+            case NUM_SIZE_64: case_block(s64, lhsi, rhsi); break;
             }
 
             return WORDI(result);
@@ -423,8 +423,8 @@ word_t constant_fold_bin_comparison(ast_t *ast, token_type_t operator, type_t ty
     case TYPE_NUMBER: {
         switch (typedata->data.num) {
         case NUM_TYPE_SIGNED: {
-            i64 lhsi = a.as.i;
-            i64 rhsi = b.as.i;
+            s64 lhsi = a.as.s;
+            s64 rhsi = b.as.s;
             bool result = 0;
 
             switch (operator) {
@@ -490,15 +490,15 @@ static word_t constant_fold_cast(ast_t *ast, word_t in, type_t dst, type_t src) 
     #define CASTING(src_type, dst_type) (sourcetd->data.num == NUM_TYPE_##src_type && desttd->data.num == NUM_TYPE_##dst_type)
     #define DSIZE(size_) (desttd->size == (size_/8))
     #define VALU (in.as.u)
-    #define VALI (in.as.i)
+    #define VALI (in.as.s)
     #define VALF (in.as.d)
 
     word_t result = {0};
     if (CASTING(SIGNED, SIGNED)) {
-        if (DSIZE(8)) result.as.i = cast(i8, VALI);
-        else if (DSIZE(16)) result.as.i = cast(i16, VALI);
-        else if (DSIZE(32)) result.as.i = cast(i32, VALI);
-        else result.as.i = VALI;
+        if (DSIZE(8)) result.as.s = cast(s8, VALI);
+        else if (DSIZE(16)) result.as.s = cast(s16, VALI);
+        else if (DSIZE(32)) result.as.s = cast(s32, VALI);
+        else result.as.s = VALI;
     } else if (CASTING(SIGNED, UNSIGNED)) {
         if (DSIZE(8)) result.as.u = cast(u8, cast(u64, VALI));
         else if (DSIZE(16)) result.as.u = cast(u16, cast(u64, VALI));
@@ -515,10 +515,10 @@ static word_t constant_fold_cast(ast_t *ast, word_t in, type_t dst, type_t src) 
         else if (DSIZE(32)) result.as.u = cast(u32, VALU);
         else result.as.u = VALU;
     } else if (CASTING(UNSIGNED, SIGNED)) {
-        if (DSIZE(8)) result.as.i = cast(i8, cast(i64, VALU));
-        else if (DSIZE(16)) result.as.i = cast(i16, cast(i64, VALU));
-        else if (DSIZE(32)) result.as.i = cast(i32, cast(i64, VALU));
-        else if (DSIZE(64)) result.as.i = cast(i64, VALU);
+        if (DSIZE(8)) result.as.s = cast(s8, cast(s64, VALU));
+        else if (DSIZE(16)) result.as.s = cast(s16, cast(s64, VALU));
+        else if (DSIZE(32)) result.as.s = cast(s32, cast(s64, VALU));
+        else if (DSIZE(64)) result.as.s = cast(s64, VALU);
         else UNREACHABLE();
     } else if (CASTING(UNSIGNED, FLOAT)) {
         if (DSIZE(32)) result.as.d = cast(f32, VALU);
@@ -534,10 +534,10 @@ static word_t constant_fold_cast(ast_t *ast, word_t in, type_t dst, type_t src) 
         else if (DSIZE(64)) result.as.u = cast(u64, VALF);
         else UNREACHABLE();
     } else if (CASTING(FLOAT, SIGNED)) {
-        if (DSIZE(8)) result.as.i = cast(i8, cast(i64, VALF));
-        else if (DSIZE(16)) result.as.i = cast(i16, cast(i64, VALF));
-        else if (DSIZE(32)) result.as.i = cast(i32, cast(i64, VALF));
-        else if (DSIZE(64)) result.as.i = cast(i64, VALF);
+        if (DSIZE(8)) result.as.s = cast(s8, cast(s64, VALF));
+        else if (DSIZE(16)) result.as.s = cast(s16, cast(s64, VALF));
+        else if (DSIZE(32)) result.as.s = cast(s32, cast(s64, VALF));
+        else if (DSIZE(64)) result.as.s = cast(s64, VALF);
         else UNREACHABLE();
     } else UNREACHABLE();
 
@@ -573,25 +573,25 @@ static ast_node_t *cast_implicitly_if_necessary(ast_t *ast, type_t destination_t
             switch ((num_size_t)(destinationtd->size)) {
             case NUM_SIZE_8:
                 switch(expr_num) {
-                case NUM_TYPE_SIGNED: if (w.as.i < INT8_MIN || w.as.i > INT8_MAX) return expr; break;
+                case NUM_TYPE_SIGNED: if (w.as.s < INT8_MIN || w.as.s > INT8_MAX) return expr; break;
                 case NUM_TYPE_UNSIGNED: if (w.as.u > INT8_MAX) return expr; break;
-                case NUM_TYPE_FLOAT: if (w.as.d < INT8_MIN || w.as.d > INT8_MAX || w.as.d != ((i8)w.as.d)) return expr; break;
+                case NUM_TYPE_FLOAT: if (w.as.d < INT8_MIN || w.as.d > INT8_MAX || w.as.d != ((s8)w.as.d)) return expr; break;
                 }
                 break;
             
             case NUM_SIZE_16:
                 switch(expr_num) {
-                case NUM_TYPE_SIGNED: if (w.as.i < INT16_MIN || w.as.i > INT16_MAX) return expr; break;
+                case NUM_TYPE_SIGNED: if (w.as.s < INT16_MIN || w.as.s > INT16_MAX) return expr; break;
                 case NUM_TYPE_UNSIGNED: if (w.as.u > INT16_MAX) return expr; break;
-                case NUM_TYPE_FLOAT: if (w.as.d < INT16_MIN || w.as.d > INT16_MAX || w.as.d != ((i16)w.as.d)) return expr; break;
+                case NUM_TYPE_FLOAT: if (w.as.d < INT16_MIN || w.as.d > INT16_MAX || w.as.d != ((s16)w.as.d)) return expr; break;
                 }
                 break;
             
             case NUM_SIZE_32:
                 switch(expr_num) {
-                case NUM_TYPE_SIGNED: if (w.as.i < INT32_MIN || w.as.i > INT32_MAX) return expr; break;
+                case NUM_TYPE_SIGNED: if (w.as.s < INT32_MIN || w.as.s > INT32_MAX) return expr; break;
                 case NUM_TYPE_UNSIGNED: if (w.as.u > INT32_MAX)  return expr; break;
-                case NUM_TYPE_FLOAT: if (w.as.d < INT32_MIN || w.as.d > INT32_MAX || w.as.d != ((i32)w.as.d)) return expr; break;
+                case NUM_TYPE_FLOAT: if (w.as.d < INT32_MIN || w.as.d > INT32_MAX || w.as.d != ((s32)w.as.d)) return expr; break;
                 }
                 break;
             
@@ -599,7 +599,7 @@ static ast_node_t *cast_implicitly_if_necessary(ast_t *ast, type_t destination_t
                 switch(expr_num) {
                 case NUM_TYPE_SIGNED: break;
                 case NUM_TYPE_UNSIGNED: if (w.as.u > INT64_MAX)  return expr; break;
-                case NUM_TYPE_FLOAT: if (w.as.d < INT64_MIN || w.as.d > INT64_MAX || w.as.d != ((i64)w.as.d)) return expr; break;
+                case NUM_TYPE_FLOAT: if (w.as.d < INT64_MIN || w.as.d > INT64_MAX || w.as.d != ((s64)w.as.d)) return expr; break;
                 }
                 break;
             }
@@ -609,7 +609,7 @@ static ast_node_t *cast_implicitly_if_necessary(ast_t *ast, type_t destination_t
             switch ((num_size_t)(destinationtd->size)) {
             case NUM_SIZE_8:
                 switch(expr_num) {
-                case NUM_TYPE_SIGNED: if (w.as.i < 0 || w.as.i > UINT8_MAX) return expr; break;
+                case NUM_TYPE_SIGNED: if (w.as.s < 0 || w.as.s > UINT8_MAX) return expr; break;
                 case NUM_TYPE_UNSIGNED: if (w.as.u > UINT8_MAX) return expr; break;
                 case NUM_TYPE_FLOAT: if (w.as.d < 0 || w.as.d > UINT8_MAX || w.as.d != ((u8)w.as.d)) return expr; break;
                 }
@@ -617,7 +617,7 @@ static ast_node_t *cast_implicitly_if_necessary(ast_t *ast, type_t destination_t
             
             case NUM_SIZE_16:
                 switch(expr_num) {
-                case NUM_TYPE_SIGNED: if (w.as.i < 0 || w.as.i > UINT16_MAX) return expr; break;
+                case NUM_TYPE_SIGNED: if (w.as.s < 0 || w.as.s > UINT16_MAX) return expr; break;
                 case NUM_TYPE_UNSIGNED: if (w.as.u > UINT16_MAX) return expr; break;
                 case NUM_TYPE_FLOAT: if (w.as.d < 0 || w.as.d > UINT16_MAX || w.as.d != ((u16)w.as.d)) return expr; break;
                 }
@@ -625,7 +625,7 @@ static ast_node_t *cast_implicitly_if_necessary(ast_t *ast, type_t destination_t
             
             case NUM_SIZE_32:
                 switch(expr_num) {
-                case NUM_TYPE_SIGNED: if (w.as.i < 0 || w.as.i > UINT32_MAX) return expr; break;
+                case NUM_TYPE_SIGNED: if (w.as.s < 0 || w.as.s > UINT32_MAX) return expr; break;
                 case NUM_TYPE_UNSIGNED: if (w.as.u > UINT32_MAX)  return expr; break;
                 case NUM_TYPE_FLOAT: if (w.as.d < 0 || w.as.d > UINT32_MAX || w.as.d != ((u32)w.as.d)) return expr; break;
                 }
@@ -633,7 +633,7 @@ static ast_node_t *cast_implicitly_if_necessary(ast_t *ast, type_t destination_t
             
             case NUM_SIZE_64: break;
                 switch(expr_num) {
-                case NUM_TYPE_SIGNED: if (w.as.i < 0) return expr; break;
+                case NUM_TYPE_SIGNED: if (w.as.s < 0) return expr; break;
                 case NUM_TYPE_UNSIGNED: break;
                 case NUM_TYPE_FLOAT: if (w.as.d < 0 || w.as.d > UINT64_MAX || w.as.d != ((u64)w.as.d)) return expr; break;
                 }
@@ -964,7 +964,7 @@ void resolve_expression(
                     if (an_operand(expr)->expr_val.is_concrete) {
                         switch (operand_td->data.num) {
                         case NUM_TYPE_SIGNED: {
-                            i64 val = operand->expr_val.word.as.i;
+                            s64 val = operand->expr_val.word.as.s;
                             val = -val;
                             expr->expr_val = ast_node_val_word(WORDI(val));
                             break;
@@ -1147,7 +1147,7 @@ void resolve_expression(
         }
 
         case AST_NODE_TYPE_EXPRESSION_BLOCK: {
-            i32 declarations_count = expr->children.count;
+            s32 declarations_count = expr->children.count;
 
             scope_t block_scope;
             scope_init(&block_scope, &analyzer->allocator, SCOPE_TYPE_BLOCK, state.scope, expr);
@@ -1822,7 +1822,7 @@ static void resolve_struct_definition(analyzer_t *analyzer, ast_t *ast, analysis
 
     forward_scan_declaration_names(analyzer, state.scope, struct_definition->as.struct_.declarations, struct_definition->as.struct_.declarations.count);
 
-    i32 declarations_count = struct_definition->as.struct_.declarations.count;
+    s32 declarations_count = struct_definition->as.struct_.declarations.count;
 
     type_t incomplete_struct_id = type_unique_incomplete_struct_type(&ast->type_set);
     struct_definition->value_type = incomplete_struct_id;
@@ -1837,10 +1837,10 @@ static void resolve_struct_definition(analyzer_t *analyzer, ast_t *ast, analysis
     };
     table_put(type2ns, ast->type_to_creation_node, struct_definition->value_type, node_and_scope);
 
-    i32 field_count = 0;
+    s32 field_count = 0;
 
     bool invalid_struct = false;
-    for (i32 i = 0; i < declarations_count; i++) {
+    for (s32 i = 0; i < declarations_count; i++) {
         ast_node_t* declaration = struct_definition->as.struct_.declarations.items[i];
         field_count += (declaration->is_mutable);
 
@@ -1861,17 +1861,17 @@ static void resolve_struct_definition(analyzer_t *analyzer, ast_t *ast, analysis
         return;
     }
 
-    i32 constant_count = declarations_count - field_count;
+    s32 constant_count = declarations_count - field_count;
 
     struct_field_t fields[field_count];
     ast_node_t* ast_fields[field_count];
     struct_constant_t constants[constant_count];
 
     {
-        i32 field_counter = 0;
-        i32 constant_counter = 0;
+        s32 field_counter = 0;
+        s32 constant_counter = 0;
 
-        for (i32 i = 0; i < declarations_count; ++i) {
+        for (s32 i = 0; i < declarations_count; ++i) {
             token_t identifier = struct_definition->as.struct_.declarations.items[i]->identifier;
             char* name = arena_alloc(&analyzer->allocator, sizeof(char)*(identifier.view.length + 1));
 
@@ -1899,8 +1899,8 @@ static void resolve_struct_definition(analyzer_t *analyzer, ast_t *ast, analysis
     type_t complete_struct_type = type_set_fetch_anonymous_struct(&ast->type_set, field_count, fields, constant_count, constants);
     complete_struct_type_info = ast->type_set.types.items[complete_struct_type.i];
 
-    i32 incomplete_index = -1;
-    for (i32 i = 0; i < complete_struct_type_info->data.struct_.field_count; i++) {
+    s32 incomplete_index = -1;
+    for (s32 i = 0; i < complete_struct_type_info->data.struct_.field_count; i++) {
         type_t field_type = complete_struct_type_info->data.struct_.fields[i].type;
         typedata_t *field_type_info = ast->type_set.types.items[field_type.i];
         if (struct_type_is_incomplete(field_type_info)) {
@@ -1920,7 +1920,7 @@ static void resolve_struct_definition(analyzer_t *analyzer, ast_t *ast, analysis
             struct_data[i] = 0;
         }
 
-        // for (i32 i = 0; i < field_count; i++) {
+        // for (s32 i = 0; i < field_count; i++) {
             // type_t field_type = complete_struct_type_info->data.struct_.fields[i].type;
             // u32 offset = complete_struct_type_info->data.struct_.fields[i].offset;
             // ast_node_t *declaration = ast_fields[i];
@@ -1979,8 +1979,8 @@ static void resolve_declaration(
     }
 }
 
-void resolve_declarations(analyzer_t* analyzer, ast_t* ast, analysis_state_t state, ast_nodes_t declarations, i32 count) {
-    for (i32 i = 0; i < count; i++) {
+void resolve_declarations(analyzer_t* analyzer, ast_t* ast, analysis_state_t state, ast_nodes_t declarations, s32 count) {
+    for (s32 i = 0; i < count; i++) {
         ast_node_t* declaration = declarations.items[i];
         if (declaration->node_type == AST_NODE_TYPE_DECLARATION_DEFINITION && !declaration->is_mutable) {
             continue;
@@ -1989,7 +1989,7 @@ void resolve_declarations(analyzer_t* analyzer, ast_t* ast, analysis_state_t sta
         resolve_declaration(analyzer, ast, state, declarations.items[i]);
     }
 
-    for (i32 i = 0; i < count; i++) {
+    for (s32 i = 0; i < count; i++) {
         ast_node_t *declaration = declarations.items[i];
         if (declaration->node_type != AST_NODE_TYPE_DECLARATION_DEFINITION) {
             continue;
@@ -2025,7 +2025,7 @@ bool resolve_ast(analyzer_t *analyzer, ast_t *ast) {
             .fold_level = 0,
         };
 
-        i32 declaration_count = ast->root->children.count;
+        s32 declaration_count = ast->root->children.count;
         forward_scan_declaration_names(analyzer, &global_scope, ast->root->children, declaration_count);
         resolve_declarations(analyzer, ast, analysis_state, ast->root->children, declaration_count);
 

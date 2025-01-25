@@ -14,7 +14,7 @@ int result_; {
 
       int z_ = int_(30);
 
-      addi32_(addi32_(x_, y_), z_);
+      adds32_(adds32_(x_, y_), z_);
     };
 
     int a_; {
@@ -24,7 +24,7 @@ int result_; {
 
       int z_ = int_(30);
 
-      a_ = addi32_(addi32_(x_, y_), z_);
+      a_ = adds32_(adds32_(x_, y_), z_);
     };
 
     ;

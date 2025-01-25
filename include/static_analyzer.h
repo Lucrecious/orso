@@ -9,7 +9,7 @@
 struct interpreter_t;
 
 typedef struct analysis_dependency_t {
-    i32 fold_level;
+    s32 fold_level;
     ast_node_t* ast_node; 
 } analysis_dependency_t;
 

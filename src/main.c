@@ -287,16 +287,16 @@ void test_expr_file(string_t expr_file, arena_t *arena) {
         return;
     }
     
-    i64 resultvm = INT64_MIN;
+    s64 resultvm = INT64_MIN;
     if (true)
     {
         vm_t vm = {0};
         compile_expr_to_vm(&vm, &ast, arena, myerror);
 
-        resultvm = *(i64*)vm_run_(&vm);
+        resultvm = *(s64*)vm_run_(&vm);
     }
 
-    i64 resultc = INT64_MIN;
+    s64 resultc = INT64_MIN;
     string_t cexpr_str;
     if (true)
     {
@@ -328,7 +328,7 @@ void test_expr_file(string_t expr_file, arena_t *arena) {
         string_t dll_path = string_format("%s/%s", arena, cc.build_dir.cstr, filename.cstr);
         dynlib_t lib = dynlib_load(dll_path);
 
-        i64 (*expr)(void) = dynlib_symbol(lib, lit2str("expr"));
+        s64 (*expr)(void) = dynlib_symbol(lib, lit2str("expr"));
 
         dynlib_unload(lib);
 

@@ -352,12 +352,12 @@ static ast_node_t *ast_primaryu(ast_t *ast, u64 value, type_t type, token_t toke
     return primary;
 }
 
-static ast_node_t *ast_primaryi(ast_t *ast, i64 value, type_t type, token_t token) {
+static ast_node_t *ast_primaryi(ast_t *ast, s64 value, type_t type, token_t token) {
     if (TYPE_IS_UNRESOLVED(type)) {
         if (value >= INT_MIN && value <= INT_MAX) {
             type = ast->type_set.int_;
         } else {
-            type = ast->type_set.i64_;
+            type = ast->type_set.s64_;
         }
     }
 
@@ -366,25 +366,25 @@ static ast_node_t *ast_primaryi(ast_t *ast, i64 value, type_t type, token_t toke
     word_t word = {0};
     switch ((num_size_t)td->size) {
     case NUM_SIZE_8: {
-        i8 v = cast(i8, value);
-        word.as.i = v;
+        s8 v = cast(s8, value);
+        word.as.s = v;
         break;
     }
 
     case NUM_SIZE_16: {
-        i16 v = cast(i16, value);
-        word.as.i = v;
+        s16 v = cast(s16, value);
+        word.as.s = v;
         break;
     }
 
     case NUM_SIZE_32: {
-        i32 v = cast(i32, value);
-        word.as.i = v;
+        s32 v = cast(s32, value);
+        word.as.s = v;
         break;
     }
 
     case NUM_SIZE_64: {
-        word.as.i = value;
+        word.as.s = value;
         break;
     }
 
@@ -649,30 +649,30 @@ static ast_node_t *parse_number(parser_t *parser) {
         case TOKEN_INTEGER: {
             token_t token = parser->previous;
             string_view_t numsv = token.view;
-            // todo: check for overflow on u64 and i64
+            // todo: check for overflow on u64 and s64
             u64 value = cstrn_to_u64(numsv.data, numsv.length);
 
             bool is_free_number = false;
 
             type_t type = typeid(TYPE_UNRESOLVED);
-            if (sv_ends_with(numsv, "i")) {
+            if (sv_ends_with(numsv, "s")) {
                 type = parser->ast->type_set.int_;
             } else if (sv_ends_with(numsv, "u")) {
                 type = parser->ast->type_set.uint_;
-            } else if (sv_ends_with(numsv, "i8")) {
-                type = parser->ast->type_set.i8_;
+            } else if (sv_ends_with(numsv, "s8")) {
+                type = parser->ast->type_set.s8_;
             } else if (sv_ends_with(numsv, "u8")) {
                 type = parser->ast->type_set.u8_;
-            } else if (sv_ends_with(numsv, "i16")) {
-                type = parser->ast->type_set.i16_;
+            } else if (sv_ends_with(numsv, "s16")) {
+                type = parser->ast->type_set.s16_;
             } else if (sv_ends_with(numsv, "u16")) {
                 type = parser->ast->type_set.u16_;
-            } else if (sv_ends_with(numsv, "i32")) {
-                type = parser->ast->type_set.i32_;
+            } else if (sv_ends_with(numsv, "s32")) {
+                type = parser->ast->type_set.s32_;
             } else if (sv_ends_with(numsv, "u32")) {
                 type = parser->ast->type_set.u32_;
-            } else if (sv_ends_with(numsv, "i64")) {
-                type = parser->ast->type_set.i64_;
+            } else if (sv_ends_with(numsv, "s64")) {
+                type = parser->ast->type_set.s64_;
             } else if (sv_ends_with(numsv, "u64")) {
                 type = parser->ast->type_set.u64_;
             } else if (sv_ends_with(numsv, "sz")) {
@@ -1035,7 +1035,7 @@ static bool is_incoming_function_signature(parser_t* parser) {
     ASSERT(parenthesis_open.type == TOKEN_PARENTHESIS_OPEN, "must be starting to open a parenthesis");
 
     lexer_t look_ahead_lexer = parser->lexer;
-    i32 parenthesis_level = 1;
+    s32 parenthesis_level = 1;
     token_t next = parser->current;
     // get matching close parenthesis
     while (true) {

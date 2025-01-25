@@ -17,17 +17,17 @@ struct type_table_t {
     type_t void_;
     type_t bool_;
 
-    type_t i8_;
+    type_t s8_;
     type_t u8_;
 
-    type_t i16_;
+    type_t s16_;
     type_t u16_;
 
-    type_t i32_;
+    type_t s32_;
     type_t u32_;
 
     type_t u64_;
-    type_t i64_;
+    type_t s64_;
 
     type_t f32_;
     type_t f64_;
@@ -62,12 +62,12 @@ type_t type_set_fetch_native_function(
 
 type_t type_set_fetch_anonymous_struct(
     type_table_t *set,
-    i32 field_count, struct_field_t *fields,
-    i32 constant_count, struct_constant_t *constants);
+    s32 field_count, struct_field_t *fields,
+    s32 constant_count, struct_constant_t *constants);
 
 type_t type_set_fetch_pointer(type_table_t *set, type_t type);
 
-type_t type_create_struct(type_table_t *set, cstr_t name, i32 name_length, typedata_t *anonymous_struct);
+type_t type_create_struct(type_table_t *set, cstr_t name, s32 name_length, typedata_t *anonymous_struct);
 
 type_t type_unique_incomplete_struct_type(type_table_t *set);
 

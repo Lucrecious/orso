@@ -29,19 +29,19 @@ typedef void* ptr;
 
 #define zero(ptr, type) memset(ptr, 0, sizeof(type))
 
-FORCE_INLINE i32 mini32(i32 a, i32 b) {
+FORCE_INLINE s32 mins32(s32 a, s32 b) {
   return a < b ? a : b;
 }
 
-FORCE_INLINE i32 maxi32(i32 a, i32 b) {
+FORCE_INLINE s32 maxs32(s32 a, s32 b) {
   return a > b ? a : b;
 }
 
-FORCE_INLINE u32 minu32(i32 a, i32 b) {
+FORCE_INLINE u32 minu32(s32 a, s32 b) {
   return a < b ? a : b;
 }
 
-FORCE_INLINE u32 maxu32(i32 a, i32 b) {
+FORCE_INLINE u32 maxu32(s32 a, s32 b) {
   return a > b ? a : b;
 }
 

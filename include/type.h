@@ -27,10 +27,10 @@ typedef enum type_kind_t {
     TYPE_VOID,             // null
     TYPE_BOOL,             // true false
     TYPE_STRING,           // "anything in here"
-    TYPE_TYPE,             // i32, void, type, () -> void, etc
+    TYPE_TYPE,             // s32, void, type, () -> void, etc
     
     // "complex" types
-    TYPE_NUMBER,           // i8, u8, i16, u16, i32, u32, i64, u32, u64, f32, f64
+    TYPE_NUMBER,           // s8, u8, s16, u16, s32, u32, s64, u32, u64, f32, f64
     TYPE_FUNCTION,         // (type1, type2, ..., typen) -> return_type OR (foo := 0, bar := "") -> return_type
     TYPE_NATIVE_FUNCTION,  // (type1, type2, ..., typen) -> return_type
     TYPE_POINTER,          // &type
@@ -44,7 +44,7 @@ typedef struct struct_field_t {
     type_t type;
 
     // not relevant for hashing
-    i32 offset;
+    s32 offset;
 } struct_field_t;
 
 typedef struct struct_constant_t {
@@ -103,10 +103,10 @@ struct typedata_t {
             // null if anonymous
             char *name;
 
-            i32 field_count;
+            s32 field_count;
             struct_field_t *fields;
 
-            i32 constant_count;
+            s32 constant_count;
             struct_constant_t *constants;
         } struct_;
 
@@ -130,7 +130,7 @@ bool struct_type_is_incomplete(typedata_t *type);
 
 bool type_equal(typedata_t *a, typedata_t *b);
 
-size_t bytes_to_words(i32 byte_count);
+size_t bytes_to_words(s32 byte_count);
 
 struct_field_t *type_struct_find_field(typedata_t *struct_, const char *name, size_t name_length);
 

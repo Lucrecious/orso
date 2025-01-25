@@ -9,27 +9,27 @@ int expr(void) {
 int result_; {
     int sum_ = int_(0);
 
-    i8 min8_ = i8_(128);
+    s8 min8_ = s8_(128);
 
-    i8 max8_ = i8_(127);
+    s8 max8_ = s8_(127);
 
     {
-      i8 a_ = min8_;
+      s8 a_ = min8_;
 ;
 
-      (a_ = subi8_(a_, i8_(1)));
+      (a_ = subs8_(a_, s8_(1)));
 
       {
         if ((a_ == max8_)) {
-          (sum_ = addi32_(sum_, int_(1)));
+          (sum_ = adds32_(sum_, int_(1)));
         }
       };
 
-      (a_ = addi8_(a_, i8_(1)));
+      (a_ = adds8_(a_, s8_(1)));
 
       {
         if ((a_ == min8_)) {
-          (sum_ = addi32_(sum_, int_(1)));
+          (sum_ = adds32_(sum_, int_(1)));
         }
       };
     };
@@ -46,7 +46,7 @@ int result_; {
 
       {
         if ((a_ == maxu8_)) {
-          (sum_ = addi32_(sum_, int_(1)));
+          (sum_ = adds32_(sum_, int_(1)));
         }
       };
 
@@ -54,32 +54,32 @@ int result_; {
 
       {
         if ((a_ == minu8_)) {
-          (sum_ = addi32_(sum_, int_(1)));
+          (sum_ = adds32_(sum_, int_(1)));
         }
       };
     };
 
-    i16 min16_ = i16_(32768);
+    s16 min16_ = s16_(32768);
 
-    i16 max16_ = i16_(32767);
+    s16 max16_ = s16_(32767);
 
     {
-      i16 a_ = min16_;
+      s16 a_ = min16_;
 ;
 
-      (a_ = subi16_(a_, i16_(1)));
+      (a_ = subs16_(a_, s16_(1)));
 
       {
         if ((a_ == max16_)) {
-          (sum_ = addi32_(sum_, int_(1)));
+          (sum_ = adds32_(sum_, int_(1)));
         }
       };
 
-      (a_ = addi16_(a_, i16_(1)));
+      (a_ = adds16_(a_, s16_(1)));
 
       {
         if ((a_ == min16_)) {
-          (sum_ = addi32_(sum_, int_(1)));
+          (sum_ = adds32_(sum_, int_(1)));
         }
       };
     };
@@ -96,7 +96,7 @@ int result_; {
 
       {
         if ((a_ == maxu16_)) {
-          (sum_ = addi32_(sum_, int_(1)));
+          (sum_ = adds32_(sum_, int_(1)));
         }
       };
 
@@ -104,32 +104,32 @@ int result_; {
 
       {
         if ((a_ == minu16_)) {
-          (sum_ = addi32_(sum_, int_(1)));
+          (sum_ = adds32_(sum_, int_(1)));
         }
       };
     };
 
-    i32 min32_ = i32_(-2147483648);
+    s32 min32_ = s32_(-2147483648);
 
-    i32 max32_ = i32_(2147483647);
+    s32 max32_ = s32_(2147483647);
 
     {
-      i32 a_ = min32_;
+      s32 a_ = min32_;
 ;
 
-      (a_ = subi32_(a_, i32_(1)));
+      (a_ = subs32_(a_, s32_(1)));
 
       {
         if ((a_ == max32_)) {
-          (sum_ = addi32_(sum_, int_(1)));
+          (sum_ = adds32_(sum_, int_(1)));
         }
       };
 
-      (a_ = addi32_(a_, i32_(1)));
+      (a_ = adds32_(a_, s32_(1)));
 
       {
         if ((a_ == min32_)) {
-          (sum_ = addi32_(sum_, int_(1)));
+          (sum_ = adds32_(sum_, int_(1)));
         }
       };
     };
@@ -146,7 +146,7 @@ int result_; {
 
       {
         if ((a_ == maxu32_)) {
-          (sum_ = addi32_(sum_, int_(1)));
+          (sum_ = adds32_(sum_, int_(1)));
         }
       };
 
@@ -154,32 +154,32 @@ int result_; {
 
       {
         if ((a_ == minu32_)) {
-          (sum_ = addi32_(sum_, int_(1)));
+          (sum_ = adds32_(sum_, int_(1)));
         }
       };
     };
 
-    i64 min64_ = INT64_MIN;
+    s64 min64_ = INT64_MIN;
 
-    i64 max64_ = 9223372036854775807ll;
+    s64 max64_ = 9223372036854775807ll;
 
     {
-      i64 a_ = min64_;
+      s64 a_ = min64_;
 ;
 
-      (a_ = subi64_(a_, 1ll));
+      (a_ = subs64_(a_, 1ll));
 
       {
         if ((a_ == max64_)) {
-          (sum_ = addi32_(sum_, int_(1)));
+          (sum_ = adds32_(sum_, int_(1)));
         }
       };
 
-      (a_ = addi64_(a_, 1ll));
+      (a_ = adds64_(a_, 1ll));
 
       {
         if ((a_ == min64_)) {
-          (sum_ = addi32_(sum_, int_(1)));
+          (sum_ = adds32_(sum_, int_(1)));
         }
       };
     };
@@ -196,7 +196,7 @@ int result_; {
 
       {
         if ((a_ == maxu64_)) {
-          (sum_ = addi32_(sum_, int_(1)));
+          (sum_ = adds32_(sum_, int_(1)));
         }
       };
 
@@ -204,7 +204,7 @@ int result_; {
 
       {
         if ((a_ == minu64_)) {
-          (sum_ = addi32_(sum_, int_(1)));
+          (sum_ = adds32_(sum_, int_(1)));
         }
       };
     };

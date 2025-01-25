@@ -91,7 +91,7 @@ static void emit_read_memory_to_reg(texloc_t location, function_t *function, reg
                 case NUM_SIZE_8: {
                     switch (type_info->data.num) {
                         case NUM_TYPE_FLOAT: UNREACHABLE(); break;
-                        case NUM_TYPE_SIGNED: instruction.op = OP_MOVI8_MEM_TO_REG; break;
+                        case NUM_TYPE_SIGNED: instruction.op = OP_MOVs8_MEM_TO_REG; break;
                         case NUM_TYPE_UNSIGNED: instruction.op = OP_MOVU8_MEM_TO_REG; break;
                     }
                     break;
@@ -100,7 +100,7 @@ static void emit_read_memory_to_reg(texloc_t location, function_t *function, reg
                 case NUM_SIZE_16: {
                     switch (type_info->data.num) {
                         case NUM_TYPE_FLOAT: UNREACHABLE(); break;
-                        case NUM_TYPE_SIGNED: instruction.op = OP_MOVI16_MEM_TO_REG; break;
+                        case NUM_TYPE_SIGNED: instruction.op = OP_MOVs16_MEM_TO_REG; break;
                         case NUM_TYPE_UNSIGNED: instruction.op = OP_MOVU16_MEM_TO_REG; break;
                     }
                     break;
@@ -109,7 +109,7 @@ static void emit_read_memory_to_reg(texloc_t location, function_t *function, reg
                 case NUM_SIZE_32: {
                     switch (type_info->data.num) {
                         case NUM_TYPE_FLOAT: instruction.op = OP_MOVF32_MEM_TO_REG; break;
-                        case NUM_TYPE_SIGNED: instruction.op = OP_MOVI32_MEM_TO_REG; break;
+                        case NUM_TYPE_SIGNED: instruction.op = OP_MOVs32_MEM_TO_REG; break;
                         case NUM_TYPE_UNSIGNED: instruction.op = OP_MOVU32_MEM_TO_REG; break;
                     }
                     break;

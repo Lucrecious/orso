@@ -164,7 +164,7 @@ static bool cgen_binary_is_macro(token_type_t type, typedata_t *optd, cstr_t *op
             switch ((num_size_t)optd->size) {
             case NUM_SIZE_8: {
                 switch (optd->data.num) {
-                case NUM_TYPE_SIGNED: case_block(i8); break;
+                case NUM_TYPE_SIGNED: case_block(s8); break;
                 case NUM_TYPE_UNSIGNED: case_block(u8); break;
                 default: UNREACHABLE(); break;
                 }
@@ -173,7 +173,7 @@ static bool cgen_binary_is_macro(token_type_t type, typedata_t *optd, cstr_t *op
 
             case NUM_SIZE_16: {
                 switch (optd->data.num) {
-                case NUM_TYPE_SIGNED: case_block(i16); break;
+                case NUM_TYPE_SIGNED: case_block(s16); break;
                 case NUM_TYPE_UNSIGNED: case_block(u16); break;
                 default: UNREACHABLE(); break;
                 }
@@ -182,7 +182,7 @@ static bool cgen_binary_is_macro(token_type_t type, typedata_t *optd, cstr_t *op
 
             case NUM_SIZE_32: {
                 switch (optd->data.num) {
-                case NUM_TYPE_SIGNED: case_block(i32); break;
+                case NUM_TYPE_SIGNED: case_block(s32); break;
                 case NUM_TYPE_UNSIGNED: case_block(u32); break;
                 case NUM_TYPE_FLOAT: case_block(f); break;
                 }
@@ -191,7 +191,7 @@ static bool cgen_binary_is_macro(token_type_t type, typedata_t *optd, cstr_t *op
 
             case NUM_SIZE_64: {
                 switch (optd->data.num) {
-                case NUM_TYPE_SIGNED: case_block(i64); break;
+                case NUM_TYPE_SIGNED: case_block(s64); break;
                 case NUM_TYPE_UNSIGNED: case_block(u64); break;
                 case NUM_TYPE_FLOAT: case_block(d); break;
                 }
@@ -308,7 +308,7 @@ static void cgen_constant(cgen_t *cgen, word_t word, typedata_t *typedata) {
                 case NUM_SIZE_8: {
                     switch (typedata->data.num) {
                     case NUM_TYPE_FLOAT: UNREACHABLE(); break;
-                    case NUM_TYPE_SIGNED: sb_add_format(&cgen->sb, "%s_(%"PRIi32")", numtype, (i32)word.as.i); break;
+                    case NUM_TYPE_SIGNED: sb_add_format(&cgen->sb, "%s_(%"PRIi32")", numtype, (s32)word.as.s); break;
                     case NUM_TYPE_UNSIGNED: sb_add_format(&cgen->sb, "%s_(%"PRIu32")", numtype, (u32)word.as.u); break;
                     }
                     break;
@@ -317,7 +317,7 @@ static void cgen_constant(cgen_t *cgen, word_t word, typedata_t *typedata) {
                 case NUM_SIZE_16: {
                     switch (typedata->data.num) {
                     case NUM_TYPE_FLOAT: UNREACHABLE(); break;
-                    case NUM_TYPE_SIGNED: sb_add_format(&cgen->sb, "%s_(%"PRIi32")", numtype, (i32)word.as.i); break;
+                    case NUM_TYPE_SIGNED: sb_add_format(&cgen->sb, "%s_(%"PRIi32")", numtype, (s32)word.as.s); break;
                     case NUM_TYPE_UNSIGNED: sb_add_format(&cgen->sb, "%s_(%"PRIu32")", numtype, (u32)word.as.u); break;
                     }
                     break;
@@ -326,7 +326,7 @@ static void cgen_constant(cgen_t *cgen, word_t word, typedata_t *typedata) {
                 case NUM_SIZE_32: {
                     switch (typedata->data.num) {
                     case NUM_TYPE_FLOAT: sb_add_format(&cgen->sb, "%s_(%g)", numtype, (f32)word.as.d); break;
-                    case NUM_TYPE_SIGNED: sb_add_format(&cgen->sb, "%s_(%"PRIi32")", numtype, (i32)word.as.i); break;
+                    case NUM_TYPE_SIGNED: sb_add_format(&cgen->sb, "%s_(%"PRIi32")", numtype, (s32)word.as.s); break;
                     case NUM_TYPE_UNSIGNED: sb_add_format(&cgen->sb, "%s_(%"PRIu32")", numtype, (u32)word.as.u); break;
                     }
                     break;
@@ -336,12 +336,12 @@ static void cgen_constant(cgen_t *cgen, word_t word, typedata_t *typedata) {
                     switch (typedata->data.num) {
                         case NUM_TYPE_FLOAT: sb_add_format(&cgen->sb, "%lg", (f64)word.as.d); break;
                         case NUM_TYPE_SIGNED: {
-                            if (word.as.i == INT64_MIN) {
+                            if (word.as.s == INT64_MIN) {
                                 // the smallest 64bit integer cannot be expressed as a single number literal
                                 // due to how C99 parses numbers
-                                sb_add_format(&cgen->sb, "INT64_MIN", (i64)word.as.i); break;
+                                sb_add_format(&cgen->sb, "INT64_MIN", (s64)word.as.s); break;
                             } else {
-                                sb_add_format(&cgen->sb, "%"PRIi64"ll", (i64)word.as.i); break;
+                                sb_add_format(&cgen->sb, "%"PRIi64"ll", (s64)word.as.s); break;
                             }
                         }
                         case NUM_TYPE_UNSIGNED: sb_add_format(&cgen->sb, "%"PRIu64""PRIu64, (u64)word.as.u); break;

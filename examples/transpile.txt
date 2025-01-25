@@ -1,7 +1,7 @@
 {2;5;}+2;
 
-i64 expr0 = 0;
-i64 temp0; {
+s64 expr0 = 0;
+s64 temp0; {
     2;
     temp0 = 5;
 }
@@ -20,13 +20,13 @@ expr0 = expr0 + temp0 + 2;
             {4;} 
         +   5
 
-i64 temp0 = 1*2;
-i64 temp1 = 3;
-i64 temp2; {
+s64 temp0 = 1*2;
+s64 temp1 = 3;
+s64 temp2; {
     temp2 = 4;
 }
-i64 temp3 = temp1*temp2;
-i64 temp4 = temp3 + 5;
+s64 temp3 = temp1*temp2;
+s64 temp4 = temp3 + 5;
 temp0 + temp4
 
 
@@ -41,7 +41,7 @@ x = {5;}
     x
     {5;}
 
-i64 temp0; {
+s64 temp0; {
     temp0 = 5;
 }
 x = temp0;
@@ -56,9 +56,9 @@ x = temp0;
         x
         {5;}
 
-i64 temp0 = 1;
+s64 temp0 = 1;
 
-i64 temp1; {
+s64 temp1; {
     temp1 = 5;
 }
 x = temp0;
@@ -77,11 +77,11 @@ temp0 + x;
             5
         {2;}
 
-i64 temp0 = 1;
-i64 temp1 = (x=5);
-i64 temp2; {
+s64 temp0 = 1;
+s64 temp1 = (x=5);
+s64 temp2; {
     temp2 = 2;
 }
-i64 temp3 = temp1*temp2;
+s64 temp3 = temp1*temp2;
 temp0 + temp3;
 

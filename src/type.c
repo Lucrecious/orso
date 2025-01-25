@@ -34,8 +34,8 @@ bool type_equal(typedata_t *a, typedata_t *b) {
             return true;
         }
         case TYPE_STRUCT: {
-            i32 a_name_length = a->data.struct_.name ? strlen(a->data.struct_.name) : 0;
-            i32 b_name_length = b->data.struct_.name ? strlen(b->data.struct_.name) : 0;
+            s32 a_name_length = a->data.struct_.name ? strlen(a->data.struct_.name) : 0;
+            s32 b_name_length = b->data.struct_.name ? strlen(b->data.struct_.name) : 0;
             if (a_name_length != b_name_length) {
                 return false;
             }
@@ -48,13 +48,13 @@ bool type_equal(typedata_t *a, typedata_t *b) {
                 return false;
             }
 
-            for (i32 i = 0; i < a->data.struct_.field_count; i++) {
+            for (s32 i = 0; i < a->data.struct_.field_count; i++) {
                 unless (typeid_eq(a->data.struct_.fields[i].type, b->data.struct_.fields[i].type)) {
                     return false;
                 }
 
-                i32 field_name_length_a = strlen(a->data.struct_.fields[i].name);
-                i32 field_name_length_b = strlen(b->data.struct_.fields[i].name);
+                s32 field_name_length_a = strlen(a->data.struct_.fields[i].name);
+                s32 field_name_length_b = strlen(b->data.struct_.fields[i].name);
                 if (field_name_length_a != field_name_length_b) {
                     return false;
                 }
@@ -97,12 +97,12 @@ bool type_in_list(types_t list, type_t find) {
     return false;
 }
 
-size_t bytes_to_words(i32 byte_count) {
+size_t bytes_to_words(s32 byte_count) {
     return (byte_count + (WORD_SIZE-1)) / WORD_SIZE;
 }
 
 struct_field_t *type_struct_find_field(typedata_t *struct_, const char *name, size_t name_length) {
-    for (i32 i = 0; i < struct_->data.struct_.field_count; i++) {
+    for (s32 i = 0; i < struct_->data.struct_.field_count; i++) {
         if (strlen(struct_->data.struct_.fields[i].name) != name_length) {
             continue;
         }
@@ -150,7 +150,7 @@ string_t type_to_string_toplevel(typedatas_t types, type_t type, arena_t *alloca
         if (is_toplevel) {
             sb_add_cstr(&sb, " { ");
 
-            for (i32 i = 0; i < type_info->data.struct_.field_count; i++) {
+            for (s32 i = 0; i < type_info->data.struct_.field_count; i++) {
                 char *name = type_info->data.struct_.fields[i].name;
 
                 sb_add_cstr(&sb, name);

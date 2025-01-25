@@ -97,7 +97,7 @@ struct lexer_t {
     token_t previous_token;
     string_t file_path;
     string_view_t source;
-    i32 line;
+    s32 line;
     cstr_t start;
     cstr_t line_start;
     cstr_t current;

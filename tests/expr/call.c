@@ -9,14 +9,14 @@ int sub2_fn_(int, int);
 
 int add1_fn_(int a_, int b_) {
   {
-    int tmp3 = addi32_(a_, b_);
+    int tmp3 = adds32_(a_, b_);
     return tmp3;
   };
 }
 
 int sub2_fn_(int a_, int b_) {
   {
-    int tmp4 = subi32_(a_, b_);
+    int tmp4 = subs32_(a_, b_);
     return tmp4;
   };
 }
@@ -34,7 +34,7 @@ int result_; {
 
     {
       if ((a_ == int_(3))) {
-        (sum_ = addi32_(sum_, int_(1)));
+        (sum_ = adds32_(sum_, int_(1)));
       }
     };
 
@@ -49,7 +49,7 @@ int result_; {
 
     {
       if ((b_ == int_(7))) {
-        (sum_ = addi32_(sum_, int_(1)));
+        (sum_ = adds32_(sum_, int_(1)));
       }
     };
 
@@ -61,7 +61,7 @@ int result_; {
 
     {
       if ((c_ == int_(11))) {
-        (sum_ = addi32_(sum_, int_(1)));
+        (sum_ = adds32_(sum_, int_(1)));
       }
     };
 
@@ -74,7 +74,7 @@ int result_; {
 
     {
       if ((d_ == int_(15))) {
-        (sum_ = addi32_(sum_, int_(1)));
+        (sum_ = adds32_(sum_, int_(1)));
       }
     };
 
@@ -89,7 +89,7 @@ int result_; {
 
     {
       if ((e_ == int_(19))) {
-        (sum_ = addi32_(sum_, int_(1)));
+        (sum_ = adds32_(sum_, int_(1)));
       }
     };
 
@@ -110,7 +110,7 @@ int result_; {
 
     {
       if ((e_ == int_(23))) {
-        (sum_ = addi32_(sum_, int_(1)));
+        (sum_ = adds32_(sum_, int_(1)));
       }
     };
 

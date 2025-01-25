@@ -1,10 +1,10 @@
 #define INTRINSICS_IMPLEMENTATION
 #include "intrinsics.h"
 
-i32 expr(void) {
-i32 result_; {
-    i32 b_; {
-      i32 a_; {
+s32 expr(void) {
+s32 result_; {
+    s32 b_; {
+      s32 a_; {
         {
           a_ = 5;
         };

@@ -1,4 +1,4 @@
-fib :: (n: i32) -> i32{
+fib :: (n: s32) -> s32{
     return
         if n == 0       then 0
         else if n == 1  then 1

@@ -20,9 +20,9 @@ int fib1_fn_(int n_) {
 
           (a_ = b_);
 
-          (b_ = addi32_(b_, t_));
+          (b_ = adds32_(b_, t_));
 
-          tmp2 = ((n_ = subi32_(n_, int_(1))));
+          tmp2 = ((n_ = subs32_(n_, int_(1))));
         };
         continue4_:;
       }
