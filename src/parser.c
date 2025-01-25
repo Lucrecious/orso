@@ -534,7 +534,9 @@ static void parser_init(parser_t *parser, ast_t *ast, string_t file_path, string
 }
 
 static void parser_error(parser_t *parser, error_t error) {
-    if (!error.is_warning) {
+    if (parser->panic_mode) return;
+
+    unless (error.is_warning) {
         parser->had_error = true;
         parser->panic_mode = true;
     }
@@ -571,17 +573,23 @@ static bool match(parser_t* parser, token_type_t type) {
 static void synchronize(parser_t* parser) {
     parser->panic_mode = false;
 
-    while (!check(parser, TOKEN_EOF)) {
-        switch (parser->current.type) {
+    until (check(parser, TOKEN_EOF)) {
+        switch (parser->previous.type) {
             case TOKEN_SEMICOLON:
+                return;
+            
+            default: break;
+        }
+
+        switch (parser->current.type) {
             case TOKEN_BRACE_CLOSE:
-            case TOKEN_PARENTHESIS_CLOSE:
                 return;
             
             default: break;
         }
 
         advance(parser);
+
     }
 }
 
@@ -909,6 +917,10 @@ static ast_node_t *parse_block(parser_t *parser) {
     ast_node_t *block = ast_block_begin(parser->ast, parser->previous);
 
     until (check(parser, TOKEN_BRACE_CLOSE) || check(parser, TOKEN_EOF)) {
+        if (match(parser, TOKEN_SEMICOLON)) {
+            continue;
+        }
+
         ast_node_t *decl_node = parse_decl(parser, false);
 
         unless (consume(parser, TOKEN_SEMICOLON)) {
@@ -916,6 +928,8 @@ static ast_node_t *parse_block(parser_t *parser) {
         }
 
         ast_block_decl(block, decl_node);
+
+        synchronize(parser);
     }
 
     unless (consume(parser, TOKEN_BRACE_CLOSE)) {
@@ -1304,20 +1318,21 @@ static bool check_expression(parser_t *parser) {
 }
 
 static ast_node_t *parse_precedence(parser_t *parser, Precedence precedence) {
-    advance(parser);
-
-    ParseFn prefix_rule = parser_get_rule(parser->previous.type)->prefix;
+    ParseFn prefix_rule = parser_get_rule(parser->current.type)->prefix;
     ast_node_t *left_operand;
 
     if (prefix_rule == NULL) {
-        left_operand = ast_node_new(parser->ast, AST_NODE_TYPE_NONE, parser->previous);
+        left_operand = ast_node_new(parser->ast, AST_NODE_TYPE_NONE, parser->current);
         parser_error(parser, make_error_node(ERROR_PARSEREX_EXPECTED_EXPRESSION, left_operand));
     } else {
+        advance(parser);
+
         left_operand = prefix_rule(parser);
     }
 
     while (precedence <= parser_get_rule(parser->current.type)->precedence) {
         advance(parser);
+
         ParseFn infix_rule = parser_get_rule(parser->previous.type)->infix;
         ast_node_t *right_operand = infix_rule(parser);
 
@@ -1474,10 +1489,6 @@ static ast_node_t *parse_decl(parser_t *parser, bool is_top_level) {
         }
     }
 
-    if (parser->panic_mode) {
-        synchronize(parser);
-    }
-
     return node;
 }
 
@@ -1505,12 +1516,14 @@ bool parse(ast_t *ast, string_t file_path, string_view_t source, error_function_
 
     ast->root = ast_node_new(parser.ast, AST_NODE_TYPE_EXPRESSION_BLOCK, parser.previous);
 
-    while (!match(&parser, TOKEN_EOF)) {
+    until (match(&parser, TOKEN_EOF)) {
         ast_node_t *declaration_node = parse_decl_def(&parser);
         array_push(&ast->root->children, declaration_node);
         unless (consume(&parser, TOKEN_SEMICOLON)) {
             parser_error(&parser, make_error_node(ERROR_PARSEREX_EXPECTED_SEMICOLON_AFTER_DECLARATION, declaration_node));
         }
+
+        synchronize(&parser);
     }
 
     unless (consume(&parser, TOKEN_EOF)) {
@@ -1582,208 +1595,6 @@ ast_node_val_t zero_value(ast_t *ast, type_t type) {
     ast_node_val_t val = ast_node_val_word(value);
     table_put(ptr2word, ast->type_to_zero_word, type, value);
     return val;
-}
-
-type_t valin2type(ast_t *ast, value_index_t index) {
-    ASSERT(index.exists, "must be there");
-
-    type_t type;
-    if (memarr_get(&ast->constants, index.index, sizeof(type_t), &type)) {
-        return type;
-    }
-
-    return typeid(TYPE_INVALID);
-}
-
-value_index_t type2valin(ast_t *ast, type_t t) {
-    return memarr_push_value(&ast->constants, &t, sizeof(type_t));
-}
-
-i64 valin2i(ast_t *ast, value_index_t index, num_size_t numsize) {
-    if (!index.exists) return 0;
-
-    i64 result = 0;
-
-    switch (numsize) {
-    case NUM_SIZE_8: {
-        i8 value;
-        unless (memarr_get(&ast->constants, index.index, NUM_SIZE_8, &value)) break;
-        result = value;
-        break;
-    }
-
-    case NUM_SIZE_16: {
-        i16 value;
-        unless (memarr_get(&ast->constants, index.index, NUM_SIZE_16, &value)) break;
-        result = value;
-        break;
-    }
-
-    case NUM_SIZE_32: {
-        i32 value;
-        unless (memarr_get(&ast->constants, index.index, NUM_SIZE_32, &value)) break;
-        result = value;
-        break;
-    }
-
-    case NUM_SIZE_64: {
-        i64 value;
-        unless (memarr_get(&ast->constants, index.index, NUM_SIZE_64, &value)) break;
-        result = value;
-        break;
-    }
-
-    default: UNREACHABLE();
-    }
-
-    return result;
-}
-
-u64 valin2u(ast_t *ast, value_index_t index, num_size_t num_size) {
-    if (!index.exists) return 0;
-
-    u64 result = 0;
-
-    switch (num_size) {
-    case NUM_SIZE_8: {
-        u8 value;
-        unless (memarr_get(&ast->constants, index.index, NUM_SIZE_8, &value)) break;
-        result = value;
-        break;
-    }
-
-    case NUM_SIZE_16: {
-        u16 value;
-        unless (memarr_get(&ast->constants, index.index, NUM_SIZE_16, &value)) break;
-        result = value;
-        break;
-    }
-
-    case NUM_SIZE_32: {
-        u32 value;
-        unless (memarr_get(&ast->constants, index.index, NUM_SIZE_32, &value)) break;
-        result = value;
-        break;
-    }
-
-    case NUM_SIZE_64: {
-        u64 value;
-        unless (memarr_get(&ast->constants, index.index, NUM_SIZE_64, &value)) break;
-        result = value;
-        break;
-    }
-
-    default: UNREACHABLE();
-    }
-
-    return result;
-}
-
-f64 valin2d(ast_t *ast, value_index_t index, num_size_t num_size) {
-    if (!index.exists) return 0.0;
-
-    f64 result = 0.0;
-
-    switch (num_size) {
-    case NUM_SIZE_8: UNREACHABLE(); break;
-    case NUM_SIZE_16: UNREACHABLE(); break;
-
-    case NUM_SIZE_32: {
-        f32 value;
-        unless (memarr_get(&ast->constants, index.index, NUM_SIZE_32, &value)) break;
-        result = value;
-        break;
-    }
-
-    case NUM_SIZE_64: {
-        f64 value;
-        unless (memarr_get(&ast->constants, index.index, NUM_SIZE_64, &value)) break;
-        result = value;
-        break;
-    }
-
-    default: UNREACHABLE();
-    }
-
-    return result;
-}
-
-value_index_t i2valin(ast_t *ast, i64 value, num_size_t num_size) {
-    switch (num_size) {
-    case NUM_SIZE_8: {
-        i8 v = cast(i8, value);
-        return memarr_push_value(&ast->constants, &v, NUM_SIZE_8);
-    }
-
-    case NUM_SIZE_16: {
-        i16 v = cast(i16, value);
-        return memarr_push_value(&ast->constants, &v, NUM_SIZE_16);
-    }
-
-    case NUM_SIZE_32: {
-        i32 v = cast(i32, value);
-        return memarr_push_value(&ast->constants, &v, NUM_SIZE_32);
-    }
-
-    case NUM_SIZE_64: {
-        return memarr_push_value(&ast->constants, &value, NUM_SIZE_64);
-    }
-
-    default: UNREACHABLE();
-    }
-}
-
-value_index_t u2valin(ast_t *ast, u64 value, num_size_t num_size) {
-    switch (num_size) {
-    case NUM_SIZE_8: {
-        u8 v = cast(u8, value);
-        return memarr_push_value(&ast->constants, &v, NUM_SIZE_8);
-    }
-
-    case NUM_SIZE_16: {
-        u16 v = cast(u16, value);
-        return memarr_push_value(&ast->constants, &v, NUM_SIZE_16);
-    }
-
-    case NUM_SIZE_32: {
-        u32 v = cast(u32, value);
-        return memarr_push_value(&ast->constants, &v, NUM_SIZE_32);
-    }
-
-    case NUM_SIZE_64: {
-        return memarr_push_value(&ast->constants, &value, NUM_SIZE_64);
-    }
-    }
-}
-
-value_index_t d2valin(ast_t *ast, f64 value, num_size_t num_size) {
-    switch (num_size) {
-    case NUM_SIZE_8: UNREACHABLE(); return value_index_nil();
-
-    case NUM_SIZE_16: UNREACHABLE(); return value_index_nil();
-
-    case NUM_SIZE_32: {
-        f32 v = cast(f32, value);
-        return memarr_push_value(&ast->constants, &v, NUM_SIZE_32);
-    }
-
-    case NUM_SIZE_64: {
-        return memarr_push_value(&ast->constants, &value, NUM_SIZE_64);
-    }
-    }
-}
-
-bool valin2bool(ast_t *ast, value_index_t value_index) {
-    u8 resultb = 0;
-    bool result = false;
-    unless (memarr_get(&ast->constants, value_index.index, NUM_SIZE_8, &resultb)) return false;
-    result = resultb;
-    return result;
-}
-
-value_index_t bool2valin(ast_t *ast, bool value) {
-    byte val = (u8)value;
-    return memarr_push_value(&ast->constants, &val, NUM_SIZE_8);
 }
 
 static void print_indent(u32 level) {

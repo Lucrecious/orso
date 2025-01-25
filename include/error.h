@@ -42,6 +42,6 @@ typedef void (*error_function_t)(ast_t *ast, error_t error);
 #define make_error_no_args(et) make_error(et, &nil_node, nil_token, nil_token)
 #define make_warning(warning_type, token) ((error_t){ .type = (ERROR_NONE), .message = error_messages[ERROR_NONE], .node = (&nil_node), .got_token = (nil_token), .after_token = (nil_token), .is_warning=true })
 #define make_error_token(et, gt, at) make_error(et, &nil_node, gt, at)
-#define make_error_node(et, n) make_error(et, n, (n)->end, (n)->start)
+#define make_error_node(et, n) make_error(et, n, (n)->start, (n)->end)
 
 #endif

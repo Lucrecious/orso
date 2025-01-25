@@ -263,21 +263,6 @@ value_index_t ast_push_constant_(ast_t *ast, void *data, type_t type);
 bool parse_expr(ast_t *ast, string_t file_path, string_view_t source, error_function_t error_fn);
 bool parse(ast_t *ast, string_t file_path, string_view_t source, error_function_t error_fn);
 
-type_t valin2type(ast_t *ast, value_index_t index);
-value_index_t type2valin(ast_t *ast, type_t t);
-
-i64 valin2i(ast_t *ast, value_index_t index, num_size_t numsize);
-value_index_t i2valin(ast_t *ast, i64 value, num_size_t numsize);
-
-u64 valin2u(ast_t *ast, value_index_t index, num_size_t numsize);
-value_index_t u2valin(ast_t *ast, u64 value, num_size_t numsize);
-
-f64 valin2d(ast_t *ast, value_index_t index, num_size_t numsize);
-value_index_t d2valin(ast_t *ast, f64 value, num_size_t numsize);
-
-bool valin2bool(ast_t *ast, value_index_t value_index);
-value_index_t bool2valin(ast_t *ast, bool value);
-
 void ast_init(ast_t *ast, size_t memory_size_bytes);
 void ast_free(ast_t *ast);
 
