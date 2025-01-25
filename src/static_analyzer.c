@@ -71,7 +71,7 @@ static ast_node_t *get_def_by_identifier_or_error(
         analyzer_t *analyzer,
         ast_t *ast,
         analysis_state_t state,
-        token_t identifier_token,
+        ast_node_t *def,
         scope_t **found_scope);
 
 static bool is_builtin_type(type_table_t *t, string_view_t identifier, type_t *type) {
@@ -996,7 +996,7 @@ void resolve_expression(
 
             scope_t *def_scope;
 
-            ast_node_t *decl = get_def_by_identifier_or_error(analyzer, ast, state, expr->identifier, &def_scope);
+            ast_node_t *decl = get_def_by_identifier_or_error(analyzer, ast, state, expr, &def_scope);
 
             if (decl == NULL) {
                 INVALIDATE(expr);
@@ -1068,7 +1068,7 @@ void resolve_expression(
                 search_state.scope = node_and_scope.scope;
 
                 scope_t* found_scope;
-                ast_node_t *decl = get_def_by_identifier_or_error(analyzer, ast, search_state, expr->identifier, &found_scope);
+                ast_node_t *decl = get_def_by_identifier_or_error(analyzer, ast, search_state, expr, &found_scope);
 
                 unless (decl) {
                     INVALIDATE(expr);
@@ -1101,11 +1101,10 @@ void resolve_expression(
                 break;
             } 
 
-            if (lvalue_node->node_type == AST_NODE_TYPE_EXPRESSION_DEF_VALUE) {
+            if (an_is_notnone(lvalue_node->ref_decl)) {
                 scope_t *def_scope;
                 ast_node_t *def;
-                token_t identifier = lvalue_node->identifier;
-                def = get_def_by_identifier_or_error(analyzer, ast, state, identifier, &def_scope);
+                def = get_def_by_identifier_or_error(analyzer, ast, state, lvalue_node, &def_scope);
 
                 
                 if (def == NULL) {
@@ -1143,8 +1142,6 @@ void resolve_expression(
 
                 expr->value_type = lvalue_node->value_type;
 
-            } else {
-                UNREACHABLE();
             }
             break;
         }
@@ -1654,14 +1651,14 @@ static ast_node_t *get_def_by_identifier_or_error(
         analyzer_t *analyzer,
         ast_t *ast,
         analysis_state_t state,
-        token_t identifier_token,
+        ast_node_t *def,
         scope_t **search_scope) { // TODO: consider removing search scope from params, check if it's actually used
 
     bool passed_local_mutable_access_barrier = false;
 
     // early return if looking at a built in type
     {
-        ast_node_t *decl = get_builtin_decl(ast, identifier_token.view);
+        ast_node_t *decl = get_builtin_decl(ast, def->identifier.view);
         if (decl) {
             search_scope = NULL;
             return decl;
@@ -1680,7 +1677,7 @@ static ast_node_t *get_def_by_identifier_or_error(
 
         {
             tmp_arena_t *tmp = allocator_borrow();
-            string_t identifier_ = sv2string(identifier_token.view, tmp->allocator);
+            string_t identifier_ = sv2string(def->identifier.view, tmp->allocator);
 
             unless (table_get(s2w, (*search_scope)->definitions, identifier_, &def_slot)) {
                 NEXT_SCOPE();
@@ -1720,6 +1717,8 @@ static ast_node_t *get_def_by_identifier_or_error(
 
     #undef NEXT_SCOPE
     }
+
+    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_DEFINITION_DOES_NOT_EXIST, def));
 
     return NULL;
 }
