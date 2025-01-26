@@ -138,9 +138,6 @@ void ast_init(ast_t *ast, size_t memory_size_bytes) {
         memarr_push(&ast->constants, &zero, sizeof(u64));
     }
 
-    ast->symbols = table_new(s2w, &ast->allocator);
-
-    ast->function_arena = &ast->allocator;
     type_set_init(&ast->type_set, &ast->allocator);
 
     ast->builtins = table_new(s2w, &ast->allocator);
@@ -188,7 +185,6 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start) {
     node->ccode_continue_label = lit2str("");
     node->ccode_var_name = lit2str("");
 
-    node->fold = false;
     node->foldable = false;
     node->fold_level_resolved_at = -1;
     node->is_mutable = false;
@@ -269,7 +265,9 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start) {
             node->as.struct_.declarations = (ast_nodes_t){.allocator=&ast->allocator};
             break;
         }
+
         
+        case AST_NODE_TYPE_EXPRESSION_DIRECTIVE:
         case AST_NODE_TYPE_EXPRESSION_PRIMARY:
             break;
         
@@ -1178,6 +1176,44 @@ static ast_node_t *parse_unary(parser_t *parser) {
     return expression_node;
 }
 
+static ast_node_t *ast_call_begin(ast_t *ast, ast_node_type_t type, token_t start) {
+    ast_node_t *call = ast_node_new(ast, type, start);
+    return call;
+}
+
+static void ast_call_end(ast_node_t *call, token_t end) {
+    call->end = end;
+}
+
+static ast_node_t *parse_directive(parser_t *parser) {
+    bool allow_multiple_args = false;
+
+    ast_node_t *directive = ast_call_begin(parser->ast, AST_NODE_TYPE_EXPRESSION_DIRECTIVE, parser->previous);
+    directive->identifier = parser->previous;
+
+    if (match(parser, TOKEN_PARENTHESIS_OPEN)) {
+        allow_multiple_args = true;
+    }
+
+    do {
+        ast_node_t *arg = parse_expression(parser);
+        array_push(&directive->children, arg);
+
+        unless (allow_multiple_args) break;
+        unless (match(parser, TOKEN_COMMA)) break;
+    } while (true);
+
+    if (allow_multiple_args) {
+        unless (consume(parser, TOKEN_PARENTHESIS_CLOSE)) {
+            parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_CLOSE_PARENTHESIS, parser->current, parser->previous));
+        }
+    }
+
+    ast_call_end(directive, parser->previous);
+
+    return directive;
+}
+
 static ast_node_t *parse_binary(parser_t *parser) {
     ast_node_t *expression_node = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_BINARY, parser->previous);
 
@@ -1284,6 +1320,7 @@ parse_rule_t rules[] = {
     [TOKEN_LESS_EQUAL]              = { NULL,               parse_binary,       PREC_COMPARISON },
     [TOKEN_GREATER_EQUAL]           = { NULL,               parse_binary,       PREC_COMPARISON },
     [TOKEN_ARROW_RIGHT]             = { NULL,               NULL,               PREC_NONE },
+    [TOKEN_DIRECTIVE]               = { parse_directive,    NULL,               PREC_NONE },
     [TOKEN_IDENTIFIER]              = { parse_def_value,    NULL,               PREC_NONE },
     [TOKEN_STRING]                  = { parse_literal,      NULL,               PREC_NONE },
     [TOKEN_SYMBOL]                  = { parse_literal,      NULL,               PREC_NONE },
@@ -1403,21 +1440,10 @@ static parse_rule_t *parser_get_rule(token_type_t type) {
 }
 
 static ast_node_t *parse_expression(parser_t *parser) {
-    bool fold = false;
-    bool is_type_directive = false;
-    if (match(parser, TOKEN_DIRECTIVE)) {
-        token_t directive = parser->previous;
-        fold = (directive.view.length - 1 == strlen("fold") && strncmp(directive.view.data + 1, "fold", 4) == 0);
-
-        is_type_directive = (directive.view.length - 1 == strlen("type") && strncmp(directive.view.data + 1, "type", 4) == 0);
-    }
-
     bool inside_type_context = parser->inside_type_context;
-    parser->inside_type_context = is_type_directive || inside_type_context;
+    parser->inside_type_context = inside_type_context;
 
     ast_node_t *expression_node = parse_precedence(parser, parser->inside_type_context ? PREC_OR : PREC_ASSIGNMENT);
-    expression_node->fold = fold;
-
     parser->inside_type_context = inside_type_context;
 
     return expression_node;
@@ -1642,10 +1668,24 @@ static void ast_print_ast_node(typedatas_t types, ast_node_t *node, u32 level) {
             print_line("%s", label.cstr);
             break;
         }
+
         case AST_NODE_TYPE_EXPRESSION_GROUPING: {
             print_indent(level);
             print_line("group (...): %s", type2cstr(node));
             ast_print_ast_node(types, an_operand(node), level + 1);
+            break;
+        }
+
+        case AST_NODE_TYPE_EXPRESSION_DIRECTIVE: {
+            print_indent(level);
+            print_line("directive(%.*s): %s", node->identifier.view.length, node->identifier.view.data, type2cstr(node));
+
+            print_indent(level + 1);
+            print_line("args");
+            for (size_t i = an_dir_arg_start(node); i < an_dir_arg_end(node); ++i) {
+                ast_node_t *child = node->children.items[i];
+                ast_print_ast_node(types, child, level + 2);
+            }
             break;
         }
 

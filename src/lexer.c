@@ -199,14 +199,6 @@ static token_t symbol(lexer_t *lexer) {
     return _string_symbol(lexer, '\'', TOKEN_SYMBOL);
 }
 
-static token_t annotation(lexer_t *lexer) {
-    while (is_alpha(peek(lexer)) || is_digit(peek(lexer))) {
-        advance(lexer);
-    }
-
-    return create_token(lexer, TOKEN_ANNOTATION);
-}
-
 static token_t number(lexer_t *lexer) {
     while (is_digit(peek(lexer)) || peek(lexer) == '_') {
         advance(lexer);
@@ -352,7 +344,7 @@ static bool is_directive_character(char c) {
     return false;
 }
 
-static token_t directive(lexer_t* lexer) {
+static token_t directive(lexer_t *lexer) {
     while (is_directive_character(peek(lexer))) {
         advance(lexer);
     }
@@ -381,7 +373,7 @@ token_t _lexer_next_token(lexer_t *lexer) {
 
     char c = advance(lexer);
 
-    if (c == '#') {
+    if (c == '@') {
         return directive(lexer);
     }
 
@@ -420,7 +412,6 @@ token_t _lexer_next_token(lexer_t *lexer) {
         
         case '"': return string(lexer);
         case '\'': return symbol(lexer);
-        case '@': return annotation(lexer);
     }
 
     return error_token(lexer, lit2sv("Unexpected character."));

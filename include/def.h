@@ -28,6 +28,7 @@ typedef void* ptr;
 #define len(a) sizeof(a) / sizeof(a[0]);
 
 #define zero(ptr, type) memset(ptr, 0, sizeof(type))
+#define zer0(type) ((type){0})
 
 FORCE_INLINE s32 mins32(s32 a, s32 b) {
   return a < b ? a : b;

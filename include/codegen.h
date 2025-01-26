@@ -8,7 +8,7 @@
 
 bool compile_program(vm_t *vm, ast_t *ast);
 
-bool compile_expr_to_function(function_t *function, ast_t *expr_ast, error_function_t error_fn, arena_t *function_arena);
+bool compile_expr_to_function(function_t *function, ast_t *ast, ast_node_t *expr, error_function_t error_fn, arena_t *function_arena);
 
 #endif
 
@@ -26,7 +26,7 @@ struct gen_t {
     ast_t *ast;
     size_t stack_size;
     arena_t *gen_arena;
-    arena_t *function_arena;
+    arena_t *program_arena;
 
     struct {
         local_t *items;
@@ -37,16 +37,6 @@ struct gen_t {
 
     bool had_error;
     bool breached_stack_limit;
-};
-
-typedef enum reg_t reg_t;
-enum reg_t {
-    REG_NULL = 0,
-    REG_RESULT = 1, // 256 bytes for memory on stack
-
-    REG_TMP = 33,
-    REG_STACK_BOTTOM = 34,
-    REG_STACK_FRAME = 35,
 };
 
 static void gen_error(gen_t *gen, error_t error) {
@@ -779,7 +769,7 @@ static gen_t make_gen(ast_t *ast, error_function_t error_fn, arena_t *gen_arena,
     gen.error_fn = error_fn;
     gen.gen_arena = gen_arena;
     gen.locals.allocator = gen_arena;
-    gen.function_arena = function_arena;
+    gen.program_arena = function_arena;
     gen.breached_stack_limit = false;
 
     return gen;
@@ -790,12 +780,12 @@ static void gen_function_def(gen_t *parent_gen, function_t *parent_function, ast
     if (function_def->expr_val.is_concrete) {
         function = (function_t*)function_def->expr_val.word.as.p;
         if (function_is_compiled(function)) return;
-        function_init(function, parent_function->file_path, parent_function->memory, parent_gen->function_arena);
+        function_init(function, parent_function->memory, parent_gen->program_arena);
     } else {
-        function = new_function(parent_function->file_path, parent_function->memory, parent_gen->function_arena);
+        function = new_function(parent_function->memory, parent_gen->program_arena);
     } 
 
-    gen_t gen = make_gen(parent_gen->ast, parent_gen->error_fn, parent_gen->locals.allocator, parent_gen->function_arena);
+    gen_t gen = make_gen(parent_gen->ast, parent_gen->error_fn, parent_gen->locals.allocator, parent_gen->program_arena);
 
     for (size_t i = an_func_def_arg_start(function_def); i < an_func_def_arg_end(function_def); ++i) {
         ast_node_t *arg = function_def->children.items[i];
@@ -1005,6 +995,7 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
         }
 
 
+        case AST_NODE_TYPE_EXPRESSION_DIRECTIVE:
         case AST_NODE_TYPE_EXPRESSION_DOT:
         case AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE:
         case AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION:
@@ -1016,14 +1007,14 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
     }
 }
 
-bool compile_expr_to_function(function_t *function, ast_t *ast, error_function_t error_fn, arena_t *function_arena) {
+bool compile_expr_to_function(function_t *function, ast_t *ast, ast_node_t *expr, error_function_t error_fn, arena_t *function_arena) {
     arena_t arena = {0};
 
     gen_t gen = make_gen(ast, error_fn, &arena, function_arena);
 
-    gen_expression(&gen, function, ast->root);
+    gen_expression(&gen, function, expr);
 
-    emit_return(token_end_location(&ast->root->end), function);
+    emit_return(token_end_location(&expr->end), function);
     
     return gen.had_error;
 }

@@ -311,8 +311,8 @@ source_location_t vm_find_source_location(vm_t *vm) {
     function_t *function = vm->call_frame.function;
     size_t index = vm->call_frame.pc;
 
-    string_t file_path = function->file_path;
     texloc_t text_location = function->locations.items[index];
+    string_t file_path = text_location.filepath;
 
     return (source_location_t){
         .file_path = file_path,

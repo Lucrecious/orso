@@ -25,13 +25,14 @@ struct ast_nodes_t {
 typedef enum scope_type_t {
     SCOPE_TYPE_NONE                     = 0,
     SCOPE_TYPE_MODULE                   = 1 << 0,
-    SCOPE_TYPE_FUNCDEF                 = 1 << 1,
+    SCOPE_TYPE_FUNCDEF                  = 1 << 1,
     SCOPE_TYPE_FUNC_DEF_BODY            = 1 << 2,
     SCOPE_TYPE_JMPABLE                  = 1 << 3,
     SCOPE_TYPE_BLOCK                    = 1 << 4,
     SCOPE_TYPE_STRUCT                   = 1 << 5,
     SCOPE_TYPE_CONDITION                = 1 << 6,
-    SCOPE_TYPE_TYPE_CONTEXT             = 1 << 7
+    SCOPE_TYPE_TYPE_CONTEXT             = 1 << 7,
+    SCOPE_TYPE_FOLD_DIRECTIVE           = 1 << 8
 } scope_type_t;
 
 declare_table(s2w, string_t, word_t)
@@ -73,6 +74,7 @@ typedef enum ast_node_type_t {
     AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION,
     AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE,
     AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER,
+    AST_NODE_TYPE_EXPRESSION_DIRECTIVE,
 } ast_node_type_t;
 
 #define AST_NODE_TYPE_EXPRESSION_CASE \
@@ -93,6 +95,7 @@ case AST_NODE_TYPE_EXPRESSION_PRIMARY: \
 case AST_NODE_TYPE_EXPRESSION_JMP: \
 case AST_NODE_TYPE_EXPRESSION_UNARY: \
 case AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER: \
+case AST_NODE_TYPE_EXPRESSION_DIRECTIVE: \
 case AST_NODE_TYPE_EXPRESSION_DOT
 
 typedef struct ast_struct_t {
@@ -149,6 +152,8 @@ ast_node_t nil_node;
 #define an_call_arg_end(n) ((n)->children.count)
 #define an_bcall_arg_start(n) (0)
 #define an_bcall_arg_end(n) ((n)->children.count)
+#define an_dir_arg_start(n) (0)
+#define an_dir_arg_end(n) ((n)->children.count)
 
 #define an_is_none(n)    ((n)->node_type == AST_NODE_TYPE_NONE)
 #define an_is_notnone(n) ((n)->node_type != AST_NODE_TYPE_NONE)
@@ -186,7 +191,6 @@ struct ast_node_t {
     bool is_mutable;
     ast_node_t *ref_decl;
 
-    bool fold;
     bool foldable;
     s32 fold_level_resolved_at;
 
@@ -244,8 +248,6 @@ typedef struct ast_t {
 
     table_t(s2w) *builtins;
 
-    arena_t *function_arena;
-
     ast_node_t *root;
     
     arena_t constant_arena;
@@ -253,8 +255,6 @@ typedef struct ast_t {
 
     table_t(ptr2word) *type_to_zero_word;
     table_t(type2ns) *type_to_creation_node;
-
-    table_t(s2w) *symbols;
 } ast_t;
 
 void ast_print(ast_t *ast, const char *name);

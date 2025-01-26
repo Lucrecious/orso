@@ -5,6 +5,7 @@
 #include "type_set.h"
 #include "error.h"
 #include "vm.h"
+#include "codegen.h"
 #include "tmp.h"
 
 #include "intrinsics.h"
@@ -21,20 +22,7 @@
 
 typedef bool (*IsCircularDependencyFunc)(analyzer_t*, ast_node_t*);
 
-// static void clock_native(word_t *arguments, word_t *result) {
-//     (void)arguments;
-//     result[0] = WORDD((double)clock() / CLOCKS_PER_SEC);
-// }
-
-typedef enum folding_mode_t {
-    MODE_RUNTIME = 0x1,
-    MODE_CONSTANT_TIME = 0x2,
-    MODE_FOLDING_TIME = 0x4,
-} folding_mode_t;
-
 typedef struct analysis_state_t {
-    s32 fold_level;
-    folding_mode_t mode;
     scope_t *scope;
 } analysis_state_t;
 
@@ -662,6 +650,21 @@ static ast_node_t *cast_implicitly_if_necessary(ast_t *ast, type_t destination_t
     return cast;
 }
 
+static bool stan_run(analyzer_t *analyzer, ast_node_t *expr, word_t *out_result) {
+    tmp_arena_t *tmp = allocator_borrow();
+
+    function_t *function = new_function(analyzer->env_or_null->memory, tmp->allocator);
+    compile_expr_to_function(function, analyzer->ast, expr, analyzer->error_fn, analyzer->env_or_null->arena);
+
+    vm_fresh_run(analyzer->env_or_null->vm, function);
+
+    word_t result = analyzer->env_or_null->vm->registers[REG_RESULT];
+    *out_result = result;
+
+    allocator_return(tmp);
+    return true;
+}
+
 void resolve_expression(
         analyzer_t *analyzer,
         ast_t *ast,
@@ -674,12 +677,46 @@ void resolve_expression(
         return;
     }
 
-    if (expr->fold) {
-        ++state.fold_level;
-        state.mode |= MODE_FOLDING_TIME;
-    }
-
     switch (expr->node_type) {
+        case AST_NODE_TYPE_EXPRESSION_DIRECTIVE: {
+            ASSERT(sv_eq(expr->identifier.view, lit2sv("@run")), "only run is implemented right now");
+
+            scope_t scope = {0};
+            scope_init(&scope, &analyzer->allocator, SCOPE_TYPE_FOLD_DIRECTIVE, state.scope, expr);
+            analysis_state_t new_state = state;
+            state.scope = &scope;
+
+            ast_node_t *child = expr->children.items[0];
+
+            resolve_expression(analyzer, ast, new_state, child);
+
+            if (analyzer->env_or_null) {
+                unless (TYPE_IS_INVALID(child->value_type)) {
+                    typedata_t *td = type2td(ast, child->value_type);
+                    size_t size = bytes_to_words(td->size);
+                    ASSERT(size == 1, "for now types can only be as large as a word");
+
+                    word_t result[size];
+                    bool success = stan_run(analyzer, child, result);
+                    if (success) {
+                        expr->expr_val = ast_node_val_word(result[0]);
+                        expr->value_type = child->value_type;
+                    } else {
+                        INVALIDATE(expr);
+                    }
+                } else {
+                    INVALIDATE(expr);
+                }
+                break;
+            } else {
+                // make sure we cannot compile
+                analyzer->had_error = true;
+                // todo: output a warning that is not buildable or something
+                expr->value_type = child->value_type;
+                expr->expr_val = child->expr_val;
+            }
+        }
+
         case AST_NODE_TYPE_EXPRESSION_GROUPING: {
             resolve_expression(analyzer, ast, state, an_operand(expr));
             expr->lvalue_node = an_operand(expr);
@@ -1156,7 +1193,6 @@ void resolve_expression(
 
             analysis_state_t block_state = state;
             block_state.scope = &block_scope;
-            block_state.mode = MODE_RUNTIME | (state.mode & MODE_FOLDING_TIME);
             resolve_declarations(analyzer, ast, block_state, expr->children, declarations_count);
 
             size_t last_unreachable_index = expr->children.count;
@@ -1234,7 +1270,6 @@ void resolve_expression(
 
                     return_state = state;
                     return_state.scope = &return_scope;
-                    return_state.mode = MODE_RUNTIME | (state.mode & MODE_FOLDING_TIME);
                     break;
                 }
 
@@ -1473,7 +1508,6 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
     type_t declaration_type = typeid(TYPE_UNRESOLVED);
     if (TYPE_IS_UNRESOLVED(declaration->value_type) && !an_is_none(an_decl_type(declaration))) {
         analysis_state_t new_state = state;
-        new_state.mode = MODE_CONSTANT_TIME | (state.mode & MODE_FOLDING_TIME);
         resolve_expression(analyzer, ast, new_state, an_decl_type(declaration));
 
         ast_node_t *decl_type = an_decl_type(declaration);
@@ -1488,16 +1522,10 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
             case SCOPE_TYPE_BLOCK:
             case SCOPE_TYPE_CONDITION:
             case SCOPE_TYPE_JMPABLE:
-            case SCOPE_TYPE_MODULE: {
-                folding_mode_t mode = declaration->is_mutable ? MODE_RUNTIME : MODE_CONSTANT_TIME;
-                mode = mode | (state.mode & MODE_FOLDING_TIME);
-                new_state.mode = mode;
-                break;
-            }
-
+            case SCOPE_TYPE_MODULE:
             case SCOPE_TYPE_STRUCT:
+            case SCOPE_TYPE_FOLD_DIRECTIVE:
             case SCOPE_TYPE_FUNCDEF: {
-                new_state.mode = MODE_CONSTANT_TIME | (state.mode & MODE_FOLDING_TIME);
                 break;
             }
 
@@ -1565,7 +1593,6 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
             to_struct_type->value_type = typeid(TYPE_TYPE);
             an_operand(to_struct_type) = an_decl_expr(declaration);
 
-            to_struct_type->fold = false;
             to_struct_type->foldable = true;
             typedata_t *initial_expression_type_info = type2typedata(&ast->type_set.types, an_decl_expr(declaration)->value_type);
             type_t named_struct_id = type_create_struct(&ast->type_set, declaration->start.view.data, declaration->start.view.length, initial_expression_type_info);
@@ -1590,7 +1617,6 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
 
     // Could be resolved could be unresolved at this point.
     declaration->value_type = declaration_type;
-    declaration->fold_level_resolved_at = state.fold_level;
 
     if (TYPE_IS_UNRESOLVED(declaration->value_type)) {
         type_t expression_type = an_decl_expr(declaration)->value_type;
@@ -1708,11 +1734,6 @@ static ast_node_t *get_def_by_identifier_or_error(
             resolve_declaration_definition(analyzer, ast, new_state, decl);
         }
 
-        if (decl->is_mutable && decl->fold_level_resolved_at != state.fold_level) {
-            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CANNOT_ACCESS_MUTABLE_ON_DIFFERENT_FOLD_LEVEL, decl));
-            return NULL;
-        }
-
         return decl;
 
     #undef NEXT_SCOPE
@@ -1748,7 +1769,6 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
 
     for (size_t i = an_func_def_arg_start(funcdef); i < an_func_def_arg_end(funcdef); ++i) {
         analysis_state_t new_state = state;
-        new_state.mode = MODE_CONSTANT_TIME | (state.mode & MODE_FOLDING_TIME);
         new_state.scope = &funcdef_scope;
         resolve_declaration_definition(analyzer, ast, new_state, funcdef->children.items[i]);
         array_push(&parameter_types, funcdef->children.items[i]->value_type);
@@ -1760,8 +1780,6 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
 
     type_t return_type = typeid(TYPE_VOID);
     {
-        analysis_state_t new_state = state;
-        new_state.mode = MODE_CONSTANT_TIME | (state.mode & MODE_FOLDING_TIME);
         resolve_expression(analyzer, ast, state, an_func_def_return(funcdef));
     }
 
@@ -1782,13 +1800,18 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
 
     // create empty placeholder function immeidately in case definition is recursive
     unless (TYPE_IS_INVALID(an_func_def_block(funcdef)->value_type)) {
-        function_t *function = new_function(funcdef->start.loc.filepath, NULL, ast->function_arena);
+        function_t *function = NULL;
+        if (analyzer->env_or_null) {
+            new_function(analyzer->env_or_null->memory, analyzer->env_or_null->arena);
+        } else {
+            function = &analyzer->placeholder;
+        }
+
         funcdef->expr_val = ast_node_val_word(WORDP(function));
     }
 
     {
         analysis_state_t new_state = state;
-        new_state.mode = MODE_RUNTIME;
 
         scope_t function_scope;
         scope_init(&function_scope, &analyzer->allocator, SCOPE_TYPE_FUNC_DEF_BODY, &funcdef_scope, funcdef);
@@ -1817,7 +1840,6 @@ static void resolve_struct_definition(analyzer_t *analyzer, ast_t *ast, analysis
     scope_t struct_scope;
     scope_init(&struct_scope, &analyzer->allocator, SCOPE_TYPE_STRUCT, state.scope, struct_definition);
 
-    state.fold_level = MODE_CONSTANT_TIME;
     state.scope = &struct_scope;
 
     forward_scan_declaration_names(analyzer, state.scope, struct_definition->as.struct_.declarations, struct_definition->as.struct_.declarations.count);
@@ -2020,9 +2042,7 @@ bool resolve_ast(analyzer_t *analyzer, ast_t *ast) {
         scope_init(&global_scope, &analyzer->allocator, SCOPE_TYPE_MODULE, NULL, NULL);
 
         analysis_state_t analysis_state = (analysis_state_t) {
-            .mode = MODE_RUNTIME,
             .scope = &global_scope,
-            .fold_level = 0,
         };
 
         s32 declaration_count = ast->root->children.count;
@@ -2037,9 +2057,7 @@ bool resolve_ast(analyzer_t *analyzer, ast_t *ast) {
         scope_init(&global_scope, &analyzer->allocator, SCOPE_TYPE_MODULE, NULL, NULL);
 
         analysis_state_t state = (analysis_state_t) {
-            .mode = MODE_RUNTIME,
             .scope = &global_scope,
-            .fold_level = 0,
         };
 
         resolve_expression(analyzer, ast, state, ast->root);
@@ -2050,23 +2068,19 @@ bool resolve_ast(analyzer_t *analyzer, ast_t *ast) {
     }
 }
 
-void analyzer_init(analyzer_t* analyzer, write_function_t write_fn, error_function_t error_fn) {
+void analyzer_init(analyzer_t *analyzer, env_t *env, write_function_t write_fn, error_function_t error_fn) {
     analyzer->error_fn = error_fn;
     analyzer->had_error = false;
+    analyzer->env_or_null = env;
 
-    analyzer->allocator = (arena_t){0};
-
-    analyzer->dependencies = (analysis_dependencies_t){.allocator=&analyzer->allocator};
+    analyzer->allocator = zer0(arena_t);
+    analyzer->placeholder = zer0(function_t);
 
     // TODO: fix
     (void)write_fn;
-
-    analyzer->symbols = table_new(s2w, &analyzer->allocator);
 }
 
-void analyzer_free(analyzer_t* analyzer) {
-    analyzer->dependencies.count = 0;
-
+void analyzer_free(analyzer_t *analyzer) {
     analyzer->ast = NULL;
 
     analyzer->error_fn = NULL;

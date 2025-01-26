@@ -152,12 +152,12 @@ void mywrite(cstr_t chars) {
 
 
 // todo: fix memory leak because too lazy to write an ast_dup function right now
-bool parse_expr_cstr(ast_t *ast, string_view_t expr_source, string_t file_path) {
+bool parse_expr_cstr(ast_t *ast, string_view_t expr_source, string_t file_path, env_t *program_env_or_null) {
     bool success = parse_expr(ast, file_path, expr_source, myerror);
 
     if (success) {
         analyzer_t analyzer = {0};
-        analyzer_init(&analyzer, mywrite, myerror);
+        analyzer_init(&analyzer, program_env_or_null, mywrite, myerror);
         analyzer.ast = ast;
 
         success = resolve_ast(&analyzer, ast);
@@ -166,14 +166,6 @@ bool parse_expr_cstr(ast_t *ast, string_view_t expr_source, string_t file_path) 
     }
 
     return success;
-}
-
-static void *vm_run_(vm_t *vm) {
-    until (vm->halted) {
-        vm_step(vm);
-    }
-
-    return &vm->registers[REG_RESULT];
 }
 
 typedef enum compiler_mode_type_t compiler_mode_type_t;
@@ -235,7 +227,7 @@ string_t coutput_file_from_edl(string_t file, arena_t *arena) {
     return coutput_file;
 }
 
-bool parse_expr_file(ast_t *ast, string_t expr_file, arena_t *arena) {
+bool parse_expr_file(ast_t *ast, string_t expr_file, env_t *program_env_or_null) {
     String_Builder sb = {0};
     bool success = read_entire_file(expr_file.cstr, &sb);
 
@@ -245,12 +237,14 @@ bool parse_expr_file(ast_t *ast, string_t expr_file, arena_t *arena) {
     
     String_View nob_sv = sb_to_sv(sb);
     string_view_t code = { .data = nob_sv.data, .length = nob_sv.count };
-    code = string2sv(sv2string(code, arena));
 
     ast_init(ast, megabytes(2));
-    ast->function_arena = arena;
+    code = string2sv(sv2string(code, &ast->allocator));
 
-    success = parse_expr_cstr(ast, code, expr_file);
+    success = parse_expr_cstr(ast, code, expr_file, program_env_or_null);
+
+    sb_free(sb);
+
     unless (success) {
         return false;
     }
@@ -258,31 +252,32 @@ bool parse_expr_file(ast_t *ast, string_t expr_file, arena_t *arena) {
     return true;
 }
 
-void compile_expr_to_vm(vm_t *vm, ast_t *ast, arena_t *arena, error_function_t error_fn) {
-    memarr_t *memory = arena_alloc(arena, sizeof(memarr_t));
+env_t make_test_env(vm_t *vm, arena_t *program_arena) {
+    memarr_t *memory = arena_alloc(program_arena, sizeof(memarr_t));
     *memory = (memarr_t){0};
 
     memarr_init(memory, megabytes(2.5));
     size_t stack_size = (size_t)megabytes(0.5);
     memory->count = stack_size;
     memset(memory->data, 0, stack_size);
-    
-    function_t *expr_function = new_function(lit2str("<none>"), memory, arena);
-
-    compile_expr_to_function(expr_function, ast, error_fn, arena);
 
     vm_init(vm);
     vm->registers[REG_STACK_FRAME].as.u = stack_size;
     vm->registers[REG_STACK_BOTTOM].as.u = stack_size;
+    
+    env_t env = {.vm=(vm), .memory=(memory), .arena=(program_arena)};
 
-    vm_set_entry_point(vm, expr_function);
+    return env;
 }
 
-void test_expr_file(string_t expr_file, arena_t *arena) {
+void test_expr_file(string_t expr_file, arena_t *test_arena) {
     nob_log(INFO, "---- test: %s", expr_file.cstr);
 
+    vm_t vm = {0};
+    env_t env = make_test_env(&vm, test_arena);
+
     ast_t ast = {0};
-    unless (parse_expr_file(&ast, expr_file, arena)) {
+    unless (parse_expr_file(&ast, expr_file, &env)) {
         nob_log(ERROR, "could not parse: %s", expr_file.cstr);
         return;
     }
@@ -290,19 +285,21 @@ void test_expr_file(string_t expr_file, arena_t *arena) {
     s64 resultvm = INT64_MIN;
     if (true)
     {
-        vm_t vm = {0};
-        compile_expr_to_vm(&vm, &ast, arena, myerror);
+        function_t *expr_function = new_function(env.memory, env.arena);
+        compile_expr_to_function(expr_function, &ast, ast.root, myerror, env.arena);
 
-        resultvm = *(s64*)vm_run_(&vm);
+
+        vm_fresh_run(&vm, expr_function);
+        resultvm = vm.registers[REG_RESULT].as.s;
     }
 
     s64 resultc = INT64_MIN;
     string_t cexpr_str;
     if (true)
     {
-        cexpr_str = compile_expr_to_c(&ast, arena);
+        cexpr_str = compile_expr_to_c(&ast, test_arena);
 
-        cc_t cc = cc_make(CC_GCC, arena);
+        cc_t cc = cc_make(CC_GCC, test_arena);
         cc.output_type = CC_DYNAMIC;
 
         cc_mem_source(&cc, cexpr_str);
@@ -314,7 +311,7 @@ void test_expr_file(string_t expr_file, arena_t *arena) {
         cc_no_warning(&cc, lit2str("parentheses-equality"));
 
         string_view_t filename_ = sv_filename(string2sv(expr_file));
-        string_t filename = string_format("%.*s.so", arena, filename_.length, filename_.data);
+        string_t filename = string_format("%.*s.so", test_arena, filename_.length, filename_.data);
         cc.output_name = filename;
 
         bool success = cc_build(&cc);
@@ -325,7 +322,7 @@ void test_expr_file(string_t expr_file, arena_t *arena) {
         }
 
         
-        string_t dll_path = string_format("%s/%s", arena, cc.build_dir.cstr, filename.cstr);
+        string_t dll_path = string_format("%s/%s", test_arena, cc.build_dir.cstr, filename.cstr);
         dynlib_t lib = dynlib_load(dll_path);
 
         s64 (*expr)(void) = dynlib_symbol(lib, lit2str("expr"));
@@ -335,7 +332,7 @@ void test_expr_file(string_t expr_file, arena_t *arena) {
         resultc = expr();
     }
 
-    string_t coutput_file = coutput_file_from_edl(expr_file, arena);
+    string_t coutput_file = coutput_file_from_edl(expr_file, test_arena);
 
     string_view_t ccode = {0};
     {
@@ -367,7 +364,10 @@ void test_expr_file(string_t expr_file, arena_t *arena) {
 
 void test_gen_expr_file(string_t expr_file, arena_t *arena) {
     ast_t ast = {0};
-    unless (parse_expr_file(&ast, expr_file, arena)) {
+    vm_t vm = {0};
+    env_t env = make_test_env(&vm, arena);
+
+    unless (parse_expr_file(&ast, expr_file, &env)) {
         nob_log(ERROR, "could not parse: %s", expr_file.cstr);
         return;
     }
@@ -384,12 +384,18 @@ void test_gen_expr_file(string_t expr_file, arena_t *arena) {
 
 void debug_expr_file(string_t expr_file, arena_t *arena) {
     ast_t ast = {0};
-    unless (parse_expr_file(&ast, expr_file, arena)) {
+
+    vm_t vm = {0};
+    env_t env = make_test_env(&vm, arena);
+
+    unless (parse_expr_file(&ast, expr_file, &env)) {
         nob_log(ERROR, "could not parse: %s", expr_file.cstr);
         return;
     }
-    vm_t vm = {0};
-    compile_expr_to_vm(&vm, &ast, arena, myerror);
+
+    function_t *expr_function = new_function(env.memory, env.arena);
+    compile_expr_to_function(expr_function, &ast, ast.root, myerror, env.arena);
+    vm_set_entry_point(&vm, expr_function);
 
     debugger_t debugger = {0};
     debugger_init(&debugger, arena);
@@ -398,10 +404,12 @@ void debug_expr_file(string_t expr_file, arena_t *arena) {
 }
 
 void ast_expr_file(string_t expr_file, arena_t *arena) {
+    UNUSED(arena);
+
     ast_t ast = {0};
-    unless (parse_expr_file(&ast, expr_file, arena)) {
+
+    unless (parse_expr_file(&ast, expr_file, NULL)) {
         nob_log(ERROR, "could not parse: %s", expr_file.cstr);
-        return;
     }
 
     ast_print(&ast, expr_file.cstr);

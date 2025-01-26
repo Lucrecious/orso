@@ -5,6 +5,16 @@
 #include "slot.h"
 #include "parser.h"
 
+typedef enum reg_t reg_t;
+enum reg_t {
+    REG_NULL = 0,
+    REG_RESULT = 1, // 256 bytes for memory on stack
+
+    REG_TMP = 33,
+    REG_STACK_BOTTOM = 34,
+    REG_STACK_FRAME = 35,
+};
+
 typedef void (*write_function_t)(const char* chars);
 
 typedef enum op_code_t op_code_t;
@@ -181,7 +191,6 @@ struct instruction_t {
 
 typedef struct function_t function_t;
 struct function_t {
-    string_t file_path;
     struct {
         texloc_t *items;
         size_t count;
@@ -198,8 +207,8 @@ struct function_t {
     } code;
 };
 
-function_t *new_function(string_t file_path, memarr_t *memory, arena_t *arena);
-void function_init(function_t *function, string_t file_path, memarr_t *memory, arena_t *arena);
+function_t *new_function(memarr_t *memory, arena_t *arena);
+void function_init(function_t *function, memarr_t *memory, arena_t *arena);
 bool function_is_compiled(function_t *function);
 
 typedef struct call_frame_t call_frame_t;
@@ -221,27 +230,29 @@ void vm_init(vm_t *vm);
 
 void vm_set_entry_point(vm_t *vm, function_t *entry_point);
 void vm_step(vm_t *vm);
+void vm_fresh_run(vm_t *vm, function_t *entry_point);
+
+typedef struct env_t env_t;
+struct env_t {
+    vm_t *vm;
+    arena_t *arena;
+    memarr_t *memory;
+};
 
 #endif
 
 #ifdef VM_IMPLEMENTATION
 #include <math.h>
 
-function_t *new_function(string_t file_path, memarr_t *memory, arena_t *arena) {
+function_t *new_function(memarr_t *memory, arena_t *arena) {
     function_t *function = arena_alloc(arena, sizeof(function_t));
     *function = (function_t){0};
-    function_init(function, file_path, memory, arena);
+    function_init(function, memory, arena);
     return function;
 }
 
-void function_init(function_t *function, string_t file_path, memarr_t *memory, arena_t *arena) {
+void function_init(function_t *function, memarr_t *memory, arena_t *arena) {
     function->memory = memory;
-    if (file_path.length == 0) {
-        function->file_path = lit2str("");
-    } else {
-        function->file_path = string_copy(file_path, arena);
-    }
-
     function->locations.allocator = arena;
     function->code.allocator = arena;
 }
@@ -258,6 +269,11 @@ void vm_set_entry_point(vm_t *vm, function_t *entry_point) {
     vm->halted = false;
     vm->call_frame.function = entry_point;
     vm->call_frame.pc = 0;
+}
+
+void vm_fresh_run(vm_t *vm, function_t *entry_point) {
+    vm_set_entry_point(vm, entry_point);
+    until (vm->halted) vm_step(vm);
 }
 
 void vm_step(vm_t *vm) {
