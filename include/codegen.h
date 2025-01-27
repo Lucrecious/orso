@@ -793,6 +793,8 @@ void gen_function_def(ast_t *ast, env_t *env, ast_node_t *funcdef, error_functio
 
     ast_node_t *block = an_func_def_block(funcdef);
     gen_block(&gen, function, block);
+
+    allocator_return(tmp);
 }
 
 static void gen_call(gen_t *gen, function_t *function, ast_node_t *call) {
