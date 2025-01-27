@@ -686,9 +686,13 @@ void resolve_expression(
             analysis_state_t new_state = state;
             new_state.scope = &scope;
 
+            array_push(&analyzer->pending_dependencies, expr);
+
             ast_node_t *child = expr->children.items[0];
 
             resolve_expression(analyzer, ast, new_state, child);
+
+            --analyzer->pending_dependencies.count;
 
             if (!analyzer->had_error && analyzer->env_or_null) {
                 unless (TYPE_IS_INVALID(child->value_type)) {
@@ -1759,14 +1763,22 @@ static ast_node_t *get_def_by_identifier_or_error(
     if (td->kind == TYPE_FUNCTION) {
         ASSERT(decl->expr_val.is_concrete, "should be constant and thus should be concrete");
         function_t *function = (function_t*)decl->expr_val.word.as.p;
-        for (size_t i = 0; i < analyzer->pending_definitions.count; ++i) {
-            ast_node_t *funcdef = analyzer->pending_definitions.items[i];
-            ASSERT(funcdef->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION, "only impelmenetedt these for now");
+        bool passed_through_fold = false;
+        for (size_t i = analyzer->pending_dependencies.count; i > 0; --i) {
+            ast_node_t *dep = analyzer->pending_dependencies.items[i-1];
 
-            function_t *pending_function = (function_t*)funcdef->expr_val.word.as.p;
-            if (function == pending_function) {
-                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_FUNCTION_PART_OF_CYCLICAL_DEPENDENCY, def));
-                return NULL;
+            switch (dep->node_type) {
+            case AST_NODE_TYPE_EXPRESSION_DIRECTIVE: passed_through_fold = true; break;
+            case AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION: {
+                function_t *pending_function = (function_t*)dep->expr_val.word.as.p;
+                if (passed_through_fold && function == pending_function) {
+                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_FUNCTION_PART_OF_CYCLICAL_DEPENDENCY, def));
+                    return decl;
+                }
+                break;
+            }
+
+            default: UNREACHABLE(); break;
             }
         }
     }
@@ -1840,7 +1852,7 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
         funcdef->expr_val = ast_node_val_word(WORDP(function));
     }
 
-    array_push(&analyzer->pending_definitions, funcdef);
+    array_push(&analyzer->pending_dependencies, funcdef);
 
     {
         analysis_state_t new_state = state;
@@ -1866,7 +1878,7 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
         }
     }
 
-    --analyzer->pending_definitions.count;
+    --analyzer->pending_dependencies.count;
 
     if (analyzer->had_error) {
         return;
@@ -2123,7 +2135,7 @@ void analyzer_init(analyzer_t *analyzer, env_t *env, write_function_t write_fn, 
 
     analyzer->allocator = zer0(arena_t);
     analyzer->placeholder = zer0(function_t);
-    analyzer->pending_definitions.allocator = &analyzer->allocator;
+    analyzer->pending_dependencies.allocator = &analyzer->allocator;
 
     // TODO: fix
     (void)write_fn;

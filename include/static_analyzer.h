@@ -19,7 +19,7 @@ typedef struct analyzer_t {
         size_t capacity;
         size_t count;
         arena_t *allocator;
-    } pending_definitions;
+    } pending_dependencies;
 
     arena_t allocator;
 } analyzer_t;

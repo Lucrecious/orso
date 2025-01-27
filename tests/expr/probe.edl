@@ -1,7 +1,7 @@
 
 {
     foo :: (n: int) -> int {
-        if n > 0 then return @run tar(-1);
+        if n > 0 then return tar(-1);
         return n;
     };
 
@@ -14,7 +14,7 @@
         return n;
     };
 
-    foo(10);
+    @run foo(10);
 }
 
 // {
