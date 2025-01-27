@@ -684,8 +684,7 @@ void resolve_expression(
             scope_t scope = {0};
             scope_init(&scope, &analyzer->allocator, SCOPE_TYPE_FOLD_DIRECTIVE, state.scope, expr);
             analysis_state_t new_state = state;
-
-            state.scope = &scope;
+            new_state.scope = &scope;
 
             ast_node_t *child = expr->children.items[0];
 
@@ -1697,6 +1696,8 @@ static ast_node_t *get_def_by_identifier_or_error(
     word_t def_slot;
     *search_scope = state.scope;
 
+    ast_node_t *decl = NULL;
+
     while (*search_scope) {
         bool is_function_scope = (*search_scope)->type == SCOPE_TYPE_FUNCDEF;
         bool is_fold_scope = (*search_scope)->type == SCOPE_TYPE_FOLD_DIRECTIVE;
@@ -1719,7 +1720,7 @@ static ast_node_t *get_def_by_identifier_or_error(
         }
 
 
-        ast_node_t *decl = (ast_node_t*)def_slot.as.p;
+        decl = (ast_node_t*)def_slot.as.p;
 
         if (passed_local_fold_scope && decl->is_mutable) {
             stan_error(analyzer, make_error_node(ERROR_ANALYSIS_DEFINITION_DOES_NOT_EXIST_IN_THE_SAME_RUN_SCOPE, def));
@@ -1736,32 +1737,41 @@ static ast_node_t *get_def_by_identifier_or_error(
             NEXT_SCOPE();
             continue;
         }
+        
+        break;
+    }
 
-        // ensure that the value is resolved
-        if (an_is_notnone(an_decl_expr(decl))) {
-            analysis_state_t new_state = state;
-            new_state.scope = *search_scope;
-            resolve_declaration_definition(analyzer, ast, new_state, decl);
-        }
+    unless (decl) {
+        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_DEFINITION_DOES_NOT_EXIST, def));
+        return NULL;
+    }
+    
+    // ensure that the value is resolved
+    if (an_is_notnone(an_decl_expr(decl))) {
+        analysis_state_t new_state = state;
+        new_state.scope = *search_scope;
+        resolve_declaration_definition(analyzer, ast, new_state, decl);
+    }
 
-        typedata_t *td = type2td(ast, decl->value_type);
-        if (passed_local_fold_scope && td->kind == TYPE_FUNCTION) {
-            ASSERT(decl->expr_val.is_concrete, "should be constant and thus should be concrete");
-            function_t *function = (function_t*)decl->expr_val.word.as.p;
-            unless (function_is_compiled(function)) {
+    #undef NEXT_SCOPE
+
+    typedata_t *td = type2td(ast, decl->value_type);
+    if (td->kind == TYPE_FUNCTION) {
+        ASSERT(decl->expr_val.is_concrete, "should be constant and thus should be concrete");
+        function_t *function = (function_t*)decl->expr_val.word.as.p;
+        for (size_t i = 0; i < analyzer->pending_definitions.count; ++i) {
+            ast_node_t *funcdef = analyzer->pending_definitions.items[i];
+            ASSERT(funcdef->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION, "only impelmenetedt these for now");
+
+            function_t *pending_function = (function_t*)funcdef->expr_val.word.as.p;
+            if (function == pending_function) {
                 stan_error(analyzer, make_error_node(ERROR_ANALYSIS_FUNCTION_PART_OF_CYCLICAL_DEPENDENCY, def));
                 return NULL;
             }
         }
-
-        return decl;
-
-    #undef NEXT_SCOPE
     }
 
-    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_DEFINITION_DOES_NOT_EXIST, def));
-
-    return NULL;
+    return decl;
 }
 
 static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t state, ast_node_t *funcdef) {
@@ -1830,6 +1840,8 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
         funcdef->expr_val = ast_node_val_word(WORDP(function));
     }
 
+    array_push(&analyzer->pending_definitions, funcdef);
+
     {
         analysis_state_t new_state = state;
 
@@ -1853,6 +1865,8 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
             stan_error(analyzer, make_error_node(ERROR_ANALYSIS_TYPE_MISMATCH, funcdef));
         }
     }
+
+    --analyzer->pending_definitions.count;
 
     if (analyzer->had_error) {
         return;
@@ -2101,12 +2115,15 @@ bool resolve_ast(analyzer_t *analyzer, ast_t *ast) {
 }
 
 void analyzer_init(analyzer_t *analyzer, env_t *env, write_function_t write_fn, error_function_t error_fn) {
+    *analyzer = zer0(analyzer_t);
+
     analyzer->error_fn = error_fn;
     analyzer->had_error = false;
     analyzer->env_or_null = env;
 
     analyzer->allocator = zer0(arena_t);
     analyzer->placeholder = zer0(function_t);
+    analyzer->pending_definitions.allocator = &analyzer->allocator;
 
     // TODO: fix
     (void)write_fn;

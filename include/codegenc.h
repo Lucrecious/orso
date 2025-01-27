@@ -1063,7 +1063,8 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
 
     switch (expression->node_type) {
 
-        case AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION:
+        case AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION: UNREACHABLE();
+
         case AST_NODE_TYPE_EXPRESSION_NIL:
         case AST_NODE_TYPE_EXPRESSION_PRIMARY: {
             cgen_constant_or_nil(cgen, expression, var);
@@ -1150,13 +1151,18 @@ static void cgen_generate_function_names(cgen_t *cgen, ast_node_t *node) {
         unless (table_get(p2n, cgen->functions, function, &funcdata)) {
             funcdata.type = node->value_type;
 
+            bool got_name = false;
             if (node->node_type == AST_NODE_TYPE_DECLARATION_DEFINITION && !node->is_mutable) {
+                got_name = true;
                 funcdata.name = cgen_function_name(cgen, node->identifier.view);
             } else if (node->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION) {
+                got_name = true;
                 funcdata.name = string_format("func%zu", &cgen->tmp_arena, ++cgen->tmp_count);
             }
 
-            table_put(p2n, cgen->functions, function, funcdata);
+            if (got_name) {
+                table_put(p2n, cgen->functions, function, funcdata);
+            }
         }
     }
 

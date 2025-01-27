@@ -14,6 +14,13 @@ typedef struct analyzer_t {
 
     function_t placeholder;
 
+    struct {
+        ast_node_t **items;
+        size_t capacity;
+        size_t count;
+        arena_t *allocator;
+    } pending_definitions;
+
     arena_t allocator;
 } analyzer_t;
 
