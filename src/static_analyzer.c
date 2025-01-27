@@ -684,13 +684,14 @@ void resolve_expression(
             scope_t scope = {0};
             scope_init(&scope, &analyzer->allocator, SCOPE_TYPE_FOLD_DIRECTIVE, state.scope, expr);
             analysis_state_t new_state = state;
+
             state.scope = &scope;
 
             ast_node_t *child = expr->children.items[0];
 
             resolve_expression(analyzer, ast, new_state, child);
 
-            if (analyzer->env_or_null) {
+            if (!analyzer->had_error && analyzer->env_or_null) {
                 unless (TYPE_IS_INVALID(child->value_type)) {
                     typedata_t *td = type2td(ast, child->value_type);
                     size_t size = bytes_to_words(td->size);
@@ -711,6 +712,7 @@ void resolve_expression(
             } else {
                 // make sure we cannot compile
                 analyzer->had_error = true;
+
                 // todo: output a warning that is not buildable or something
                 expr->value_type = child->value_type;
                 expr->expr_val = child->expr_val;
@@ -1681,6 +1683,7 @@ static ast_node_t *get_def_by_identifier_or_error(
         scope_t **search_scope) { // TODO: consider removing search scope from params, check if it's actually used
 
     bool passed_local_mutable_access_barrier = false;
+    bool passed_local_fold_scope = false;
 
     // early return if looking at a built in type
     {
@@ -1696,9 +1699,11 @@ static ast_node_t *get_def_by_identifier_or_error(
 
     while (*search_scope) {
         bool is_function_scope = (*search_scope)->type == SCOPE_TYPE_FUNCDEF;
+        bool is_fold_scope = (*search_scope)->type == SCOPE_TYPE_FOLD_DIRECTIVE;
 
     #define NEXT_SCOPE() \
         if (is_function_scope) { passed_local_mutable_access_barrier = true; }\
+        if (is_fold_scope) { passed_local_fold_scope = true; } \
         *search_scope = (*search_scope)->outer
 
         {
@@ -1716,9 +1721,14 @@ static ast_node_t *get_def_by_identifier_or_error(
 
         ast_node_t *decl = (ast_node_t*)def_slot.as.p;
 
+        if (passed_local_fold_scope && decl->is_mutable) {
+            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_DEFINITION_DOES_NOT_EXIST_IN_THE_SAME_RUN_SCOPE, def));
+            return NULL;
+        }
+
         if (passed_local_mutable_access_barrier && (*search_scope)->creator != NULL && decl->is_mutable) {
-            NEXT_SCOPE();
-            continue;
+            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CAN_ONLY_ACCESS_CONSTANTS_AND_GLOBALS, def));
+            return NULL;
         }
 
         // this means that the declaration is *after* the definition we are trying to resolve
@@ -1732,6 +1742,16 @@ static ast_node_t *get_def_by_identifier_or_error(
             analysis_state_t new_state = state;
             new_state.scope = *search_scope;
             resolve_declaration_definition(analyzer, ast, new_state, decl);
+        }
+
+        typedata_t *td = type2td(ast, decl->value_type);
+        if (passed_local_fold_scope && td->kind == TYPE_FUNCTION) {
+            ASSERT(decl->expr_val.is_concrete, "should be constant and thus should be concrete");
+            function_t *function = (function_t*)decl->expr_val.word.as.p;
+            unless (function_is_compiled(function)) {
+                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_FUNCTION_PART_OF_CYCLICAL_DEPENDENCY, def));
+                return NULL;
+            }
         }
 
         return decl;
@@ -1799,10 +1819,10 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
     funcdef->value_type = function_type;
 
     // create empty placeholder function immeidately in case definition is recursive
+    function_t *function = NULL;
     unless (TYPE_IS_INVALID(an_func_def_block(funcdef)->value_type)) {
-        function_t *function = NULL;
         if (analyzer->env_or_null) {
-            new_function(analyzer->env_or_null->memory, analyzer->env_or_null->arena);
+            function = new_function(analyzer->env_or_null->memory, analyzer->env_or_null->arena);
         } else {
             function = &analyzer->placeholder;
         }
@@ -1833,6 +1853,18 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
             stan_error(analyzer, make_error_node(ERROR_ANALYSIS_TYPE_MISMATCH, funcdef));
         }
     }
+
+    if (analyzer->had_error) {
+        return;
+    }
+
+    unless (analyzer->env_or_null) {
+        return;
+    }
+
+    ASSERT(function, "it should be set because we had no errors");
+
+    gen_function_def(ast, analyzer->env_or_null, funcdef, analyzer->error_fn);
 }
 
 // footnote(struct-resolution)

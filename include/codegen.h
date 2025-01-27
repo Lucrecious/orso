@@ -8,6 +8,7 @@
 
 bool compile_program(vm_t *vm, ast_t *ast);
 
+void gen_function_def(ast_t *ast, env_t *env, ast_node_t *funcdef, error_function_t error_fn);
 bool compile_expr_to_function(function_t *function, ast_t *ast, ast_node_t *expr, error_function_t error_fn, arena_t *function_arena);
 
 #endif
@@ -775,30 +776,23 @@ static gen_t make_gen(ast_t *ast, error_function_t error_fn, arena_t *gen_arena,
     return gen;
 }
 
-static void gen_function_def(gen_t *parent_gen, function_t *parent_function, ast_node_t *function_def) {
-    function_t *function = NULL;
-    if (function_def->expr_val.is_concrete) {
-        function = (function_t*)function_def->expr_val.word.as.p;
-        if (function_is_compiled(function)) return;
-        function_init(function, parent_function->memory, parent_gen->program_arena);
-    } else {
-        function = new_function(parent_function->memory, parent_gen->program_arena);
-    } 
+void gen_function_def(ast_t *ast, env_t *env, ast_node_t *funcdef, error_function_t error_fn) {
+    ASSERT(funcdef->expr_val.is_concrete, "should have something there");
+    function_t *function = (function_t*)funcdef->expr_val.word.as.p;
+    if (function_is_compiled(function)) return;
 
-    gen_t gen = make_gen(parent_gen->ast, parent_gen->error_fn, parent_gen->locals.allocator, parent_gen->program_arena);
+    tmp_arena_t *tmp = allocator_borrow();
+    gen_t gen = make_gen(ast, error_fn, tmp->allocator, env->arena);
 
-    for (size_t i = an_func_def_arg_start(function_def); i < an_func_def_arg_end(function_def); ++i) {
-        ast_node_t *arg = function_def->children.items[i];
+    for (size_t i = an_func_def_arg_start(funcdef); i < an_func_def_arg_end(funcdef); ++i) {
+        ast_node_t *arg = funcdef->children.items[i];
         typedata_t *type_info = type2typedata(&gen.ast->type_set.types, arg->value_type);
         gen.stack_size += bytes_to_words(type_info->size)*WORD_SIZE;
         gen_add_local(&gen, arg, gen.stack_size);
     }
 
-    ast_node_t *block = an_func_def_block(function_def);
+    ast_node_t *block = an_func_def_block(funcdef);
     gen_block(&gen, function, block);
-
-    typedata_t *func_type_info = type2typedata(&parent_gen->ast->type_set.types, function_def->value_type);
-    gen_constant(function_def->end.loc, parent_function, &function, func_type_info);
 }
 
 static void gen_call(gen_t *gen, function_t *function, ast_node_t *call) {
@@ -920,10 +914,6 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
     ASSERT(ast_node_type_is_expression(expression->node_type), "must be expression");
 
     if (expression->expr_val.is_concrete) {
-        if (expression->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION) {
-            gen_function_def(gen, function, expression);
-        }
-
         gen_expr_val(gen, function, expression, ast_node_val_nil());
         return;
     }
