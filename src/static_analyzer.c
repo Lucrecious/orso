@@ -1767,6 +1767,29 @@ static ast_node_t *get_def_by_identifier_or_error(
         for (size_t i = analyzer->pending_dependencies.count; i > 0; --i) {
             ast_node_t *dep = analyzer->pending_dependencies.items[i-1];
 
+            /**
+             * proof by contradiction: assume the function is not compiled, but
+             * it didn't pass through a fold barrier or the function was not found in the
+             * dependencies list
+             * 
+             * the functon is not found in the dependency list and the function is not compiled
+             * is impossible because before this is called, we resolve the declaration, and we find
+             * that it's a function type declaration. this wouldn't be possible if we didn't try to 
+             * resolve the function definition. so the function definition was resolved without calling itself
+             * otherwise, we would have found in the dependencies list because the function is currently 
+             * being resolved.
+             * 
+             * if the function doesn't pass through a fold barrier and the function is not compiled,
+             * then the function must be in the dependency list. if it's before the fold barrier, this
+             * is fine bceause it means the function will resolve *before* the fold needs to occur.
+             * 
+             * if the function is after it means, the fold needs to resolve before the function definition, but
+             * the function definition needs the fold to resolve, causing a loop
+             * 
+             * not really proof by contradiction actually will rewrite
+             * 
+             */
+
             switch (dep->node_type) {
             case AST_NODE_TYPE_EXPRESSION_DIRECTIVE: passed_through_fold = true; break;
             case AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION: {

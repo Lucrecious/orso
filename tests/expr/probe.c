@@ -2,59 +2,23 @@
 #include "intrinsics.h"
 
 typedef void(*fn_void)();
-typedef int(*fn_int_int)(int);
+typedef int(*fn_int_int_int)(int,int);
 
-int foo1_fn_(int);
-int tar2_fn_(int);
-int bar3_fn_(int);
+int add1_fn_(int, int);
 
-int foo1_fn_(int n_) {
+int add1_fn_(int a_, int b_) {
   {
-    {
-      if ((n_ > int_(0))) {
-        int tmp4 = int_(-2);
-        return tmp4;
-      }
-    };
-
-    int tmp5 = n_;
-;
-    return tmp5;
-  };
-}
-
-int tar2_fn_(int n_) {
-  {
-    int tmp6 = ((bar3_fn_)(subs32_(n_, int_(1))));
-    return tmp6;
-  };
-}
-
-int bar3_fn_(int n_) {
-  {
-    {
-      if ((n_ > int_(0))) {
-        int tmp7 = ((foo1_fn_)(int_(-1)));
-        return tmp7;
-      }
-    };
-
-    int tmp8 = n_;
-;
-    return tmp8;
+    int tmp2 = adds32_(a_, b_);
+    return tmp2;
   };
 }
 
 
 int expr(void) {
 int result_; {
-    fn_int_int foo_ = (foo1_fn_);
+    fn_int_int_int add_ = (add1_fn_);
 
-    fn_int_int tar_ = (tar2_fn_);
-
-    fn_int_int bar_ = (bar3_fn_);
-
-    result_ = ((foo1_fn_)(int_(10)));
+    result_ = int_(69);
   };
 
   return result_;
