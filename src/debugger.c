@@ -27,13 +27,8 @@ static string_t disassemble_instruction(instruction_t in, arena_t *allocator) {
                 (u32)in.as.mov_mem_to_reg.mem_address,\
                 (u32)in.as.mov_mem_to_reg.reg_result)
 
-        case OP_MOVs8_MEM_TO_REG: return OP_MOV_MEM_TO_REG(s8);
         case OP_MOVU8_MEM_TO_REG: return OP_MOV_MEM_TO_REG(U8);
-
-        case OP_MOVs16_MEM_TO_REG: return OP_MOV_MEM_TO_REG(s16);
         case OP_MOVU16_MEM_TO_REG: return OP_MOV_MEM_TO_REG(U16);
-
-        case OP_MOVs32_MEM_TO_REG: return OP_MOV_MEM_TO_REG(s32);
         case OP_MOVU32_MEM_TO_REG: return OP_MOV_MEM_TO_REG(U32);
 
         case OP_MOVF32_MEM_TO_REG: return OP_MOV_MEM_TO_REG(F32);
@@ -68,17 +63,35 @@ static string_t disassemble_instruction(instruction_t in, arena_t *allocator) {
         case OP_JMP: return string_format("OP_JMP(amount: %lu)", allocator, (u32)in.as.jmp.amount);
         case OP_LOOP: return string_format("OP_LOOP(amount: %lu)", allocator, (u32)in.as.jmp.amount);
 
-        case OP_MOVWORD_REG_TO_REGMEM: {
-            return string_format("OP_MOVWORD_REG_TO_REGMEM(reg_source: %lu, regmem_destination: %lu)", allocator,
-                    (u32)in.as.mov_reg_to_regmem.reg_source,
-                    (u32)in.as.mov_reg_to_regmem.regmem_destination);
-        }
+        #define OP_REG_TO_REG(SUFFIX) string_format("OP_MOV"#SUFFIX"(reg_source: %lu, regmem_destination: %lu)", allocator, \
+                (u32)in.as.mov_reg_to_reg.reg_source, \
+                (u32)in.as.mov_reg_to_reg.reg_destination);
 
-        case OP_MOVWORD_REGMEM_TO_REG: {
-            return string_format("OP_MOVWORD_REGMEM_TO_REG(reg_source: %lu, regmem_destination: %lu)", allocator,
-                    (u32)in.as.mov_regmem_to_reg.regmem_source,
-                    (u32)in.as.mov_regmem_to_reg.reg_destination);
-        }
+        case OP_MOVU8_REG_TO_REGMEM: return OP_REG_TO_REG(U8_REG_TO_REGMEM);
+        case OP_MOVU16_REG_TO_REGMEM: return OP_REG_TO_REG(U16_REG_TO_REGMEM);
+        case OP_MOVU32_REG_TO_REGMEM: return OP_REG_TO_REG(U32_REG_TO_REGMEM);
+        case OP_MOVF32_REG_TO_REGMEM: return OP_REG_TO_REG(F32_REG_TO_REGMEM);
+        case OP_MOVWORD_REG_TO_REGMEM: return OP_REG_TO_REG(WORD_REG_TO_REGMEM);
+
+        case OP_MOVU8_REGMEM_TO_REG: return OP_REG_TO_REG(U8_REGMEM_TO_REG);
+        case OP_MOVU16_REGMEM_TO_REG: return OP_REG_TO_REG(U16_REGMEM_TO_REG);
+        case OP_MOVU32_REGMEM_TO_REG: return OP_REG_TO_REG(U32_REGMEM_TO_REG);
+        case OP_MOVF32_REGMEM_TO_REG: return OP_REG_TO_REG(F32_REGMEM_TO_REG);
+        case OP_MOVWORD_REGMEM_TO_REG: return OP_REG_TO_REG(WORD_REGMEM_TO_REG);
+
+        case OP_MOVU8_REG_TO_REGADDR: return OP_REG_TO_REG(U8_REG_TO_REGADDR);
+        case OP_MOVU16_REG_TO_REGADDR: return OP_REG_TO_REG(U16_REG_TO_REGADDR);
+        case OP_MOVU32_REG_TO_REGADDR: return OP_REG_TO_REG(U32_REG_TO_REGADDR);
+        case OP_MOVF32_REG_TO_REGADDR: return OP_REG_TO_REG(F32_REG_TO_REGADDR);
+        case OP_MOVWORD_REG_TO_REGADDR: return OP_REG_TO_REG(WORD_REG_TO_REGADDR);
+
+        case OP_MOVU8_REGADDR_TO_REG: return OP_REG_TO_REG(U8_REGADDR_TO_REG);
+        case OP_MOVU16_REGADDR_TO_REG: return OP_REG_TO_REG(U16_REGADDR_TO_REG);
+        case OP_MOVU32_REGADDR_TO_REG: return OP_REG_TO_REG(U32_REGADDR_TO_REG);
+        case OP_MOVF32_REGADDR_TO_REG: return OP_REG_TO_REG(F32_REGADDR_TO_REG);
+        case OP_MOVWORD_REGADDR_TO_REG: return OP_REG_TO_REG(WORD_REGADDR_TO_REG);
+
+        case OP_MOV_REGMEM_TO_REGADDR: return OP_REG_TO_REG(REGMEM_TO_REGADDR);
 
         case OP_MOV_REG_TO_REG: {
             return string_format("OP_MOV_REG_TO_REG(reg_source: %lu, reg_destination: %lu)", allocator,

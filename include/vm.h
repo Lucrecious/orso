@@ -21,22 +21,24 @@ typedef enum op_code_t op_code_t;
 enum op_code_t {
     OP_NOP,
 
-    OP_MOVs8_MEM_TO_REG,
     OP_MOVU8_MEM_TO_REG,
-
-    OP_MOVs16_MEM_TO_REG,
     OP_MOVU16_MEM_TO_REG,
-
-    OP_MOVs32_MEM_TO_REG,
     OP_MOVU32_MEM_TO_REG,
-
     OP_MOVF32_MEM_TO_REG,
-
     OP_MOVWORD_MEM_TO_REG,
 
     OP_MOV_REG_TO_REG,
 
+    OP_MOVU8_REG_TO_REGMEM,
+    OP_MOVU16_REG_TO_REGMEM,
+    OP_MOVU32_REG_TO_REGMEM,
+    OP_MOVF32_REG_TO_REGMEM,
     OP_MOVWORD_REG_TO_REGMEM,
+
+    OP_MOVU8_REGMEM_TO_REG,
+    OP_MOVU16_REGMEM_TO_REG,
+    OP_MOVU32_REGMEM_TO_REG,
+    OP_MOVF32_REGMEM_TO_REG,
     OP_MOVWORD_REGMEM_TO_REG,
 
     OP_CAST_D2F,
@@ -118,6 +120,20 @@ enum op_code_t {
     OP_INCREMENTU,
     OP_DECREMENTU,
 
+    OP_MOV_REGMEM_TO_REGADDR,
+
+    OP_MOVU8_REG_TO_REGADDR,
+    OP_MOVU16_REG_TO_REGADDR,
+    OP_MOVU32_REG_TO_REGADDR,
+    OP_MOVF32_REG_TO_REGADDR,
+    OP_MOVWORD_REG_TO_REGADDR,
+
+    OP_MOVU8_REGADDR_TO_REG,
+    OP_MOVU16_REGADDR_TO_REG,
+    OP_MOVU32_REGADDR_TO_REG,
+    OP_MOVF32_REGADDR_TO_REG,
+    OP_MOVWORD_REGADDR_TO_REG,
+
     OP_CALL,
     OP_RETURN,
 };
@@ -154,16 +170,6 @@ struct instruction_t {
             byte reg_result;
             memaddr_t mem_address;
         } mov_mem_to_reg;
-
-        struct {
-            byte reg_source;
-            byte regmem_destination;
-        } mov_reg_to_regmem;
-
-        struct {
-            byte regmem_source;
-            byte reg_destination;
-        } mov_regmem_to_reg;
 
         struct {
             byte reg_destination;
@@ -311,16 +317,6 @@ void vm_step(vm_t *vm) {
             break;
         }
 
-        case OP_MOVs8_MEM_TO_REG: {
-            memaddr_t memaddr = in.as.mov_mem_to_reg.mem_address;
-            byte reg = in.as.mov_mem_to_reg.reg_result;
-            s8 value = *((s8*)(MEMORY->data + memaddr));
-            vm->registers[reg].as.s = value;
-
-            IP_ADV(1);
-            break;
-        }
-
         case OP_MOVU8_MEM_TO_REG: {
             memaddr_t memaddr = in.as.mov_mem_to_reg.mem_address;
             byte reg = in.as.mov_mem_to_reg.reg_result;
@@ -331,31 +327,11 @@ void vm_step(vm_t *vm) {
             break;
         }
 
-        case OP_MOVs16_MEM_TO_REG: {
-            memaddr_t memaddr = in.as.mov_mem_to_reg.mem_address;
-            byte reg = in.as.mov_mem_to_reg.reg_result;
-            s16 value = *((s16*)(MEMORY->data + memaddr));
-            vm->registers[reg].as.s = value;
-
-            IP_ADV(1);
-            break;
-        }
-
         case OP_MOVU16_MEM_TO_REG: {
             memaddr_t memaddr = in.as.mov_mem_to_reg.mem_address;
             byte reg = in.as.mov_mem_to_reg.reg_result;
             u16 value = *((u16*)(MEMORY->data + memaddr));
             vm->registers[reg].as.u = value;
-
-            IP_ADV(1);
-            break;
-        }
-
-        case OP_MOVs32_MEM_TO_REG: {
-            memaddr_t memaddr = in.as.mov_mem_to_reg.mem_address;
-            byte reg = in.as.mov_mem_to_reg.reg_result;
-            s32 value = *((s32*)(MEMORY->data + memaddr));
-            vm->registers[reg].as.s = value;
 
             IP_ADV(1);
             break;
@@ -392,10 +368,10 @@ void vm_step(vm_t *vm) {
         }
 
         case OP_MOVWORD_REG_TO_REGMEM: {
-            byte reg = in.as.mov_reg_to_regmem.reg_source;
+            byte reg = in.as.mov_reg_to_reg.reg_source;
             word_t value = vm->registers[reg];
 
-            byte regmem = in.as.mov_reg_to_regmem.regmem_destination;
+            byte regmem = in.as.mov_reg_to_reg.reg_destination;
             memaddr_t memaddr = (u32)vm->registers[regmem].as.u;
 
             memcpy(MEMORY->data + memaddr, &value, sizeof(word_t));
@@ -405,10 +381,10 @@ void vm_step(vm_t *vm) {
         }
 
         case OP_MOVWORD_REGMEM_TO_REG: {
-            byte regmem = in.as.mov_regmem_to_reg.regmem_source;
+            byte regmem = in.as.mov_reg_to_reg.reg_source;
             memaddr_t memaddr = vm->registers[regmem].as.u;
 
-            byte reg = in.as.mov_regmem_to_reg.reg_destination;
+            byte reg = in.as.mov_reg_to_reg.reg_destination;
 
             memcpy(&vm->registers[reg], MEMORY->data + memaddr, sizeof(word_t));
 
@@ -606,6 +582,64 @@ void vm_step(vm_t *vm) {
         case_unary_reg_reg(DECREMENTU, u, --);
 
         #undef case_unary_reg_reg
+
+        case OP_MOV_REGMEM_TO_REGADDR: {
+            byte src_mem = in.as.mov_reg_to_reg.reg_source;
+            byte dest_addr = in.as.mov_reg_to_reg.reg_destination;
+
+            memaddr_t memaddr = vm->registers[src_mem].as.u;
+
+            vm->registers[dest_addr].as.p = (MEMORY->data + memaddr);
+
+            IP_ADV(1);
+            break;
+        }
+
+        #define case_mov_regaddr_to_reg(name, q, type) case OP_MOV##name##_REGADDR_TO_REG: { \
+            byte regaddr = in.as.mov_reg_to_reg.reg_source; \
+            byte reg_dest = in.as.mov_reg_to_reg.reg_destination; \
+            memaddr_t memaddr = vm->registers[regaddr].as.u; \
+            vm->registers[reg_dest].as.q = *((type*)(MEMORY->data + memaddr)); \
+        } break
+
+        case_mov_regaddr_to_reg(U8, u, u8);
+        case_mov_regaddr_to_reg(U16, u, u16);
+        case_mov_regaddr_to_reg(U32, u, u32);
+        case_mov_regaddr_to_reg(F32, d, f32);
+
+        #undef case_mov_regaddr_to_reg
+
+        case OP_MOVWORD_REGADDR_TO_REG: {
+            byte regaddr = in.as.mov_reg_to_reg.reg_source;
+            byte reg_dest = in.as.mov_reg_to_reg.reg_destination;
+            memaddr_t memaddr = vm->registers[regaddr].as.u;
+            
+            memcpy(&vm->registers[reg_dest], MEMORY->data+memaddr, sizeof(word_t));
+            break;
+        }
+
+        #define case_mov_reg_to_regaddr(name, q, type) case OP_MOV##name##_REG_TO_REGADDR: { \
+            byte reg_src = in.as.mov_reg_to_reg.reg_source; \
+            byte regaddr = in.as.mov_reg_to_reg.reg_destination; \
+            memaddr_t memaddr = vm->registers[regaddr].as.u; \
+            *((type*)(MEMORY->data + memaddr)) = (type)vm->registers[reg_src].as.q; \
+        } break
+
+        case_mov_reg_to_regaddr(U8, u, u8);
+        case_mov_reg_to_regaddr(U16, u, u16);
+        case_mov_reg_to_regaddr(U32, u, u32);
+        case_mov_reg_to_regaddr(F32, d, f32);
+
+        #undef case_mov_reg_to_regaddr
+
+        case OP_MOVWORD_REG_TO_REGADDR: {
+            byte reg_src = in.as.mov_reg_to_reg.reg_source;
+            byte regaddr = in.as.mov_reg_to_reg.reg_destination;
+            memaddr_t memaddr = vm->registers[regaddr].as.u;
+            
+            memcpy(MEMORY->data+memaddr, &vm->registers[reg_src], sizeof(word_t));
+            break;
+        }
 
         case OP_CALL: {
             void *ptr = vm->registers[in.as.call.reg_op].as.p;
