@@ -760,14 +760,14 @@ static void gen_patch_jmps(gen_t *gen, function_t *function, ast_node_t *expr, t
 }
 
 static size_t gen_condition(gen_t *gen, ast_node_t *branch, function_t *function) {
-    emit_push_reg(gen, branch->start.loc, function, REG_RESULT, branch->value_type);
+    emit_push_reg(gen, branch->start.loc, function, REG_RESULT, gen->ast->type_set.u64_);
 
     ast_node_t *condition = an_condition(branch);
     gen_expression(gen, function, condition);
 
     emit_mov_reg_to_reg(gen, function, token_end_location(&condition->end), condition->value_type, REG_MOV_TYPE_REG_TO_REG, REG_TMP, REG_RESULT);
 
-    emit_pop_to_reg(gen, token_end_location(&condition->end), function, REG_RESULT, branch->value_type);
+    emit_pop_to_reg(gen, token_end_location(&condition->end), function, REG_RESULT, gen->ast->type_set.u64_);
 
     // then index
     return gen_jmp_if_reg(function, token_end_location(&condition->end), REG_TMP, branch->condition_negated ? true : false);
@@ -818,7 +818,8 @@ static void gen_branching(gen_t *gen, function_t *function, ast_node_t *branch) 
     }
 }
 static void gen_assignment(gen_t *gen, function_t *function, ast_node_t *assignment) {
-    gen_expression(gen, function, an_rhs(assignment));
+    ast_node_t *rhs = an_rhs(assignment);
+    gen_expression(gen, function, rhs);
 
     ast_node_t *lhs = an_lhs(assignment);
     if (lhs->lvalue_node->node_type == AST_NODE_TYPE_EXPRESSION_DEF_VALUE) {
@@ -834,9 +835,17 @@ static void gen_assignment(gen_t *gen, function_t *function, ast_node_t *assignm
     } else if (lhs->lvalue_node->node_type == AST_NODE_TYPE_EXPRESSION_UNARY) {
         ASSERT(lhs->operator.type == TOKEN_STAR, "must be dereferencing");
 
+        emit_push_reg(gen, rhs->end.loc, function, REG_RESULT, gen->ast->type_set.u64_);
+
         // gen address
         ast_node_t *addr_node = an_operand(lhs->lvalue_node);
         gen_expression(gen, function, addr_node);
+
+        texloc_t end = token_end_location(&assignment->end);
+        emit_pop_to_reg(gen, end, function, REG_TMP, gen->ast->type_set.u64_);
+
+        emit_mov_reg_to_reg(gen, function, end,
+                assignment->value_type, REG_MOV_TYPE_REG_TO_ADDR, REG_RESULT, REG_TMP);
     }
 }
 

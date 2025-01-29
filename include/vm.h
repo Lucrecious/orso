@@ -341,7 +341,7 @@ void vm_step(vm_t *vm) {
             memaddr_t memaddr = in.as.mov_mem_to_reg.mem_address;
             byte reg = in.as.mov_mem_to_reg.reg_result;
             u32 value = *((u32*)(MEMORY->data + memaddr));
-            vm->registers[reg].as.s = value;
+            vm->registers[reg].as.u = value;
 
             IP_ADV(1);
             break;
@@ -598,8 +598,7 @@ void vm_step(vm_t *vm) {
         #define case_mov_regaddr_to_reg(name, q, type) case OP_MOV##name##_REGADDR_TO_REG: { \
             byte regaddr = in.as.mov_reg_to_reg.reg_source; \
             byte reg_dest = in.as.mov_reg_to_reg.reg_destination; \
-            memaddr_t memaddr = vm->registers[regaddr].as.u; \
-            vm->registers[reg_dest].as.q = *((type*)(MEMORY->data + memaddr)); \
+            vm->registers[reg_dest].as.q = *((type*)(vm->registers[regaddr].as.p)); \
         } break
 
         case_mov_regaddr_to_reg(U8, u, u8);
@@ -612,17 +611,14 @@ void vm_step(vm_t *vm) {
         case OP_MOVWORD_REGADDR_TO_REG: {
             byte regaddr = in.as.mov_reg_to_reg.reg_source;
             byte reg_dest = in.as.mov_reg_to_reg.reg_destination;
-            memaddr_t memaddr = vm->registers[regaddr].as.u;
-            
-            memcpy(&vm->registers[reg_dest], MEMORY->data+memaddr, sizeof(word_t));
+            memcpy(&vm->registers[reg_dest], vm->registers[regaddr].as.p, sizeof(word_t));
             break;
         }
 
         #define case_mov_reg_to_regaddr(name, q, type) case OP_MOV##name##_REG_TO_REGADDR: { \
             byte reg_src = in.as.mov_reg_to_reg.reg_source; \
             byte regaddr = in.as.mov_reg_to_reg.reg_destination; \
-            memaddr_t memaddr = vm->registers[regaddr].as.u; \
-            *((type*)(MEMORY->data + memaddr)) = (type)vm->registers[reg_src].as.q; \
+            *((type*)(vm->registers[regaddr].as.p)) = (type)vm->registers[reg_src].as.q; \
         } break
 
         case_mov_reg_to_regaddr(U8, u, u8);
@@ -635,9 +631,7 @@ void vm_step(vm_t *vm) {
         case OP_MOVWORD_REG_TO_REGADDR: {
             byte reg_src = in.as.mov_reg_to_reg.reg_source;
             byte regaddr = in.as.mov_reg_to_reg.reg_destination;
-            memaddr_t memaddr = vm->registers[regaddr].as.u;
-            
-            memcpy(MEMORY->data+memaddr, &vm->registers[reg_src], sizeof(word_t));
+            memcpy(vm->registers[regaddr].as.p, &vm->registers[reg_src], sizeof(word_t));
             break;
         }
 
