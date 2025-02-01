@@ -8,16 +8,12 @@
     x := 0;
     y := 0;
 
-    xp := &x;
-    xpp := &xp;
+    *{
+        zp := &x;
+        if true then zp = &y;
 
-    **xpp = 42;
+        zp;
+    } = 10;
 
-    x;
-
-    *xpp = &y;
-
-    **xpp = 42;
-
-    y == x;
+    y;
 }

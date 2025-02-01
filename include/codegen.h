@@ -67,6 +67,7 @@ static void emit_read_memory_to_reg(texloc_t location, function_t *function, reg
             break;
         }
 
+        case TYPE_POINTER:
         case TYPE_TYPE:
         case TYPE_FUNCTION: {
             if (type_info->size != WORD_SIZE) {
