@@ -724,7 +724,7 @@ void resolve_expression(
 
         case AST_NODE_TYPE_EXPRESSION_GROUPING: {
             resolve_expression(analyzer, ast, state, an_operand(expr));
-            expr->lvalue_node = an_operand(expr);
+            expr->lvalue_node = an_operand(expr)->lvalue_node;
             expr->value_type = an_operand(expr)->value_type;
             expr->expr_val = an_operand(expr)->expr_val;
             expr->is_free_number = an_operand(expr)->is_free_number;
@@ -970,7 +970,10 @@ void resolve_expression(
                     break;
                 }
 
-                default: UNREACHABLE(); break;
+                default: {
+                    INVALIDATE(expr);
+                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_OPERAND_FOR_ADDRESS_OPERATOR, expr));
+                }
                 }
             } else {
                 typedata_t *operand_td = type2td(ast, an_operand(expr)->value_type);
@@ -983,8 +986,8 @@ void resolve_expression(
                         break;
                     }
 
-                    expr->lvalue_node = expr;
                     expr->value_type = operand_td->data.pointer.type;
+                    expr->lvalue_node = expr;
                     break;
                 }
 

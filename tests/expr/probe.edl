@@ -1,8 +1,23 @@
 
 {
-    x := 42;
+    mutate :: (n: &int) -> void {
+        *n = 42;
+        return;
+    };
+
+    x := 0;
+    y := 0;
 
     xp := &x;
+    xpp := &xp;
 
-    *xp;
+    **xpp = 42;
+
+    x;
+
+    *xpp = &y;
+
+    **xpp = 42;
+
+    y == x;
 }
