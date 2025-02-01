@@ -1,0 +1,5 @@
+// core lib
+
+mmap :: @intrinsic (size_t) -> &void;
+munmap :: @intrinsic (&void) -> void;
+mmarkro :: @intrinsic (&void) -> void;

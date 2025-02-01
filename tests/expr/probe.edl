@@ -1,19 +1,45 @@
-
 {
-    mutate :: (n: &int) -> void {
-        *n = 42;
-        return;
+    toi :: (ptr: &void) -> int {
+        iptr := &int << ptr;
+        return *iptr;
     };
 
-    x := 0;
-    y := 0;
+    x := 10;
 
-    *{
-        zp := &x;
-        if true then zp = &y;
+    xp := &void << &x;
 
-        zp;
-    } = 10;
+    dx := 0;
+    
+    if typeof(xp) == &void then toi(xp);
 
-    y;
+    dx;
+
+
+    // count :: 10;
+
+    // addall :: (ints: &int, count: size_t) -> int {
+    //     c := 0pd;
+
+    //     sum := 0;
+
+    //     return while c < count {
+    //         num := *(ints + c);
+    //         c = c + 1;
+    //         sum = sum + num;
+    //     } then sum;
+    // };
+
+    // ints := &int << mmap(sizeof(int)*count);
+
+    // c := 0pd;
+    // while c < count {
+    //     *(ints + c) = c;
+    //     c = c + 1;
+    // };
+
+    // mprotect(ints, sizeof(int)*count);
+
+    // sum := addall(ints, count);
+
+    // munmap(ints, sizeof(int)*count);
 }
