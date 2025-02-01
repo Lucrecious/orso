@@ -21,6 +21,8 @@ operator_t operators[TOKEN_SIZE] = {
     [TOKEN_LESS] = {.type=OPERATOR_TYPE_COMPARISON},
     [TOKEN_LESS_EQUAL] = {.type=OPERATOR_TYPE_COMPARISON},
 
+    [TOKEN_LESS_LESS] = {.type=OPERATOR_TYPE_NONE},
+
     [TOKEN_AND] = {.type=OPERATOR_TYPE_LOGICAL},
     [TOKEN_OR] = {.type=OPERATOR_TYPE_LOGICAL},
     [TOKEN_NOT] = {.type=OPERATOR_TYPE_LOGICAL},
@@ -407,7 +409,8 @@ token_t _lexer_next_token(lexer_t *lexer) {
         case '+': return create_token(lexer, match(lexer, '+') ? TOKEN_PLUS_PLUS : TOKEN_PLUS);
         case '=': return create_token(lexer, match(lexer, '=') ? TOKEN_EQUAL_EQUAL : TOKEN_EQUAL);
         case '!': return create_token(lexer, match(lexer, '=') ? TOKEN_BANG_EQUAL : TOKEN_BANG);
-        case '<': return create_token(lexer, match(lexer, '=') ? TOKEN_LESS_EQUAL : TOKEN_LESS);
+        case '<': return create_token(lexer, match(lexer, '=') ? TOKEN_LESS_EQUAL :
+                                            (match(lexer, '<') ? TOKEN_LESS_LESS : TOKEN_LESS));
         case '>': return create_token(lexer, match(lexer, '=') ? TOKEN_GREATER_EQUAL : TOKEN_GREATER);
         
         case '"': return string(lexer);

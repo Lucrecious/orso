@@ -245,6 +245,7 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start) {
         case AST_NODE_TYPE_EXPRESSION_JMP:
         case AST_NODE_TYPE_EXPRESSION_GROUPING: {
             array_push(&node->children, &nil_node);
+            array_push(&node->children, &nil_node);
             break;
         }
 
@@ -295,12 +296,18 @@ ast_node_t *ast_nil(ast_t *ast, type_t value_type, token_t token_location) {
     return nil_node;
 }
 
-ast_node_t *ast_cast(ast_t *ast, type_t destination_type, ast_node_t *expr, token_t cast_token) {
-    ast_node_t *cast_ = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_CAST, cast_token);
+ast_node_t *ast_def_value(ast_t *ast, token_t identifier) {
+    ast_node_t *def_value = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_DEF_VALUE, identifier);
+    def_value->identifier = identifier;
+    return def_value;
+}
+
+ast_node_t *ast_cast(ast_t *ast, ast_node_t *type_expr, ast_node_t *expr) {
+    ast_node_t *cast_ = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_CAST, type_expr->start);
     cast_->end = expr->end;
 
-    an_expression(cast_) = expr;
-    cast_->value_type = destination_type;
+    an_lhs(cast_) = type_expr;
+    an_rhs(cast_) = expr;
     return cast_;
 }
 
@@ -459,12 +466,6 @@ static ast_node_t *ast_return(ast_t *ast, ast_node_t *expr, token_t start) {
     an_expression(return_) = expr;
     return_->end = expr->end;
     return return_;
-}
-
-static ast_node_t *ast_def_value(ast_t *ast, token_t identifier) {
-    ast_node_t *def_value = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_DEF_VALUE, identifier);
-    def_value->identifier = identifier;
-    return def_value;
 }
 
 static ast_node_t *ast_block_begin(ast_t *ast, token_t start) {
@@ -1231,6 +1232,16 @@ static ast_node_t *parse_binary(parser_t *parser) {
     return expression_node;
 }
 
+static ast_node_t *parse_cast(parser_t *parser) {
+    parse_rule_t *rule = parser_get_rule(TOKEN_LESS_LESS);
+
+    ast_node_t *expr = parse_precedence(parser, (Precedence)(rule->precedence+1));
+
+    ast_node_t *cast_node = ast_cast(parser->ast, &nil_node, expr);
+    
+    return cast_node;
+}
+
 static ast_node_t *parse_struct_def(parser_t *parser) {
     ast_node_t *struct_definition = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION, parser->previous);
 
@@ -1315,6 +1326,7 @@ parse_rule_t rules[] = {
     [TOKEN_AMPERSAND]               = { parse_unary,        NULL,               PREC_UNARY },
     [TOKEN_PLUS_PLUS]               = { parse_unary,        NULL,               PREC_NONE },
     [TOKEN_MINUS_MINUS]             = { parse_unary,        NULL,               PREC_NONE },
+    [TOKEN_LESS_LESS]               = { NULL,               parse_cast,         PREC_BITWISE_OR },
     [TOKEN_EQUAL_EQUAL]             = { NULL,               parse_binary,       PREC_EQUALITY },
     [TOKEN_BANG_EQUAL]              = { NULL,               parse_binary,       PREC_EQUALITY },
     [TOKEN_LESS_EQUAL]              = { NULL,               parse_binary,       PREC_COMPARISON },
@@ -1374,6 +1386,7 @@ static ast_node_t *parse_precedence(parser_t *parser, Precedence precedence) {
         ast_node_t *right_operand = infix_rule(parser);
 
         switch (right_operand->node_type) {
+            case AST_NODE_TYPE_EXPRESSION_CAST:
             case AST_NODE_TYPE_EXPRESSION_BINARY: {
                 an_lhs(right_operand) = left_operand;
                 right_operand->start = left_operand->start;
@@ -1714,7 +1727,7 @@ static void ast_print_ast_node(typedatas_t types, ast_node_t *node, u32 level) {
             print_indent(level);
             print_line("cast: %s", type2cstr(node));
 
-            ast_print_ast_node(types, an_operand(node), level + 1);
+            ast_print_ast_node(types, an_rhs(node), level + 1);
             break;
         }
         case AST_NODE_TYPE_EXPRESSION_UNARY: {

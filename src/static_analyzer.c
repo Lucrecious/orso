@@ -470,78 +470,101 @@ word_t constant_fold_bin_comparison(ast_t *ast, token_type_t operator, type_t ty
     }
 }
 
+static bool stan_can_cast(typedatas_t *types, type_t dst, type_t src) {
+    typedata_t *srctd = type2typedata(types, src);
+    typedata_t *dsttd = type2typedata(types, dst);
+
+    if (srctd->kind == TYPE_NUMBER && dsttd->kind == TYPE_NUMBER) return true;
+    if (srctd->kind == TYPE_POINTER && dsttd->kind == TYPE_POINTER) return true;
+    if (srctd->kind == TYPE_FUNCTION && dsttd->kind == TYPE_POINTER && TYPE_IS_VOID(dsttd->data.pointer.type)) return true;
+    if (srctd->kind == TYPE_POINTER && TYPE_IS_VOID(srctd->data.pointer.type) && dsttd->kind == TYPE_FUNCTION) return true;
+
+    return false;
+}
+
 static word_t constant_fold_cast(ast_t *ast, word_t in, type_t dst, type_t src) {
     typedata_t *desttd = type2td(ast, dst);
     typedata_t *sourcetd = type2td(ast, src);
-    ASSERT(desttd->kind == TYPE_NUMBER && desttd->kind == sourcetd->kind, "must both be number types for now");
+    ASSERT(stan_can_cast(&ast->type_set.types, dst, src), "must be castable");
 
-    #define CASTING(src_type, dst_type) (sourcetd->data.num == NUM_TYPE_##src_type && desttd->data.num == NUM_TYPE_##dst_type)
-    #define DSIZE(size_) (desttd->size == (size_/8))
-    #define VALU (in.as.u)
-    #define VALI (in.as.s)
-    #define VALF (in.as.d)
+    switch (desttd->kind) {
+    case TYPE_NUMBER: {
+        #define CASTING(src_type, dst_type) (sourcetd->data.num == NUM_TYPE_##src_type && desttd->data.num == NUM_TYPE_##dst_type)
+        #define DSIZE(size_) (desttd->size == (size_/8))
+        #define VALU (in.as.u)
+        #define VALI (in.as.s)
+        #define VALF (in.as.d)
 
-    word_t result = {0};
-    if (CASTING(SIGNED, SIGNED)) {
-        if (DSIZE(8)) result.as.s = cast(s8, VALI);
-        else if (DSIZE(16)) result.as.s = cast(s16, VALI);
-        else if (DSIZE(32)) result.as.s = cast(s32, VALI);
-        else result.as.s = VALI;
-    } else if (CASTING(SIGNED, UNSIGNED)) {
-        if (DSIZE(8)) result.as.u = cast(u8, cast(u64, VALI));
-        else if (DSIZE(16)) result.as.u = cast(u16, cast(u64, VALI));
-        else if (DSIZE(32)) result.as.u = cast(u32, cast(u64, VALI));
-        else if (DSIZE(64)) result.as.u = cast(u64, VALI);
-        else UNREACHABLE();
-    } else if (CASTING(SIGNED, FLOAT)) {
-        if (DSIZE(32)) result.as.d = cast(f32, VALI);
-        else if (DSIZE(64)) result.as.d = cast(f64, VALI);
-        else UNREACHABLE();
-    } else if (CASTING(UNSIGNED, UNSIGNED)) {
-        if (DSIZE(8)) result.as.u = cast(u8, VALU);
-        else if (DSIZE(16)) result.as.u = cast(u16, VALU);
-        else if (DSIZE(32)) result.as.u = cast(u32, VALU);
-        else result.as.u = VALU;
-    } else if (CASTING(UNSIGNED, SIGNED)) {
-        if (DSIZE(8)) result.as.s = cast(s8, cast(s64, VALU));
-        else if (DSIZE(16)) result.as.s = cast(s16, cast(s64, VALU));
-        else if (DSIZE(32)) result.as.s = cast(s32, cast(s64, VALU));
-        else if (DSIZE(64)) result.as.s = cast(s64, VALU);
-        else UNREACHABLE();
-    } else if (CASTING(UNSIGNED, FLOAT)) {
-        if (DSIZE(32)) result.as.d = cast(f32, VALU);
-        else if (DSIZE(64)) result.as.d = cast(f64, VALU);
-        else UNREACHABLE();
-    } else if (CASTING(FLOAT, FLOAT)) {
-        if (DSIZE(32)) result.as.d = cast(f32, VALF);
-        else result.as.d = VALF;
-    } else if (CASTING(FLOAT, SIGNED)) {
-        if (DSIZE(8)) result.as.u = cast(u8, cast(u64, VALF));
-        else if (DSIZE(16)) result.as.u = cast(u16, cast(u64, VALF));
-        else if (DSIZE(32)) result.as.u = cast(u32, cast(u64, VALF));
-        else if (DSIZE(64)) result.as.u = cast(u64, VALF);
-        else UNREACHABLE();
-    } else if (CASTING(FLOAT, SIGNED)) {
-        if (DSIZE(8)) result.as.s = cast(s8, cast(s64, VALF));
-        else if (DSIZE(16)) result.as.s = cast(s16, cast(s64, VALF));
-        else if (DSIZE(32)) result.as.s = cast(s32, cast(s64, VALF));
-        else if (DSIZE(64)) result.as.s = cast(s64, VALF);
-        else UNREACHABLE();
-    } else UNREACHABLE();
+        word_t result = {0};
+        if (CASTING(SIGNED, SIGNED)) {
+            if (DSIZE(8)) result.as.s = cast(s8, VALI);
+            else if (DSIZE(16)) result.as.s = cast(s16, VALI);
+            else if (DSIZE(32)) result.as.s = cast(s32, VALI);
+            else result.as.s = VALI;
+        } else if (CASTING(SIGNED, UNSIGNED)) {
+            if (DSIZE(8)) result.as.u = cast(u8, cast(u64, VALI));
+            else if (DSIZE(16)) result.as.u = cast(u16, cast(u64, VALI));
+            else if (DSIZE(32)) result.as.u = cast(u32, cast(u64, VALI));
+            else if (DSIZE(64)) result.as.u = cast(u64, VALI);
+            else UNREACHABLE();
+        } else if (CASTING(SIGNED, FLOAT)) {
+            if (DSIZE(32)) result.as.d = cast(f32, VALI);
+            else if (DSIZE(64)) result.as.d = cast(f64, VALI);
+            else UNREACHABLE();
+        } else if (CASTING(UNSIGNED, UNSIGNED)) {
+            if (DSIZE(8)) result.as.u = cast(u8, VALU);
+            else if (DSIZE(16)) result.as.u = cast(u16, VALU);
+            else if (DSIZE(32)) result.as.u = cast(u32, VALU);
+            else result.as.u = VALU;
+        } else if (CASTING(UNSIGNED, SIGNED)) {
+            if (DSIZE(8)) result.as.s = cast(s8, cast(s64, VALU));
+            else if (DSIZE(16)) result.as.s = cast(s16, cast(s64, VALU));
+            else if (DSIZE(32)) result.as.s = cast(s32, cast(s64, VALU));
+            else if (DSIZE(64)) result.as.s = cast(s64, VALU);
+            else UNREACHABLE();
+        } else if (CASTING(UNSIGNED, FLOAT)) {
+            if (DSIZE(32)) result.as.d = cast(f32, VALU);
+            else if (DSIZE(64)) result.as.d = cast(f64, VALU);
+            else UNREACHABLE();
+        } else if (CASTING(FLOAT, FLOAT)) {
+            if (DSIZE(32)) result.as.d = cast(f32, VALF);
+            else result.as.d = VALF;
+        } else if (CASTING(FLOAT, SIGNED)) {
+            if (DSIZE(8)) result.as.u = cast(u8, cast(u64, VALF));
+            else if (DSIZE(16)) result.as.u = cast(u16, cast(u64, VALF));
+            else if (DSIZE(32)) result.as.u = cast(u32, cast(u64, VALF));
+            else if (DSIZE(64)) result.as.u = cast(u64, VALF);
+            else UNREACHABLE();
+        } else if (CASTING(FLOAT, SIGNED)) {
+            if (DSIZE(8)) result.as.s = cast(s8, cast(s64, VALF));
+            else if (DSIZE(16)) result.as.s = cast(s16, cast(s64, VALF));
+            else if (DSIZE(32)) result.as.s = cast(s32, cast(s64, VALF));
+            else if (DSIZE(64)) result.as.s = cast(s64, VALF);
+            else UNREACHABLE();
+        } else UNREACHABLE();
 
-    #undef VALF
-    #undef VALI
-    #undef VALU
-    #undef DSIZE
-    #undef CASTING
+        #undef VALF
+        #undef VALI
+        #undef VALU
+        #undef DSIZE
+        #undef CASTING
 
-    return result;
+        return result;
+    }
+
+    case TYPE_FUNCTION:
+    case TYPE_POINTER: return in;
+
+    default: UNREACHABLE(); return in;
+    }
 }
 
 static ast_node_t *cast_implicitly_if_necessary(ast_t *ast, type_t destination_type, ast_node_t *expr) {
     ASSERT(TYPE_IS_RESOLVED(expr->value_type), "expression must be resolved already");
 
     if (typeid_eq(destination_type, expr->value_type)) return expr;
+
+    unless (stan_can_cast(&ast->type_set.types, destination_type, expr->value_type)) return expr;
 
     typedata_t *destinationtd = type2td(ast, destination_type);
     typedata_t *exprtd = type2td(ast, expr->value_type);
@@ -639,7 +662,13 @@ static ast_node_t *cast_implicitly_if_necessary(ast_t *ast, type_t destination_t
         if (exprtd->size > destinationtd->size) return expr;
     }
 
-    ast_node_t *cast = ast_cast(ast, destination_type, expr, token_implicit_at_start(expr->start));
+
+    ast_node_t *implicit_def_value = ast_def_value(ast, token_implicit_at_start(expr->start));
+    implicit_def_value->value_type = typeid(TYPE_TYPE);
+    implicit_def_value->expr_val = ast_node_val_word(WORDT(destination_type));
+
+    ast_node_t *cast = ast_cast(ast, implicit_def_value, expr);
+    cast->value_type = destination_type;
 
     if (expr->expr_val.is_concrete) {
         word_t result = constant_fold_cast(ast, expr->expr_val.word, destination_type, expr->value_type);
@@ -871,7 +900,19 @@ void resolve_expression(
                         UNREACHABLE();
                     } else {
                         u8 result = (u8)(memcmp(&wordl, &wordr, WORD_SIZE) == 0);
-                        expr->expr_val = ast_node_val_word(WORDU(result));
+                        switch (expr->operator.type) {
+                        case TOKEN_EQUAL_EQUAL: {
+                            expr->expr_val = ast_node_val_word(WORDU(result));
+                            break;
+                        }
+
+                        case TOKEN_BANG_EQUAL: {
+                            expr->expr_val = ast_node_val_word(WORDU(result == 0));
+                            break;
+                        }
+
+                        default: UNREACHABLE(); break;
+                        }
                     }
 
                     expr->is_free_number = left->is_free_number && right->is_free_number;
@@ -935,6 +976,9 @@ void resolve_expression(
                     expr->expr_val = ast_node_val_word(WORDU((u64)result));
                     expr->is_free_number = left->is_free_number && right->is_free_number;
                 }
+            } else if (expr->operator.type == TOKEN_LESS_LESS) {
+                // should be in cast branch
+                UNREACHABLE();
             } else {
                 UNREACHABLE();
             }
@@ -982,6 +1026,12 @@ void resolve_expression(
                 case TOKEN_STAR: {
                     if (operand_td->kind != TYPE_POINTER) {
                         stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_DEREF_OPERAND, expr));
+                        INVALIDATE(expr);
+                        break;
+                    }
+
+                    if (TYPE_IS_VOID(operand_td->data.pointer.type)) {
+                        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CANNOT_DEREFERENCE_VOIDPTR, expr));
                         INVALIDATE(expr);
                         break;
                     }
@@ -1445,26 +1495,37 @@ void resolve_expression(
         }
 
         case AST_NODE_TYPE_EXPRESSION_CAST: {
-            ast_node_t *cast_expr = an_expression(expr);
+            ast_node_t *cast_expr = an_rhs(expr);
             resolve_expression(analyzer, ast, state, cast_expr);
             if (TYPE_IS_INVALID(cast_expr->value_type)) {
                 INVALIDATE(expr);
                 break;
             }
 
-            typedata_t *desttd = type2td(ast, cast_expr->value_type);
-            typedata_t *sourcetd = type2td(ast, cast_expr->value_type);
-
-            if (desttd->kind != TYPE_NUMBER || sourcetd->kind != TYPE_NUMBER) {
-                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_OPERAND_CANNOT_CASTED, expr));
+            ast_node_t *type_expr = an_lhs(expr);
+            resolve_expression(analyzer, ast, state, type_expr);
+            if (TYPE_IS_INVALID(type_expr->value_type)) {
                 INVALIDATE(expr);
                 break;
             }
 
-            if (cast_expr->expr_val.is_concrete) {
-                word_t result = constant_fold_cast(ast, cast_expr->expr_val.word, expr->value_type, cast_expr->value_type);
-                expr->expr_val = ast_node_val_word(result);
-                expr->is_free_number = cast_expr->is_free_number;
+            typedata_t *typetd = type2td(ast, type_expr->value_type);
+            if (typetd->kind == TYPE_TYPE && type_expr->expr_val.is_concrete) {
+                if (stan_can_cast(&ast->type_set.types, type_expr->expr_val.word.as.t, cast_expr->value_type)) {
+                    expr->value_type = type_expr->expr_val.word.as.t;
+
+                    if (cast_expr->expr_val.is_concrete) {
+                        word_t result = constant_fold_cast(ast, cast_expr->expr_val.word, expr->value_type, cast_expr->value_type);
+                        expr->expr_val = ast_node_val_word(result);
+                        expr->is_free_number = cast_expr->is_free_number;
+                    }
+                } else {
+                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_CAST, expr));
+                }
+
+            } else {
+                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_LHS_REQUIRES_TYPE_KNOWN_AT_COMPILE_TIME, type_expr));
+                INVALIDATE(expr);
             }
             break;
         }
@@ -1549,7 +1610,7 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
         ast_node_t *cast_node = an_decl_expr(declaration);
         ASSERT(cast_node->node_type == AST_NODE_TYPE_EXPRESSION_CAST, "must be implicit casting node");
         
-        type_t completed_struct_type = an_operand(cast_node)->value_type;
+        type_t completed_struct_type = an_rhs(cast_node)->value_type;
         
         // this means that we found out later that the struct this was supposed to be was actually invalid, so we need to fix the ast
         if (TYPE_IS_INVALID(completed_struct_type)) {

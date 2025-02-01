@@ -268,7 +268,8 @@ void ast_free(ast_t *ast);
 
 ast_node_t* ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start);
 ast_node_t *ast_nil(ast_t *ast, type_t value_type, token_t token_location);
-ast_node_t *ast_cast(ast_t *ast, type_t destination_type, ast_node_t *expr, token_t cast_token);
+ast_node_t *ast_def_value(ast_t *ast, token_t identifer);
+ast_node_t *ast_cast(ast_t *ast, ast_node_t *expr_type, ast_node_t *expr);
 
 bool ast_node_type_is_decl_or_stmt(ast_node_type_t node_type);
 bool ast_node_type_is_expression(ast_node_type_t node_type);
