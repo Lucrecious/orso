@@ -220,7 +220,7 @@ static void emit_mov_reg_to_reg(gen_t *gen, function_t *function, texloc_t loc, 
 
     case TYPE_FUNCTION:
     case TYPE_TYPE:
-    case TYPE_POINTER: mov_op = op_word;
+    case TYPE_POINTER: mov_op = op_word; break;
 
     case TYPE_NATIVE_FUNCTION:
     case TYPE_STRING: UNREACHABLE(); break;
@@ -589,7 +589,7 @@ static void gen_unary(gen_t *gen, function_t *function, ast_node_t *unary) {
     ast_node_t *expr = an_expression(unary);
 
     if (unary->operator.type == TOKEN_AMPERSAND) {
-        ast_node_t *ref_decl = unary->lvalue_node->ref_decl;
+        ast_node_t *ref_decl = an_operand(unary)->lvalue_node->ref_decl;
         local_t *local = find_local(gen, ref_decl);
 
         gen_local_memaddr(gen, token_end_location(&unary->end), function, local, REG_RESULT);
@@ -823,7 +823,7 @@ static void gen_assignment(gen_t *gen, function_t *function, ast_node_t *assignm
 
     ast_node_t *lhs = an_lhs(assignment);
     if (lhs->lvalue_node->node_type == AST_NODE_TYPE_EXPRESSION_DEF_VALUE) {
-        ast_node_t *ref_decl = lhs->ref_decl;
+        ast_node_t *ref_decl = lhs->lvalue_node->ref_decl;
 
         local_t *local = find_local(gen, ref_decl);
 
@@ -846,6 +846,8 @@ static void gen_assignment(gen_t *gen, function_t *function, ast_node_t *assignm
 
         emit_mov_reg_to_reg(gen, function, end,
                 assignment->value_type, REG_MOV_TYPE_REG_TO_ADDR, REG_RESULT, REG_TMP);
+    } else {
+        UNREACHABLE();
     }
 }
 

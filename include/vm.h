@@ -367,6 +367,22 @@ void vm_step(vm_t *vm) {
             break;
         }
 
+        #define case_op_mov_reg_to_regmem(name, type, q) case OP_MOV##name##_REG_TO_REGMEM: { \
+            byte src = in.as.mov_reg_to_reg.reg_source; \
+            byte dst_regmem = in.as.mov_reg_to_reg.reg_destination; \
+            memaddr_t dst_mem = vm->registers[dst_regmem].as.u; \
+            type value = (type)vm->registers[src].as.q; \
+            *(type*)(MEMORY->data + dst_mem) = value; \
+            IP_ADV(1); \
+        } break;
+
+        case_op_mov_reg_to_regmem(U8, u8, u);
+        case_op_mov_reg_to_regmem(U16, u16, u);
+        case_op_mov_reg_to_regmem(U32, u32, u);
+        case_op_mov_reg_to_regmem(F32, f32, d);
+
+        #undef case_op_reg_to_regmem
+
         case OP_MOVWORD_REG_TO_REGMEM: {
             byte reg = in.as.mov_reg_to_reg.reg_source;
             word_t value = vm->registers[reg];
@@ -379,6 +395,21 @@ void vm_step(vm_t *vm) {
             IP_ADV(1);
             break;
         }
+
+        #define case_op_mov_regmem_to_reg(name, type, q) case OP_MOV##name##_REGMEM_TO_REG: { \
+            byte src_regmem = in.as.mov_reg_to_reg.reg_source; \
+            memaddr_t src_mem = vm->registers[src_regmem].as.u; \
+            byte dst = in.as.mov_reg_to_reg.reg_destination; \
+            vm->registers[dst].as.q = *(type*)(MEMORY->data + src_mem); \
+            IP_ADV(1); \
+        } break;
+
+        case_op_mov_regmem_to_reg(U8, u8, u);
+        case_op_mov_regmem_to_reg(U16, u16, u);
+        case_op_mov_regmem_to_reg(U32, u32, u);
+        case_op_mov_regmem_to_reg(F32, f32, d);
+
+        #undef case_op_mov_regmem_reg
 
         case OP_MOVWORD_REGMEM_TO_REG: {
             byte regmem = in.as.mov_reg_to_reg.reg_source;
@@ -599,6 +630,7 @@ void vm_step(vm_t *vm) {
             byte regaddr = in.as.mov_reg_to_reg.reg_source; \
             byte reg_dest = in.as.mov_reg_to_reg.reg_destination; \
             vm->registers[reg_dest].as.q = *((type*)(vm->registers[regaddr].as.p)); \
+            IP_ADV(1); \
         } break
 
         case_mov_regaddr_to_reg(U8, u, u8);
@@ -612,6 +644,7 @@ void vm_step(vm_t *vm) {
             byte regaddr = in.as.mov_reg_to_reg.reg_source;
             byte reg_dest = in.as.mov_reg_to_reg.reg_destination;
             memcpy(&vm->registers[reg_dest], vm->registers[regaddr].as.p, sizeof(word_t));
+            IP_ADV(1);
             break;
         }
 
@@ -619,6 +652,7 @@ void vm_step(vm_t *vm) {
             byte reg_src = in.as.mov_reg_to_reg.reg_source; \
             byte regaddr = in.as.mov_reg_to_reg.reg_destination; \
             *((type*)(vm->registers[regaddr].as.p)) = (type)vm->registers[reg_src].as.q; \
+            IP_ADV(1); \
         } break
 
         case_mov_reg_to_regaddr(U8, u, u8);
@@ -632,6 +666,7 @@ void vm_step(vm_t *vm) {
             byte reg_src = in.as.mov_reg_to_reg.reg_source;
             byte regaddr = in.as.mov_reg_to_reg.reg_destination;
             memcpy(vm->registers[regaddr].as.p, &vm->registers[reg_src], sizeof(word_t));
+            IP_ADV(1);
             break;
         }
 

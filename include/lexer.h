@@ -88,8 +88,9 @@ struct token_t {
 }
 
 #define token_end_location(token) ((texloc_t){\
-    .line = ((token)->loc.line),\
-    .column=(((token)->loc.column + (token)->view.length))\
+    .filepath = ((token)->loc.filepath), \
+    .line = ((token)->loc.line), \
+    .column=(((token)->loc.column + (token)->view.length)) \
 })
 
 typedef struct lexer_t lexer_t;

@@ -949,26 +949,45 @@ void resolve_expression(
                 break;
             }
 
-            bool is_inside_type_context = (state.scope->type == SCOPE_TYPE_TYPE_CONTEXT);
-            if (is_inside_type_context && expr->operator.type == TOKEN_AMPERSAND) {
-                unless (TYPE_IS_TYPE(an_operand(expr)->value_type)) {
-                    INVALIDATE(expr);
-                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_UNARY_OPERAND, expr));
+            if (expr->operator.type == TOKEN_AMPERSAND) {
+                ast_node_t *op = an_operand(expr);
+
+                switch (op->lvalue_node->node_type) {
+                case AST_NODE_TYPE_EXPRESSION_DEF_VALUE: {
+                    if (op->lvalue_node->ref_decl->is_mutable) {
+                        type_t ptr_type = type_set_fetch_pointer(&ast->type_set, op->lvalue_node->value_type);
+                        expr->value_type = ptr_type;
+                    } else {
+                        if (TYPE_IS_TYPE(op->lvalue_node->value_type)) {
+                            type_t ptr_type = type_set_fetch_pointer(&ast->type_set, op->lvalue_node->expr_val.word.as.t);
+                            expr->expr_val = ast_node_val_word(WORDT(ptr_type));
+                            expr->value_type = typeid(TYPE_TYPE);
+                        } else {
+                            INVALIDATE(expr);
+                            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CANNOT_TAKE_ADDRESS_OF_CONSTANT, expr));
+                        }
+                    }
                     break;
                 }
 
-                unless (an_operand(expr)->expr_val.is_concrete) {
-                    INVALIDATE(expr);
-                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_EXPECTED_CONSTANT, an_operand(expr)));
-                    break;
+                default: UNREACHABLE(); break;
                 }
-
-                // todo
-                INVALIDATE(expr);
             } else {
                 typedata_t *operand_td = type2td(ast, an_operand(expr)->value_type);
 
                 switch (expr->operator.type) {
+                case TOKEN_STAR: {
+                    if (operand_td->kind != TYPE_POINTER) {
+                        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_DEREF_OPERAND, expr));
+                        INVALIDATE(expr);
+                        break;
+                    }
+
+                    expr->lvalue_node = expr;
+                    expr->value_type = operand_td->data.pointer.type;
+                    break;
+                }
+
                 case TOKEN_NOT: {
                     if (operand_td->kind != TYPE_BOOL) {
                         stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_NOT_OPERAND, expr));
@@ -1002,7 +1021,7 @@ void resolve_expression(
                     ast_node_t *operand = an_operand(expr);
                     expr->value_type = operand->value_type;
 
-                    // constand fold
+                    // constant fold
                     if (an_operand(expr)->expr_val.is_concrete) {
                         switch (operand_td->data.num) {
                         case NUM_TYPE_SIGNED: {
@@ -1143,47 +1162,13 @@ void resolve_expression(
                 break;
             } 
 
-            if (an_is_notnone(lvalue_node->ref_decl)) {
-                scope_t *def_scope;
-                ast_node_t *def;
-                def = get_def_by_identifier_or_error(analyzer, ast, state, lvalue_node, &def_scope);
+            expr->value_type = lvalue_node->value_type;
 
-                
-                if (def == NULL) {
-                    INVALIDATE(expr);
-                    break;
-                }
-
-                expr->value_type = def->value_type;
-
-                type_t rhs_type = rhs->value_type;
-                unless (typeid_eq(def->value_type, rhs_type)) {
-                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_TYPE_MISMATCH, expr));
-                    INVALIDATE(expr);
-                    break;
-                }
-
-                expr->value_type = rhs_type;
-
-            } else if (lvalue_node->node_type == AST_NODE_TYPE_EXPRESSION_DOT) {
-                // todo
-                UNREACHABLE();
-
-                ASSERT(EXPRESSION_RESOLVED(lvalue_node), "must be resolved");
-                // resolve_expression(analyzer, ast, state, lvalue_node);
-
-                if (TYPE_IS_INVALID(lvalue_node->value_type)) {
-                    INVALIDATE(expr);
-                    break;
-                }
-
-                unless (typeid_eq(lvalue_node->value_type, rhs->value_type)) {
-                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_TYPE_MISMATCH, expr));
-                    break;
-                }
-
-                expr->value_type = lvalue_node->value_type;
-
+            type_t rhs_type = rhs->value_type;
+            unless (typeid_eq(lvalue_node->value_type, rhs_type)) {
+                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_TYPE_MISMATCH, expr));
+                INVALIDATE(expr);
+                break;
             }
             break;
         }
