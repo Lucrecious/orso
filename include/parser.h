@@ -58,6 +58,7 @@ typedef enum ast_node_type_t {
     AST_NODE_TYPE_DECLARATION_STATEMENT, // for expressions
 
     AST_NODE_TYPE_EXPRESSION_JMP, // return, break, continue
+    AST_NODE_TYPE_EXPRESSION_INFERRED_TYPE,
     AST_NODE_TYPE_EXPRESSION_CAST,
     AST_NODE_TYPE_EXPRESSION_BINARY,
     AST_NODE_TYPE_EXPRESSION_DOT,
@@ -94,6 +95,7 @@ case AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE: \
 case AST_NODE_TYPE_EXPRESSION_GROUPING: \
 case AST_NODE_TYPE_EXPRESSION_PRIMARY: \
 case AST_NODE_TYPE_EXPRESSION_JMP: \
+case AST_NODE_TYPE_EXPRESSION_INFERRED_TYPE: \
 case AST_NODE_TYPE_EXPRESSION_UNARY: \
 case AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER: \
 case AST_NODE_TYPE_EXPRESSION_DIRECTIVE: \
@@ -165,6 +167,8 @@ struct ast_node_val_t {
 
 #define ast_node_val_nil() ((ast_node_val_t){0})
 #define ast_node_val_word(w) ((ast_node_val_t){.word = (w), .is_concrete=true});
+
+#define an_is_constant(n) (!(n)->is_mutable)
 
 struct ast_node_t {
     ast_node_type_t node_type;
@@ -261,7 +265,6 @@ ast_node_t *ast_begin_module(ast_t *ast);
 void ast_end_module(ast_node_t *module);
 void ast_add_module(ast_t *ast, ast_node_t *module, string_t moduleid);
 
-bool ast_node_type_is_decl_or_stmt(ast_node_type_t node_type);
 bool ast_node_type_is_expression(ast_node_type_t node_type);
 
 token_t token_implicit_at_start(token_t token);

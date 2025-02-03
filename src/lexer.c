@@ -379,6 +379,12 @@ token_t _lexer_next_token(lexer_t *lexer) {
         return directive(lexer);
     }
 
+    if (c == '?') {
+        token_t tok = identifier(lexer);
+        tok.type = TOKEN_INFERRED_TYPE;
+        return tok;
+    }
+
     if (is_alpha(c)) {
         return identifier(lexer);
     }

@@ -237,7 +237,6 @@ bool parse_expr_file(ast_t *ast, string_t expr_file, env_t *program_env_or_null,
     String_View nob_sv = sb_to_sv(sb);
     string_view_t code = { .data = nob_sv.data, .length = nob_sv.count };
 
-    ast_init(ast);
     code = string2sv(sv2string(code, &ast->allocator));
 
     success = parse_expr_cstr(ast, code, expr_file, program_env_or_null, out_expr);
@@ -293,7 +292,7 @@ env_t make_test_env(ast_t *ast, vm_t *vm, arena_t *program_arena) {
     
     env_t env = {.vm=(vm), .memory=(memory), .arena=(program_arena)};
 
-    ast_node_t *module = parse_module(ast, str("./core.odl"));
+    ast_node_t *module = parse_module(ast, str("./bin/core.odl"));
     ast_add_module(ast, module, str("core"));
 
     analyzer_t analyzer = {0};

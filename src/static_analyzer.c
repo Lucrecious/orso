@@ -322,14 +322,12 @@ static void resolve_struct_definition(
 
 static void declare_definition(analyzer_t *analyzer, scope_t *scope, ast_node_t *definition);
 
-static void forward_scan_declaration_names(analyzer_t *analyzer, scope_t *scope, ast_nodes_t declarations) {
+static void forward_scan_constant_names(analyzer_t *analyzer, scope_t *scope, ast_nodes_t declarations) {
     for (size_t i = 0; i < declarations.count; i++) {
         ast_node_t *decl = declarations.items[i];
-        if (decl->node_type != AST_NODE_TYPE_DECLARATION_DEFINITION) {
-            continue;
+        if (decl->node_type == AST_NODE_TYPE_DECLARATION_DEFINITION && an_is_constant(decl)) {
+            declare_definition(analyzer, scope, decl);
         }
-
-        declare_definition(analyzer, scope, decl);
     }
 }
 
@@ -764,6 +762,10 @@ void resolve_expression(
                 // todo
                 UNREACHABLE();
             }
+            break;
+        }
+        
+        case AST_NODE_TYPE_EXPRESSION_INFERRED_TYPE: {
             break;
         }
 
@@ -1229,7 +1231,7 @@ void resolve_expression(
             scope_t block_scope;
             scope_init(&block_scope, &analyzer->allocator, SCOPE_TYPE_BLOCK, state.scope, expr);
 
-            forward_scan_declaration_names(analyzer, &block_scope, expr->children);
+            forward_scan_constant_names(analyzer, &block_scope, expr->children);
 
             analysis_state_t block_state = state;
             block_state.scope = &block_scope;
@@ -1557,38 +1559,35 @@ static void declare_definition(analyzer_t *analyzer, scope_t *scope, ast_node_t 
 
 static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, analysis_state_t state, ast_node_t *declaration) {
     type_t declaration_type = typeid(TYPE_UNRESOLVED);
-    if (TYPE_IS_UNRESOLVED(declaration->value_type) && !an_is_none(an_decl_type(declaration))) {
+    if (TYPE_IS_UNRESOLVED(declaration->value_type)) {
         analysis_state_t new_state = state;
         resolve_expression(analyzer, ast, new_state, an_decl_type(declaration));
 
         ast_node_t *decl_type = an_decl_type(declaration);
-        declaration_type = decl_type->expr_val.word.as.t;
+        if (TYPE_IS_RESOLVED(decl_type->value_type)) {
+            declaration_type = decl_type->expr_val.word.as.t;
+        }
     }
 
-    unless (an_is_none(an_decl_expr(declaration))) {
-        if (TYPE_IS_UNRESOLVED(an_decl_expr(declaration)->value_type)) {
-            analysis_state_t new_state = state;
-            switch (state.scope->type) {
-            case SCOPE_TYPE_FUNC_DEF_BODY:
-            case SCOPE_TYPE_BLOCK:
-            case SCOPE_TYPE_CONDITION:
-            case SCOPE_TYPE_JMPABLE:
-            case SCOPE_TYPE_MODULE:
-            case SCOPE_TYPE_STRUCT:
-            case SCOPE_TYPE_FOLD_DIRECTIVE:
-            case SCOPE_TYPE_FUNCDEF: {
-                break;
-            }
-
-            case SCOPE_TYPE_TYPE_CONTEXT:
-            case SCOPE_TYPE_NONE: UNREACHABLE(); break;
-            }
-
-            resolve_expression(analyzer, ast, new_state, an_decl_expr(declaration));
+    if (TYPE_IS_UNRESOLVED(an_decl_expr(declaration)->value_type)) {
+        analysis_state_t new_state = state;
+        switch (state.scope->type) {
+        case SCOPE_TYPE_FUNC_DEF_BODY:
+        case SCOPE_TYPE_BLOCK:
+        case SCOPE_TYPE_CONDITION:
+        case SCOPE_TYPE_JMPABLE:
+        case SCOPE_TYPE_MODULE:
+        case SCOPE_TYPE_STRUCT:
+        case SCOPE_TYPE_FOLD_DIRECTIVE:
+        case SCOPE_TYPE_FUNCDEF: {
+            break;
         }
-    } else {
-        ASSERT(TYPE_IS_RESOLVED(declaration_type), "must be resolved from explicit type");
-        an_decl_expr(declaration) = ast_nil(ast, declaration_type, token_implicit_at_end(declaration->end));
+
+        case SCOPE_TYPE_TYPE_CONTEXT:
+        case SCOPE_TYPE_NONE: UNREACHABLE(); break;
+        }
+
+        resolve_expression(analyzer, ast, new_state, an_decl_expr(declaration));
     }
 
     // we are resolved
@@ -1673,6 +1672,14 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
         type_t expression_type = an_decl_expr(declaration)->value_type;
         declaration->value_type = expression_type;
     }
+
+    ast_node_t *decl_type = an_decl_type(declaration);
+    if (decl_type->node_type == AST_NODE_TYPE_EXPRESSION_INFERRED_TYPE) {
+        decl_type->value_type = typeid(TYPE_TYPE);
+        decl_type->expr_val = ast_node_val_word(WORDT(declaration->value_type));
+    }
+
+    ASSERT(TYPE_IS_RESOLVED(decl_type->value_type), "must be resolved at this point");
 
     {
         ast_node_t *decl_expr = an_decl_expr(declaration);
@@ -1868,7 +1875,7 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
             array_push(&parameters, funcdef->children.items[i]);
         }
 
-        forward_scan_declaration_names(analyzer, &funcdef_scope, parameters);
+        forward_scan_constant_names(analyzer, &funcdef_scope, parameters);
 
         allocator_return(tmp);
     }
@@ -1966,7 +1973,7 @@ static void resolve_struct_definition(analyzer_t *analyzer, ast_t *ast, analysis
 
     state.scope = &struct_scope;
 
-    forward_scan_declaration_names(analyzer, state.scope, struct_definition->as.struct_.declarations);
+    forward_scan_constant_names(analyzer, state.scope, struct_definition->as.struct_.declarations);
 
     s32 declarations_count = struct_definition->as.struct_.declarations.count;
 
@@ -2128,7 +2135,7 @@ static void resolve_declaration(
 void resolve_declarations(analyzer_t* analyzer, ast_t* ast, analysis_state_t state, ast_nodes_t declarations) {
     for (size_t i = 0; i < declarations.count; i++) {
         ast_node_t* declaration = declarations.items[i];
-        if (declaration->node_type == AST_NODE_TYPE_DECLARATION_DEFINITION && !declaration->is_mutable) {
+        if (declaration->node_type == AST_NODE_TYPE_DECLARATION_DEFINITION && an_is_constant(declaration)) {
             continue;
         }
 
@@ -2165,7 +2172,7 @@ bool resolve_ast(analyzer_t *analyzer, ast_t *ast) {
             .scope = &global_scope
         };
 
-        forward_scan_declaration_names(analyzer, &global_scope, module->children);
+        forward_scan_constant_names(analyzer, &global_scope, module->children);
         resolve_declarations(analyzer, ast, state, module->children);
     }
 

@@ -205,6 +205,10 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start) {
             break;
         }
 
+        case AST_NODE_TYPE_EXPRESSION_INFERRED_TYPE: {
+            break;
+        }
+
         case AST_NODE_TYPE_EXPRESSION_ASSIGNMENT:
         case AST_NODE_TYPE_EXPRESSION_BINARY: {
             array_push(&node->children, &nil_node);
@@ -624,19 +628,6 @@ static ast_node_t *parse_statement(parser_t* parser);
 static parse_rule_t *parser_get_rule(token_type_t type);
 static bool check_expression(parser_t* parser);
 static ast_node_t* parse_precedence(parser_t* parser, Precedence precedence);
-
-bool ast_node_type_is_decl_or_stmt(ast_node_type_t node_type) {
-    switch (node_type) {
-        case AST_NODE_TYPE_EXPRESSION_CASE:
-        case AST_NODE_TYPE_NONE:
-        case AST_NODE_TYPE_MODULE:
-            return false;
-        
-        case AST_NODE_TYPE_DECLARATION_DEFINITION:
-        case AST_NODE_TYPE_DECLARATION_STATEMENT:
-            return true;
-    }
-}
 
 bool ast_node_type_is_expression(ast_node_type_t node_type) {
     switch (node_type) {
@@ -1502,6 +1493,10 @@ static ast_node_t *ast_decldef(parser_t *parser, token_t identifier, ast_node_t 
 
     return definition_node;
 }
+static ast_node_t *ast_inferred_type(ast_t *ast, token_t identifer) {
+    ast_node_t *n = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_INFERRED_TYPE, identifer);
+    return n;
+}
 
 
 static ast_node_t *parse_decl_def(parser_t *parser) {
@@ -1520,7 +1515,7 @@ static ast_node_t *parse_decl_def(parser_t *parser) {
         type_expr = parse_expression(parser);
         parser->inside_type_context = inside_type_context;
     } else {
-        type_expr = ast_def_value(parser->ast, token_implicit_at_end(parser->previous));
+        type_expr = ast_inferred_type(parser->ast, token_implicit_at_end(parser->previous));
     }
 
     ASSERT(type_expr, "should be set by now");
@@ -1732,6 +1727,13 @@ static void ast_print_ast_node(typedatas_t types, ast_node_t *node, u32 level) {
         case AST_NODE_TYPE_EXPRESSION_NIL: {
             print_indent(level);
             string_t label = string_format("nil: %s", tmp->allocator, type2cstr(node));
+            print_line("%s", label.cstr);
+            break;
+        }
+
+        case AST_NODE_TYPE_EXPRESSION_INFERRED_TYPE: {
+            print_indent(level);
+            string_t label = string_format("inferred_type: %s", tmp->allocator, type_to_string(types, node->expr_val.word.as.t, tmp->allocator));
             print_line("%s", label.cstr);
             break;
         }

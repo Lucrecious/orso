@@ -1148,6 +1148,9 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
         }
 
 
+        // should be resolved at compile time
+        case AST_NODE_TYPE_EXPRESSION_INFERRED_TYPE: UNREACHABLE(); break;
+
         case AST_NODE_TYPE_EXPRESSION_DIRECTIVE:
         case AST_NODE_TYPE_EXPRESSION_DOT:
         case AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE:
@@ -1185,6 +1188,8 @@ bool compile_modules(ast_t *ast, error_function_t error_fn, memarr_t *program_me
 
     ast_node_t *module;
     kh_foreach_value(ast->moduleid2node, module, gen_module(&gen, module, global_init_func));
+
+    emit_return(token_end_loc(&module->end), global_init_func);
 
     return !gen.had_error;
 }

@@ -208,7 +208,7 @@ static void show_line(vm_t *vm, size_t bytecode_around) {
 
         texloc_t location = function->locations.items[i];
         string_t as_string = disassemble_instruction(function->code.items[i], tmp_arena->allocator);
-        printf("%04zu:%04zu:%04zu: %s\n", i, location.line+1, location.column+1, as_string.cstr);
+        printf("%04zu:%04zu: %s\n", location.line+1, location.column+1, as_string.cstr);
     }
 
     allocator_return(tmp_arena);

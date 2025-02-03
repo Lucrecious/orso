@@ -154,6 +154,8 @@ int main(int argc, char **argv) {
 
     cb_build(&cb);
 
+    nob_copy_file("./lib/core.odl", "./bin/core.odl");
+
     arena_free(&allocator);
 
 }
