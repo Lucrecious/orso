@@ -28,5 +28,6 @@ void analyzer_init(analyzer_t *analyzer, env_t *env, write_function_t write_fn, 
 void analyzer_free(analyzer_t *analyzer);
 
 bool resolve_ast(analyzer_t *analyzer, ast_t *ast);
+bool resolve_ast_expr(analyzer_t *analyzer, ast_t *ast, ast_node_t *expr);
 
 #endif

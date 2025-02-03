@@ -1,0 +1,56 @@
+{
+    pi;
+}
+// {
+//     count :: 10;
+
+//     addall :: (ints: &int, count: size_t) -> int {
+//         c := 0pd;
+
+//         sum := 0;
+
+//         return while c < count {
+//             num := *(ints + c);
+//             c = c + 1;
+//             sum = sum + num;
+//         } then sum;
+//     };
+
+//     memory := mreserve(sizeof(int)*count);
+//     mcommit(memory, sizeof(int)*count)
+
+//     ints := &int << memory;
+
+//     c := 0pd;
+//     while c < count {
+//         *(ints + c) = c;
+//         c = c + 1;
+//     };
+
+//     mprotect(memory, sizeof(int)*count);
+
+//     sum := addall(ints, count);
+
+//     munmap(memory);
+    
+//     sum;
+// }
+
+// array_t :: struct(t: type_t) {
+//     items := &t.nil;
+//     count := 0sz;
+// };
+
+// at :: (arr: &array_t(t), index: size_t) -> &?t => if index < arr.count then arr.items + index else &t.nil;
+
+// push :: (arr: &array_t(t), item: ?t) {
+//     *at(arr, arr.count) = item;
+//     ++arr.count;
+// };
+
+// len :: @inline (arr: &array(?t)) -> size_t => arr.count;
+
+// nums := array_t(int).{};
+
+// *at(&nums, 0) = 10;
+

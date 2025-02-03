@@ -9,6 +9,7 @@
 #include "type_set.h"
 #include "stringt.h"
 #include "tmp.h"
+#include "../nob.h"
 
 /*
 program                  -> declaration* EOF
@@ -69,7 +70,7 @@ static int type_equal_(type_t a, type_t b) {
     return typeid_eq(a, b);
 }
 
-implement_table(ptr2word, type_t, word_t, type_hash, type_equal_)
+implement_table(t2w, type_t, word_t, type_hash, type_equal_)
 implement_table(type2ns, type_t, ast_node_and_scope_t, type_hash, type_equal_)
 
 static bool streq___(const string_t a, const string_t b) {
@@ -88,6 +89,7 @@ uint32_t fnv1_hash__(string_t s) {
 }
 
 implement_table(s2w, string_t, word_t, fnv1_hash__, streq___)
+implement_table(s2n, string_t, ast_node_t*, fnv1_hash__, streq___)
 
 typedef struct parser_t {
     error_function_t error_fn;
@@ -126,23 +128,17 @@ typedef struct {
     Precedence precedence;
 } parse_rule_t;
 
-void ast_init(ast_t *ast, size_t memory_size_bytes) {
+void ast_init(ast_t *ast) {
+    *ast = zer0(ast_t);
     ast->allocator = (arena_t){0};
     ast->resolved = false;
-    ast->root = NULL;
-
-    memarr_init(&ast->constants, memory_size_bytes);
-
-    {
-        u64 zero = 0;
-        memarr_push(&ast->constants, &zero, sizeof(u64));
-    }
-
+    
     type_set_init(&ast->type_set, &ast->allocator);
 
     ast->builtins = table_new(s2w, &ast->allocator);
+    ast->moduleid2node = table_new(s2n, &ast->allocator);
 
-    ast->type_to_zero_word = table_new(ptr2word, &ast->allocator);
+    ast->type_to_zero_word = table_new(t2w, &ast->allocator);
     ast->type_to_creation_node = table_new(type2ns, &ast->allocator);
 }
 
@@ -287,6 +283,36 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start) {
     }
 
     return node;
+}
+
+ast_node_t *ast_begin_module(ast_t *ast) {
+    ast_node_t *module = ast_node_new(ast, AST_NODE_TYPE_MODULE, nil_token);
+    return module;
+}
+
+void ast_end_module(ast_node_t *module) {
+    if (module->children.count == 0) return;
+
+    token_t min_token = module->children.items[0]->start;
+    token_t max_token = module->children.items[0]->end;
+    for (size_t i = 1; i < module->children.count; ++i) {
+        token_t start = module->children.items[i]->start;
+        token_t end = module->children.items[i]->end;
+
+        if (start.loc.line < min_token.loc.line
+        || (start.loc.line == min_token.loc.line && start.loc.column < min_token.loc.column)) min_token = start;
+
+        if (end.loc.line > max_token.loc.line
+        || (end.loc.line == max_token.loc.line && end.loc.column > max_token.loc.column)) max_token = end;
+    }
+
+    module->start = min_token;
+    module->end = max_token;
+}
+
+void ast_add_module(ast_t *ast, ast_node_t *module, string_t moduleid) {
+    moduleid = string_copy(moduleid, &ast->allocator);
+    table_put(s2n, ast->moduleid2node, moduleid, module);
 }
 
 ast_node_t *ast_nil(ast_t *ast, type_t value_type, token_t token_location) {
@@ -635,12 +661,6 @@ token_t token_implicit_at_end(token_t token) {
     token.loc.column += token.view.length;
     token.view.length = 0;
     return token;
-}
-
-value_index_t memarr_push_value(memarr_t *arr, void *data, size_t size_bytes) {
-    size_t index = memarr_push(arr, data, size_bytes);
-    value_index_t vi = value_index_(index);
-    return vi;
 }
 
 static ast_node_t *parse_number(parser_t *parser) {
@@ -1471,49 +1491,67 @@ static ast_node_t *parse_statement(parser_t *parser) {
     return statement_node;
 }
 
-static ast_node_t *parse_decl_def(parser_t *parser) {
-    ast_node_t *definition_node = ast_node_new(parser->ast, AST_NODE_TYPE_DECLARATION_DEFINITION, parser->current);
+static ast_node_t *ast_decldef(parser_t *parser, token_t identifier, ast_node_t *type_expr, ast_node_t *init_expr) {
+    ast_node_t *definition_node = ast_node_new(parser->ast, AST_NODE_TYPE_DECLARATION_DEFINITION, identifier);
+    definition_node->identifier = identifier;
+    an_decl_type(definition_node) = type_expr;
+    an_decl_expr(definition_node) = init_expr;
 
+    definition_node->start = identifier;
+    definition_node->end = init_expr->end;
+
+    return definition_node;
+}
+
+
+static ast_node_t *parse_decl_def(parser_t *parser) {
     advance(parser);
 
-    definition_node->value_type = typeid(TYPE_UNRESOLVED);
-
-    definition_node->expr_val.is_concrete = false;
-
-    definition_node->identifier = parser->previous;
+    token_t identifier = parser->previous;
 
     unless (consume(parser, TOKEN_COLON)) {
-        parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_COLON_AFTER_DECLARATION_IDENTIFIER, parser->current, definition_node->identifier));
+        parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_COLON_AFTER_DECLARATION_IDENTIFIER, parser->current, identifier));
     }
 
+    ast_node_t *type_expr = NULL;
     if (!check(parser, TOKEN_EQUAL) && !check(parser, TOKEN_COLON)) {
         bool inside_type_context = parser->inside_type_context;
         parser->inside_type_context = true;
-        an_decl_type(definition_node) = parse_expression(parser);
+        type_expr = parse_expression(parser);
         parser->inside_type_context = inside_type_context;
+    } else {
+        type_expr = ast_def_value(parser->ast, token_implicit_at_end(parser->previous));
     }
 
-    // TODO: try to do constant vs variable detection a little more clever...
+    ASSERT(type_expr, "should be set by now");
+
+    bool is_mutable = false;
     bool requires_expression = false;
     if (match(parser, TOKEN_EQUAL)) {
         requires_expression = true;
-        definition_node->is_mutable = true;
+        is_mutable = true;
     } else if (match(parser, TOKEN_COLON)) {
         requires_expression = true;
-        definition_node->is_mutable = false;
+        is_mutable = false;
     } else {
-        definition_node->is_mutable = true;
+        is_mutable = true;
     }
 
+    ast_node_t *init_expr = NULL;
     if (requires_expression) {
         bool inside_type_context = parser->inside_type_context;
         parser->inside_type_context = false;
-        an_decl_expr(definition_node) = parse_expression(parser);
+        init_expr = parse_expression(parser);
         parser->inside_type_context = inside_type_context;
+    } else {
+        init_expr = ast_nil(parser->ast, typeid(TYPE_UNRESOLVED), token_implicit_at_end(parser->previous));
     }
 
-    definition_node->end = parser->previous;
-    return definition_node;
+    ASSERT(init_expr, "should be set by now");
+
+    ast_node_t *decldef = ast_decldef(parser, identifier, type_expr, init_expr);
+    decldef->is_mutable = is_mutable;
+    return decldef;
 }
 
 static ast_node_t *parse_decl(parser_t *parser, bool is_top_level) {
@@ -1531,56 +1569,72 @@ static ast_node_t *parse_decl(parser_t *parser, bool is_top_level) {
     return node;
 }
 
-bool parse_expr(ast_t *ast, string_t file_path, string_view_t source, error_function_t error_fn) {
+static void parse_into_module(parser_t *parser, ast_node_t *module) {
+    until (match(parser, TOKEN_EOF)) {
+        ast_node_t *decldef = parse_decl_def(parser);
+        array_push(&module->children, decldef);
+
+        unless (consume(parser, TOKEN_SEMICOLON)) {
+            parser_error(parser, make_error_node(ERROR_PARSEREX_EXPECTED_SEMICOLON_AFTER_DECLARATION, decldef));
+        }
+
+        synchronize(parser);
+    }
+
+    unless (consume(parser, TOKEN_EOF)) {
+        parser_error(parser, make_error_node(ERROR_PARSEREX_EXPECTED_EOF_AFTER_MODULE, module));
+    }
+}
+
+bool parse_string_to_module(ast_t *ast, ast_node_t *module, string_t filepath, string_t source, error_function_t error_fn) {
+    parser_t parser = {0};
+    parser_init(&parser, ast, filepath, string2sv(source), error_fn);
+    
+    advance(&parser);
+
+    parse_into_module(&parser, module);
+
+    return !parser.had_error;
+}
+
+bool parse_expr(ast_t *ast, string_t file_path, string_view_t source, error_function_t error_fn, ast_node_t **result) {
     parser_t parser = {0};
     parser_init(&parser, ast, file_path, source, error_fn);
 
     advance(&parser);
 
     parser.inside_type_context = false;
-    ast->root = parse_precedence(&parser, PREC_BLOCK);
+    ast_node_t *expr = parse_precedence(&parser, PREC_BLOCK);
 
     unless (consume(&parser, TOKEN_EOF)) {
         parser_error(&parser, make_error_token(ERROR_PARSER_EXPECTED_EOF_AFTER_EXPRESSION, parser.current, parser.previous));
     }
 
+    *result = expr;
+
     return !parser.had_error;
 }
 
+// todo: needs more thought, why have two functions (expr and parse), should be we parse into a module
 bool parse(ast_t *ast, string_t file_path, string_view_t source, error_function_t error_fn) {
-    parser_t parser = {0};
-    parser_init(&parser, ast, file_path, source, error_fn);
+    UNUSED(ast);
+    UNUSED(file_path);
+    UNUSED(source);
+    UNUSED(error_fn);
+    // parser_t parser = {0};
+    // parser_init(&parser, ast, file_path, source, error_fn);
 
-    advance(&parser);
+    // advance(&parser);
 
-    ast->root = ast_node_new(parser.ast, AST_NODE_TYPE_EXPRESSION_BLOCK, parser.previous);
+    // ast->root = ast_node_new(parser.ast, AST_NODE_TYPE_EXPRESSION_BLOCK, parser.previous);
 
-    until (match(&parser, TOKEN_EOF)) {
-        ast_node_t *declaration_node = parse_decl_def(&parser);
-        array_push(&ast->root->children, declaration_node);
-        unless (consume(&parser, TOKEN_SEMICOLON)) {
-            parser_error(&parser, make_error_node(ERROR_PARSEREX_EXPECTED_SEMICOLON_AFTER_DECLARATION, declaration_node));
-        }
-
-        synchronize(&parser);
-    }
-
-    unless (consume(&parser, TOKEN_EOF)) {
-        parser_error(&parser, make_error_node(ERROR_PARSEREX_EXPECTED_EOF_AFTER_MODULE, ast->root));
-    }
-
-    return !parser.had_error;
-}
-
-value_index_t ast_push_constant_(ast_t *ast, void *data, type_t type) {
-    typedata_t *type_info = type2typedata(&ast->type_set.types, type);
-    size_t size = type_info->size;
-    return memarr_push_value(&ast->constants, data, size);
+    // return !parser.had_error;
+    return false;
 }
 
 ast_node_val_t zero_value(ast_t *ast, type_t type) {
     word_t result = {0};
-    if (table_get(ptr2word, ast->type_to_zero_word, type, &result)) {
+    if (table_get(t2w, ast->type_to_zero_word, type, &result)) {
         return ast_node_val_word(result);
     }
 
@@ -1632,7 +1686,7 @@ ast_node_val_t zero_value(ast_t *ast, type_t type) {
     }
 
     ast_node_val_t val = ast_node_val_word(value);
-    table_put(ptr2word, ast->type_to_zero_word, type, value);
+    table_put(t2w, ast->type_to_zero_word, type, value);
     return val;
 }
 
@@ -1934,5 +1988,11 @@ static void ast_print_ast_node(typedatas_t types, ast_node_t *node, u32 level) {
 
 void ast_print(ast_t* ast, const char* name) {
     printf("=== %s ===\n", name);
-    ast_print_ast_node(ast->type_set.types, ast->root, 0);
+    for (size_t i = kh_begin(ast->moduleid2node); i < kh_end(ast->moduleid2node); ++i) {
+        if (kh_exist(ast->moduleid2node, i)) continue;
+
+
+        ast_node_t *module = kh_val(ast->moduleid2node, i);
+        ast_print_ast_node(ast->type_set.types, module, 0);
+    }
 }

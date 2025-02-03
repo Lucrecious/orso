@@ -64,7 +64,7 @@ void sb_add_cstr(string_builder_t *sb, cstr_t cstr);
 void sb_add_format(string_builder_t *sb, cstr_t format, ...);
 string_t sb_render(string_builder_t *builder, arena_t *allocator);
 
-#define str(string_literal) ((string_t){ .cstr = string_literal, .length = (sizeof(string_literal)/sizeof(char) - sizeof(char)) })
+#define str(lit) ((string_t){ .cstr = (lit), .length = (sizeof(lit)/sizeof(char) - sizeof(char)) })
 #define lit2str(lit) str(lit)
 #define lit2sv(lit) ((string_view_t){ .data = lit, .length = (sizeof(lit)/sizeof(char) - sizeof(char)) })
 

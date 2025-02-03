@@ -36,6 +36,7 @@ typedef enum scope_type_t {
 } scope_type_t;
 
 declare_table(s2w, string_t, word_t)
+declare_table(s2n, string_t, ast_node_t*)
 
 typedef struct scope_t {
     ast_node_t *creator;
@@ -119,17 +120,6 @@ struct ast_type_initializer_t {
     ast_node_t *type;
     ast_nodes_t arguments;
 };
-
-typedef struct value_index_t value_index_t;
-struct value_index_t {
-    bool exists;
-    size_t index;
-};
-
-#define value_index_(i) ((value_index_t){.exists=true, .index=(i)})
-#define value_index_nil() ((value_index_t){.exists=false, .index=0})
-
-value_index_t memarr_push_value(memarr_t *arr, void *data, size_t size_bytes);
 
 ast_node_t nil_node;
 
@@ -223,7 +213,7 @@ struct ast_node_t {
     } as;
 };
 
-declare_table(ptr2word, type_t, word_t)
+declare_table(t2w, type_t, word_t)
 
 typedef struct ast_node_and_scope_t {
     ast_node_t *node;
@@ -248,28 +238,28 @@ typedef struct ast_t {
 
     table_t(s2w) *builtins;
 
-    ast_node_t *root;
-    
-    arena_t constant_arena;
-    memarr_t constants;
+    table_t(s2n) *moduleid2node;
 
-    table_t(ptr2word) *type_to_zero_word;
+    table_t(t2w) *type_to_zero_word;
     table_t(type2ns) *type_to_creation_node;
 } ast_t;
 
 void ast_print(ast_t *ast, const char *name);
 
-value_index_t ast_push_constant_(ast_t *ast, void *data, type_t type);
-bool parse_expr(ast_t *ast, string_t file_path, string_view_t source, error_function_t error_fn);
+bool parse_string_to_module(ast_t *ast, ast_node_t *module, string_t filepath, string_t source, error_function_t error_fn);
+bool parse_expr(ast_t *ast, string_t file_path, string_view_t source, error_function_t error_fn, ast_node_t **result);
 bool parse(ast_t *ast, string_t file_path, string_view_t source, error_function_t error_fn);
 
-void ast_init(ast_t *ast, size_t memory_size_bytes);
+void ast_init(ast_t *ast);
 void ast_free(ast_t *ast);
 
 ast_node_t* ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start);
 ast_node_t *ast_nil(ast_t *ast, type_t value_type, token_t token_location);
 ast_node_t *ast_def_value(ast_t *ast, token_t identifer);
 ast_node_t *ast_cast(ast_t *ast, ast_node_t *expr_type, ast_node_t *expr);
+ast_node_t *ast_begin_module(ast_t *ast);
+void ast_end_module(ast_node_t *module);
+void ast_add_module(ast_t *ast, ast_node_t *module, string_t moduleid);
 
 bool ast_node_type_is_decl_or_stmt(ast_node_type_t node_type);
 bool ast_node_type_is_expression(ast_node_type_t node_type);

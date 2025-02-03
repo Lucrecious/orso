@@ -1,5 +1,8 @@
 // core lib
 
-mmap :: @intrinsic (size_t) -> &void;
-munmap :: @intrinsic (&void) -> void;
-mmarkro :: @intrinsic (&void) -> void;
+// mmap :: @intrinsic (size_t) -> &void;
+// mcommit :: @intrinsic (&void, size_t) -> void;
+// mmarkro :: @intrinsic (&void, size_t) -> void;
+// munmap :: @intrinsic (&void) -> void;
+
+pi :: 3.14159;

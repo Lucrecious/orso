@@ -6,7 +6,7 @@
 #include "tmp.h"
 #include <inttypes.h>
 
-string_t compile_expr_to_c(ast_t *ast, arena_t *allocator);
+string_t compile_expr_to_c(ast_t *ast, ast_node_t *expr_node, arena_t *allocator);
 
 #endif
 
@@ -1291,13 +1291,14 @@ static void cgen_function_definitions(cgen_t *cgen, ast_node_t *node) {
 }
 
 void cgen_functions(cgen_t *cgen, ast_t *ast) {
-    cgen_generate_function_names(cgen, ast->root);
+    ast_node_t *module;
+    kh_foreach_value(ast->moduleid2node, module, cgen_generate_function_names(cgen, module));
 
     cgen_forward_declare_functions(cgen);
 
     sb_add_cstr(&cgen->sb, "\n");
 
-    cgen_function_definitions(cgen, ast->root);
+    kh_foreach_value(ast->moduleid2node, module, cgen_function_definitions(cgen, module));
 }
 
 static void cgen_generate_cnames_for_types(typedatas_t *tds, arena_t *arena) {
@@ -1390,8 +1391,7 @@ static void cgen_typedefs(cgen_t *cgen, typedatas_t *tds) {
     }
 }
 
-string_t compile_expr_to_c(ast_t *ast, arena_t *arena) {
-    ast_node_t *expr_node = ast->root;
+string_t compile_expr_to_c(ast_t *ast, ast_node_t *expr_node, arena_t *arena) {
     cgen_cache_requires_tmp(&ast->type_set.types, expr_node);
 
     cgen_generate_cnames_for_types(&ast->type_set.types, &ast->allocator);

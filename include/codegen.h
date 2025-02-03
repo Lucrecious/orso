@@ -9,7 +9,8 @@
 bool compile_program(vm_t *vm, ast_t *ast);
 
 void gen_function_def(ast_t *ast, env_t *env, ast_node_t *funcdef, error_function_t error_fn);
-bool compile_expr_to_function(function_t *function, ast_t *ast, ast_node_t *expr, error_function_t error_fn, arena_t *function_arena);
+bool compile_modules(ast_t *ast, error_function_t error_fn, memarr_t *program_memory, arena_t *funcarea, function_t *global_init_func);
+bool compile_expr_to_function(function_t *function, ast_t *ast, ast_node_t *expr, error_function_t error_fn, memarr_t *program_memory, arena_t *function_arena);
 
 #endif
 
@@ -21,6 +22,16 @@ struct local_t {
     ast_node_t *ref_decl;
 };
 
+static int ptr_hash__(void *id) {
+    return kh_int64_hash_func((khint64_t)id);
+}
+
+static int ptr_eq__(void *a, void *b) {
+    return a == b;
+}
+
+define_table(ptr2sz, void*, size_t, ptr_hash__, ptr_eq__);
+
 typedef struct gen_t gen_t;
 struct gen_t {
     error_function_t error_fn;
@@ -28,6 +39,7 @@ struct gen_t {
     size_t stack_size;
     arena_t *gen_arena;
     arena_t *program_arena;
+    memarr_t *program_memory;
 
     struct {
         local_t *items;
@@ -35,6 +47,8 @@ struct gen_t {
         size_t capacity;
         arena_t *allocator;
     } locals;
+
+    table_t(ptr2sz) *decl2index;
 
     bool had_error;
     bool breached_stack_limit;
@@ -542,22 +556,22 @@ static void gen_binary(gen_t *gen, function_t *function, ast_node_t *binary) {
         ast_node_t *lhs = an_lhs(binary);
         gen_expression(gen, function, lhs);
 
-        emit_push_reg(gen, token_end_location(&lhs->end), function, REG_RESULT, lhs->value_type);
+        emit_push_reg(gen, token_end_loc(&lhs->end), function, REG_RESULT, lhs->value_type);
 
         ast_node_t *rhs = an_rhs(binary);
         gen_expression(gen, function, rhs);
 
-        emit_pop_to_reg(gen, token_end_location(&rhs->end), function, REG_TMP, lhs->value_type);
+        emit_pop_to_reg(gen, token_end_loc(&rhs->end), function, REG_TMP, lhs->value_type);
 
         typedata_t *expr_type_info = type2typedata(&gen->ast->type_set.types, an_lhs(binary)->value_type);
 
-        emit_bin_op(token_end_location(&binary->end), function, binary->operator.type, expr_type_info, REG_TMP, REG_RESULT, REG_RESULT);
+        emit_bin_op(token_end_loc(&binary->end), function, binary->operator.type, expr_type_info, REG_TMP, REG_RESULT, REG_RESULT);
     } else if (operator_is_logical(op)) {
         ast_node_t *lhs = an_lhs(binary);
         gen_expression(gen, function, lhs);
 
         bool jmp_condition = (binary->operator.type == TOKEN_AND) ? false : true;
-        size_t and_or_jmp = gen_jmp_if_reg(function, token_end_location(&lhs->end), REG_RESULT, jmp_condition);
+        size_t and_or_jmp = gen_jmp_if_reg(function, token_end_loc(&lhs->end), REG_RESULT, jmp_condition);
 
         ast_node_t *rhs = an_rhs(binary);
         gen_expression(gen, function, rhs);
@@ -593,26 +607,28 @@ static void gen_unary(gen_t *gen, function_t *function, ast_node_t *unary) {
         ast_node_t *ref_decl = an_operand(unary)->lvalue_node->ref_decl;
         local_t *local = find_local(gen, ref_decl);
 
-        gen_local_memaddr(gen, token_end_location(&unary->end), function, local, REG_RESULT);
+        gen_local_memaddr(gen, token_end_loc(&unary->end), function, local, REG_RESULT);
 
-        emit_mem_to_addr(token_end_location(&unary->end), function, REG_RESULT, REG_RESULT);
+        emit_mem_to_addr(token_end_loc(&unary->end), function, REG_RESULT, REG_RESULT);
     } else {
         gen_expression(gen, function, expr);
 
-        emit_unary(gen, token_end_location(&unary->end), function, unary->operator.type, expr->value_type, REG_RESULT, REG_RESULT);
+        emit_unary(gen, token_end_loc(&unary->end), function, unary->operator.type, expr->value_type, REG_RESULT, REG_RESULT);
     }
 }
 
-static value_index_t add_constant(function_t *function, void *data, size_t size) {
+static size_t add_constant(function_t *function, void *data, size_t size) {
     size_t index = memarr_push(function->memory, data, size);
-    return value_index_(index);
+    return index;
 }
 
-static void gen_constant(texloc_t location, function_t *function, void *data, typedata_t *type_info) {
-    value_index_t value_index = add_constant(function, data, type_info->size);
+static void gen_constant(gen_t *gen, texloc_t location, function_t *function, void *data, type_t type) {
+    typedata_t *td = type2typedata(&gen->ast->type_set.types, type);
 
-    if (type_info->size <= WORD_SIZE) {
-        emit_read_memory_to_reg(location, function, REG_RESULT, value_index.index, type_info);
+    size_t value_index = add_constant(function, data, td->size);
+
+    if (td->size <= WORD_SIZE) {
+        emit_read_memory_to_reg(location, function, REG_RESULT, value_index, td);
     } else {
         ASSERT(false, "todo");
     }
@@ -641,7 +657,7 @@ static void gen_expr_val(gen_t *gen, function_t *function, ast_node_t *expressio
         UNREACHABLE();
     } else {
         word_t data = val.word;
-        gen_constant(expression->start.loc, function, &data, type_info);
+        gen_constant(gen, expression->start.loc, function, &data, expression->value_type);
     }
 }
 
@@ -653,15 +669,28 @@ static void gen_add_local(gen_t *gen, ast_node_t *declaration, size_t stack_loca
     array_push(&gen->locals, local);
 }
 
-static void gen_local_decl_def(gen_t *gen, function_t *function, ast_node_t *declaration) {
+static void gen_local_decldef(gen_t *gen, function_t *function, ast_node_t *declaration) {
     gen_expression(gen, function, an_decl_expr(declaration));
-    emit_push_reg(gen, token_end_location(&declaration->end), function, REG_RESULT, declaration->value_type);
+    emit_push_reg(gen, token_end_loc(&declaration->end), function, REG_RESULT, declaration->value_type);
 
     size_t local_location = gen->stack_size;
     gen_add_local(gen, declaration, local_location);
 }
 
-static void gen_decl(gen_t *gen, function_t *function, ast_node_t *decl, bool is_global) {
+static size_t gen_global_decldef(gen_t *gen, ast_node_t *decldef) {
+    typedata_t *td = type2typedata(&gen->ast->type_set.types, decldef->value_type);
+    u8 data[td->size];
+    memset(data, 0, td->size);
+    size_t global_index = memarr_push(gen->program_memory, &data, td->size);
+
+    ASSERT(decldef->identifier.view.length != 0, "cannot be an implicit def");
+
+    table_put(ptr2sz, gen->decl2index, decldef, global_index);
+
+    return global_index;
+}
+
+static void gen_local_decl(gen_t *gen, function_t *function, ast_node_t *decl, bool is_global) {
     if (is_global) {
         switch (decl->node_type) {
             case AST_NODE_TYPE_DECLARATION_DEFINITION: {
@@ -674,7 +703,7 @@ static void gen_decl(gen_t *gen, function_t *function, ast_node_t *decl, bool is
     } else {
         switch (decl->node_type) {
             case AST_NODE_TYPE_DECLARATION_DEFINITION: {
-                gen_local_decl_def(gen, function, decl);
+                gen_local_decldef(gen, function, decl);
                 break;
             }
 
@@ -692,7 +721,7 @@ static void gen_decl(gen_t *gen, function_t *function, ast_node_t *decl, bool is
 static void gen_block(gen_t *gen, function_t *function, ast_node_t *block) {
     for (size_t i = 0; i < block->children.count; ++i) {
         ast_node_t *declaration = block->children.items[i];
-        gen_decl(gen, function, declaration, false);
+        gen_local_decl(gen, function, declaration, false);
     }
 }
 
@@ -720,13 +749,25 @@ static void gen_pop_until_stack_point(gen_t *gen, function_t *function, texloc_t
     emit_popn_bytes(gen, function, pop_size_bytes, location, update_gen);
 }
 
+static void gen_global_addr(gen_t *gen, texloc_t loc, function_t *function, size_t index) {
+    gen_constant(gen, loc, function, &index, gen->ast->type_set.size_t_);
+    emit_mem_to_addr(loc, function, REG_RESULT, REG_RESULT);
+}
+
 static void gen_def_value(gen_t *gen, function_t *function, ast_node_t *def) {
-    local_t *local = find_local(gen, def->ref_decl);
+    size_t global_index;
+    if (table_get(ptr2sz, gen->decl2index, def->ref_decl, &global_index)) {
+        gen_global_addr(gen, token_end_loc(&def->end), function, global_index);
 
-    gen_local_memaddr(gen, def->start.loc, function, local, REG_RESULT);
+        emit_mov_reg_to_reg(gen, function, token_end_loc(&def->end), def->value_type, REG_MOV_TYPE_ADDR_TO_REG, REG_RESULT, REG_RESULT);
+    } else {
+        local_t *local = find_local(gen, def->ref_decl);
 
-    texloc_t end = token_end_location(&def->end);
-    emit_mov_reg_to_reg(gen, function, end, def->value_type, REG_MOV_TYPE_MEM_TO_REG, REG_RESULT, REG_RESULT);
+        gen_local_memaddr(gen, def->start.loc, function, local, REG_RESULT);
+
+        texloc_t end = token_end_loc(&def->end);
+        emit_mov_reg_to_reg(gen, function, end, def->value_type, REG_MOV_TYPE_MEM_TO_REG, REG_RESULT, REG_RESULT);
+    }
 }
 
 static size_t gen_jmp(function_t *function, texloc_t location) {
@@ -766,12 +807,12 @@ static size_t gen_condition(gen_t *gen, ast_node_t *branch, function_t *function
     ast_node_t *condition = an_condition(branch);
     gen_expression(gen, function, condition);
 
-    emit_mov_reg_to_reg(gen, function, token_end_location(&condition->end), condition->value_type, REG_MOV_TYPE_REG_TO_REG, REG_TMP, REG_RESULT);
+    emit_mov_reg_to_reg(gen, function, token_end_loc(&condition->end), condition->value_type, REG_MOV_TYPE_REG_TO_REG, REG_TMP, REG_RESULT);
 
-    emit_pop_to_reg(gen, token_end_location(&condition->end), function, REG_RESULT, gen->ast->type_set.u64_);
+    emit_pop_to_reg(gen, token_end_loc(&condition->end), function, REG_RESULT, gen->ast->type_set.u64_);
 
     // then index
-    return gen_jmp_if_reg(function, token_end_location(&condition->end), REG_TMP, branch->condition_negated ? true : false);
+    return gen_jmp_if_reg(function, token_end_loc(&condition->end), REG_TMP, branch->condition_negated ? true : false);
 }
 
 static void gen_branching(gen_t *gen, function_t *function, ast_node_t *branch) {
@@ -790,7 +831,7 @@ static void gen_branching(gen_t *gen, function_t *function, ast_node_t *branch) 
             size_t then_index = gen_condition(gen, branch, function);
             gen_expression(gen, function, an_then(branch));
 
-            size_t else_index = gen_jmp(function, token_end_location(&an_then(branch)->end));
+            size_t else_index = gen_jmp(function, token_end_loc(&an_then(branch)->end));
 
             gen_patch_jmp(gen, function, then_index);
 
@@ -805,9 +846,9 @@ static void gen_branching(gen_t *gen, function_t *function, ast_node_t *branch) 
             gen_expression(gen, function, an_then(branch));
 
             gen_patch_jmps(gen, function, branch, TOKEN_CONTINUE);
-            gen_loop(gen, function, token_end_location(&an_then(branch)->end), loop_index);
+            gen_loop(gen, function, token_end_loc(&an_then(branch)->end), loop_index);
 
-            size_t else_index = gen_jmp(function, token_end_location(&an_then(branch)->end));
+            size_t else_index = gen_jmp(function, token_end_loc(&an_then(branch)->end));
 
             gen_patch_jmp(gen, function, then_index);
 
@@ -830,7 +871,7 @@ static void gen_assignment(gen_t *gen, function_t *function, ast_node_t *assignm
 
         gen_local_memaddr(gen, assignment->end.loc, function, local, REG_TMP);
 
-        emit_mov_reg_to_reg(gen, function, token_end_location(&assignment->end),
+        emit_mov_reg_to_reg(gen, function, token_end_loc(&assignment->end),
                 assignment->value_type, REG_MOV_TYPE_REG_TO_MEM, REG_TMP, REG_RESULT);
 
     } else if (lhs->lvalue_node->node_type == AST_NODE_TYPE_EXPRESSION_UNARY) {
@@ -842,7 +883,7 @@ static void gen_assignment(gen_t *gen, function_t *function, ast_node_t *assignm
         ast_node_t *addr_node = an_operand(lhs->lvalue_node);
         gen_expression(gen, function, addr_node);
 
-        texloc_t end = token_end_location(&assignment->end);
+        texloc_t end = token_end_loc(&assignment->end);
         emit_pop_to_reg(gen, end, function, REG_TMP, gen->ast->type_set.u64_);
 
         emit_mov_reg_to_reg(gen, function, end,
@@ -859,14 +900,14 @@ static void gen_jmp_expr(gen_t *gen, function_t *function, ast_node_t *jmp_expr)
         case TOKEN_CONTINUE:
         case TOKEN_BREAK: {
             size_t stack_point = jmp_expr->jmp_out_scope_node->vm_stack_point;
-            gen_pop_until_stack_point(gen, function, token_end_location(&jmp_expr->end), stack_point, false);
-            jmp_expr->vm_jmp_index = gen_jmp(function, token_end_location(&jmp_expr->end));
+            gen_pop_until_stack_point(gen, function, token_end_loc(&jmp_expr->end), stack_point, false);
+            jmp_expr->vm_jmp_index = gen_jmp(function, token_end_loc(&jmp_expr->end));
             break;
         }
 
         case TOKEN_RETURN: {
-            gen_pop_until_stack_point(gen, function, token_end_location(&jmp_expr->end), 0, false);
-            emit_return(token_end_location(&jmp_expr->end), function);
+            gen_pop_until_stack_point(gen, function, token_end_loc(&jmp_expr->end), 0, false);
+            emit_return(token_end_loc(&jmp_expr->end), function);
             break;
         }
 
@@ -875,14 +916,16 @@ static void gen_jmp_expr(gen_t *gen, function_t *function, ast_node_t *jmp_expr)
     }
 }
 
-static gen_t make_gen(ast_t *ast, error_function_t error_fn, arena_t *gen_arena, arena_t *function_arena) {
+static gen_t make_gen(ast_t *ast, memarr_t *program_memory, error_function_t error_fn, arena_t *gen_arena, arena_t *program_arena) {
     gen_t gen = {0};
     gen.ast = ast;
     gen.error_fn = error_fn;
     gen.gen_arena = gen_arena;
     gen.locals.allocator = gen_arena;
-    gen.program_arena = function_arena;
+    gen.program_arena = program_arena;
+    gen.program_memory = program_memory;
     gen.breached_stack_limit = false;
+    gen.decl2index = table_new(ptr2sz, gen_arena);
 
     return gen;
 }
@@ -893,7 +936,7 @@ void gen_function_def(ast_t *ast, env_t *env, ast_node_t *funcdef, error_functio
     if (function_is_compiled(function)) return;
 
     tmp_arena_t *tmp = allocator_borrow();
-    gen_t gen = make_gen(ast, error_fn, tmp->allocator, env->arena);
+    gen_t gen = make_gen(ast, env->memory, error_fn, tmp->allocator, env->arena);
 
     for (size_t i = an_func_def_arg_start(funcdef); i < an_func_def_arg_end(funcdef); ++i) {
         ast_node_t *arg = funcdef->children.items[i];
@@ -919,7 +962,7 @@ static void gen_call(gen_t *gen, function_t *function, ast_node_t *call) {
             ast_node_t *arg = call->children.items[i];
             typedata_t *td = type2typedata(&gen->ast->type_set.types, arg->value_type);
             gen_expression(gen, function, arg);
-            emit_push_reg(gen, token_end_location(&arg->end), function, REG_RESULT, arg->value_type);
+            emit_push_reg(gen, token_end_loc(&arg->end), function, REG_RESULT, arg->value_type);
             argument_size_words += bytes_to_words(td->size);
         }
     }
@@ -930,13 +973,13 @@ static void gen_call(gen_t *gen, function_t *function, ast_node_t *call) {
     // replace stack frame
     emit_binu_reg_im(function, call->start.loc, REG_STACK_FRAME, REG_STACK_BOTTOM, argument_size_words*WORD_SIZE, '+');
 
-    emit_call(function, REG_RESULT, token_end_location(&call->end));
+    emit_call(function, REG_RESULT, token_end_loc(&call->end));
 
     // call consumes arguments
     gen->stack_size -= argument_size_words*WORD_SIZE;
 
     // restore stack frame
-    emit_pop_to_reg(gen, token_end_location(&call->end), function, REG_STACK_FRAME, gen->ast->type_set.u64_);
+    emit_pop_to_reg(gen, token_end_loc(&call->end), function, REG_STACK_FRAME, gen->ast->type_set.u64_);
 }
 
 static void gen_bcall(gen_t *gen, function_t *function, ast_node_t *call) {
@@ -1027,7 +1070,7 @@ static void gen_cast(gen_t *gen, function_t *function, ast_node_t *cast) {
     ast_node_t *expr = an_rhs(cast);
     gen_expression(gen, function, expr);
 
-    emit_cast(gen, function, cast->value_type, expr->value_type, token_end_location(&cast->end));
+    emit_cast(gen, function, cast->value_type, expr->value_type, token_end_loc(&cast->end));
 }
 
 static void gen_expression(gen_t *gen, function_t *function, ast_node_t *expression) {
@@ -1065,7 +1108,7 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
         case AST_NODE_TYPE_EXPRESSION_BLOCK: {
             size_t stack_point = gen_stack_point(gen);
             gen_block(gen, function, expression);
-            gen_pop_until_stack_point(gen, function, token_end_location(&expression->end), stack_point, true);
+            gen_pop_until_stack_point(gen, function, token_end_loc(&expression->end), stack_point, true);
             break;
         }
 
@@ -1117,14 +1160,45 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
     }
 }
 
-bool compile_expr_to_function(function_t *function, ast_t *ast, ast_node_t *expr, error_function_t error_fn, arena_t *function_arena) {
+static void gen_module(gen_t *gen, ast_node_t *module, function_t *init_func) {
+    for (size_t i = 0; i < module->children.count; ++i) {
+        ast_node_t *decldef = module->children.items[i];
+        size_t index = gen_global_decldef(gen, decldef);
+
+        ast_node_t *type_expr = an_decl_type(decldef);
+        gen_global_addr(gen, token_end_loc(&type_expr->end), init_func, index);
+        emit_push_reg(gen, token_end_loc(&type_expr->end), init_func, REG_RESULT, gen->ast->type_set.size_t_);
+
+        ast_node_t *expr = an_decl_expr(decldef);
+        gen_expression(gen, init_func, expr);
+
+        emit_pop_to_reg(gen, token_end_loc(&expr->end), init_func, REG_TMP, gen->ast->type_set.size_t_);
+
+        emit_mov_reg_to_reg(gen, init_func, token_end_loc(&expr->end), expr->value_type, REG_MOV_TYPE_REG_TO_ADDR, REG_TMP, REG_RESULT);
+    }
+}
+
+bool compile_modules(ast_t *ast, error_function_t error_fn, memarr_t *program_memory, arena_t *program_arena, function_t *global_init_func) {
     arena_t arena = {0};
 
-    gen_t gen = make_gen(ast, error_fn, &arena, function_arena);
+    gen_t gen = make_gen(ast, program_memory, error_fn, &arena, program_arena);
+
+    ast_node_t *module;
+    kh_foreach_value(ast->moduleid2node, module, gen_module(&gen, module, global_init_func));
+
+    return !gen.had_error;
+}
+
+bool compile_expr_to_function(function_t *function, ast_t *ast, ast_node_t *expr, error_function_t error_fn, memarr_t *program_memory, arena_t *program_arena) {
+    arena_t arena = {0};
+
+    gen_t gen = make_gen(ast, program_memory, error_fn, &arena, program_arena);
 
     gen_expression(&gen, function, expr);
 
-    emit_return(token_end_location(&expr->end), function);
+    emit_return(token_end_loc(&expr->end), function);
+
+    arena_free(&arena);
     
     return gen.had_error;
 }

@@ -55,7 +55,7 @@ static void stan_error(analyzer_t *analyzer, error_t error) {
     if (analyzer->error_fn) analyzer->error_fn(analyzer->ast, error);
 }
 
-static ast_node_t *get_def_by_identifier_or_error(
+static ast_node_t *get_defval_or_null_by_identifier_and_error(
         analyzer_t *analyzer,
         ast_t *ast,
         analysis_state_t state,
@@ -294,8 +294,7 @@ static void resolve_declarations(
         analyzer_t *analyzer,
         ast_t *ast,
         analysis_state_t state,
-        ast_nodes_t declarations,
-        s32 count);
+        ast_nodes_t declarations);
 
 static void resolve_declaration(
         analyzer_t *analyzer,
@@ -323,14 +322,14 @@ static void resolve_struct_definition(
 
 static void declare_definition(analyzer_t *analyzer, scope_t *scope, ast_node_t *definition);
 
-static void forward_scan_declaration_names(analyzer_t *analyzer, scope_t *scope, ast_nodes_t declarations, s32 count) {
-    for (s32 i = 0; i < count; i++) {
-        ast_node_t* declaration = declarations.items[i];
-        if (declaration->node_type != AST_NODE_TYPE_DECLARATION_DEFINITION) {
+static void forward_scan_declaration_names(analyzer_t *analyzer, scope_t *scope, ast_nodes_t declarations) {
+    for (size_t i = 0; i < declarations.count; i++) {
+        ast_node_t *decl = declarations.items[i];
+        if (decl->node_type != AST_NODE_TYPE_DECLARATION_DEFINITION) {
             continue;
         }
 
-        declare_definition(analyzer, scope, declaration);
+        declare_definition(analyzer, scope, decl);
     }
 }
 
@@ -679,11 +678,11 @@ static ast_node_t *cast_implicitly_if_necessary(ast_t *ast, type_t destination_t
     return cast;
 }
 
-static bool stan_run(analyzer_t *analyzer, ast_node_t *expr, word_t *out_result) {
+static bool stan_run(analyzer_t *analyzer, env_t *env, ast_node_t *expr, word_t *out_result) {
     tmp_arena_t *tmp = allocator_borrow();
 
-    function_t *function = new_function(analyzer->env_or_null->memory, tmp->allocator);
-    compile_expr_to_function(function, analyzer->ast, expr, analyzer->error_fn, analyzer->env_or_null->arena);
+    function_t *function = new_function(env->memory, tmp->allocator);
+    compile_expr_to_function(function, analyzer->ast, expr, analyzer->error_fn, env->memory, env->arena);
 
     vm_fresh_run(analyzer->env_or_null->vm, function);
 
@@ -730,7 +729,7 @@ void resolve_expression(
                     ASSERT(size == 1, "for now types can only be as large as a word");
 
                     word_t result[size];
-                    bool success = stan_run(analyzer, child, result);
+                    bool success = stan_run(analyzer, analyzer->env_or_null, child, result);
                     if (success) {
                         expr->expr_val = ast_node_val_word(result[0]);
                         expr->value_type = child->value_type;
@@ -1110,7 +1109,7 @@ void resolve_expression(
 
             scope_t *def_scope;
 
-            ast_node_t *decl = get_def_by_identifier_or_error(analyzer, ast, state, expr, &def_scope);
+            ast_node_t *decl = get_defval_or_null_by_identifier_and_error(analyzer, ast, state, expr, &def_scope);
 
             if (decl == NULL) {
                 INVALIDATE(expr);
@@ -1182,7 +1181,7 @@ void resolve_expression(
                 search_state.scope = node_and_scope.scope;
 
                 scope_t* found_scope;
-                ast_node_t *decl = get_def_by_identifier_or_error(analyzer, ast, search_state, expr, &found_scope);
+                ast_node_t *decl = get_defval_or_null_by_identifier_and_error(analyzer, ast, search_state, expr, &found_scope);
 
                 unless (decl) {
                     INVALIDATE(expr);
@@ -1227,16 +1226,14 @@ void resolve_expression(
         }
 
         case AST_NODE_TYPE_EXPRESSION_BLOCK: {
-            s32 declarations_count = expr->children.count;
-
             scope_t block_scope;
             scope_init(&block_scope, &analyzer->allocator, SCOPE_TYPE_BLOCK, state.scope, expr);
 
-            forward_scan_declaration_names(analyzer, &block_scope, expr->children, declarations_count);
+            forward_scan_declaration_names(analyzer, &block_scope, expr->children);
 
             analysis_state_t block_state = state;
             block_state.scope = &block_scope;
-            resolve_declarations(analyzer, ast, block_state, expr->children, declarations_count);
+            resolve_declarations(analyzer, ast, block_state, expr->children);
 
             size_t last_unreachable_index = expr->children.count;
             for (size_t i = 0; i < expr->children.count; ++i) {
@@ -1727,7 +1724,16 @@ static ast_node_t *get_builtin_decl(ast_t *ast, string_view_t identifier) {
     return decl;
 }
 
-static ast_node_t *get_def_by_identifier_or_error(
+static ast_node_t *get_module_or_null(ast_t *ast, string_t moduleid) {
+    ast_node_t *module;
+    if (table_get(s2n, ast->moduleid2node, moduleid, &module)) {
+        return module;
+    }
+
+    return NULL;
+}
+
+static ast_node_t *get_defval_or_null_by_identifier_and_error(
         analyzer_t *analyzer,
         ast_t *ast,
         analysis_state_t state,
@@ -1793,6 +1799,18 @@ static ast_node_t *get_def_by_identifier_or_error(
         
         break;
     }
+    
+    // check core module
+    ast_node_t *module = get_module_or_null(ast, str("core"));
+    ASSERT(module, "core should be there");
+
+    for (size_t i = 0; i < module->children.count; ++i) {
+        ast_node_t *module_decl = module->children.items[i];
+        if (sv_eq(def->identifier.view, module_decl->identifier.view)) {
+            decl = module_decl;
+            break;
+        }
+    }
 
     unless (decl) {
         stan_error(analyzer, make_error_node(ERROR_ANALYSIS_DEFINITION_DOES_NOT_EXIST, def));
@@ -1815,29 +1833,6 @@ static ast_node_t *get_def_by_identifier_or_error(
         bool passed_through_fold = false;
         for (size_t i = analyzer->pending_dependencies.count; i > 0; --i) {
             ast_node_t *dep = analyzer->pending_dependencies.items[i-1];
-
-            /**
-             * proof by contradiction: assume the function is not compiled, but
-             * it didn't pass through a fold barrier or the function was not found in the
-             * dependencies list
-             * 
-             * the functon is not found in the dependency list and the function is not compiled
-             * is impossible because before this is called, we resolve the declaration, and we find
-             * that it's a function type declaration. this wouldn't be possible if we didn't try to 
-             * resolve the function definition. so the function definition was resolved without calling itself
-             * otherwise, we would have found in the dependencies list because the function is currently 
-             * being resolved.
-             * 
-             * if the function doesn't pass through a fold barrier and the function is not compiled,
-             * then the function must be in the dependency list. if it's before the fold barrier, this
-             * is fine bceause it means the function will resolve *before* the fold needs to occur.
-             * 
-             * if the function is after it means, the fold needs to resolve before the function definition, but
-             * the function definition needs the fold to resolve, causing a loop
-             * 
-             * not really proof by contradiction actually will rewrite
-             * 
-             */
 
             switch (dep->node_type) {
             case AST_NODE_TYPE_EXPRESSION_DIRECTIVE: passed_through_fold = true; break;
@@ -1866,7 +1861,6 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
     types_t parameter_types = {.allocator=&ast->allocator};
 
     {
-        size_t parameter_count = funcdef->children.count-2;
         tmp_arena_t *tmp = allocator_borrow();
 
         ast_nodes_t parameters = {.allocator=tmp->allocator};
@@ -1874,7 +1868,7 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
             array_push(&parameters, funcdef->children.items[i]);
         }
 
-        forward_scan_declaration_names(analyzer, &funcdef_scope, parameters, parameter_count);
+        forward_scan_declaration_names(analyzer, &funcdef_scope, parameters);
 
         allocator_return(tmp);
     }
@@ -1972,7 +1966,7 @@ static void resolve_struct_definition(analyzer_t *analyzer, ast_t *ast, analysis
 
     state.scope = &struct_scope;
 
-    forward_scan_declaration_names(analyzer, state.scope, struct_definition->as.struct_.declarations, struct_definition->as.struct_.declarations.count);
+    forward_scan_declaration_names(analyzer, state.scope, struct_definition->as.struct_.declarations);
 
     s32 declarations_count = struct_definition->as.struct_.declarations.count;
 
@@ -2131,8 +2125,8 @@ static void resolve_declaration(
     }
 }
 
-void resolve_declarations(analyzer_t* analyzer, ast_t* ast, analysis_state_t state, ast_nodes_t declarations, s32 count) {
-    for (s32 i = 0; i < count; i++) {
+void resolve_declarations(analyzer_t* analyzer, ast_t* ast, analysis_state_t state, ast_nodes_t declarations) {
+    for (size_t i = 0; i < declarations.count; i++) {
         ast_node_t* declaration = declarations.items[i];
         if (declaration->node_type == AST_NODE_TYPE_DECLARATION_DEFINITION && !declaration->is_mutable) {
             continue;
@@ -2141,7 +2135,7 @@ void resolve_declarations(analyzer_t* analyzer, ast_t* ast, analysis_state_t sta
         resolve_declaration(analyzer, ast, state, declarations.items[i]);
     }
 
-    for (s32 i = 0; i < count; i++) {
+    for (size_t i = 0; i < declarations.count; i++) {
         ast_node_t *declaration = declarations.items[i];
         if (declaration->node_type != AST_NODE_TYPE_DECLARATION_DEFINITION) {
             continue;
@@ -2160,42 +2154,35 @@ void resolve_declarations(analyzer_t* analyzer, ast_t* ast, analysis_state_t sta
 }
 
 bool resolve_ast(analyzer_t *analyzer, ast_t *ast) {
-    if (ast->root->node_type == AST_NODE_TYPE_MODULE) {
-        UNREACHABLE();
-        if (ast->root->children.items == NULL) {
-            ast->resolved = false;
-            // error(analyzer, 0, "No code to run. Akin to having no main function.");
-            return false;
-        }
+    for (size_t i = kh_begin(ast->moduleid2node); i != kh_end(ast->moduleid2node); ++i) {
+        unless (kh_exist(ast->moduleid2node, i)) continue;
+
+        ast_node_t *module = kh_val(ast->moduleid2node, i);
 
         scope_t global_scope = {0};
-        scope_init(&global_scope, &analyzer->allocator, SCOPE_TYPE_MODULE, NULL, NULL);
-
-        analysis_state_t analysis_state = (analysis_state_t) {
-            .scope = &global_scope,
-        };
-
-        s32 declaration_count = ast->root->children.count;
-        forward_scan_declaration_names(analyzer, &global_scope, ast->root->children, declaration_count);
-        resolve_declarations(analyzer, ast, analysis_state, ast->root->children, declaration_count);
-
-        ast->resolved = !analyzer->had_error;
-
-        return ast->resolved;
-    } else {
-        scope_t global_scope = {0};
-        scope_init(&global_scope, &analyzer->allocator, SCOPE_TYPE_MODULE, NULL, NULL);
-
+        scope_init(&global_scope, &analyzer->allocator, SCOPE_TYPE_MODULE, NULL, module);
         analysis_state_t state = (analysis_state_t) {
-            .scope = &global_scope,
+            .scope = &global_scope
         };
 
-        resolve_expression(analyzer, ast, state, ast->root);
-
-        ast->resolved = !analyzer->had_error;
-
-        return ast->resolved;
+        forward_scan_declaration_names(analyzer, &global_scope, module->children);
+        resolve_declarations(analyzer, ast, state, module->children);
     }
+
+    ast->resolved = !analyzer->had_error;
+    return ast->resolved;
+}
+
+bool resolve_ast_expr(analyzer_t *analyzer, ast_t *ast, ast_node_t *expr) {
+    scope_t global_scope = {0};
+    scope_init(&global_scope, &analyzer->allocator, SCOPE_TYPE_MODULE, NULL, NULL);
+    analysis_state_t state = (analysis_state_t) {
+        .scope = &global_scope
+    };
+
+    resolve_expression(analyzer, ast, state, expr);
+
+    return !analyzer->had_error;
 }
 
 void analyzer_init(analyzer_t *analyzer, env_t *env, write_function_t write_fn, error_function_t error_fn) {

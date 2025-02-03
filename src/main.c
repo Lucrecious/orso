@@ -112,7 +112,7 @@ void myerror(ast_t *ast, error_t error) {
 
     switch (error_source) {
     case ERROR_SOURCE_PARSER: {
-        print_error_location_hint(error.after_token, token_end_location(&error.after_token).column);
+        print_error_location_hint(error.after_token, token_end_loc(&error.after_token).column);
         break;
     }
 
@@ -121,7 +121,7 @@ void myerror(ast_t *ast, error_t error) {
         case ERROR_PARSEREX_EXPECTED_EOF_AFTER_MODULE:
         case ERROR_PARSEREX_EXPECTED_SEMICOLON_AFTER_STRUCT_DECLARATION:
         case ERROR_PARSEREX_EXPECTED_SEMICOLON_AFTER_DECLARATION: {
-            print_error_location_hint(error.node->end, token_end_location(&error.node->end).column);
+            print_error_location_hint(error.node->end, token_end_loc(&error.node->end).column);
             break;
         }
 
@@ -151,16 +151,15 @@ void mywrite(cstr_t chars) {
 }
 
 
-// todo: fix memory leak because too lazy to write an ast_dup function right now
-bool parse_expr_cstr(ast_t *ast, string_view_t expr_source, string_t file_path, env_t *program_env_or_null) {
-    bool success = parse_expr(ast, file_path, expr_source, myerror);
+bool parse_expr_cstr(ast_t *ast, string_view_t expr_source, string_t file_path, env_t *program_env_or_null, ast_node_t **result_expr) {
+    bool success = parse_expr(ast, file_path, expr_source, myerror, result_expr);
 
     if (success) {
         analyzer_t analyzer = {0};
         analyzer_init(&analyzer, program_env_or_null, mywrite, myerror);
         analyzer.ast = ast;
 
-        success = resolve_ast(&analyzer, ast);
+        success = resolve_ast_expr(&analyzer, ast, *result_expr);
 
         analyzer_free(&analyzer);
     }
@@ -227,7 +226,7 @@ string_t coutput_file_from_edl(string_t file, arena_t *arena) {
     return coutput_file;
 }
 
-bool parse_expr_file(ast_t *ast, string_t expr_file, env_t *program_env_or_null) {
+bool parse_expr_file(ast_t *ast, string_t expr_file, env_t *program_env_or_null, ast_node_t **out_expr) {
     String_Builder sb = {0};
     bool success = read_entire_file(expr_file.cstr, &sb);
 
@@ -238,10 +237,10 @@ bool parse_expr_file(ast_t *ast, string_t expr_file, env_t *program_env_or_null)
     String_View nob_sv = sb_to_sv(sb);
     string_view_t code = { .data = nob_sv.data, .length = nob_sv.count };
 
-    ast_init(ast, megabytes(2));
+    ast_init(ast);
     code = string2sv(sv2string(code, &ast->allocator));
 
-    success = parse_expr_cstr(ast, code, expr_file, program_env_or_null);
+    success = parse_expr_cstr(ast, code, expr_file, program_env_or_null, out_expr);
 
     sb_free(sb);
 
@@ -252,7 +251,34 @@ bool parse_expr_file(ast_t *ast, string_t expr_file, env_t *program_env_or_null)
     return true;
 }
 
-env_t make_test_env(vm_t *vm, arena_t *program_arena) {
+static ast_node_t *parse_module(ast_t *ast, string_t filepath) {
+    String_Builder sb = {0};
+    bool success = read_entire_file(filepath.cstr, &sb);
+    if (!success) {
+        nob_log(ERROR, "cannot read given module at %s", filepath.cstr);
+        exit(1);
+    }
+
+    string_t source;
+    {
+        string_t tmp;
+        tmp.cstr = sb.items;
+        tmp.length = sb.count;
+
+        source = string_copy(tmp, &ast->allocator);
+    }
+
+    sb_free(sb);
+
+    ast_node_t *module = ast_begin_module(ast);
+    success = parse_string_to_module(ast, module, filepath, source, myerror);
+
+    ast_end_module(module);
+
+    return module;
+}
+
+env_t make_test_env(ast_t *ast, vm_t *vm, arena_t *program_arena) {
     memarr_t *memory = arena_alloc(program_arena, sizeof(memarr_t));
     *memory = (memarr_t){0};
 
@@ -267,17 +293,41 @@ env_t make_test_env(vm_t *vm, arena_t *program_arena) {
     
     env_t env = {.vm=(vm), .memory=(memory), .arena=(program_arena)};
 
+    ast_node_t *module = parse_module(ast, str("./core.odl"));
+    ast_add_module(ast, module, str("core"));
+
+    analyzer_t analyzer = {0};
+    analyzer_init(&analyzer, &env, mywrite, myerror);
+
+    resolve_ast(&analyzer, ast);
+
+    analyzer_free(&analyzer);
+
     return env;
+}
+
+static function_t *compile_expr_and_prepare_vm(vm_t *vm, ast_t *ast, env_t *env, ast_node_t *expr) {
+    function_t *init_function = new_function(env->memory, env->arena);
+    compile_modules(ast, myerror, env->memory, env->arena, init_function);
+    vm_fresh_run(vm, init_function);
+
+    function_t *expr_function = new_function(env->memory, env->arena);
+    compile_expr_to_function(expr_function, ast, expr, myerror, env->memory, env->arena);
+
+    return expr_function;
 }
 
 void test_expr_file(string_t expr_file, arena_t *test_arena) {
     nob_log(INFO, "---- test: %s", expr_file.cstr);
 
-    vm_t vm = {0};
-    env_t env = make_test_env(&vm, test_arena);
-
     ast_t ast = {0};
-    unless (parse_expr_file(&ast, expr_file, &env)) {
+    ast_init(&ast);
+
+    vm_t vm = {0};
+    env_t env = make_test_env(&ast, &vm, test_arena);
+
+    ast_node_t *expr;
+    unless (parse_expr_file(&ast, expr_file, &env, &expr)) {
         nob_log(ERROR, "could not parse: %s", expr_file.cstr);
         return;
     }
@@ -285,9 +335,7 @@ void test_expr_file(string_t expr_file, arena_t *test_arena) {
     s64 resultvm = INT64_MIN;
     if (true)
     {
-        function_t *expr_function = new_function(env.memory, env.arena);
-        compile_expr_to_function(expr_function, &ast, ast.root, myerror, env.arena);
-
+        function_t *expr_function = compile_expr_and_prepare_vm(&vm, &ast, &env, expr);
 
         vm_fresh_run(&vm, expr_function);
         resultvm = vm.registers[REG_RESULT].as.s;
@@ -297,7 +345,7 @@ void test_expr_file(string_t expr_file, arena_t *test_arena) {
     string_t cexpr_str;
     if (true)
     {
-        cexpr_str = compile_expr_to_c(&ast, test_arena);
+        cexpr_str = compile_expr_to_c(&ast, expr, test_arena);
 
         cc_t cc = cc_make(CC_GCC, test_arena);
         cc.output_type = CC_DYNAMIC;
@@ -364,15 +412,18 @@ void test_expr_file(string_t expr_file, arena_t *test_arena) {
 
 void test_gen_expr_file(string_t expr_file, arena_t *arena) {
     ast_t ast = {0};
-    vm_t vm = {0};
-    env_t env = make_test_env(&vm, arena);
+    ast_init(&ast);
 
-    unless (parse_expr_file(&ast, expr_file, &env)) {
+    vm_t vm = {0};
+    env_t env = make_test_env(&ast, &vm, arena);
+
+    ast_node_t *expr;
+    unless (parse_expr_file(&ast, expr_file, &env, &expr)) {
         nob_log(ERROR, "could not parse: %s", expr_file.cstr);
         return;
     }
 
-    string_t expr_str = compile_expr_to_c(&ast, arena);
+    string_t expr_str = compile_expr_to_c(&ast, expr, arena);
     string_t coutput_file = coutput_file_from_edl(expr_file, arena);
 
     bool success = write_entire_file(coutput_file.cstr, expr_str.cstr, expr_str.length);
@@ -384,17 +435,19 @@ void test_gen_expr_file(string_t expr_file, arena_t *arena) {
 
 void debug_expr_file(string_t expr_file, arena_t *arena) {
     ast_t ast = {0};
+    ast_init(&ast);
 
     vm_t vm = {0};
-    env_t env = make_test_env(&vm, arena);
+    env_t env = make_test_env(&ast, &vm, arena);
 
-    unless (parse_expr_file(&ast, expr_file, &env)) {
+
+    ast_node_t *expr;
+    unless (parse_expr_file(&ast, expr_file, &env, &expr)) {
         nob_log(ERROR, "could not parse: %s", expr_file.cstr);
         return;
     }
 
-    function_t *expr_function = new_function(env.memory, env.arena);
-    compile_expr_to_function(expr_function, &ast, ast.root, myerror, env.arena);
+    function_t *expr_function = compile_expr_and_prepare_vm(&vm, &ast, &env, expr);
     vm_set_entry_point(&vm, expr_function);
 
     debugger_t debugger = {0};
@@ -407,8 +460,10 @@ void ast_expr_file(string_t expr_file, arena_t *arena) {
     UNUSED(arena);
 
     ast_t ast = {0};
+    ast_init(&ast);
 
-    unless (parse_expr_file(&ast, expr_file, NULL)) {
+    ast_node_t *expr;
+    unless (parse_expr_file(&ast, expr_file, NULL, &expr)) {
         nob_log(ERROR, "could not parse: %s", expr_file.cstr);
     }
 
