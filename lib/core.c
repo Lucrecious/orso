@@ -27,10 +27,6 @@ f64 ns2sec(u64 ns) {
     return ns*(f64)(1e-9);
 }
 
-u8 add_(u8 a, u8 b) {
-    return a + b;
-}
-
 void *mmap(size_t size_bytes) {
     (void)size_bytes;
     return NULL;

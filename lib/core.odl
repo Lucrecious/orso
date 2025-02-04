@@ -1,10 +1,11 @@
 // core lib
 
-// mmap :: @intrinsic (size_t) -> &void;
-// mcommit :: @intrinsic (&void, size_t) -> void;
-// mmarkro :: @intrinsic (&void, size_t) -> void;
-// munmap :: @intrinsic (&void) -> void;
+// @intrinsic mmap :: (size_t) -> &void;
+// @intrinsic mcommit :: (&void, size_t) -> void;
+// @intrinsic mmarkro :: (&void, size_t) -> void;
+// @intrinsic munmap :: (&void) -> void;
 
 @intrinsic clock_ns :: () -> u64;
 @intrinsic ns2sec :: (u64) -> f64;
-@intrinsic add :: (u8, u8) -> u8;
+@intrinsic lerpd :: (f64, f64, f64)-> f64;
+@intrinsic lerpu8 :: (u8, u8, f64)-> u8;
