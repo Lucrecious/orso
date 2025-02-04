@@ -32,7 +32,7 @@ typedef enum type_kind_t {
     // "complex" types
     TYPE_NUMBER,           // s8, u8, s16, u16, s32, u32, s64, u32, u64, f32, f64
     TYPE_FUNCTION,         // (type1, type2, ..., typen) -> return_type OR (foo := 0, bar := "") -> return_type
-    TYPE_NATIVE_FUNCTION,  // (type1, type2, ..., typen) -> return_type
+    TYPE_INTRINSIC_FUNCTION,  // (type1, type2, ..., typen) -> return_type
     TYPE_POINTER,          // &type
     TYPE_STRUCT,           // used for both anonymous and named
 

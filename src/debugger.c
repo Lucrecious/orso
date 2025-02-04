@@ -181,6 +181,7 @@ static string_t disassemble_instruction(instruction_t in, arena_t *allocator) {
         #undef OP_UNARY_REG_REG
 
         case OP_CALL: return lit2str("OP_CALL");
+        case OP_INTRINSIC_CALL: return lit2str("OP_INTRINSIC_CALL");
         case OP_RETURN: return lit2str("OP_RETURN");
     }
 }

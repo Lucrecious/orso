@@ -5,4 +5,4 @@
 // mmarkro :: @intrinsic (&void, size_t) -> void;
 // munmap :: @intrinsic (&void) -> void;
 
-pi :: 3.14159;
+@intrinsic clock :: () -> u64;

@@ -376,7 +376,7 @@ static void cgen_constant(cgen_t *cgen, word_t word, typedata_t *typedata) {
 
         case TYPE_VOID:
         case TYPE_STRING:
-        case TYPE_NATIVE_FUNCTION:
+        case TYPE_INTRINSIC_FUNCTION:
         case TYPE_POINTER:
         case TYPE_STRUCT: UNREACHABLE(); break;
 
@@ -1216,11 +1216,8 @@ static void cgen_generate_function_names(cgen_t *cgen, ast_node_t *node) {
 }
 
 void cgen_forward_declare_functions(cgen_t *cgen) {
-    for (size_t i = kh_begin(cgen->functions); i < kh_end(cgen->functions); ++i) {
-        unless (kh_exist(cgen->functions, i)) continue;
-
-        funcdata_t funcdata = kh_val(cgen->functions, i);
-
+    funcdata_t funcdata;
+    kh_foreach_value(cgen->functions, funcdata, {
         typedata_t *td = type2typedata(&cgen->ast->type_set.types, funcdata.type);
         type_t rettype = td->data.function.return_type;
         
@@ -1235,7 +1232,7 @@ void cgen_forward_declare_functions(cgen_t *cgen) {
         }
 
         sb_add_cstr(&cgen->sb, ");\n");
-    }
+    });
 }
 
 static void cgen_function_definitions(cgen_t *cgen, ast_node_t *node) {

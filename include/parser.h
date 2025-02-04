@@ -11,6 +11,8 @@
 
 #include "table.h"
 
+typedef void (*intrinsic_fn_t)(void *args_reverse_order, void *result);
+
 struct ast_node_t;
 typedef struct ast_node_t ast_node_t;
 
@@ -183,6 +185,8 @@ struct ast_node_t {
     bool condition_negated;
 
     bool is_mutable;
+    bool is_intrinsic;
+    bool is_exported;
     ast_node_t *ref_decl;
 
     bool foldable;
@@ -241,6 +245,7 @@ typedef struct ast_t {
     type_table_t type_set;
 
     table_t(s2w) *builtins;
+    table_t(s2w) *intrinsic_fns;
 
     table_t(s2n) *moduleid2node;
 

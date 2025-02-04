@@ -48,17 +48,17 @@ struct_definition        -> `struct` `{` definition* `}`
 type_init                ->  logic_or`{` `}`
 */
 
-#define ERROR_XMACRO(error_type, error_message, error_source) [error_type] = error_message,
+#define X(error_type, error_message, error_source) [error_type] = error_message,
 cstr_t const error_messages[] = {
 #include "error.x"
 };
-#undef ERROR_XMACRO
+#undef X
 
-#define ERROR_XMACRO(error_type, error_message, error_source) [error_type] = ERROR_SOURCE_##error_source,
+#define X(error_type, error_message, error_source) [error_type] = ERROR_SOURCE_##error_source,
 error_source_t error_sources[] = {
 #include "error.x"
 };
-#undef ERROR_XMACRO
+#undef X
 
 
 
@@ -136,6 +136,7 @@ void ast_init(ast_t *ast) {
     type_set_init(&ast->type_set, &ast->allocator);
 
     ast->builtins = table_new(s2w, &ast->allocator);
+    ast->intrinsic_fns = table_new(s2w, &ast->allocator);
     ast->moduleid2node = table_new(s2n, &ast->allocator);
 
     ast->type_to_zero_word = table_new(t2w, &ast->allocator);
@@ -184,6 +185,8 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start) {
     node->foldable = false;
     node->fold_level_resolved_at = -1;
     node->is_mutable = false;
+    node->is_exported = false;
+    node->is_intrinsic = false;
     node->identifier = nil_token;
     node->ref_decl = &nil_node;
 
@@ -1072,11 +1075,14 @@ static bool is_incoming_function_signature(parser_t* parser) {
 }
 
 static bool is_incoming_decl_def(parser_t* parser) {
-    if (parser->current.type != TOKEN_IDENTIFIER) {
-        return false;
+    lexer_t lookahead_lexer = parser->lexer;
+    while (lookahead_lexer.previous_token.type == TOKEN_DIRECTIVE) {
+        lexer_next_token(&lookahead_lexer);
     }
 
-    lexer_t lookahead_lexer = parser->lexer;
+    if (lookahead_lexer.previous_token.type != TOKEN_IDENTIFIER) {
+        return false;
+    }
 
     token_t token = lexer_next_token(&lookahead_lexer);
 
@@ -1500,8 +1506,19 @@ static ast_node_t *ast_inferred_type(ast_t *ast, token_t identifer) {
 
 
 static ast_node_t *parse_decl_def(parser_t *parser) {
-    advance(parser);
+    bool is_intrinsic = false;
+    {
+        while (match(parser, TOKEN_DIRECTIVE)) {
+            if (sv_eq(parser->previous.view, lit2sv("@intrinsic"))) {
+                is_intrinsic = true;
+            } else {
+                parser_error(parser, make_error_token(ERROR_PARSER_INVALID_DECLARATION_DIRECTIVE, parser->current, parser->current));
+                parser->panic_mode = false;
+            }
+        }
+    }
 
+    advance(parser);
     token_t identifier = parser->previous;
 
     unless (consume(parser, TOKEN_COLON)) {
@@ -1546,11 +1563,13 @@ static ast_node_t *parse_decl_def(parser_t *parser) {
 
     ast_node_t *decldef = ast_decldef(parser, identifier, type_expr, init_expr);
     decldef->is_mutable = is_mutable;
+    decldef->is_intrinsic = is_intrinsic;
     return decldef;
 }
 
 static ast_node_t *parse_decl(parser_t *parser, bool is_top_level) {
     ast_node_t *node = NULL;
+
     if (is_incoming_decl_def(parser)) {
         node = parse_decl_def(parser);
     } else {
@@ -1670,7 +1689,7 @@ ast_node_val_t zero_value(ast_t *ast, type_t type) {
         case TYPE_COUNT:
         case TYPE_UNREACHABLE:
         case TYPE_FUNCTION:
-        case TYPE_NATIVE_FUNCTION:
+        case TYPE_INTRINSIC_FUNCTION:
         case TYPE_INVALID:
         case TYPE_UNRESOLVED:
             UNREACHABLE();
@@ -1990,11 +2009,9 @@ static void ast_print_ast_node(typedatas_t types, ast_node_t *node, u32 level) {
 
 void ast_print(ast_t* ast, const char* name) {
     printf("=== %s ===\n", name);
-    for (size_t i = kh_begin(ast->moduleid2node); i < kh_end(ast->moduleid2node); ++i) {
-        if (kh_exist(ast->moduleid2node, i)) continue;
 
-
-        ast_node_t *module = kh_val(ast->moduleid2node, i);
+    ast_node_t *module;
+    kh_foreach_value(ast->moduleid2node, module, {
         ast_print_ast_node(ast->type_set.types, module, 0);
-    }
+    });
 }

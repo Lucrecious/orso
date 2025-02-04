@@ -11,14 +11,14 @@ enum error_source_t {
     ERROR_SOURCE_CODEGEN,
 };
 
-#define ERROR_XMACRO(error_type, message, error_source_type) error_type,
+#define X(error_type, message, error_source_type) error_type,
 typedef enum error_type_t error_type_t;
 enum error_type_t {
 #include "error.x"
 ERROR_COUNT,
 };
 
-#undef ERROR_XMACRO
+#undef X
 
 cstr_t const error_messages[ERROR_COUNT];
 error_source_t error_sources[ERROR_COUNT];

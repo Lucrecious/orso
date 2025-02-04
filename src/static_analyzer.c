@@ -7,10 +7,14 @@
 #include "vm.h"
 #include "codegen.h"
 #include "tmp.h"
+#include "core.h"
 
 #include "intrinsics.h"
 
-#include <time.h>
+struct { cstr_t name; intrinsic_fn_t fn; } intrinsic_fns[] = {
+    {.name="clock", .fn=clock_i_},
+};
+#define INTRINSIC_FUNCTION_COUNT (sizeof(intrinsic_fns) / sizeof(intrinsic_fns[0]))
 
 #define EXPRESSION_RESOLVED(expression) (!TYPE_IS_UNRESOLVED((expression)->value_type))
 
@@ -44,6 +48,13 @@ static ast_node_t *add_builtin_definition(ast_t *ast, string_view_t identifier, 
     decl->is_mutable = false;
 
     table_put(s2w, ast->builtins, sv2string(identifier, &ast->allocator), WORDP(decl));
+
+    for (size_t i = 0; i < INTRINSIC_FUNCTION_COUNT; ++i) {
+        cstr_t name = intrinsic_fns[i].name;
+        intrinsic_fn_t fn = intrinsic_fns[i].fn;
+
+        table_put(s2w, ast->intrinsic_fns, cstr2string(name, &ast->allocator), WORDP(fn));
+    }
 
     return decl;
 }
@@ -112,7 +123,7 @@ static bool check_call_on_func(analyzer_t *analyzer, ast_t *ast, ast_node_t *cal
     ast_node_t *callee = an_callee(call);
     typedata_t *func_td = type2td(ast, callee->value_type);
 
-    ASSERT(func_td->kind == TYPE_FUNCTION, "must be used only on func");
+    ASSERT(func_td->kind == TYPE_FUNCTION || func_td->kind == TYPE_INTRINSIC_FUNCTION, "must be used only on func");
 
     size_t arg_start = an_call_arg_start(call);
     size_t arg_end = an_call_arg_end(call);
@@ -1698,6 +1709,49 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
     if (an_decl_expr(declaration)->expr_val.is_concrete) {
         declaration->expr_val = an_decl_expr(declaration)->expr_val;
     }
+    
+    add_definition(state.scope, &analyzer->allocator, declaration->identifier.view, declaration);
+
+    // bind it to intrinsic if intrinsic
+    {
+        if (declaration->is_intrinsic) {
+            unless (an_is_constant(declaration)) {
+                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INTRINSIC_MUST_BE_CONSTANT, declaration));
+                INVALIDATE(declaration);
+                return;
+            }
+
+            ASSERT(declaration->expr_val.is_concrete, "should be there if its a constant");
+
+            unless (TYPE_IS_TYPE(declaration->value_type)) {
+                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INTRINSIC_DECLARATIONS_CAN_ONLY_BE_TYPES, declaration));
+                INVALIDATE(declaration);
+                return;
+            }
+
+            type_t type = declaration->expr_val.word.as.t;
+            typedata_t *td = type2td(ast, type);
+
+            if (td->kind != TYPE_FUNCTION) {
+                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_ONLY_INTRINSIC_FUNCTIONS_ARE_SUPPORTED, an_decl_expr(declaration)));
+                INVALIDATE(declaration);
+                return;
+            }
+
+            tmp_arena_t *tmp = allocator_borrow();
+            word_t result;
+            if (table_get(s2w, ast->intrinsic_fns, sv2string(declaration->identifier.view, tmp->allocator), &result)) {
+                intrinsic_fn_t func = (intrinsic_fn_t)result.as.p;
+                declaration->expr_val = ast_node_val_word(WORDP(func));
+                declaration->value_type = type_set_fetch_intrinsic_function(&ast->type_set, type);
+            } else {
+                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INTRINSIC_NAME_DOES_NOT_EXIST, declaration));
+                INVALIDATE(declaration);
+            }
+
+            allocator_return(tmp);
+        }
+    }
 }
 
 static ast_node_t *get_builtin_decl(ast_t *ast, string_view_t identifier) {
@@ -2161,11 +2215,8 @@ void resolve_declarations(analyzer_t* analyzer, ast_t* ast, analysis_state_t sta
 }
 
 bool resolve_ast(analyzer_t *analyzer, ast_t *ast) {
-    for (size_t i = kh_begin(ast->moduleid2node); i != kh_end(ast->moduleid2node); ++i) {
-        unless (kh_exist(ast->moduleid2node, i)) continue;
-
-        ast_node_t *module = kh_val(ast->moduleid2node, i);
-
+    ast_node_t *module;
+    kh_foreach_value(ast->moduleid2node, module, {
         scope_t global_scope = {0};
         scope_init(&global_scope, &analyzer->allocator, SCOPE_TYPE_MODULE, NULL, module);
         analysis_state_t state = (analysis_state_t) {
@@ -2174,7 +2225,7 @@ bool resolve_ast(analyzer_t *analyzer, ast_t *ast) {
 
         forward_scan_constant_names(analyzer, &global_scope, module->children);
         resolve_declarations(analyzer, ast, state, module->children);
-    }
+    });
 
     ast->resolved = !analyzer->had_error;
     return ast->resolved;

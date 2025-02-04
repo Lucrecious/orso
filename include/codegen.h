@@ -83,6 +83,7 @@ static void emit_read_memory_to_reg(texloc_t location, function_t *function, reg
 
         case TYPE_POINTER:
         case TYPE_TYPE:
+        case TYPE_INTRINSIC_FUNCTION:
         case TYPE_FUNCTION: {
             if (type_info->size != WORD_SIZE) {
                 TODO("other than numbers, type should be solely handled by size");
@@ -237,7 +238,7 @@ static void emit_mov_reg_to_reg(gen_t *gen, function_t *function, texloc_t loc, 
     case TYPE_TYPE:
     case TYPE_POINTER: mov_op = op_word; break;
 
-    case TYPE_NATIVE_FUNCTION:
+    case TYPE_INTRINSIC_FUNCTION:
     case TYPE_STRING: UNREACHABLE(); break;
     case TYPE_STRUCT: UNREACHABLE(); /*todo*/ break;
 
@@ -515,6 +516,17 @@ static void emit_call(function_t *function, reg_t reg, texloc_t loc) {
     instruction_t in = {0};
     in.op = OP_CALL;
     in.as.call.reg_op = (byte)reg;
+    emit_instruction(function, loc, in);
+}
+
+static void emit_intrinsic_call(function_t *function, reg_t callee, reg_t reg_arg_bottom_memaddr, reg_t reg_result_size, texloc_t loc) {
+    instruction_t in = {0};
+    in.op = OP_INTRINSIC_CALL;
+    in.as.call.reg_op = (byte)callee;
+    in.as.call.reg_arg_bottom_memaddr = reg_arg_bottom_memaddr;
+    in.as.call.reg_result = REG_RESULT;
+    in.as.call.reg_result_size = reg_result_size;
+
     emit_instruction(function, loc, in);
 }
 
@@ -951,7 +963,9 @@ void gen_function_def(ast_t *ast, env_t *env, ast_node_t *funcdef, error_functio
     allocator_return(tmp);
 }
 
-static void gen_call(gen_t *gen, function_t *function, ast_node_t *call) {
+static void gen_call(gen_t *gen, function_t *function, ast_node_t *call, bool is_intrinsic) {
+    size_t stack_point = gen_stack_point(gen);
+
     // store stack frame
     emit_push_reg(gen, call->start.loc, function, REG_STACK_FRAME, gen->ast->type_set.u64_);
 
@@ -967,19 +981,33 @@ static void gen_call(gen_t *gen, function_t *function, ast_node_t *call) {
         }
     }
 
+    // puts size of result in tmp if intrinsic
+    if (is_intrinsic) {
+        typedata_t *resulttd = type2typedata(&gen->ast->type_set.types, call->value_type);
+        gen_constant(gen, an_callee(call)->start.loc, function, &resulttd->size, gen->ast->type_set.size_t_);
+        emit_mov_reg_to_reg(gen, function, an_callee(call)->start.loc, gen->ast->type_set.size_t_, REG_MOV_TYPE_REG_TO_REG, REG_TMP, REG_RESULT);
+    }
+
     // prepare callee for call by putting it in the result register
     gen_expression(gen, function, an_callee(call));
 
-    // replace stack frame
-    emit_binu_reg_im(function, call->start.loc, REG_STACK_FRAME, REG_STACK_BOTTOM, argument_size_words*WORD_SIZE, '+');
+    if (is_intrinsic) {
+        emit_intrinsic_call(function, REG_RESULT, REG_STACK_BOTTOM, REG_TMP, token_end_loc(&call->end));
 
-    emit_call(function, REG_RESULT, token_end_loc(&call->end));
+        gen_pop_until_stack_point(gen, function, token_end_loc(&call->end), stack_point, true);
 
-    // call consumes arguments
-    gen->stack_size -= argument_size_words*WORD_SIZE;
+    } else {
+        // replace stack frame
+        emit_binu_reg_im(function, call->start.loc, REG_STACK_FRAME, REG_STACK_BOTTOM, argument_size_words*WORD_SIZE, '+');
 
-    // restore stack frame
-    emit_pop_to_reg(gen, token_end_loc(&call->end), function, REG_STACK_FRAME, gen->ast->type_set.u64_);
+        emit_call(function, REG_RESULT, token_end_loc(&call->end));
+
+        // call consumes arguments
+        gen->stack_size -= argument_size_words*WORD_SIZE;
+
+        // restore stack frame
+        emit_pop_to_reg(gen, token_end_loc(&call->end), function, REG_STACK_FRAME, gen->ast->type_set.u64_);
+    }
 }
 
 static void gen_bcall(gen_t *gen, function_t *function, ast_node_t *call) {
@@ -1133,7 +1161,9 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
         }
 
         case AST_NODE_TYPE_EXPRESSION_CALL: {
-            gen_call(gen, function, expression);
+            typedata_t *calleetd = type2typedata(&gen->ast->type_set.types, an_callee(expression)->value_type);
+            bool is_intrinsic = (calleetd->kind == TYPE_INTRINSIC_FUNCTION);
+            gen_call(gen, function, expression, is_intrinsic);
             break;
         }
 

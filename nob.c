@@ -15,6 +15,7 @@ const char* SOURCES[] = {
     "./src/type.c",
     "./src/type_set.c",
     "./src/debugger.c",
+    "./lib/core.c",
 };
 
 typedef enum cb_std_t cb_std_t;

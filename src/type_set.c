@@ -11,7 +11,7 @@
 
 typedata_t *function_type_new(type_table_t *set, types_t arguments, type_t return_type, bool is_native) {
     typedata_t *function_type = ALLOC(typedata_t);
-    function_type->kind = is_native ? TYPE_NATIVE_FUNCTION : TYPE_FUNCTION;
+    function_type->kind = is_native ? TYPE_INTRINSIC_FUNCTION : TYPE_FUNCTION;
     function_type->data.function.argument_types = (types_t){.allocator=set->allocator};
     for (size_t i = 0; i < arguments.count; ++i) {
         array_push(&function_type->data.function.argument_types, arguments.items[i]);
@@ -80,12 +80,12 @@ typedata_t *pointer_type_new(type_table_t *set, type_t type) {
 }
 
 typedata_t *type_copy_new(type_table_t *set, typedata_t *type) {
-    if (type->kind == TYPE_FUNCTION || type->kind == TYPE_NATIVE_FUNCTION) {
+    if (type->kind == TYPE_FUNCTION || type->kind == TYPE_INTRINSIC_FUNCTION) {
         return (typedata_t*)function_type_new(
             set,
             type->data.function.argument_types,
             type->data.function.return_type,
-            type->kind == TYPE_NATIVE_FUNCTION
+            type->kind == TYPE_INTRINSIC_FUNCTION
         );
     }
 
@@ -230,7 +230,7 @@ bool type_is_function(typedatas_t types, type_t type) {
 }
 
 bool type_is_native_function(typedatas_t types, type_t type) {
-    return type2typedata(&types, type)->kind == TYPE_NATIVE_FUNCTION;
+    return type2typedata(&types, type)->kind == TYPE_INTRINSIC_FUNCTION;
 }
 
 bool type_is_struct(typedatas_t types, type_t type) {
@@ -299,9 +299,9 @@ type_t type_set_fetch_pointer(type_table_t* set, type_t inner_type) {
     return type;
 }
 
-type_t type_set_fetch_function_(type_table_t *set, type_t return_type, types_t arguments, bool is_native) {
+type_t type_set_fetch_function(type_table_t *set, type_t return_type, types_t arguments) {
     typedata_t function_type = {
-        .kind = is_native ? TYPE_NATIVE_FUNCTION : TYPE_FUNCTION,
+        .kind = TYPE_FUNCTION,
         .data.function.argument_types = arguments,
         .data.function.return_type = return_type,
         .size = sizeof(void*),
@@ -318,12 +318,20 @@ type_t type_set_fetch_function_(type_table_t *set, type_t return_type, types_t a
     return type;
 }
 
-type_t type_set_fetch_function(type_table_t *set, type_t return_type, types_t arguments) {
-    return type_set_fetch_function_(set, return_type, arguments, false);
-}
+type_t type_set_fetch_intrinsic_function(type_table_t *set, type_t function_type) {
+    typedata_t *td = type2typedata(&set->types, function_type);
+    typedata_t functd = *td;
+    functd.kind = TYPE_INTRINSIC_FUNCTION;
 
-type_t type_set_fetch_native_function(type_table_t *set, type_t return_type, types_t arguments) {
-    return type_set_fetch_function_(set, return_type, arguments, true);
+    type_t type;
+    if (table_get(type2u64, set->types2index, &functd, &type)) {
+        return type;
+    }
+
+    typedata_t *type_info = type_copy_new(set, &functd);
+    type = track_type(set, type_info);
+
+    return type;
 }
 
 type_t type_set_fetch_anonymous_struct(type_table_t *set, s32 field_count, struct_field_t *fields, s32 constant_count, struct_constant_t* constants) {

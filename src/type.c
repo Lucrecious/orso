@@ -16,7 +16,7 @@ bool type_equal(typedata_t *a, typedata_t *b) {
 
     switch (a->kind) {
         case TYPE_FUNCTION:
-        case TYPE_NATIVE_FUNCTION: {
+        case TYPE_INTRINSIC_FUNCTION: {
             if (a->data.function.argument_types.count != b->data.function.argument_types.count) {
                 return false;
             }
@@ -189,7 +189,7 @@ string_t type_to_string_toplevel(typedatas_t types, type_t type, arena_t *alloca
             case TYPE_COUNT:
             case TYPE_STRUCT:
             case TYPE_FUNCTION:
-            case TYPE_NATIVE_FUNCTION:
+            case TYPE_INTRINSIC_FUNCTION:
             case TYPE_POINTER:
                 type_name = "<?>"; UNREACHABLE(); break;
         }

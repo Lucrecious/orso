@@ -134,6 +134,7 @@ enum op_code_t {
     OP_MOVF32_REGADDR_TO_REG,
     OP_MOVWORD_REGADDR_TO_REG,
 
+    OP_INTRINSIC_CALL,
     OP_CALL,
     OP_RETURN,
 };
@@ -183,6 +184,9 @@ struct instruction_t {
 
         struct {
             byte reg_op;
+            byte reg_result_size;
+            byte reg_arg_bottom_memaddr;
+            byte reg_result;
         } call;
 
         struct {
@@ -680,6 +684,23 @@ void vm_step(vm_t *vm) {
             vm->call_frames[vm->call_frame_count] = vm->call_frame;
             vm->call_frame_count++;
             vm->call_frame = call_frame;
+            break;
+        }
+
+        case OP_INTRINSIC_CALL: {
+            void *ptr = vm->registers[in.as.call.reg_op].as.p;
+            u64 result_size = vm->registers[in.as.call.reg_result_size].as.u;
+            void* args_address_bottom = MEMORY->data + vm->registers[in.as.call.reg_arg_bottom_memaddr].as.u;
+
+            u8 result[result_size];
+            intrinsic_fn_t fn = (intrinsic_fn_t)ptr;
+            if (result_size > WORD_SIZE) TODO("not implemented yet");
+
+            fn(args_address_bottom, result);
+
+            vm->registers[in.as.call.reg_result] = *(word_t*)result;
+
+            IP_ADV(1);
             break;
         }
 

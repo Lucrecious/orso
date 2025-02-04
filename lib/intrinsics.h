@@ -5,6 +5,8 @@
 #include <stddef.h>
 #include <math.h>
 
+#define UNUSED(arg) ((void)arg)
+
 typedef int8_t s8;
 typedef uint8_t u8;
 typedef int16_t s16;

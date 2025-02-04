@@ -55,10 +55,9 @@ type_t type_set_fetch_function(
     type_t return_type,
     types_t arguments);
 
-type_t type_set_fetch_native_function(
+type_t type_set_fetch_intrinsic_function(
     type_table_t* set,
-    type_t return_type,
-    types_t arguments);
+    type_t function_type);
 
 type_t type_set_fetch_anonymous_struct(
     type_table_t *set,

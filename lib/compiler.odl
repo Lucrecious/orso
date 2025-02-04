@@ -2,7 +2,7 @@ string_ :: struct {
     bytes := byte.[];
 };
 
-#export compile :: (string_ path) -> bool {
+compile :: (string_ path) -> bool {
     lc_ := compiler_t_.{};
     lc_source_(&compiler_, path);
     
