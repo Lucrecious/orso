@@ -12,7 +12,7 @@
 #include "intrinsics.h"
 
 struct { cstr_t name; intrinsic_fn_t fn; } intrinsic_fns[] = {
-    {.name="clock", .fn=clock_i_},
+    {.name="clock_ns", .fn=clock_ns_i_},
     {.name="ns2sec", .fn=ns2sec_i_}
 };
 #define INTRINSIC_FUNCTION_COUNT (sizeof(intrinsic_fns) / sizeof(intrinsic_fns[0]))

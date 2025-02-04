@@ -14,7 +14,7 @@ u64 clock(void) {
 #else
 #include <time.h>
 
-u64 clock_(void) {
+u64 clock_ns(void) {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (u64)(ts.tv_sec * 1000000000ULL + ts.tv_nsec);
@@ -45,9 +45,9 @@ void munmap(void *addr) {
     (void)addr;
 }
 
-void clock_i_(void *args, void *result) {
+void clock_ns_i_(void *args, void *result) {
     UNUSED(args);
-    u64 u = clock_();
+    u64 u = clock_ns();
     *(u64*)result = u;
 }
 
