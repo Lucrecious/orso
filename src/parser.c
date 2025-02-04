@@ -1647,6 +1647,8 @@ bool parse(ast_t *ast, string_t file_path, string_view_t source, error_function_
 }
 
 ast_node_val_t zero_value(ast_t *ast, type_t type) {
+    if (TYPE_IS_UNRESOLVED(type)) return ast_node_val_word(WORDU(0));
+
     word_t result = {0};
     if (table_get(t2w, ast->type_to_zero_word, type, &result)) {
         return ast_node_val_word(result);

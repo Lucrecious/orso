@@ -1604,7 +1604,19 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
         case SCOPE_TYPE_NONE: UNREACHABLE(); break;
         }
 
-        resolve_expression(analyzer, ast, new_state, an_decl_expr(declaration));
+        ast_node_t *expr = an_decl_expr(declaration);
+        if (expr->node_type == AST_NODE_TYPE_EXPRESSION_NIL) {
+            if (TYPE_IS_UNREACHABLE(declaration_type)) {
+                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CANNOT_INFER_NIL_VALUE, declaration));
+                INVALIDATE(expr);
+            } else {
+                expr->value_type = declaration_type;
+                expr->expr_val = zero_value(ast, declaration_type);
+            }
+
+        } else {
+            resolve_expression(analyzer, ast, new_state, an_decl_expr(declaration));
+        }
     }
 
     // we are resolved

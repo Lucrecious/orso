@@ -11,11 +11,6 @@
 #undef XARG
 #undef X
 
-void *mmap(size_t size_bytes);
-void mcommit(void *addr, size_t size_bytes);
-void mmarkro(void *addr, size_t size_bytes);
-void munmap(void *addr);
-
 #define X(export_fn_name, c_fn_name, return_type, ...) void c_fn_name##_i_(void*,void*);
 #define XARG(name, type)
 #define XRET(type, c_fn_name, ...)

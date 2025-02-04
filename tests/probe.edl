@@ -1,5 +1,21 @@
 {
-    clock();
+    // mem_size :: 1024sz;
+
+    // mem := &int << mreserve(mem_size);
+    // mmarkrw(&void << mem, mem_size);
+    // *mem = 10;
+
+    // x := *mem;
+    
+    // mfree(&void << mem, mem_size);
+
+    // x;
+
+    t := clock_ns();
+    c := 0;
+    while c < 1_000_000 do c = c + 1;
+
+    ns2sec(clock_ns() - t);
 }
 // {
 //     count :: 10;

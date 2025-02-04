@@ -1,11 +1,13 @@
 // core lib
 
-// @intrinsic mmap :: (size_t) -> &void;
-// @intrinsic mcommit :: (&void, size_t) -> void;
-// @intrinsic mmarkro :: (&void, size_t) -> void;
-// @intrinsic munmap :: (&void) -> void;
+@intrinsic mreserve :: (size_t) -> &void;
+@intrinsic mmarkro :: (&void, size_t) -> bool;
+@intrinsic mmarkrw :: (&void, size_t) -> bool;
+@intrinsic mfree :: (&void, size_t) -> bool;
+@intrinsic mpagesize :: () -> size_t;
 
 @intrinsic clock_ns :: () -> u64;
-@intrinsic ns2sec :: (u64) -> f64;
-@intrinsic lerpd :: (f64, f64, f64)-> f64;
-@intrinsic lerpu8 :: (u8, u8, f64)-> u8;
+
+ns2sec :: (ns: u64) -> f64 {
+    return (f64 << ns)*0.000_000_001;
+};

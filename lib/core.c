@@ -14,6 +14,8 @@ u64 clock(void) {
 
 #else
 #include <time.h>
+#include <unistd.h>
+#include <sys/mman.h>
 
 u64 clock_ns(void) {
     struct timespec ts;
@@ -21,29 +23,35 @@ u64 clock_ns(void) {
     return (u64)(ts.tv_sec * 1000000000ULL + ts.tv_nsec);
 }
 
+void *odlmreserve(size_t size) {
+    void *addr = mmap(NULL, size, PROT_NONE, MAP_PRIVATE|MAP_ANONYMOUS,-1, 0);
+    return addr;
+}
+
+bool_ odlmmarkro(void *addr, size_t size) {
+    bool_ success = (u8)(mprotect(addr, size, PROT_READ) == 0);
+    return success;
+}
+
+bool_ odlmmarkrw(void *addr, size_t size) {
+    bool_ success = (bool_)(mprotect(addr, size, PROT_READ|PROT_WRITE) == 0);
+    return success;
+}
+
+bool_ odlmfree(void *addr, size_t size) {
+    bool_ success = (bool_)(munmap(addr, size) == 0);
+    return success;
+}
+
+size_t odlmpagesize(void) {
+    size_t pagesize = (size_t)getpagesize();
+    return pagesize;
+}
+
 #endif
 
 f64 ns2sec(u64 ns) {
     return ns*(f64)(1e-9);
-}
-
-void *mmap(size_t size_bytes) {
-    (void)size_bytes;
-    return NULL;
-}
-
-void mcommit(void *addr, size_t size_bytes) {
-    (void)addr;
-    (void)size_bytes;
-}
-
-void mmarkro(void *addr, size_t size_bytes) {
-    (void)addr;
-    (void)size_bytes;
-}
-
-void munmap(void *addr) {
-    (void)addr;
 }
 
 #define XARG(name, type) type name = *(type*)(args); args += b2w(sizeof(type))*WORD_SIZE
