@@ -952,7 +952,7 @@ void gen_function_def(ast_t *ast, env_t *env, ast_node_t *funcdef, error_functio
     for (size_t i = an_func_def_arg_start(funcdef); i < an_func_def_arg_end(funcdef); ++i) {
         ast_node_t *arg = funcdef->children.items[i];
         typedata_t *type_info = type2typedata(&gen.ast->type_set.types, arg->value_type);
-        gen.stack_size += bytes_to_words(type_info->size)*WORD_SIZE;
+        gen.stack_size += b2w(type_info->size)*WORD_SIZE;
         gen_add_local(&gen, arg, gen.stack_size);
     }
 
@@ -976,7 +976,7 @@ static void gen_call(gen_t *gen, function_t *function, ast_node_t *call, bool is
             typedata_t *td = type2typedata(&gen->ast->type_set.types, arg->value_type);
             gen_expression(gen, function, arg);
             emit_push_reg(gen, token_end_loc(&arg->end), function, REG_RESULT, arg->value_type);
-            argument_size_words += bytes_to_words(td->size);
+            argument_size_words += b2w(td->size);
         }
     }
 

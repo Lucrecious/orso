@@ -130,8 +130,6 @@ bool struct_type_is_incomplete(typedata_t *type);
 
 bool type_equal(typedata_t *a, typedata_t *b);
 
-size_t bytes_to_words(s32 byte_count);
-
 struct_field_t *type_struct_find_field(typedata_t *struct_, const char *name, size_t name_length);
 
 string_t type_to_string(typedatas_t types, type_t type, arena_t *allocator);

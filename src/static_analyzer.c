@@ -11,11 +11,15 @@
 
 #include "intrinsics.h"
 
+#define X(export_fn_name, c_fn_name, return_type, code, ...) { .name=(#export_fn_name), .fn=(c_fn_name##_i_) },
+#define XARG(name, type)
+#define XRET(type, c_fn_name, ...)
 struct { cstr_t name; intrinsic_fn_t fn; } intrinsic_fns[] = {
-    {.name="clock_ns", .fn=clock_ns_i_},
-    {.name="ns2sec", .fn=ns2sec_i_},
-    {.name="add", .fn=add_i_},
+#undef XRET
+#undef XARG
+#include "intrinsic_fns.x"
 };
+#undef X
 #define INTRINSIC_FUNCTION_COUNT (sizeof(intrinsic_fns) / sizeof(intrinsic_fns[0]))
 
 #define EXPRESSION_RESOLVED(expression) (!TYPE_IS_UNRESOLVED((expression)->value_type))
@@ -736,7 +740,7 @@ void resolve_expression(
             if (!analyzer->had_error && analyzer->env_or_null) {
                 unless (TYPE_IS_INVALID(child->value_type)) {
                     typedata_t *td = type2td(ast, child->value_type);
-                    size_t size = bytes_to_words(td->size);
+                    size_t size = b2w(td->size);
                     ASSERT(size == 1, "for now types can only be as large as a word");
 
                     word_t result[size];
@@ -2123,7 +2127,7 @@ static void resolve_struct_definition(analyzer_t *analyzer, ast_t *ast, analysis
 
         ASSERT(complete_struct_type_info->data.struct_.field_count == field_count, "completed struct must have the same number as fields as ast field declaration nodes");
 
-        u64 size_in_slots = bytes_to_words(complete_struct_type_info->size);
+        u64 size_in_slots = b2w(complete_struct_type_info->size);
         byte struct_data[size_in_slots * sizeof(word_t)];
         for (u64 i = 0; i < size_in_slots * sizeof(word_t); i++) {
             struct_data[i] = 0;

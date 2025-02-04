@@ -41,6 +41,8 @@ struct word_t {
 
 #define WORD_SIZE sizeof(word_t)
 
+#define b2w(size)  ((size + (WORD_SIZE-1)) / WORD_SIZE)
+
 #define WORDI(value) ((word_t){.as.s=(value)})
 #define WORDU(value) ((word_t){.as.u=(value)})
 #define WORDD(value) ((word_t){.as.d=(value)})

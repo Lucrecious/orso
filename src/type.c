@@ -96,10 +96,6 @@ bool type_in_list(types_t list, type_t find) {
     return false;
 }
 
-size_t bytes_to_words(s32 byte_count) {
-    return (byte_count + (WORD_SIZE-1)) / WORD_SIZE;
-}
-
 struct_field_t *type_struct_find_field(typedata_t *struct_, const char *name, size_t name_length) {
     for (s32 i = 0; i < struct_->data.struct_.field_count; i++) {
         if (strlen(struct_->data.struct_.fields[i].name) != name_length) {

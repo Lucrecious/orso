@@ -50,21 +50,12 @@ void munmap(void *addr) {
     (void)addr;
 }
 
-void clock_ns_i_(void *args, void *result) {
-    UNUSED(args);
-    u64 u = clock_ns();
-    *(u64*)result = u;
-}
+#define XARG(name, type) type name = *(type*)(args); args += b2w(sizeof(type))*WORD_SIZE
+#define XRET(type, c_fn_name, ...) type ret = c_fn_name(__VA_ARGS__); *(type*)result = ret
+#define X(export_fn_name, c_fn_name, return_type, code, ...) void c_fn_name##_i_(void *args, void *result) { code; }
 
-void ns2sec_i_(void *args, void *result) {
-    u64 ns = *(u64*)args;
-    f64 ret = ns2sec(ns);
-    *(f64*)result = ret;
-}
+#include "intrinsic_fns.x"
 
-void add_i_(void *args, void *result) {
-    u8 b = *(u8*)args;
-    u8 a = *(u8*)(args+sizeof(u64));
-    u8 c = add_(a, b);
-    *(u8*) result = c;
-}
+#undef X
+#undef XRET
+#undef XARG

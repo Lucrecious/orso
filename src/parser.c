@@ -1675,7 +1675,7 @@ ast_node_val_t zero_value(ast_t *ast, type_t type) {
 
         case TYPE_STRUCT: {
             UNREACHABLE();
-            // for (size_t i = 0; i < bytes_to_words(type_info->size); i++) {
+            // for (size_t i = 0; i < b2w(type_info->size); i++) {
             //     value[i] = WORDI(0);
             // }
             break;

@@ -371,13 +371,13 @@ type_t type_set_fetch_anonymous_struct(type_table_t *set, s32 field_count, struc
             type_t previous_type = fields[i - 1].type;
             typedata_t *previous_type_info = type2typedata(&set->types, previous_type);
 
-            s32 bytes = bytes_to_words(previous_type_info->size) * WORD_SIZE;
+            s32 bytes = b2w(previous_type_info->size) * WORD_SIZE;
             type_info->data.struct_.fields[i].offset = previous_offset + bytes;
         }
 
         type_t field_type= type_info->data.struct_.fields[field_count-1].type;
         typedata_t *field_type_info = type2typedata(&set->types, field_type);
-        s32 size_of_final = bytes_to_words(field_type_info->size) * WORD_SIZE;
+        s32 size_of_final = b2w(field_type_info->size) * WORD_SIZE;
         s32 total_size = type_info->data.struct_.fields[field_count - 1].offset + size_of_final;
 
         type_info->size = total_size;
