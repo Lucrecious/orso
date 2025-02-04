@@ -7,3 +7,4 @@
 
 @intrinsic clock_ns :: () -> u64;
 @intrinsic ns2sec :: (u64) -> f64;
+@intrinsic add :: (u8, u8) -> u8;

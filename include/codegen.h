@@ -4,7 +4,6 @@
 #include "parser.h"
 #include "vm.h"
 #include "error.h"
-#include "slot.h"
 
 bool compile_program(vm_t *vm, ast_t *ast);
 

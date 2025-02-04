@@ -1,6 +1,5 @@
 #include "type.h"
 
-#include "slot.h"
 #include "type_set.h"
 #include "tmp.h"
 

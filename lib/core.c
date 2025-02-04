@@ -1,3 +1,4 @@
+#include "intrinsics.h"
 #include "core.h"
 
 #if defined(_WIN32) || defined(_WIN64)
@@ -24,6 +25,10 @@ u64 clock_ns(void) {
 
 f64 ns2sec(u64 ns) {
     return ns*(f64)(1e-9);
+}
+
+u8 add_(u8 a, u8 b) {
+    return a + b;
 }
 
 void *mmap(size_t size_bytes) {
@@ -55,4 +60,11 @@ void ns2sec_i_(void *args, void *result) {
     u64 ns = *(u64*)args;
     f64 ret = ns2sec(ns);
     *(f64*)result = ret;
+}
+
+void add_i_(void *args, void *result) {
+    u8 b = *(u8*)args;
+    u8 a = *(u8*)(args+sizeof(u64));
+    u8 c = add_(a, b);
+    *(u8*) result = c;
 }

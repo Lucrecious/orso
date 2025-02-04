@@ -23,6 +23,30 @@ typedef unsigned int uint;
 
 typedef const char *cstr_t;
 
+typedef struct type_t type_t;
+struct type_t {
+    u64 i;
+};
+
+typedef struct word_t word_t;
+struct word_t {
+    union {
+        s64 s;
+        f64 d;
+        void *p;
+        u64 u;
+        type_t t;
+    } as;
+};
+
+#define WORD_SIZE sizeof(word_t)
+
+#define WORDI(value) ((word_t){.as.s=(value)})
+#define WORDU(value) ((word_t){.as.u=(value)})
+#define WORDD(value) ((word_t){.as.d=(value)})
+#define WORDP(value) ((word_t){.as.p=(value)})
+#define WORDT(value) ((word_t){.as.t=(value)})
+
 #define s8_(lit) ((s8)lit)
 #define u8_(lit) ((u8)lit)
 #define s16_(lit) ((s16)lit)
@@ -37,11 +61,6 @@ typedef const char *cstr_t;
 #define uint_(lit) ((uint)lit)
 
 #define fn_t_(var_name, return_type, ...) return_type (*var_name)(__VA_ARGS__)
-
-typedef struct type_t type_t;
-struct type_t {
-    u64 i;
-};
 
 #define typeid(index) ((type_t){.i=(index)})
 #define typeid_eq(t1, t2) ((t1).i == (t2).i)

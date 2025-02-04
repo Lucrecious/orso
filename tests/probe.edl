@@ -1,10 +1,5 @@
 {
-    t := clock_ns();
-
-    u := 0;
-    while u < 5_000_000 do u = u + 1;
-
-    ns2sec(clock_ns() - t);
+    add(1u8, 1u8);
 }
 // {
 //     count :: 10;

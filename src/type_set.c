@@ -1,7 +1,6 @@
 #include "type_set.h"
 
 #include <stdlib.h>
-#include "slot.h"
 
 #define ORSO_TYPE_SET_MAX_LOAD 0.75
 #define GROW_CAPACITY(capacity) capacity == 0 ? 8 : capacity * 2

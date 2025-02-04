@@ -2,7 +2,6 @@
 #define VM_H_
 
 #include "def.h"
-#include "slot.h"
 #include "parser.h"
 
 typedef enum reg_t reg_t;
@@ -692,7 +691,7 @@ void vm_step(vm_t *vm) {
             u64 result_size = vm->registers[in.as.call.reg_result_size].as.u;
             void* args_address_bottom = MEMORY->data + vm->registers[in.as.call.reg_arg_bottom_memaddr].as.u;
 
-            u8 result[result_size];
+            u8 result[bytes_to_words(result_size)*WORD_SIZE];
             intrinsic_fn_t fn = (intrinsic_fn_t)ptr;
             if (result_size > WORD_SIZE) TODO("not implemented yet");
 
