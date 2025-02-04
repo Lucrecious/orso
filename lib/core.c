@@ -15,13 +15,16 @@ u64 clock(void) {
 #include <time.h>
 
 u64 clock_(void) {
-    // struct timespec ts;
-    // clock_gettime(CLOCK_MONOTONIC, &ts);
-    // return (u64)(ts.tv_sec * 1000000000ULL + ts.tv_nsec);
-    return 69;
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (u64)(ts.tv_sec * 1000000000ULL + ts.tv_nsec);
 }
 
 #endif
+
+f64 ns2sec(u64 ns) {
+    return ns*(f64)(1e-9);
+}
 
 void *mmap(size_t size_bytes) {
     (void)size_bytes;
@@ -46,4 +49,10 @@ void clock_i_(void *args, void *result) {
     UNUSED(args);
     u64 u = clock_();
     *(u64*)result = u;
+}
+
+void ns2sec_i_(void *args, void *result) {
+    u64 ns = *(u64*)args;
+    f64 ret = ns2sec(ns);
+    *(f64*)result = ret;
 }

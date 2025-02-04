@@ -6,3 +6,4 @@
 // munmap :: @intrinsic (&void) -> void;
 
 @intrinsic clock :: () -> u64;
+@intrinsic ns2sec :: (u64) -> f64;

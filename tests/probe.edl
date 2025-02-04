@@ -1,7 +1,10 @@
 {
     t := clock();
 
-    t;
+    u := 0;
+    while u < 5_000_000 do u = u + 1;
+
+    ns2sec(clock() - t);
 }
 // {
 //     count :: 10;
