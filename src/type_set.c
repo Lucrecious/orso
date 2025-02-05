@@ -11,12 +11,12 @@
 typedata_t *function_type_new(type_table_t *set, types_t arguments, type_t return_type, bool is_native) {
     typedata_t *function_type = ALLOC(typedata_t);
     function_type->kind = is_native ? TYPE_INTRINSIC_FUNCTION : TYPE_FUNCTION;
-    function_type->data.function.argument_types = (types_t){.allocator=set->allocator};
+    function_type->as.function.argument_types = (types_t){.allocator=set->allocator};
     for (size_t i = 0; i < arguments.count; ++i) {
-        array_push(&function_type->data.function.argument_types, arguments.items[i]);
+        array_push(&function_type->as.function.argument_types, arguments.items[i]);
     }
 
-    function_type->data.function.return_type = return_type;
+    function_type->as.function.return_type = return_type;
 
     function_type->size = sizeof(void*);
 
@@ -28,41 +28,41 @@ typedata_t *struct_type_new(type_table_t *set, struct_field_t *fields, s32 field
     typedata_t* struct_type = ALLOC(typedata_t);
     struct_type->kind = TYPE_STRUCT;
 
-    struct_type->data.struct_.name = NULL;
+    struct_type->as.struct_.name = NULL;
 
-    struct_type->data.struct_.field_count = field_count;
-    struct_type->data.struct_.fields = NULL;
-    struct_type->data.struct_.constant_count = constant_count;
-    struct_type->data.struct_.constants = NULL;
+    struct_type->as.struct_.field_count = field_count;
+    struct_type->as.struct_.fields = NULL;
+    struct_type->as.struct_.constant_count = constant_count;
+    struct_type->as.struct_.constants = NULL;
     struct_type->size = (size_t)total_size;
 
     if (field_count > 0) {
-        struct_type->data.struct_.fields = ALLOC_N(struct_field_t, field_count);
+        struct_type->as.struct_.fields = ALLOC_N(struct_field_t, field_count);
 
         for (s32 i = 0; i < field_count; i++) {
-            struct_type->data.struct_.fields[i] = fields[i];
+            struct_type->as.struct_.fields[i] = fields[i];
 
             s32 length = strlen(fields[i].name);
             char* name = ALLOC_N(char, length + 1);
             memcpy(name, fields[i].name, length);
             name[length] = '\0';
 
-            struct_type->data.struct_.fields[i].name = name;
+            struct_type->as.struct_.fields[i].name = name;
         }
     }
 
     if (constant_count > 0) {
-        struct_type->data.struct_.constants = ALLOC_N(struct_constant_t, constant_count);
+        struct_type->as.struct_.constants = ALLOC_N(struct_constant_t, constant_count);
 
         for (s32 i = 0; i < constant_count; i++) {
-            struct_type->data.struct_.constants[i] = constants[i];
+            struct_type->as.struct_.constants[i] = constants[i];
 
             s32 length = strlen(constants[i].name);
             char* name = ALLOC_N(char, length + 1);
             memcpy(name, constants[i].name, length);
             name[length] = '\0';
 
-            struct_type->data.struct_.constants[i].name = name;
+            struct_type->as.struct_.constants[i].name = name;
         }
     }
 
@@ -72,8 +72,9 @@ typedata_t *struct_type_new(type_table_t *set, struct_field_t *fields, s32 field
 typedata_t *pointer_type_new(type_table_t *set, type_t type) {
     typedata_t *pointer = ALLOC(typedata_t);
     pointer->kind = TYPE_POINTER;
-    pointer->data.pointer.type = type;
+    pointer->as.ptr.type = type;
     pointer->size = sizeof(void*);
+    pointer->capabilities = TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE;
 
     return pointer;
 }
@@ -82,8 +83,8 @@ typedata_t *type_copy_new(type_table_t *set, typedata_t *type) {
     if (type->kind == TYPE_FUNCTION || type->kind == TYPE_INTRINSIC_FUNCTION) {
         return (typedata_t*)function_type_new(
             set,
-            type->data.function.argument_types,
-            type->data.function.return_type,
+            type->as.function.argument_types,
+            type->as.function.return_type,
             type->kind == TYPE_INTRINSIC_FUNCTION
         );
     }
@@ -91,17 +92,17 @@ typedata_t *type_copy_new(type_table_t *set, typedata_t *type) {
     if (type->kind == TYPE_STRUCT) {
         return struct_type_new(
             set,
-            type->data.struct_.fields,
-            type->data.struct_.field_count,
-            type->data.struct_.constants,
-            type->data.struct_.constant_count,
+            type->as.struct_.fields,
+            type->as.struct_.field_count,
+            type->as.struct_.constants,
+            type->as.struct_.constant_count,
             type->size);
     }
 
     if (type->kind == TYPE_POINTER) {
         return pointer_type_new(
             set,
-            type->data.pointer.type);
+            type->as.ptr.type);
     }
 
     UNREACHABLE();
@@ -125,28 +126,29 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
 
     static typedata_t type_void = {.name=lit2str("void"), .kind=TYPE_VOID, .size=0, .capabilities=TYPE_CAP_NONE};
     static typedata_t type_bool = {.name=lit2str("bool"), .kind=TYPE_BOOL, .size=NUM_SIZE_8, .capabilities=TYPE_CAP_LOGICAL};
-    static typedata_t type_f32 = {.name=lit2str("f32"), .kind=TYPE_NUMBER, .size=NUM_SIZE_32, .data.num = NUM_TYPE_FLOAT, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
-    static typedata_t type_f64 = {.name=lit2str("f64"), .kind=TYPE_NUMBER, .size=NUM_SIZE_64, .data.num = NUM_TYPE_FLOAT, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
+    static typedata_t type_f32 = {.name=lit2str("f32"), .kind=TYPE_NUMBER, .size=NUM_SIZE_32, .as.num = NUM_TYPE_FLOAT, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
+    static typedata_t type_f64 = {.name=lit2str("f64"), .kind=TYPE_NUMBER, .size=NUM_SIZE_64, .as.num = NUM_TYPE_FLOAT, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
 
-    static typedata_t type_s8 = {.name=lit2str("s8"), .kind=TYPE_NUMBER, .size=NUM_SIZE_8, .data.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
-    static typedata_t type_u8 = {.name=lit2str("u8"), .kind=TYPE_NUMBER, .size=NUM_SIZE_8, .data.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
+    static typedata_t type_s8 = {.name=lit2str("s8"), .kind=TYPE_NUMBER, .size=NUM_SIZE_8, .as.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
+    static typedata_t type_u8 = {.name=lit2str("u8"), .kind=TYPE_NUMBER, .size=NUM_SIZE_8, .as.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
 
-    static typedata_t type_s16 = {.name=lit2str("s16"), .kind=TYPE_NUMBER, .size=NUM_SIZE_16, .data.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
-    static typedata_t type_u16 = {.name=lit2str("u16"), .kind=TYPE_NUMBER, .size=NUM_SIZE_16, .data.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
+    static typedata_t type_s16 = {.name=lit2str("s16"), .kind=TYPE_NUMBER, .size=NUM_SIZE_16, .as.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
+    static typedata_t type_u16 = {.name=lit2str("u16"), .kind=TYPE_NUMBER, .size=NUM_SIZE_16, .as.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
 
-    static typedata_t type_s32 = {.name=lit2str("s32"), .kind=TYPE_NUMBER, .size=NUM_SIZE_32, .data.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
-    static typedata_t type_u32 = {.name=lit2str("u32"), .kind=TYPE_NUMBER, .size=NUM_SIZE_32, .data.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
+    static typedata_t type_s32 = {.name=lit2str("s32"), .kind=TYPE_NUMBER, .size=NUM_SIZE_32, .as.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
+    static typedata_t type_u32 = {.name=lit2str("u32"), .kind=TYPE_NUMBER, .size=NUM_SIZE_32, .as.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
 
-    static typedata_t type_s64 = {.name=lit2str("s64"), .kind=TYPE_NUMBER, .size=NUM_SIZE_64, .data.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
-    static typedata_t type_u64 = {.name=lit2str("u64"), .kind=TYPE_NUMBER, .size=NUM_SIZE_64, .data.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
+    static typedata_t type_s64 = {.name=lit2str("s64"), .kind=TYPE_NUMBER, .size=NUM_SIZE_64, .as.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
+    static typedata_t type_u64 = {.name=lit2str("u64"), .kind=TYPE_NUMBER, .size=NUM_SIZE_64, .as.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
 
-    static typedata_t type_int = {.name=lit2str("int"), .kind=TYPE_NUMBER, .size=sizeof(int), .data.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
-    static typedata_t type_uint = {.name=lit2str("uint"), .kind=TYPE_NUMBER, .size=sizeof(unsigned int), .data.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
-    static typedata_t type_size_t = {.name=lit2str("size_t"), .kind=TYPE_NUMBER, .size=sizeof(size_t), .data.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
+    static typedata_t type_int = {.name=lit2str("int"), .kind=TYPE_NUMBER, .size=sizeof(int), .as.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
+    static typedata_t type_uint = {.name=lit2str("uint"), .kind=TYPE_NUMBER, .size=sizeof(unsigned int), .as.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
+    static typedata_t type_size_t = {.name=lit2str("size_t"), .kind=TYPE_NUMBER, .size=sizeof(size_t), .as.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
+    static typedata_t type_ptrdiff_t = {.name=lit2str("ptrdiff_t"), .kind=TYPE_NUMBER, .size=sizeof(s64), .as.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
 
     static typedata_t type_string = {.name=lit2str("string"), .kind=TYPE_STRING, .size=sizeof(void*), .capabilities=(TYPE_CAP_COMPARABLE)};
     static typedata_t type_type = {.name=lit2str("type"), .kind=TYPE_TYPE, .size=sizeof(type_t), .capabilities=(TYPE_CAP_NONE)};
-    static typedata_t empty_function = {.name=lit2str(""), .kind = TYPE_FUNCTION, .size = sizeof(void*), .data.function.return_type = typeid(TYPE_VOID), .capabilities=(TYPE_CAP_NONE)};
+    static typedata_t empty_function = {.name=lit2str(""), .kind = TYPE_FUNCTION, .size = sizeof(void*), .as.function.return_type = typeid(TYPE_VOID), .capabilities=(TYPE_CAP_NONE)};
 
     type_t invalid = typeid(set->types.count);
     array_push(&set->types, &type_invalid);
@@ -208,6 +210,9 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
     set->size_t_ = typeid(set->types.count);
     array_push(&set->types, &type_size_t);
 
+    set->ptrdiff_t_ = typeid(set->types.count);
+    array_push(&set->types, &type_ptrdiff_t);
+
     set->empty_function_ = typeid(set->types.count);
     array_push(&set->types, &empty_function);
     
@@ -247,30 +252,30 @@ static u64 hash_type(typedata_t *type) {
     ADD_HASH(hash, type->kind);
 
     if (type->kind == TYPE_FUNCTION) {
-        ADD_HASH(hash, type->data.function.argument_types.count);
+        ADD_HASH(hash, type->as.function.argument_types.count);
 
-        for (size_t i = 0; i < type->data.function.argument_types.count; ++i) {
-            ADD_HASH(hash, (u64)(type->data.function.argument_types.items[i].i));
+        for (size_t i = 0; i < type->as.function.argument_types.count; ++i) {
+            ADD_HASH(hash, (u64)(type->as.function.argument_types.items[i].i));
         }
 
-        ADD_HASH(hash, (u64)(type->data.function.return_type.i));
+        ADD_HASH(hash, (u64)(type->as.function.return_type.i));
     } else if (type->kind == TYPE_STRUCT) {
-        ASSERT(type->data.struct_.name == NULL, "only anonymous structs are hashed");
-        ASSERT(type->data.struct_.constant_count == 0, "only anonymous structs without constants can be hashed");
+        ASSERT(type->as.struct_.name == NULL, "only anonymous structs are hashed");
+        ASSERT(type->as.struct_.constant_count == 0, "only anonymous structs without constants can be hashed");
 
-        ADD_HASH(hash, type->data.struct_.field_count);
+        ADD_HASH(hash, type->as.struct_.field_count);
 
-        for (s32 i = 0; i < type->data.struct_.field_count; i++) {
-            char* name = type->data.struct_.fields[i].name;
+        for (s32 i = 0; i < type->as.struct_.field_count; i++) {
+            char* name = type->as.struct_.fields[i].name;
             s32 length = strlen(name);
             for (s32 i = 0; i < length; i++) {
                 ADD_HASH(hash, name[i]);
             }
             
-            ADD_HASH(hash, (u64)(type->data.struct_.fields[i].type.i));
+            ADD_HASH(hash, (u64)(type->as.struct_.fields[i].type.i));
         }
     } else if (type->kind == TYPE_POINTER) {
-        ADD_HASH(hash, (u64)(type->data.pointer.type.i));
+        ADD_HASH(hash, (u64)(type->as.ptr.type.i));
     }
 
     return hash;
@@ -283,8 +288,9 @@ implement_table(type2u64, typedata_t*, type_t, hash_type, type_equal);
 type_t type_set_fetch_pointer(type_table_t* set, type_t inner_type) {
     typedata_t pointer_type = {
         .kind = TYPE_POINTER,
-        .data.pointer.type = inner_type,
-        .size = sizeof(void*)
+        .as.ptr.type = inner_type,
+        .size = sizeof(void*),
+        .capabilities = TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE
     };
 
     type_t type;
@@ -301,8 +307,8 @@ type_t type_set_fetch_pointer(type_table_t* set, type_t inner_type) {
 type_t type_set_fetch_function(type_table_t *set, type_t return_type, types_t arguments) {
     typedata_t function_type = {
         .kind = TYPE_FUNCTION,
-        .data.function.argument_types = arguments,
-        .data.function.return_type = return_type,
+        .as.function.argument_types = arguments,
+        .as.function.return_type = return_type,
         .size = sizeof(void*),
     };
 
@@ -336,11 +342,11 @@ type_t type_set_fetch_intrinsic_function(type_table_t *set, type_t function_type
 type_t type_set_fetch_anonymous_struct(type_table_t *set, s32 field_count, struct_field_t *fields, s32 constant_count, struct_constant_t* constants) {
     typedata_t struct_type = {
         .kind = TYPE_STRUCT,
-        .data.struct_.field_count = field_count,
-        .data.struct_.fields = fields,
+        .as.struct_.field_count = field_count,
+        .as.struct_.fields = fields,
 
-        .data.struct_.constant_count = constant_count,
-        .data.struct_.constants = constants,
+        .as.struct_.constant_count = constant_count,
+        .as.struct_.constants = constants,
 
         .size = 0,
     };
@@ -365,20 +371,20 @@ type_t type_set_fetch_anonymous_struct(type_table_t *set, s32 field_count, struc
     // it should be impossible for sizing to be infinitely recursive because the types should have resolved
     // properly for this struct type to be created
     if (field_count > 0) {
-        type_info->data.struct_.fields[0].offset = 0;
+        type_info->as.struct_.fields[0].offset = 0;
         for (s32 i = 1; i < field_count; ++i) {
-            s32 previous_offset = type_info->data.struct_.fields[i - 1].offset;
+            s32 previous_offset = type_info->as.struct_.fields[i - 1].offset;
             type_t previous_type = fields[i - 1].type;
             typedata_t *previous_type_info = type2typedata(&set->types, previous_type);
 
             s32 bytes = b2w(previous_type_info->size) * WORD_SIZE;
-            type_info->data.struct_.fields[i].offset = previous_offset + bytes;
+            type_info->as.struct_.fields[i].offset = previous_offset + bytes;
         }
 
-        type_t field_type= type_info->data.struct_.fields[field_count-1].type;
+        type_t field_type= type_info->as.struct_.fields[field_count-1].type;
         typedata_t *field_type_info = type2typedata(&set->types, field_type);
         s32 size_of_final = b2w(field_type_info->size) * WORD_SIZE;
-        s32 total_size = type_info->data.struct_.fields[field_count - 1].offset + size_of_final;
+        s32 total_size = type_info->as.struct_.fields[field_count - 1].offset + size_of_final;
 
         type_info->size = total_size;
     }
@@ -387,13 +393,13 @@ type_t type_set_fetch_anonymous_struct(type_table_t *set, s32 field_count, struc
 }
 
 type_t type_create_struct(type_table_t *set, cstr_t name, s32 name_length, typedata_t *anonymous_struct) {
-    ASSERT(anonymous_struct->kind == TYPE_STRUCT && anonymous_struct->data.struct_.name == NULL, "can only create struct from anonymous struct");
+    ASSERT(anonymous_struct->kind == TYPE_STRUCT && anonymous_struct->as.struct_.name == NULL, "can only create struct from anonymous struct");
 
-    if (anonymous_struct->data.struct_.constant_count == 0) {
+    if (anonymous_struct->as.struct_.constant_count == 0) {
         typedata_t *new_type_info = type_copy_new(set, anonymous_struct);
-        new_type_info->data.struct_.name = ALLOC_N(char, name_length + 1);
-        memcpy(new_type_info->data.struct_.name, name, name_length);
-        new_type_info->data.struct_.name[name_length] = '\0';
+        new_type_info->as.struct_.name = ALLOC_N(char, name_length + 1);
+        memcpy(new_type_info->as.struct_.name, name, name_length);
+        new_type_info->as.struct_.name[name_length] = '\0';
 
         array_push(&set->types, new_type_info);
         type_t new_type = typeid(set->types.count-1);
@@ -428,11 +434,11 @@ void named_struct_copy_data_from_completed_struct_type(type_table_t *set, type_t
 
     typedata_t *copied_type = type_copy_new(NULL, complete_anonymous_struct);
 
-    incomplete_named_struct->data.struct_.field_count = copied_type->data.struct_.field_count;
-    incomplete_named_struct->data.struct_.fields = copied_type->data.struct_.fields;
+    incomplete_named_struct->as.struct_.field_count = copied_type->as.struct_.field_count;
+    incomplete_named_struct->as.struct_.fields = copied_type->as.struct_.fields;
 
-    incomplete_named_struct->data.struct_.constant_count = copied_type->data.struct_.constant_count;
-    incomplete_named_struct->data.struct_.constants = copied_type->data.struct_.constants;
+    incomplete_named_struct->as.struct_.constant_count = copied_type->as.struct_.constant_count;
+    incomplete_named_struct->as.struct_.constants = copied_type->as.struct_.constants;
 
     incomplete_named_struct->size = copied_type->size;
 }

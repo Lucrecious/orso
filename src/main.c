@@ -456,17 +456,23 @@ void debug_expr_file(string_t expr_file, arena_t *arena) {
 }
 
 void ast_expr_file(string_t expr_file, arena_t *arena) {
-    UNUSED(arena);
-
     ast_t ast = {0};
     ast_init(&ast);
+
+    vm_t vm = {0};
+    make_test_env(&ast, &vm, arena);
 
     ast_node_t *expr;
     unless (parse_expr_file(&ast, expr_file, NULL, &expr)) {
         nob_log(ERROR, "could not parse: %s", expr_file.cstr);
     }
 
+    printf("modules = \n");
     ast_print(&ast, expr_file.cstr);
+    printf("\n");
+
+    printf("expr = \n");
+    ast_print_node(&ast, expr);
 }
 
 int main(int argc, char **argv) {

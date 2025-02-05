@@ -252,6 +252,7 @@ typedef struct ast_t {
     table_t(type2ns) *type_to_creation_node;
 } ast_t;
 
+void ast_print_node(ast_t *ast, ast_node_t *node);
 void ast_print(ast_t *ast, const char *name);
 
 bool parse_string_to_module(ast_t *ast, ast_node_t *module, string_t filepath, string_t source, error_function_t error_fn);
@@ -265,6 +266,7 @@ ast_node_t* ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start);
 ast_node_t *ast_nil(ast_t *ast, type_t value_type, token_t token_location);
 ast_node_t *ast_def_value(ast_t *ast, token_t identifer);
 ast_node_t *ast_cast(ast_t *ast, ast_node_t *expr_type, ast_node_t *expr);
+ast_node_t *ast_inferred_type(ast_t *ast, token_t identifer);
 ast_node_t *ast_begin_module(ast_t *ast);
 void ast_end_module(ast_node_t *module);
 void ast_add_module(ast_t *ast, ast_node_t *module, string_t moduleid);

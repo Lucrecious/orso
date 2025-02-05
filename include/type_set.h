@@ -36,6 +36,8 @@ struct type_table_t {
     type_t uint_;
     type_t size_t_;
 
+    type_t ptrdiff_t_;
+
     type_t string_;
     type_t symbol_;
     type_t type_;

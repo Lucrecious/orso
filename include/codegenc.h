@@ -163,7 +163,7 @@ static bool cgen_binary_is_macro(token_type_t type, typedata_t *optd, cstr_t *op
         case TYPE_NUMBER: {
             switch ((num_size_t)optd->size) {
             case NUM_SIZE_8: {
-                switch (optd->data.num) {
+                switch (optd->as.num) {
                 case NUM_TYPE_SIGNED: case_block(s8); break;
                 case NUM_TYPE_UNSIGNED: case_block(u8); break;
                 default: UNREACHABLE(); break;
@@ -172,7 +172,7 @@ static bool cgen_binary_is_macro(token_type_t type, typedata_t *optd, cstr_t *op
             }
 
             case NUM_SIZE_16: {
-                switch (optd->data.num) {
+                switch (optd->as.num) {
                 case NUM_TYPE_SIGNED: case_block(s16); break;
                 case NUM_TYPE_UNSIGNED: case_block(u16); break;
                 default: UNREACHABLE(); break;
@@ -181,7 +181,7 @@ static bool cgen_binary_is_macro(token_type_t type, typedata_t *optd, cstr_t *op
             }
 
             case NUM_SIZE_32: {
-                switch (optd->data.num) {
+                switch (optd->as.num) {
                 case NUM_TYPE_SIGNED: case_block(s32); break;
                 case NUM_TYPE_UNSIGNED: case_block(u32); break;
                 case NUM_TYPE_FLOAT: case_block(f); break;
@@ -190,7 +190,7 @@ static bool cgen_binary_is_macro(token_type_t type, typedata_t *optd, cstr_t *op
             }
 
             case NUM_SIZE_64: {
-                switch (optd->data.num) {
+                switch (optd->as.num) {
                 case NUM_TYPE_SIGNED: case_block(s64); break;
                 case NUM_TYPE_UNSIGNED: case_block(u64); break;
                 case NUM_TYPE_FLOAT: case_block(d); break;
@@ -306,7 +306,7 @@ static void cgen_constant(cgen_t *cgen, word_t word, typedata_t *typedata) {
             cstr_t numtype = cgen_typedata_name(typedata);
             switch ((num_size_t)typedata->size) {
                 case NUM_SIZE_8: {
-                    switch (typedata->data.num) {
+                    switch (typedata->as.num) {
                     case NUM_TYPE_FLOAT: UNREACHABLE(); break;
                     case NUM_TYPE_SIGNED: sb_add_format(&cgen->sb, "%s_(%"PRIi32")", numtype, (s32)word.as.s); break;
                     case NUM_TYPE_UNSIGNED: sb_add_format(&cgen->sb, "%s_(%"PRIu32")", numtype, (u32)word.as.u); break;
@@ -315,7 +315,7 @@ static void cgen_constant(cgen_t *cgen, word_t word, typedata_t *typedata) {
                 }
 
                 case NUM_SIZE_16: {
-                    switch (typedata->data.num) {
+                    switch (typedata->as.num) {
                     case NUM_TYPE_FLOAT: UNREACHABLE(); break;
                     case NUM_TYPE_SIGNED: sb_add_format(&cgen->sb, "%s_(%"PRIi32")", numtype, (s32)word.as.s); break;
                     case NUM_TYPE_UNSIGNED: sb_add_format(&cgen->sb, "%s_(%"PRIu32")", numtype, (u32)word.as.u); break;
@@ -324,7 +324,7 @@ static void cgen_constant(cgen_t *cgen, word_t word, typedata_t *typedata) {
                 }
 
                 case NUM_SIZE_32: {
-                    switch (typedata->data.num) {
+                    switch (typedata->as.num) {
                     case NUM_TYPE_FLOAT: sb_add_format(&cgen->sb, "%s_(%g)", numtype, (f32)word.as.d); break;
                     case NUM_TYPE_SIGNED: sb_add_format(&cgen->sb, "%s_(%"PRIi32")", numtype, (s32)word.as.s); break;
                     case NUM_TYPE_UNSIGNED: sb_add_format(&cgen->sb, "%s_(%"PRIu32")", numtype, (u32)word.as.u); break;
@@ -333,7 +333,7 @@ static void cgen_constant(cgen_t *cgen, word_t word, typedata_t *typedata) {
                 }
 
                 case NUM_SIZE_64: {
-                    switch (typedata->data.num) {
+                    switch (typedata->as.num) {
                         case NUM_TYPE_FLOAT: sb_add_format(&cgen->sb, "%lg", (f64)word.as.d); break;
                         case NUM_TYPE_SIGNED: {
                             if (word.as.s == INT64_MIN) {
@@ -1219,12 +1219,12 @@ void cgen_forward_declare_functions(cgen_t *cgen) {
     funcdata_t funcdata;
     kh_foreach_value(cgen->functions, funcdata, {
         typedata_t *td = type2typedata(&cgen->ast->type_set.types, funcdata.type);
-        type_t rettype = td->data.function.return_type;
+        type_t rettype = td->as.function.return_type;
         
         sb_add_format(&cgen->sb, "%s %s(", cgen_type_name(cgen, rettype), funcdata.name);
         
-        for (size_t a = 0; a < td->data.function.argument_types.count; ++a) {
-            type_t argtype = td->data.function.argument_types.items[a];
+        for (size_t a = 0; a < td->as.function.argument_types.count; ++a) {
+            type_t argtype = td->as.function.argument_types.items[a];
             if (a != 0) {
                 sb_add_cstr(&cgen->sb, ", ");
             }
@@ -1240,7 +1240,7 @@ static void cgen_function_definitions(cgen_t *cgen, ast_node_t *node) {
         // <ret_type> <func_name>(<arg1_type> <arg1_name>, <arg2_type> <arg2_name>, ..., <argn_type> <argn_name>) {
         typedata_t *td = type2typedata(&cgen->ast->type_set.types, node->value_type);
 
-        typedata_t *rettd = type2typedata(&cgen->ast->type_set.types, td->data.function.return_type);
+        typedata_t *rettd = type2typedata(&cgen->ast->type_set.types, td->as.function.return_type);
 
         sb_add_format(&cgen->sb, "%s ", rettd->name.cstr);
 
@@ -1307,7 +1307,7 @@ static void cgen_generate_cnames_for_types(typedatas_t *tds, arena_t *arena) {
         case TYPE_TYPE: td->name = lit2str("type_t"); break;
         case TYPE_VOID: td->name = lit2str("void"); break;
         case TYPE_POINTER: {
-            typedata_t *innertd = type2typedata(tds, td->data.pointer.type);
+            typedata_t *innertd = type2typedata(tds, td->as.ptr.type);
             ASSERT(innertd->name.length != 0, "all dependendant types should be before this one by construction");
 
             string_t name = string_format("p_%s", arena, innertd->name.cstr);
@@ -1322,13 +1322,13 @@ static void cgen_generate_cnames_for_types(typedatas_t *tds, arena_t *arena) {
 
             sb_add_cstr(&sb, "fn_");
 
-            for (size_t i = 0; i < td->data.function.argument_types.count; ++i) {
-                type_t arg_type = td->data.function.argument_types.items[i];
+            for (size_t i = 0; i < td->as.function.argument_types.count; ++i) {
+                type_t arg_type = td->as.function.argument_types.items[i];
                 typedata_t *argtd = type2typedata(tds, arg_type);
                 sb_add_format(&sb, "%s_", argtd->name.cstr);
             }
 
-            type_t ret_type = td->data.function.return_type;
+            type_t ret_type = td->as.function.return_type;
             typedata_t *rettd = type2typedata(tds, ret_type);
 
             sb_add_format(&sb, "%s", rettd->name.cstr);
@@ -1355,7 +1355,7 @@ static void cgen_typedefs(cgen_t *cgen, typedatas_t *tds) {
         case TYPE_POINTER: {
             // typedef <inner_typename>* <typename>
 
-            typedata_t *innertd = type2typedata(tds, td->data.pointer.type);
+            typedata_t *innertd = type2typedata(tds, td->as.ptr.type);
             sb_add_format(&cgen->sb, "typedef %s* %s;\n", innertd->name.cstr, td->name.cstr);
             break;
         }
@@ -1364,11 +1364,11 @@ static void cgen_typedefs(cgen_t *cgen, typedatas_t *tds) {
             // typedef <ret_type>(*<type_name>)(<arg1_type>,<arg2_type>, ...,<argn_type>);
 
             sb_add_cstr(&cgen->sb, "typedef ");
-            typedata_t *rettd = type2typedata(tds, td->data.function.return_type);
+            typedata_t *rettd = type2typedata(tds, td->as.function.return_type);
             sb_add_format(&cgen->sb, "%s(*%s)(", rettd->name.cstr, td->name.cstr);
 
-            for (size_t i = 0; i < td->data.function.argument_types.count; ++i) {
-                type_t arg_type = td->data.function.argument_types.items[i];
+            for (size_t i = 0; i < td->as.function.argument_types.count; ++i) {
+                type_t arg_type = td->as.function.argument_types.items[i];
                 typedata_t *argtd = type2typedata(tds, arg_type);
 
                 if (i != 0) {

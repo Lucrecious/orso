@@ -1,5 +1,6 @@
 #include "intrinsics.h"
 #include "core.h"
+#include <stdio.h>
 
 #if defined(_WIN32) || defined(_WIN64)
 #include <windows.h>
@@ -46,6 +47,14 @@ bool_ odlmfree(void *addr, size_t size) {
 size_t odlmpagesize(void) {
     size_t pagesize = (size_t)getpagesize();
     return pagesize;
+}
+
+int odlreadint(void) {
+    int num;
+    if (scanf("%d", &num) != 1) {
+        return 0;
+    }
+    return num;
 }
 
 #endif

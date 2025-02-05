@@ -91,10 +91,6 @@ struct typedata_t {
         num_type_t num;
 
         struct {
-            types_t types;
-        } union_;
-
-        struct {
             type_t return_type;
             types_t argument_types;
         } function;
@@ -112,8 +108,8 @@ struct typedata_t {
 
         struct {
             type_t type;
-        } pointer;
-    } data;
+        } ptr;
+    } as;
 };
 
 #define TYPE_IS_VOID(TYPE) ((TYPE).i == TYPE_VOID)

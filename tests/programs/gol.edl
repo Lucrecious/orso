@@ -1,0 +1,6 @@
+{
+    width := readint();
+    height := readint();
+
+    width * height;
+}

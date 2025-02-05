@@ -344,6 +344,11 @@ ast_node_t *ast_cast(ast_t *ast, ast_node_t *type_expr, ast_node_t *expr) {
     return cast_;
 }
 
+ast_node_t *ast_inferred_type(ast_t *ast, token_t identifer) {
+    ast_node_t *n = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_INFERRED_TYPE, identifer);
+    return n;
+}
+
 static ast_node_t *ast_primaryu(ast_t *ast, u64 value, type_t type, token_t token) {
     if (TYPE_IS_UNRESOLVED(type)) {
         if (value < UINT_MAX) {
@@ -690,6 +695,8 @@ static ast_node_t *parse_number(parser_t *parser) {
                 type = parser->ast->type_set.u64_;
             } else if (sv_ends_with(numsv, "sz")) {
                 type = parser->ast->type_set.size_t_;
+            } else if (sv_ends_with(numsv, "pd")) {
+                type = parser->ast->type_set.ptrdiff_t_;
             } else {
                 is_free_number = true;
             }
@@ -697,7 +704,7 @@ static ast_node_t *parse_number(parser_t *parser) {
             bool do_signed = true;
             unless (TYPE_IS_UNRESOLVED(type)) {
                 typedata_t *td = type2typedata(&parser->ast->type_set.types, type);
-                do_signed = (td->data.num == NUM_TYPE_SIGNED);
+                do_signed = (td->as.num == NUM_TYPE_SIGNED);
 
                 switch((num_size_t)td->size) {
                 case NUM_SIZE_8: {
@@ -1499,10 +1506,6 @@ static ast_node_t *ast_decldef(parser_t *parser, token_t identifier, ast_node_t 
 
     return definition_node;
 }
-static ast_node_t *ast_inferred_type(ast_t *ast, token_t identifer) {
-    ast_node_t *n = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_INFERRED_TYPE, identifer);
-    return n;
-}
 
 
 static ast_node_t *parse_decl_def(parser_t *parser) {
@@ -1663,7 +1666,7 @@ ast_node_val_t zero_value(ast_t *ast, type_t type) {
         case TYPE_BOOL: value = WORDI(0); break;
         
         case TYPE_NUMBER: {
-            switch (type_info->data.num) {
+            switch (type_info->as.num) {
                 case NUM_TYPE_SIGNED:
                 case NUM_TYPE_UNSIGNED: value = WORDI(0); break;
                 case NUM_TYPE_FLOAT: value = WORDD(0); break;
@@ -2009,8 +2012,12 @@ static void ast_print_ast_node(typedatas_t types, ast_node_t *node, u32 level) {
     allocator_return(tmp);
 }
 
+void ast_print_node(ast_t *ast, ast_node_t *node) {
+    ast_print_ast_node(ast->type_set.types, node, 0);
+}
+
 void ast_print(ast_t* ast, const char* name) {
-    printf("=== %s ===\n", name);
+    UNUSED(name);
 
     ast_node_t *module;
     kh_foreach_value(ast->moduleid2node, module, {

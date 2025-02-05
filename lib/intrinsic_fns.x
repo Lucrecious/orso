@@ -39,3 +39,8 @@ X(mpagesize, odlmpagesize, size_t, {
     UNUSED(args);
     XRET(bool_, odlmpagesize);
 }, void)
+
+X(readint, odlreadint, int, {
+    UNUSED(args);
+    XRET(int, odlreadint);
+}, void)

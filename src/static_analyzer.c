@@ -106,6 +106,7 @@ if (sv_eq(identifier, lit2sv(#TYPE_STRING))) {\
     RETURN_IF_TYPE(identifier, int, t->int_)
     RETURN_IF_TYPE(identifier, uint, t->uint_)
     RETURN_IF_TYPE(identifier, size_t, t->size_t_)
+    RETURN_IF_TYPE(identifier, ptrdiff_t, t->ptrdiff_t_)
 
 #undef RETURN_IF_TYPE
 
@@ -135,13 +136,13 @@ static bool check_call_on_func(analyzer_t *analyzer, ast_t *ast, ast_node_t *cal
     size_t arg_end = an_call_arg_end(call);
 
     bool errored = false;
-    if (func_td->data.function.argument_types.count != (arg_end - arg_start)) {
+    if (func_td->as.function.argument_types.count != (arg_end - arg_start)) {
         errored = true;
         stan_error(analyzer, make_error_node(ERROR_ANALYSIS_NUMBER_ARGS_CALL_FUNC_MISTMATCH, call));
     }
 
-    for (size_t i = 0; i < func_td->data.function.argument_types.count; ++i) {
-        type_t parameter_type = func_td->data.function.argument_types.items[i];
+    for (size_t i = 0; i < func_td->as.function.argument_types.count; ++i) {
+        type_t parameter_type = func_td->as.function.argument_types.items[i];
 
         ast_node_t *arg = call->children.items[arg_start + i];
         type_t argument_type = arg->value_type;
@@ -363,7 +364,7 @@ word_t constant_fold_bin_arithmetic(ast_t *ast, token_type_t operator, type_t ty
 
     switch (numtype->kind) {
     case TYPE_NUMBER: {
-        switch (numtype->data.num) {
+        switch (numtype->as.num) {
         case NUM_TYPE_SIGNED: {
             s64 lhsi = l.as.s;
             s64 rhsi = r.as.s;
@@ -423,7 +424,7 @@ word_t constant_fold_bin_comparison(ast_t *ast, token_type_t operator, type_t ty
 
     switch (typedata->kind) {
     case TYPE_NUMBER: {
-        switch (typedata->data.num) {
+        switch (typedata->as.num) {
         case NUM_TYPE_SIGNED: {
             s64 lhsi = a.as.s;
             s64 rhsi = b.as.s;
@@ -490,8 +491,15 @@ static bool stan_can_cast(typedatas_t *types, type_t dst, type_t src) {
 
     if (srctd->kind == TYPE_NUMBER && dsttd->kind == TYPE_NUMBER) return true;
     if (srctd->kind == TYPE_POINTER && dsttd->kind == TYPE_POINTER) return true;
-    if (srctd->kind == TYPE_FUNCTION && dsttd->kind == TYPE_POINTER && TYPE_IS_VOID(dsttd->data.pointer.type)) return true;
-    if (srctd->kind == TYPE_POINTER && TYPE_IS_VOID(srctd->data.pointer.type) && dsttd->kind == TYPE_FUNCTION) return true;
+    if (srctd->kind == TYPE_FUNCTION && dsttd->kind == TYPE_POINTER && TYPE_IS_VOID(dsttd->as.ptr.type)) return true;
+    if (srctd->kind == TYPE_POINTER && TYPE_IS_VOID(srctd->as.ptr.type) && dsttd->kind == TYPE_FUNCTION) return true;
+
+    if (srctd->kind == TYPE_POINTER && dsttd->kind == TYPE_NUMBER &&
+            (dsttd->as.num == NUM_TYPE_SIGNED || dsttd->as.num == NUM_TYPE_UNSIGNED)) return true;
+
+    if (srctd->kind == TYPE_NUMBER && (srctd->as.num == NUM_TYPE_SIGNED || srctd->as.num == NUM_TYPE_UNSIGNED) &&
+            dsttd->kind == TYPE_POINTER) return true;
+
 
     return false;
 }
@@ -503,7 +511,7 @@ static word_t constant_fold_cast(ast_t *ast, word_t in, type_t dst, type_t src) 
 
     switch (desttd->kind) {
     case TYPE_NUMBER: {
-        #define CASTING(src_type, dst_type) (sourcetd->data.num == NUM_TYPE_##src_type && desttd->data.num == NUM_TYPE_##dst_type)
+        #define CASTING(src_type, dst_type) (sourcetd->as.num == NUM_TYPE_##src_type && desttd->as.num == NUM_TYPE_##dst_type)
         #define DSIZE(size_) (desttd->size == (size_/8))
         #define VALU (in.as.u)
         #define VALI (in.as.s)
@@ -573,6 +581,23 @@ static word_t constant_fold_cast(ast_t *ast, word_t in, type_t dst, type_t src) 
     }
 }
 
+static ast_node_t *ast_implicit_cast(ast_t *ast, ast_node_t *expr, type_t dst_type) {
+    ast_node_t *inferred_type = ast_inferred_type(ast, token_implicit_at_start(expr->start));
+    inferred_type->value_type = typeid(TYPE_TYPE);
+    inferred_type->expr_val = ast_node_val_word(WORDT(dst_type));
+
+    ast_node_t *cast = ast_cast(ast, inferred_type, expr);
+    cast->value_type = dst_type;
+
+    if (expr->expr_val.is_concrete) {
+        word_t result = constant_fold_cast(ast, expr->expr_val.word, dst_type, expr->value_type);
+        cast->expr_val = ast_node_val_word(result);
+        cast->is_free_number = expr->is_free_number;
+    }
+
+    return cast;
+}
+
 static ast_node_t *cast_implicitly_if_necessary(ast_t *ast, type_t destination_type, ast_node_t *expr) {
     ASSERT(TYPE_IS_RESOLVED(expr->value_type), "expression must be resolved already");
 
@@ -582,13 +607,13 @@ static ast_node_t *cast_implicitly_if_necessary(ast_t *ast, type_t destination_t
 
     typedata_t *destinationtd = type2td(ast, destination_type);
     typedata_t *exprtd = type2td(ast, expr->value_type);
-    
+
     // for now only numbers can be cast/promoted implicitly
     if (destinationtd->kind != TYPE_NUMBER) return expr;
     if (exprtd->kind != TYPE_NUMBER) return expr;
 
-    num_type_t dst_num = destinationtd->data.num;
-    num_type_t expr_num = exprtd->data.num;
+    num_type_t dst_num = destinationtd->as.num;
+    num_type_t expr_num = exprtd->as.num;
 
     // if we now what the value of the number we just implicitly cast it...
     if (expr->expr_val.is_concrete && expr->is_free_number) {
@@ -670,25 +695,13 @@ static ast_node_t *cast_implicitly_if_necessary(ast_t *ast, type_t destination_t
         }
     } else {
         // if not concrete then they need to be the same data type
-        if (exprtd->data.num != destinationtd->data.num) return expr;
+        if (exprtd->as.num != destinationtd->as.num) return expr;
 
         // cannot store a type in storage with a smaller size
         if (exprtd->size > destinationtd->size) return expr;
     }
 
-
-    ast_node_t *implicit_def_value = ast_def_value(ast, token_implicit_at_start(expr->start));
-    implicit_def_value->value_type = typeid(TYPE_TYPE);
-    implicit_def_value->expr_val = ast_node_val_word(WORDT(destination_type));
-
-    ast_node_t *cast = ast_cast(ast, implicit_def_value, expr);
-    cast->value_type = destination_type;
-
-    if (expr->expr_val.is_concrete) {
-        word_t result = constant_fold_cast(ast, expr->expr_val.word, destination_type, expr->value_type);
-        cast->expr_val = ast_node_val_word(result);
-        cast->is_free_number = expr->is_free_number;
-    }
+    ast_node_t *cast = ast_implicit_cast(ast, expr, destination_type);
 
     return cast;
 }
@@ -806,7 +819,7 @@ void resolve_expression(
 
             if (typedata->kind == TYPE_STRUCT) {
                 int arg_count = expr->as.initiailizer.arguments.count;
-                if (typedata->data.struct_.field_count < arg_count) {
+                if (typedata->as.struct_.field_count < arg_count) {
                     stan_error(analyzer, make_error_node(ERROR_ANALYSIS_TOO_MANY_STRUCT_ARGUMENTS, expr));
                     INVALIDATE(expr);
                     break;
@@ -822,8 +835,8 @@ void resolve_expression(
                         continue;
                     }
 
-                    if (i < typedata->data.struct_.field_count) {
-                        type_t field_type = typedata->data.struct_.fields[i].type;
+                    if (i < typedata->as.struct_.field_count) {
+                        type_t field_type = typedata->as.struct_.fields[i].type;
                         type_t arg_type = arg->value_type;
                         unless (typeid_eq(field_type, arg_type)) {
                             stan_error(analyzer, make_error_node(ERROR_ANALYSIS_TYPE_MISMATCH,  arg));
@@ -873,6 +886,19 @@ void resolve_expression(
             typedata_t *left_td = type2td(ast, left->value_type);
             typedata_t *right_td = type2td(ast, right->value_type);
 
+            #define td_is_s_or_u_int(td) ((td)->as.num == NUM_TYPE_SIGNED || (td)->as.num == NUM_TYPE_UNSIGNED)
+
+            if (right_td->kind == TYPE_POINTER && left_td->kind == TYPE_NUMBER && left->is_free_number && td_is_s_or_u_int(left_td)) {
+                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_NUMBER_MUST_BE_ON_RHS_FOR_POINTER_ARITHMETIC, expr));
+                INVALIDATE(expr);
+            }
+
+            if (left_td->kind == TYPE_POINTER && right_td->kind == TYPE_NUMBER && right->is_free_number && td_is_s_or_u_int(right_td)) {
+                an_rhs(expr) = (right = cast_implicitly_if_necessary(ast, ast->type_set.ptrdiff_t_, right));
+            }
+
+            #undef td_is_s_or_u_int
+
             if (operator_is_arithmetic(expr->operator.type)) {
                 unless (left_td->capabilities&TYPE_CAP_ARITHMETIC) {
                     stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_ARITHMETIC_OPERAND_TYPES, left));
@@ -885,17 +911,40 @@ void resolve_expression(
                     break;
                 }
 
-                unless (typeid_eq(left->value_type, right->value_type)) {
-                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_ARITHMETIC_OPERANDS_REQUIRES_EXPLICIT_CAST, expr));
-                    INVALIDATE(expr);
-                    break;
-                }
+                if (left_td->kind == TYPE_POINTER && typeid_eq(ast->type_set.ptrdiff_t_, right->value_type)) {
+                    
+                    if (expr->operator.type != TOKEN_PLUS && expr->operator.type != TOKEN_MINUS) {
+                        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_ONLY_ADD_AND_SUB_ARE_VALID_IN_PTR_ARITHMEIC, expr));
+                        INVALIDATE(expr);
+                    } else {
+                        if (expr->operator.type == TOKEN_PLUS && right_td->kind == TYPE_POINTER) {
+                            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CANNOT_ADD_POINTERS, expr));
+                            INVALIDATE(expr);
+                        } else {
+                            // if right is pointer then its a difference, so type is ptrdiff
+                            // if its not a pointer, then it must be a ptrdiff, and the produces a ptr type
+                            expr->value_type = right_td->kind == TYPE_POINTER ? ast->type_set.ptrdiff_t_ : left->value_type;
+                        }
+                    }
 
-                expr->value_type = left->value_type;
-                if (left->expr_val.is_concrete && right->expr_val.is_concrete) {
-                    word_t word = constant_fold_bin_arithmetic(ast, expr->operator.type, left->value_type, left->expr_val.word, right->expr_val.word);
-                    expr->expr_val = ast_node_val_word(word);
-                    expr->is_free_number = left->is_free_number && right->is_free_number;
+                } else {
+                    unless (typeid_eq(left->value_type, right->value_type)) {
+                        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_ARITHMETIC_OPERANDS_REQUIRES_EXPLICIT_CAST, expr));
+                        INVALIDATE(expr);
+                        break;
+                    }
+
+                    if (right_td->kind == TYPE_POINTER && expr->operator.type != TOKEN_MINUS) {
+                        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CANNOT_ADD_POINTERS, expr));
+                        INVALIDATE(expr);
+                    } else {
+                        expr->value_type = left->value_type;
+                        if (left->expr_val.is_concrete && right->expr_val.is_concrete) {
+                            word_t word = constant_fold_bin_arithmetic(ast, expr->operator.type, left->value_type, left->expr_val.word, right->expr_val.word);
+                            expr->expr_val = ast_node_val_word(word);
+                            expr->is_free_number = left->is_free_number && right->is_free_number;
+                        }
+                    }
                 }
             } else if (operator_is_equating(expr->operator.type)) {
                 // everything is equatable but they need to be the same type
@@ -1048,13 +1097,13 @@ void resolve_expression(
                         break;
                     }
 
-                    if (TYPE_IS_VOID(operand_td->data.pointer.type)) {
+                    if (TYPE_IS_VOID(operand_td->as.ptr.type)) {
                         stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CANNOT_DEREFERENCE_VOIDPTR, expr));
                         INVALIDATE(expr);
                         break;
                     }
 
-                    expr->value_type = operand_td->data.pointer.type;
+                    expr->value_type = operand_td->as.ptr.type;
                     expr->lvalue_node = expr;
                     break;
                 }
@@ -1083,7 +1132,7 @@ void resolve_expression(
                         break;
                     }
 
-                    if (operand_td->data.num == NUM_TYPE_UNSIGNED) {
+                    if (operand_td->as.num == NUM_TYPE_UNSIGNED) {
                         stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CANNOT_NEGATE_UNSIGNED_NUMBER, expr));
                         INVALIDATE(expr);
                         break;
@@ -1094,7 +1143,7 @@ void resolve_expression(
 
                     // constant fold
                     if (an_operand(expr)->expr_val.is_concrete) {
-                        switch (operand_td->data.num) {
+                        switch (operand_td->as.num) {
                         case NUM_TYPE_SIGNED: {
                             s64 val = operand->expr_val.word.as.s;
                             val = -val;
@@ -1439,7 +1488,7 @@ void resolve_expression(
             }
 
             typedata_t *callee_td = ast->type_set.types.items[callee_type.i];
-            expr->value_type = callee_td->data.function.return_type;
+            expr->value_type = callee_td->as.function.return_type;
             break;
         }
 
@@ -1628,7 +1677,7 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
         // This must be available at compile time
         type_t struct_type = declaration->expr_val.word.as.t;
         typedata_t *struct_type_info = ast->type_set.types.items[struct_type.i];
-        unless (struct_type_is_incomplete(struct_type_info) && struct_type_info->data.struct_.name) {
+        unless (struct_type_is_incomplete(struct_type_info) && struct_type_info->as.struct_.name) {
             return;
         }
 
@@ -2125,8 +2174,8 @@ static void resolve_struct_definition(analyzer_t *analyzer, ast_t *ast, analysis
     complete_struct_type_info = ast->type_set.types.items[complete_struct_type.i];
 
     s32 incomplete_index = -1;
-    for (s32 i = 0; i < complete_struct_type_info->data.struct_.field_count; i++) {
-        type_t field_type = complete_struct_type_info->data.struct_.fields[i].type;
+    for (s32 i = 0; i < complete_struct_type_info->as.struct_.field_count; i++) {
+        type_t field_type = complete_struct_type_info->as.struct_.fields[i].type;
         typedata_t *field_type_info = ast->type_set.types.items[field_type.i];
         if (struct_type_is_incomplete(field_type_info)) {
             incomplete_index = i;
@@ -2137,7 +2186,7 @@ static void resolve_struct_definition(analyzer_t *analyzer, ast_t *ast, analysis
     if (incomplete_index < 0) {
         struct_definition->value_type = complete_struct_type;
 
-        ASSERT(complete_struct_type_info->data.struct_.field_count == field_count, "completed struct must have the same number as fields as ast field declaration nodes");
+        ASSERT(complete_struct_type_info->as.struct_.field_count == field_count, "completed struct must have the same number as fields as ast field declaration nodes");
 
         u64 size_in_slots = b2w(complete_struct_type_info->size);
         byte struct_data[size_in_slots * sizeof(word_t)];

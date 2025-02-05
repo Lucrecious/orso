@@ -1,22 +1,38 @@
 {
-    // mem_size :: 1024sz;
+    mem_size :: 1024sz;
 
-    // mem := &int << mreserve(mem_size);
-    // mmarkrw(&void << mem, mem_size);
-    // *mem = 10;
+    mem := &int << mreserve(mem_size);
+    mmarkrw(&void << mem, mem_size);
+    *mem = 10;
 
-    // x := *mem;
+    *(mem + 1) = 20;
+
+    x := *mem;
+    y := *(mem + 1);
     
-    // mfree(&void << mem, mem_size);
+    mfree(&void << mem, mem_size);
 
-    // x;
-
-    t := clock_ns();
-    c := 0;
-    while c < 1_000_000 do c = c + 1;
-
-    ns2sec(clock_ns() - t);
+    x + y;
 }
+
+// print :: (@vargs args: &[]any) {}
+
+// value2str :: (v: ?i_t) -> str8_t {
+//     return case_of i_t is {
+//         int     do i2s(v);
+//         f32     do f2s(v);
+//         str8_t  do v;
+//         foo_t   do foo2str;{
+//         _ {
+
+//         };
+//     };
+// };
+
+// value2str :: (v: ?i_t) -> str8_t @overload { i2s; f2s; s2s; foo2str; };
+
+
+
 // {
 //     count :: 10;
 

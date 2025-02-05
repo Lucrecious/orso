@@ -95,7 +95,7 @@ static void emit_read_memory_to_reg(texloc_t location, function_t *function, reg
         case TYPE_NUMBER: {
             switch ((num_size_t)type_info->size) {
                 case NUM_SIZE_8: {
-                    switch (type_info->data.num) {
+                    switch (type_info->as.num) {
                         case NUM_TYPE_FLOAT: UNREACHABLE(); break;
                         case NUM_TYPE_SIGNED:
                         case NUM_TYPE_UNSIGNED: instruction.op = OP_MOVU8_MEM_TO_REG; break;
@@ -104,7 +104,7 @@ static void emit_read_memory_to_reg(texloc_t location, function_t *function, reg
                 }
 
                 case NUM_SIZE_16: {
-                    switch (type_info->data.num) {
+                    switch (type_info->as.num) {
                         case NUM_TYPE_FLOAT: UNREACHABLE(); break;
                         case NUM_TYPE_SIGNED:
                         case NUM_TYPE_UNSIGNED: instruction.op = OP_MOVU16_MEM_TO_REG; break;
@@ -113,7 +113,7 @@ static void emit_read_memory_to_reg(texloc_t location, function_t *function, reg
                 }
 
                 case NUM_SIZE_32: {
-                    switch (type_info->data.num) {
+                    switch (type_info->as.num) {
                         case NUM_TYPE_FLOAT: instruction.op = OP_MOVF32_MEM_TO_REG; break;
                         case NUM_TYPE_SIGNED:
                         case NUM_TYPE_UNSIGNED: instruction.op = OP_MOVU32_MEM_TO_REG; break;
@@ -207,7 +207,7 @@ static void emit_mov_reg_to_reg(gen_t *gen, function_t *function, texloc_t loc, 
 
     switch (td->kind) {
     case TYPE_NUMBER: {
-        switch (td->data.num) {
+        switch (td->as.num) {
         case NUM_TYPE_SIGNED:
         case NUM_TYPE_UNSIGNED: {
             switch ((num_size_t)td->size) {
@@ -328,7 +328,7 @@ static void emit_bin_op(texloc_t loc, function_t *function, token_type_t token_t
     case TYPE_NUMBER: {
         switch (token_type) {
             case TOKEN_PLUS: {
-                switch (type_info->data.num) {
+                switch (type_info->as.num) {
                     case NUM_TYPE_FLOAT: instruction.op = OP_ADDD_REG_REG; break;
                     case NUM_TYPE_SIGNED: instruction.op = OP_ADDI_REG_REG; break;
                     case NUM_TYPE_UNSIGNED: instruction.op = OP_ADDU_REG_REG; break;
@@ -337,7 +337,7 @@ static void emit_bin_op(texloc_t loc, function_t *function, token_type_t token_t
             }
 
             case TOKEN_MINUS: {
-                switch (type_info->data.num) {
+                switch (type_info->as.num) {
                     case NUM_TYPE_FLOAT: instruction.op = OP_SUBD_REG_REG; break;
                     case NUM_TYPE_SIGNED: instruction.op = OP_SUBI_REG_REG; break;
                     case NUM_TYPE_UNSIGNED: instruction.op = OP_SUBU_REG_REG; break;
@@ -346,7 +346,7 @@ static void emit_bin_op(texloc_t loc, function_t *function, token_type_t token_t
             }
 
             case TOKEN_STAR: {
-                switch (type_info->data.num) {
+                switch (type_info->as.num) {
                     case NUM_TYPE_FLOAT: instruction.op = OP_MULD_REG_REG; break;
                     case NUM_TYPE_SIGNED: instruction.op = OP_MULI_REG_REG; break;
                     case NUM_TYPE_UNSIGNED: instruction.op = OP_MULU_REG_REG; break;
@@ -355,7 +355,7 @@ static void emit_bin_op(texloc_t loc, function_t *function, token_type_t token_t
             }
             
             case TOKEN_SLASH: {
-                switch (type_info->data.num) {
+                switch (type_info->as.num) {
                     case NUM_TYPE_FLOAT: instruction.op = OP_DIVD_REG_REG; break;
                     case NUM_TYPE_SIGNED: instruction.op = OP_DIVI_REG_REG; break;
                     case NUM_TYPE_UNSIGNED: instruction.op = OP_DIVU_REG_REG; break;
@@ -364,7 +364,7 @@ static void emit_bin_op(texloc_t loc, function_t *function, token_type_t token_t
             }
 
             case TOKEN_PERCENT: {
-                switch (type_info->data.num) {
+                switch (type_info->as.num) {
                     case NUM_TYPE_FLOAT: instruction.op = OP_MODD_REG_REG; break;
                     case NUM_TYPE_SIGNED: instruction.op = OP_MODI_REG_REG; break;
                     case NUM_TYPE_UNSIGNED: instruction.op = OP_MODU_REG_REG; break;
@@ -373,7 +373,7 @@ static void emit_bin_op(texloc_t loc, function_t *function, token_type_t token_t
             }
 
             case TOKEN_PERCENT_PERCENT: {
-                switch (type_info->data.num) {
+                switch (type_info->as.num) {
                     case NUM_TYPE_FLOAT: instruction.op = OP_REMD_REG_REG; break;
                     case NUM_TYPE_SIGNED: instruction.op = OP_REMI_REG_REG; break;
                     case NUM_TYPE_UNSIGNED: instruction.op = OP_REMU_REG_REG; break;
@@ -382,7 +382,7 @@ static void emit_bin_op(texloc_t loc, function_t *function, token_type_t token_t
             }
 
             case TOKEN_GREATER: {
-                switch (type_info->data.num) {
+                switch (type_info->as.num) {
                     case NUM_TYPE_FLOAT: instruction.op = OP_GTD_REG_REG; break;
                     case NUM_TYPE_SIGNED: instruction.op = OP_GTI_REG_REG; break;
                     case NUM_TYPE_UNSIGNED: instruction.op = OP_GTU_REG_REG; break;
@@ -391,7 +391,7 @@ static void emit_bin_op(texloc_t loc, function_t *function, token_type_t token_t
             }
 
             case TOKEN_GREATER_EQUAL: {
-                switch (type_info->data.num) {
+                switch (type_info->as.num) {
                     case NUM_TYPE_FLOAT: instruction.op = OP_GED_REG_REG; break;
                     case NUM_TYPE_SIGNED: instruction.op = OP_GEI_REG_REG; break;
                     case NUM_TYPE_UNSIGNED: instruction.op = OP_GEU_REG_REG; break;
@@ -400,7 +400,7 @@ static void emit_bin_op(texloc_t loc, function_t *function, token_type_t token_t
             }
 
             case TOKEN_LESS:{
-                switch (type_info->data.num) {
+                switch (type_info->as.num) {
                     case NUM_TYPE_FLOAT: instruction.op = OP_LTD_REG_REG; break;
                     case NUM_TYPE_SIGNED: instruction.op = OP_LTI_REG_REG; break;
                     case NUM_TYPE_UNSIGNED: instruction.op = OP_LTU_REG_REG; break;
@@ -409,7 +409,7 @@ static void emit_bin_op(texloc_t loc, function_t *function, token_type_t token_t
             }
 
             case TOKEN_LESS_EQUAL: {
-                switch (type_info->data.num) {
+                switch (type_info->as.num) {
                     case NUM_TYPE_FLOAT: instruction.op = OP_LED_REG_REG; break;
                     case NUM_TYPE_SIGNED: instruction.op = OP_LEI_REG_REG; break;
                     case NUM_TYPE_UNSIGNED: instruction.op = OP_LEU_REG_REG; break;
@@ -418,7 +418,7 @@ static void emit_bin_op(texloc_t loc, function_t *function, token_type_t token_t
             }
 
             case TOKEN_EQUAL_EQUAL: {
-                switch (type_info->data.num) {
+                switch (type_info->as.num) {
                     case NUM_TYPE_FLOAT: instruction.op = OP_EQD_REG_REG; break;
                     case NUM_TYPE_SIGNED: instruction.op = OP_EQI_REG_REG; break;
                     case NUM_TYPE_UNSIGNED: instruction.op = OP_EQU_REG_REG; break;
@@ -427,7 +427,7 @@ static void emit_bin_op(texloc_t loc, function_t *function, token_type_t token_t
             }
 
             case TOKEN_BANG_EQUAL: {
-                switch (type_info->data.num) {
+                switch (type_info->as.num) {
                     case NUM_TYPE_FLOAT: instruction.op = OP_NQD_REG_REG; break;
                     case NUM_TYPE_SIGNED: instruction.op = OP_NQI_REG_REG; break;
                     case NUM_TYPE_UNSIGNED: instruction.op = OP_NQU_REG_REG; break;
@@ -477,7 +477,7 @@ static void emit_unary(gen_t *gen, texloc_t loc, function_t *function, token_typ
 
             switch (type_info->kind) {
                 case TYPE_NUMBER: {
-                    switch (type_info->data.num) {
+                    switch (type_info->as.num) {
                         case NUM_TYPE_FLOAT: in.op = OP_NEGATED; break;
                         case NUM_TYPE_SIGNED: in.op = OP_NEGATEI; break;
                         case NUM_TYPE_UNSIGNED: UNREACHABLE(); break;
@@ -561,6 +561,23 @@ static void gen_patch_jmp(gen_t *gen, function_t *function, size_t index) {
     instruction->as.jmp.amount = (u32)amount;
 }
 
+static size_t add_constant(function_t *function, void *data, size_t size) {
+    size_t index = memarr_push(function->memory, data, size);
+    return index;
+}
+
+static void gen_constant(gen_t *gen, texloc_t location, function_t *function, void *data, type_t type) {
+    typedata_t *td = type2typedata(&gen->ast->type_set.types, type);
+
+    size_t value_index = add_constant(function, data, td->size);
+
+    if (td->size <= WORD_SIZE) {
+        emit_read_memory_to_reg(location, function, REG_RESULT, value_index, td);
+    } else {
+        ASSERT(false, "todo");
+    }
+}
+
 static void gen_binary(gen_t *gen, function_t *function, ast_node_t *binary) {
     token_type_t op = binary->operator.type;
     if (operator_is_arithmetic(op) || operator_is_comparing(op) || operator_is_equating(op)) {
@@ -572,11 +589,35 @@ static void gen_binary(gen_t *gen, function_t *function, ast_node_t *binary) {
         ast_node_t *rhs = an_rhs(binary);
         gen_expression(gen, function, rhs);
 
+        typedata_t *lhstd = type2typedata(&gen->ast->type_set.types, lhs->value_type);
+        typedata_t *rhstd = type2typedata(&gen->ast->type_set.types, rhs->value_type);
+        typedata_t *optd = lhstd;
+        {
+            if (lhstd->kind == TYPE_POINTER || rhstd->kind == TYPE_POINTER) {
+                optd = type2typedata(&gen->ast->type_set.types, gen->ast->type_set.u64_);
+            }
+
+            // do the implicit multiplication required for ptr arithmetic
+            if (lhstd->kind == TYPE_POINTER && typeid_eq(rhs->value_type, gen->ast->type_set.ptrdiff_t_)) {
+                texloc_t loc = token_end_loc(&rhs->end);
+                emit_push_reg(gen, loc, function, REG_RESULT, rhs->value_type);
+
+                typedata_t *lhsinnertd = type2typedata(&gen->ast->type_set.types, lhstd->as.ptr.type);
+
+                size_t factor_size = lhsinnertd->size > 0 ? lhsinnertd->size : sizeof(u8);
+
+                gen_constant(gen, loc, function, &factor_size, gen->ast->type_set.size_t_);
+
+                emit_pop_to_reg(gen, loc, function, REG_TMP, rhs->value_type);
+
+                emit_bin_op(loc, function, TOKEN_STAR, rhstd, REG_TMP, REG_RESULT, REG_RESULT);
+            }
+        }
+
         emit_pop_to_reg(gen, token_end_loc(&rhs->end), function, REG_TMP, lhs->value_type);
 
-        typedata_t *expr_type_info = type2typedata(&gen->ast->type_set.types, an_lhs(binary)->value_type);
+        emit_bin_op(token_end_loc(&binary->end), function, binary->operator.type, optd, REG_TMP, REG_RESULT, REG_RESULT);
 
-        emit_bin_op(token_end_loc(&binary->end), function, binary->operator.type, expr_type_info, REG_TMP, REG_RESULT, REG_RESULT);
     } else if (operator_is_logical(op)) {
         ast_node_t *lhs = an_lhs(binary);
         gen_expression(gen, function, lhs);
@@ -625,23 +666,6 @@ static void gen_unary(gen_t *gen, function_t *function, ast_node_t *unary) {
         gen_expression(gen, function, expr);
 
         emit_unary(gen, token_end_loc(&unary->end), function, unary->operator.type, expr->value_type, REG_RESULT, REG_RESULT);
-    }
-}
-
-static size_t add_constant(function_t *function, void *data, size_t size) {
-    size_t index = memarr_push(function->memory, data, size);
-    return index;
-}
-
-static void gen_constant(gen_t *gen, texloc_t location, function_t *function, void *data, type_t type) {
-    typedata_t *td = type2typedata(&gen->ast->type_set.types, type);
-
-    size_t value_index = add_constant(function, data, td->size);
-
-    if (td->size <= WORD_SIZE) {
-        emit_read_memory_to_reg(location, function, REG_RESULT, value_index, td);
-    } else {
-        ASSERT(false, "todo");
     }
 }
 
@@ -1047,38 +1071,38 @@ static void emit_cast(gen_t *gen, function_t *function, type_t dest, type_t sour
 
         // registers only hold 64bit numbers, so all lower bit types are automatically widened when put into a register
 
-        if (desttd->data.num == NUM_TYPE_SIGNED && sourcetd->data.num == NUM_TYPE_SIGNED) {
+        if (desttd->as.num == NUM_TYPE_SIGNED && sourcetd->as.num == NUM_TYPE_SIGNED) {
             EMIT_CAST(NUM_SIZE_8, OP_CAST_L2B);
             EMIT_CAST(NUM_SIZE_16, OP_CAST_L2S);
             EMIT_CAST(NUM_SIZE_32, OP_CAST_L2I);
-        } else if (desttd->data.num == NUM_TYPE_UNSIGNED && sourcetd->data.num == NUM_TYPE_SIGNED) {
+        } else if (desttd->as.num == NUM_TYPE_UNSIGNED && sourcetd->as.num == NUM_TYPE_SIGNED) {
             EMIT_CAST(NUM_SIZE_8, OP_CAST_L2UL, OP_CAST_UL2UB);
             EMIT_CAST(NUM_SIZE_16, OP_CAST_L2UL, OP_CAST_UL2US);
             EMIT_CAST(NUM_SIZE_32, OP_CAST_L2UL, OP_CAST_UL2U);
             EMIT_CAST(NUM_SIZE_64, OP_CAST_L2UL);
-        } else if (desttd->data.num == NUM_TYPE_FLOAT && sourcetd->data.num == NUM_TYPE_SIGNED) {
+        } else if (desttd->as.num == NUM_TYPE_FLOAT && sourcetd->as.num == NUM_TYPE_SIGNED) {
             EMIT_CAST(NUM_SIZE_32, OP_CAST_L2F);
             EMIT_CAST(NUM_SIZE_64, OP_CAST_L2D);
-        } else if (desttd->data.num == NUM_TYPE_UNSIGNED && sourcetd->data.num == NUM_TYPE_UNSIGNED) {
+        } else if (desttd->as.num == NUM_TYPE_UNSIGNED && sourcetd->as.num == NUM_TYPE_UNSIGNED) {
             EMIT_CAST(NUM_SIZE_8, OP_CAST_UL2UB);
             EMIT_CAST(NUM_SIZE_16, OP_CAST_UL2US);
             EMIT_CAST(NUM_SIZE_32, OP_CAST_UL2U);
-        } else if (desttd->data.num == NUM_TYPE_SIGNED && sourcetd->data.num == NUM_TYPE_UNSIGNED) {
+        } else if (desttd->as.num == NUM_TYPE_SIGNED && sourcetd->as.num == NUM_TYPE_UNSIGNED) {
             EMIT_CAST(NUM_SIZE_8, OP_CAST_UL2L, OP_CAST_L2B);
             EMIT_CAST(NUM_SIZE_16, OP_CAST_UL2L, OP_CAST_L2S);
             EMIT_CAST(NUM_SIZE_32, OP_CAST_UL2L, OP_CAST_L2I);
             EMIT_CAST(NUM_SIZE_64, OP_CAST_UL2L);
-        } else if (desttd->data.num == NUM_TYPE_FLOAT && sourcetd->data.num == NUM_TYPE_UNSIGNED) {
+        } else if (desttd->as.num == NUM_TYPE_FLOAT && sourcetd->as.num == NUM_TYPE_UNSIGNED) {
             EMIT_CAST(NUM_SIZE_32, OP_CAST_UL2F);
             EMIT_CAST(NUM_SIZE_64, OP_CAST_UL2D);
-        } else if (desttd->data.num == NUM_TYPE_FLOAT && sourcetd->data.num == NUM_TYPE_FLOAT) {
+        } else if (desttd->as.num == NUM_TYPE_FLOAT && sourcetd->as.num == NUM_TYPE_FLOAT) {
             EMIT_CAST(NUM_SIZE_32, OP_CAST_D2F);
-        } else if (desttd->data.num == NUM_TYPE_UNSIGNED && sourcetd->data.num == NUM_TYPE_FLOAT) {
+        } else if (desttd->as.num == NUM_TYPE_UNSIGNED && sourcetd->as.num == NUM_TYPE_FLOAT) {
             EMIT_CAST(NUM_SIZE_8, OP_CAST_D2UL, OP_CAST_UL2UB);
             EMIT_CAST(NUM_SIZE_16, OP_CAST_D2UL, OP_CAST_UL2US);
             EMIT_CAST(NUM_SIZE_32, OP_CAST_D2UL, OP_CAST_UL2U);
             EMIT_CAST(NUM_SIZE_64, OP_CAST_D2UL);
-        } else if (desttd->data.num == NUM_TYPE_SIGNED && sourcetd->data.num == NUM_TYPE_FLOAT) {
+        } else if (desttd->as.num == NUM_TYPE_SIGNED && sourcetd->as.num == NUM_TYPE_FLOAT) {
             EMIT_CAST(NUM_SIZE_8, OP_CAST_D2L, OP_CAST_L2B);
             EMIT_CAST(NUM_SIZE_16, OP_CAST_D2L, OP_CAST_L2S);
             EMIT_CAST(NUM_SIZE_32, OP_CAST_D2L, OP_CAST_L2I);
