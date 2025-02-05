@@ -1110,6 +1110,16 @@ static void emit_cast(gen_t *gen, function_t *function, type_t dest, type_t sour
         }
         #undef EMIT_CAST
 
+        if (desttd->size > sourcetd->size) {
+            instruction_t in = {0};
+            in.op = OP_WIDEN;
+            in.as.casting.reg_op = REG_RESULT;
+            in.as.casting.reg_result = REG_RESULT;
+            in.as.casting.size_bytes = sourcetd->size;
+
+            emit_instruction(function, loc, in);
+        }
+
     } else {
         ASSERT(desttd->size == sourcetd->size, "this at least must hold");
         // nop necessary to cast both are 64bit pointers so they can be interpreted the same

@@ -57,6 +57,14 @@ int odlreadint(void) {
     return num;
 }
 
+void odlprintint(int n) {
+    printf("%d", n);
+}
+
+void odlprintln(void) {
+    printf("\n");
+}
+
 #endif
 
 f64 ns2sec(u64 ns) {

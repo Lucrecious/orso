@@ -10,6 +10,9 @@
 
 @intrinsic readint :: () -> int;
 
+@intrinsic printint :: (int) -> void;
+@intrinsic println :: () -> void;
+
 ns2sec :: (ns: u64) -> f64 {
     return (f64 << ns)*0.000_000_001;
 };

@@ -134,14 +134,19 @@ static bool check_call_on_func(analyzer_t *analyzer, ast_t *ast, ast_node_t *cal
 
     size_t arg_start = an_call_arg_start(call);
     size_t arg_end = an_call_arg_end(call);
+    size_t arg_count = arg_end - arg_start;
 
     bool errored = false;
-    if (func_td->as.function.argument_types.count != (arg_end - arg_start)) {
+    size_t func_type_arg_count = func_td->as.function.argument_types.count;
+    if (func_type_arg_count != (arg_end - arg_start)) {
         errored = true;
         stan_error(analyzer, make_error_node(ERROR_ANALYSIS_NUMBER_ARGS_CALL_FUNC_MISTMATCH, call));
     }
 
-    for (size_t i = 0; i < func_td->as.function.argument_types.count; ++i) {
+
+    size_t min_args = func_type_arg_count < arg_count ? func_type_arg_count : arg_count;
+
+    for (size_t i = 0; i < min_args; ++i) {
         type_t parameter_type = func_td->as.function.argument_types.items[i];
 
         ast_node_t *arg = call->children.items[arg_start + i];
@@ -605,100 +610,103 @@ static ast_node_t *cast_implicitly_if_necessary(ast_t *ast, type_t destination_t
 
     unless (stan_can_cast(&ast->type_set.types, destination_type, expr->value_type)) return expr;
 
-    typedata_t *destinationtd = type2td(ast, destination_type);
+    typedata_t *dsttd = type2td(ast, destination_type);
     typedata_t *exprtd = type2td(ast, expr->value_type);
 
     // for now only numbers can be cast/promoted implicitly
-    if (destinationtd->kind != TYPE_NUMBER) return expr;
-    if (exprtd->kind != TYPE_NUMBER) return expr;
+    if (dsttd->kind == TYPE_NUMBER && exprtd->kind == TYPE_NUMBER) {
+        num_type_t dst_num = dsttd->as.num;
+        num_type_t expr_num = exprtd->as.num;
 
-    num_type_t dst_num = destinationtd->as.num;
-    num_type_t expr_num = exprtd->as.num;
+        // if we now what the value of the number we just implicitly cast it...
+        if (expr->expr_val.is_concrete && expr->is_free_number) {
+            word_t w = expr->expr_val.word;
+            switch (dst_num) {
+            case NUM_TYPE_SIGNED:
+                switch ((num_size_t)(dsttd->size)) {
+                case NUM_SIZE_8:
+                    switch(expr_num) {
+                    case NUM_TYPE_SIGNED: if (w.as.s < INT8_MIN || w.as.s > INT8_MAX) return expr; break;
+                    case NUM_TYPE_UNSIGNED: if (w.as.u > INT8_MAX) return expr; break;
+                    case NUM_TYPE_FLOAT: if (w.as.d < INT8_MIN || w.as.d > INT8_MAX || w.as.d != ((s8)w.as.d)) return expr; break;
+                    }
+                    break;
+                
+                case NUM_SIZE_16:
+                    switch(expr_num) {
+                    case NUM_TYPE_SIGNED: if (w.as.s < INT16_MIN || w.as.s > INT16_MAX) return expr; break;
+                    case NUM_TYPE_UNSIGNED: if (w.as.u > INT16_MAX) return expr; break;
+                    case NUM_TYPE_FLOAT: if (w.as.d < INT16_MIN || w.as.d > INT16_MAX || w.as.d != ((s16)w.as.d)) return expr; break;
+                    }
+                    break;
+                
+                case NUM_SIZE_32:
+                    switch(expr_num) {
+                    case NUM_TYPE_SIGNED: if (w.as.s < INT32_MIN || w.as.s > INT32_MAX) return expr; break;
+                    case NUM_TYPE_UNSIGNED: if (w.as.u > INT32_MAX)  return expr; break;
+                    case NUM_TYPE_FLOAT: if (w.as.d < INT32_MIN || w.as.d > INT32_MAX || w.as.d != ((s32)w.as.d)) return expr; break;
+                    }
+                    break;
+                
+                case NUM_SIZE_64: break;
+                    switch(expr_num) {
+                    case NUM_TYPE_SIGNED: break;
+                    case NUM_TYPE_UNSIGNED: if (w.as.u > INT64_MAX)  return expr; break;
+                    case NUM_TYPE_FLOAT: if (w.as.d < INT64_MIN || w.as.d > INT64_MAX || w.as.d != ((s64)w.as.d)) return expr; break;
+                    }
+                    break;
+                }
+                break;
 
-    // if we now what the value of the number we just implicitly cast it...
-    if (expr->expr_val.is_concrete && expr->is_free_number) {
-        word_t w = expr->expr_val.word;
-        switch (dst_num) {
-        case NUM_TYPE_SIGNED:
-            switch ((num_size_t)(destinationtd->size)) {
-            case NUM_SIZE_8:
-                switch(expr_num) {
-                case NUM_TYPE_SIGNED: if (w.as.s < INT8_MIN || w.as.s > INT8_MAX) return expr; break;
-                case NUM_TYPE_UNSIGNED: if (w.as.u > INT8_MAX) return expr; break;
-                case NUM_TYPE_FLOAT: if (w.as.d < INT8_MIN || w.as.d > INT8_MAX || w.as.d != ((s8)w.as.d)) return expr; break;
+            case NUM_TYPE_UNSIGNED:
+                switch ((num_size_t)(dsttd->size)) {
+                case NUM_SIZE_8:
+                    switch(expr_num) {
+                    case NUM_TYPE_SIGNED: if (w.as.s < 0 || w.as.s > UINT8_MAX) return expr; break;
+                    case NUM_TYPE_UNSIGNED: if (w.as.u > UINT8_MAX) return expr; break;
+                    case NUM_TYPE_FLOAT: if (w.as.d < 0 || w.as.d > UINT8_MAX || w.as.d != ((u8)w.as.d)) return expr; break;
+                    }
+                    break;
+                
+                case NUM_SIZE_16:
+                    switch(expr_num) {
+                    case NUM_TYPE_SIGNED: if (w.as.s < 0 || w.as.s > UINT16_MAX) return expr; break;
+                    case NUM_TYPE_UNSIGNED: if (w.as.u > UINT16_MAX) return expr; break;
+                    case NUM_TYPE_FLOAT: if (w.as.d < 0 || w.as.d > UINT16_MAX || w.as.d != ((u16)w.as.d)) return expr; break;
+                    }
+                    break;
+                
+                case NUM_SIZE_32:
+                    switch(expr_num) {
+                    case NUM_TYPE_SIGNED: if (w.as.s < 0 || w.as.s > UINT32_MAX) return expr; break;
+                    case NUM_TYPE_UNSIGNED: if (w.as.u > UINT32_MAX)  return expr; break;
+                    case NUM_TYPE_FLOAT: if (w.as.d < 0 || w.as.d > UINT32_MAX || w.as.d != ((u32)w.as.d)) return expr; break;
+                    }
+                    break;
+                
+                case NUM_SIZE_64: break;
+                    switch(expr_num) {
+                    case NUM_TYPE_SIGNED: if (w.as.s < 0) return expr; break;
+                    case NUM_TYPE_UNSIGNED: break;
+                    case NUM_TYPE_FLOAT: if (w.as.d < 0 || w.as.d > UINT64_MAX || w.as.d != ((u64)w.as.d)) return expr; break;
+                    }
+                    break;
                 }
                 break;
-            
-            case NUM_SIZE_16:
-                switch(expr_num) {
-                case NUM_TYPE_SIGNED: if (w.as.s < INT16_MIN || w.as.s > INT16_MAX) return expr; break;
-                case NUM_TYPE_UNSIGNED: if (w.as.u > INT16_MAX) return expr; break;
-                case NUM_TYPE_FLOAT: if (w.as.d < INT16_MIN || w.as.d > INT16_MAX || w.as.d != ((s16)w.as.d)) return expr; break;
-                }
-                break;
-            
-            case NUM_SIZE_32:
-                switch(expr_num) {
-                case NUM_TYPE_SIGNED: if (w.as.s < INT32_MIN || w.as.s > INT32_MAX) return expr; break;
-                case NUM_TYPE_UNSIGNED: if (w.as.u > INT32_MAX)  return expr; break;
-                case NUM_TYPE_FLOAT: if (w.as.d < INT32_MIN || w.as.d > INT32_MAX || w.as.d != ((s32)w.as.d)) return expr; break;
-                }
-                break;
-            
-            case NUM_SIZE_64: break;
-                switch(expr_num) {
-                case NUM_TYPE_SIGNED: break;
-                case NUM_TYPE_UNSIGNED: if (w.as.u > INT64_MAX)  return expr; break;
-                case NUM_TYPE_FLOAT: if (w.as.d < INT64_MIN || w.as.d > INT64_MAX || w.as.d != ((s64)w.as.d)) return expr; break;
-                }
-                break;
+
+            case NUM_TYPE_FLOAT: break;
             }
-            break;
+        } else {
+            // if not concrete then they need to be the same data type
+            if (exprtd->as.num != dsttd->as.num) return expr;
 
-        case NUM_TYPE_UNSIGNED:
-            switch ((num_size_t)(destinationtd->size)) {
-            case NUM_SIZE_8:
-                switch(expr_num) {
-                case NUM_TYPE_SIGNED: if (w.as.s < 0 || w.as.s > UINT8_MAX) return expr; break;
-                case NUM_TYPE_UNSIGNED: if (w.as.u > UINT8_MAX) return expr; break;
-                case NUM_TYPE_FLOAT: if (w.as.d < 0 || w.as.d > UINT8_MAX || w.as.d != ((u8)w.as.d)) return expr; break;
-                }
-                break;
-            
-            case NUM_SIZE_16:
-                switch(expr_num) {
-                case NUM_TYPE_SIGNED: if (w.as.s < 0 || w.as.s > UINT16_MAX) return expr; break;
-                case NUM_TYPE_UNSIGNED: if (w.as.u > UINT16_MAX) return expr; break;
-                case NUM_TYPE_FLOAT: if (w.as.d < 0 || w.as.d > UINT16_MAX || w.as.d != ((u16)w.as.d)) return expr; break;
-                }
-                break;
-            
-            case NUM_SIZE_32:
-                switch(expr_num) {
-                case NUM_TYPE_SIGNED: if (w.as.s < 0 || w.as.s > UINT32_MAX) return expr; break;
-                case NUM_TYPE_UNSIGNED: if (w.as.u > UINT32_MAX)  return expr; break;
-                case NUM_TYPE_FLOAT: if (w.as.d < 0 || w.as.d > UINT32_MAX || w.as.d != ((u32)w.as.d)) return expr; break;
-                }
-                break;
-            
-            case NUM_SIZE_64: break;
-                switch(expr_num) {
-                case NUM_TYPE_SIGNED: if (w.as.s < 0) return expr; break;
-                case NUM_TYPE_UNSIGNED: break;
-                case NUM_TYPE_FLOAT: if (w.as.d < 0 || w.as.d > UINT64_MAX || w.as.d != ((u64)w.as.d)) return expr; break;
-                }
-                break;
-            }
-            break;
-
-        case NUM_TYPE_FLOAT: break;
+            // cannot store a type in storage with a smaller size
+            if (exprtd->size > dsttd->size) return expr;
         }
+    } else if (exprtd->kind == TYPE_POINTER && dsttd->kind == TYPE_POINTER && TYPE_IS_VOID(dsttd->as.ptr.type)) {
+        // good to go
     } else {
-        // if not concrete then they need to be the same data type
-        if (exprtd->as.num != destinationtd->as.num) return expr;
-
-        // cannot store a type in storage with a smaller size
-        if (exprtd->size > destinationtd->size) return expr;
+        return expr;
     }
 
     ast_node_t *cast = ast_implicit_cast(ast, expr, destination_type);
@@ -1282,6 +1290,8 @@ void resolve_expression(
                 break;
             } 
 
+            rhs = cast_implicitly_if_necessary(ast, lhs->value_type, rhs);
+
             expr->value_type = lvalue_node->value_type;
 
             type_t rhs_type = rhs->value_type;
@@ -1475,10 +1485,20 @@ void resolve_expression(
             }
 
             type_t callee_type = callee->value_type;
+            typedata_t *callee_td = type2td(ast, callee_type);
 
             if ((!type_is_function(ast->type_set.types, callee_type) && !type_is_native_function(ast->type_set.types, callee_type))) {
                 stan_error(analyzer, make_error_node(ERROR_ANALYSIS_EXPECTED_CALLABLE, an_callee(expr)));
                 break;
+            }
+
+            for (size_t i = an_call_arg_start(expr); i < an_bcall_arg_end(expr); ++i) {
+                ast_node_t *arg = expr->children.items[i];
+                if (TYPE_IS_INVALID(arg->value_type)) continue;
+                size_t i_= i - an_call_arg_start(expr);
+
+                arg = cast_implicitly_if_necessary(ast, callee_td->as.function.argument_types.items[i_], arg);
+                expr->children.items[i] = arg;
             }
 
             bool success = check_call_on_func(analyzer, ast, expr);
@@ -1487,7 +1507,6 @@ void resolve_expression(
                 break;
             }
 
-            typedata_t *callee_td = ast->type_set.types.items[callee_type.i];
             expr->value_type = callee_td->as.function.return_type;
             break;
         }

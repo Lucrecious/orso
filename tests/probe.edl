@@ -1,20 +1,95 @@
-{
-    mem_size :: 1024sz;
+do:gol {
+    // no strings yet so not printing anything yet
+    width := readint();
+    height := readint();
+    tile_count := width*height;
 
-    mem := &int << mreserve(mem_size);
-    mmarkrw(&void << mem, mem_size);
-    *mem = 10;
 
-    *(mem + 1) = 20;
+    // exit immediately if board has no dimensions
+    if tile_count == 0 {
+        printint(0); // no strings, so only printing integers for now
+        println(); // no strings, so a specific function needed for new line
+        break:gol 1; // returning non-zero means error
+    };
 
-    x := *mem;
-    y := *(mem + 1);
-    
-    mfree(&void << mem, mem_size);
+    // only available memory functions right now are just system calls for reserving virtual memory
+    // '<<'' is casting operator
+    board := &u8 << mreserve(size_t << tile_count);
 
-    x + y;
+    // you need to mark the memory as read/write
+    mmarkrw(board, size_t << tile_count);
+
+    printint(1); // indicating successful board creation
+    println();
+
+    // no arrays yet, function for getting ptr at index
+    at :: (board: &u8, index: ptrdiff_t) -> &u8 {
+        return (board + index);
+    };
+
+    // no arrays yet, function for getting ptr in terms of x and y
+    atxy :: (board: &u8, x: int, y: int, width: int) -> &u8 {
+        return board + ptrdiff_t << (y*width + x);
+    };
+
+    // only ptrdiff_t types are allowed to be used for arithmetics with pointers
+    i := 0pd;
+    while i < tile_count {
+        *at(board, i) = 0;
+        i = i + 1;
+    };
+
+    // set tiles in a loop until user doesn't want anymore
+    initx := readint();
+    inity := readint();
+
+    until initx*inity == 0 {
+        x := initx - 1;
+        y := inity - 1;
+
+        if x < 0 or y < 0 or x >= width or y >= width {
+            printint(0); // printing 0 indicates invalid tile position
+            println();
+        } else {
+            *atxy(board, x, y, width) = 1;
+            printint(1); // printing 1 indicates valid tile position
+            println();
+        };
+
+        initx = readint();
+        inity = readint();
+
+        0;
+    };
+
+    render_board :: (board: &u8, width: int, height: int) -> void {
+        w := 0;
+        h := 0;
+
+        while h < height {
+            while w < width {
+                t := *atxy(board, w, h, width);
+                tile := int << t;
+                printint(tile);
+
+                w = w + 1;
+            };
+            w = 0;
+            h = h + 1;
+            println();
+        };
+
+        println();
+
+        return;
+    };
+
+    render_board(board, width, height);
+
+    mfree(board, size_t << tile_count);
+
+    0;
 }
-
 // print :: (@vargs args: &[]any) {}
 
 // value2str :: (v: ?i_t) -> str8_t {

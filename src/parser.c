@@ -1691,16 +1691,18 @@ ast_node_val_t zero_value(ast_t *ast, type_t type) {
             break;
         }
 
-        case TYPE_COUNT:
-        case TYPE_UNREACHABLE:
+        case TYPE_UNRESOLVED:
         case TYPE_FUNCTION:
         case TYPE_INTRINSIC_FUNCTION:
         case TYPE_INVALID:
-        case TYPE_UNRESOLVED:
-            UNREACHABLE();
             value = WORDI(0);
             break;
 
+        case TYPE_UNREACHABLE:
+        case TYPE_COUNT:
+            UNREACHABLE();
+            value = WORDI(0);
+            break;
         case TYPE_VOID: break;
     }
 

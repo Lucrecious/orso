@@ -1,6 +1,17 @@
 {
     width := readint();
     height := readint();
+    tile_count := width*height;
 
-    width * height;
+    tiles := &u8 << mreserve(size_t << tile_count);
+    mmarkrw(tiles, size_t << tile_count);
+
+    i := 0pd;
+    while i < tile_count do *(tiles + i) = 69;
+
+    value := *(tiles + ptrdiff_t << width);
+
+    mfree(tiles, size_t << tile_count);
+
+    value;
 }

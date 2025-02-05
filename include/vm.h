@@ -58,6 +58,8 @@ enum op_code_t {
     OP_CAST_L2F,
     OP_CAST_L2D,
 
+    OP_WIDEN,
+
     OP_SUBU_REG_IM32,
     OP_ADDU_REG_IM32,
 
@@ -191,6 +193,7 @@ struct instruction_t {
         struct {
             byte reg_op;
             byte reg_result;
+            byte size_bytes; // for widening
         } casting;
     } as;
 };
@@ -486,6 +489,18 @@ void vm_step(vm_t *vm) {
 
         #undef do_cast
 
+        case OP_WIDEN: {
+            const u64 masks[] = {0x0000000F, 0x000000FF, 0x00000FFF, 0x0000FFFF, 0x000FFFFF, 0x00FFFFFF, 0x0FFFFFFF, 0xFFFFFFFF};
+            u8 size_bytes = in.as.casting.size_bytes;
+            ASSERT(size_bytes < WORD_SIZE, "this is only for small things");
+
+            u64 mask = masks[size_bytes];
+            vm->registers[in.as.casting.reg_result].as.u = vm->registers[in.as.casting.reg_op].as.u&mask;
+
+            IP_ADV(1);
+            break;
+        }
+
         // conversion to unsigned for wrapped operation on overflow but converted back to integer after (c is ub for signed overflow)
         #define case_bini_reg_reg(name, op, type) case OP_##name##_REG_REG: {\
             s64 a = vm->registers[in.as.bin_reg_to_reg.reg_op1].as.type; \
@@ -632,7 +647,7 @@ void vm_step(vm_t *vm) {
         #define case_mov_regaddr_to_reg(name, q, type) case OP_MOV##name##_REGADDR_TO_REG: { \
             byte regaddr = in.as.mov_reg_to_reg.reg_source; \
             byte reg_dest = in.as.mov_reg_to_reg.reg_destination; \
-            vm->registers[reg_dest].as.q = *((type*)(vm->registers[regaddr].as.p)); \
+            vm->registers[reg_dest].as.q = (*((type*)(vm->registers[regaddr].as.p))); \
             IP_ADV(1); \
         } break
 
@@ -691,7 +706,12 @@ void vm_step(vm_t *vm) {
             u64 result_size = vm->registers[in.as.call.reg_result_size].as.u;
             void* args_address_bottom = MEMORY->data + vm->registers[in.as.call.reg_arg_bottom_memaddr].as.u;
 
-            u8 result[b2w(result_size)*WORD_SIZE];
+            size_t size = b2w(result_size)*WORD_SIZE;
+            if (size < WORD_SIZE) size = WORD_SIZE;
+
+            u8 result[size];
+            memset(result, 0, size);
+
             intrinsic_fn_t fn = (intrinsic_fn_t)ptr;
             if (result_size > WORD_SIZE) TODO("not implemented yet");
 

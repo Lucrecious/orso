@@ -44,3 +44,15 @@ X(readint, odlreadint, int, {
     UNUSED(args);
     XRET(int, odlreadint);
 }, void)
+
+X(printint, odlprintint, void, {
+    XARG(i, int);
+    UNUSED(result);
+    odlprintint(i);
+}, int)
+
+X(println, odlprintln, void, {
+    UNUSED(args);
+    UNUSED(result);
+    odlprintln();
+}, void)
