@@ -709,6 +709,11 @@ static ast_node_t *cast_implicitly_if_necessary(ast_t *ast, type_t dst_type, ast
             // if not concrete then they need to be the same data type
             if (exprtd->as.num != dsttd->as.num) return expr;
 
+            // shouldn't convert types unless they are platform specific
+            if (type_size_is_platform_specific(&ast->type_set, expr->value_type) || type_size_is_platform_specific(&ast->type_set, dst_type)) {
+                return expr;
+            }
+
             // cannot store a type in storage with a smaller size
             if (exprtd->size > dsttd->size) return expr;
         }
@@ -855,8 +860,8 @@ void resolve_expression(
                     if (i < typedata->as.struct_.field_count) {
                         type_t field_type = typedata->as.struct_.fields[i].type;
                         type_t arg_type = arg->value_type;
-                        unless (typeid_eq(field_type, arg_type)) {
-                            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_TYPE_MISMATCH,  arg));
+                        unless (typeid_eq(field_type, arg_type) || TYPE_IS_INVALID(arg_type)) {
+                            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_ARG_TYPE_DOES_NOT_MATCH_PARAM_TYPE,  arg));
                             is_invalidated = true;
                             continue;
                         }
@@ -1304,8 +1309,8 @@ void resolve_expression(
             expr->value_type = lvalue_node->value_type;
 
             type_t rhs_type = rhs->value_type;
-            unless (typeid_eq(lvalue_node->value_type, rhs_type)) {
-                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_TYPE_MISMATCH, expr));
+            unless (TYPE_IS_INVALID(rhs_type) || typeid_eq(lvalue_node->value_type, rhs_type)) {
+                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_ASSIGNEE_TYPE_DOES_NOT_MATCH_DEF_TYPE, expr));
                 INVALIDATE(expr);
                 break;
             }
@@ -1794,7 +1799,7 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
         ast_node_t *casted_expr = cast_implicitly_if_necessary(ast, declared_type, decl_expr);
         unless (typeid_eq(declared_type, casted_expr->value_type)) {
             unless (TYPE_IS_INVALID(decl_expr->value_type)) {
-                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_TYPE_MISMATCH, declaration));
+                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INITIAL_EXPR_TYPE_MISMATCH, declaration));
             }
         }
 
@@ -2095,8 +2100,8 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
         ast_node_t *ret_expr = an_expression(jmp);
 
         type_t ret_expr_type = ret_expr->value_type;
-        unless (typeid_eq(ret_expr_type, return_type)) {
-            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_TYPE_MISMATCH, funcdef));
+        unless (TYPE_IS_INVALID(ret_expr_type) || typeid_eq(ret_expr_type, return_type)) {
+            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_JMP_RETURN_TYPE_DOES_NOT_MATCH_BLOCKS, funcdef));
         }
     }
 
