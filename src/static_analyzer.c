@@ -602,15 +602,24 @@ static ast_node_t *ast_implicit_cast(ast_t *ast, ast_node_t *expr, type_t dst_ty
 
     return cast;
 }
+bool type_size_is_platform_specific(type_table_t *type_table, type_t type) {
+    #define IS(t) typeid_eq(type, type_table->t##_)
+    if (IS(s8) || IS(s16) || IS(s32) || IS(s64) ||
+        IS(u8) || IS(u16) || IS(u32) || IS(u64) ||
+        IS(f64) || IS(f32)) return false;
+    #undef IS
 
-static ast_node_t *cast_implicitly_if_necessary(ast_t *ast, type_t destination_type, ast_node_t *expr) {
+    return true;
+}
+
+static ast_node_t *cast_implicitly_if_necessary(ast_t *ast, type_t dst_type, ast_node_t *expr) {
     ASSERT(TYPE_IS_RESOLVED(expr->value_type), "expression must be resolved already");
 
-    if (typeid_eq(destination_type, expr->value_type)) return expr;
+    if (typeid_eq(dst_type, expr->value_type)) return expr;
 
-    unless (stan_can_cast(&ast->type_set.types, destination_type, expr->value_type)) return expr;
+    unless (stan_can_cast(&ast->type_set.types, dst_type, expr->value_type)) return expr;
 
-    typedata_t *dsttd = type2td(ast, destination_type);
+    typedata_t *dsttd = type2td(ast, dst_type);
     typedata_t *exprtd = type2td(ast, expr->value_type);
 
     // for now only numbers can be cast/promoted implicitly
@@ -709,7 +718,7 @@ static ast_node_t *cast_implicitly_if_necessary(ast_t *ast, type_t destination_t
         return expr;
     }
 
-    ast_node_t *cast = ast_implicit_cast(ast, expr, destination_type);
+    ast_node_t *cast = ast_implicit_cast(ast, expr, dst_type);
 
     return cast;
 }

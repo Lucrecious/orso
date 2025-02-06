@@ -119,14 +119,14 @@ typedef enum {
     PREC_UNARY,       // - not &
     PREC_CALL,        // . ()
     PREC_PRIMARY
-} Precedence;
+} prec_t;
 
 typedef ast_node_t* (*ParseFn)(parser_t*);
 
 typedef struct {
     ParseFn prefix;
     ParseFn infix;
-    Precedence precedence;
+    prec_t precedence;
 } parse_rule_t;
 
 void ast_init(ast_t *ast) {
@@ -636,7 +636,7 @@ static ast_node_t *parse_expression(parser_t* parser);
 static ast_node_t *parse_statement(parser_t* parser);
 static parse_rule_t *parser_get_rule(token_type_t type);
 static bool check_expression(parser_t* parser);
-static ast_node_t* parse_precedence(parser_t* parser, Precedence precedence);
+static ast_node_t* parse_precedence(parser_t* parser, prec_t precedence);
 
 bool ast_node_type_is_expression(ast_node_type_t node_type) {
     switch (node_type) {
@@ -1250,7 +1250,7 @@ static ast_node_t *parse_binary(parser_t *parser) {
 
     expression_node->start = parser->previous;
 
-    ast_node_t *rhs = parse_precedence(parser, (Precedence)(rule->precedence + 1));
+    ast_node_t *rhs = parse_precedence(parser, (prec_t)(rule->precedence + 1));
     an_rhs(expression_node) = rhs;
     expression_node->end = parser->previous;
 
@@ -1258,9 +1258,7 @@ static ast_node_t *parse_binary(parser_t *parser) {
 }
 
 static ast_node_t *parse_cast(parser_t *parser) {
-    parse_rule_t *rule = parser_get_rule(TOKEN_LESS_LESS);
-
-    ast_node_t *expr = parse_precedence(parser, (Precedence)(rule->precedence+1));
+    ast_node_t *expr = parse_precedence(parser, PREC_COMPARISON);//rule->precedence);
 
     ast_node_t *cast_node = ast_cast(parser->ast, &nil_node, expr);
     
@@ -1391,7 +1389,7 @@ static bool check_expression(parser_t *parser) {
     return parser_get_rule(parser->current.type)->prefix != NULL;
 }
 
-static ast_node_t *parse_precedence(parser_t *parser, Precedence precedence) {
+static ast_node_t *parse_precedence(parser_t *parser, prec_t precedence) {
     ParseFn prefix_rule = parser_get_rule(parser->current.type)->prefix;
     ast_node_t *left_operand;
 

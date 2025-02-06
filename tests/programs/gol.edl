@@ -1,5 +1,5 @@
 do:gol {
-    // no strings yet so not printing words yet
+    // no strings yet so not printing anything yet
     width := readint();
     height := readint();
     tile_count := width*height;
@@ -15,7 +15,7 @@ do:gol {
     // only available memory functions right now are just system calls for reserving virtual memory
     // '<<'' is casting operator
     board := &u8 << mreserve(size_t << tile_count*2);
-    swap_board := board + (ptrdiff_t << tile_count);
+    buffer := board + (ptrdiff_t << tile_count);
 
     // you need to mark the memory as read/write
     mmarkrw(board, size_t << tile_count*2);
@@ -31,13 +31,13 @@ do:gol {
 
     // no arrays yet, function for getting ptr in terms of x and y
     atxy :: (board: &u8, x: int, y: int, width: int) -> &u8 {
-        return board + ptrdiff_t << (y*width + x);
+        return board + ptrdiff_t << y*width + x;
     };
 
     board_clear :: (board: &u8, count: int) -> void {
         // only ptrdiff_t types are allowed to be used for arithmetics with pointers
         i := 0pd;
-        while i < count {
+        while i < ptrdiff_t << count {
             *at(board, i) = 0;
 
             // no += operator yet
@@ -125,7 +125,7 @@ do:gol {
     };
 
     while readint() != 0 {
-        board_clear(swap_board, tile_count);
+        board_clear(buffer, tile_count);
 
         x := 0;
         y := 0;
@@ -136,19 +136,19 @@ do:gol {
 
                 // death by underpopulation
                 if alive > 0 and n < 2 then
-                    *atxy(swap_board, x, y, width) = 0
+                    *atxy(buffer, x, y, width) = 0
                 
                 // lives to next generation
                 else if alive > 0 and (n == 2 or n == 3) then
-                    *atxy(swap_board, x, y, width) = 1
+                    *atxy(buffer, x, y, width) = 1
 
                 // death by overpopulation
                 else if alive > 0 and n > 3 then
-                    *atxy(swap_board, x, y, width) = 0
+                    *atxy(buffer, x, y, width) = 0
 
                 // reproduction
                 else if alive < 1 and n == 3 then
-                    *atxy(swap_board, x, y, width) = 1;
+                    *atxy(buffer, x, y, width) = 1;
                 
                 x = x + 1;
             };
@@ -156,13 +156,9 @@ do:gol {
             y = y + 1;
         };
 
-        swap :: (a: &&u8, b: &&u8) -> void {
-            t := b;
-            *b = *a;
-            *t = *a;
-        };
-
-        swap(&board, &swap_board);
+        tmp := board;
+        board = buffer;
+        buffer = tmp;
         render_board(board, width, height);
     };
 
