@@ -252,16 +252,22 @@ bool debugger_step(debugger_t *debugger, vm_t *vm) {
         }
         println("");
     } else if (cstr_eq(command.cstr, "break")) {
-        if (command_n_args.count != 3) {
-            printfln("expected 2 arguments (file and line) but got %zu", command_n_args.count-1);
+        if (command_n_args.count != 2) {
+            printfln("expected 1 arguments (line) but got %zu", command_n_args.count-1);
             return true;
         }
 
-        string_t file_path = string_copy(command_n_args.items[1], debugger->allocator);
-        string_t line_number = command_n_args.items[2];
+        string_t line_number = command_n_args.items[1];
         size_t line = string2size(line_number);
 
-        array_push(&debugger->breakpoints, ((source_location_t){.file_path=file_path, .text_location = texloc(file_path, line, 0) }));
+        while (try_vm_step(vm)) {
+            source_location_t new_location = vm_find_source_location(vm);
+            if (new_location.text_location.line == line) {
+                show_line(vm, 3);
+                break;
+            }
+        }
+
     } else if (cstr_eq(command.cstr, "stepo") || cstr_eq(command.cstr, "o")) {
         source_location_t bp = vm_find_source_location(vm);
 
@@ -272,7 +278,8 @@ bool debugger_step(debugger_t *debugger, vm_t *vm) {
                 break;
             }
         }
-    } else if (cstr_eq(command.cstr, "stepi") || cstr_eq(command.cstr, "i")) {
+    } else if (cstr_eq(command.cstr, "br")) {
+    } else if (cstr_eq(command.cstr, "stepi") || cstr_eq(command.cstr, "i")) { 
         if (try_vm_step(vm)) {
             show_line(vm, 3);
         }

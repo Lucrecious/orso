@@ -14,12 +14,14 @@ do:gol {
 
     // only available memory functions right now are just system calls for reserving virtual memory
     // '<<'' is casting operator
-    board := &u8 << mreserve(size_t << tile_count);
+    board := &u8 << mreserve(size_t << (tile_count*2));
+    swap_board := board + (ptrdiff_t << tile_count);
 
     // you need to mark the memory as read/write
-    mmarkrw(board, size_t << tile_count);
+    mmarkrw(board, size_t << (tile_count*2));
 
     printint(1); // indicating successful board creation
+    println();
     println();
 
     // no arrays yet, function for getting ptr at index
@@ -32,12 +34,21 @@ do:gol {
         return board + ptrdiff_t << (y*width + x);
     };
 
-    // only ptrdiff_t types are allowed to be used for arithmetics with pointers
-    i := 0pd;
-    while i < tile_count {
-        *at(board, i) = 0;
-        i = i + 1;
+    board_clear :: (board: &u8, count: int) -> void {
+        // only ptrdiff_t types are allowed to be used for arithmetics with pointers
+        i := 0pd;
+        while i < count {
+            *at(board, i) = 0;
+
+            // no += operator yet
+            i = i + 1;
+        };
+
+        // all functions need a return even if void right now
+        return;
     };
+
+    board_clear(board, tile_count);
 
     // set tiles in a loop until user doesn't want anymore
     initx := readint();
@@ -55,12 +66,12 @@ do:gol {
             printint(1); // printing 1 indicates valid tile position
             println();
         };
+        println();
 
         initx = readint();
         inity = readint();
-
-        0;
     };
+    println();
 
     render_board :: (board: &u8, width: int, height: int) -> void {
         w := 0;
@@ -68,8 +79,7 @@ do:gol {
 
         while h < height {
             while w < width {
-                t := *atxy(board, w, h, width);
-                tile := int << t;
+                tile := int << *atxy(board, w, h, width);
                 printint(tile);
 
                 w = w + 1;
@@ -86,78 +96,74 @@ do:gol {
 
     render_board(board, width, height);
 
+    neighbors :: (board: &u8, x: int, y: int, w: int, h: int) -> int {
+        sum := 0;
+
+        xi := 0;
+        yi := 0;
+
+        xs := x - 1;
+        ys := y - 1;
+
+        while yi < 3 {
+            while xi < 3 {
+                xn := xs + xi;
+                yn := ys + yi;
+
+                xi = xi + 1;
+
+                if xn == x and yn == y then continue;
+                if xn < 0 or yn < 0 or xn >= w or yn >= h then continue;
+
+                sum = sum + int << *atxy(board, xn, yn, w);
+            };
+            xi = 0;
+            yi = yi + 1;
+        };
+
+        return sum;
+    };
+
+    while readint() != 0 {
+        board_clear(swap_board, tile_count);
+
+        x := 0;
+        y := 0;
+        while y < height {
+            while x < width {
+                n := neighbors(board, x, y, width, height);
+                alive := *atxy(board, x, y, width);
+
+                // death by underpopulation
+                if alive > 0 and n < 2 then
+                    *atxy(swap_board, x, y, width) = 0
+                
+                // lives to next generation
+                else if alive > 0 and (n == 2 or n == 3) then
+                    *atxy(swap_board, x, y, width) = 1
+
+                // death by overpopulation
+                else if alive > 0 and n > 3 then
+                    *atxy(swap_board, x, y, width) = 0
+
+                // reproduction
+                else if alive < 1 and n == 3 then
+                    *atxy(swap_board, x, y, width) = 1;
+                
+                x = x + 1;
+            };
+            x = 0;
+            y = y + 1;
+        };
+
+        tmp := board;
+        board = swap_board;
+        swap_board = tmp;
+        render_board(board, width, height);
+    };
+
     mfree(board, size_t << tile_count);
 
     0;
 }
-// print :: (@vargs args: &[]any) {}
-
-// value2str :: (v: ?i_t) -> str8_t {
-//     return case_of i_t is {
-//         int     do i2s(v);
-//         f32     do f2s(v);
-//         str8_t  do v;
-//         foo_t   do foo2str;{
-//         _ {
-
-//         };
-//     };
-// };
-
-// value2str :: (v: ?i_t) -> str8_t @overload { i2s; f2s; s2s; foo2str; };
-
-
-
-// {
-//     count :: 10;
-
-//     addall :: (ints: &int, count: size_t) -> int {
-//         c := 0pd;
-
-//         sum := 0;
-
-//         return while c < count {
-//             num := *(ints + c);
-//             c = c + 1;
-//             sum = sum + num;
-//         } then sum;
-//     };
-
-//     memory := mreserve(sizeof(int)*count);
-//     mcommit(memory, sizeof(int)*count)
-
-//     ints := &int << memory;
-
-//     c := 0pd;
-//     while c < count {
-//         *(ints + c) = c;
-//         c = c + 1;
-//     };
-
-//     mprotect(memory, sizeof(int)*count);
-
-//     sum := addall(ints, count);
-
-//     munmap(memory);
-    
-//     sum;
-// }
-
-// array_t :: struct(t: type_t) {
-//     items := &t.nil;
-//     count := 0sz;
-// };
-
-// at :: (arr: &array_t(t), index: size_t) -> &?t => if index < arr.count then arr.items + index else &t.nil;
-
-// push :: (arr: &array_t(t), item: ?t) {
-//     *at(arr, arr.count) = item;
-//     ++arr.count;
-// };
-
-// len :: @inline (arr: &array(?t)) -> size_t => arr.count;
-
-// nums := array_t(int).{};
-
-// *at(&nums, 0) = 10;
 

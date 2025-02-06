@@ -50,11 +50,17 @@ size_t odlmpagesize(void) {
 }
 
 int odlreadint(void) {
-    int num;
-    if (scanf("%d", &num) != 1) {
-        return 0;
+    char buffer[100];
+    int number;
+    while(fgets(buffer, sizeof buffer, stdin) != NULL) {
+        if(sscanf(buffer, "%d", &number) != 1) {
+            return 0;
+        }
+
+        return number;
     }
-    return num;
+
+    return 0;
 }
 
 void odlprintint(int n) {

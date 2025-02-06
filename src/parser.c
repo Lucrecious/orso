@@ -114,6 +114,7 @@ typedef enum {
     PREC_COMPARISON,  // < > <= >=
     PREC_TERM,        // + -
     PREC_FACTOR,      // * /
+    PREC_CAST,        // <<
     PREC_BITWISE_OR,  // | and type separator
     PREC_UNARY,       // - not &
     PREC_CALL,        // . ()
@@ -1350,7 +1351,7 @@ parse_rule_t rules[] = {
     [TOKEN_AMPERSAND]               = { parse_unary,        NULL,               PREC_UNARY },
     [TOKEN_PLUS_PLUS]               = { parse_unary,        NULL,               PREC_NONE },
     [TOKEN_MINUS_MINUS]             = { parse_unary,        NULL,               PREC_NONE },
-    [TOKEN_LESS_LESS]               = { NULL,               parse_cast,         PREC_BITWISE_OR },
+    [TOKEN_LESS_LESS]               = { NULL,               parse_cast,         PREC_CAST },
     [TOKEN_EQUAL_EQUAL]             = { NULL,               parse_binary,       PREC_EQUALITY },
     [TOKEN_BANG_EQUAL]              = { NULL,               parse_binary,       PREC_EQUALITY },
     [TOKEN_LESS_EQUAL]              = { NULL,               parse_binary,       PREC_COMPARISON },
