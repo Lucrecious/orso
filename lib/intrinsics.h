@@ -5,6 +5,8 @@
 #include <stddef.h>
 #include <math.h>
 
+#define CORE_MODULE_NAME "core"
+
 #define UNUSED(arg) ((void)arg)
 
 typedef int8_t s8;
@@ -38,6 +40,8 @@ struct word_t {
         type_t t;
     } as;
 };
+
+#include "typedefs.gen.h"
 
 #define WORD_SIZE sizeof(word_t)
 
@@ -158,6 +162,9 @@ struct word_t {
 #define subd_(a, b) (a - b)
 #define muld_(a, b) (a * b)
 #define divd_(a, b) div_(a, b)
+
+#define addptr_(ptr, a) ((ptr) + (s64)(a))
+#define subptr_(ptr, a) ((ptr) - (s64)(a))
 
 #define min_(a, b) ((a) < (b) ? (a) : (b))
 #define max_(a, b) ((a) > (b) ? (a) : (b))

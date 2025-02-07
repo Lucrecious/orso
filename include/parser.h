@@ -210,6 +210,7 @@ struct ast_node_t {
     string_t ccode_break_label;
     string_t ccode_continue_label;
     string_t ccode_var_name;
+    string_t ccode_init_func_name;
 
     union {
         // structs
@@ -237,6 +238,8 @@ struct fd_pairs_t {
     arena_t *allocator;
 };
 
+declare_table(p2s, void*, string_t);
+
 typedef struct ast_t {
     arena_t allocator;
 
@@ -245,6 +248,7 @@ typedef struct ast_t {
 
     table_t(s2w) *builtins;
     table_t(s2w) *intrinsic_fns;
+    table_t(p2s) *intrinsicfn2cname;
 
     table_t(s2n) *moduleid2node;
 

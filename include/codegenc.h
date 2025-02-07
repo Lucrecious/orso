@@ -6,7 +6,8 @@
 #include "tmp.h"
 #include <inttypes.h>
 
-string_t compile_expr_to_c(ast_t *ast, ast_node_t *expr_node, arena_t *allocator);
+void compile_ast_to_c(ast_t *ast, string_builder_t *sb);
+void compile_expr_to_c(ast_t *ast, ast_node_t *expr_node, string_builder_t *sb);
 
 #endif
 
@@ -57,22 +58,30 @@ static cgen_var_t nil_cvar = {.is_new = false, .id = 0 , .type = typeid(TYPE_INV
 #define no_var(tv) ((tv).id == 0 && (tv).name.length == 0)
 #define has_var(tv) ((tv).id > 0 || (tv).name.length > 0)
 
-static string_t cgen_definition_name(cgen_t *cgen, string_view_t name) {
+static string_t cgen_local_def_name(cgen_t *cgen, string_view_t name) {
     string_t r = string_format("%.*s_", &cgen->tmp_arena, (int)name.length, name.data);
     return r;
 }
 
 static string_t cgen_function_name(cgen_t *cgen, string_view_t name) {
-    string_t r = string_format("%.*s%zu_fn_", &cgen->tmp_arena, (int)name.length, name.data, ++cgen->tmp_count);
+    string_t r = string_format("%.*s_odlfn%zu_", &cgen->tmp_arena, (int)name.length, name.data, ++cgen->tmp_count);
     return r;
 }
 
 static cgen_var_t cgen_user_var(cgen_t *cgen, string_view_t name, type_t type) {
     cgen_var_t var = {0};
-    var.name = cgen_definition_name(cgen, name);
+    var.name = cgen_local_def_name(cgen, name);
     var.type = type;
     var.is_new = true;
 
+    return var;
+}
+
+static cgen_var_t cgen_global_var(cgen_t *cgen, string_view_t name, type_t type) {
+    cgen_var_t var = {0};
+    var.name = string_format("%.*s_odlvar", &cgen->tmp_arena, name.length, name.data);
+    var.type = type;
+    var.is_new = true;
     return var;
 }
 
@@ -160,6 +169,14 @@ static bool cgen_binary_is_macro(token_type_t type, typedata_t *optd, cstr_t *op
 
     if (operator_is_arithmetic(type)) {
         switch (optd->kind) {
+        case TYPE_POINTER: {
+            switch (type) {
+                case TOKEN_MINUS: set_op("subptr_", true);
+                case TOKEN_PLUS: set_op("addptr_", true);
+                default: UNREACHABLE();
+            }
+            break;
+        }
         case TYPE_NUMBER: {
             switch ((num_size_t)optd->size) {
             case NUM_SIZE_8: {
@@ -196,6 +213,8 @@ static bool cgen_binary_is_macro(token_type_t type, typedata_t *optd, cstr_t *op
                 case NUM_TYPE_FLOAT: case_block(d); break;
                 }
                 break;
+            
+            default: UNREACHABLE(); break;
             }
 
             }
@@ -300,6 +319,14 @@ static string_t cgen_get_function_name(cgen_t *cgen, function_t *function) {
     return result.name;
 }
 
+static string_t cgen_get_instrinsic_fn_name(ast_t *ast, intrinsic_fn_t fn) {
+    string_t name = lit2str("");
+    bool success = table_get(p2s, ast->intrinsicfn2cname, fn, &name);
+    UNUSED(success);
+    ASSERT(success, "intrinsics should all be in there...");
+    return name;
+}
+
 static void cgen_constant(cgen_t *cgen, word_t word, typedata_t *typedata) {
     switch (typedata->kind) {
         case TYPE_NUMBER: {
@@ -374,10 +401,18 @@ static void cgen_constant(cgen_t *cgen, word_t word, typedata_t *typedata) {
             break;
         }
 
+        case TYPE_INTRINSIC_FUNCTION: {
+            intrinsic_fn_t fn = word.as.p;
+            string_t funcname = cgen_get_instrinsic_fn_name(cgen->ast, fn);
+            sb_add_cstr(&cgen->sb, "(");
+            sb_add_format(&cgen->sb, "%s", funcname.cstr);
+            sb_add_cstr(&cgen->sb, ")");
+            break;
+        }
+
+        case TYPE_POINTER:
         case TYPE_VOID:
         case TYPE_STRING:
-        case TYPE_INTRINSIC_FUNCTION:
-        case TYPE_POINTER:
         case TYPE_STRUCT: UNREACHABLE(); break;
 
         case TYPE_UNREACHABLE:
@@ -423,8 +458,8 @@ static void cgen_binary(cgen_t *cgen, ast_node_t *binary, cgen_var_t var) {
     ast_node_t *lhs = an_lhs(binary);
     ast_node_t *rhs = an_rhs(binary);
 
-    typedata_t *operandtd = type2typedata(&cgen->ast->type_set.types, lhs->value_type);
-    bool is_macro = cgen_binary_is_macro(binary->operator.type, operandtd, &operator_or_function_name);
+    typedata_t *lhstd = type2typedata(&cgen->ast->type_set.types, lhs->value_type);
+    bool is_macro = cgen_binary_is_macro(binary->operator.type, lhstd, &operator_or_function_name);
 
     unless (binary->requires_tmp_for_cgen) {
         if (has_var(var)) {
@@ -435,6 +470,10 @@ static void cgen_binary(cgen_t *cgen, ast_node_t *binary, cgen_var_t var) {
             sb_add_format(&cgen->sb, "%s", operator_or_function_name);
         }
         sb_add_cstr(&cgen->sb, "(");
+        
+        if (lhstd->kind == TYPE_POINTER) {
+            sb_add_format(&cgen->sb, "(%s)", lhstd->name);
+        }
 
         cgen_expression(cgen, lhs, nil_cvar);
 
@@ -506,7 +545,12 @@ static void cgen_binary(cgen_t *cgen, ast_node_t *binary, cgen_var_t var) {
         }
 
         if (is_macro) {
-            sb_add_format(&cgen->sb, "%s(%s, %s)", operator_or_function_name, cgen_var_name(cgen, lhs_var), cgen_var_name(cgen, rhs_var));
+            // pointer arithmetic is always a macro
+            if (lhstd->kind == TYPE_POINTER) {
+                sb_add_format(&cgen->sb, "%s((%s)%s, %s)", operator_or_function_name, lhstd->name, cgen_var_name(cgen, lhs_var), cgen_var_name(cgen, rhs_var));
+            } else {
+                sb_add_format(&cgen->sb, "%s(%s, %s)", operator_or_function_name, cgen_var_name(cgen, lhs_var), cgen_var_name(cgen, rhs_var));
+            }
         } else {
             sb_add_format(&cgen->sb, "%s %s %s", cgen_var_name(cgen, lhs_var), operator_or_function_name, cgen_var_name(cgen, rhs_var));
         }
@@ -778,7 +822,7 @@ static void cgen_then(cgen_t *cgen, ast_node_t *branch, cgen_var_t var) {
 
 static void cgen_if(cgen_t *cgen, ast_node_t *branch, cgen_var_t var) {
     ASSERT(branch->requires_tmp_for_cgen, "branches always require a tmp");
-    bool skip_else = an_else(branch)->node_type == AST_NODE_TYPE_EXPRESSION_NIL && branch->branch_type != BRANCH_TYPE_LOOPING;
+    bool skip_else = an_else(branch)->node_type == AST_NODE_TYPE_EXPRESSION_NIL;
     cgen_begin_branch(cgen, branch, var, skip_else);
 
     cstr_t if_or_unless = branch->condition_negated ? "unless" : "if";
@@ -836,7 +880,9 @@ static void cgen_while(cgen_t *cgen, ast_node_t *branch, cgen_var_t var)  {
     cgen_add_indent(cgen);
     sb_add_cstr(&cgen->sb, "}\n");
 
-    cgen_statement(cgen, an_else(branch), cgen_var_used(var), true);
+    ast_node_t *elze = an_else(branch);
+    if (elze->node_type != AST_NODE_TYPE_EXPRESSION_NIL || has_var(var))
+        cgen_statement(cgen, elze, cgen_var_used(var), true);
 
     cgen_end_branch(cgen);
 
@@ -867,7 +913,9 @@ static void cgen_do(cgen_t *cgen, ast_node_t *branch, cgen_var_t var) {
     cgen_add_indent(cgen);
     sb_add_cstr(&cgen->sb, "} while(false); \n");
 
-    cgen_statement(cgen, an_else(branch), cgen_var_used(var), true);
+    ast_node_t *elze = an_else(branch);
+    if (elze->node_type != AST_NODE_TYPE_EXPRESSION_NIL || has_var(var))
+        cgen_statement(cgen, an_else(branch), cgen_var_used(var), true);
 
     cgen_end_branch(cgen);
 
@@ -906,7 +954,7 @@ static void cgen_def_value(cgen_t *cgen, ast_node_t *def_value, cgen_var_t var) 
         sb_add_format(&cgen->sb, "%s = ", cgen_var(cgen, var));
     }
 
-    sb_add_format(&cgen->sb, "%s", cgen_definition_name(cgen, def_value->identifier.view).cstr);
+    sb_add_format(&cgen->sb, "%s", cgen_local_def_name(cgen, def_value->identifier.view).cstr);
 
     if (has_var(var)) {
         sb_add_cstr(&cgen->sb, ";\n");
@@ -1287,18 +1335,20 @@ static void cgen_function_definitions(cgen_t *cgen, ast_node_t *node) {
     }
 }
 
-void cgen_functions(cgen_t *cgen, ast_t *ast) {
-    ast_node_t *module;
-    kh_foreach_value(ast->moduleid2node, module, cgen_generate_function_names(cgen, module));
+void cgen_functions(cgen_t *cgen, ast_node_t *top_node) {
+    cgen_generate_function_names(cgen, top_node);
 
     cgen_forward_declare_functions(cgen);
 
     sb_add_cstr(&cgen->sb, "\n");
 
-    kh_foreach_value(ast->moduleid2node, module, cgen_function_definitions(cgen, module));
+    cgen_function_definitions(cgen, top_node);
 }
 
-static void cgen_generate_cnames_for_types(typedatas_t *tds, arena_t *arena) {
+static void cgen_generate_cnames_for_types(ast_t *ast) {
+    typedatas_t *tds = &ast->type_set.types;
+    arena_t *arena = &ast->allocator;
+
     for (size_t i = 0; i < tds->count; ++i) {
         typedata_t *td = tds->items[i];
         switch(td->kind) {
@@ -1315,6 +1365,7 @@ static void cgen_generate_cnames_for_types(typedatas_t *tds, arena_t *arena) {
             break;
         }
 
+        case TYPE_INTRINSIC_FUNCTION:
         case TYPE_FUNCTION: {
             tmp_arena_t *tmp = allocator_borrow();
             string_builder_t sb = {.allocator=tmp->allocator};
@@ -1338,6 +1389,7 @@ static void cgen_generate_cnames_for_types(typedatas_t *tds, arena_t *arena) {
             allocator_return(tmp);
             break;
         }
+
         case TYPE_STRING: break;
 
         case TYPE_UNREACHABLE:
@@ -1388,48 +1440,133 @@ static void cgen_typedefs(cgen_t *cgen, typedatas_t *tds) {
     }
 }
 
-string_t compile_expr_to_c(ast_t *ast, ast_node_t *expr_node, arena_t *arena) {
-    cgen_cache_requires_tmp(&ast->type_set.types, expr_node);
-
-    cgen_generate_cnames_for_types(&ast->type_set.types, &ast->allocator);
-    
-    tmp_arena_t *tmp_arena = allocator_borrow();
+cgen_t make_cgen(ast_t *ast) {
     cgen_t cgen = {.ast = ast, .tmp_count = 0 };
     cgen.sb.allocator = &cgen.tmp_arena;
     cgen.functions = table_new(p2n, &cgen.tmp_arena);
 
-    sb_add_cstr(&cgen.sb, "#define INTRINSICS_IMPLEMENTATION\n");
-    cgen_add_include(&cgen, "intrinsics.h");
-    sb_add_cstr(&cgen.sb, "\n");
+    return cgen;
+}
 
-    cgen_typedefs(&cgen, &ast->type_set.types);
+void cgen_declare_global_decls(cgen_t *cgen, ast_nodes_t *decls) {
+    for (size_t i = 0; i < decls->count; ++i) {
+        ast_node_t *decl = decls->items[i];
+        if (decl->is_intrinsic) continue;
+        if (an_is_constant(decl)) continue;
 
-    sb_add_cstr(&cgen.sb, "\n");
+        cgen_var_t var = cgen_global_var(cgen, decl->identifier.view, decl->value_type);
 
-    cgen_functions(&cgen, ast);
+        sb_add_format(&cgen->sb, "%s;\n", cgen_var(cgen, var));
+    }
+
+    sb_add_cstr(&cgen->sb, "\n");
+}
+
+void cgen_init_function(cgen_t *cgen, ast_node_t *module) {
+    size_t id = ++cgen->tmp_count;
+    string_t init_func_name = string_format("_module_init_%zu", &cgen->tmp_arena, id);
+    module->ccode_init_func_name = init_func_name;
+    sb_add_format(&cgen->sb, "void %s(void) {\n", init_func_name.cstr);
+    cgen_indent(cgen);
+
+    for (size_t i = 0; i < module->children.count; ++i) {
+        ast_node_t *decl = module->children.items[i];
+        if (decl->is_intrinsic) continue;
+        if (an_is_constant(decl)) continue;
+
+        cgen_var_t var = cgen_global_var(cgen, decl->identifier.view, decl->value_type);
+        var.is_new = false;
+
+        ast_node_t *init_expr = an_decl_expr(decl);
+        cgen_statement(cgen, init_expr, var, true);
+
+        sb_add_cstr(&cgen->sb, "\n");
+    }
+
+    cgen_unindent(cgen);
+    sb_add_cstr(&cgen->sb, "}\n\n");
+}
+
+
+void cgen_global_decls(cgen_t *cgen, ast_node_t *module) {
+    cgen_declare_global_decls(cgen, &module->children);
+
+    cgen_init_function(cgen, module);
+}
+
+void cgen_module(cgen_t *cgen, string_t moduleid, ast_node_t *module) {
+    bool is_core = string_eq(moduleid, lit2str(CORE_MODULE_NAME));
+
+    // only core has the intrinsic implementation
+    if (is_core) {
+        sb_add_cstr(&cgen->sb, "#define INTRINSICS_IMPLEMENTATION\n");
+    }
+    cgen_add_include(cgen, "intrinsics.h");
+
+    if (is_core) {
+        cgen_add_include(cgen, "core.h");
+        cgen_add_include(cgen, "core.c");
+    }
+
+    if (is_core) {
+        // todo: this needs to go into its own file honestly
+        cgen_typedefs(cgen, &cgen->ast->type_set.types);
+    }
+
+    cgen_functions(cgen, module);
+
+    cgen_global_decls(cgen, module);
+}
+
+void compile_ast_to_c(ast_t *ast, string_builder_t *sb) {
+    cgen_generate_cnames_for_types(ast);
+    cgen_t cgen = make_cgen(ast);
+
+
+    string_t moduleid;
+    ast_node_t *module;
+    kh_foreach(ast->moduleid2node, moduleid, module, cgen_cache_requires_tmp(&ast->type_set.types, module));
+    kh_foreach(ast->moduleid2node, moduleid, module, cgen_module(&cgen, moduleid, module));
+
+    sb_add_format(sb, "%.*s", cgen.sb.count, cgen.sb.items);
+}
+
+void compile_expr_to_c(ast_t *ast, ast_node_t *expr_node, string_builder_t *sb) {
+    cgen_t cgen = make_cgen(ast);
+
+    compile_ast_to_c(ast, &cgen.sb);
+
+    cgen_cache_requires_tmp(&ast->type_set.types, expr_node);
+
+    cgen_functions(&cgen, expr_node);
 
     sb_add_cstr(&cgen.sb, "\n");
 
     sb_add_format(&cgen.sb, "%s expr(void) {\n", cgen_type_name(&cgen, expr_node->value_type));
     cgen_indent(&cgen);
 
-    cgen_var_t var = cgen_user_var(&cgen, lit2sv("result"), expr_node->value_type);
-    cgen_expression(&cgen, expr_node, var);
-    cgen_semicolon_nl(&cgen);
+    // call init functions here
+    ast_node_t *module;
+    kh_foreach_value(ast->moduleid2node, module, {
+        cgen_add_indent(&cgen);
+        sb_add_format(&cgen.sb, "%s();\n", module->ccode_init_func_name.cstr);
+    });
+    sb_add_cstr(&cgen.sb, "\n");
+
+    cgen_var_t var = cgen_next_tmpid(&cgen, expr_node->value_type);
+    cgen_statement(&cgen, expr_node, var, true);
 
     sb_add_cstr(&cgen.sb, "\n");
+
     cgen_add_indent(&cgen);
+
     sb_add_format(&cgen.sb, "return %s;\n", cgen_var_name(&cgen, var));
 
     cgen_unindent(&cgen);
 
     sb_add_cstr(&cgen.sb, "}\n");
 
-    allocator_return(tmp_arena);
-
-    string_t code = sb_render(&cgen.sb, arena);
-
-    return code;
+    sb_add_format(sb, "%.*s", cgen.sb.count, cgen.sb.items);
 }
 
 #undef CODEGENC_IMPLEMENTATION

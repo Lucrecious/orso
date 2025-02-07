@@ -293,7 +293,7 @@ env_t make_test_env(ast_t *ast, vm_t *vm, arena_t *program_arena) {
     env_t env = {.vm=(vm), .memory=(memory), .arena=(program_arena)};
 
     ast_node_t *module = parse_module(ast, str("./bin/core.odl"));
-    ast_add_module(ast, module, str("core"));
+    ast_add_module(ast, module, str(CORE_MODULE_NAME));
 
     analyzer_t analyzer = {0};
     analyzer_init(&analyzer, &env, mywrite, myerror);
@@ -344,7 +344,13 @@ void test_expr_file(string_t expr_file, arena_t *test_arena) {
     string_t cexpr_str;
     if (true)
     {
-        cexpr_str = compile_expr_to_c(&ast, expr, test_arena);
+        tmp_arena_t *tmp = allocator_borrow();
+        string_builder_t cexpr_sb = {.allocator=tmp->allocator};
+        compile_expr_to_c(&ast, expr, &cexpr_sb);
+
+        cexpr_str = sb_render(&cexpr_sb, test_arena);
+
+        allocator_return(tmp);
 
         cc_t cc = cc_make(CC_GCC, test_arena);
         cc.output_type = CC_DYNAMIC;
@@ -422,7 +428,12 @@ void test_gen_expr_file(string_t expr_file, arena_t *arena) {
         return;
     }
 
-    string_t expr_str = compile_expr_to_c(&ast, expr, arena);
+    tmp_arena_t *tmp = allocator_borrow();
+    string_builder_t sb = {.allocator=tmp->allocator};
+    compile_expr_to_c(&ast, expr, &sb);
+    string_t expr_str = sb_render(&sb, arena);
+    allocator_return(tmp);
+
     string_t coutput_file = coutput_file_from_edl(expr_file, arena);
 
     bool success = write_entire_file(coutput_file.cstr, expr_str.cstr, expr_str.length);

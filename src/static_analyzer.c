@@ -11,10 +11,10 @@
 
 #include "intrinsics.h"
 
-#define X(export_fn_name, c_fn_name, return_type, code, ...) { .name=(#export_fn_name), .fn=(c_fn_name##_i_) },
+#define X(export_fn_name, c_fn_name, return_type, code, ...) { .name=(#export_fn_name), .cname=(#c_fn_name), .fn=(c_fn_name##_i_) },
 #define XARG(name, type)
 #define XRET(type, c_fn_name, ...)
-struct { cstr_t name; intrinsic_fn_t fn; } intrinsic_fns[] = {
+struct { cstr_t name; cstr_t cname; intrinsic_fn_t fn; } intrinsic_fns[] = {
 #undef XRET
 #undef XARG
 #include "intrinsic_fns.x"
@@ -56,10 +56,12 @@ static ast_node_t *add_builtin_definition(ast_t *ast, string_view_t identifier, 
     table_put(s2w, ast->builtins, sv2string(identifier, &ast->allocator), WORDP(decl));
 
     for (size_t i = 0; i < INTRINSIC_FUNCTION_COUNT; ++i) {
-        cstr_t name = intrinsic_fns[i].name;
+        string_t name = cstr2string(intrinsic_fns[i].name, &ast->allocator);
+        string_t cname = cstr2string(intrinsic_fns[i].cname, &ast->allocator);
         intrinsic_fn_t fn = intrinsic_fns[i].fn;
 
-        table_put(s2w, ast->intrinsic_fns, cstr2string(name, &ast->allocator), WORDP(fn));
+        table_put(s2w, ast->intrinsic_fns, name, WORDP(fn));
+        table_put(p2s, ast->intrinsicfn2cname, fn, cname);
     }
 
     return decl;
@@ -1962,7 +1964,7 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
     }
     
     // check core module
-    ast_node_t *module = get_module_or_null(ast, str("core"));
+    ast_node_t *module = get_module_or_null(ast, str(CORE_MODULE_NAME));
     ASSERT(module, "core should be there");
 
     for (size_t i = 0; i < module->children.count; ++i) {
