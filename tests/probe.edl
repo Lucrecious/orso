@@ -1,6 +1,19 @@
 {
-    i := 0pd;
-    j := 1;
-    j < i;
-}
+    person_t :: int;
+    bob : @run get_type() : 0;
+    alice : @run get_type() : 1;
 
+    get_type :: () -> type {
+        preference := readint();
+        return if preference == 0 then
+            int
+        else
+            f32;
+    };
+
+    date :: (a: int, b: int) -> bool {
+        return true;
+    };
+
+    date(alice, bob);
+}

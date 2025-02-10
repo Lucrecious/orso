@@ -1,0 +1,15 @@
+{
+    m := &u8 << mreserve(4);
+    mmarkrw(m, 4);
+
+    *(m + 3) = 1;
+
+    a := int << *m;
+    b := int << *(m + 1);
+    c := int << *(m + 2);
+    d := int << *(m + 3);
+
+    mfree(m, 4);
+
+    a + b + c +d;
+}

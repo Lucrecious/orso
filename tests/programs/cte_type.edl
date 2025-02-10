@@ -1,0 +1,14 @@
+{
+    get_type :: () -> type {
+        x := readint();
+        if x == 0 then return f64;
+        return int;
+    };
+
+    int_or_float :: @run get_type();
+
+    n: int_or_float = 1;
+    x := 1s;
+    y := x + n;
+    y;
+}

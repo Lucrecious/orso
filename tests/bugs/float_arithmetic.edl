@@ -1,0 +1,10 @@
+{
+    bug:
+    checksum := 0;
+
+    x := false; // so constant folding doesn't occur
+    f64 << if x then
+        1
+    else
+        -1;
+}

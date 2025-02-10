@@ -493,7 +493,11 @@ static void emit_unary(gen_t *gen, texloc_t loc, function_t *function, token_typ
         }
 
         case TOKEN_STAR: {
-            emit_mov_reg_to_reg(gen, function, loc, type, REG_MOV_TYPE_ADDR_TO_REG, result, op1);
+            type_t t = type;
+            if (type_info->kind == TYPE_POINTER) {
+                t = type_info->as.ptr.type;
+            }
+            emit_mov_reg_to_reg(gen, function, loc, t, REG_MOV_TYPE_ADDR_TO_REG, result, op1);
             break;
         }
 
@@ -1081,8 +1085,30 @@ static void emit_cast(gen_t *gen, function_t *function, type_t dest, type_t sour
             EMIT_CAST(NUM_SIZE_32, OP_CAST_L2UL, OP_CAST_UL2U);
             EMIT_CAST(NUM_SIZE_64, OP_CAST_L2UL);
         } else if (desttd->as.num == NUM_TYPE_FLOAT && sourcetd->as.num == NUM_TYPE_SIGNED) {
-            EMIT_CAST(NUM_SIZE_32, OP_CAST_L2F);
-            EMIT_CAST(NUM_SIZE_64, OP_CAST_L2D);
+            switch ((num_size_t)sourcetd->size) {
+                case NUM_SIZE_8: {
+                    EMIT_CAST(NUM_SIZE_32, OP_CAST_B2F);
+                    EMIT_CAST(NUM_SIZE_64, OP_CAST_B2D);
+                    break;
+                }
+
+                case NUM_SIZE_16: {
+                    EMIT_CAST(NUM_SIZE_32, OP_CAST_S2F);
+                    EMIT_CAST(NUM_SIZE_64, OP_CAST_S2D);
+                    break;
+                }
+
+                case NUM_SIZE_32: {
+                    EMIT_CAST(NUM_SIZE_32, OP_CAST_I2F);
+                    EMIT_CAST(NUM_SIZE_64, OP_CAST_I2D);
+                    break;
+                }
+                case NUM_SIZE_64: {
+                    EMIT_CAST(NUM_SIZE_32, OP_CAST_L2F);
+                    EMIT_CAST(NUM_SIZE_64, OP_CAST_L2D);
+                    break;
+                }
+            }
         } else if (desttd->as.num == NUM_TYPE_UNSIGNED && sourcetd->as.num == NUM_TYPE_UNSIGNED) {
             EMIT_CAST(NUM_SIZE_8, OP_CAST_UL2UB);
             EMIT_CAST(NUM_SIZE_16, OP_CAST_UL2US);
@@ -1093,8 +1119,30 @@ static void emit_cast(gen_t *gen, function_t *function, type_t dest, type_t sour
             EMIT_CAST(NUM_SIZE_32, OP_CAST_UL2L, OP_CAST_L2I);
             EMIT_CAST(NUM_SIZE_64, OP_CAST_UL2L);
         } else if (desttd->as.num == NUM_TYPE_FLOAT && sourcetd->as.num == NUM_TYPE_UNSIGNED) {
-            EMIT_CAST(NUM_SIZE_32, OP_CAST_UL2F);
-            EMIT_CAST(NUM_SIZE_64, OP_CAST_UL2D);
+            switch ((num_size_t)sourcetd->size) {
+                case NUM_SIZE_8: {
+                    EMIT_CAST(NUM_SIZE_32, OP_CAST_UB2F);
+                    EMIT_CAST(NUM_SIZE_64, OP_CAST_UB2D);
+                    break;
+                }
+
+                case NUM_SIZE_16: {
+                    EMIT_CAST(NUM_SIZE_32, OP_CAST_US2F);
+                    EMIT_CAST(NUM_SIZE_64, OP_CAST_US2D);
+                    break;
+                }
+
+                case NUM_SIZE_32: {
+                    EMIT_CAST(NUM_SIZE_32, OP_CAST_U2F);
+                    EMIT_CAST(NUM_SIZE_64, OP_CAST_U2D);
+                    break;
+                }
+                case NUM_SIZE_64: {
+                    EMIT_CAST(NUM_SIZE_32, OP_CAST_UL2F);
+                    EMIT_CAST(NUM_SIZE_64, OP_CAST_UL2D);
+                    break;
+                }
+            }
         } else if (desttd->as.num == NUM_TYPE_FLOAT && sourcetd->as.num == NUM_TYPE_FLOAT) {
             EMIT_CAST(NUM_SIZE_32, OP_CAST_D2F);
         } else if (desttd->as.num == NUM_TYPE_UNSIGNED && sourcetd->as.num == NUM_TYPE_FLOAT) {
@@ -1109,16 +1157,6 @@ static void emit_cast(gen_t *gen, function_t *function, type_t dest, type_t sour
             EMIT_CAST(NUM_SIZE_64, OP_CAST_D2L);
         }
         #undef EMIT_CAST
-
-        if (desttd->size > sourcetd->size) {
-            instruction_t in = {0};
-            in.op = OP_WIDEN;
-            in.as.casting.reg_op = REG_RESULT;
-            in.as.casting.reg_result = REG_RESULT;
-            in.as.casting.size_bytes = sourcetd->size;
-
-            emit_instruction(function, loc, in);
-        }
 
     } else {
         ASSERT(desttd->size == sourcetd->size, "this at least must hold");

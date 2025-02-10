@@ -38,6 +38,20 @@ static string_t disassemble_instruction(instruction_t in, arena_t *allocator) {
 
         #define OP_CAST(suffix) string_format("OP_CAST"#suffix"(reg_result: %lu, reg_op: %lu)", allocator, (u32)in.as.casting.reg_result, (u32)in.as.casting.reg_op);
 
+        case OP_CAST_B2F: return OP_CAST(B2F);
+        case OP_CAST_S2F: return OP_CAST(S2F);
+        case OP_CAST_I2F: return OP_CAST(I2F);
+        case OP_CAST_UB2F: return OP_CAST(UB2F);
+        case OP_CAST_US2F: return OP_CAST(US2F);
+        case OP_CAST_U2F: return OP_CAST(U2F);
+
+        case OP_CAST_B2D: return OP_CAST(B2D);
+        case OP_CAST_S2D: return OP_CAST(S2D);
+        case OP_CAST_I2D: return OP_CAST(I2D);
+        case OP_CAST_UB2D: return OP_CAST(UB2D);
+        case OP_CAST_US2D: return OP_CAST(US2D);
+        case OP_CAST_U2D: return OP_CAST(U2D);
+
         case OP_CAST_D2F: return OP_CAST(D2F);
         case OP_CAST_D2UL: return OP_CAST(D2UL);
         case OP_CAST_D2L: return OP_CAST(D2L);
@@ -180,7 +194,6 @@ static string_t disassemble_instruction(instruction_t in, arena_t *allocator) {
         
         #undef OP_UNARY_REG_REG
 
-        case OP_WIDEN: return lit2str("OP_WIDEN");
         case OP_CALL: return lit2str("OP_CALL");
         case OP_INTRINSIC_CALL: return lit2str("OP_INTRINSIC_CALL");
         case OP_RETURN: return lit2str("OP_RETURN");

@@ -2062,7 +2062,7 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
     }
 
     if (parameter_invalid || TYPE_IS_INVALID(return_type)) {
-        INVALIDATE(funcdef);
+        // INVALIDATE(funcdef);
         return;
     }
 
@@ -2092,7 +2092,8 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
         resolve_expression(analyzer, ast, new_state, an_func_def_block(funcdef));
     }
 
-    unless (TYPE_IS_UNREACHABLE(an_func_def_block(funcdef)->value_type)) {
+    ast_node_t *funcblock = an_func_def_block(funcdef);
+    unless (TYPE_IS_UNREACHABLE(funcblock->value_type)) {
         stan_error(analyzer, make_error_node(ERROR_ANALYSIS_FUNCTION_MUST_RETURN_ON_ALL_BRANCHES, funcdef));
     }
 

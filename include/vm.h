@@ -3,6 +3,7 @@
 
 #include "def.h"
 #include "parser.h"
+#include "intrinsics.h"
 
 typedef enum reg_t reg_t;
 enum reg_t {
@@ -40,6 +41,20 @@ enum op_code_t {
     OP_MOVF32_REGMEM_TO_REG,
     OP_MOVWORD_REGMEM_TO_REG,
 
+    OP_CAST_B2F,
+    OP_CAST_S2F,
+    OP_CAST_I2F,
+    OP_CAST_B2D,
+    OP_CAST_S2D,
+    OP_CAST_I2D,
+
+    OP_CAST_UB2F,
+    OP_CAST_US2F,
+    OP_CAST_U2F,
+    OP_CAST_UB2D,
+    OP_CAST_US2D,
+    OP_CAST_U2D,
+
     OP_CAST_D2F,
     OP_CAST_D2UL,
     OP_CAST_D2L,
@@ -57,8 +72,6 @@ enum op_code_t {
     OP_CAST_L2UL,
     OP_CAST_L2F,
     OP_CAST_L2D,
-
-    OP_WIDEN,
 
     OP_SUBU_REG_IM32,
     OP_ADDU_REG_IM32,
@@ -462,44 +475,46 @@ void vm_step(vm_t *vm) {
             break;
         }
 
-        #define do_cast(d, s, dtype) do { \
+        #define do_cast(d, s, dtype, stype) do { \
             byte result = in.as.casting.reg_result; \
             byte op = in.as.casting.reg_op; \
-            vm->registers[result].as.d = cast(dtype, vm->registers[op].as.s); \
+            vm->registers[result].as.d = cast(dtype, (stype)vm->registers[op].as.s); \
             IP_ADV(1); \
         } while(false); break
 
-        case OP_CAST_D2UL: do_cast(u, d, u64);
-        case OP_CAST_D2L: do_cast(s, d, s64);
-        case OP_CAST_D2F: do_cast(d, d, f32);
+        case OP_CAST_B2D: do_cast(d, s, f64, s8);
+        case OP_CAST_S2D: do_cast(d, s, f64, s16);
+        case OP_CAST_I2D: do_cast(d, s, f64, s32);
+        case OP_CAST_UB2D: do_cast(d, s, f64, u8);
+        case OP_CAST_US2D: do_cast(d, s, f64, u16);
+        case OP_CAST_U2D: do_cast(d, s, f64, u32);
 
-        case OP_CAST_UL2UB: do_cast(u, u, u8);
-        case OP_CAST_UL2US: do_cast(u, u, u16);
-        case OP_CAST_UL2U: do_cast(u, u, u32);
-        case OP_CAST_UL2L: do_cast(s, u, s64);
-        case OP_CAST_UL2F: do_cast(d, u, f32);
-        case OP_CAST_UL2D: do_cast(d, u, f64);
+        case OP_CAST_B2F: do_cast(d, s, f32, s8);
+        case OP_CAST_S2F: do_cast(d, s, f32, s16);
+        case OP_CAST_I2F: do_cast(d, s, f32, s32);
+        case OP_CAST_UB2F: do_cast(d, s, f32, u8);
+        case OP_CAST_US2F: do_cast(d, s, f32, u16);
+        case OP_CAST_U2F: do_cast(d, s, f32, u32);
 
-        case OP_CAST_L2B: do_cast(s, s, s8);
-        case OP_CAST_L2S: do_cast(s, s, s16);
-        case OP_CAST_L2I: do_cast(s, s, s32);
-        case OP_CAST_L2UL: do_cast(u, s, u64);
-        case OP_CAST_L2F: do_cast(d, s, f32);
-        case OP_CAST_L2D: do_cast(d, s, f64);
+        case OP_CAST_D2F: do_cast(d, d, f32, f64);
+        case OP_CAST_D2UL: do_cast(u, d, u64, f64);
+        case OP_CAST_D2L: do_cast(s, d, s64, f64);
+
+        case OP_CAST_UL2UB: do_cast(u, u, u8, u64);
+        case OP_CAST_UL2US: do_cast(u, u, u16, u64);
+        case OP_CAST_UL2U: do_cast(u, u, u32, u64);
+        case OP_CAST_UL2L: do_cast(s, u, s64, u64);
+        case OP_CAST_UL2F: do_cast(d, u, f32, u64);
+        case OP_CAST_UL2D: do_cast(d, u, f64, u64);
+
+        case OP_CAST_L2B: do_cast(s, s, s8, s64);
+        case OP_CAST_L2S: do_cast(s, s, s16, s64);
+        case OP_CAST_L2I: do_cast(s, s, s32, s64);
+        case OP_CAST_L2UL: do_cast(u, s, u64, s64);
+        case OP_CAST_L2F: do_cast(d, s, f32, s64);
+        case OP_CAST_L2D: do_cast(d, s, f64, s64);
 
         #undef do_cast
-
-        case OP_WIDEN: {
-            const u64 masks[] = {0x0000000F, 0x000000FF, 0x00000FFF, 0x0000FFFF, 0x000FFFFF, 0x00FFFFFF, 0x0FFFFFFF, 0xFFFFFFFF};
-            u8 size_bytes = in.as.casting.size_bytes;
-            ASSERT(size_bytes < WORD_SIZE, "this is only for small things");
-
-            u64 mask = masks[size_bytes];
-            vm->registers[in.as.casting.reg_result].as.u = vm->registers[in.as.casting.reg_op].as.u&mask;
-
-            IP_ADV(1);
-            break;
-        }
 
         // conversion to unsigned for wrapped operation on overflow but converted back to integer after (c is ub for signed overflow)
         #define case_bini_reg_reg(name, op, type) case OP_##name##_REG_REG: {\
@@ -644,17 +659,17 @@ void vm_step(vm_t *vm) {
             break;
         }
 
-        #define case_mov_regaddr_to_reg(name, q, type) case OP_MOV##name##_REGADDR_TO_REG: { \
+        #define case_mov_regaddr_to_reg(name, q, type, mask) case OP_MOV##name##_REGADDR_TO_REG: { \
             byte regaddr = in.as.mov_reg_to_reg.reg_source; \
             byte reg_dest = in.as.mov_reg_to_reg.reg_destination; \
             vm->registers[reg_dest].as.q = (*((type*)(vm->registers[regaddr].as.p))); \
             IP_ADV(1); \
         } break
 
-        case_mov_regaddr_to_reg(U8, u, u8);
-        case_mov_regaddr_to_reg(U16, u, u16);
-        case_mov_regaddr_to_reg(U32, u, u32);
-        case_mov_regaddr_to_reg(F32, d, f32);
+        case_mov_regaddr_to_reg(U8, u, u8, 0xF);
+        case_mov_regaddr_to_reg(U16, u, u16, 0xFF);
+        case_mov_regaddr_to_reg(U32, u, u32, 0xFFFF);
+        case_mov_regaddr_to_reg(F32, d, f32, 0xFFFF);
 
         #undef case_mov_regaddr_to_reg
 
