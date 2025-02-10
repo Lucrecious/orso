@@ -22,6 +22,6 @@
 // creating a variable. it's a value that gets inferred. and types are the only values that can be inferred.
 
 {
-    x: ~u = 1;
-    u == f32;
+    x: ~u = 1 + typeof(u);
+    x;
 }

@@ -1923,7 +1923,11 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
             resolve_declaration_definition(analyzer, ast, new_state, decl);
         }
     } else {
-        ASSERT(decl->node_type == AST_NODE_TYPE_EXPR_INFERRED_TYPE_DECL && TYPE_IS_TYPE(decl->value_type), "only inferred type decls otherwise, and they should be resolved by now");
+        ASSERT(decl->node_type == AST_NODE_TYPE_EXPR_INFERRED_TYPE_DECL, "must");
+        unless (TYPE_IS_TYPE(decl->value_type) && TYPE_IS_RESOLVED(decl->expr_val.word.as.t)) {
+            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_TYPE_INFERENCE_DECL_HAS_NOT_BEEN_RESOLVED, def));
+            return decl;
+        }
     }
 
     #undef NEXT_SCOPE
