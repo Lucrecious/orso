@@ -59,7 +59,7 @@ typedef enum ast_node_type_t {
     AST_NODE_TYPE_DECLARATION_STATEMENT, // for expressions
 
     AST_NODE_TYPE_EXPRESSION_JMP, // return, break, continue
-    AST_NODE_TYPE_EXPRESSION_INFERRED_TYPE,
+    AST_NODE_TYPE_EXPR_INFERRED_TYPE_DECL,
     AST_NODE_TYPE_EXPRESSION_CAST,
     AST_NODE_TYPE_EXPRESSION_BINARY,
     AST_NODE_TYPE_EXPRESSION_DOT,
@@ -96,7 +96,7 @@ case AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE: \
 case AST_NODE_TYPE_EXPRESSION_GROUPING: \
 case AST_NODE_TYPE_EXPRESSION_PRIMARY: \
 case AST_NODE_TYPE_EXPRESSION_JMP: \
-case AST_NODE_TYPE_EXPRESSION_INFERRED_TYPE: \
+case AST_NODE_TYPE_EXPR_INFERRED_TYPE_DECL: \
 case AST_NODE_TYPE_EXPRESSION_UNARY: \
 case AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER: \
 case AST_NODE_TYPE_EXPRESSION_DIRECTIVE: \
@@ -269,8 +269,8 @@ void ast_free(ast_t *ast);
 ast_node_t* ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start);
 ast_node_t *ast_nil(ast_t *ast, type_t value_type, token_t token_location);
 ast_node_t *ast_def_value(ast_t *ast, token_t identifer);
+ast_node_t *ast_inferred_type_decl(ast_t *ast, token_t squiggle_token, token_t identifer);
 ast_node_t *ast_cast(ast_t *ast, ast_node_t *expr_type, ast_node_t *expr);
-ast_node_t *ast_inferred_type(ast_t *ast, token_t identifer);
 ast_node_t *ast_begin_module(ast_t *ast);
 void ast_end_module(ast_node_t *module);
 void ast_add_module(ast_t *ast, ast_node_t *module, string_t moduleid);

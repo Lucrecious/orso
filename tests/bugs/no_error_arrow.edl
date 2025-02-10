@@ -1,0 +1,7 @@
+// the error arrow is not shown at all, looks like the column is wrong
+// comments above a thing adds white space to errors
+{
+    //.
+    x: int = 1.5;
+    x;
+}

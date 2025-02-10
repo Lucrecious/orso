@@ -589,7 +589,7 @@ static word_t constant_fold_cast(ast_t *ast, word_t in, type_t dst, type_t src) 
 }
 
 static ast_node_t *ast_implicit_cast(ast_t *ast, ast_node_t *expr, type_t dst_type) {
-    ast_node_t *inferred_type = ast_inferred_type(ast, token_implicit_at_start(expr->start));
+    ast_node_t *inferred_type = ast_inferred_type_decl(ast, token_implicit_at_start(expr->start), token_implicit_at_start(expr->start));
     inferred_type->value_type = typeid(TYPE_TYPE);
     inferred_type->expr_val = ast_node_val_word(WORDT(dst_type));
 
@@ -812,14 +812,20 @@ void resolve_expression(
         }
 
         case AST_NODE_TYPE_EXPRESSION_NIL: {
-            if (TYPE_IS_UNRESOLVED(expr->value_type)) {
-                // todo
-                UNREACHABLE();
-            }
+            expr->value_type = typeid(TYPE_UNRESOLVED);
             break;
         }
         
-        case AST_NODE_TYPE_EXPRESSION_INFERRED_TYPE: {
+        case AST_NODE_TYPE_EXPR_INFERRED_TYPE_DECL: {
+            expr->value_type = typeid(TYPE_TYPE);
+            expr->expr_val = ast_node_val_word(WORDT(typeid(TYPE_UNRESOLVED)));
+
+            if (state.scope->type == SCOPE_TYPE_TYPE_CONTEXT) {
+                add_definition(state.scope->outer, &ast->allocator, expr->identifier.view, expr);
+            } else {
+                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INFERRED_TYPE_DECLS_ARE_ONLY_ALLOWED_INSIDE_TYPE_ANNOTATIONS, expr));
+                INVALIDATE(expr);
+            }
             break;
         }
 
@@ -1658,19 +1664,25 @@ static void declare_definition(analyzer_t *analyzer, scope_t *scope, ast_node_t 
     allocator_return(tmp);
 }
 
-static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, analysis_state_t state, ast_node_t *declaration) {
-    type_t declaration_type = typeid(TYPE_UNRESOLVED);
-    if (TYPE_IS_UNRESOLVED(declaration->value_type)) {
+static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, analysis_state_t state, ast_node_t *decl) {
+    ast_node_t *decl_type = an_decl_type(decl);
+    if (TYPE_IS_UNRESOLVED(decl->value_type)) {
         analysis_state_t new_state = state;
-        resolve_expression(analyzer, ast, new_state, an_decl_type(declaration));
+        scope_t type_context = {0};
+        scope_init(&type_context, &ast->allocator, SCOPE_TYPE_TYPE_CONTEXT, state.scope, decl_type);
+        new_state.scope = &type_context;
+        resolve_expression(analyzer, ast, new_state, decl_type);
 
-        ast_node_t *decl_type = an_decl_type(declaration);
-        if (TYPE_IS_RESOLVED(decl_type->value_type)) {
-            declaration_type = decl_type->expr_val.word.as.t;
+        if (TYPE_IS_RESOLVED(decl_type->value_type) && TYPE_IS_RESOLVED(decl_type->expr_val.word.as.t)) {
+            decl->value_type = decl_type->expr_val.word.as.t;
+        } else unless (TYPE_IS_TYPE(decl_type->value_type)) {
+            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_EXPECTED_TYPE, decl_type));
+            INVALIDATE(decl);
         }
     }
 
-    if (TYPE_IS_UNRESOLVED(an_decl_expr(declaration)->value_type)) {
+    ast_node_t *init_expr = an_decl_expr(decl);
+    if (TYPE_IS_UNRESOLVED(an_decl_expr(decl)->value_type)) {
         analysis_state_t new_state = state;
         switch (state.scope->type) {
         case SCOPE_TYPE_FUNC_DEF_BODY:
@@ -1688,167 +1700,91 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
         case SCOPE_TYPE_NONE: UNREACHABLE(); break;
         }
 
-        ast_node_t *expr = an_decl_expr(declaration);
-        if (expr->node_type == AST_NODE_TYPE_EXPRESSION_NIL) {
-            if (TYPE_IS_UNREACHABLE(declaration_type)) {
-                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CANNOT_INFER_NIL_VALUE, declaration));
-                INVALIDATE(expr);
-            } else {
-                expr->value_type = declaration_type;
-                expr->expr_val = zero_value(ast, declaration_type);
-            }
-
-        } else {
-            resolve_expression(analyzer, ast, new_state, an_decl_expr(declaration));
-        }
+        resolve_expression(analyzer, ast, new_state, init_expr);
     }
 
-    // we are resolved
-    if (is_declaration_resolved(declaration)) {
-        unless (TYPE_IS_TYPE(declaration->value_type)) {
-            return;
-        }
-
-        // This must be available at compile time
-        type_t struct_type = declaration->expr_val.word.as.t;
-        typedata_t *struct_type_info = ast->type_set.types.items[struct_type.i];
-        unless (struct_type_is_incomplete(struct_type_info) && struct_type_info->as.struct_.name) {
-            return;
-        }
-
-        ast_node_t *cast_node = an_decl_expr(declaration);
-        ASSERT(cast_node->node_type == AST_NODE_TYPE_EXPRESSION_CAST, "must be implicit casting node");
-        
-        type_t completed_struct_type = an_rhs(cast_node)->value_type;
-        
-        // this means that we found out later that the struct this was supposed to be was actually invalid, so we need to fix the ast
-        if (TYPE_IS_INVALID(completed_struct_type)) {
-            INVALIDATE(cast_node);
-            INVALIDATE(declaration);
-            return;
-        }
-
-        ASSERT(type_is_struct(ast->type_set.types, completed_struct_type), "casted expression must be a struct type");
-
-        typedata_t *completed_struct_type_info = ast->type_set.types.items[completed_struct_type.i];
-        if (struct_type_is_incomplete(completed_struct_type_info)) {
-            return;
-        }
-
-        named_struct_copy_data_from_completed_struct_type(&ast->type_set, struct_type, completed_struct_type);
+    if (TYPE_IS_INVALID(decl->value_type)) {
         return;
     }
 
-
-    if (TYPE_IS_INVALID(an_decl_expr(declaration)->value_type)) {
-        INVALIDATE(declaration);
+    if (TYPE_IS_UNRESOLVED(init_expr->value_type) && TYPE_IS_UNRESOLVED(decl_type->expr_val.word.as.t)) {
+        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CANNOT_INFER_NIL_VALUE, decl));
+        INVALIDATE(decl);
+        INVALIDATE(init_expr);
+        INVALIDATE(decl_type);
+    } else if (TYPE_IS_RESOLVED(init_expr->value_type) && TYPE_IS_UNRESOLVED(decl_type->expr_val.word.as.t)) {
+        decl_type->expr_val.word.as.t = init_expr->value_type;
+    
+        decl->value_type = init_expr->value_type;
+    } else if (TYPE_IS_UNRESOLVED(init_expr->value_type) && TYPE_IS_RESOLVED(decl_type->expr_val.word.as.t)) {
+        init_expr->value_type = decl_type->expr_val.word.as.t;
+        init_expr->expr_val = zero_value(ast, init_expr->value_type);
+    
+        decl->value_type = init_expr->value_type;
     }
 
-    if (TYPE_IS_VOID(an_decl_expr(declaration)->value_type)) {
-        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CANNOT_STORE_VOID_EXPRESSIONS, declaration));
-        INVALIDATE(declaration);
-    }
-
-    unless (declaration->is_mutable) {
-        if (type_is_struct(ast->type_set.types, an_decl_expr(declaration)->value_type)
-        && (TYPE_IS_UNRESOLVED(declaration_type) || TYPE_IS_TYPE(declaration_type))) {
-            ast_node_t *to_struct_type = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_CAST, an_decl_expr(declaration)->start);
-            to_struct_type->value_type = typeid(TYPE_TYPE);
-            an_operand(to_struct_type) = an_decl_expr(declaration);
-
-            to_struct_type->foldable = true;
-            typedata_t *initial_expression_type_info = type2typedata(&ast->type_set.types, an_decl_expr(declaration)->value_type);
-            type_t named_struct_id = type_create_struct(&ast->type_set, declaration->start.view.data, declaration->start.view.length, initial_expression_type_info);
-            to_struct_type->expr_val = ast_node_val_word(WORDT(named_struct_id));
-
-            type_t initial_expression_type = an_decl_expr(declaration)->value_type;
-
-            ast_node_and_scope_t node_and_scope;
-            bool found = table_get(type2ns, ast->type_to_creation_node, initial_expression_type, &node_and_scope);
-            ASSERT(found, "this should always find something");
-
-            an_decl_expr(declaration) = to_struct_type;
-
-            table_put(type2ns, ast->type_to_creation_node, named_struct_id, node_and_scope);
-            
-            {
-                // todo: add zero value for structs
-                UNREACHABLE();
-            }
-        }
-    }
-
-    // Could be resolved could be unresolved at this point.
-    declaration->value_type = declaration_type;
-
-    if (TYPE_IS_UNRESOLVED(declaration->value_type)) {
-        type_t expression_type = an_decl_expr(declaration)->value_type;
-        declaration->value_type = expression_type;
-    }
-
-    ast_node_t *decl_type = an_decl_type(declaration);
-    if (decl_type->node_type == AST_NODE_TYPE_EXPRESSION_INFERRED_TYPE) {
-        decl_type->value_type = typeid(TYPE_TYPE);
-        decl_type->expr_val = ast_node_val_word(WORDT(declaration->value_type));
+    if (TYPE_IS_VOID(decl->value_type)) {
+        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CANNOT_STORE_VOID_EXPRESSIONS, decl));
+        INVALIDATE(decl);
     }
 
     ASSERT(TYPE_IS_RESOLVED(decl_type->value_type), "must be resolved at this point");
 
     {
-        ast_node_t *decl_expr = an_decl_expr(declaration);
-        type_t declared_type = declaration->value_type;
+        ast_node_t *decl_expr = an_decl_expr(decl);
+        type_t declared_type = decl->value_type;
 
         ast_node_t *casted_expr = cast_implicitly_if_necessary(ast, declared_type, decl_expr);
         unless (typeid_eq(declared_type, casted_expr->value_type)) {
             unless (TYPE_IS_INVALID(decl_expr->value_type)) {
-                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INITIAL_EXPR_TYPE_MISMATCH, declaration));
+                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INITIAL_EXPR_TYPE_MISMATCH, decl));
             }
         }
 
-        an_decl_expr(declaration) = casted_expr;
+        an_decl_expr(decl) = casted_expr;
     }
 
-    if (an_decl_expr(declaration)->expr_val.is_concrete) {
-        declaration->expr_val = an_decl_expr(declaration)->expr_val;
+    if (an_decl_expr(decl)->expr_val.is_concrete) {
+        decl->expr_val = an_decl_expr(decl)->expr_val;
     }
     
-    add_definition(state.scope, &analyzer->allocator, declaration->identifier.view, declaration);
+    add_definition(state.scope, &analyzer->allocator, decl->identifier.view, decl);
 
     // bind it to intrinsic if intrinsic
     {
-        if (declaration->is_intrinsic) {
-            unless (an_is_constant(declaration)) {
-                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INTRINSIC_MUST_BE_CONSTANT, declaration));
-                INVALIDATE(declaration);
+        if (decl->is_intrinsic) {
+            unless (an_is_constant(decl)) {
+                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INTRINSIC_MUST_BE_CONSTANT, decl));
+                INVALIDATE(decl);
                 return;
             }
 
-            ASSERT(declaration->expr_val.is_concrete, "should be there if its a constant");
+            ASSERT(decl->expr_val.is_concrete, "should be there if its a constant");
 
-            unless (TYPE_IS_TYPE(declaration->value_type)) {
-                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INTRINSIC_DECLARATIONS_CAN_ONLY_BE_TYPES, declaration));
-                INVALIDATE(declaration);
+            unless (TYPE_IS_TYPE(decl->value_type)) {
+                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INTRINSIC_DECLARATIONS_CAN_ONLY_BE_TYPES, decl));
+                INVALIDATE(decl);
                 return;
             }
 
-            type_t type = declaration->expr_val.word.as.t;
+            type_t type = decl->expr_val.word.as.t;
             typedata_t *td = type2td(ast, type);
 
             if (td->kind != TYPE_FUNCTION) {
-                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_ONLY_INTRINSIC_FUNCTIONS_ARE_SUPPORTED, an_decl_expr(declaration)));
-                INVALIDATE(declaration);
+                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_ONLY_INTRINSIC_FUNCTIONS_ARE_SUPPORTED, an_decl_expr(decl)));
+                INVALIDATE(decl);
                 return;
             }
 
             tmp_arena_t *tmp = allocator_borrow();
             word_t result;
-            if (table_get(s2w, ast->intrinsic_fns, sv2string(declaration->identifier.view, tmp->allocator), &result)) {
+            if (table_get(s2w, ast->intrinsic_fns, sv2string(decl->identifier.view, tmp->allocator), &result)) {
                 intrinsic_fn_t func = (intrinsic_fn_t)result.as.p;
-                declaration->expr_val = ast_node_val_word(WORDP(func));
-                declaration->value_type = type_set_fetch_intrinsic_function(&ast->type_set, type);
+                decl->expr_val = ast_node_val_word(WORDP(func));
+                decl->value_type = type_set_fetch_intrinsic_function(&ast->type_set, type);
             } else {
-                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INTRINSIC_NAME_DOES_NOT_EXIST, declaration));
-                INVALIDATE(declaration);
+                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INTRINSIC_NAME_DOES_NOT_EXIST, decl));
+                INVALIDATE(decl);
             }
 
             allocator_return(tmp);
@@ -1979,12 +1915,15 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
         stan_error(analyzer, make_error_node(ERROR_ANALYSIS_DEFINITION_DOES_NOT_EXIST, def));
         return NULL;
     }
-    
-    // ensure that the value is resolved
-    if (an_is_notnone(an_decl_expr(decl))) {
-        analysis_state_t new_state = state;
-        new_state.scope = *search_scope;
-        resolve_declaration_definition(analyzer, ast, new_state, decl);
+
+    if (decl->node_type == AST_NODE_TYPE_DECLARATION_DEFINITION) {
+        if (TYPE_IS_UNRESOLVED(decl->value_type)) {
+            analysis_state_t new_state = state;
+            new_state.scope = *search_scope;
+            resolve_declaration_definition(analyzer, ast, new_state, decl);
+        }
+    } else {
+        ASSERT(decl->node_type == AST_NODE_TYPE_EXPR_INFERRED_TYPE_DECL && TYPE_IS_TYPE(decl->value_type), "only inferred type decls otherwise, and they should be resolved by now");
     }
 
     #undef NEXT_SCOPE

@@ -1,19 +1,27 @@
+// Implementation notes for inferred typing for generics:
+// - front end is static analyzer... i shouldn't have to change *anything* in the code gen
+// - first thing i wanted to work
+// {
+//     x: ~u = 10;
+//     u == int;
+// }
+// ~u is declaration syntax for inferred types, it can only be used inside a type annotation context which
+// is only available when declaring variables.
+// then the variable name itself is a regular *constant* you can use throughout the rest of the context like 
+// unfortunately, it adds "special" syntax, but i think it's worth t, as the altnerative might look like this:
+// x: u: type = 10;
+// which *might* be possible to parse (how do i properly differentiate during parsing between a regular declaration and an inffered one),
+// but then that means, essentially, that declarations are also expression, which i want to avoid.
+// also, it would be inconvenient to use when i add in generic structs... if i can describe an array like "array(int)"
+// thien it would need to look something like this...
+// x: array(u: type) = .[];
+// it's a little inconvenient, a syntax like this is a little more terse and can convey *better* meaning
+// x: array(~u) = .[];
+// 
+// the other thing is that this isn't like a regular declaration... it's an *inferred* declaration. it's not simply
+// creating a variable. it's a value that gets inferred. and types are the only values that can be inferred.
+
 {
-    person_t :: int;
-    bob : @run get_type() : 0;
-    alice : @run get_type() : 1;
-
-    get_type :: () -> type {
-        preference := readint();
-        return if preference == 0 then
-            int
-        else
-            f32;
-    };
-
-    date :: (a: int, b: int) -> bool {
-        return true;
-    };
-
-    date(alice, bob);
+    x: ~u = 1;
+    u == f32;
 }

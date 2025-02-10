@@ -220,7 +220,7 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start) {
             break;
         }
 
-        case AST_NODE_TYPE_EXPRESSION_INFERRED_TYPE: {
+        case AST_NODE_TYPE_EXPR_INFERRED_TYPE_DECL: {
             break;
         }
 
@@ -354,11 +354,6 @@ ast_node_t *ast_cast(ast_t *ast, ast_node_t *type_expr, ast_node_t *expr) {
     an_lhs(cast_) = type_expr;
     an_rhs(cast_) = expr;
     return cast_;
-}
-
-ast_node_t *ast_inferred_type(ast_t *ast, token_t identifer) {
-    ast_node_t *n = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_INFERRED_TYPE, identifer);
-    return n;
 }
 
 static ast_node_t *ast_primaryu(ast_t *ast, u64 value, type_t type, token_t token) {
@@ -571,6 +566,16 @@ static ast_node_t *ast_do(ast_t *ast, token_t label, ast_node_t *then, ast_node_
     an_else(do_) = else_;
     do_->end = else_->end;
     return do_;
+}
+
+ast_node_t *ast_inferred_type_decl(ast_t *ast, token_t squiggle_token, token_t identifer) {
+    ast_node_t *inferred_type_decl = ast_node_new(ast, AST_NODE_TYPE_EXPR_INFERRED_TYPE_DECL, squiggle_token);
+    inferred_type_decl->end = identifer;
+    inferred_type_decl->identifier = identifer;
+    inferred_type_decl->is_mutable = false;
+    inferred_type_decl->value_type = typeid(TYPE_UNRESOLVED);
+
+    return inferred_type_decl;
 }
 
 static void parser_init(parser_t *parser, ast_t *ast, string_t file_path, string_view_t source, error_function_t error_fn) {
@@ -1213,6 +1218,19 @@ static ast_node_t *parse_unary(parser_t *parser) {
     return expression_node;
 }
 
+static ast_node_t *parse_inferred_type_decl(parser_t *parser) {
+    token_t first_token = parser->previous;
+
+    token_t identifier = parser->current;
+    unless (consume(parser, TOKEN_IDENTIFIER)) {
+        identifier = nil_token;
+        parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_IDENTIFER_AFTER_INFERRED_TYPE_DECL_ANNOTATION, parser->previous, parser->current));
+    }
+
+    ast_node_t *inferred_type_decl = ast_inferred_type_decl(parser->ast, first_token, identifier);
+    return inferred_type_decl;
+}
+
 static ast_node_t *ast_call_begin(ast_t *ast, ast_node_type_t type, token_t start) {
     ast_node_t *call = ast_node_new(ast, type, start);
     return call;
@@ -1358,6 +1376,7 @@ parse_rule_t rules[] = {
     [TOKEN_SEMICOLON]               = { NULL,               NULL,               PREC_NONE },
     [TOKEN_BAR]                     = { NULL,               parse_binary,       PREC_BITWISE_OR },
     [TOKEN_AMPERSAND]               = { parse_unary,        NULL,               PREC_UNARY },
+    [TOKEN_SQUIGGLE]                = { parse_inferred_type_decl,        NULL,  PREC_UNARY },
     [TOKEN_PLUS_PLUS]               = { parse_unary,        NULL,               PREC_NONE },
     [TOKEN_MINUS_MINUS]             = { parse_unary,        NULL,               PREC_NONE },
     [TOKEN_LESS_LESS]               = { NULL,               parse_cast,         PREC_CAST },
@@ -1545,7 +1564,7 @@ static ast_node_t *parse_decl_def(parser_t *parser) {
         type_expr = parse_expression(parser);
         parser->inside_type_context = inside_type_context;
     } else {
-        type_expr = ast_inferred_type(parser->ast, token_implicit_at_end(parser->previous));
+        type_expr = ast_inferred_type_decl(parser->ast, token_implicit_at_end(parser->previous), token_implicit_at_end(parser->previous));
     }
 
     ASSERT(type_expr, "should be set by now");
@@ -1767,9 +1786,9 @@ static void ast_print_ast_node(typedatas_t types, ast_node_t *node, u32 level) {
             break;
         }
 
-        case AST_NODE_TYPE_EXPRESSION_INFERRED_TYPE: {
+        case AST_NODE_TYPE_EXPR_INFERRED_TYPE_DECL: {
             print_indent(level);
-            string_t label = string_format("inferred_type: %s", tmp->allocator, type_to_string(types, node->expr_val.word.as.t, tmp->allocator));
+            string_t label = string_format("inferred type decl: %.*s = %s", tmp->allocator, node->identifier.view.length, node->identifier.view.data, type_to_string(types, node->expr_val.word.as.t, tmp->allocator));
             print_line("%s", label.cstr);
             break;
         }
@@ -2005,6 +2024,12 @@ static void ast_print_ast_node(typedatas_t types, ast_node_t *node, u32 level) {
         case AST_NODE_TYPE_DECLARATION_DEFINITION: {
             print_indent(level);
             print_line("declaration (%.*s): %s", node->identifier.view.length, node->identifier.view.data, type2cstr(node));
+
+            if (an_decl_type(node) != AST_NODE_TYPE_NONE) {
+                print_indent(level+1);
+                print_line("type expr");
+                ast_print_ast_node(types, an_decl_type(node), level+2);
+            }
 
             if (an_decl_expr(node) != AST_NODE_TYPE_NONE) {
                 print_indent(level+1);
