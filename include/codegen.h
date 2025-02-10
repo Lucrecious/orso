@@ -453,7 +453,7 @@ static void emit_bin_op(texloc_t loc, function_t *function, token_type_t token_t
 }
 
 static void emit_unary(gen_t *gen, texloc_t loc, function_t *function, token_type_t token_type, type_t type, reg_t op1, reg_t result) {
-    typedata_t *type_info = type2typedata(&gen->ast->type_set.types, type);
+    typedata_t *td = type2typedata(&gen->ast->type_set.types, type);
 
     switch (token_type) {
         case TOKEN_NOT: {
@@ -461,7 +461,7 @@ static void emit_unary(gen_t *gen, texloc_t loc, function_t *function, token_typ
             in.as.unary_reg_to_reg.reg_op = op1;
             in.as.unary_reg_to_reg.reg_result = result;
 
-            switch (type_info->kind) {
+            switch (td->kind) {
                 case TYPE_BOOL: in.op = OP_NOT; break;
                 default: UNREACHABLE();
             }
@@ -475,9 +475,9 @@ static void emit_unary(gen_t *gen, texloc_t loc, function_t *function, token_typ
             in.as.unary_reg_to_reg.reg_op = op1;
             in.as.unary_reg_to_reg.reg_result = result;
 
-            switch (type_info->kind) {
+            switch (td->kind) {
                 case TYPE_NUMBER: {
-                    switch (type_info->as.num) {
+                    switch (td->as.num) {
                         case NUM_TYPE_FLOAT: in.op = OP_NEGATED; break;
                         case NUM_TYPE_SIGNED: in.op = OP_NEGATEI; break;
                         case NUM_TYPE_UNSIGNED: UNREACHABLE(); break;
@@ -494,9 +494,8 @@ static void emit_unary(gen_t *gen, texloc_t loc, function_t *function, token_typ
 
         case TOKEN_STAR: {
             type_t t = type;
-            if (type_info->kind == TYPE_POINTER) {
-                t = type_info->as.ptr.type;
-            }
+            ASSERT(td->kind == TYPE_POINTER, "only allowed on pointer types");
+            t = td->as.ptr.type;
             emit_mov_reg_to_reg(gen, function, loc, t, REG_MOV_TYPE_ADDR_TO_REG, result, op1);
             break;
         }
