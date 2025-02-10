@@ -27,10 +27,10 @@ void _module_init_3(void) {
 
 
 
-f64 expr(void) {
+bool_ expr(void) {
   _module_init_3();
 
-  f64 tmp1; {
+  bool_ tmp1; {
     bool_ x_ = false;
 
     int tmp2; {
@@ -40,7 +40,9 @@ f64 expr(void) {
         tmp2 = int_(-1);
       }
     };
-    tmp1 = cast(f64, tmp2);
+    f64 a_ = cast(f64, tmp2);
+
+    tmp1 = (a_ == -1);
   };
 
   return tmp1;
