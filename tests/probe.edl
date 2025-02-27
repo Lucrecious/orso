@@ -57,10 +57,12 @@
 // i think that while an inferred function definition can be passed around in mutable variables,
 // they can only be called from a constant time value so the definition can be inferred.
 {
-    add :: (a: ~u, b: u) -> u {
-        return a + b;
+    add :: (a: &~u, b: &u) -> u {
+        return *a + *b;
     };
 
-    add(1, 1);
+    x := 1;
+    y := 1;
+    add(&x, &y);
 }
 

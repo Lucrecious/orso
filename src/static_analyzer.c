@@ -181,12 +181,19 @@ static bool fold_funcsig_or_error(analyzer_t *analyzer, ast_t *ast, ast_node_t *
     bool hit_error = false;
     types_t parameter_types = {.allocator=&ast->allocator};
 
+    bool type_is_inferred = false;
+
     for (size_t i = an_func_def_arg_start(expression); i < an_func_def_arg_end(expression); ++i) {
         ast_node_t *parameter = expression->children.items[i];
         unless (parameter->expr_val.is_concrete) {
             hit_error = true;
             stan_error(analyzer, make_error_node(ERROR_ANALYSIS_EXPECTED_CONSTANT, parameter));
             break;
+        }
+
+        if (TYPE_IS_UNRESOLVED(parameter->value_type)) {
+            type_is_inferred = true;
+            continue;
         }
 
         unless (TYPE_IS_TYPE(parameter->value_type)) {
@@ -197,6 +204,11 @@ static bool fold_funcsig_or_error(analyzer_t *analyzer, ast_t *ast, ast_node_t *
 
         type_t type = typeid(parameter->expr_val.word.as.u);
         array_push(&parameter_types, type);
+    }
+
+    if (type_is_inferred) {
+        expression->expr_val = ast_node_val_word(WORDT(typeid(TYPE_UNRESOLVED)));
+        return true;
     }
 
     if (hit_error) {
@@ -840,6 +852,11 @@ static ast_node_t *stan_realize_inferred_funcdef_or_error_and_null(analyzer_t *a
         result = find_realized_funcdef_or_null_by_inferred_types(inferred_funcdef->realized_funcdef_copies, types);
         unless(result) {
             result = ast_node_copy(analyzer->ast, inferred_funcdef);
+            for (size_t i = an_func_def_arg_start(result); i < an_func_def_arg_end(result); ++i) {
+                ast_node_t *param = result->children.items[i];
+                param->value_type = typeid(TYPE_UNRESOLVED);
+            }
+
             resolve_funcdef(analyzer, analyzer->ast, new_state, result);
 
             types_t types_ = {.allocator=&analyzer->ast->allocator};
@@ -1153,11 +1170,17 @@ void resolve_expression(
                     } else {
                         if (TYPE_IS_TYPE(op->lvalue_node->value_type)) {
                             expr->value_type = typeid(TYPE_TYPE);
-                            type_t ptr_type = type_set_fetch_pointer(&ast->type_set, op->lvalue_node->expr_val.word.as.t);
+
+                            type_t lvalue_type = op->lvalue_node->expr_val.word.as.t;
+                            type_t ptr_type = type_set_fetch_pointer(&ast->type_set, lvalue_type);
                             expr->expr_val = ast_node_val_word(WORDT(ptr_type));
                         } else {
-                            INVALIDATE(expr);
-                            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CANNOT_TAKE_ADDRESS_OF_CONSTANT, expr));
+                            if (TYPE_IS_UNRESOLVED(op->lvalue_node->value_type)) {
+                                expr->expr_val = ast_node_val_word(WORDT(typeid(TYPE_UNRESOLVED)));
+                            } else {
+                                INVALIDATE(expr);
+                                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CANNOT_TAKE_ADDRESS_OF_CONSTANT, expr));
+                            }
                         }
                     }
                     break;
@@ -1679,7 +1702,7 @@ static void declare_definition(analyzer_t *analyzer, scope_t *scope, ast_node_t 
     allocator_return(tmp);
 }
 
-static void forward_scan_inferred_types(ast_node_t *decl, ast_node_t *decl_type, arena_t *arena, type_patterns_t *patterns) {
+static void forward_scan_inferred_types(ast_node_t *decl, ast_node_t *decl_type, arena_t *arena, scope_t *scope, type_patterns_t *patterns) {
     switch (decl_type->node_type) {
         case AST_NODE_TYPE_NONE:
         case AST_NODE_TYPE_DECLARATION_STATEMENT:
@@ -1704,12 +1727,15 @@ static void forward_scan_inferred_types(ast_node_t *decl, ast_node_t *decl_type,
         case AST_NODE_TYPE_EXPRESSION_JMP: break;
 
         case AST_NODE_TYPE_EXPR_INFERRED_TYPE_DECL: {
-            decl_type->node_type = AST_NODE_TYPE_EXPRESSION_DEF_VALUE;
-
             type_path_t *path = arena_alloc(arena, sizeof(type_path_t));
             *path = zer0(type_path_t);
             path->kind = TYPE_COUNT;
             path->next = NULL;
+
+            add_definition(scope, arena, decl_type->identifier.view, decl_type);
+
+            decl_type->node_type = AST_NODE_TYPE_EXPRESSION_DEF_VALUE;
+            decl_type->value_type = typeid(TYPE_UNRESOLVED);
 
             type_pattern_t pattern = {
                 .identifier = decl_type->identifier,
@@ -1720,11 +1746,11 @@ static void forward_scan_inferred_types(ast_node_t *decl, ast_node_t *decl_type,
         }
 
         case AST_NODE_TYPE_EXPRESSION_UNARY: {
-            unless (decl_type->operator.type == TOKEN_AMPERSAND && an_is_notnone(an_expression(decl_type)->lvalue_node)) {
+            unless (decl_type->operator.type == TOKEN_AMPERSAND) {
                 break;
             }
 
-            forward_scan_inferred_types(decl, an_expression(decl_type), arena, patterns);
+            forward_scan_inferred_types(decl, an_expression(decl_type), arena, scope, patterns);
 
             for (size_t i = 0; i < patterns->count; ++i) {
                 type_path_t *current = patterns->items[i].expected;
@@ -1744,7 +1770,7 @@ static void forward_scan_inferred_types(ast_node_t *decl, ast_node_t *decl_type,
 
 
         case AST_NODE_TYPE_EXPRESSION_GROUPING: {
-            forward_scan_inferred_types(decl, an_expression(decl_type), arena, patterns);
+            forward_scan_inferred_types(decl, an_expression(decl_type), arena, scope, patterns);
             break;
         }
     }
@@ -1759,30 +1785,38 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
         new_state.scope = &type_context;
 
         type_patterns_t patterns = {.allocator=&ast->allocator};
-        forward_scan_inferred_types(decl, decl_type, &analyzer->allocator, &patterns);
+        forward_scan_inferred_types(decl, decl_type, &analyzer->allocator, state.scope, &patterns);
 
         decl->type_decl_patterns.count = 0;
         if (patterns.count > 0) {
             decl->type_decl_patterns = patterns;
-            return;
         }
 
         resolve_expression(analyzer, ast, new_state, decl_type);
 
         unless (TYPE_IS_TYPE(decl_type->value_type)) {
-            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_EXPECTED_TYPE, decl_type));
-            INVALIDATE(decl);
+            if (TYPE_IS_UNRESOLVED(decl_type->value_type)) {
+                decl->value_type = typeid(TYPE_UNRESOLVED);
+            } else {
+                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_EXPECTED_TYPE, decl_type));
+                INVALIDATE(decl);
+            }
         } else if (TYPE_IS_RESOLVED(decl_type->value_type)) {
             decl->value_type = decl_type->expr_val.word.as.t;
         } 
     }
 
     ast_node_t *init_expr = an_decl_expr(decl);
-    if (TYPE_IS_UNRESOLVED(an_decl_expr(decl)->value_type)) {
+    if (TYPE_IS_UNRESOLVED(an_decl_expr(decl)->value_type) && decl->type_decl_patterns.count == 0) {
         resolve_expression(analyzer, ast, state, init_expr);
     }
 
     if (TYPE_IS_INVALID(decl->value_type)) {
+        return;
+    }
+
+    if (TYPE_IS_UNRESOLVED(decl->value_type) && state.scope->type == SCOPE_TYPE_FUNCDEF) {
+        add_definition(state.scope, &analyzer->allocator, decl->identifier.view, decl);
         return;
     }
 
@@ -1828,8 +1862,8 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
     
     add_definition(state.scope, &analyzer->allocator, decl->identifier.view, decl);
 
+    // bind it to intrinsic if intrinsic
     {
-        // bind it to intrinsic if intrinsic
         if (decl->is_intrinsic) {
             unless (an_is_constant(decl)) {
                 stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INTRINSIC_MUST_BE_CONSTANT, decl));
@@ -1972,12 +2006,6 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
             stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CAN_ONLY_ACCESS_CONSTANTS_AND_GLOBALS, def));
             return NULL;
         }
-
-        // this means that the declaration is *after* the definition we are trying to resolve
-        if (decl->is_mutable && !is_declaration_resolved(decl)) {
-            NEXT_SCOPE();
-            continue;
-        }
         
         break;
     }
@@ -2006,11 +2034,7 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
             resolve_declaration_definition(analyzer, ast, new_state, decl);
         }
     } else {
-        ASSERT(decl->node_type == AST_NODE_TYPE_EXPR_INFERRED_TYPE_DECL, "must");
-        unless (TYPE_IS_TYPE(decl->value_type) && TYPE_IS_RESOLVED(decl->expr_val.word.as.t)) {
-            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_TYPE_INFERENCE_DECL_HAS_NOT_BEEN_RESOLVED, def));
-            return decl;
-        }
+        return decl;
     }
 
     #undef NEXT_SCOPE
@@ -2087,6 +2111,8 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
                 ast_node_t *implicit_type_decl = ast_implicit_expr(ast, typeid(TYPE_TYPE), WORDT(typeid(TYPE_TYPE)), token_implicit_at_start(an_decl_type(param)->start));
                 ast_node_t *implicit_expr = ast_implicit_expr(ast, typeid(TYPE_TYPE), WORDT(typeid(TYPE_UNRESOLVED)), token_implicit_at_end(param->end));
                 ast_node_t *implicit_decl = ast_decldef(ast, pattern.identifier, implicit_type_decl, implicit_expr);
+                implicit_decl->is_mutable = false;
+                
                 add_definition(state.scope, &analyzer->allocator, pattern.identifier.view, implicit_decl);
             }
         }
