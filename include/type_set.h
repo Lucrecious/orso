@@ -48,7 +48,7 @@ void type_set_init(type_table_t *set, arena_t *allocator);
 
 typedata_t *type2typedata(typedatas_t *types, type_t type);
 bool type_is_function(typedatas_t types, type_t type);
-bool type_is_native_function(typedatas_t types, type_t type);
+bool type_is_intrinsic_function(typedatas_t types, type_t type);
 bool type_is_struct(typedatas_t types, type_t type);
 bool type_is_pointer(typedatas_t types, type_t type);
 

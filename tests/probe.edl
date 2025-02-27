@@ -20,8 +20,48 @@
 // 
 // the other thing is that this isn't like a regular declaration... it's an *inferred* declaration. it's not simply
 // creating a variable. it's a value that gets inferred. and types are the only values that can be inferred.
+// the next thing i'm trying to solve is this:
+//
+//
+// {
+//     i := 0;
+//     x: &~u = &i;
+//     u == int;
+// }
+// 
+// this involves pattern matching... and is substantially more difficult to analyze
+// i realize that this is similar to parsing actually in the sense that i have a valid structure
+// i want to check against. i.e. &~u is ptr of inferred type means i want to match a pointer and capture
+// its inner type as u.
 
+//
+
+// after thinking about it more, i realize that this functionality is different than what my end goal is
+// which is to use this to create "inferred function defintiions"
+// my idea is to make a "compile-time" constant type called an "inferred function definiton" which monomorphises 
+// to a concrete type when called
+// the thing with that is that, inferred type decls only really make sense when they are declared as parameters
+// in a function call. as part of regular variable definitions, it's different functionality. One is simply inferring
+// the type of the expression and using pattern matching to give the implicit type a name, and the other is making a 
+// new and unique copy of a function and trying to resolve its ast given the arguments
+// so now i'm moving to solve this:
+// {
+//     self :: (a: ~u) -> u {
+//         return a;
+//     };
+
+//     item := self(1);
+//     typeof(item) == int;
+// }
+// a simple function that requires the definition to be inferred from the function arguments
+// i think that while an inferred function definition can be passed around in mutable variables,
+// they can only be called from a constant time value so the definition can be inferred.
 {
-    x: ~u = 1 + typeof(u);
-    x;
+    self :: (a: ~u) -> u {
+        return a;
+    };
+
+    item := self(1);
+    typeof(item) == int;
 }
+

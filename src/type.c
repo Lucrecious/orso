@@ -14,6 +14,9 @@ bool type_equal(typedata_t *a, typedata_t *b) {
     if (a->size != b->size) return false;
 
     switch (a->kind) {
+        case TYPE_INFERRED: return false;
+        case TYPE_INFERRED_FUNCTION: return false;
+
         case TYPE_FUNCTION:
         case TYPE_INTRINSIC_FUNCTION: {
             if (a->as.function.argument_types.count != b->as.function.argument_types.count) {
@@ -119,7 +122,7 @@ string_t type_to_string_toplevel(typedatas_t types, type_t type, arena_t *alloca
 
     typedata_t *type_info = type2typedata(&types, type);
 
-    if (type_is_function(types, type) || type_is_native_function(types, type)) {
+    if (type_is_function(types, type) || type_is_intrinsic_function(types, type)) {
         sb_add_char(&sb, '(');
 
         for (size_t i = 0; i < type_info->as.function.argument_types.count; ++i) {
@@ -180,7 +183,9 @@ string_t type_to_string_toplevel(typedatas_t types, type_t type, arena_t *alloca
             case TYPE_INVALID: type_name = "<invalid>"; break;
             case TYPE_UNRESOLVED: type_name = "<unresolved>"; break;
             case TYPE_UNREACHABLE: type_name = "<unreachable>"; break;
-            
+            case TYPE_INFERRED: type_name = "<inferred>"; break;
+            case TYPE_INFERRED_FUNCTION: type_name = "<inferred funcdev>"; break;
+
             case TYPE_COUNT:
             case TYPE_STRUCT:
             case TYPE_FUNCTION:

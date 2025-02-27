@@ -33,7 +33,8 @@ typedef enum scope_type_t {
     SCOPE_TYPE_STRUCT                   = 1 << 5,
     SCOPE_TYPE_CONDITION                = 1 << 6,
     SCOPE_TYPE_TYPE_CONTEXT             = 1 << 7,
-    SCOPE_TYPE_FOLD_DIRECTIVE           = 1 << 8
+    SCOPE_TYPE_FOLD_DIRECTIVE           = 1 << 8,
+    SCOPE_TYPE_INFERRED_PARAMS          = 1 << 9,
 } scope_type_t;
 
 declare_table(s2w, string_t, word_t)
@@ -171,6 +172,43 @@ struct ast_node_val_t {
 
 #define an_is_constant(n) (!(n)->is_mutable)
 
+typedef struct type_path_t type_path_t;
+struct type_path_t {
+    type_kind_t kind;
+    type_path_t *next;
+};
+
+typedef struct type_pattern_t type_pattern_t;
+struct type_pattern_t {
+    type_path_t *expected;
+    token_t identifier;
+};
+
+typedef struct inferred_funcdef_copy_t inferred_funcdef_copy_t;
+struct inferred_funcdef_copy_t {
+    types_t key;
+    ast_node_t *funcdef;
+};
+
+typedef struct inferred_funcdef_copies_t inferred_funcdef_copies_t;
+struct inferred_funcdef_copies_t {
+    inferred_funcdef_copy_t *items;
+    size_t count;
+    size_t capacity;
+    arena_t *allocator;
+};
+
+typedef struct type_patterns_t type_patterns_t;
+struct type_patterns_t {
+    type_pattern_t *items;
+    size_t count;
+    size_t capacity;
+    arena_t *allocator;
+};
+
+// the ast node is pretty large and redundant right now on purpose
+// once the ast node is stable, it'll be compressed since many of these
+// fields are mutally exclusive
 struct ast_node_t {
     ast_node_type_t node_type;
 
@@ -187,6 +225,7 @@ struct ast_node_t {
     bool is_intrinsic;
     bool is_exported;
     ast_node_t *ref_decl;
+    type_patterns_t type_decl_patterns;
 
     bool foldable;
     s32 fold_level_resolved_at;
@@ -205,20 +244,14 @@ struct ast_node_t {
     ast_node_t *jmp_out_scope_node;
     ast_nodes_t jmp_nodes;
 
+    inferred_funcdef_copies_t realized_funcdef_copies;
+
     size_t vm_jmp_index;
     size_t vm_stack_point;
     string_t ccode_break_label;
     string_t ccode_continue_label;
     string_t ccode_var_name;
     string_t ccode_init_func_name;
-
-    union {
-        // structs
-        ast_struct_t struct_;
-
-        // type initializer
-        ast_type_initializer_t initiailizer;
-    } as;
 };
 
 declare_table(t2w, type_t, word_t)
@@ -266,14 +299,17 @@ bool parse(ast_t *ast, string_t file_path, string_view_t source, error_function_
 void ast_init(ast_t *ast);
 void ast_free(ast_t *ast);
 
-ast_node_t* ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start);
+ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start);
+ast_node_t *ast_node_copy(ast_t *ast, ast_node_t *node);
 ast_node_t *ast_nil(ast_t *ast, type_t value_type, token_t token_location);
+ast_node_t *ast_decldef(ast_t *ast, token_t identifier, ast_node_t *type_expr, ast_node_t *init_expr);
 ast_node_t *ast_def_value(ast_t *ast, token_t identifer);
 ast_node_t *ast_inferred_type_decl(ast_t *ast, token_t squiggle_token, token_t identifer);
 ast_node_t *ast_cast(ast_t *ast, ast_node_t *expr_type, ast_node_t *expr);
 ast_node_t *ast_begin_module(ast_t *ast);
 void ast_end_module(ast_node_t *module);
 void ast_add_module(ast_t *ast, ast_node_t *module, string_t moduleid);
+ast_node_t *ast_implicit_expr(ast_t *ast, type_t type, word_t value, token_t where);
 
 bool ast_node_type_is_expression(ast_node_type_t node_type);
 

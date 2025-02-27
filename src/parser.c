@@ -212,6 +212,8 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start) {
     node->last_statement = &nil_node;
 
     node->children = (ast_nodes_t){.allocator=&ast->allocator};
+    node->realized_funcdef_copies = (inferred_funcdef_copies_t){.allocator=&ast->allocator};
+    node->type_decl_patterns = (type_patterns_t){.allocator=&ast->allocator};
 
     switch (node_type) {
         case AST_NODE_TYPE_DECLARATION_DEFINITION: {
@@ -265,8 +267,7 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start) {
         }
 
         case AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER: {
-            node->as.initiailizer.type = NULL;
-            node->as.initiailizer.arguments = (ast_nodes_t){.allocator=&ast->allocator};
+            UNREACHABLE();
             break;
         }
         
@@ -278,11 +279,10 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start) {
         }
 
         case AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION: {
-            node->as.struct_.declarations = (ast_nodes_t){.allocator=&ast->allocator};
+            UNREACHABLE();
             break;
         }
 
-        
         case AST_NODE_TYPE_EXPRESSION_DIRECTIVE:
         case AST_NODE_TYPE_EXPRESSION_PRIMARY:
             break;
@@ -302,6 +302,74 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start) {
     }
 
     return node;
+}
+
+type_path_t *type_path_copy(type_path_t *path, arena_t *arena) {
+    if (path == NULL) return NULL;
+
+    type_path_t *new_path = arena_alloc(arena, sizeof(type_path_t));
+    *new_path = *path;
+    new_path->next = type_path_copy(new_path->next, arena);
+
+    return new_path;
+}
+
+ast_node_t *ast_node_copy(ast_t *ast, ast_node_t *node) {
+    ast_node_t *copy = ast_node_new(ast, node->node_type, node->start);
+
+    copy->branch_type = node->branch_type;
+    copy->ccode_break_label = node->ccode_break_label;
+    copy->ccode_continue_label = node->ccode_continue_label;
+    copy->ccode_init_func_name = node->ccode_init_func_name;
+    copy->ccode_var_name = node->ccode_var_name;
+
+    for (size_t i = copy->children.count; i < node->children.count; ++i) {
+        array_push(&copy->children, &nil_node);
+    }
+
+    for (size_t i = 0; i < node->children.count; ++i) {
+        ast_node_t *child_copy = node->children.items[i];
+        child_copy = ast_node_copy(ast, child_copy);
+        copy->children.items[i] = child_copy;
+    }
+
+    copy->condition_negated = node->condition_negated;
+    copy->end = node->end;
+    copy->expr_val = node->expr_val;
+    copy->fold_level_resolved_at = node->fold_level_resolved_at;
+    copy->foldable = node->foldable;
+    copy->identifier = node->identifier;
+
+    copy->is_exported = node->is_exported;
+    copy->is_free_number = node->is_free_number;
+    copy->is_intrinsic = node->is_intrinsic;
+    copy->is_mutable = node->is_mutable;
+
+    ASSERT(copy->jmp_nodes.count == 0, "need to convert references to other nodes to relative ones");
+    ASSERT(copy->jmp_out_scope_node == &nil_node, "need to convert references to other nodes to relative ones");
+    ASSERT(copy->ref_decl == &nil_node, "need to convert references to other nodes to relative ones");
+    ASSERT(copy->lvalue_node== &nil_node, "need to convert references to other nodes to relative ones");
+    ASSERT(copy->last_statement= &nil_node, "need to convert references to other nodes to relative ones");
+
+    copy->operator = node->operator;
+
+    copy->realized_funcdef_copies = node->realized_funcdef_copies;
+    copy->requires_tmp_for_cgen = node->requires_tmp_for_cgen;
+    copy->start = node->start;
+
+    for (size_t i = 0; i < node->type_decl_patterns.count; ++i) {
+        type_pattern_t pattern = node->type_decl_patterns.items[i];
+
+        pattern.expected = type_path_copy(pattern.expected, &ast->allocator);
+
+        array_push(&copy->type_decl_patterns, pattern);
+    }
+
+    copy->value_type = node->value_type;
+    copy->vm_jmp_index = node->vm_jmp_index;
+    copy->vm_stack_point = node->vm_stack_point;
+
+    return copy;
 }
 
 ast_node_t *ast_begin_module(ast_t *ast) {
@@ -332,6 +400,25 @@ void ast_end_module(ast_node_t *module) {
 void ast_add_module(ast_t *ast, ast_node_t *module, string_t moduleid) {
     moduleid = string_copy(moduleid, &ast->allocator);
     table_put(s2n, ast->moduleid2node, moduleid, module);
+}
+
+ast_node_t *ast_implicit_expr(ast_t *ast, type_t type, word_t value, token_t where) {
+    ast_node_t *expr = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_PRIMARY, where);
+    expr->value_type = type;
+    expr->expr_val = ast_node_val_word(value);
+    return expr;
+}
+
+ast_node_t *ast_decldef(ast_t *ast, token_t identifier, ast_node_t *type_expr, ast_node_t *init_expr) {
+    ast_node_t *definition_node = ast_node_new(ast, AST_NODE_TYPE_DECLARATION_DEFINITION, identifier);
+    definition_node->identifier = identifier;
+    an_decl_type(definition_node) = type_expr;
+    an_decl_expr(definition_node) = init_expr;
+
+    definition_node->start = identifier;
+    definition_node->end = init_expr->end;
+
+    return definition_node;
 }
 
 ast_node_t *ast_nil(ast_t *ast, type_t value_type, token_t token_location) {
@@ -1325,10 +1412,9 @@ static ast_node_t *parse_dot(parser_t* parser) {
         unless (match(parser, TOKEN_BRACE_CLOSE)) {
             do {
                 if (check(parser, TOKEN_COMMA) || check(parser, TOKEN_BRACE_CLOSE)) {
-                    array_push(&initiailizer->as.initiailizer.arguments, NULL);
                 } else {
                     ast_node_t *argument = parse_expression(parser);
-                    array_push(&initiailizer->as.initiailizer.arguments, argument);
+                    array_push(&initiailizer->children, argument);
                 }
 
             } while (match(parser, TOKEN_COMMA));
@@ -1448,8 +1534,9 @@ static ast_node_t *parse_precedence(parser_t *parser, prec_t precedence) {
             }
 
             case AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER: {
-                right_operand->as.initiailizer.type = left_operand;
-                left_operand = right_operand;
+                UNREACHABLE();
+                // right_operand->as.initiailizer.type = left_operand;
+                // left_operand = right_operand;
                 break;
             }
 
@@ -1524,19 +1611,6 @@ static ast_node_t *parse_statement(parser_t *parser) {
     return statement_node;
 }
 
-static ast_node_t *ast_decldef(parser_t *parser, token_t identifier, ast_node_t *type_expr, ast_node_t *init_expr) {
-    ast_node_t *definition_node = ast_node_new(parser->ast, AST_NODE_TYPE_DECLARATION_DEFINITION, identifier);
-    definition_node->identifier = identifier;
-    an_decl_type(definition_node) = type_expr;
-    an_decl_expr(definition_node) = init_expr;
-
-    definition_node->start = identifier;
-    definition_node->end = init_expr->end;
-
-    return definition_node;
-}
-
-
 static ast_node_t *parse_decl_def(parser_t *parser) {
     bool is_intrinsic = false;
     {
@@ -1564,7 +1638,7 @@ static ast_node_t *parse_decl_def(parser_t *parser) {
         type_expr = parse_expression(parser);
         parser->inside_type_context = inside_type_context;
     } else {
-        type_expr = ast_inferred_type_decl(parser->ast, token_implicit_at_end(parser->previous), token_implicit_at_end(parser->previous));
+        type_expr = ast_implicit_expr(parser->ast, typeid(TYPE_TYPE), WORDT(typeid(TYPE_UNRESOLVED)), token_implicit_at_end(parser->previous));
     }
 
     ASSERT(type_expr, "should be set by now");
@@ -1593,7 +1667,7 @@ static ast_node_t *parse_decl_def(parser_t *parser) {
 
     ASSERT(init_expr, "should be set by now");
 
-    ast_node_t *decldef = ast_decldef(parser, identifier, type_expr, init_expr);
+    ast_node_t *decldef = ast_decldef(parser->ast, identifier, type_expr, init_expr);
     decldef->is_mutable = is_mutable;
     decldef->is_intrinsic = is_intrinsic;
     return decldef;
@@ -1722,6 +1796,8 @@ ast_node_val_t zero_value(ast_t *ast, type_t type) {
 
         case TYPE_UNRESOLVED:
         case TYPE_FUNCTION:
+        case TYPE_INFERRED_FUNCTION:
+        case TYPE_INFERRED:
         case TYPE_INTRINSIC_FUNCTION:
         case TYPE_INVALID:
             value = WORDI(0);
@@ -1814,23 +1890,24 @@ static void ast_print_ast_node(typedatas_t types, ast_node_t *node, u32 level) {
         }
 
         case AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER: {
-            print_indent(level);
-            print_line("type initializer: %s", type2cstr(node));
+            // print_indent(level);
+            // print_line("type initializer: %s", type2cstr(node));
 
-            print_indent(level + 1);
-            print_line("type");
-            ast_print_ast_node(types, node->as.initiailizer.type, level+2);
-            for (size_t i = 0; i < node->as.initiailizer.arguments.count; ++i) {
-                ast_node_t *arg = node->as.initiailizer.arguments.items[i];
-                print_indent(level + 1);
-                print_line("arg %llu", i);
-                if (arg) {
-                    ast_print_ast_node(types, arg, level + 2);
-                } else {
-                    print_indent(level+2);
-                    print_line("<default>");
-                }
-            }
+            // print_indent(level + 1);
+            // print_line("type");
+            // ast_print_ast_node(types, node->as.initiailizer.type, level+2);
+            // for (size_t i = 0; i < node->as.initiailizer.arguments.count; ++i) {
+            //     ast_node_t *arg = node->as.initiailizer.arguments.items[i];
+            //     print_indent(level + 1);
+            //     print_line("arg %llu", i);
+            //     if (arg) {
+            //         ast_print_ast_node(types, arg, level + 2);
+            //     } else {
+            //         print_indent(level+2);
+            //         print_line("<default>");
+            //     }
+            // }
+            UNREACHABLE();
             break;
         }
 
@@ -1972,15 +2049,16 @@ static void ast_print_ast_node(typedatas_t types, ast_node_t *node, u32 level) {
             break;
         }
         case AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION: {
-            print_indent(level);
-            print_line("struct: %s", type2cstr(node));
+            UNREACHABLE();
+            // print_indent(level);
+            // print_line("struct: %s", type2cstr(node));
 
-            print_indent(level + 1);
-            print_line("members");
-            for (size_t i = 0; i < node->as.struct_.declarations.count; ++i) {
-                ast_node_t *declaration = node->as.struct_.declarations.items[i];
-                ast_print_ast_node(types, declaration, level + 2);
-            }
+            // print_indent(level + 1);
+            // print_line("members");
+            // for (size_t i = 0; i < node->as.struct_.declarations.count; ++i) {
+            //     ast_node_t *declaration = node->as.struct_.declarations.items[i];
+            //     ast_print_ast_node(types, declaration, level + 2);
+            // }
             break;
         }
         case AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE: {

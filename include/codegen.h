@@ -244,6 +244,8 @@ static void emit_mov_reg_to_reg(gen_t *gen, function_t *function, texloc_t loc, 
     case TYPE_VOID:
     case TYPE_UNRESOLVED:
     case TYPE_UNREACHABLE:
+    case TYPE_INFERRED:
+    case TYPE_INFERRED_FUNCTION:
     case TYPE_INVALID:
     case TYPE_COUNT: UNREACHABLE(); break;
     }
@@ -741,7 +743,11 @@ static void gen_local_decl(gen_t *gen, function_t *function, ast_node_t *decl, b
     } else {
         switch (decl->node_type) {
             case AST_NODE_TYPE_DECLARATION_DEFINITION: {
-                gen_local_decldef(gen, function, decl);
+                if (decl->is_mutable) {
+                    gen_local_decldef(gen, function, decl);
+                } else {
+                    // todo
+                }
                 break;
             }
 

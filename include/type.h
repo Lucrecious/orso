@@ -18,16 +18,18 @@ typedef struct typedatas_t typedatas_t;
 typedef struct typedata_t typedata_t;
 
 typedef enum type_kind_t {
+    // analysis types
     TYPE_INVALID = 0,      // error type
     TYPE_UNRESOLVED,       // unresolved (not undefined, not error, not defined)
-
-    // simple types (types that do not require type info)
+    TYPE_INFERRED,         // 
+    TYPE_INFERRED_FUNCTION,// inferred function definition, copies created at compile-time when called
     TYPE_UNREACHABLE,      // for jmp expressions (return, break, continue)
 
-    TYPE_VOID,             // null
+    // simple types (types that do not require type info)
+    TYPE_VOID,             // no symbol
     TYPE_BOOL,             // true false
     TYPE_STRING,           // "anything in here"
-    TYPE_TYPE,             // s32, void, type, () -> void, etc
+    TYPE_TYPE,             // s32, void, type, (int, int) -> int, etc
     
     // "complex" types
     TYPE_NUMBER,           // s8, u8, s16, u16, s32, u32, s64, u32, u64, f32, f64
@@ -119,6 +121,8 @@ struct typedata_t {
 #define TYPE_IS_UNREACHABLE(TYPE) ((TYPE).i == TYPE_UNREACHABLE)
 #define TYPE_IS_UNRESOLVED(TYPE) ((TYPE).i == TYPE_UNRESOLVED)
 #define TYPE_IS_RESOLVED(TYPE) ((TYPE).i != TYPE_UNRESOLVED)
+#define TYPE_IS_INFERRED(TYPE) ((TYPE).i == TYPE_INFERRED)
+#define TYPE_IS_INFERRED_FUNCTION(TYPE) ((TYPE).i == TYPE_INFERRED_FUNCTION)
 
 struct type_table_t;
 
