@@ -57,11 +57,10 @@
 // i think that while an inferred function definition can be passed around in mutable variables,
 // they can only be called from a constant time value so the definition can be inferred.
 {
-    self :: (a: ~u) -> u {
-        return a;
+    add :: (a: ~u, b: u) -> u {
+        return a + b;
     };
 
-    item := self(1);
-    typeof(item) == int;
+    add(1, 1);
 }
 

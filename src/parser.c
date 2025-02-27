@@ -1008,6 +1008,7 @@ static ast_node_t *convert_function_definition(parser_t *parser, ast_node_t *lef
     ast_node_t *block = an_func_def_block(func_def);
 
     func_def->children.count = 0;
+    func_def->start = left_operand->start;
 
     array_push(&func_def->children, an_func_def_return(left_operand));
     array_push(&func_def->children, block);

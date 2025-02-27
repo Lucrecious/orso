@@ -1513,6 +1513,11 @@ void resolve_expression(
                     break;
                 }
 
+                if (TYPE_IS_INVALID(realized_funcdef->value_type)) {
+                    INVALIDATE(expr);
+                    break;
+                }
+
                 callee = realized_funcdef;
                 callee_type = realized_funcdef->value_type;
                 callee_td = type2td(ast, callee_type);
@@ -2075,9 +2080,24 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
 
         if (param->type_decl_patterns.count > 0) {
             is_inferred = true;
+
+            for (size_t i = 0; i < param->type_decl_patterns.count; ++i) {
+                type_pattern_t pattern = param->type_decl_patterns.items[i];
+
+                ast_node_t *implicit_type_decl = ast_implicit_expr(ast, typeid(TYPE_TYPE), WORDT(typeid(TYPE_TYPE)), token_implicit_at_start(an_decl_type(param)->start));
+                ast_node_t *implicit_expr = ast_implicit_expr(ast, typeid(TYPE_TYPE), WORDT(typeid(TYPE_UNRESOLVED)), token_implicit_at_end(param->end));
+                ast_node_t *implicit_decl = ast_decldef(ast, pattern.identifier, implicit_type_decl, implicit_expr);
+                add_definition(state.scope, &analyzer->allocator, pattern.identifier.view, implicit_decl);
+            }
         }
     }
-    
+
+    if (parameter_invalid) {
+        is_inferred = false;
+        // cannot be inferred if parameter is invalid
+        // and better if it goes through fail path
+    }
+
     if (is_inferred) {
         type_t function_type = typeid(TYPE_INFERRED_FUNCTION);
         funcdef->value_type = function_type;
@@ -2096,7 +2116,7 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
         }
 
         if (parameter_invalid || TYPE_IS_INVALID(return_type)) {
-            // INVALIDATE(funcdef);
+            INVALIDATE(funcdef);
             return;
         }
 
