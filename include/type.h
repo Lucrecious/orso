@@ -36,6 +36,7 @@ typedef enum type_kind_t {
     TYPE_FUNCTION,         // (type1, type2, ..., typen) -> return_type OR (foo := 0, bar := "") -> return_type
     TYPE_INTRINSIC_FUNCTION,  // (type1, type2, ..., typen) -> return_type
     TYPE_POINTER,          // &type
+    TYPE_ARRAY,            // [n]type
     TYPE_STRUCT,           // used for both anonymous and named
 
     TYPE_COUNT,
@@ -111,6 +112,11 @@ struct typedata_t {
         struct {
             type_t type;
         } ptr;
+
+        struct {
+            size_t size;
+            type_t type;
+        } arr;
     } as;
 };
 

@@ -73,6 +73,10 @@ bool type_equal(typedata_t *a, typedata_t *b) {
             return typeid_eq(a->as.ptr.type, b->as.ptr.type);
         }
 
+        case TYPE_ARRAY: {
+            return typeid_eq(a->as.arr.type, b->as.arr.type) && a->as.arr.size == b->as.arr.size;
+        }
+
         case TYPE_BOOL: return true;
 
         case TYPE_NUMBER: return a->as.num == b->as.num;
@@ -179,6 +183,8 @@ string_t type_to_string_toplevel(typedatas_t types, type_t type, arena_t *alloca
                 type_name = type_info->name.cstr;
                 break;
             }
+
+            case TYPE_ARRAY: type_name = "<array>"; break;
 
             case TYPE_INVALID: type_name = "<invalid>"; break;
             case TYPE_UNRESOLVED: type_name = "<unresolved>"; break;

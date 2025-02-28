@@ -146,6 +146,8 @@ void ast_init(ast_t *ast) {
     
     type_set_init(&ast->type_set, &ast->allocator);
 
+    memarr_init(&ast->multiword_data, megabytes(0.5));
+
     ast->builtins = table_new(s2w, &ast->allocator);
     ast->intrinsic_fns = table_new(s2w, &ast->allocator);
     ast->intrinsicfn2cname = table_new(p2s, &ast->allocator);
@@ -250,6 +252,7 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start) {
             break;
         }
         
+        case AST_NODE_TYPE_EXPRESSION_ARRAY_TYPE:
         case AST_NODE_TYPE_EXPRESSION_CALL: {
             array_push(&node->children, &nil_node);
             array_push(&node->children, &nil_node);
@@ -673,6 +676,14 @@ static ast_node_t *ast_binary(ast_t *ast, token_t operator, ast_node_t *left, as
     an_rhs(binary) = right;
 
     return binary;
+}
+
+static ast_node_t *ast_array_type(ast_t *ast, ast_node_t *size_expr, ast_node_t *type_expr) {
+    ast_node_t *array_size = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_ARRAY_TYPE, size_expr->start);
+    an_array_size_expr(array_size) = size_expr;
+    an_array_type_expr(array_size) = type_expr;
+    array_size->end = type_expr->end;
+    return array_size;
 }
 
 static ast_node_t *ast_unary(ast_t *ast, token_t operator, ast_node_t *operand) {
@@ -1305,6 +1316,21 @@ static ast_node_t *parse_function_definition(parser_t *parser) {
     return func_def;
 }
 
+static ast_node_t *parse_array_type(parser_t *parser) {
+    token_t start = parser->previous;
+
+    ast_node_t *size_expr = parse_expression(parser);
+
+    unless (consume(parser, TOKEN_BRACKET_CLOSE)) {
+        parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_CLOSE_BRACKET_AFTER_SIZE_EXPRESSION, parser->previous, start));
+    }
+
+    ast_node_t *type_expr = parse_precedence(parser, PREC_UNARY);
+
+    ast_node_t *array_type = ast_array_type(parser->ast, size_expr, type_expr);
+    return array_type;
+}
+
 static ast_node_t *parse_grouping_or_function_signature_or_definition(parser_t *parser) {
     ast_node_type_t node_type;
     if (is_incoming_function_signature(parser)) {
@@ -1425,7 +1451,8 @@ static ast_node_t *parse_binary(parser_t *parser) {
 
 static ast_node_t *parse_cast(parser_t *parser) {
     parse_rule_t *rule = parser_get_rule(parser->previous.type);
-    ast_node_t *expr_type = parse_precedence(parser, PREC_CAST);//(prec_t)(rule->precedence+1));
+    ast_node_t *expr_type = parse_precedence(parser, (prec_t)(rule->precedence+1));
+    // ast_node_t *expr_type = parse_precedence(parser, PREC_CAST);
 
     ast_node_t *cast_node = ast_cast(parser->ast, expr_type, &nil_node);
     
@@ -1495,7 +1522,7 @@ parse_rule_t rules[] = {
     [TOKEN_PARENTHESIS_CLOSE]       = { NULL,               NULL,               PREC_NONE },
     [TOKEN_BRACE_OPEN]              = { parse_block,        NULL,               PREC_BLOCK },
     [TOKEN_BRACE_CLOSE]             = { NULL,               NULL,               PREC_NONE },
-    [TOKEN_BRACKET_OPEN]            = { NULL,               NULL,               PREC_NONE },
+    [TOKEN_BRACKET_OPEN]            = { parse_array_type,   NULL,               PREC_CALL },
     [TOKEN_BRACKET_CLOSE]           = { NULL,               NULL,               PREC_NONE },
     [TOKEN_COMMA]                   = { NULL,               NULL,               PREC_NONE },
     [TOKEN_DOT]                     = { NULL,               parse_dot,          PREC_CALL },
@@ -1825,6 +1852,17 @@ bool parse(ast_t *ast, string_t file_path, string_view_t source, error_function_
     return false;
 }
 
+word_t *ast_multiword_value(ast_t *ast, size_t size_words) {
+    word_t z = {.as.u = 0};
+
+    word_t *start = (word_t*)(ast->multiword_data.data + ast->multiword_data.count);
+    for (size_t i = 0; i < size_words; ++i) {
+        memarr_push(&ast->multiword_data, &z, WORD_SIZE);
+    }
+
+    return start;
+}
+
 ast_node_val_t zero_value(ast_t *ast, type_t type) {
     if (TYPE_IS_UNRESOLVED(type)) return ast_node_val_word(WORDU(0));
 
@@ -1853,6 +1891,13 @@ ast_node_val_t zero_value(ast_t *ast, type_t type) {
         case TYPE_STRING:
             UNREACHABLE();
             break;
+
+        case TYPE_ARRAY: {
+            typedata_t *td = type2typedata(&ast->type_set.types, type);
+            word_t *data = ast_multiword_value(ast, b2w(td->size));
+            value = WORDP(data);
+            break;
+        }
 
         case TYPE_STRUCT: {
             UNREACHABLE();
@@ -1946,6 +1991,20 @@ static void ast_print_ast_node(typedatas_t types, ast_node_t *node, u32 level) {
             print_indent(level);
             print_line("group (...): %s", type2cstr(node));
             ast_print_ast_node(types, an_operand(node), level + 1);
+            break;
+        }
+
+        case AST_NODE_TYPE_EXPRESSION_ARRAY_TYPE: {
+            print_indent(level);
+            print_line("array type: %s", type2cstr(node));
+
+            print_indent(level + 1);
+            print_line("size");
+            ast_print_ast_node(types, an_array_size_expr(node), level + 2);
+
+            print_indent(level + 1);
+            print_line("type");
+            ast_print_ast_node(types, an_array_type_expr(node), level + 2);
             break;
         }
 

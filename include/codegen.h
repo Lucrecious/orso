@@ -239,6 +239,8 @@ static void emit_mov_reg_to_reg(gen_t *gen, function_t *function, texloc_t loc, 
 
     case TYPE_INTRINSIC_FUNCTION:
     case TYPE_STRING: UNREACHABLE(); break;
+
+    case TYPE_ARRAY:
     case TYPE_STRUCT: UNREACHABLE(); /*todo*/ break;
 
     case TYPE_VOID:
@@ -1214,6 +1216,11 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
 
         case AST_NODE_TYPE_EXPRESSION_GROUPING: {
             gen_expression(gen, function, an_operand(expression));
+            break;
+        }
+
+        case AST_NODE_TYPE_EXPRESSION_ARRAY_TYPE: {
+            UNREACHABLE(); // todo
             break;
         }
 

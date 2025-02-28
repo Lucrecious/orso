@@ -1,15 +1,13 @@
 do:gol {
-    // no strings yet so not printing anything yet
     width := readint();
     height := readint();
     tile_count := width*height;
 
 
-    // exit immediately if board has no dimensions
     if tile_count == 0 {
-        printint(0); // no strings, so only printing integers for now
-        println(); // no strings, so a specific function needed for new line
-        break:gol 1; // returning non-zero means error
+        printint(0);
+        println();
+        break:gol 1;
     };
 
     // new generics addition here...
@@ -22,7 +20,7 @@ do:gol {
     };
 
     // another generic 'at' function
-    atxy :: (arr: &~u, x: int, y: int, width: int) -> &u8 {
+    atxy :: (arr: &~u, x: ~v, y: v, width: v) -> &u8 {
         return arr + (y*width + x as ptrdiff_t);
     };
 

@@ -65,6 +65,7 @@ typedef enum ast_node_type_t {
     AST_NODE_TYPE_EXPRESSION_BINARY,
     AST_NODE_TYPE_EXPRESSION_DOT,
     AST_NODE_TYPE_EXPRESSION_UNARY,
+    AST_NODE_TYPE_EXPRESSION_ARRAY_TYPE,
     AST_NODE_TYPE_EXPRESSION_GROUPING,
     AST_NODE_TYPE_EXPRESSION_BUILTIN_CALL,
     AST_NODE_TYPE_EXPRESSION_CALL,
@@ -95,6 +96,7 @@ case AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION: \
 case AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION: \
 case AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE: \
 case AST_NODE_TYPE_EXPRESSION_GROUPING: \
+case AST_NODE_TYPE_EXPRESSION_ARRAY_TYPE: \
 case AST_NODE_TYPE_EXPRESSION_PRIMARY: \
 case AST_NODE_TYPE_EXPRESSION_JMP: \
 case AST_NODE_TYPE_EXPR_INFERRED_TYPE_DECL: \
@@ -150,6 +152,8 @@ ast_node_t nil_node;
 #define an_bcall_arg_end(n) ((n)->children.count)
 #define an_dir_arg_start(n) (0)
 #define an_dir_arg_end(n) ((n)->children.count)
+#define an_array_size_expr(n) ((n)->children.items[0])
+#define an_array_type_expr(n) ((n)->children.items[1])
 
 #define an_is_none(n)    ((n)->node_type == AST_NODE_TYPE_NONE)
 #define an_is_notnone(n) ((n)->node_type != AST_NODE_TYPE_NONE)
@@ -280,6 +284,8 @@ typedef struct ast_t {
 
     bool resolved;
     type_table_t type_set;
+
+    memarr_t multiword_data;
 
     table_t(s2w) *builtins;
     table_t(s2w) *intrinsic_fns;

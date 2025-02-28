@@ -411,6 +411,7 @@ static void cgen_constant(cgen_t *cgen, word_t word, typedata_t *typedata) {
         }
 
         case TYPE_POINTER:
+        case TYPE_ARRAY:
         case TYPE_VOID:
         case TYPE_STRING:
         case TYPE_STRUCT: UNREACHABLE(); break;

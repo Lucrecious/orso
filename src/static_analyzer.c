@@ -942,6 +942,65 @@ void resolve_expression(
             break;
         }
 
+        case AST_NODE_TYPE_EXPRESSION_ARRAY_TYPE: {
+            ast_node_t *size_expr = an_array_size_expr(expr);
+            resolve_expression(analyzer, ast, state, size_expr);
+
+            ast_node_t *type_expr = an_array_type_expr(expr);
+            resolve_expression(analyzer, ast, state, type_expr);
+
+            if (TYPE_IS_INVALID(size_expr->value_type)) {
+                INVALIDATE(expr);
+                break;
+            }
+
+            typedata_t *td = type2td(ast, size_expr->value_type);
+            if (td->kind != TYPE_NUMBER) {
+                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_ARRAY_SIZE_MUST_BE_A_SIGNED_OR_UNSIGNED_INTEGER, size_expr));
+                INVALIDATE(expr);
+                break;
+            }
+            
+            if (td->as.num == NUM_TYPE_FLOAT) {
+                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_ARRAY_SIZE_MUST_BE_A_SIGNED_OR_UNSIGNED_INTEGER, size_expr));
+                INVALIDATE(expr);
+                break;
+            }
+            
+            if (!size_expr->expr_val.is_concrete) {
+                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_ARRAY_SIZE_MUST_BE_A_COMPILE_TIME_CONSTANT, size_expr));
+                INVALIDATE(expr);
+                break;
+            }
+
+            if (td->as.num == NUM_TYPE_SIGNED && size_expr->expr_val.word.as.s < 0) {
+                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_ARRAY_SIZE_MUST_BE_POSITIVE, size_expr));
+                INVALIDATE(expr);
+                break;
+            }
+
+            if (!TYPE_IS_TYPE(type_expr->value_type)) {
+                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_ARRAY_TYPE_IS_NOT_A_TYPE, type_expr));
+                INVALIDATE(expr);
+                break;
+            }
+
+            if (!type_expr->expr_val.is_concrete) {
+                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_ARRAY_TYPE_MUST_BE_COMPILE_TIME_CONSTANT, type_expr));
+                INVALIDATE(expr);
+                break;
+            }
+
+            type_t array_value_type = type_expr->expr_val.word.as.t;
+            size_t array_size = size_expr->expr_val.word.as.u;
+
+            type_t array_type = type_set_fetch_array(&ast->type_set, array_size, array_value_type);
+
+            expr->value_type = typeid(TYPE_TYPE);
+            expr->expr_val = ast_node_val_word(WORDT(array_type));
+            break;
+        }
+
         case AST_NODE_TYPE_EXPRESSION_NIL: {
             expr->value_type = typeid(TYPE_UNRESOLVED);
             break;
@@ -1162,31 +1221,31 @@ void resolve_expression(
             if (expr->operator.type == TOKEN_AMPERSAND) {
                 ast_node_t *op = an_operand(expr);
 
-                switch (op->lvalue_node->node_type) {
-                case AST_NODE_TYPE_EXPRESSION_DEF_VALUE: {
-                    if (op->lvalue_node->ref_decl->is_mutable) {
-                        type_t ptr_type = type_set_fetch_pointer(&ast->type_set, op->lvalue_node->value_type);
-                        expr->value_type = ptr_type;
-                    } else {
-                        if (TYPE_IS_TYPE(op->lvalue_node->value_type)) {
-                            expr->value_type = typeid(TYPE_TYPE);
-
-                            type_t lvalue_type = op->lvalue_node->expr_val.word.as.t;
-                            type_t ptr_type = type_set_fetch_pointer(&ast->type_set, lvalue_type);
-                            expr->expr_val = ast_node_val_word(WORDT(ptr_type));
+                if (TYPE_IS_TYPE(op->value_type) && op->expr_val.is_concrete) {
+                    expr->value_type = typeid(TYPE_TYPE);
+                    type_t ptr_type = type_set_fetch_pointer(&ast->type_set, op->expr_val.word.as.t);
+                    expr->expr_val = ast_node_val_word(WORDT(ptr_type));
+                } else {
+                    switch (op->lvalue_node->node_type) {
+                    case AST_NODE_TYPE_EXPRESSION_DEF_VALUE: {
+                        if (op->lvalue_node->ref_decl->is_mutable) {
+                            type_t ptr_type = type_set_fetch_pointer(&ast->type_set, op->lvalue_node->value_type);
+                            expr->value_type = ptr_type;
                         } else {
                             INVALIDATE(expr);
                             stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CANNOT_TAKE_ADDRESS_OF_CONSTANT, expr));
                         }
+                        break;
                     }
-                    break;
+
+                    default: {
+                        INVALIDATE(expr);
+                        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_OPERAND_FOR_ADDRESS_OPERATOR, expr));
+                        break;
+                    }
+                    }
                 }
 
-                default: {
-                    INVALIDATE(expr);
-                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_OPERAND_FOR_ADDRESS_OPERATOR, expr));
-                }
-                }
             } else {
                 typedata_t *operand_td = type2td(ast, an_operand(expr)->value_type);
 
@@ -1790,6 +1849,11 @@ static void forward_scan_inferred_types(ast_node_t *decl, ast_node_t *decl_type,
                 path->next = current;
                 patterns->items[i].expected = path;
             }
+            break;
+        }
+
+        case AST_NODE_TYPE_EXPRESSION_ARRAY_TYPE: {
+            UNREACHABLE(); // todo
             break;
         }
 

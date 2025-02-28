@@ -79,6 +79,18 @@ typedata_t *pointer_type_new(type_table_t *set, type_t type) {
     return pointer;
 }
 
+typedata_t *array_type_new(type_table_t *set, size_t size, type_t type) {
+    size_t type_size = set->types.items[type.i]->size;
+    typedata_t *array_type = ALLOC(typedata_t);
+    array_type->kind = TYPE_ARRAY;
+    array_type->as.arr.type = type;
+    array_type->as.arr.size = sizeof(void*);
+    array_type->size = type_size*size;
+    array_type->capabilities = TYPE_CAP_NONE;
+
+    return array_type;
+}
+
 typedata_t *type_copy_new(type_table_t *set, typedata_t *type) {
     if (type->kind == TYPE_FUNCTION || type->kind == TYPE_INTRINSIC_FUNCTION) {
         return (typedata_t*)function_type_new(
@@ -103,6 +115,10 @@ typedata_t *type_copy_new(type_table_t *set, typedata_t *type) {
         return pointer_type_new(
             set,
             type->as.ptr.type);
+    }
+
+    if (type->kind == TYPE_ARRAY) {
+        return array_type_new(set, type->as.arr.size, type->as.arr.type);
     }
 
     UNREACHABLE();
@@ -286,6 +302,9 @@ static u64 hash_type(typedata_t *type) {
         }
     } else if (type->kind == TYPE_POINTER) {
         ADD_HASH(hash, (u64)(type->as.ptr.type.i));
+    } else if (type->kind == TYPE_ARRAY) {
+        ADD_HASH(hash, (u64)(type->as.arr.type.i));
+        ADD_HASH(hash, (u64)(type->as.arr.size));
     }
 
     return hash;
@@ -309,6 +328,27 @@ type_t type_set_fetch_pointer(type_table_t* set, type_t inner_type) {
     }
 
     typedata_t *type_info = type_copy_new(set, &pointer_type);
+    type = track_type(set, type_info);
+
+    return type;
+}
+
+type_t type_set_fetch_array(type_table_t *set, size_t size, type_t value_type) {
+    size_t value_type_size = set->types.items[value_type.i]->size;
+    typedata_t array_type = {
+        .kind = TYPE_ARRAY,
+        .as.arr.size = size,
+        .as.arr.type = value_type,
+        .size = value_type_size*size,
+        .capabilities = TYPE_CAP_NONE,
+    };
+
+    type_t type;
+    if (table_get(type2u64, set->types2index, &array_type, &type)) {
+        return type;
+    }
+
+    typedata_t *type_info = type_copy_new(set, &array_type);
     type = track_type(set, type_info);
 
     return type;
