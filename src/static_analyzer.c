@@ -1671,14 +1671,14 @@ void resolve_expression(
         }
 
         case AST_NODE_TYPE_EXPRESSION_CAST: {
-            ast_node_t *cast_expr = an_rhs(expr);
+            ast_node_t *cast_expr = an_cast_expr(expr);
             resolve_expression(analyzer, ast, state, cast_expr);
             if (TYPE_IS_INVALID(cast_expr->value_type)) {
                 INVALIDATE(expr);
                 break;
             }
 
-            ast_node_t *type_expr = an_lhs(expr);
+            ast_node_t *type_expr = an_cast_type(expr);
             resolve_expression(analyzer, ast, state, type_expr);
             if (TYPE_IS_INVALID(type_expr->value_type)) {
                 INVALIDATE(expr);

@@ -105,7 +105,7 @@
     pd_t :: ptrdiff_t;
 
     make_arr :: (init: ~u, count: size_t) -> &u {
-        arr := mreserve(sizeof(u)*count) as &u
+        arr := mreserve(sizeof(u)*count) as &u;
         mmarkrw(arr, sizeof(u)*count);
 
         c := 0sz;

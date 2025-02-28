@@ -1123,7 +1123,7 @@ static void cgen_call(cgen_t *cgen, ast_node_t *call, cgen_var_t var) {
 }
 
 static void cgen_cast(cgen_t *cgen, ast_node_t *cast, cgen_var_t var) {
-    ast_node_t *castee = an_rhs(cast);
+    ast_node_t *castee = an_cast_expr(cast);
     if (cast->requires_tmp_for_cgen) {
         cgen_var_t tmp_var = cgen_next_tmpid(cgen, castee->value_type);
         cgen_statement(cgen, castee, tmp_var, false);

@@ -268,7 +268,14 @@ static token_type_t check_keyword(lexer_t *lexer, s32 start, s32 length,
 
 static token_type_t identifier_type(lexer_t *lexer) {
     switch (lexer->start[0]) {
-        case 'a': return check_keyword(lexer, 1, 2, "nd", TOKEN_AND);
+        case 'a':
+            if (lexer->current - lexer->start > 1) {
+                switch (lexer->start[1]) {
+                    case 'n': return check_keyword(lexer, 2, 1, "d", TOKEN_AND);
+                    case 's': return check_keyword(lexer, 2, 0, "", TOKEN_AS);
+                }
+            }
+            break;
         case 'b': return check_keyword(lexer, 1, 4, "reak", TOKEN_BREAK);
         case 'c': return check_keyword(lexer, 1, 7, "ontinue", TOKEN_CONTINUE);
         case 'd': return check_keyword(lexer, 1, 1, "o", TOKEN_DO);

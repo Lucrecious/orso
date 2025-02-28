@@ -132,6 +132,8 @@ ast_node_t nil_node;
 #define an_expression(n) an_operand(n)
 #define an_lhs(n) ((n)->children.items[0])
 #define an_rhs(n) ((n)->children.items[1])
+#define an_cast_expr(n) ((n)->children.items[0])
+#define an_cast_type(n) ((n)->children.items[1])
 #define an_decl_type(n) ((n)->children.items[0])
 #define an_decl_expr(n) ((n)->children.items[1])
 #define an_condition(n) ((n)->children.items[0])

@@ -124,7 +124,7 @@ typedef enum {
     PREC_COMPARISON,  // < > <= >=
     PREC_TERM,        // + -
     PREC_FACTOR,      // * /
-    PREC_CAST,        // <<
+    PREC_CAST,        // as
     PREC_BITWISE_OR,  // | and type separator
     PREC_UNARY,       // - not &
     PREC_CALL,        // . ()
@@ -438,8 +438,8 @@ ast_node_t *ast_cast(ast_t *ast, ast_node_t *type_expr, ast_node_t *expr) {
     ast_node_t *cast_ = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_CAST, type_expr->start);
     cast_->end = expr->end;
 
-    an_lhs(cast_) = type_expr;
-    an_rhs(cast_) = expr;
+    an_cast_type(cast_) = type_expr;
+    an_cast_expr(cast_) = expr;
     return cast_;
 }
 
@@ -1375,9 +1375,9 @@ static ast_node_t *parse_binary(parser_t *parser) {
 }
 
 static ast_node_t *parse_cast(parser_t *parser) {
-    ast_node_t *expr = parse_precedence(parser, PREC_COMPARISON);//rule->precedence);
+    ast_node_t *expr_type = parse_precedence(parser, PREC_COMPARISON);//rule->precedence);
 
-    ast_node_t *cast_node = ast_cast(parser->ast, &nil_node, expr);
+    ast_node_t *cast_node = ast_cast(parser->ast, expr_type, &nil_node);
     
     return cast_node;
 }
@@ -1466,7 +1466,8 @@ parse_rule_t rules[] = {
     [TOKEN_SQUIGGLE]                = { parse_inferred_type_decl,        NULL,  PREC_UNARY },
     [TOKEN_PLUS_PLUS]               = { parse_unary,        NULL,               PREC_NONE },
     [TOKEN_MINUS_MINUS]             = { parse_unary,        NULL,               PREC_NONE },
-    [TOKEN_LESS_LESS]               = { NULL,               parse_cast,         PREC_CAST },
+    [TOKEN_LESS_LESS]               = { NULL,               NULL,               PREC_NONE },
+    [TOKEN_AS]                      = { NULL,               parse_cast,         PREC_CAST },
     [TOKEN_EQUAL_EQUAL]             = { NULL,               parse_binary,       PREC_EQUALITY },
     [TOKEN_BANG_EQUAL]              = { NULL,               parse_binary,       PREC_EQUALITY },
     [TOKEN_LESS_EQUAL]              = { NULL,               parse_binary,       PREC_COMPARISON },
@@ -1527,7 +1528,16 @@ static ast_node_t *parse_precedence(parser_t *parser, prec_t precedence) {
         ast_node_t *right_operand = infix_rule(parser);
 
         switch (right_operand->node_type) {
-            case AST_NODE_TYPE_EXPRESSION_CAST:
+            case AST_NODE_TYPE_EXPRESSION_CAST: {
+                ast_node_t *expr = left_operand;
+                ast_node_t *cast_type = an_cast_type(right_operand);
+                an_cast_expr(right_operand) = expr;
+                an_cast_type(right_operand) = cast_type;
+                right_operand->start = left_operand->start;
+                left_operand = right_operand;
+                break;
+            }
+
             case AST_NODE_TYPE_EXPRESSION_BINARY: {
                 an_lhs(right_operand) = left_operand;
                 right_operand->start = left_operand->start;

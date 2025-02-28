@@ -14,5 +14,5 @@
 @intrinsic println :: () -> void;
 
 ns2sec :: (ns: u64) -> f64 {
-    return (f64 << ns)*0.000_000_001;
+    return (ns as f64)*0.000_000_001;
 };

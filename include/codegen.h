@@ -1179,7 +1179,7 @@ static void emit_cast(gen_t *gen, function_t *function, type_t dest, type_t sour
 }
 
 static void gen_cast(gen_t *gen, function_t *function, ast_node_t *cast) {
-    ast_node_t *expr = an_rhs(cast);
+    ast_node_t *expr = an_cast_expr(cast);
     gen_expression(gen, function, expr);
 
     emit_cast(gen, function, cast->value_type, expr->value_type, token_end_loc(&cast->end));
