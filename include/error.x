@@ -50,6 +50,8 @@ X(ERROR_ANALYSIS_CANNOT_NEGATE_UNSIGNED_NUMBER, "cannot negate unsigned number",
 X(ERROR_ANALYSIS_NUMBER_ARGS_CALL_FUNC_MISTMATCH, "number of arguments for call do not match function type's parameter count", ANALYSIS)
 X(ERROR_ANALYSIS_ARG_VS_PARAM_FUNC_CALL_MISMATCH, "argument type does not match function parameter type", ANALYSIS)
 X(ERROR_ANALYSIS_TYPEOF_REQUIRES_ONE_ARG, "'typeof' builtin function requires exactly one argument", ANALYSIS)
+X(ERROR_ANALYSIS_SIZEOF_REQUIRES_ONE_ARG, "'sizeof' builtin function requires exactly one argument", ANALYSIS)
+X(ERROR_ANALYSIS_SIZEOF_BUILTIN_REQUIRES_A_CONSTANT_TYPE_OR_ANOTHER_EXPRESSION_TYPE, "'sizeof' builtin requires a constant type or another expression type", ANALYSIS)
 X(ERROR_ANALYSIS_INVALID_BINARY_OPERANDS, "invalid binary operands", ANALYSIS)
 X(ERROR_ANALYSIS_INVALID_MEMBER_ACCESS, "invalid member access", ANALYSIS)
 X(ERROR_ANALYSIS_INVALID_RETURN_TYPE, "invalid return type", ANALYSIS)

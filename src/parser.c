@@ -1494,6 +1494,7 @@ parse_rule_t rules[] = {
     [TOKEN_TRUE]                    = { parse_literal,      NULL,               PREC_NONE },
     [TOKEN_FALSE]                   = { parse_literal,      NULL,               PREC_NONE },
     [TOKEN_TYPEOF]                  = { parse_builtin_call, NULL,               PREC_NONE },
+    [TOKEN_SIZEOF]                  = { parse_builtin_call, NULL,               PREC_NONE },
     [TOKEN_RETURN]                  = { parse_jmp,          NULL,               PREC_NONE },
     [TOKEN_BREAK]                   = { parse_jmp,          NULL,               PREC_NONE },
     [TOKEN_CONTINUE]                = { parse_jmp,          NULL,               PREC_NONE },

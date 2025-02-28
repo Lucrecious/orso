@@ -293,7 +293,15 @@ static token_type_t identifier_type(lexer_t *lexer) {
         }
         case 'o': return check_keyword(lexer, 1, 1, "r", TOKEN_OR);
         case 'r': return check_keyword(lexer, 1, 5, "eturn", TOKEN_RETURN);
-        case 's': return check_keyword(lexer, 1, 5, "truct", TOKEN_STRUCT);
+        case 's': 
+            if (lexer->current - lexer->start > 1) {
+                switch(lexer->start[1]) {
+                    case 't': return check_keyword(lexer, 2, 4, "ruct", TOKEN_STRUCT);
+                    case 'i': return check_keyword(lexer, 2, 4, "zeof", TOKEN_SIZEOF);
+                }
+                
+            }
+            break;
         case 't':
             if (lexer->current - lexer->start > 1) {
                 switch(lexer->start[1]) {

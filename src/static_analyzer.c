@@ -1629,6 +1629,42 @@ void resolve_expression(
                 expr->expr_val = ast_node_val_word(WORDT(expr_arg->value_type));
                 break;
             }
+            
+            case TOKEN_SIZEOF: {
+                unless (count == 1) {
+                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_SIZEOF_REQUIRES_ONE_ARG, expr));
+                    INVALIDATE(expr);
+                    break;
+                }
+
+                ast_node_t *expr_arg = expr->children.items[arg_start];
+                resolve_expression(analyzer, ast, state, expr_arg);
+                type_t expr_type = expr_arg->value_type;
+
+                if (TYPE_IS_TYPE(expr_type) && !expr_arg->expr_val.is_concrete) {
+                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_SIZEOF_BUILTIN_REQUIRES_A_CONSTANT_TYPE_OR_ANOTHER_EXPRESSION_TYPE, expr_arg));
+                    INVALIDATE(expr);
+                    return;
+                }
+
+                if (!TYPE_IS_TYPE(expr_type)) {
+                    expr_arg->value_type = typeid(TYPE_TYPE);
+                    expr_arg->expr_val = ast_node_val_word(WORDT(expr_type));
+                }
+
+                {
+                    expr_arg->value_type = typeid(TYPE_TYPE);
+                    expr_arg->expr_val = ast_node_val_word(WORDT(expr_arg->expr_val.word.as.t));
+                }
+
+                if (TYPE_IS_INVALID(expr_arg->value_type)) {
+                    INVALIDATE(expr);
+                    break;
+                }
+
+                expr->value_type = ast->type_set.size_t_;
+                break;
+            }
             default: UNREACHABLE(); break;
             }
             break;

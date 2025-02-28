@@ -1043,14 +1043,22 @@ static void gen_call(gen_t *gen, function_t *function, ast_node_t *call, bool is
 }
 
 static void gen_bcall(gen_t *gen, function_t *function, ast_node_t *call) {
-    for (size_t i = an_bcall_arg_start(call); i < an_bcall_arg_end(call); ++i) {
+    size_t arg1_index = an_bcall_arg_start(call);
+    for (size_t i = arg1_index; i < an_bcall_arg_end(call); ++i) {
         ast_node_t *arg = call->children.items[i];
         gen_expression(gen, function, arg);
     }
 
     switch (call->identifier.type) {
     case TOKEN_TYPEOF: {
-        ast_node_val_t val = call->children.items[0]->expr_val;
+        ast_node_val_t val = call->children.items[arg1_index]->expr_val;
+        gen_expr_val(gen, function, call, val);
+        break;
+    }
+
+    case TOKEN_SIZEOF: {
+        typedata_t *td = type2typedata(&gen->ast->type_set.types, call->children.items[arg1_index]->expr_val.word.as.t);
+        ast_node_val_t val = ast_node_val_word(WORDU(td->size));
         gen_expr_val(gen, function, call, val);
         break;
     }
