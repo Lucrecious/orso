@@ -1,0 +1,29 @@
+{
+calculate_pi
+:
+:
+(
+iterations
+:
+int
+)
+->
+f64
+{
+pi
+:
+=
+0.0
+;
+        n := 0;
+        while n < iterations {
+            pi = pi + (if n%%2 == 0 then 1.0 else -1.0) / (2 * (f64 << n) + 1);
+            n = n + 1;
+            pi;
+        } then pi = pi * 4;;
+
+        return pi;
+    };
+
+    @run calculate_pi(1_000_000);
+}

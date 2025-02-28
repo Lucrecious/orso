@@ -1175,12 +1175,8 @@ void resolve_expression(
                             type_t ptr_type = type_set_fetch_pointer(&ast->type_set, lvalue_type);
                             expr->expr_val = ast_node_val_word(WORDT(ptr_type));
                         } else {
-                            if (TYPE_IS_UNRESOLVED(op->lvalue_node->value_type)) {
-                                expr->expr_val = ast_node_val_word(WORDT(typeid(TYPE_UNRESOLVED)));
-                            } else {
-                                INVALIDATE(expr);
-                                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CANNOT_TAKE_ADDRESS_OF_CONSTANT, expr));
-                            }
+                            INVALIDATE(expr);
+                            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CANNOT_TAKE_ADDRESS_OF_CONSTANT, expr));
                         }
                     }
                     break;
@@ -1702,7 +1698,7 @@ static void declare_definition(analyzer_t *analyzer, scope_t *scope, ast_node_t 
     allocator_return(tmp);
 }
 
-static void forward_scan_inferred_types(ast_node_t *decl, ast_node_t *decl_type, arena_t *arena, scope_t *scope, type_patterns_t *patterns) {
+static void forward_scan_inferred_types(ast_node_t *decl, ast_node_t *decl_type, arena_t *arena, type_patterns_t *patterns) {
     switch (decl_type->node_type) {
         case AST_NODE_TYPE_NONE:
         case AST_NODE_TYPE_DECLARATION_STATEMENT:
@@ -1732,8 +1728,6 @@ static void forward_scan_inferred_types(ast_node_t *decl, ast_node_t *decl_type,
             path->kind = TYPE_COUNT;
             path->next = NULL;
 
-            add_definition(scope, arena, decl_type->identifier.view, decl_type);
-
             decl_type->node_type = AST_NODE_TYPE_EXPRESSION_DEF_VALUE;
             decl_type->value_type = typeid(TYPE_UNRESOLVED);
 
@@ -1750,7 +1744,7 @@ static void forward_scan_inferred_types(ast_node_t *decl, ast_node_t *decl_type,
                 break;
             }
 
-            forward_scan_inferred_types(decl, an_expression(decl_type), arena, scope, patterns);
+            forward_scan_inferred_types(decl, an_expression(decl_type), arena, patterns);
 
             for (size_t i = 0; i < patterns->count; ++i) {
                 type_path_t *current = patterns->items[i].expected;
@@ -1770,7 +1764,7 @@ static void forward_scan_inferred_types(ast_node_t *decl, ast_node_t *decl_type,
 
 
         case AST_NODE_TYPE_EXPRESSION_GROUPING: {
-            forward_scan_inferred_types(decl, an_expression(decl_type), arena, scope, patterns);
+            forward_scan_inferred_types(decl, an_expression(decl_type), arena, patterns);
             break;
         }
     }
@@ -1783,14 +1777,6 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
         scope_t type_context = {0};
         scope_init(&type_context, &ast->allocator, SCOPE_TYPE_TYPE_CONTEXT, state.scope, decl_type);
         new_state.scope = &type_context;
-
-        type_patterns_t patterns = {.allocator=&ast->allocator};
-        forward_scan_inferred_types(decl, decl_type, &analyzer->allocator, state.scope, &patterns);
-
-        decl->type_decl_patterns.count = 0;
-        if (patterns.count > 0) {
-            decl->type_decl_patterns = patterns;
-        }
 
         resolve_expression(analyzer, ast, new_state, decl_type);
 
@@ -2073,6 +2059,7 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
     scope_init(&funcdef_scope, &analyzer->allocator, SCOPE_TYPE_FUNCDEF, state.scope, funcdef);
     types_t parameter_types = {.allocator=&ast->allocator};
 
+    // forward scan paramters
     {
         tmp_arena_t *tmp = allocator_borrow();
 
@@ -2086,9 +2073,32 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
         allocator_return(tmp);
     }
 
-    bool parameter_invalid = false;
+    // forward scan inferred types declarations
+    bool is_inferred_function = false;
+    {
+        for (size_t i = an_func_def_arg_start(funcdef); i < an_func_def_arg_end(funcdef); ++i) {
+            ast_node_t *decl = funcdef->children.items[i];
+            ast_node_t *decl_type = an_decl_type(decl);
+            type_patterns_t patterns = {.allocator=&ast->allocator};
+            forward_scan_inferred_types(decl, decl_type, &analyzer->allocator, &patterns);
 
-    bool is_inferred = false;
+            decl->type_decl_patterns.count = 0;
+            if (patterns.count > 0) {
+                decl->type_decl_patterns = patterns;
+                is_inferred_function = true;
+            }
+        }
+    }
+
+    // dip out if it's inferred function, we'll resolve this when its called...
+    if (is_inferred_function) {
+        type_t function_type = typeid(TYPE_INFERRED_FUNCTION);
+        funcdef->value_type = function_type;
+        funcdef->expr_val = ast_node_val_word(WORDP(funcdef));
+        return;
+    }
+
+    bool parameter_invalid = false;
 
     for (size_t i = an_func_def_arg_start(funcdef); i < an_func_def_arg_end(funcdef); ++i) {
         analysis_state_t new_state = state;
@@ -2101,105 +2111,78 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
         if (TYPE_IS_INVALID(param->value_type)) {
             parameter_invalid = true;
         }
-
-        if (param->type_decl_patterns.count > 0) {
-            is_inferred = true;
-
-            for (size_t i = 0; i < param->type_decl_patterns.count; ++i) {
-                type_pattern_t pattern = param->type_decl_patterns.items[i];
-
-                ast_node_t *implicit_type_decl = ast_implicit_expr(ast, typeid(TYPE_TYPE), WORDT(typeid(TYPE_TYPE)), token_implicit_at_start(an_decl_type(param)->start));
-                ast_node_t *implicit_expr = ast_implicit_expr(ast, typeid(TYPE_TYPE), WORDT(typeid(TYPE_UNRESOLVED)), token_implicit_at_end(param->end));
-                ast_node_t *implicit_decl = ast_decldef(ast, pattern.identifier, implicit_type_decl, implicit_expr);
-                implicit_decl->is_mutable = false;
-                
-                add_definition(state.scope, &analyzer->allocator, pattern.identifier.view, implicit_decl);
-            }
-        }
     }
 
-    if (parameter_invalid) {
-        is_inferred = false;
-        // cannot be inferred if parameter is invalid
-        // and better if it goes through fail path
+    type_t return_type = typeid(TYPE_VOID);
+    {
+        resolve_expression(analyzer, ast, state, an_func_def_return(funcdef));
     }
 
-    if (is_inferred) {
-        type_t function_type = typeid(TYPE_INFERRED_FUNCTION);
-        funcdef->value_type = function_type;
-        funcdef->expr_val = ast_node_val_word(WORDP(funcdef));
+    ast_node_t *ret_expr = an_func_def_return(funcdef);
+    unless (TYPE_IS_TYPE(ret_expr->value_type)) {
+        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_RETURN_TYPE, an_func_def_return(funcdef)));
     } else {
-        type_t return_type = typeid(TYPE_VOID);
-        {
-            resolve_expression(analyzer, ast, state, an_func_def_return(funcdef));
-        }
-
-        ast_node_t *ret_expr = an_func_def_return(funcdef);
-        unless (TYPE_IS_TYPE(ret_expr->value_type)) {
-            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_RETURN_TYPE, an_func_def_return(funcdef)));
-        } else {
-            return_type = an_func_def_return(funcdef)->expr_val.word.as.t;
-        }
-
-        if (parameter_invalid || TYPE_IS_INVALID(return_type)) {
-            INVALIDATE(funcdef);
-            return;
-        }
-
-        type_t function_type = type_set_fetch_function(&ast->type_set, return_type, parameter_types);
-        funcdef->value_type = function_type;
-
-        // create empty placeholder function immeidately in case definition is recursive
-        function_t *function = NULL;
-        unless (TYPE_IS_INVALID(an_func_def_block(funcdef)->value_type)) {
-            if (analyzer->env_or_null) {
-                function = new_function(analyzer->env_or_null->memory, analyzer->env_or_null->arena);
-            } else {
-                function = &analyzer->placeholder;
-            }
-
-            funcdef->expr_val = ast_node_val_word(WORDP(function));
-        }
-
-        array_push(&analyzer->pending_dependencies, funcdef);
-
-        {
-            analysis_state_t new_state = state;
-
-            scope_t function_scope;
-            scope_init(&function_scope, &analyzer->allocator, SCOPE_TYPE_FUNC_DEF_BODY, &funcdef_scope, funcdef);
-            new_state.scope = &function_scope;
-            resolve_expression(analyzer, ast, new_state, an_func_def_block(funcdef));
-        }
-
-        ast_node_t *funcblock = an_func_def_block(funcdef);
-        unless (TYPE_IS_UNREACHABLE(funcblock->value_type)) {
-            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_FUNCTION_MUST_RETURN_ON_ALL_BRANCHES, funcdef));
-        }
-
-        for (size_t i = 0; i < funcdef->jmp_nodes.count; ++i) {
-            ast_node_t *jmp = funcdef->jmp_nodes.items[i];
-            
-            ast_node_t *ret_expr = an_expression(jmp);
-
-            type_t ret_expr_type = ret_expr->value_type;
-            unless (TYPE_IS_INVALID(ret_expr_type) || typeid_eq(ret_expr_type, return_type)) {
-                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_JMP_RETURN_TYPE_DOES_NOT_MATCH_BLOCKS, funcdef));
-            }
-        }
-
-        --analyzer->pending_dependencies.count;
-
-        if (analyzer->had_error) {
-            return;
-        }
-
-        unless (analyzer->env_or_null) {
-            return;
-        }
-
-        gen_function_def(ast, analyzer->env_or_null, funcdef, analyzer->error_fn);
+        return_type = an_func_def_return(funcdef)->expr_val.word.as.t;
     }
+
+    if (parameter_invalid || TYPE_IS_INVALID(return_type)) {
+        INVALIDATE(funcdef);
+        return;
+    }
+
+    type_t function_type = type_set_fetch_function(&ast->type_set, return_type, parameter_types);
+    funcdef->value_type = function_type;
+
+    // create empty placeholder function immeidately in case definition is recursive
+    function_t *function = NULL;
+    unless (TYPE_IS_INVALID(an_func_def_block(funcdef)->value_type)) {
+        if (analyzer->env_or_null) {
+            function = new_function(analyzer->env_or_null->memory, analyzer->env_or_null->arena);
+        } else {
+            function = &analyzer->placeholder;
+        }
+
+        funcdef->expr_val = ast_node_val_word(WORDP(function));
+    }
+
+    array_push(&analyzer->pending_dependencies, funcdef);
+
+    {
+        analysis_state_t new_state = state;
+
+        scope_t function_scope;
+        scope_init(&function_scope, &analyzer->allocator, SCOPE_TYPE_FUNC_DEF_BODY, &funcdef_scope, funcdef);
+        new_state.scope = &function_scope;
+        resolve_expression(analyzer, ast, new_state, an_func_def_block(funcdef));
+    }
+
+    ast_node_t *funcblock = an_func_def_block(funcdef);
+    unless (TYPE_IS_UNREACHABLE(funcblock->value_type)) {
+        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_FUNCTION_MUST_RETURN_ON_ALL_BRANCHES, funcdef));
+    }
+
+    for (size_t i = 0; i < funcdef->jmp_nodes.count; ++i) {
+        ast_node_t *jmp = funcdef->jmp_nodes.items[i];
+        
+        ast_node_t *ret_expr = an_expression(jmp);
+
+        type_t ret_expr_type = ret_expr->value_type;
+        unless (TYPE_IS_INVALID(ret_expr_type) || typeid_eq(ret_expr_type, return_type)) {
+            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_JMP_RETURN_TYPE_DOES_NOT_MATCH_BLOCKS, funcdef));
+        }
+    }
+
+    --analyzer->pending_dependencies.count;
+
+    if (analyzer->had_error) {
+        return;
+    }
+
+    unless (analyzer->env_or_null) {
+        return;
+    }
+
+    gen_function_def(ast, analyzer->env_or_null, funcdef, analyzer->error_fn);
 }
 
 // footnote(struct-resolution)
