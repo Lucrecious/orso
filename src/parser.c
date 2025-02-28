@@ -665,6 +665,24 @@ ast_node_t *ast_inferred_type_decl(ast_t *ast, token_t squiggle_token, token_t i
     return inferred_type_decl;
 }
 
+static ast_node_t *ast_binary(ast_t *ast, token_t operator, ast_node_t *left, ast_node_t *right) {
+    ast_node_t *binary = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_BINARY, left->start);
+    binary->operator = operator;
+    binary->end = right->end;
+    an_lhs(binary) = left;
+    an_rhs(binary) = right;
+
+    return binary;
+}
+
+static ast_node_t *ast_unary(ast_t *ast, token_t operator, ast_node_t *operand) {
+    ast_node_t *unary = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_UNARY, operator);
+    unary->operator = operator;
+    unary->end = operand->end;
+    an_operand(unary) = operand;
+    return unary;
+}
+
 static void parser_init(parser_t *parser, ast_t *ast, string_t file_path, string_view_t source, error_function_t error_fn) {
     lexer_init(&parser->lexer, file_path, source);
     parser->ast = ast;
@@ -986,6 +1004,42 @@ static ast_node_t *convert_assignment_expression(parser_t *parser, ast_node_t *l
     (void)parser;
     assignment->start = left->start;
     an_lhs(assignment) = left;
+
+    if (assignment->operator.type != TOKEN_EQUAL) {
+        token_t op = assignment->operator;
+
+        // remove the equals at the end
+        op.view.length -= 1;
+        switch (op.type) {
+            case TOKEN_PLUS_EQUAL: op.type = TOKEN_PLUS; break;
+            case TOKEN_MINUS_EQUAL: op.type = TOKEN_MINUS; break;
+            case TOKEN_SLASH_EQUAL: op.type = TOKEN_SLASH; break;
+            case TOKEN_STAR_EQUAL: op.type = TOKEN_STAR; break;
+            case TOKEN_PERCENT_EQUAL: op.type = TOKEN_PERCENT; break;
+            case TOKEN_PERCENT_PERCENT_EQUAL: op.type = TOKEN_PERCENT_PERCENT; break;
+            case TOKEN_AND_EQUAL: op.type = TOKEN_AND; break;
+            case TOKEN_OR_EQUAL: op.type = TOKEN_OR; break;
+            case TOKEN_NOT_EQUAL: op.type = TOKEN_NOT; break;
+
+            default: UNREACHABLE(); break;
+        }
+
+        ast_node_t *rhs;
+        if (op.type == TOKEN_NOT) {
+            rhs = ast_unary(parser->ast, op, an_rhs(assignment));
+        } else {
+            rhs = ast_binary(parser->ast, op, an_lhs(assignment), an_rhs(assignment));
+        }
+
+        an_rhs(assignment) = rhs;
+
+
+        // make the operator only the equals
+        assignment->operator.loc.column += op.view.length;
+        assignment->operator.view.data += op.view.length;
+        assignment->operator.view.length = 1;
+    }
+
     return assignment;
 }
 
@@ -1025,6 +1079,7 @@ static ast_node_t *convert_function_definition(parser_t *parser, ast_node_t *lef
 
 static ast_node_t *parse_assignment(parser_t *parser) {
     ast_node_t *expression_node = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_ASSIGNMENT, parser->previous);
+    expression_node->operator = parser->previous;
 
     ast_node_t *rhs = parse_expression(parser);
     an_rhs(expression_node) = rhs;
@@ -1297,13 +1352,12 @@ static ast_node_t *parse_call(parser_t *parser) {
 }
 
 static ast_node_t *parse_unary(parser_t *parser) {
-    ast_node_t *expression_node = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_UNARY, parser->previous);
-    expression_node->operator = parser->previous;
+    token_t operator = parser->previous;
+    ast_node_t *operand = parse_precedence(parser, PREC_UNARY);
 
-    an_operand(expression_node) = parse_precedence(parser, PREC_UNARY);
-    expression_node->end = parser->previous;
+    ast_node_t *unary = ast_unary(parser->ast, operator, operand);
 
-    return expression_node;
+    return unary;
 }
 
 static ast_node_t *parse_inferred_type_decl(parser_t *parser) {
@@ -1358,20 +1412,15 @@ static ast_node_t *parse_directive(parser_t *parser) {
 }
 
 static ast_node_t *parse_binary(parser_t *parser) {
-    ast_node_t *expression_node = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_BINARY, parser->previous);
-
     token_t operator = parser->previous;
-    expression_node->operator = operator;
 
     parse_rule_t *rule = parser_get_rule(operator.type);
 
-    expression_node->start = parser->previous;
-
     ast_node_t *rhs = parse_precedence(parser, (prec_t)(rule->precedence + 1));
-    an_rhs(expression_node) = rhs;
-    expression_node->end = parser->previous;
 
-    return expression_node;
+    ast_node_t *binary = ast_binary(parser->ast, operator, &nil_node, rhs);
+
+    return binary;
 }
 
 static ast_node_t *parse_cast(parser_t *parser) {
@@ -1456,7 +1505,18 @@ parse_rule_t rules[] = {
     [TOKEN_COLON]                   = { NULL,               NULL,               PREC_NONE },
     [TOKEN_PERCENT]                 = { NULL,               parse_binary,       PREC_TERM },
     [TOKEN_PERCENT_PERCENT]         = { NULL,               parse_binary,       PREC_TERM },
+
     [TOKEN_EQUAL]                   = { NULL,               parse_assignment,   PREC_ASSIGNMENT},
+    [TOKEN_PLUS_EQUAL]              = { NULL,               parse_assignment,   PREC_ASSIGNMENT},
+    [TOKEN_MINUS_EQUAL]             = { NULL,               parse_assignment,   PREC_ASSIGNMENT},
+    [TOKEN_SLASH_EQUAL]             = { NULL,               parse_assignment,   PREC_ASSIGNMENT},
+    [TOKEN_STAR_EQUAL]              = { NULL,               parse_assignment,   PREC_ASSIGNMENT},
+    [TOKEN_PERCENT_EQUAL]           = { NULL,               parse_assignment,   PREC_ASSIGNMENT},
+    [TOKEN_PERCENT_PERCENT_EQUAL]   = { NULL,               parse_assignment,   PREC_ASSIGNMENT},
+    [TOKEN_AND_EQUAL]               = { NULL,               parse_assignment,   PREC_ASSIGNMENT},
+    [TOKEN_OR_EQUAL]                = { NULL,               parse_assignment,   PREC_ASSIGNMENT},
+    [TOKEN_NOT_EQUAL]               = { NULL,               parse_assignment,   PREC_ASSIGNMENT},
+
     [TOKEN_BANG]                    = { NULL,               NULL,               PREC_NONE },
     [TOKEN_LESS]                    = { NULL,               parse_binary,       PREC_COMPARISON },
     [TOKEN_GREATER]                 = { NULL,               parse_binary,       PREC_COMPARISON },

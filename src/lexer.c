@@ -290,14 +290,7 @@ static token_type_t identifier_type(lexer_t *lexer) {
             break;
         }
         case 'i': return check_keyword(lexer, 1, 1, "f", TOKEN_IF);
-        case 'n': {
-            if (lexer->current - lexer->start > 1) {
-                switch (lexer->start[1]) {
-                    case 'o': return check_keyword(lexer, 2, 1, "t", TOKEN_NOT);
-                }
-            }
-            break;
-        }
+        case 'n': return check_keyword(lexer, 1, 2, "ot", TOKEN_NOT);
         case 'o': return check_keyword(lexer, 1, 1, "r", TOKEN_OR);
         case 'r': return check_keyword(lexer, 1, 5, "eturn", TOKEN_RETURN);
         case 's': 
@@ -398,7 +391,19 @@ token_t _lexer_next_token(lexer_t *lexer) {
     }
 
     if (is_alpha(c)) {
-        return identifier(lexer);
+        token_t t = identifier(lexer);
+
+        // special case if certain keyword and =s after
+        if ((t.type == TOKEN_AND || t.type == TOKEN_OR || t.type == TOKEN_NOT) && match(lexer, '=')) {
+            t.type = t.type == TOKEN_AND
+                    ? TOKEN_AND_EQUAL : (t.type == TOKEN_OR
+                    ? TOKEN_OR_EQUAL : TOKEN_NOT_EQUAL);
+            t.view.length += 1;
+            t.loc.column += 1;
+            return t;
+        }
+
+        return t;
     }
 
     if (is_digit(c)) {
@@ -414,17 +419,36 @@ token_t _lexer_next_token(lexer_t *lexer) {
         case ']': return create_token(lexer, TOKEN_BRACKET_CLOSE);
         case ',': return create_token(lexer, TOKEN_COMMA);
         case '.': return create_token(lexer, TOKEN_DOT);
-        case '-': return create_token(lexer, match(lexer, '>') ? TOKEN_ARROW_RIGHT :
-                                            (match(lexer, '-') ? TOKEN_MINUS_MINUS : 
-                                                                 TOKEN_MINUS));
-        case '*': return create_token(lexer, TOKEN_STAR);
-        case '%': return create_token(lexer, match(lexer, '%') ? TOKEN_PERCENT_PERCENT : TOKEN_PERCENT);
-        case '/': return create_token(lexer, TOKEN_SLASH);
+
+        case '-': {
+            if (match(lexer, '>')) return create_token(lexer, TOKEN_ARROW_RIGHT);
+            if (match(lexer, '-')) return create_token(lexer, TOKEN_MINUS_MINUS);
+            if (match(lexer, '=')) return create_token(lexer, TOKEN_MINUS_EQUAL);
+            return create_token(lexer, TOKEN_MINUS);
+        }
+
+        case '*': return create_token(lexer, match(lexer, '=') ? TOKEN_STAR_EQUAL : TOKEN_STAR);
+
+        case '%': {
+            if (match(lexer,'%')) {
+                if (match(lexer, '=')) return create_token(lexer, TOKEN_PERCENT_PERCENT_EQUAL);
+                return create_token(lexer, TOKEN_PERCENT_PERCENT);
+            } else {
+                if (match(lexer, '=')) return create_token(lexer, TOKEN_PERCENT_EQUAL);
+                return create_token(lexer, TOKEN_PERCENT);
+            }
+        }
+
+        case '/': return create_token(lexer, match(lexer, '=') ? TOKEN_SLASH_EQUAL : TOKEN_SLASH);
         case ':': return create_token(lexer, TOKEN_COLON);
         case ';': return create_token(lexer, TOKEN_SEMICOLON);
         case '|': return create_token(lexer, TOKEN_BAR);
         case '&': return create_token(lexer, TOKEN_AMPERSAND);
-        case '+': return create_token(lexer, match(lexer, '+') ? TOKEN_PLUS_PLUS : TOKEN_PLUS);
+        case '+': {
+            if (match(lexer, '+')) return create_token(lexer, TOKEN_PLUS_PLUS);
+            if (match(lexer, '=')) return create_token(lexer, TOKEN_PLUS_EQUAL);
+            return create_token(lexer, TOKEN_PLUS);
+        }
         case '=': return create_token(lexer, match(lexer, '=') ? TOKEN_EQUAL_EQUAL : TOKEN_EQUAL);
         case '!': return create_token(lexer, match(lexer, '=') ? TOKEN_BANG_EQUAL : TOKEN_BANG);
         case '<': return create_token(lexer, match(lexer, '=') ? TOKEN_LESS_EQUAL :

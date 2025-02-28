@@ -101,28 +101,37 @@
 //     if *at(arrb, 5) == true then printint(1) else printint(0);
 //     println();
 // }
+
 {
-    pd_t :: ptrdiff_t;
+    s := false;
+    u := true;
 
-    make_arr :: (init: ~u, count: size_t) -> &u {
-        arr := mreserve(sizeof(u)*count) as &u;
-        mmarkrw(arr, sizeof(u)*count);
+    s not= s and u;
 
-        c := 0sz;
-        while c < count {
-            *at(arr, c as pd_t) = init;
-            c = c + 1;
-        };
-
-        return arr;
-    };
-
-    at :: (arr: &~u, in: ptrdiff_t) -> &u {
-        return arr + in;
-    };
-
-    arri := make_arr(2, 10);
-
-    *at(arri, 3);
+    s;
 }
+// {
+//     pd_t :: ptrdiff_t;
+
+//     make_arr :: (init: ~u, count: size_t) -> &u {
+//         arr := mreserve(sizeof(u)*count) as &u;
+//         mmarkrw(arr, sizeof(u)*count);
+
+//         c := 0sz;
+//         while c < count {
+//             *at(arr, c as pd_t) = init;
+//             c += 1;
+//         };
+
+//         return arr;
+//     };
+
+//     at :: (arr: &~u, in: ptrdiff_t) -> &u {
+//         return arr + in;
+//     };
+
+//     arri := make_arr(2, 10);
+
+//     *at(arri, 3);
+// }
 
