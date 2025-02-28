@@ -122,9 +122,9 @@ typedef enum {
     PREC_AND,         // and
     PREC_EQUALITY,    // == !=
     PREC_COMPARISON,  // < > <= >=
+    PREC_CAST,        // as
     PREC_TERM,        // + -
     PREC_FACTOR,      // * /
-    PREC_CAST,        // as
     PREC_BITWISE_OR,  // | and type separator
     PREC_UNARY,       // - not &
     PREC_CALL,        // . ()
@@ -1424,7 +1424,8 @@ static ast_node_t *parse_binary(parser_t *parser) {
 }
 
 static ast_node_t *parse_cast(parser_t *parser) {
-    ast_node_t *expr_type = parse_precedence(parser, PREC_COMPARISON);//rule->precedence);
+    parse_rule_t *rule = parser_get_rule(parser->previous.type);
+    ast_node_t *expr_type = parse_precedence(parser, PREC_CAST);//(prec_t)(rule->precedence+1));
 
     ast_node_t *cast_node = ast_cast(parser->ast, expr_type, &nil_node);
     

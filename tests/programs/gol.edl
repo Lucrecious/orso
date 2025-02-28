@@ -12,45 +12,58 @@ do:gol {
         break:gol 1; // returning non-zero means error
     };
 
-    // only available memory functions right now are just system calls for reserving virtual memory
-    // '<<'' is casting operator
-    board := &u8 << mreserve(size_t << tile_count*2);
-    buffer := board + (ptrdiff_t << tile_count);
+    // new generics addition here...
 
-    // you need to mark the memory as read/write
-    mmarkrw(board, size_t << tile_count*2);
+    // generic 'at' function to get address of an item
+    at :: (arr: &~u, i: ~v) -> &u {
 
-    printint(1); // indicating successful board creation
-    println();
-    println();
-
-    // no arrays yet, function for getting ptr at index
-    at :: (board: &u8, index: ptrdiff_t) -> &u8 {
-        return (board + index);
+        // 'as' is used for casting rather than '<<'
+        return arr + (i as ptrdiff_t);
     };
 
-    // no arrays yet, function for getting ptr in terms of x and y
-    atxy :: (board: &u8, x: int, y: int, width: int) -> &u8 {
-        return board + ptrdiff_t << y*width + x;
+    // another generic 'at' function
+    atxy :: (arr: &~u, x: int, y: int, width: int) -> &u8 {
+        return arr + (y*width + x as ptrdiff_t);
     };
 
-    board_clear :: (board: &u8, count: int) -> void {
-        // only ptrdiff_t types are allowed to be used for arithmetics with pointers
-        i := 0pd;
-        while i < ptrdiff_t << count {
-            *at(board, i) = 0;
+    // generic array fill
+    fill :: (arr: &~u, value: u, count: ~v) -> void {
+        c: v = 0;
+        while c < count {
+            *at(arr, c) = value;
 
-            // no += operator yet
-            i = i + 1;
+            // added '<op>=' syntax
+            c += 1;
         };
 
-        // all functions need a return even if void right now
         return;
     };
 
-    board_clear(board, tile_count);
+    // generic array maker
+    make_arr :: (value: ~u, count: ~v) -> &u {
+        arr := mreserve(sizeof(u)*(count as size_t)) as &u;
+        mmarkrw(arr, sizeof(u)*(count as size_t));
 
-    // set tiles in a loop until user doesn't want anymore
+        fill(arr, value, count);
+
+        return arr;
+    };
+
+    arr_free :: (arr: &~u, count: ~v) -> void {
+        mfree(arr, sizeof(u)*(count as size_t));
+        return;
+    };
+
+    // infers array type as 'u8', and infers the size given the expression
+    board := make_arr(0u8, tile_count*2);
+    buffer := at(board, tile_count);
+    
+    // the rest is pretty much the same as the previous version but using the new inferred function semantics
+
+    printint(1);
+    println();
+    println();
+
     initx := readint();
     inity := readint();
 
@@ -59,11 +72,11 @@ do:gol {
         y := inity - 1;
 
         if x < 0 or y < 0 or x >= width or y >= height {
-            printint(0); // printing 0 indicates invalid tile position
+            printint(0);
             println();
         } else {
             *atxy(board, x, y, width) = 1;
-            printint(1); // printing 1 indicates valid tile position
+            printint(1);
             println();
         };
         println();
@@ -79,7 +92,7 @@ do:gol {
 
         while h < height {
             while w < width {
-                tile := int << *atxy(board, w, h, width);
+                tile := *atxy(board, w, h, width) as int;
                 printint(tile);
 
                 w = w + 1;
@@ -110,22 +123,22 @@ do:gol {
                 xn := xs + xi;
                 yn := ys + yi;
 
-                xi = xi + 1;
+                xi += 1;
 
                 if xn == x and yn == y then continue;
                 if xn < 0 or yn < 0 or xn >= w or yn >= h then continue;
 
-                sum = sum + int << *atxy(board, xn, yn, w);
+                sum = sum + (*atxy(board, xn, yn, w) as int);
             };
             xi = 0;
-            yi = yi + 1;
+            yi += 1;
         };
 
         return sum;
     };
 
     while readint() != 0 {
-        board_clear(buffer, tile_count);
+        fill(buffer, 0, tile_count);
 
         x := 0;
         y := 0;
@@ -150,10 +163,10 @@ do:gol {
                 else if alive < 1 and n == 3 then
                     *atxy(buffer, x, y, width) = 1;
                 
-                x = x + 1;
+                x += 1;
             };
             x = 0;
-            y = y + 1;
+            y += 1;
         };
 
         tmp := board;
@@ -162,7 +175,7 @@ do:gol {
         render_board(board, width, height);
     };
 
-    mfree(board, size_t << tile_count*2);
+    arr_free(board, tile_count*2);
 
     0;
 }
