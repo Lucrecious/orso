@@ -36,6 +36,8 @@ X(ERROR_ANALYSIS_INVALID_ARITHMETIC_OPERAND_TYPES, "type is not capable of arith
 X(ERROR_ANALYSIS_INVALID_COMPARISON_OPERAND_TYPES, "type is not capable of comparisons", ANALYSIS)
 X(ERROR_ANALYSIS_NUMBER_MUST_BE_ON_RHS_FOR_POINTER_ARITHMETIC, "number must be on right hand side for pointer arithmetic", ANALYSIS)
 X(ERROR_ANALYSIS_INVALID_LOGICAL_OPERAND_TYPES, "type is not capable of logical operations", ANALYSIS)
+X(ERROR_ANALYSIS_INVALID_ACCESSOR_TYPE, "accessor type must be unsigned or signed int", ANALYSIS)
+X(ERROR_ANALYSIS_INVALID_ACCESSEE_TYPE, "accessee type must be an array or pointer to an array", ANALYSIS)
 X(ERROR_ANALYSIS_LHS_REQUIRES_TYPE_KNOWN_AT_COMPILE_TIME, "left hand side must be a type known at compile time", ANALYSIS)
 X(ERROR_ANALYSIS_INVALID_CAST, "invalid cast operand; cannot perform cast", ANALYSIS)
 X(ERROR_ANALYSIS_ARITHMETIC_OPERANDS_REQUIRES_EXPLICIT_CAST, "arithmetic operands requires explicit cast", ANALYSIS)

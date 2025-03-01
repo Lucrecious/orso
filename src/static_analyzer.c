@@ -1002,6 +1002,51 @@ void resolve_expression(
         }
 
         case AST_NODE_TYPE_EXPRESSION_ITEM_ACCESS: {
+            ast_node_t *accessee = an_item_accessee(expr);
+            resolve_expression(analyzer, ast, state, accessee);
+
+            ast_node_t *accessor = an_item_accessor(expr);
+            resolve_expression(analyzer, ast, state, accessor);
+
+            if (TYPE_IS_INVALID(accessee->value_type)) {
+                INVALIDATE(expr);
+                break;
+            }
+
+            if (TYPE_IS_INVALID(accessor->value_type)) {
+                INVALIDATE(expr);
+                break;
+            }
+
+            expr->lvalue_node = an_is_notnone(accessee->lvalue_node) ? expr : &nil_node;
+
+            typedata_t *accessee_td = type2td(ast, accessee->value_type);
+            // accessee
+            {
+                if (accessee_td->kind != TYPE_ARRAY) {
+                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_ACCESSEE_TYPE, accessor));
+                    INVALIDATE(expr);
+                    break;
+                }
+            }
+
+            // accessor
+            {
+                typedata_t *td = type2td(ast, accessor->value_type);
+                unless (td->kind == TYPE_NUMBER && td->as.num != NUM_TYPE_FLOAT) {
+                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_ACCESSOR_TYPE, accessor));
+                    INVALIDATE(expr);
+                    break;
+                }
+            }
+
+            expr->value_type = accessee_td->as.arr.type;
+
+            if (accessee->expr_val.is_concrete && accessor->expr_val.is_concrete) {
+                // todo
+                UNREACHABLE();
+            }
+
             break;
         }
 
