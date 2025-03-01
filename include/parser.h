@@ -66,6 +66,7 @@ typedef enum ast_node_type_t {
     AST_NODE_TYPE_EXPRESSION_DOT,
     AST_NODE_TYPE_EXPRESSION_UNARY,
     AST_NODE_TYPE_EXPRESSION_ARRAY_TYPE,
+    AST_NODE_TYPE_EXPRESSION_ITEM_ACCESS,
     AST_NODE_TYPE_EXPRESSION_GROUPING,
     AST_NODE_TYPE_EXPRESSION_BUILTIN_CALL,
     AST_NODE_TYPE_EXPRESSION_CALL,
@@ -97,6 +98,7 @@ case AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION: \
 case AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE: \
 case AST_NODE_TYPE_EXPRESSION_GROUPING: \
 case AST_NODE_TYPE_EXPRESSION_ARRAY_TYPE: \
+case AST_NODE_TYPE_EXPRESSION_ITEM_ACCESS: \
 case AST_NODE_TYPE_EXPRESSION_PRIMARY: \
 case AST_NODE_TYPE_EXPRESSION_JMP: \
 case AST_NODE_TYPE_EXPR_INFERRED_TYPE_DECL: \
@@ -154,6 +156,8 @@ ast_node_t nil_node;
 #define an_dir_arg_end(n) ((n)->children.count)
 #define an_array_size_expr(n) ((n)->children.items[0])
 #define an_array_type_expr(n) ((n)->children.items[1])
+#define an_item_accessee(n) ((n)->children.items[0])
+#define an_item_accessor(n) ((n)->children.items[1])
 
 #define an_is_none(n)    ((n)->node_type == AST_NODE_TYPE_NONE)
 #define an_is_notnone(n) ((n)->node_type != AST_NODE_TYPE_NONE)

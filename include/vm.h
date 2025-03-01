@@ -11,8 +11,9 @@ enum reg_t {
     REG_RESULT = 1, // 256 bytes for memory on stack
 
     REG_TMP = 33,
-    REG_STACK_BOTTOM = 34,
-    REG_STACK_FRAME = 35,
+    REG_TMP2 = 34,
+    REG_STACK_BOTTOM = 35,
+    REG_STACK_FRAME = 36,
 };
 
 typedef void (*write_function_t)(const char* chars);
@@ -148,6 +149,8 @@ enum op_code_t {
     OP_MOVF32_REGADDR_TO_REG,
     OP_MOVWORD_REGADDR_TO_REG,
 
+    OP_MOVWORD_REGADDR_WITH_OFFSET_TO_REG,
+
     OP_INTRINSIC_CALL,
     OP_CALL,
     OP_RETURN,
@@ -189,6 +192,7 @@ struct instruction_t {
         struct {
             byte reg_destination;
             byte reg_source;
+            u32 byte_offset;
         } mov_reg_to_reg;
 
         struct {
@@ -381,6 +385,19 @@ void vm_step(vm_t *vm) {
             byte reg = in.as.mov_mem_to_reg.reg_result;
             word_t value = *((word_t*)(MEMORY->data + memaddr));
             vm->registers[reg] = value;
+
+            IP_ADV(1);
+            break;
+        }
+
+        case OP_MOVWORD_REGADDR_WITH_OFFSET_TO_REG: {
+            byte reg_source_addr = in.as.mov_reg_to_reg.reg_source;
+            u32 offset = in.as.mov_reg_to_reg.byte_offset;
+            byte reg_dest = in.as.mov_reg_to_reg.reg_destination;
+
+            void *addr = vm->registers[reg_source_addr].as.p + offset;
+
+            memcpy(&vm->registers[reg_dest], addr, WORD_SIZE);
 
             IP_ADV(1);
             break;

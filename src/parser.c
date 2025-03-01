@@ -228,6 +228,7 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start) {
             break;
         }
 
+        case AST_NODE_TYPE_EXPRESSION_ITEM_ACCESS:
         case AST_NODE_TYPE_EXPRESSION_ASSIGNMENT:
         case AST_NODE_TYPE_EXPRESSION_BINARY: {
             array_push(&node->children, &nil_node);
@@ -684,6 +685,14 @@ static ast_node_t *ast_array_type(ast_t *ast, ast_node_t *size_expr, ast_node_t 
     an_array_type_expr(array_size) = type_expr;
     array_size->end = type_expr->end;
     return array_size;
+}
+
+static ast_node_t *ast_item_access(ast_t *ast, ast_node_t *accessee, ast_node_t *accessor) {
+    ast_node_t *item_access = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_ITEM_ACCESS, accessee->start);
+    an_item_accessee(item_access) = accessee;
+    an_item_accessor(item_access) = accessor;
+    item_access->end = accessor->end;
+    return item_access;
 }
 
 static ast_node_t *ast_unary(ast_t *ast, token_t operator, ast_node_t *operand) {
@@ -1331,6 +1340,19 @@ static ast_node_t *parse_array_type(parser_t *parser) {
     return array_type;
 }
 
+static ast_node_t *parse_item_access(parser_t *parser) {
+    token_t start = parser->previous;
+
+    ast_node_t *access_expr = parse_expression(parser);
+
+    unless (consume(parser, TOKEN_BRACKET_CLOSE)) {
+        parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_CLOSE_BRACKET_AFTER_SIZE_EXPRESSION, parser->previous, start));
+    }
+
+    ast_node_t *item_access = ast_item_access(parser->ast, &nil_node, access_expr);
+    return item_access;
+}
+
 static ast_node_t *parse_grouping_or_function_signature_or_definition(parser_t *parser) {
     ast_node_type_t node_type;
     if (is_incoming_function_signature(parser)) {
@@ -1522,7 +1544,7 @@ parse_rule_t rules[] = {
     [TOKEN_PARENTHESIS_CLOSE]       = { NULL,               NULL,               PREC_NONE },
     [TOKEN_BRACE_OPEN]              = { parse_block,        NULL,               PREC_BLOCK },
     [TOKEN_BRACE_CLOSE]             = { NULL,               NULL,               PREC_NONE },
-    [TOKEN_BRACKET_OPEN]            = { parse_array_type,   NULL,               PREC_CALL },
+    [TOKEN_BRACKET_OPEN]            = { parse_array_type,   parse_item_access, PREC_CALL },
     [TOKEN_BRACKET_CLOSE]           = { NULL,               NULL,               PREC_NONE },
     [TOKEN_COMMA]                   = { NULL,               NULL,               PREC_NONE },
     [TOKEN_DOT]                     = { NULL,               parse_dot,          PREC_CALL },
@@ -1621,6 +1643,14 @@ static ast_node_t *parse_precedence(parser_t *parser, prec_t precedence) {
                 ast_node_t *cast_type = an_cast_type(right_operand);
                 an_cast_expr(right_operand) = expr;
                 an_cast_type(right_operand) = cast_type;
+                right_operand->start = left_operand->start;
+                left_operand = right_operand;
+                break;
+            }
+
+            case AST_NODE_TYPE_EXPRESSION_ITEM_ACCESS: {
+                ast_node_t *accessee = left_operand;
+                an_item_accessee(right_operand) = accessee;
                 right_operand->start = left_operand->start;
                 left_operand = right_operand;
                 break;
@@ -1866,71 +1896,15 @@ word_t *ast_multiword_value(ast_t *ast, size_t size_words) {
 ast_node_val_t zero_value(ast_t *ast, type_t type) {
     if (TYPE_IS_UNRESOLVED(type)) return ast_node_val_word(WORDU(0));
 
-    word_t result = {0};
-    if (table_get(t2w, ast->type_to_zero_word, type, &result)) {
-        return ast_node_val_word(result);
-    }
-
     typedata_t *type_info = ast->type_set.types.items[type.i];
-
     word_t value = {0};
-
-    switch (type_info->kind) {
-        case TYPE_POINTER:
-        case TYPE_BOOL: value = WORDI(0); break;
-        
-        case TYPE_NUMBER: {
-            switch (type_info->as.num) {
-                case NUM_TYPE_SIGNED:
-                case NUM_TYPE_UNSIGNED: value = WORDI(0); break;
-                case NUM_TYPE_FLOAT: value = WORDD(0); break;
-            }
-            break;
-        }
-
-        case TYPE_STRING:
-            UNREACHABLE();
-            break;
-
-        case TYPE_ARRAY: {
-            typedata_t *td = type2typedata(&ast->type_set.types, type);
-            word_t *data = ast_multiword_value(ast, b2w(td->size));
-            value = WORDP(data);
-            break;
-        }
-
-        case TYPE_STRUCT: {
-            UNREACHABLE();
-            // for (size_t i = 0; i < b2w(type_info->size); i++) {
-            //     value[i] = WORDI(0);
-            // }
-            break;
-        }
-
-        case TYPE_TYPE: {
-            value = WORDT(typeid(TYPE_VOID));
-            break;
-        }
-
-        case TYPE_UNRESOLVED:
-        case TYPE_FUNCTION:
-        case TYPE_INFERRED_FUNCTION:
-        case TYPE_INFERRED:
-        case TYPE_INTRINSIC_FUNCTION:
-        case TYPE_INVALID:
-            value = WORDI(0);
-            break;
-
-        case TYPE_UNREACHABLE:
-        case TYPE_COUNT:
-            UNREACHABLE();
-            value = WORDI(0);
-            break;
-        case TYPE_VOID: break;
+    if (type_info->size > WORD_SIZE) {
+        typedata_t *td = type2typedata(&ast->type_set.types, type);
+        word_t *data = ast_multiword_value(ast, b2w(td->size));
+        value = WORDP(data);
     }
 
     ast_node_val_t val = ast_node_val_word(value);
-    table_put(t2w, ast->type_to_zero_word, type, value);
     return val;
 }
 
@@ -2005,6 +1979,20 @@ static void ast_print_ast_node(typedatas_t types, ast_node_t *node, u32 level) {
             print_indent(level + 1);
             print_line("type");
             ast_print_ast_node(types, an_array_type_expr(node), level + 2);
+            break;
+        }
+
+        case AST_NODE_TYPE_EXPRESSION_ITEM_ACCESS: {
+            print_indent(level);
+            print_line("item access: %s", type2cstr(node));
+
+            print_indent(level + 1);
+            print_line("accessee");
+            ast_print_ast_node(types, an_item_accessee(node), level + 2);
+
+            print_indent(level + 1);
+            print_line("accessor");
+            ast_print_ast_node(types, an_item_accessor(node), level + 2);
             break;
         }
 

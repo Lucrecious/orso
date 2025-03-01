@@ -3,6 +3,7 @@
 
 #include "def.h"
 
+// simple linear allocator that reverses memory in word-sized chunks only
 typedef struct memarr_t memarr_t;
 struct memarr_t {
     byte *data;
@@ -35,8 +36,8 @@ void memarr_free(memarr_t *arr) {
 }
 
 size_t memarr_push(memarr_t *arr, void *data, size_t size_bytes) {
-    size_t word_sized = (size_bytes + sizeof(uintptr_t) - 1)/sizeof(uintptr_t);
-    size_t reserved_size = word_sized*sizeof(uintptr_t);
+    size_t word_sized = (size_bytes + WORD_SIZE - 1)/WORD_SIZE;
+    size_t reserved_size = word_sized*WORD_SIZE;
 
     while ((arr->count + reserved_size) >= arr->capacity) {
         arr->data = arena_realloc(&arr->arena, arr->data, arr->capacity, arr->capacity*2);

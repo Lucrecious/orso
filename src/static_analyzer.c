@@ -1001,6 +1001,10 @@ void resolve_expression(
             break;
         }
 
+        case AST_NODE_TYPE_EXPRESSION_ITEM_ACCESS: {
+            break;
+        }
+
         case AST_NODE_TYPE_EXPRESSION_NIL: {
             expr->value_type = typeid(TYPE_UNRESOLVED);
             break;
@@ -1801,6 +1805,7 @@ static void forward_scan_inferred_types(ast_node_t *decl, ast_node_t *decl_type,
         case AST_NODE_TYPE_EXPRESSION_ASSIGNMENT:
         case AST_NODE_TYPE_DECLARATION_DEFINITION: UNREACHABLE(); break;
 
+        case AST_NODE_TYPE_EXPRESSION_ITEM_ACCESS:
         case AST_NODE_TYPE_EXPRESSION_CAST:
         case AST_NODE_TYPE_EXPRESSION_BINARY:
         case AST_NODE_TYPE_EXPRESSION_DOT:

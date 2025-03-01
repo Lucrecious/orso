@@ -105,3 +105,4 @@ X(ERROR_ANALYSIS_CANNOT_RETURN_OUTSIDE_FUNC_DEF, "cannot return outside of a fun
 X(ERROR_CODEGEN_MEMORY_SIZE_TOO_BIG, "memory size too big", CODEGEN)
 X(ERROR_CODEGEN_JMP_TOO_LARGE, "jump too big", CODEGEN)
 X(ERROR_CODEGEN_STACK_SIZE_GROWS_LARGER_THAN_UINT32_MAX, "stack size cannot grow larger than (2^32)-1", CODEGEN)
+X(ERROR_CODEGEN_DATA_TOO_LARGE_TO_PUSH_TO_STACK, "stack size cannot grow larger than (2^32)-1", CODEGEN)

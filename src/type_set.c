@@ -84,7 +84,7 @@ typedata_t *array_type_new(type_table_t *set, size_t size, type_t type) {
     typedata_t *array_type = ALLOC(typedata_t);
     array_type->kind = TYPE_ARRAY;
     array_type->as.arr.type = type;
-    array_type->as.arr.size = sizeof(void*);
+    array_type->as.arr.size = size;
     array_type->size = type_size*size;
     array_type->capabilities = TYPE_CAP_NONE;
 

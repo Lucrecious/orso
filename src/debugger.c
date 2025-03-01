@@ -26,6 +26,9 @@ static string_t disassemble_instruction(instruction_t in, arena_t *allocator) {
         #define OP_MOV_MEM_TO_REG(suffix) string_format("OP_MOV"#suffix"_MEM_TO_REG(memaddr: %lu, result_result: %lu)", allocator,\
                 (u32)in.as.mov_mem_to_reg.mem_address,\
                 (u32)in.as.mov_mem_to_reg.reg_result)
+        #define OP_MOV_MEM_TO_REG(suffix) string_format("OP_MOV"#suffix"_MEM_TO_REG(memaddr: %lu, result_result: %lu)", allocator,\
+                (u32)in.as.mov_mem_to_reg.mem_address,\
+                (u32)in.as.mov_mem_to_reg.reg_result)
 
         case OP_MOVU8_MEM_TO_REG: return OP_MOV_MEM_TO_REG(U8);
         case OP_MOVU16_MEM_TO_REG: return OP_MOV_MEM_TO_REG(U16);
@@ -73,6 +76,9 @@ static string_t disassemble_instruction(instruction_t in, arena_t *allocator) {
         case OP_JMP_IF_REG_CONDITION:
             return string_format("OP_JMP_IF_REG_CONDITION(condition_reg: %lu, check_for: %lu, amount: %lu)", allocator,
                     (u32)in.as.jmp.condition_reg, (u32)in.as.jmp.check_for, in.as.jmp.amount);
+
+        case OP_MOVWORD_REGADDR_WITH_OFFSET_TO_REG:
+            return string_format("OP_MOVWORD_REGADDR_WITH_OFFSET_TO_REG(%s)", allocator, "");
 
         case OP_JMP: return string_format("OP_JMP(amount: %lu)", allocator, (u32)in.as.jmp.amount);
         case OP_LOOP: return string_format("OP_LOOP(amount: %lu)", allocator, (u32)in.as.jmp.amount);
