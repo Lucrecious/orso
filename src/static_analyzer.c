@@ -67,8 +67,6 @@ static ast_node_t *add_builtin_definition(ast_t *ast, string_view_t identifier, 
     return decl;
 }
 
-#define type2td(ast, type) type2typedata(&((ast)->type_set.types), (type))
-
 static void stan_error(analyzer_t *analyzer, error_t error) {
     analyzer->had_error = true;
     if (analyzer->error_fn) analyzer->error_fn(analyzer->ast, error);
@@ -130,7 +128,7 @@ if (sv_eq(identifier, lit2sv(#TYPE_STRING))){\
 
 static bool check_call_on_func(analyzer_t *analyzer, ast_t *ast, ast_node_t *call) {
     ast_node_t *callee = an_callee(call);
-    typedata_t *func_td = type2td(ast, callee->value_type);
+    typedata_t *func_td = ast_type2td(ast, callee->value_type);
 
     ASSERT(func_td->kind == TYPE_FUNCTION || func_td->kind == TYPE_INTRINSIC_FUNCTION, "must be used only on func");
 
@@ -375,7 +373,7 @@ static void forward_scan_constant_names(analyzer_t *analyzer, scope_t *scope, as
 }
 
 word_t constant_fold_bin_arithmetic(ast_t *ast, token_type_t operator, type_t type, word_t l, word_t r) {
-    typedata_t *numtype = type2td(ast, type);
+    typedata_t *numtype = ast_type2td(ast, type);
 
     #define case_block(type, l, r) do { switch (operator) { \
         case TOKEN_PLUS: result = add##type##_(l, r); break; \
@@ -445,7 +443,7 @@ word_t constant_fold_bin_arithmetic(ast_t *ast, token_type_t operator, type_t ty
 }
 
 word_t constant_fold_bin_comparison(ast_t *ast, token_type_t operator, type_t type, word_t a, word_t b) {
-    typedata_t *typedata = type2td(ast, type);
+    typedata_t *typedata = ast_type2td(ast, type);
 
     switch (typedata->kind) {
     case TYPE_NUMBER: {
@@ -530,8 +528,8 @@ static bool stan_can_cast(typedatas_t *types, type_t dst, type_t src) {
 }
 
 static word_t constant_fold_cast(ast_t *ast, word_t in, type_t dst, type_t src) {
-    typedata_t *desttd = type2td(ast, dst);
-    typedata_t *sourcetd = type2td(ast, src);
+    typedata_t *desttd = ast_type2td(ast, dst);
+    typedata_t *sourcetd = ast_type2td(ast, src);
     ASSERT(stan_can_cast(&ast->type_set.types, dst, src), "must be castable");
 
     switch (desttd->kind) {
@@ -639,8 +637,8 @@ static ast_node_t *cast_implicitly_if_necessary(ast_t *ast, type_t dst_type, ast
 
     unless (stan_can_cast(&ast->type_set.types, dst_type, expr->value_type)) return expr;
 
-    typedata_t *dsttd = type2td(ast, dst_type);
-    typedata_t *exprtd = type2td(ast, expr->value_type);
+    typedata_t *dsttd = ast_type2td(ast, dst_type);
+    typedata_t *exprtd = ast_type2td(ast, expr->value_type);
 
     // for now only numbers can be cast/promoted implicitly
     if (dsttd->kind == TYPE_NUMBER && exprtd->kind == TYPE_NUMBER) {
@@ -764,7 +762,7 @@ static bool stan_run(analyzer_t *analyzer, env_t *env, ast_node_t *expr, word_t 
 }
 
 static type_t stan_pattern_match_or_error(analyzer_t *analyzer, ast_node_t *decl, type_path_t *expected, type_t actual) {
-    typedata_t *td = type2td(analyzer->ast, actual);
+    typedata_t *td = ast_type2td(analyzer->ast, actual);
     switch (expected->kind) {
     case TYPE_FUNCTION: {
         UNREACHABLE(); // todo
@@ -907,7 +905,7 @@ void resolve_expression(
 
             if (!analyzer->had_error && analyzer->env_or_null) {
                 unless (TYPE_IS_INVALID(child->value_type)) {
-                    typedata_t *td = type2td(ast, child->value_type);
+                    typedata_t *td = ast_type2td(ast, child->value_type);
                     size_t size = b2w(td->size);
                     ASSERT(size == 1, "for now types can only be as large as a word");
 
@@ -954,7 +952,7 @@ void resolve_expression(
                 break;
             }
 
-            typedata_t *td = type2td(ast, size_expr->value_type);
+            typedata_t *td = ast_type2td(ast, size_expr->value_type);
             if (td->kind != TYPE_NUMBER) {
                 stan_error(analyzer, make_error_node(ERROR_ANALYSIS_ARRAY_SIZE_MUST_BE_A_SIGNED_OR_UNSIGNED_INTEGER, size_expr));
                 INVALIDATE(expr);
@@ -1018,9 +1016,11 @@ void resolve_expression(
                 break;
             }
 
-            expr->lvalue_node = an_is_notnone(accessee->lvalue_node) ? expr : &nil_node;
+            if (an_is_notnone(accessee->lvalue_node) && accessee->lvalue_node->node_type == AST_NODE_TYPE_EXPRESSION_DEF_VALUE) {
+                expr->lvalue_node = expr;
+            }
 
-            typedata_t *accessee_td = type2td(ast, accessee->value_type);
+            typedata_t *accessee_td = ast_type2td(ast, accessee->value_type);
             // accessee
             {
                 if (accessee_td->kind != TYPE_ARRAY) {
@@ -1032,7 +1032,7 @@ void resolve_expression(
 
             // accessor
             {
-                typedata_t *td = type2td(ast, accessor->value_type);
+                typedata_t *td = ast_type2td(ast, accessor->value_type);
                 unless (td->kind == TYPE_NUMBER && td->as.num != NUM_TYPE_FLOAT) {
                     stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_ACCESSOR_TYPE, accessor));
                     INVALIDATE(expr);
@@ -1090,8 +1090,8 @@ void resolve_expression(
                 break;
             }
 
-            typedata_t *left_td = type2td(ast, left->value_type);
-            typedata_t *right_td = type2td(ast, right->value_type);
+            typedata_t *left_td = ast_type2td(ast, left->value_type);
+            typedata_t *right_td = ast_type2td(ast, right->value_type);
 
             #define td_is_s_or_u_int(td) ((td)->as.num == NUM_TYPE_SIGNED || (td)->as.num == NUM_TYPE_UNSIGNED)
 
@@ -1168,7 +1168,7 @@ void resolve_expression(
                     word_t wordl = left->expr_val.word;
                     word_t wordr = right->expr_val.word;
 
-                    typedata_t *td = type2td(ast, left->value_type);
+                    typedata_t *td = ast_type2td(ast, left->value_type);
                     if (td->size > WORD_SIZE) {
                         // todo
                         UNREACHABLE();
@@ -1296,7 +1296,7 @@ void resolve_expression(
                 }
 
             } else {
-                typedata_t *operand_td = type2td(ast, an_operand(expr)->value_type);
+                typedata_t *operand_td = ast_type2td(ast, an_operand(expr)->value_type);
 
                 switch (expr->operator.type) {
                 case TOKEN_STAR: {
@@ -1622,7 +1622,7 @@ void resolve_expression(
             }
 
             type_t callee_type = callee->value_type;
-            typedata_t *callee_td = type2td(ast, callee_type);
+            typedata_t *callee_td = ast_type2td(ast, callee_type);
 
             if (callee_td->kind == TYPE_INFERRED_FUNCTION) {
                 unless (callee->expr_val.is_concrete) {
@@ -1647,7 +1647,7 @@ void resolve_expression(
 
                 callee = realized_funcdef;
                 callee_type = realized_funcdef->value_type;
-                callee_td = type2td(ast, callee_type);
+                callee_td = ast_type2td(ast, callee_type);
                 an_callee(expr) = callee;
             }
 
@@ -1793,7 +1793,7 @@ void resolve_expression(
                 break;
             }
 
-            typedata_t *typetd = type2td(ast, type_expr->value_type);
+            typedata_t *typetd = ast_type2td(ast, type_expr->value_type);
             if (typetd->kind == TYPE_TYPE && type_expr->expr_val.is_concrete) {
                 if (stan_can_cast(&ast->type_set.types, type_expr->expr_val.word.as.t, cast_expr->value_type)) {
                     expr->value_type = type_expr->expr_val.word.as.t;
@@ -2016,7 +2016,7 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
             }
 
             type_t type = decl->expr_val.word.as.t;
-            typedata_t *td = type2td(ast, type);
+            typedata_t *td = ast_type2td(ast, type);
 
             if (td->kind != TYPE_FUNCTION) {
                 stan_error(analyzer, make_error_node(ERROR_ANALYSIS_ONLY_INTRINSIC_FUNCTIONS_ARE_SUPPORTED, an_decl_expr(decl)));
@@ -2175,7 +2175,7 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
 
     #undef NEXT_SCOPE
 
-    typedata_t *td = type2td(ast, decl->value_type);
+    typedata_t *td = ast_type2td(ast, decl->value_type);
     if (td->kind == TYPE_FUNCTION) {
         ASSERT(decl->expr_val.is_concrete, "should be constant and thus should be concrete");
         function_t *function = (function_t*)decl->expr_val.word.as.p;

@@ -311,6 +311,8 @@ bool parse(ast_t *ast, string_t file_path, string_view_t source, error_function_
 void ast_init(ast_t *ast);
 void ast_free(ast_t *ast);
 
+#define ast_type2td(ast, type) type2typedata(&((ast)->type_set.types), (type))
+
 ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start);
 ast_node_t *ast_node_copy(ast_t *ast, ast_node_t *node);
 ast_node_t *ast_nil(ast_t *ast, type_t value_type, token_t token_location);
