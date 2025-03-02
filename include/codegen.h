@@ -953,6 +953,33 @@ static void gen_branching(gen_t *gen, function_t *function, ast_node_t *branch) 
         }
     }
 }
+void gen_item_access_ptr_into_result_reg(gen_t *gen, function_t *function, ast_node_t *item_access) {
+    ast_node_t *accessee = an_item_accessee(item_access->lvalue_node);
+    typedata_t *accessee_td = type2typedata(&gen->ast->type_set.types, accessee->value_type);
+
+    typedata_t *array_inner = ast_type2td(gen->ast, accessee_td->as.arr.type);
+
+    // put offset size in tmp2 reg
+    ast_node_t *accessor_ = an_item_accessor(item_access);
+    gen_expression(gen, function, accessor_);
+    emit_mov_reg_to_reg(function, token_end_loc(&accessor_->end), REG_MOV_SIZE_WORD, REG_MOV_TYPE_REG_TO_REG, REG_TMP2, REG_RESULT);
+
+    // add address of local to offset
+    texloc_t end = token_end_loc(&accessor_->end);
+    gen_constant(gen, end, function, &array_inner->size, gen->ast->type_set.size_t_);
+
+    // put address of lvalue local in tmp
+    ast_node_t *decl = accessee->lvalue_node->ref_decl;
+    local_t *local = find_local(gen, decl);
+    gen_local_mem_index(gen, token_end_loc(&accessor_->end), function, local, REG_TMP);
+    emit_mem_to_addr(end, function, REG_TMP, REG_TMP);
+
+    // do the multadd 
+    emit_bin_op(end, function, TOKEN_STAR, ast_type2td(gen->ast, gen->ast->type_set.u64_), REG_TMP2, REG_RESULT, REG_TMP2);
+    emit_bin_op(end, function, TOKEN_PLUS, ast_type2td(gen->ast, gen->ast->type_set.u64_), REG_TMP, REG_TMP2, REG_TMP);
+    emit_mov_reg_to_reg(function, end, REG_MOV_SIZE_WORD, REG_MOV_TYPE_REG_TO_REG, REG_RESULT, REG_TMP);
+}
+
 static void gen_assignment(gen_t *gen, function_t *function, ast_node_t *assignment) {
     ast_node_t *rhs = an_rhs(assignment);
     gen_expression(gen, function, rhs);
@@ -988,37 +1015,21 @@ static void gen_assignment(gen_t *gen, function_t *function, ast_node_t *assignm
 
         switch (accessee_td->kind) {
             case TYPE_ARRAY: {
-                typedata_t *array_inner = ast_type2td(gen->ast, accessee_td->as.arr.type);
-
                 // tmp store current reg in stack (doesn't matter if its regaddr value or reg is value)
                 emit_push_reg(gen, rhs->end.loc, function, REG_RESULT, REG_MOV_SIZE_WORD, 0);
 
-                // put offset size in tmp2 reg
-                ast_node_t *accessor_ = an_item_accessor(lhs->lvalue_node);
-                gen_expression(gen, function, accessor_);
-                emit_mov_reg_to_reg(function, token_end_loc(&accessor_->end), REG_MOV_SIZE_WORD, REG_MOV_TYPE_REG_TO_REG, REG_TMP2, REG_RESULT);
+                gen_item_access_ptr_into_result_reg(gen, function, lhs->lvalue_node);
 
-                // add address of local to offset
-                texloc_t end = token_end_loc(&accessor_->end);
-                gen_constant(gen, end, function, &array_inner->size, gen->ast->type_set.size_t_);
-
-                // put address of lvalue local in tmp
-                ast_node_t *decl = accessee->lvalue_node->ref_decl;
-                local_t *local = find_local(gen, decl);
-                gen_local_mem_index(gen, token_end_loc(&accessor_->end), function, local, REG_TMP);
-
-                emit_mem_to_addr(end, function, REG_TMP, REG_TMP);
-
-                // do the multadd 
-                emit_bin_op(end, function, TOKEN_STAR, ast_type2td(gen->ast, gen->ast->type_set.u64_), REG_TMP2, REG_RESULT, REG_TMP2);
-                emit_bin_op(end, function, TOKEN_PLUS, ast_type2td(gen->ast, gen->ast->type_set.u64_), REG_TMP, REG_TMP2, REG_TMP);
-                emit_mov_reg_to_reg(function, end, REG_MOV_SIZE_WORD, REG_MOV_TYPE_REG_TO_REG, REG_RESULT, REG_TMP);
-
+                texloc_t end = token_end_loc(&rhs->end);
                 emit_pop_to_reg(gen, end, function, REG_TMP, gen->ast->type_set.u64_);
 
-                // move data from addr at tmp to result reg
+                // move data from tmp to result reg addr
                 emit_mov_reg_to_reg(function, end,
                         type2movsize(gen, assignment->value_type), REG_MOV_TYPE_REG_TO_ADDR, REG_RESULT, REG_TMP);
+                
+                // move data from tmp to result reg
+                emit_mov_reg_to_reg(function, end,
+                        type2movsize(gen, assignment->value_type), REG_MOV_TYPE_REG_TO_REG, REG_RESULT, REG_TMP);
                 break; 
             }
 
@@ -1278,6 +1289,23 @@ static void gen_cast(gen_t *gen, function_t *function, ast_node_t *cast) {
     emit_cast(gen, function, cast->value_type, expr->value_type, token_end_loc(&cast->end));
 }
 
+static void gen_item_access(gen_t *gen, function_t *function, ast_node_t *item_access) {
+    ast_node_t *accessee = an_item_accessee(item_access);
+    typedata_t *accessee_td = ast_type2td(gen->ast, accessee->value_type);
+
+    if (an_is_notnone(item_access->lvalue_node)) {
+        ASSERT(accessee_td->kind == TYPE_ARRAY, "only array type for now");
+        
+        gen_item_access_ptr_into_result_reg(gen, function, item_access);
+                
+        // move data from reg result addr to result reg
+        emit_mov_reg_to_reg(function, token_end_loc(&item_access->end),
+                type2movsize(gen, item_access->value_type), REG_MOV_TYPE_ADDR_TO_REG, REG_RESULT, REG_RESULT);
+    } else {
+        UNREACHABLE();
+    }
+}
+
 static void gen_expression(gen_t *gen, function_t *function, ast_node_t *expression) {
     ASSERT(ast_node_type_is_expression(expression->node_type), "must be expression");
 
@@ -1360,8 +1388,7 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
         }
 
         case AST_NODE_TYPE_EXPRESSION_ITEM_ACCESS: {
-            // gen_item_access()
-            UNREACHABLE(); //todo
+            gen_item_access(gen, function, expression);
             break;
         }
 

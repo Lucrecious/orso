@@ -1016,7 +1016,7 @@ void resolve_expression(
                 break;
             }
 
-            if (an_is_notnone(accessee->lvalue_node) && accessee->lvalue_node->node_type == AST_NODE_TYPE_EXPRESSION_DEF_VALUE) {
+            if (an_is_notnone(accessee->lvalue_node)) {
                 expr->lvalue_node = expr;
             }
 
