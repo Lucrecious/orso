@@ -217,7 +217,7 @@ static void emit_push_reg(gen_t *gen, texloc_t loc, function_t *function, reg_t 
         for (size_t i = 0; i < words; ++i) {
             // move a word from reg addr with offset to tmp reg
             instruction_t in = {0};
-            in.op = OP_MOVWORD_REGADDR_WITH_OFFSET_TO_REG;
+            in.op = OP_MOVWORD_ADDR_TO_REG;
             in.as.mov_reg_to_reg.reg_destination = REG_TMP;
             in.as.mov_reg_to_reg.byte_offset = i*WORD_SIZE;
             in.as.mov_reg_to_reg.reg_source = reg_source;

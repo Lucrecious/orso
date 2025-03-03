@@ -65,9 +65,6 @@ string_t disassemble_instruction(instruction_t in, arena_t *allocator) {
             return string_format("OP_LOAD_ADDR(reg_rest: %d, index: %d)", allocator,
                     (u32)in.as.load_addr.reg_dest, (u32)in.as.load_addr.memaddr);
 
-        case OP_MOVWORD_REGADDR_WITH_OFFSET_TO_REG:
-            return string_format("OP_MOVWORD_REGADDR_WITH_OFFSET_TO_REG(%s)", allocator, "");
-
         case OP_JMP: return string_format("OP_JMP(amount: %lu)", allocator, (u32)in.as.jmp.amount);
         case OP_LOOP: return string_format("OP_LOOP(amount: %lu)", allocator, (u32)in.as.jmp.amount);
 

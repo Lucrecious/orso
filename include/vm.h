@@ -122,8 +122,6 @@ enum op_code_t {
     OP_MOVF32_ADDR_TO_REG,
     OP_MOVWORD_ADDR_TO_REG,
 
-    OP_MOVWORD_REGADDR_WITH_OFFSET_TO_REG,
-
     OP_LOAD_ADDR,
 
     OP_INTRINSIC_CALL,
@@ -323,19 +321,6 @@ void vm_step(vm_t *vm) {
             u32 index = in.as.load_addr.memaddr;
 
             vm->registers[reg_dest].as.p = MEMORY->data + index;
-            IP_ADV(1);
-            break;
-        }
-
-        case OP_MOVWORD_REGADDR_WITH_OFFSET_TO_REG: {
-            byte reg_source_addr = in.as.mov_reg_to_reg.reg_source;
-            u32 offset = in.as.mov_reg_to_reg.byte_offset;
-            byte reg_dest = in.as.mov_reg_to_reg.reg_destination;
-
-            void *addr = vm->registers[reg_source_addr].as.p + offset;
-
-            memcpy(&vm->registers[reg_dest], addr, WORD_SIZE);
-
             IP_ADV(1);
             break;
         }
