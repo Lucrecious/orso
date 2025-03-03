@@ -18,26 +18,10 @@ static string_t get_input(arena_t *allocator) {
     return s;
 }
 
-static string_t disassemble_instruction(instruction_t in, arena_t *allocator) {
+string_t disassemble_instruction(instruction_t in, arena_t *allocator) {
     op_code_t op = (op_code_t)in.op;
     switch (op) {
         case OP_NOP: return lit2str("OP_NOP");
-
-        #define OP_MOV_MEM_TO_REG(suffix) string_format("OP_MOV"#suffix"_MEM_TO_REG(memaddr: %lu, result_result: %lu)", allocator,\
-                (u32)in.as.mov_mem_to_reg.mem_address,\
-                (u32)in.as.mov_mem_to_reg.reg_result)
-        #define OP_MOV_MEM_TO_REG(suffix) string_format("OP_MOV"#suffix"_MEM_TO_REG(memaddr: %lu, result_result: %lu)", allocator,\
-                (u32)in.as.mov_mem_to_reg.mem_address,\
-                (u32)in.as.mov_mem_to_reg.reg_result)
-
-        case OP_MOVU8_MEM_TO_REG: return OP_MOV_MEM_TO_REG(U8);
-        case OP_MOVU16_MEM_TO_REG: return OP_MOV_MEM_TO_REG(U16);
-        case OP_MOVU32_MEM_TO_REG: return OP_MOV_MEM_TO_REG(U32);
-
-        case OP_MOVF32_MEM_TO_REG: return OP_MOV_MEM_TO_REG(F32);
-        case OP_MOVWORD_MEM_TO_REG: return OP_MOV_MEM_TO_REG(WORD);
-
-        #undef OP_MOV_MEM_TO_REG
 
         #define OP_CAST(suffix) string_format("OP_CAST"#suffix"(reg_result: %lu, reg_op: %lu)", allocator, (u32)in.as.casting.reg_result, (u32)in.as.casting.reg_op);
 
@@ -77,6 +61,10 @@ static string_t disassemble_instruction(instruction_t in, arena_t *allocator) {
             return string_format("OP_JMP_IF_REG_CONDITION(condition_reg: %lu, check_for: %lu, amount: %lu)", allocator,
                     (u32)in.as.jmp.condition_reg, (u32)in.as.jmp.check_for, in.as.jmp.amount);
 
+        case OP_LOAD_ADDR:
+            return string_format("OP_LOAD_ADDR(reg_rest: %d, index: %d)", allocator,
+                    (u32)in.as.load_addr.reg_dest, (u32)in.as.load_addr.memaddr);
+
         case OP_MOVWORD_REGADDR_WITH_OFFSET_TO_REG:
             return string_format("OP_MOVWORD_REGADDR_WITH_OFFSET_TO_REG(%s)", allocator, "");
 
@@ -86,18 +74,6 @@ static string_t disassemble_instruction(instruction_t in, arena_t *allocator) {
         #define OP_REG_TO_REG(SUFFIX) string_format("OP_MOV"#SUFFIX"(reg_source: %lu, regmem_destination: %lu)", allocator, \
                 (u32)in.as.mov_reg_to_reg.reg_source, \
                 (u32)in.as.mov_reg_to_reg.reg_destination);
-
-        case OP_MOVU8_REG_TO_REGMEM: return OP_REG_TO_REG(U8_REG_TO_REGMEM);
-        case OP_MOVU16_REG_TO_REGMEM: return OP_REG_TO_REG(U16_REG_TO_REGMEM);
-        case OP_MOVU32_REG_TO_REGMEM: return OP_REG_TO_REG(U32_REG_TO_REGMEM);
-        case OP_MOVF32_REG_TO_REGMEM: return OP_REG_TO_REG(F32_REG_TO_REGMEM);
-        case OP_MOVWORD_REG_TO_REGMEM: return OP_REG_TO_REG(WORD_REG_TO_REGMEM);
-
-        case OP_MOVU8_REGMEM_TO_REG: return OP_REG_TO_REG(U8_REGMEM_TO_REG);
-        case OP_MOVU16_REGMEM_TO_REG: return OP_REG_TO_REG(U16_REGMEM_TO_REG);
-        case OP_MOVU32_REGMEM_TO_REG: return OP_REG_TO_REG(U32_REGMEM_TO_REG);
-        case OP_MOVF32_REGMEM_TO_REG: return OP_REG_TO_REG(F32_REGMEM_TO_REG);
-        case OP_MOVWORD_REGMEM_TO_REG: return OP_REG_TO_REG(WORD_REGMEM_TO_REG);
 
         case OP_MOVU8_REG_TO_REGADDR: return OP_REG_TO_REG(U8_REG_TO_REGADDR);
         case OP_MOVU16_REG_TO_REGADDR: return OP_REG_TO_REG(U16_REG_TO_REGADDR);
@@ -110,8 +86,6 @@ static string_t disassemble_instruction(instruction_t in, arena_t *allocator) {
         case OP_MOVU32_REGADDR_TO_REG: return OP_REG_TO_REG(U32_REGADDR_TO_REG);
         case OP_MOVF32_REGADDR_TO_REG: return OP_REG_TO_REG(F32_REGADDR_TO_REG);
         case OP_MOVWORD_REGADDR_TO_REG: return OP_REG_TO_REG(WORD_REGADDR_TO_REG);
-
-        case OP_MOV_REGMEM_TO_REGADDR: return OP_REG_TO_REG(REGMEM_TO_REGADDR);
 
         case OP_MOV_REG_TO_REG: {
             return string_format("OP_MOV_REG_TO_REG(reg_source: %lu, reg_destination: %lu)", allocator,
@@ -325,7 +299,7 @@ bool debugger_step(debugger_t *debugger, vm_t *vm) {
     } else if (cstr_eq(command.cstr, "mem")) {
         if (command_n_args.count == 2) {
             string_t arg = command_n_args.items[1];
-            memaddr_t memaddr = string2size(arg);
+            u32 memaddr = string2size(arg);
 
             
             memarr_t *memarr = vm->call_frame.function->memory;

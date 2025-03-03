@@ -287,8 +287,8 @@ env_t make_test_env(ast_t *ast, vm_t *vm, arena_t *program_arena) {
     memset(memory->data, 0, stack_size);
 
     vm_init(vm);
-    vm->registers[REG_STACK_FRAME].as.u = stack_size;
-    vm->registers[REG_STACK_BOTTOM].as.u = stack_size;
+    vm->registers[REG_STACK_FRAME].as.p = (memory->data + stack_size);
+    vm->registers[REG_STACK_BOTTOM].as.p = (memory->data + stack_size);
     
     env_t env = {.vm=(vm), .memory=(memory), .arena=(program_arena)};
 
@@ -308,6 +308,13 @@ env_t make_test_env(ast_t *ast, vm_t *vm, arena_t *program_arena) {
 static function_t *compile_expr_and_prepare_vm(vm_t *vm, ast_t *ast, env_t *env, ast_node_t *expr) {
     function_t *init_function = new_function(env->memory, env->arena);
     compile_modules(ast, myerror, env->memory, env->arena, init_function);
+
+    // tmp_arena_t *tmp = allocator_borrow();
+    // for (size_t i = 0; i < init_function->code.count; ++i) {
+    //     printf("%s\n", disassemble_instruction(init_function->code.items[i], tmp->allocator).cstr);
+    // }
+    // allocator_return(tmp);
+
     vm_fresh_run(vm, init_function);
 
     function_t *expr_function = new_function(env->memory, env->arena);

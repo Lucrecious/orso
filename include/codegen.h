@@ -63,84 +63,8 @@ static void emit_instruction(function_t *function, texloc_t location, instructio
     array_push(&function->locations, location);
 }
 
-static void emit_read_memory_to_reg(texloc_t location, function_t *function, reg_t destination, memaddr_t address, typedata_t *type_info) {
-    ASSERT(type_info->size <= WORD_SIZE, "only word-sized values or smaller can go into registers");
-
-    if (type_info->size == 0) {
-        // nop
-        return;
-    }
-
-    instruction_t instruction;
-    instruction.op = OP_MOVWORD_MEM_TO_REG;
-
-    switch (type_info->kind) {
-        case TYPE_BOOL: {
-            instruction.op = OP_MOVU8_MEM_TO_REG;
-            break;
-        }
-
-        case TYPE_POINTER:
-        case TYPE_TYPE:
-        case TYPE_INTRINSIC_FUNCTION:
-        case TYPE_FUNCTION: {
-            if (type_info->size != WORD_SIZE) {
-                TODO("other than numbers, type should be solely handled by size");
-            }
-
-            instruction.op = OP_MOVWORD_MEM_TO_REG;
-            break;
-        }
-
-        case TYPE_NUMBER: {
-            switch ((num_size_t)type_info->size) {
-                case NUM_SIZE_8: {
-                    switch (type_info->as.num) {
-                        case NUM_TYPE_FLOAT: UNREACHABLE(); break;
-                        case NUM_TYPE_SIGNED:
-                        case NUM_TYPE_UNSIGNED: instruction.op = OP_MOVU8_MEM_TO_REG; break;
-                    }
-                    break;
-                }
-
-                case NUM_SIZE_16: {
-                    switch (type_info->as.num) {
-                        case NUM_TYPE_FLOAT: UNREACHABLE(); break;
-                        case NUM_TYPE_SIGNED:
-                        case NUM_TYPE_UNSIGNED: instruction.op = OP_MOVU16_MEM_TO_REG; break;
-                    }
-                    break;
-                }
-
-                case NUM_SIZE_32: {
-                    switch (type_info->as.num) {
-                        case NUM_TYPE_FLOAT: instruction.op = OP_MOVF32_MEM_TO_REG; break;
-                        case NUM_TYPE_SIGNED:
-                        case NUM_TYPE_UNSIGNED: instruction.op = OP_MOVU32_MEM_TO_REG; break;
-                    }
-                    break;
-                }
-
-                case NUM_SIZE_64: break;
-
-                default: UNREACHABLE();
-            }
-            break;
-        }
-
-        default: UNREACHABLE();
-    }
-
-    instruction.as.mov_mem_to_reg.mem_address = address;
-    instruction.as.mov_mem_to_reg.reg_result = destination;
-
-    emit_instruction(function, location, instruction);
-}
-
 typedef enum reg_mov_type_t reg_mov_type_t;
 enum reg_mov_type_t {
-    REG_MOV_TYPE_MEM_TO_REG,
-    REG_MOV_TYPE_REG_TO_MEM,
     REG_MOV_TYPE_ADDR_TO_REG,
     REG_MOV_TYPE_REG_TO_ADDR,
     REG_MOV_TYPE_REG_TO_REG,
@@ -185,24 +109,6 @@ static void emit_mov_reg_to_reg(function_t *function, texloc_t loc, reg_mov_size
         break;
     }
 
-    case REG_MOV_TYPE_MEM_TO_REG: {
-        op_u8 = OP_MOVU8_REGMEM_TO_REG;
-        op_u16 = OP_MOVU16_REGMEM_TO_REG;
-        op_u32 = OP_MOVU32_REGMEM_TO_REG;
-        op_f32 = OP_MOVF32_REGMEM_TO_REG;
-        op_word = OP_MOVWORD_REGMEM_TO_REG;
-        break;
-    }
-
-    case REG_MOV_TYPE_REG_TO_MEM: {
-        op_u8 = OP_MOVU8_REG_TO_REGMEM;
-        op_u16 = OP_MOVU16_REG_TO_REGMEM;
-        op_u32 = OP_MOVU32_REG_TO_REGMEM;
-        op_f32 = OP_MOVF32_REG_TO_REGMEM;
-        op_word = OP_MOVWORD_REG_TO_REGMEM;
-        break;
-    }
-
     case REG_MOV_TYPE_REG_TO_REG: {
         op_u8 = OP_MOV_REG_TO_REG;
         op_u16 = OP_MOV_REG_TO_REG;
@@ -240,15 +146,6 @@ static void emit_binu_reg_im(function_t *function, texloc_t loc, byte reg_dest, 
     in.as.binu_reg_immediate.immediate = immediate;
     in.as.binu_reg_immediate.reg_operand = reg_op;
     in.as.binu_reg_immediate.reg_result = reg_dest;
-
-    emit_instruction(function, loc, in);
-}
-
-static void emit_mem_to_addr(texloc_t loc, function_t *function, reg_t destination, reg_t source) {
-    instruction_t in = {0};
-    in.op = OP_MOV_REGMEM_TO_REGADDR;
-    in.as.mov_reg_to_reg.reg_destination = (byte)destination;
-    in.as.mov_reg_to_reg.reg_source = (byte)source;
 
     emit_instruction(function, loc, in);
 }
@@ -327,7 +224,7 @@ static void emit_push_reg(gen_t *gen, texloc_t loc, function_t *function, reg_t 
             emit_instruction(function, loc, in);
 
             // mov tmp reg to stack
-            emit_mov_reg_to_reg(function, loc, REG_MOV_SIZE_WORD, REG_MOV_TYPE_REG_TO_MEM, REG_STACK_BOTTOM, REG_TMP);
+            emit_mov_reg_to_reg(function, loc, REG_MOV_SIZE_WORD, REG_MOV_TYPE_REG_TO_ADDR, REG_STACK_BOTTOM, REG_TMP);
 
             // increase stack pointer for next iteration
             emit_binu_reg_im(function, loc, REG_STACK_BOTTOM, REG_STACK_BOTTOM, WORD_SIZE, '+');
@@ -337,17 +234,17 @@ static void emit_push_reg(gen_t *gen, texloc_t loc, function_t *function, reg_t 
         emit_binu_reg_im(function, loc, REG_STACK_BOTTOM, REG_STACK_BOTTOM, size_in_words, '-');
 
         // set reg result address to address of stack bottom (where local is now)
-        emit_mem_to_addr(loc, function, REG_RESULT, REG_STACK_BOTTOM);
+        emit_mov_reg_to_reg(function, loc, REG_MOV_SIZE_WORD, REG_MOV_TYPE_REG_TO_REG, reg_source, REG_STACK_BOTTOM);
     } else {
         emit_binu_reg_im(function, loc, REG_STACK_BOTTOM, REG_STACK_BOTTOM, (u32)WORD_SIZE, '-');
-        emit_mov_reg_to_reg(function, loc, mov_size, REG_MOV_TYPE_REG_TO_MEM, REG_STACK_BOTTOM, reg_source);
+        emit_mov_reg_to_reg(function, loc, mov_size, REG_MOV_TYPE_REG_TO_ADDR, REG_STACK_BOTTOM, reg_source);
     }
 }
 
 static void emit_pop_to_reg(gen_t *gen, texloc_t loc, function_t *function, reg_t reg_destination, type_t type) {
     gen->stack_size -= sizeof(word_t);
 
-    emit_mov_reg_to_reg(function, loc, type2movsize(gen, type), REG_MOV_TYPE_MEM_TO_REG, reg_destination, REG_STACK_BOTTOM);
+    emit_mov_reg_to_reg(function, loc, type2movsize(gen, type), REG_MOV_TYPE_ADDR_TO_REG, reg_destination, REG_STACK_BOTTOM);
     emit_binu_reg_im(function, loc, REG_STACK_BOTTOM, REG_STACK_BOTTOM, (u32)sizeof(word_t), '+');
 }
 
@@ -591,12 +488,6 @@ static void emit_return(texloc_t loc, function_t *function) {
     emit_instruction(function, loc, instruction);
 }
 
-static void gen_constant(gen_t *gen, texloc_t location, function_t *function, void *data, type_t type);
-static void emit_mem_index_to_addr_into_reg_result(gen_t *gen, texloc_t loc, function_t *function, size_t index) {
-    gen_constant(gen, loc, function, &index, gen->ast->type_set.size_t_);
-    emit_mem_to_addr(loc, function, REG_RESULT, REG_RESULT);
-}
-
 static void gen_expression(gen_t *gen, function_t *function, ast_node_t *expression);
 
 static size_t gen_jmp_if_reg(function_t *function, texloc_t location, reg_t condition_reg, bool jmp_condition) {
@@ -622,20 +513,28 @@ static void gen_patch_jmp(gen_t *gen, function_t *function, size_t index) {
     instruction->as.jmp.amount = (u32)amount;
 }
 
-static size_t add_constant(function_t *function, void *data, size_t size) {
+static void add_constant(gen_t *gen, function_t *function, texloc_t loc, void *data, size_t size, reg_t reg_destination_ptr) {
     size_t index = memarr_push(function->memory, data, size);
-    return index;
+    if (index > UINT_MAX) {
+        gen_error(gen, make_error_no_args(ERROR_CODEGEN_MEMORY_SIZE_TOO_BIG));
+        return;
+    }
+
+    instruction_t in = {0};
+    in.op = OP_LOAD_ADDR;
+    in.as.load_addr.memaddr = (u32)index;
+    in.as.load_addr.reg_dest = reg_destination_ptr;
+
+    emit_instruction(function, loc, in);
 }
 
 static void gen_constant(gen_t *gen, texloc_t location, function_t *function, void *data, type_t type) {
     typedata_t *td = type2typedata(&gen->ast->type_set.types, type);
 
-    size_t value_index = add_constant(function, data, td->size);
+    add_constant(gen, function, location, data, td->size, REG_RESULT);
 
     if (td->size <= WORD_SIZE) {
-        emit_read_memory_to_reg(location, function, REG_RESULT, value_index, td);
-    } else {
-        emit_mem_index_to_addr_into_reg_result(gen, location, function, value_index);
+        emit_mov_reg_to_reg(function, location, type2movsize(gen, type), REG_MOV_TYPE_ADDR_TO_REG, REG_RESULT, REG_RESULT);
     }
 }
 
@@ -695,8 +594,7 @@ static void gen_binary(gen_t *gen, function_t *function, ast_node_t *binary) {
     }
 }
 
-static void gen_local_mem_index(gen_t *gen, texloc_t loc, function_t *function, local_t *local, reg_t dest) {
-    UNUSED(gen);
+static void gen_local_addr(texloc_t loc, function_t *function, local_t *local, reg_t dest) {
     emit_binu_reg_im(function, loc, dest, REG_STACK_FRAME, (u32)local->stack_location, '-');
 }
 
@@ -720,9 +618,7 @@ static void gen_unary(gen_t *gen, function_t *function, ast_node_t *unary) {
         ast_node_t *ref_decl = an_operand(unary)->lvalue_node->ref_decl;
         local_t *local = find_local(gen, ref_decl);
 
-        gen_local_mem_index(gen, token_end_loc(&unary->end), function, local, REG_RESULT);
-
-        emit_mem_to_addr(token_end_loc(&unary->end), function, REG_RESULT, REG_RESULT);
+        gen_local_addr(token_end_loc(&unary->end), function, local, REG_RESULT);
     } else {
         gen_expression(gen, function, expr);
 
@@ -844,23 +740,27 @@ static void gen_pop_until_stack_point(gen_t *gen, function_t *function, texloc_t
     emit_popn_bytes(gen, function, pop_size_bytes, location, update_gen);
 }
 
-static void gen_global_addr(gen_t *gen, texloc_t loc, function_t *function, size_t index) {
-    emit_mem_index_to_addr_into_reg_result(gen, loc, function, index);
+static void gen_global_addr(texloc_t loc, function_t *function, size_t index, reg_t reg_dest) {
+    instruction_t in = {0};
+    in.op = OP_LOAD_ADDR;
+    in.as.load_addr.reg_dest = reg_dest;
+    in.as.load_addr.memaddr = index;
+    emit_instruction(function, loc, in);
 }
 
 static void gen_def_value(gen_t *gen, function_t *function, ast_node_t *def) {
     size_t global_index;
     if (table_get(ptr2sz, gen->decl2index, def->ref_decl, &global_index)) {
-        gen_global_addr(gen, token_end_loc(&def->end), function, global_index);
+        gen_global_addr(token_end_loc(&def->end), function, global_index, REG_RESULT);
 
         emit_mov_reg_to_reg(function, token_end_loc(&def->end), type2movsize(gen, def->value_type), REG_MOV_TYPE_ADDR_TO_REG, REG_RESULT, REG_RESULT);
     } else {
         local_t *local = find_local(gen, def->ref_decl);
 
-        gen_local_mem_index(gen, def->start.loc, function, local, REG_RESULT);
+        gen_local_addr(def->start.loc, function, local, REG_RESULT);
 
         texloc_t end = token_end_loc(&def->end);
-        emit_mov_reg_to_reg(function, end, type2movsize(gen, def->value_type), REG_MOV_TYPE_MEM_TO_REG, REG_RESULT, REG_RESULT);
+        emit_mov_reg_to_reg(function, end, type2movsize(gen, def->value_type), REG_MOV_TYPE_ADDR_TO_REG, REG_RESULT, REG_RESULT);
     }
 }
 
@@ -971,8 +871,7 @@ void gen_item_access_ptr_into_result_reg(gen_t *gen, function_t *function, ast_n
     // put address of lvalue local in tmp
     ast_node_t *decl = accessee->lvalue_node->ref_decl;
     local_t *local = find_local(gen, decl);
-    gen_local_mem_index(gen, token_end_loc(&accessor_->end), function, local, REG_TMP);
-    emit_mem_to_addr(end, function, REG_TMP, REG_TMP);
+    gen_local_addr(token_end_loc(&accessor_->end), function, local, REG_TMP);
 
     // do the multadd 
     emit_bin_op(end, function, TOKEN_STAR, ast_type2td(gen->ast, gen->ast->type_set.u64_), REG_TMP2, REG_RESULT, REG_TMP2);
@@ -990,10 +889,10 @@ static void gen_assignment(gen_t *gen, function_t *function, ast_node_t *assignm
 
         local_t *local = find_local(gen, ref_decl);
 
-        gen_local_mem_index(gen, assignment->end.loc, function, local, REG_TMP);
+        gen_local_addr(assignment->end.loc, function, local, REG_TMP);
 
         emit_mov_reg_to_reg(function, token_end_loc(&assignment->end),
-                type2movsize(gen, assignment->value_type), REG_MOV_TYPE_REG_TO_MEM, REG_TMP, REG_RESULT);
+                type2movsize(gen, assignment->value_type), REG_MOV_TYPE_REG_TO_ADDR, REG_TMP, REG_RESULT);
 
     } else if (lhs->lvalue_node->node_type == AST_NODE_TYPE_EXPRESSION_UNARY) {
         ASSERT(lhs->operator.type == TOKEN_STAR, "must be dereferencing");
@@ -1414,7 +1313,7 @@ static void gen_module(gen_t *gen, ast_node_t *module, function_t *init_func) {
         size_t index = gen_global_decldef(gen, decldef);
 
         ast_node_t *type_expr = an_decl_type(decldef);
-        gen_global_addr(gen, token_end_loc(&type_expr->end), init_func, index);
+        gen_global_addr(token_end_loc(&type_expr->end), init_func, index, REG_RESULT);
         emit_push_reg(gen, token_end_loc(&type_expr->end), init_func, REG_RESULT, REG_MOV_SIZE_WORD, 0);
 
         ast_node_t *expr = an_decl_expr(decldef);
