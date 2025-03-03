@@ -24,84 +24,84 @@ enum op_code_t {
 
     OP_MOV_REG_TO_REG,
 
-    OP_CAST_B2F,
-    OP_CAST_S2F,
-    OP_CAST_I2F,
-    OP_CAST_B2D,
-    OP_CAST_S2D,
-    OP_CAST_I2D,
+    OP_B2F,
+    OP_S2F,
+    OP_I2F,
+    OP_B2D,
+    OP_S2D,
+    OP_I2D,
 
-    OP_CAST_UB2F,
-    OP_CAST_US2F,
-    OP_CAST_U2F,
-    OP_CAST_UB2D,
-    OP_CAST_US2D,
-    OP_CAST_U2D,
+    OP_UB2F,
+    OP_US2F,
+    OP_U2F,
+    OP_UB2D,
+    OP_US2D,
+    OP_U2D,
 
-    OP_CAST_D2F,
-    OP_CAST_D2UL,
-    OP_CAST_D2L,
+    OP_D2F,
+    OP_D2UL,
+    OP_D2L,
 
-    OP_CAST_UL2UB,
-    OP_CAST_UL2US,
-    OP_CAST_UL2U,
-    OP_CAST_UL2L,
-    OP_CAST_UL2F,
-    OP_CAST_UL2D,
+    OP_UL2UB,
+    OP_UL2US,
+    OP_UL2U,
+    OP_UL2L,
+    OP_UL2F,
+    OP_UL2D,
 
-    OP_CAST_L2B,
-    OP_CAST_L2S,
-    OP_CAST_L2I,
-    OP_CAST_L2UL,
-    OP_CAST_L2F,
-    OP_CAST_L2D,
+    OP_L2B,
+    OP_L2S,
+    OP_L2I,
+    OP_L2UL,
+    OP_L2F,
+    OP_L2D,
 
-    OP_SUBU_REG_IM32,
-    OP_ADDU_REG_IM32,
+    OP_SUBU_IM,
+    OP_ADDU_IM,
 
-    OP_ADDI_REG_REG,
-    OP_SUBI_REG_REG,
-    OP_MULI_REG_REG,
-    OP_DIVI_REG_REG,
-    OP_REMI_REG_REG,
-    OP_MODI_REG_REG,
+    OP_ADDI,
+    OP_SUBI,
+    OP_MULI,
+    OP_DIVI,
+    OP_REMI,
+    OP_MODI,
 
-    OP_ADDU_REG_REG,
-    OP_SUBU_REG_REG,
-    OP_MULU_REG_REG,
-    OP_DIVU_REG_REG,
-    OP_REMU_REG_REG,
-    OP_MODU_REG_REG,
+    OP_ADDU,
+    OP_SUBU,
+    OP_MULU,
+    OP_DIVU,
+    OP_REMU,
+    OP_MODU,
 
-    OP_ADDD_REG_REG,
-    OP_SUBD_REG_REG,
-    OP_MULD_REG_REG,
-    OP_DIVD_REG_REG,
-    OP_REMD_REG_REG,
-    OP_MODD_REG_REG,
+    OP_ADDD,
+    OP_SUBD,
+    OP_MULD,
+    OP_DIVD,
+    OP_REMD,
+    OP_MODD,
 
-    OP_GTD_REG_REG,
-    OP_GED_REG_REG,
-    OP_LTD_REG_REG,
-    OP_LED_REG_REG,
-    OP_EQD_REG_REG,
-    OP_NQD_REG_REG,
+    OP_GTD,
+    OP_GED,
+    OP_LTD,
+    OP_LED,
+    OP_EQD,
+    OP_NQD,
 
-    OP_GTI_REG_REG,
-    OP_GEI_REG_REG,
-    OP_LTI_REG_REG,
-    OP_LEI_REG_REG,
-    OP_EQI_REG_REG,
-    OP_NQI_REG_REG,
+    OP_GTI,
+    OP_GEI,
+    OP_LTI,
+    OP_LEI,
+    OP_EQI,
+    OP_NQI,
 
-    OP_GTU_REG_REG,
-    OP_GEU_REG_REG,
-    OP_LTU_REG_REG,
-    OP_LEU_REG_REG,
-    OP_EQU_REG_REG,
-    OP_NQU_REG_REG,
+    OP_GTU,
+    OP_GEU,
+    OP_LTU,
+    OP_LEU,
+    OP_EQU,
+    OP_NQU,
 
-    OP_JMP_IF_REG_CONDITION,
+    OP_JMP_IF_COND,
     OP_JMP,
     OP_LOOP,
 
@@ -110,24 +110,17 @@ enum op_code_t {
     OP_NEGATEI,
     OP_NEGATED,
 
-    OP_INCREMENTD,
-    OP_DECREMENTD,
-    OP_INCREMENTI,
-    OP_DECREMENTI,
-    OP_INCREMENTU,
-    OP_DECREMENTU,
+    OP_MOVU8_REG_TO_ADDR,
+    OP_MOVU16_REG_TO_ADDR,
+    OP_MOVU32_REG_TO_ADDR,
+    OP_MOVF32_REG_TO_ADDR,
+    OP_MOVWORD_REG_TO_ADDR,
 
-    OP_MOVU8_REG_TO_REGADDR,
-    OP_MOVU16_REG_TO_REGADDR,
-    OP_MOVU32_REG_TO_REGADDR,
-    OP_MOVF32_REG_TO_REGADDR,
-    OP_MOVWORD_REG_TO_REGADDR,
-
-    OP_MOVU8_REGADDR_TO_REG,
-    OP_MOVU16_REGADDR_TO_REG,
-    OP_MOVU32_REGADDR_TO_REG,
-    OP_MOVF32_REGADDR_TO_REG,
-    OP_MOVWORD_REGADDR_TO_REG,
+    OP_MOVU8_ADDR_TO_REG,
+    OP_MOVU16_ADDR_TO_REG,
+    OP_MOVU32_ADDR_TO_REG,
+    OP_MOVF32_ADDR_TO_REG,
+    OP_MOVWORD_ADDR_TO_REG,
 
     OP_MOVWORD_REGADDR_WITH_OFFSET_TO_REG,
 
@@ -312,7 +305,7 @@ void vm_step(vm_t *vm) {
             break;
         }
 
-        case OP_JMP_IF_REG_CONDITION: {
+        case OP_JMP_IF_COND: {
             byte reg = in.as.jmp.condition_reg;
             bool check_for = in.as.jmp.check_for;
             bool is_true = (check_for == vm->registers[reg].as.u);
@@ -356,7 +349,7 @@ void vm_step(vm_t *vm) {
             break;
         }
 
-        case OP_ADDU_REG_IM32: {
+        case OP_ADDU_IM: {
             byte s = in.as.binu_reg_immediate.reg_operand;
             u32 immediate = in.as.binu_reg_immediate.immediate;
 
@@ -368,7 +361,7 @@ void vm_step(vm_t *vm) {
             break;
         }
 
-        case OP_SUBU_REG_IM32: {
+        case OP_SUBU_IM: {
             byte s = in.as.binu_reg_immediate.reg_operand;
             u32 immediate = in.as.binu_reg_immediate.immediate;
 
@@ -387,42 +380,42 @@ void vm_step(vm_t *vm) {
             IP_ADV(1); \
         } while(false); break
 
-        case OP_CAST_B2D: do_cast(d, s, f64, s8);
-        case OP_CAST_S2D: do_cast(d, s, f64, s16);
-        case OP_CAST_I2D: do_cast(d, s, f64, s32);
-        case OP_CAST_UB2D: do_cast(d, s, f64, u8);
-        case OP_CAST_US2D: do_cast(d, s, f64, u16);
-        case OP_CAST_U2D: do_cast(d, s, f64, u32);
+        case OP_B2D: do_cast(d, s, f64, s8);
+        case OP_S2D: do_cast(d, s, f64, s16);
+        case OP_I2D: do_cast(d, s, f64, s32);
+        case OP_UB2D: do_cast(d, s, f64, u8);
+        case OP_US2D: do_cast(d, s, f64, u16);
+        case OP_U2D: do_cast(d, s, f64, u32);
 
-        case OP_CAST_B2F: do_cast(d, s, f32, s8);
-        case OP_CAST_S2F: do_cast(d, s, f32, s16);
-        case OP_CAST_I2F: do_cast(d, s, f32, s32);
-        case OP_CAST_UB2F: do_cast(d, s, f32, u8);
-        case OP_CAST_US2F: do_cast(d, s, f32, u16);
-        case OP_CAST_U2F: do_cast(d, s, f32, u32);
+        case OP_B2F: do_cast(d, s, f32, s8);
+        case OP_S2F: do_cast(d, s, f32, s16);
+        case OP_I2F: do_cast(d, s, f32, s32);
+        case OP_UB2F: do_cast(d, s, f32, u8);
+        case OP_US2F: do_cast(d, s, f32, u16);
+        case OP_U2F: do_cast(d, s, f32, u32);
 
-        case OP_CAST_D2F: do_cast(d, d, f32, f64);
-        case OP_CAST_D2UL: do_cast(u, d, u64, f64);
-        case OP_CAST_D2L: do_cast(s, d, s64, f64);
+        case OP_D2F: do_cast(d, d, f32, f64);
+        case OP_D2UL: do_cast(u, d, u64, f64);
+        case OP_D2L: do_cast(s, d, s64, f64);
 
-        case OP_CAST_UL2UB: do_cast(u, u, u8, u64);
-        case OP_CAST_UL2US: do_cast(u, u, u16, u64);
-        case OP_CAST_UL2U: do_cast(u, u, u32, u64);
-        case OP_CAST_UL2L: do_cast(s, u, s64, u64);
-        case OP_CAST_UL2F: do_cast(d, u, f32, u64);
-        case OP_CAST_UL2D: do_cast(d, u, f64, u64);
+        case OP_UL2UB: do_cast(u, u, u8, u64);
+        case OP_UL2US: do_cast(u, u, u16, u64);
+        case OP_UL2U: do_cast(u, u, u32, u64);
+        case OP_UL2L: do_cast(s, u, s64, u64);
+        case OP_UL2F: do_cast(d, u, f32, u64);
+        case OP_UL2D: do_cast(d, u, f64, u64);
 
-        case OP_CAST_L2B: do_cast(s, s, s8, s64);
-        case OP_CAST_L2S: do_cast(s, s, s16, s64);
-        case OP_CAST_L2I: do_cast(s, s, s32, s64);
-        case OP_CAST_L2UL: do_cast(u, s, u64, s64);
-        case OP_CAST_L2F: do_cast(d, s, f32, s64);
-        case OP_CAST_L2D: do_cast(d, s, f64, s64);
+        case OP_L2B: do_cast(s, s, s8, s64);
+        case OP_L2S: do_cast(s, s, s16, s64);
+        case OP_L2I: do_cast(s, s, s32, s64);
+        case OP_L2UL: do_cast(u, s, u64, s64);
+        case OP_L2F: do_cast(d, s, f32, s64);
+        case OP_L2D: do_cast(d, s, f64, s64);
 
         #undef do_cast
 
         // conversion to unsigned for wrapped operation on overflow but converted back to integer after (c is ub for signed overflow)
-        #define case_bini_reg_reg(name, op, type) case OP_##name##_REG_REG: {\
+        #define case_bini_reg_reg(name, op, type) case OP_##name: {\
             s64 a = vm->registers[in.as.bin_reg_to_reg.reg_op1].as.type; \
             s64 b = vm->registers[in.as.bin_reg_to_reg.reg_op2].as.type; \
             byte c = in.as.bin_reg_to_reg.reg_result; \
@@ -468,7 +461,7 @@ void vm_step(vm_t *vm) {
 
         #undef case_bini_reg_reg
 
-        #define case_bind_reg_reg(name, op) case OP_##name##_REG_REG: { \
+        #define case_bind_reg_reg(name, op) case OP_##name: { \
             f64 a = vm->registers[in.as.bin_reg_to_reg.reg_op1].as.d; \
             f64 b = vm->registers[in.as.bin_reg_to_reg.reg_op2].as.d; \
             byte c = in.as.bin_reg_to_reg.reg_result; \
@@ -499,7 +492,7 @@ void vm_step(vm_t *vm) {
 
         #undef case_bind_reg_reg
 
-        #define case_binc_reg_reg(name, v, op) case OP_##name##_REG_REG: { \
+        #define case_binc_reg_reg(name, v, op) case OP_##name: { \
             byte a = in.as.bin_reg_to_reg.reg_op1; \
             byte b = in.as.bin_reg_to_reg.reg_op2; \
             byte c = in.as.bin_reg_to_reg.reg_result; \
@@ -543,16 +536,9 @@ void vm_step(vm_t *vm) {
         case_unary_reg_reg(NEGATEI, s, -);
         case_unary_reg_reg(NEGATED, d, -);
 
-        case_unary_reg_reg(INCREMENTD, d, ++);
-        case_unary_reg_reg(DECREMENTD, d, --);
-        case_unary_reg_reg(INCREMENTI, s, ++);
-        case_unary_reg_reg(DECREMENTI, s, --);
-        case_unary_reg_reg(INCREMENTU, u, ++);
-        case_unary_reg_reg(DECREMENTU, u, --);
-
         #undef case_unary_reg_reg
 
-        #define case_mov_regaddr_to_reg(name, q, type, mask) case OP_MOV##name##_REGADDR_TO_REG: { \
+        #define case_mov_regaddr_to_reg(name, q, type, mask) case OP_MOV##name##_ADDR_TO_REG: { \
             byte regaddr = in.as.mov_reg_to_reg.reg_source; \
             byte reg_dest = in.as.mov_reg_to_reg.reg_destination; \
             vm->registers[reg_dest].as.q = (*((type*)(vm->registers[regaddr].as.p))); \
@@ -566,7 +552,7 @@ void vm_step(vm_t *vm) {
 
         #undef case_mov_regaddr_to_reg
 
-        case OP_MOVWORD_REGADDR_TO_REG: {
+        case OP_MOVWORD_ADDR_TO_REG: {
             byte regaddr = in.as.mov_reg_to_reg.reg_source;
             byte reg_dest = in.as.mov_reg_to_reg.reg_destination;
             memcpy(&vm->registers[reg_dest], vm->registers[regaddr].as.p, sizeof(word_t));
@@ -574,7 +560,7 @@ void vm_step(vm_t *vm) {
             break;
         }
 
-        #define case_mov_reg_to_regaddr(name, q, type) case OP_MOV##name##_REG_TO_REGADDR: { \
+        #define case_mov_reg_to_regaddr(name, q, type) case OP_MOV##name##_REG_TO_ADDR: { \
             byte reg_src = in.as.mov_reg_to_reg.reg_source; \
             byte regaddr = in.as.mov_reg_to_reg.reg_destination; \
             *((type*)(vm->registers[regaddr].as.p)) = (type)vm->registers[reg_src].as.q; \
@@ -588,7 +574,7 @@ void vm_step(vm_t *vm) {
 
         #undef case_mov_reg_to_regaddr
 
-        case OP_MOVWORD_REG_TO_REGADDR: {
+        case OP_MOVWORD_REG_TO_ADDR: {
             byte reg_src = in.as.mov_reg_to_reg.reg_source;
             byte regaddr = in.as.mov_reg_to_reg.reg_destination;
             memcpy(vm->registers[regaddr].as.p, &vm->registers[reg_src], sizeof(word_t));

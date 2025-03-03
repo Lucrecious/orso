@@ -92,20 +92,20 @@ static void emit_mov_reg_to_reg(function_t *function, texloc_t loc, reg_mov_size
 
     switch (mov_type) {
     case REG_MOV_TYPE_ADDR_TO_REG: {
-        op_u8 = OP_MOVU8_REGADDR_TO_REG;
-        op_u16 = OP_MOVU16_REGADDR_TO_REG;
-        op_u32 = OP_MOVU32_REGADDR_TO_REG;
-        op_f32 = OP_MOVF32_REGADDR_TO_REG;
-        op_word = OP_MOVWORD_REGADDR_TO_REG;
+        op_u8 = OP_MOVU8_ADDR_TO_REG;
+        op_u16 = OP_MOVU16_ADDR_TO_REG;
+        op_u32 = OP_MOVU32_ADDR_TO_REG;
+        op_f32 = OP_MOVF32_ADDR_TO_REG;
+        op_word = OP_MOVWORD_ADDR_TO_REG;
         break;
     }
 
     case REG_MOV_TYPE_REG_TO_ADDR: {
-        op_u8 = OP_MOVU8_REG_TO_REGADDR;
-        op_u16 = OP_MOVU16_REG_TO_REGADDR;
-        op_u32 = OP_MOVU32_REG_TO_REGADDR;
-        op_f32 = OP_MOVF32_REG_TO_REGADDR;
-        op_word = OP_MOVWORD_REG_TO_REGADDR;
+        op_u8 = OP_MOVU8_REG_TO_ADDR;
+        op_u16 = OP_MOVU16_REG_TO_ADDR;
+        op_u32 = OP_MOVU32_REG_TO_ADDR;
+        op_f32 = OP_MOVF32_REG_TO_ADDR;
+        op_word = OP_MOVWORD_REG_TO_ADDR;
         break;
     }
 
@@ -142,7 +142,7 @@ static void emit_mov_reg_to_reg(function_t *function, texloc_t loc, reg_mov_size
 
 static void emit_binu_reg_im(function_t *function, texloc_t loc, byte reg_dest, byte reg_op, u32 immediate, char plus_or_minus) {
     instruction_t in = {0};
-    in.op = plus_or_minus == '-' ? OP_SUBU_REG_IM32 : OP_ADDU_REG_IM32;
+    in.op = plus_or_minus == '-' ? OP_SUBU_IM : OP_ADDU_IM;
     in.as.binu_reg_immediate.immediate = immediate;
     in.as.binu_reg_immediate.reg_operand = reg_op;
     in.as.binu_reg_immediate.reg_result = reg_dest;
@@ -276,8 +276,8 @@ static void emit_bin_op(texloc_t loc, function_t *function, token_type_t token_t
             case TOKEN_LESS:
             case TOKEN_LESS_EQUAL: UNREACHABLE(); break;
 
-            case TOKEN_EQUAL_EQUAL: instruction.op = OP_EQU_REG_REG; break;
-            case TOKEN_BANG_EQUAL: instruction.op = OP_NQU_REG_REG; break;
+            case TOKEN_EQUAL_EQUAL: instruction.op = OP_EQU; break;
+            case TOKEN_BANG_EQUAL: instruction.op = OP_NQU; break;
 
             default: UNREACHABLE(); break;
         }
@@ -287,108 +287,108 @@ static void emit_bin_op(texloc_t loc, function_t *function, token_type_t token_t
         switch (token_type) {
             case TOKEN_PLUS: {
                 switch (type_info->as.num) {
-                    case NUM_TYPE_FLOAT: instruction.op = OP_ADDD_REG_REG; break;
-                    case NUM_TYPE_SIGNED: instruction.op = OP_ADDI_REG_REG; break;
-                    case NUM_TYPE_UNSIGNED: instruction.op = OP_ADDU_REG_REG; break;
+                    case NUM_TYPE_FLOAT: instruction.op = OP_ADDD; break;
+                    case NUM_TYPE_SIGNED: instruction.op = OP_ADDI; break;
+                    case NUM_TYPE_UNSIGNED: instruction.op = OP_ADDU; break;
                 }
                 break;
             }
 
             case TOKEN_MINUS: {
                 switch (type_info->as.num) {
-                    case NUM_TYPE_FLOAT: instruction.op = OP_SUBD_REG_REG; break;
-                    case NUM_TYPE_SIGNED: instruction.op = OP_SUBI_REG_REG; break;
-                    case NUM_TYPE_UNSIGNED: instruction.op = OP_SUBU_REG_REG; break;
+                    case NUM_TYPE_FLOAT: instruction.op = OP_SUBD; break;
+                    case NUM_TYPE_SIGNED: instruction.op = OP_SUBI; break;
+                    case NUM_TYPE_UNSIGNED: instruction.op = OP_SUBU; break;
                 }
                 break;
             }
 
             case TOKEN_STAR: {
                 switch (type_info->as.num) {
-                    case NUM_TYPE_FLOAT: instruction.op = OP_MULD_REG_REG; break;
-                    case NUM_TYPE_SIGNED: instruction.op = OP_MULI_REG_REG; break;
-                    case NUM_TYPE_UNSIGNED: instruction.op = OP_MULU_REG_REG; break;
+                    case NUM_TYPE_FLOAT: instruction.op = OP_MULD; break;
+                    case NUM_TYPE_SIGNED: instruction.op = OP_MULI; break;
+                    case NUM_TYPE_UNSIGNED: instruction.op = OP_MULU; break;
                 }
                 break;
             }
             
             case TOKEN_SLASH: {
                 switch (type_info->as.num) {
-                    case NUM_TYPE_FLOAT: instruction.op = OP_DIVD_REG_REG; break;
-                    case NUM_TYPE_SIGNED: instruction.op = OP_DIVI_REG_REG; break;
-                    case NUM_TYPE_UNSIGNED: instruction.op = OP_DIVU_REG_REG; break;
+                    case NUM_TYPE_FLOAT: instruction.op = OP_DIVD; break;
+                    case NUM_TYPE_SIGNED: instruction.op = OP_DIVI; break;
+                    case NUM_TYPE_UNSIGNED: instruction.op = OP_DIVU; break;
                 }
                 break;
             }
 
             case TOKEN_PERCENT: {
                 switch (type_info->as.num) {
-                    case NUM_TYPE_FLOAT: instruction.op = OP_MODD_REG_REG; break;
-                    case NUM_TYPE_SIGNED: instruction.op = OP_MODI_REG_REG; break;
-                    case NUM_TYPE_UNSIGNED: instruction.op = OP_MODU_REG_REG; break;
+                    case NUM_TYPE_FLOAT: instruction.op = OP_MODD; break;
+                    case NUM_TYPE_SIGNED: instruction.op = OP_MODI; break;
+                    case NUM_TYPE_UNSIGNED: instruction.op = OP_MODU; break;
                 }
                 break;
             }
 
             case TOKEN_PERCENT_PERCENT: {
                 switch (type_info->as.num) {
-                    case NUM_TYPE_FLOAT: instruction.op = OP_REMD_REG_REG; break;
-                    case NUM_TYPE_SIGNED: instruction.op = OP_REMI_REG_REG; break;
-                    case NUM_TYPE_UNSIGNED: instruction.op = OP_REMU_REG_REG; break;
+                    case NUM_TYPE_FLOAT: instruction.op = OP_REMD; break;
+                    case NUM_TYPE_SIGNED: instruction.op = OP_REMI; break;
+                    case NUM_TYPE_UNSIGNED: instruction.op = OP_REMU; break;
                 }
                 break;
             }
 
             case TOKEN_GREATER: {
                 switch (type_info->as.num) {
-                    case NUM_TYPE_FLOAT: instruction.op = OP_GTD_REG_REG; break;
-                    case NUM_TYPE_SIGNED: instruction.op = OP_GTI_REG_REG; break;
-                    case NUM_TYPE_UNSIGNED: instruction.op = OP_GTU_REG_REG; break;
+                    case NUM_TYPE_FLOAT: instruction.op = OP_GTD; break;
+                    case NUM_TYPE_SIGNED: instruction.op = OP_GTI; break;
+                    case NUM_TYPE_UNSIGNED: instruction.op = OP_GTU; break;
                 }
                 break;
             }
 
             case TOKEN_GREATER_EQUAL: {
                 switch (type_info->as.num) {
-                    case NUM_TYPE_FLOAT: instruction.op = OP_GED_REG_REG; break;
-                    case NUM_TYPE_SIGNED: instruction.op = OP_GEI_REG_REG; break;
-                    case NUM_TYPE_UNSIGNED: instruction.op = OP_GEU_REG_REG; break;
+                    case NUM_TYPE_FLOAT: instruction.op = OP_GED; break;
+                    case NUM_TYPE_SIGNED: instruction.op = OP_GEI; break;
+                    case NUM_TYPE_UNSIGNED: instruction.op = OP_GEU; break;
                 }
                 break;
             }
 
             case TOKEN_LESS:{
                 switch (type_info->as.num) {
-                    case NUM_TYPE_FLOAT: instruction.op = OP_LTD_REG_REG; break;
-                    case NUM_TYPE_SIGNED: instruction.op = OP_LTI_REG_REG; break;
-                    case NUM_TYPE_UNSIGNED: instruction.op = OP_LTU_REG_REG; break;
+                    case NUM_TYPE_FLOAT: instruction.op = OP_LTD; break;
+                    case NUM_TYPE_SIGNED: instruction.op = OP_LTI; break;
+                    case NUM_TYPE_UNSIGNED: instruction.op = OP_LTU; break;
                 }
                 break;
             }
 
             case TOKEN_LESS_EQUAL: {
                 switch (type_info->as.num) {
-                    case NUM_TYPE_FLOAT: instruction.op = OP_LED_REG_REG; break;
-                    case NUM_TYPE_SIGNED: instruction.op = OP_LEI_REG_REG; break;
-                    case NUM_TYPE_UNSIGNED: instruction.op = OP_LEU_REG_REG; break;
+                    case NUM_TYPE_FLOAT: instruction.op = OP_LED; break;
+                    case NUM_TYPE_SIGNED: instruction.op = OP_LEI; break;
+                    case NUM_TYPE_UNSIGNED: instruction.op = OP_LEU; break;
                 }
                 break;
             }
 
             case TOKEN_EQUAL_EQUAL: {
                 switch (type_info->as.num) {
-                    case NUM_TYPE_FLOAT: instruction.op = OP_EQD_REG_REG; break;
-                    case NUM_TYPE_SIGNED: instruction.op = OP_EQI_REG_REG; break;
-                    case NUM_TYPE_UNSIGNED: instruction.op = OP_EQU_REG_REG; break;
+                    case NUM_TYPE_FLOAT: instruction.op = OP_EQD; break;
+                    case NUM_TYPE_SIGNED: instruction.op = OP_EQI; break;
+                    case NUM_TYPE_UNSIGNED: instruction.op = OP_EQU; break;
                 }
                 break;
             }
 
             case TOKEN_BANG_EQUAL: {
                 switch (type_info->as.num) {
-                    case NUM_TYPE_FLOAT: instruction.op = OP_NQD_REG_REG; break;
-                    case NUM_TYPE_SIGNED: instruction.op = OP_NQI_REG_REG; break;
-                    case NUM_TYPE_UNSIGNED: instruction.op = OP_NQU_REG_REG; break;
+                    case NUM_TYPE_FLOAT: instruction.op = OP_NQD; break;
+                    case NUM_TYPE_SIGNED: instruction.op = OP_NQI; break;
+                    case NUM_TYPE_UNSIGNED: instruction.op = OP_NQU; break;
                 }
                 break;
             }
@@ -492,7 +492,7 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
 
 static size_t gen_jmp_if_reg(function_t *function, texloc_t location, reg_t condition_reg, bool jmp_condition) {
     instruction_t instruction = {0};
-    instruction.op = OP_JMP_IF_REG_CONDITION;
+    instruction.op = OP_JMP_IF_COND;
     instruction.as.jmp.amount = 0;
     instruction.as.jmp.condition_reg = condition_reg;
     instruction.as.jmp.check_for = jmp_condition;
@@ -1092,85 +1092,85 @@ static void emit_cast(gen_t *gen, function_t *function, type_t dest, type_t sour
         // registers only hold 64bit numbers, so all lower bit types are automatically widened when put into a register
 
         if (desttd->as.num == NUM_TYPE_SIGNED && sourcetd->as.num == NUM_TYPE_SIGNED) {
-            EMIT_CAST(NUM_SIZE_8, OP_CAST_L2B);
-            EMIT_CAST(NUM_SIZE_16, OP_CAST_L2S);
-            EMIT_CAST(NUM_SIZE_32, OP_CAST_L2I);
+            EMIT_CAST(NUM_SIZE_8, OP_L2B);
+            EMIT_CAST(NUM_SIZE_16, OP_L2S);
+            EMIT_CAST(NUM_SIZE_32, OP_L2I);
         } else if (desttd->as.num == NUM_TYPE_UNSIGNED && sourcetd->as.num == NUM_TYPE_SIGNED) {
-            EMIT_CAST(NUM_SIZE_8, OP_CAST_L2UL, OP_CAST_UL2UB);
-            EMIT_CAST(NUM_SIZE_16, OP_CAST_L2UL, OP_CAST_UL2US);
-            EMIT_CAST(NUM_SIZE_32, OP_CAST_L2UL, OP_CAST_UL2U);
-            EMIT_CAST(NUM_SIZE_64, OP_CAST_L2UL);
+            EMIT_CAST(NUM_SIZE_8, OP_L2UL, OP_UL2UB);
+            EMIT_CAST(NUM_SIZE_16, OP_L2UL, OP_UL2US);
+            EMIT_CAST(NUM_SIZE_32, OP_L2UL, OP_UL2U);
+            EMIT_CAST(NUM_SIZE_64, OP_L2UL);
         } else if (desttd->as.num == NUM_TYPE_FLOAT && sourcetd->as.num == NUM_TYPE_SIGNED) {
             switch ((num_size_t)sourcetd->size) {
                 case NUM_SIZE_8: {
-                    EMIT_CAST(NUM_SIZE_32, OP_CAST_B2F);
-                    EMIT_CAST(NUM_SIZE_64, OP_CAST_B2D);
+                    EMIT_CAST(NUM_SIZE_32, OP_B2F);
+                    EMIT_CAST(NUM_SIZE_64, OP_B2D);
                     break;
                 }
 
                 case NUM_SIZE_16: {
-                    EMIT_CAST(NUM_SIZE_32, OP_CAST_S2F);
-                    EMIT_CAST(NUM_SIZE_64, OP_CAST_S2D);
+                    EMIT_CAST(NUM_SIZE_32, OP_S2F);
+                    EMIT_CAST(NUM_SIZE_64, OP_S2D);
                     break;
                 }
 
                 case NUM_SIZE_32: {
-                    EMIT_CAST(NUM_SIZE_32, OP_CAST_I2F);
-                    EMIT_CAST(NUM_SIZE_64, OP_CAST_I2D);
+                    EMIT_CAST(NUM_SIZE_32, OP_I2F);
+                    EMIT_CAST(NUM_SIZE_64, OP_I2D);
                     break;
                 }
                 case NUM_SIZE_64: {
-                    EMIT_CAST(NUM_SIZE_32, OP_CAST_L2F);
-                    EMIT_CAST(NUM_SIZE_64, OP_CAST_L2D);
+                    EMIT_CAST(NUM_SIZE_32, OP_L2F);
+                    EMIT_CAST(NUM_SIZE_64, OP_L2D);
                     break;
                 }
             }
         } else if (desttd->as.num == NUM_TYPE_UNSIGNED && sourcetd->as.num == NUM_TYPE_UNSIGNED) {
-            EMIT_CAST(NUM_SIZE_8, OP_CAST_UL2UB);
-            EMIT_CAST(NUM_SIZE_16, OP_CAST_UL2US);
-            EMIT_CAST(NUM_SIZE_32, OP_CAST_UL2U);
+            EMIT_CAST(NUM_SIZE_8, OP_UL2UB);
+            EMIT_CAST(NUM_SIZE_16, OP_UL2US);
+            EMIT_CAST(NUM_SIZE_32, OP_UL2U);
         } else if (desttd->as.num == NUM_TYPE_SIGNED && sourcetd->as.num == NUM_TYPE_UNSIGNED) {
-            EMIT_CAST(NUM_SIZE_8, OP_CAST_UL2L, OP_CAST_L2B);
-            EMIT_CAST(NUM_SIZE_16, OP_CAST_UL2L, OP_CAST_L2S);
-            EMIT_CAST(NUM_SIZE_32, OP_CAST_UL2L, OP_CAST_L2I);
-            EMIT_CAST(NUM_SIZE_64, OP_CAST_UL2L);
+            EMIT_CAST(NUM_SIZE_8, OP_UL2L, OP_L2B);
+            EMIT_CAST(NUM_SIZE_16, OP_UL2L, OP_L2S);
+            EMIT_CAST(NUM_SIZE_32, OP_UL2L, OP_L2I);
+            EMIT_CAST(NUM_SIZE_64, OP_UL2L);
         } else if (desttd->as.num == NUM_TYPE_FLOAT && sourcetd->as.num == NUM_TYPE_UNSIGNED) {
             switch ((num_size_t)sourcetd->size) {
                 case NUM_SIZE_8: {
-                    EMIT_CAST(NUM_SIZE_32, OP_CAST_UB2F);
-                    EMIT_CAST(NUM_SIZE_64, OP_CAST_UB2D);
+                    EMIT_CAST(NUM_SIZE_32, OP_UB2F);
+                    EMIT_CAST(NUM_SIZE_64, OP_UB2D);
                     break;
                 }
 
                 case NUM_SIZE_16: {
-                    EMIT_CAST(NUM_SIZE_32, OP_CAST_US2F);
-                    EMIT_CAST(NUM_SIZE_64, OP_CAST_US2D);
+                    EMIT_CAST(NUM_SIZE_32, OP_US2F);
+                    EMIT_CAST(NUM_SIZE_64, OP_US2D);
                     break;
                 }
 
                 case NUM_SIZE_32: {
-                    EMIT_CAST(NUM_SIZE_32, OP_CAST_U2F);
-                    EMIT_CAST(NUM_SIZE_64, OP_CAST_U2D);
+                    EMIT_CAST(NUM_SIZE_32, OP_U2F);
+                    EMIT_CAST(NUM_SIZE_64, OP_U2D);
                     break;
                 }
                 case NUM_SIZE_64: {
-                    EMIT_CAST(NUM_SIZE_32, OP_CAST_UL2F);
-                    EMIT_CAST(NUM_SIZE_64, OP_CAST_UL2D);
+                    EMIT_CAST(NUM_SIZE_32, OP_UL2F);
+                    EMIT_CAST(NUM_SIZE_64, OP_UL2D);
                     break;
                 }
             }
         } else if (desttd->as.num == NUM_TYPE_FLOAT && sourcetd->as.num == NUM_TYPE_FLOAT) {
-            EMIT_CAST(NUM_SIZE_32, OP_CAST_D2F);
+            EMIT_CAST(NUM_SIZE_32, OP_D2F);
         } else if (desttd->as.num == NUM_TYPE_UNSIGNED && sourcetd->as.num == NUM_TYPE_FLOAT) {
-            EMIT_CAST(NUM_SIZE_8, OP_CAST_D2UL, OP_CAST_UL2UB);
-            EMIT_CAST(NUM_SIZE_16, OP_CAST_D2UL, OP_CAST_UL2US);
-            EMIT_CAST(NUM_SIZE_32, OP_CAST_D2UL, OP_CAST_UL2U);
-            EMIT_CAST(NUM_SIZE_64, OP_CAST_D2UL);
+            EMIT_CAST(NUM_SIZE_8, OP_D2UL, OP_UL2UB);
+            EMIT_CAST(NUM_SIZE_16, OP_D2UL, OP_UL2US);
+            EMIT_CAST(NUM_SIZE_32, OP_D2UL, OP_UL2U);
+            EMIT_CAST(NUM_SIZE_64, OP_D2UL);
         } else if (desttd->as.num == NUM_TYPE_SIGNED && sourcetd->as.num == NUM_TYPE_FLOAT) {
-            EMIT_CAST(NUM_SIZE_8, OP_CAST_D2L, OP_CAST_L2B);
-            EMIT_CAST(NUM_SIZE_16, OP_CAST_D2L, OP_CAST_L2S);
-            EMIT_CAST(NUM_SIZE_32, OP_CAST_D2L, OP_CAST_L2I);
-            EMIT_CAST(NUM_SIZE_64, OP_CAST_D2L);
+            EMIT_CAST(NUM_SIZE_8, OP_D2L, OP_L2B);
+            EMIT_CAST(NUM_SIZE_16, OP_D2L, OP_L2S);
+            EMIT_CAST(NUM_SIZE_32, OP_D2L, OP_L2I);
+            EMIT_CAST(NUM_SIZE_64, OP_D2L);
         }
         #undef EMIT_CAST
 

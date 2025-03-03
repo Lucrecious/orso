@@ -25,40 +25,40 @@ string_t disassemble_instruction(instruction_t in, arena_t *allocator) {
 
         #define OP_CAST(suffix) string_format("OP_CAST"#suffix"(reg_result: %lu, reg_op: %lu)", allocator, (u32)in.as.casting.reg_result, (u32)in.as.casting.reg_op);
 
-        case OP_CAST_B2F: return OP_CAST(B2F);
-        case OP_CAST_S2F: return OP_CAST(S2F);
-        case OP_CAST_I2F: return OP_CAST(I2F);
-        case OP_CAST_UB2F: return OP_CAST(UB2F);
-        case OP_CAST_US2F: return OP_CAST(US2F);
-        case OP_CAST_U2F: return OP_CAST(U2F);
+        case OP_B2F: return OP_CAST(B2F);
+        case OP_S2F: return OP_CAST(S2F);
+        case OP_I2F: return OP_CAST(I2F);
+        case OP_UB2F: return OP_CAST(UB2F);
+        case OP_US2F: return OP_CAST(US2F);
+        case OP_U2F: return OP_CAST(U2F);
 
-        case OP_CAST_B2D: return OP_CAST(B2D);
-        case OP_CAST_S2D: return OP_CAST(S2D);
-        case OP_CAST_I2D: return OP_CAST(I2D);
-        case OP_CAST_UB2D: return OP_CAST(UB2D);
-        case OP_CAST_US2D: return OP_CAST(US2D);
-        case OP_CAST_U2D: return OP_CAST(U2D);
+        case OP_B2D: return OP_CAST(B2D);
+        case OP_S2D: return OP_CAST(S2D);
+        case OP_I2D: return OP_CAST(I2D);
+        case OP_UB2D: return OP_CAST(UB2D);
+        case OP_US2D: return OP_CAST(US2D);
+        case OP_U2D: return OP_CAST(U2D);
 
-        case OP_CAST_D2F: return OP_CAST(D2F);
-        case OP_CAST_D2UL: return OP_CAST(D2UL);
-        case OP_CAST_D2L: return OP_CAST(D2L);
+        case OP_D2F: return OP_CAST(D2F);
+        case OP_D2UL: return OP_CAST(D2UL);
+        case OP_D2L: return OP_CAST(D2L);
 
-        case OP_CAST_UL2UB: return OP_CAST(UL2UB);
-        case OP_CAST_UL2US: return OP_CAST(UL2US);
-        case OP_CAST_UL2U: return OP_CAST(UL2U);
-        case OP_CAST_UL2L: return OP_CAST(UL2L);
-        case OP_CAST_UL2F: return OP_CAST(UL2F);
-        case OP_CAST_UL2D: return OP_CAST(UL2D);
+        case OP_UL2UB: return OP_CAST(UL2UB);
+        case OP_UL2US: return OP_CAST(UL2US);
+        case OP_UL2U: return OP_CAST(UL2U);
+        case OP_UL2L: return OP_CAST(UL2L);
+        case OP_UL2F: return OP_CAST(UL2F);
+        case OP_UL2D: return OP_CAST(UL2D);
 
-        case OP_CAST_L2B: return OP_CAST(L2B);
-        case OP_CAST_L2S: return OP_CAST(L2S);
-        case OP_CAST_L2I: return OP_CAST(L2I);
-        case OP_CAST_L2UL: return OP_CAST(L2UL);
-        case OP_CAST_L2F: return OP_CAST(L2F);
-        case OP_CAST_L2D: return OP_CAST(L2D);
+        case OP_L2B: return OP_CAST(L2B);
+        case OP_L2S: return OP_CAST(L2S);
+        case OP_L2I: return OP_CAST(L2I);
+        case OP_L2UL: return OP_CAST(L2UL);
+        case OP_L2F: return OP_CAST(L2F);
+        case OP_L2D: return OP_CAST(L2D);
 
-        case OP_JMP_IF_REG_CONDITION:
-            return string_format("OP_JMP_IF_REG_CONDITION(condition_reg: %lu, check_for: %lu, amount: %lu)", allocator,
+        case OP_JMP_IF_COND:
+            return string_format("OP_JMP_IF_COND(condition_reg: %lu, check_for: %lu, amount: %lu)", allocator,
                     (u32)in.as.jmp.condition_reg, (u32)in.as.jmp.check_for, in.as.jmp.amount);
 
         case OP_LOAD_ADDR:
@@ -75,17 +75,17 @@ string_t disassemble_instruction(instruction_t in, arena_t *allocator) {
                 (u32)in.as.mov_reg_to_reg.reg_source, \
                 (u32)in.as.mov_reg_to_reg.reg_destination);
 
-        case OP_MOVU8_REG_TO_REGADDR: return OP_REG_TO_REG(U8_REG_TO_REGADDR);
-        case OP_MOVU16_REG_TO_REGADDR: return OP_REG_TO_REG(U16_REG_TO_REGADDR);
-        case OP_MOVU32_REG_TO_REGADDR: return OP_REG_TO_REG(U32_REG_TO_REGADDR);
-        case OP_MOVF32_REG_TO_REGADDR: return OP_REG_TO_REG(F32_REG_TO_REGADDR);
-        case OP_MOVWORD_REG_TO_REGADDR: return OP_REG_TO_REG(WORD_REG_TO_REGADDR);
+        case OP_MOVU8_REG_TO_ADDR: return OP_REG_TO_REG(U8_REG_TO_REGADDR);
+        case OP_MOVU16_REG_TO_ADDR: return OP_REG_TO_REG(U16_REG_TO_REGADDR);
+        case OP_MOVU32_REG_TO_ADDR: return OP_REG_TO_REG(U32_REG_TO_REGADDR);
+        case OP_MOVF32_REG_TO_ADDR: return OP_REG_TO_REG(F32_REG_TO_REGADDR);
+        case OP_MOVWORD_REG_TO_ADDR: return OP_REG_TO_REG(WORD_REG_TO_REGADDR);
 
-        case OP_MOVU8_REGADDR_TO_REG: return OP_REG_TO_REG(U8_REGADDR_TO_REG);
-        case OP_MOVU16_REGADDR_TO_REG: return OP_REG_TO_REG(U16_REGADDR_TO_REG);
-        case OP_MOVU32_REGADDR_TO_REG: return OP_REG_TO_REG(U32_REGADDR_TO_REG);
-        case OP_MOVF32_REGADDR_TO_REG: return OP_REG_TO_REG(F32_REGADDR_TO_REG);
-        case OP_MOVWORD_REGADDR_TO_REG: return OP_REG_TO_REG(WORD_REGADDR_TO_REG);
+        case OP_MOVU8_ADDR_TO_REG: return OP_REG_TO_REG(U8_REGADDR_TO_REG);
+        case OP_MOVU16_ADDR_TO_REG: return OP_REG_TO_REG(U16_REGADDR_TO_REG);
+        case OP_MOVU32_ADDR_TO_REG: return OP_REG_TO_REG(U32_REGADDR_TO_REG);
+        case OP_MOVF32_ADDR_TO_REG: return OP_REG_TO_REG(F32_REGADDR_TO_REG);
+        case OP_MOVWORD_ADDR_TO_REG: return OP_REG_TO_REG(WORD_REGADDR_TO_REG);
 
         case OP_MOV_REG_TO_REG: {
             return string_format("OP_MOV_REG_TO_REG(reg_source: %lu, reg_destination: %lu)", allocator,
@@ -93,15 +93,15 @@ string_t disassemble_instruction(instruction_t in, arena_t *allocator) {
                     (u32)in.as.mov_reg_to_reg.reg_destination);
         }
 
-        case OP_SUBU_REG_IM32: {
-            return string_format("OP_SUBU_REG_IM32(reg_operand: %lu, immediate: %lu, reg_result: %lu)", allocator,
+        case OP_SUBU_IM: {
+            return string_format("OP_SUBU_IM(reg_operand: %lu, immediate: %lu, reg_result: %lu)", allocator,
                     (u32)in.as.binu_reg_immediate.reg_operand,
                     (u32)in.as.binu_reg_immediate.immediate,
                     (u32)in.as.binu_reg_immediate.reg_result);
         }
 
-        case OP_ADDU_REG_IM32: {
-            return string_format("OP_ADDU_REG_IM32(reg_operand: %lu, immediate: %lu, reg_result: %lu)", allocator,
+        case OP_ADDU_IM: {
+            return string_format("OP_ADDU_IM(reg_operand: %lu, immediate: %lu, reg_result: %lu)", allocator,
                     (u32)in.as.binu_reg_immediate.reg_operand,
                     (u32)in.as.binu_reg_immediate.immediate,
                     (u32)in.as.binu_reg_immediate.reg_result);
@@ -112,51 +112,51 @@ string_t disassemble_instruction(instruction_t in, arena_t *allocator) {
                 (u32)in.as.bin_reg_to_reg.reg_op2,\
                 (u32)in.as.bin_reg_to_reg.reg_result)
 
-        case OP_ADDI_REG_REG: return OP_BIN_REG_REG(ADDI);
-        case OP_SUBI_REG_REG: return OP_BIN_REG_REG(SUBI);
-        case OP_MULI_REG_REG: return OP_BIN_REG_REG(MULI);
-        case OP_DIVI_REG_REG: return OP_BIN_REG_REG(DIVI);
-        case OP_REMI_REG_REG: return OP_BIN_REG_REG(REMI);
-        case OP_MODI_REG_REG: return OP_BIN_REG_REG(MODI);
+        case OP_ADDI: return OP_BIN_REG_REG(ADDI);
+        case OP_SUBI: return OP_BIN_REG_REG(SUBI);
+        case OP_MULI: return OP_BIN_REG_REG(MULI);
+        case OP_DIVI: return OP_BIN_REG_REG(DIVI);
+        case OP_REMI: return OP_BIN_REG_REG(REMI);
+        case OP_MODI: return OP_BIN_REG_REG(MODI);
 
-        case OP_ADDU_REG_REG: return OP_BIN_REG_REG(ADDU);
-        case OP_SUBU_REG_REG: return OP_BIN_REG_REG(SUBU);
-        case OP_MULU_REG_REG: return OP_BIN_REG_REG(MULU);
-        case OP_DIVU_REG_REG: return OP_BIN_REG_REG(DIVU);
-        case OP_REMU_REG_REG: return OP_BIN_REG_REG(REMU);
-        case OP_MODU_REG_REG: return OP_BIN_REG_REG(MODU);
+        case OP_ADDU: return OP_BIN_REG_REG(ADDU);
+        case OP_SUBU: return OP_BIN_REG_REG(SUBU);
+        case OP_MULU: return OP_BIN_REG_REG(MULU);
+        case OP_DIVU: return OP_BIN_REG_REG(DIVU);
+        case OP_REMU: return OP_BIN_REG_REG(REMU);
+        case OP_MODU: return OP_BIN_REG_REG(MODU);
 
-        case OP_ADDD_REG_REG: return OP_BIN_REG_REG(ADDD);
-        case OP_SUBD_REG_REG: return OP_BIN_REG_REG(SUBD);
-        case OP_MULD_REG_REG: return OP_BIN_REG_REG(MULD);
-        case OP_DIVD_REG_REG: return OP_BIN_REG_REG(DIVD);
-        case OP_REMD_REG_REG: return OP_BIN_REG_REG(REMD);
-        case OP_MODD_REG_REG: return OP_BIN_REG_REG(MODD);
+        case OP_ADDD: return OP_BIN_REG_REG(ADDD);
+        case OP_SUBD: return OP_BIN_REG_REG(SUBD);
+        case OP_MULD: return OP_BIN_REG_REG(MULD);
+        case OP_DIVD: return OP_BIN_REG_REG(DIVD);
+        case OP_REMD: return OP_BIN_REG_REG(REMD);
+        case OP_MODD: return OP_BIN_REG_REG(MODD);
 
-        case OP_GTU_REG_REG: return OP_BIN_REG_REG(GTU);
-        case OP_GEU_REG_REG: return OP_BIN_REG_REG(GEU);
-        case OP_LTU_REG_REG: return OP_BIN_REG_REG(LTU);
-        case OP_LEU_REG_REG: return OP_BIN_REG_REG(LEU);
-        case OP_EQU_REG_REG: return OP_BIN_REG_REG(EQU);
-        case OP_NQU_REG_REG: return OP_BIN_REG_REG(NQU);
+        case OP_GTU: return OP_BIN_REG_REG(GTU);
+        case OP_GEU: return OP_BIN_REG_REG(GEU);
+        case OP_LTU: return OP_BIN_REG_REG(LTU);
+        case OP_LEU: return OP_BIN_REG_REG(LEU);
+        case OP_EQU: return OP_BIN_REG_REG(EQU);
+        case OP_NQU: return OP_BIN_REG_REG(NQU);
 
-        case OP_GTI_REG_REG: return OP_BIN_REG_REG(GTI);
-        case OP_GEI_REG_REG: return OP_BIN_REG_REG(GEI);
-        case OP_LTI_REG_REG: return OP_BIN_REG_REG(LTI);
-        case OP_LEI_REG_REG: return OP_BIN_REG_REG(LEI);
-        case OP_EQI_REG_REG: return OP_BIN_REG_REG(EQI);
-        case OP_NQI_REG_REG: return OP_BIN_REG_REG(NQI);
+        case OP_GTI: return OP_BIN_REG_REG(GTI);
+        case OP_GEI: return OP_BIN_REG_REG(GEI);
+        case OP_LTI: return OP_BIN_REG_REG(LTI);
+        case OP_LEI: return OP_BIN_REG_REG(LEI);
+        case OP_EQI: return OP_BIN_REG_REG(EQI);
+        case OP_NQI: return OP_BIN_REG_REG(NQI);
 
-        case OP_GTD_REG_REG: return OP_BIN_REG_REG(GTD);
-        case OP_GED_REG_REG: return OP_BIN_REG_REG(GED);
-        case OP_LTD_REG_REG: return OP_BIN_REG_REG(LTD);
-        case OP_LED_REG_REG: return OP_BIN_REG_REG(LED);
-        case OP_EQD_REG_REG: return OP_BIN_REG_REG(EQD);
-        case OP_NQD_REG_REG: return OP_BIN_REG_REG(NQD);
+        case OP_GTD: return OP_BIN_REG_REG(GTD);
+        case OP_GED: return OP_BIN_REG_REG(GED);
+        case OP_LTD: return OP_BIN_REG_REG(LTD);
+        case OP_LED: return OP_BIN_REG_REG(LED);
+        case OP_EQD: return OP_BIN_REG_REG(EQD);
+        case OP_NQD: return OP_BIN_REG_REG(NQD);
 
         #undef OP_BIN_REG_REG
 
-        #define OP_UNARY_REG_REG(type) string_format("OP_"#type"_REG_REG(reg_op: %lu, reg_result: %lu)", allocator,\
+        #define OP_UNARY_REG_REG(type) string_format("OP_"#type"(reg_op: %lu, reg_result: %lu)", allocator,\
                 (u32)in.as.unary_reg_to_reg.reg_op,\
                 (u32)in.as.unary_reg_to_reg.reg_result)
         
@@ -165,13 +165,6 @@ string_t disassemble_instruction(instruction_t in, arena_t *allocator) {
         case OP_NEGATEI: return OP_UNARY_REG_REG(NEGATEI);
         case OP_NEGATED: return OP_UNARY_REG_REG(NEGATED);
 
-        case OP_INCREMENTD: return OP_UNARY_REG_REG(INCREMENTD);
-        case OP_DECREMENTD: return OP_UNARY_REG_REG(DECREMENTD);
-        case OP_INCREMENTI: return OP_UNARY_REG_REG(INCREMENTI);
-        case OP_DECREMENTI: return OP_UNARY_REG_REG(DECREMENTI);
-        case OP_INCREMENTU: return OP_UNARY_REG_REG(INCREMENTU);
-        case OP_DECREMENTU: return OP_UNARY_REG_REG(DECREMENTU);
-        
         #undef OP_UNARY_REG_REG
 
         case OP_CALL: return lit2str("OP_CALL");
