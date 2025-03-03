@@ -541,7 +541,8 @@ void vm_step(vm_t *vm) {
         #define case_mov_regaddr_to_reg(name, q, type, mask) case OP_MOV##name##_ADDR_TO_REG: { \
             byte regaddr = in.as.mov_reg_to_reg.reg_source; \
             byte reg_dest = in.as.mov_reg_to_reg.reg_destination; \
-            vm->registers[reg_dest].as.q = (*((type*)(vm->registers[regaddr].as.p))); \
+            u32 offset = in.as.mov_reg_to_reg.byte_offset; \
+            vm->registers[reg_dest].as.q = (*((type*)(vm->registers[regaddr].as.p + offset))); \
             IP_ADV(1); \
         } break
 
@@ -555,7 +556,8 @@ void vm_step(vm_t *vm) {
         case OP_MOVWORD_ADDR_TO_REG: {
             byte regaddr = in.as.mov_reg_to_reg.reg_source;
             byte reg_dest = in.as.mov_reg_to_reg.reg_destination;
-            memcpy(&vm->registers[reg_dest], vm->registers[regaddr].as.p, sizeof(word_t));
+            u32 offset = in.as.mov_reg_to_reg.byte_offset;
+            memcpy(&vm->registers[reg_dest] + offset, vm->registers[regaddr].as.p, sizeof(word_t));
             IP_ADV(1);
             break;
         }
@@ -563,7 +565,8 @@ void vm_step(vm_t *vm) {
         #define case_mov_reg_to_regaddr(name, q, type) case OP_MOV##name##_REG_TO_ADDR: { \
             byte reg_src = in.as.mov_reg_to_reg.reg_source; \
             byte regaddr = in.as.mov_reg_to_reg.reg_destination; \
-            *((type*)(vm->registers[regaddr].as.p)) = (type)vm->registers[reg_src].as.q; \
+            u32 offset = in.as.mov_reg_to_reg.byte_offset; \
+            *((type*)(vm->registers[regaddr].as.p + offset)) = (type)vm->registers[reg_src].as.q; \
             IP_ADV(1); \
         } break
 
@@ -577,7 +580,8 @@ void vm_step(vm_t *vm) {
         case OP_MOVWORD_REG_TO_ADDR: {
             byte reg_src = in.as.mov_reg_to_reg.reg_source;
             byte regaddr = in.as.mov_reg_to_reg.reg_destination;
-            memcpy(vm->registers[regaddr].as.p, &vm->registers[reg_src], sizeof(word_t));
+            u32 offset = in.as.mov_reg_to_reg.byte_offset;
+            memcpy(vm->registers[regaddr].as.p + offset, &vm->registers[reg_src], sizeof(word_t));
             IP_ADV(1);
             break;
         }

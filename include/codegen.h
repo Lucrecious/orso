@@ -135,6 +135,7 @@ static void emit_mov_reg_to_reg(function_t *function, texloc_t loc, reg_mov_size
     in.op = mov_op;
     in.as.mov_reg_to_reg.reg_destination = dest;
     in.as.mov_reg_to_reg.reg_source = src;
+    in.as.mov_reg_to_reg.byte_offset = 0;
 
     emit_instruction(function, loc, in);
 }
