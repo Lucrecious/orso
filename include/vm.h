@@ -530,7 +530,7 @@ void vm_step(vm_t *vm) {
             vm->registers[reg_dest].as.q = (*((type*)(vm->registers[regaddr].as.p + offset))); \
             IP_ADV(1); \
         } break
-
+        
         case_mov_regaddr_to_reg(U8, u, u8, 0xF);
         case_mov_regaddr_to_reg(U16, u, u16, 0xFF);
         case_mov_regaddr_to_reg(U32, u, u32, 0xFFFF);
