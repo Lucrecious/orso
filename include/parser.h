@@ -79,7 +79,7 @@ typedef enum ast_node_type_t {
     AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION,
     AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION,
     AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE,
-    AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER,
+    AST_NODE_TYPE_EXPRESSION_INITIALIZER_LIST,
     AST_NODE_TYPE_EXPRESSION_DIRECTIVE,
 } ast_node_type_t;
 
@@ -103,7 +103,7 @@ case AST_NODE_TYPE_EXPRESSION_PRIMARY: \
 case AST_NODE_TYPE_EXPRESSION_JMP: \
 case AST_NODE_TYPE_EXPR_INFERRED_TYPE_DECL: \
 case AST_NODE_TYPE_EXPRESSION_UNARY: \
-case AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER: \
+case AST_NODE_TYPE_EXPRESSION_INITIALIZER_LIST: \
 case AST_NODE_TYPE_EXPRESSION_DIRECTIVE: \
 case AST_NODE_TYPE_EXPRESSION_DOT
 
@@ -154,6 +154,9 @@ ast_node_t nil_node;
 #define an_bcall_arg_end(n) ((n)->children.count)
 #define an_dir_arg_start(n) (0)
 #define an_dir_arg_end(n) ((n)->children.count)
+#define an_list_lhs(n) ((n)->children.items[0])
+#define an_list_start(n) (1)
+#define an_list_end(n) ((n)->children.count)
 #define an_array_size_expr(n) ((n)->children.items[0])
 #define an_array_type_expr(n) ((n)->children.items[1])
 #define an_item_accessee(n) ((n)->children.items[0])
@@ -324,6 +327,7 @@ ast_node_t *ast_begin_module(ast_t *ast);
 void ast_end_module(ast_node_t *module);
 void ast_add_module(ast_t *ast, ast_node_t *module, string_t moduleid);
 ast_node_t *ast_implicit_expr(ast_t *ast, type_t type, word_t value, token_t where);
+word_t *ast_multiword_value(ast_t *ast, size_t size_words);
 
 bool ast_node_type_is_expression(ast_node_type_t node_type);
 

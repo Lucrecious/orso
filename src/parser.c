@@ -253,31 +253,21 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start) {
             break;
         }
         
+        case AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE:
+        case AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION:
+        case AST_NODE_TYPE_EXPRESSION_UNARY:
+        case AST_NODE_TYPE_EXPRESSION_CAST:
+        case AST_NODE_TYPE_DECLARATION_STATEMENT:
+        case AST_NODE_TYPE_EXPRESSION_JMP:
+        case AST_NODE_TYPE_EXPRESSION_GROUPING:
         case AST_NODE_TYPE_EXPRESSION_ARRAY_TYPE:
         case AST_NODE_TYPE_EXPRESSION_CALL: {
             array_push(&node->children, &nil_node);
             array_push(&node->children, &nil_node);
             break;
         }
-        
-        case AST_NODE_TYPE_EXPRESSION_UNARY:
-        case AST_NODE_TYPE_EXPRESSION_CAST:
-        case AST_NODE_TYPE_DECLARATION_STATEMENT:
-        case AST_NODE_TYPE_EXPRESSION_JMP:
-        case AST_NODE_TYPE_EXPRESSION_GROUPING: {
-            array_push(&node->children, &nil_node);
-            array_push(&node->children, &nil_node);
-            break;
-        }
 
-        case AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER: {
-            UNREACHABLE();
-            break;
-        }
-        
-        case AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE:
-        case AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION: {
-            array_push(&node->children, &nil_node);
+        case AST_NODE_TYPE_EXPRESSION_INITIALIZER_LIST: {
             array_push(&node->children, &nil_node);
             break;
         }
@@ -1334,7 +1324,7 @@ static ast_node_t *parse_array_type(parser_t *parser) {
         parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_CLOSE_BRACKET_AFTER_SIZE_EXPRESSION, parser->previous, start));
     }
 
-    ast_node_t *type_expr = parse_precedence(parser, PREC_UNARY);
+    ast_node_t *type_expr = parse_precedence(parser, (prec_t)(PREC_CALL + 1));
 
     ast_node_t *array_type = ast_array_type(parser->ast, size_expr, type_expr);
     return array_type;
@@ -1506,17 +1496,29 @@ static ast_node_t *parse_struct_def(parser_t *parser) {
     return struct_definition;
 }
 
-static ast_node_t *parse_dot(parser_t* parser) {
+static ast_node_t *ast_begin_list_initializer(ast_t *ast, token_t open_bracket) {
+    ast_node_t *initializer = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_INITIALIZER_LIST, open_bracket);
+    return initializer;
+}
+
+static void ast_end_list_initializer(ast_node_t *initializer, token_t close_bracket) {
+    initializer->end = close_bracket;
+}
+
+static ast_node_t *parse_dot(parser_t *parser) {
     if (match(parser, TOKEN_BRACE_OPEN)) {
-        ast_node_t *initiailizer = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER, parser->previous);
+        ast_node_t *initiailizer = ast_begin_list_initializer(parser->ast, parser->previous);
+
         unless (match(parser, TOKEN_BRACE_CLOSE)) {
             do {
-                if (check(parser, TOKEN_COMMA) || check(parser, TOKEN_BRACE_CLOSE)) {
+                if (check(parser, TOKEN_BRACE_CLOSE)) {
+                } else if (check(parser, TOKEN_COMMA)) {
+                    ast_node_t *none = &nil_node;
+                    array_push(&initiailizer->children, none);
                 } else {
                     ast_node_t *argument = parse_expression(parser);
                     array_push(&initiailizer->children, argument);
                 }
-
             } while (match(parser, TOKEN_COMMA));
 
             unless (consume(parser, TOKEN_BRACE_CLOSE)) {
@@ -1524,7 +1526,7 @@ static ast_node_t *parse_dot(parser_t* parser) {
             }
         }
 
-        initiailizer->end = parser->previous;
+        ast_end_list_initializer(initiailizer, parser->previous);
 
         return initiailizer;
     } else {
@@ -1544,7 +1546,7 @@ parse_rule_t rules[] = {
     [TOKEN_PARENTHESIS_CLOSE]       = { NULL,               NULL,               PREC_NONE },
     [TOKEN_BRACE_OPEN]              = { parse_block,        NULL,               PREC_BLOCK },
     [TOKEN_BRACE_CLOSE]             = { NULL,               NULL,               PREC_NONE },
-    [TOKEN_BRACKET_OPEN]            = { parse_array_type,   parse_item_access, PREC_CALL },
+    [TOKEN_BRACKET_OPEN]            = { parse_array_type,   parse_item_access,  PREC_CALL },
     [TOKEN_BRACKET_CLOSE]           = { NULL,               NULL,               PREC_NONE },
     [TOKEN_COMMA]                   = { NULL,               NULL,               PREC_NONE },
     [TOKEN_DOT]                     = { NULL,               parse_dot,          PREC_CALL },
@@ -1663,10 +1665,10 @@ static ast_node_t *parse_precedence(parser_t *parser, prec_t precedence) {
                 break;
             }
 
-            case AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER: {
-                UNREACHABLE();
-                // right_operand->as.initiailizer.type = left_operand;
-                // left_operand = right_operand;
+            case AST_NODE_TYPE_EXPRESSION_INITIALIZER_LIST: {
+                an_list_lhs(right_operand) = left_operand;
+                right_operand->start = left_operand->start;
+                left_operand = right_operand;
                 break;
             }
 
@@ -2009,25 +2011,24 @@ static void ast_print_ast_node(typedatas_t types, ast_node_t *node, u32 level) {
             break;
         }
 
-        case AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER: {
-            // print_indent(level);
-            // print_line("type initializer: %s", type2cstr(node));
+        case AST_NODE_TYPE_EXPRESSION_INITIALIZER_LIST: {
+            print_indent(level);
+            print_line("dot: %s", type2cstr(node));
 
-            // print_indent(level + 1);
-            // print_line("type");
-            // ast_print_ast_node(types, node->as.initiailizer.type, level+2);
-            // for (size_t i = 0; i < node->as.initiailizer.arguments.count; ++i) {
-            //     ast_node_t *arg = node->as.initiailizer.arguments.items[i];
-            //     print_indent(level + 1);
-            //     print_line("arg %llu", i);
-            //     if (arg) {
-            //         ast_print_ast_node(types, arg, level + 2);
-            //     } else {
-            //         print_indent(level+2);
-            //         print_line("<default>");
-            //     }
-            // }
-            UNREACHABLE();
+            print_indent(level + 1);
+            print_line("lhs");
+            ast_print_ast_node(types, an_list_lhs(node), level+2);
+            for (size_t i = an_list_start(node); i < an_list_end(node); ++i) {
+                ast_node_t *arg = node->children.items[i];
+                print_indent(level + 1);
+                print_line("arg %llu", i);
+                if (arg) {
+                    ast_print_ast_node(types, arg, level + 2);
+                } else {
+                    print_indent(level+2);
+                    print_line("<default>");
+                }
+            }
             break;
         }
 

@@ -648,6 +648,7 @@ static void gen_expr_val(gen_t *gen, function_t *function, ast_node_t *expressio
     word_t data = val.word;
     if (type_info->size > WORD_SIZE) {
         gen_constant(gen, expression->start.loc, function, data.as.p, expression->value_type);
+        emit_push_reg(gen, expression->start.loc, function, REG_RESULT, REG_MOV_SIZE_MULTIWORD_ADDR, type_info->size);
     } else {
         gen_constant(gen, expression->start.loc, function, &data, expression->value_type);
     }
@@ -668,8 +669,6 @@ static void gen_local_decldef(gen_t *gen, function_t *function, ast_node_t *decl
 
     if (td->size <= WORD_SIZE) {
         emit_push_reg(gen, token_end_loc(&declaration->end), function, REG_RESULT, type2movsize(gen, declaration->value_type), 0);
-    } else {
-        emit_push_reg(gen, token_end_loc(&declaration->end), function, REG_RESULT, REG_MOV_SIZE_MULTIWORD_ADDR, td->size);
     }
 
     size_t local_location = gen->stack_size;
@@ -1229,6 +1228,64 @@ static void gen_item_access(gen_t *gen, function_t *function, ast_node_t *item_a
     }
 }
 
+static void emit_reg_to_addr(gen_t *gen, function_t *function, texloc_t loc, reg_mov_size_t mov_size, reg_t reg_dest, reg_t reg_src, size_t offset) {
+    if (offset > UINT32_MAX) {
+        gen_error(gen, make_error_no_args(ERROR_CODEGEN_OFFSET_TOO_LARGE));
+        return;
+    }
+
+    instruction_t in = {0};
+    switch (mov_size) {
+    case REG_MOV_SIZE_0: return;
+    case REG_MOV_SIZE_U8: in.op = OP_MOVU8_ADDR_TO_REG; break;
+    case REG_MOV_SIZE_U16: in.op = OP_MOVU16_ADDR_TO_REG; break;
+    case REG_MOV_SIZE_U32: in.op = OP_MOVU32_ADDR_TO_REG; break;
+    case REG_MOV_SIZE_F32: in.op = OP_MOVF32_ADDR_TO_REG; break;
+    case REG_MOV_SIZE_WORD: in.op = OP_MOVWORD_ADDR_TO_REG; break;
+    case REG_MOV_SIZE_MULTIWORD_ADDR: in.op = OP_MOVWORD_ADDR_TO_REG; break;
+    }
+
+    in.as.mov_reg_to_reg.reg_destination = reg_dest;
+    in.as.mov_reg_to_reg.reg_source = reg_src;
+    in.as.mov_reg_to_reg.byte_offset = (u32)offset;
+
+    emit_instruction(function, loc, in);
+}
+
+static void gen_initializer_list(gen_t *gen, function_t *function, ast_node_t *list) {
+    typedata_t *list_type_td = ast_type2td(gen->ast, list->value_type);
+
+    switch (list_type_td->kind) {
+        case TYPE_ARRAY: {
+            emit_binu_reg_im(function, list->start.loc, REG_STACK_BOTTOM, REG_STACK_BOTTOM, b2w(list_type_td->size), '-');
+
+            for (size_t i = an_list_start(list); i < an_list_end(list); ++i) {
+                ast_node_t *arg = list->children.items[i];
+
+                gen_expression(gen, function, arg);
+                typedata_t *arg_td = ast_type2td(gen->ast, arg->value_type);
+                if (arg_td->size < WORD_SIZE) {
+                    emit_reg_to_addr(gen, function, token_end_loc(&arg->end), type2movsize(gen, arg->value_type), REG_STACK_BOTTOM, REG_RESULT, i*arg_td->size);
+                } else {
+                    emit_reg_to_addr(gen, function, token_end_loc(&arg->end), type2movsize(gen, arg->value_type), REG_TMP, REG_RESULT, i*arg_td->size);
+                    emit_reg_to_addr(gen, function, token_end_loc(&arg->end), type2movsize(gen, arg->value_type), REG_STACK_BOTTOM, REG_TMP, i*arg_td->size);
+
+                    emit_popn_bytes(gen, function, b2w(arg_td->size), token_end_loc(&arg->end), true);
+                }
+            }
+
+            if (list_type_td->size < WORD_SIZE) {
+                emit_mov_reg_to_reg(function, token_end_loc(&list->end), REG_MOV_SIZE_WORD, REG_MOV_TYPE_ADDR_TO_REG, REG_RESULT, REG_STACK_BOTTOM);
+            } else {
+                emit_mov_reg_to_reg(function, token_end_loc(&list->end), REG_MOV_SIZE_WORD, REG_MOV_TYPE_REG_TO_REG, REG_RESULT, REG_STACK_BOTTOM);
+            }
+            break;
+        }
+
+        default: UNREACHABLE(); break;
+    }
+}
+
 static void gen_expression(gen_t *gen, function_t *function, ast_node_t *expression) {
     ASSERT(ast_node_type_is_expression(expression->node_type), "must be expression");
 
@@ -1315,6 +1372,11 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
             break;
         }
 
+        case AST_NODE_TYPE_EXPRESSION_INITIALIZER_LIST: {
+            gen_initializer_list(gen, function, expression);
+            break;
+        }
+
 
         // should be resolved at compile time
         case AST_NODE_TYPE_EXPR_INFERRED_TYPE_DECL: UNREACHABLE(); break;
@@ -1323,7 +1385,6 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
         case AST_NODE_TYPE_EXPRESSION_DOT:
         case AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE:
         case AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION:
-        case AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER:
         case AST_NODE_TYPE_DECLARATION_STATEMENT:
         case AST_NODE_TYPE_NONE:
         case AST_NODE_TYPE_DECLARATION_DEFINITION:

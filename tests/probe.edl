@@ -16,13 +16,51 @@
 //     return count-1;
 // };
 
+// vec :: struct(size: size_t, t: type_t) {
+//     @assert size <= 4;
+
+//     c: [size]t;
+
+//     @if size >= 1, {
+//         @place c[0]
+//         x: t;
+
+//         @place c[0]
+//         r: t;
+//     };
+
+//     @if size >= 2, {
+//         @place c[1]
+//         y: t;
+
+//         @place c[1]
+//         g: t;
+//     };
+
+//     @if size >= 3, {
+//         @place c[2]
+//         z: t;
+
+//         @place c[2]
+//         b: t;
+//     };
+
+//     @if size == 4, {
+//         @place c[3]
+//         w: t;
+
+//         @place c[3]
+//         a: t;
+//     };
+// };
+
+// vec2f :: vec(2, f32);
+
 {
-    vec2f :: [2]f32;
+    [2]f32.{4, 3};
 
-    arr: [10]vec2f;
+    // v: vec2f = .{4, 3};
 
-    arr[4][1] = 2.0;
-
-    arr[4][1];
+    // v[0] + v[1];
 }
 

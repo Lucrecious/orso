@@ -874,6 +874,102 @@ static ast_node_t *stan_realize_inferred_funcdef_or_error_and_null(analyzer_t *a
     return result;
 }
 
+static void ast_copy_expr_val_to_dest(ast_t *ast, ast_node_t *expr, void *dest) {
+    typedata_t *td = ast_type2td(ast, expr->value_type);
+
+    switch (td->kind) {
+    case TYPE_NUMBER: {
+        switch (td->as.num) {
+        case NUM_TYPE_FLOAT: {
+            switch ((num_size_t)td->size) {
+            case NUM_SIZE_8: UNREACHABLE(); break;
+            case NUM_SIZE_16: UNREACHABLE(); break;
+            case NUM_SIZE_32: {
+                f32 val = (f32)expr->expr_val.word.as.d;
+                memcpy(dest, &val, sizeof(f32));
+                break;
+            }
+
+            case NUM_SIZE_64: {
+                f64 val = (f64)expr->expr_val.word.as.d;
+                memcpy(dest, &val, sizeof(f64));
+                break;
+            }
+            }
+            break;
+        }
+
+        case NUM_TYPE_SIGNED:
+        case NUM_TYPE_UNSIGNED: {
+            switch ((num_size_t)td->size) {
+            case NUM_SIZE_8: {
+                u8 val = (u8)expr->expr_val.word.as.u;
+                memcpy(dest, &val, sizeof(u8));
+                break;
+            }
+
+            case NUM_SIZE_16: {
+                u16 val = (u16)expr->expr_val.word.as.u;
+                memcpy(dest, &val, sizeof(u16));
+                break;
+            }
+
+            case NUM_SIZE_32: {
+                u32 val = (u32)expr->expr_val.word.as.u;
+                memcpy(dest, &val, sizeof(u32));
+                break;
+            }
+
+            case NUM_SIZE_64: {
+                u64 val = (u64)expr->expr_val.word.as.u;
+                memcpy(dest, &val, sizeof(u64));
+                break;
+            }
+            }
+            break;
+        }
+        }
+        break;
+    }
+
+    case TYPE_BOOL: {
+        u8 val = expr->expr_val.word.as.u;
+        memcpy(dest, &val, sizeof(u8));
+        break;
+    }
+
+    case TYPE_VOID: break;
+
+    case TYPE_ARRAY:
+    case TYPE_STRUCT: {
+        if (td->size > WORD_SIZE) {
+            void *source = expr->expr_val.word.as.p;
+            memcpy(dest, source, td->size);
+        } else {
+            memcpy(dest, &expr->expr_val.word.as.u, td->size);
+        }
+        break;
+    }
+
+    case TYPE_POINTER:
+    case TYPE_INTRINSIC_FUNCTION:
+    case TYPE_FUNCTION:
+    case TYPE_TYPE:
+    case TYPE_INFERRED_FUNCTION: {
+        memcpy(dest, &expr->expr_val.word.as.u, WORD_SIZE);
+        break;
+    }
+
+    case TYPE_STRING: UNREACHABLE(); break; //todo
+
+    case TYPE_COUNT:
+    case TYPE_UNREACHABLE:
+    case TYPE_INFERRED:
+    case TYPE_UNRESOLVED:
+    case TYPE_INVALID: UNREACHABLE(); break;
+    }
+}
+
 void resolve_expression(
         analyzer_t *analyzer,
         ast_t *ast,
@@ -1063,9 +1159,108 @@ void resolve_expression(
             break;
         }
 
-        case AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER: {
-            UNREACHABLE();
-            INVALIDATE(expr);
+        case AST_NODE_TYPE_EXPRESSION_INITIALIZER_LIST: {
+            ast_node_t *type_expr = an_list_lhs(expr);
+            resolve_expression(analyzer, ast, state, type_expr);
+
+            bool invalid_arg = false;
+            for (size_t i = an_list_start(expr); i < an_list_end(expr); ++i) {
+                ast_node_t *arg = expr->children.items[i];
+                resolve_expression(analyzer, ast, state, arg);
+
+                if (TYPE_IS_INVALID(arg->value_type)) {
+                    invalid_arg = true;
+                }
+            }
+
+            if (invalid_arg) {
+                break;
+            }
+
+            typedata_t *type_expr_td = ast_type2td(ast, type_expr->value_type);
+            switch (type_expr_td->kind) {
+            case TYPE_TYPE: {
+                if (!type_expr->expr_val.is_concrete) {
+                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_EXPECTED_CONSTANT, type_expr));
+                    break;
+                }
+
+                type_t init_type = type_expr->expr_val.word.as.t;
+                typedata_t *init_type_td = ast_type2td(ast, init_type);
+
+                switch (init_type_td->kind) {
+                case TYPE_ARRAY: {
+                    type_t array_type = init_type_td->as.arr.type;
+
+                    typedata_t *array_type_td = ast_type2td(ast, array_type);
+
+                    bool is_constant = false;
+
+                    for (size_t i = an_list_start(expr); i < an_list_end(expr); ++i) {
+                        ast_node_t *arg = expr->children.items[i];
+
+                        if (an_is_none(arg)) {
+                            arg = ast_nil(ast, init_type, token_implicit_at_end(expr->start));
+                            expr->children.items[i] = arg;
+                        }
+
+                        arg = cast_implicitly_if_necessary(ast, array_type, arg);
+                        expr->children.items[i] = arg;
+
+                        if (!arg->expr_val.is_concrete) {
+                            is_constant = false;
+                        }
+
+                        if (!typeid_eq(arg->value_type, array_type)) {
+                            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_TYPE_MISMATCH, arg));
+                            invalid_arg = true;
+                        }
+                    }
+
+                    if (invalid_arg) break;
+
+                    size_t arg_count = an_list_end(expr) - an_list_start(expr);
+
+                    if (init_type_td->as.arr.size < arg_count) {
+                        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_TOO_MANY_ARGUMENTS_IN_LIST_INIT, expr->children.items[an_list_start(expr)]));
+                        break;
+                    }
+
+                    if (is_constant) {
+                        word_t *start;
+                        if (init_type_td->size > WORD_SIZE) {
+                            start = ast_multiword_value(ast, b2w(init_type_td->size));
+                            expr->expr_val = ast_node_val_word(WORDP(start));
+                        } else {
+                            expr->expr_val.is_concrete = true;
+                            start = &expr->expr_val.word;
+                        }
+
+                        // constant fold concrete arguments
+                        for (size_t i = an_list_start(expr); i < an_list_end(expr); ++i) {
+                            size_t offset = i - an_list_start(expr);
+                            ast_node_t *arg = expr->children.items[i];
+                            if (!arg->expr_val.is_concrete) continue;
+                            ast_copy_expr_val_to_dest(ast, arg, ((void*)start)+(offset*array_type_td->size));
+                        }
+                    }
+
+                    expr->value_type = init_type;
+                    break;
+                }
+
+                default: UNREACHABLE(); // todo
+                }
+                break;
+            }
+
+            default: {
+                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_EXPRESSION_FOR_LIST_INIT, type_expr));
+                break;
+            }
+            
+            }
+
             break;
         }
 
@@ -1863,7 +2058,7 @@ static void forward_scan_inferred_types(ast_node_t *decl, ast_node_t *decl_type,
         case AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION:
         case AST_NODE_TYPE_EXPRESSION_NIL:
         case AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION:
-        case AST_NODE_TYPE_EXPRESSION_TYPE_INITIALIZER:
+        case AST_NODE_TYPE_EXPRESSION_INITIALIZER_LIST:
         case AST_NODE_TYPE_EXPRESSION_DIRECTIVE:
         case AST_NODE_TYPE_EXPRESSION_JMP: break;
 
