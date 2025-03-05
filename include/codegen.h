@@ -140,6 +140,54 @@ static void emit_mov_reg_to_reg(function_t *function, texloc_t loc, reg_mov_size
     emit_instruction(function, loc, in);
 }
 
+static void emit_addr_to_reg(gen_t *gen, function_t *function, texloc_t loc, reg_mov_size_t mov_size, reg_t reg_dest, reg_t reg_src, size_t offset) {
+    if (offset > UINT32_MAX) {
+        gen_error(gen, make_error_no_args(ERROR_CODEGEN_OFFSET_TOO_LARGE));
+        return;
+    }
+
+    instruction_t in = {0};
+    switch (mov_size) {
+    case REG_MOV_SIZE_0: return;
+    case REG_MOV_SIZE_U8: in.op = OP_MOVU8_ADDR_TO_REG; break;
+    case REG_MOV_SIZE_U16: in.op = OP_MOVU16_ADDR_TO_REG; break;
+    case REG_MOV_SIZE_U32: in.op = OP_MOVU32_ADDR_TO_REG; break;
+    case REG_MOV_SIZE_F32: in.op = OP_MOVF32_ADDR_TO_REG; break;
+    case REG_MOV_SIZE_WORD: in.op = OP_MOVWORD_ADDR_TO_REG; break;
+    case REG_MOV_SIZE_MULTIWORD_ADDR: in.op = OP_MOVWORD_ADDR_TO_REG; break;
+    }
+
+    in.as.mov_reg_to_reg.reg_destination = reg_dest;
+    in.as.mov_reg_to_reg.reg_source = reg_src;
+    in.as.mov_reg_to_reg.byte_offset = (u32)offset;
+
+    emit_instruction(function, loc, in);
+}
+
+static void emit_reg_to_addr(gen_t *gen, function_t *function, texloc_t loc, reg_mov_size_t mov_size, reg_t reg_dest, reg_t reg_src, size_t offset) {
+    if (offset > UINT32_MAX) {
+        gen_error(gen, make_error_no_args(ERROR_CODEGEN_OFFSET_TOO_LARGE));
+        return;
+    }
+
+    instruction_t in = {0};
+    switch (mov_size) {
+    case REG_MOV_SIZE_0: return;
+    case REG_MOV_SIZE_U8: in.op = OP_MOVU8_REG_TO_ADDR; break;
+    case REG_MOV_SIZE_U16: in.op = OP_MOVU16_REG_TO_ADDR; break;
+    case REG_MOV_SIZE_U32: in.op = OP_MOVU32_REG_TO_ADDR; break;
+    case REG_MOV_SIZE_F32: in.op = OP_MOVF32_REG_TO_ADDR; break;
+    case REG_MOV_SIZE_WORD: in.op = OP_MOVWORD_REG_TO_ADDR; break;
+    case REG_MOV_SIZE_MULTIWORD_ADDR: in.op = OP_MOVWORD_REG_TO_ADDR; break;
+    }
+
+    in.as.mov_reg_to_reg.reg_destination = reg_dest;
+    in.as.mov_reg_to_reg.reg_source = reg_src;
+    in.as.mov_reg_to_reg.byte_offset = (u32)offset;
+
+    emit_instruction(function, loc, in);
+}
+
 
 static void emit_binu_reg_im(function_t *function, texloc_t loc, byte reg_dest, byte reg_op, u32 immediate, char plus_or_minus) {
     instruction_t in = {0};
@@ -642,15 +690,93 @@ static void gen_expr_val(gen_t *gen, function_t *function, ast_node_t *expressio
         gen_error(gen, make_error_node(ERROR_CODEGEN_MEMORY_SIZE_TOO_BIG, expression));
     }
 
-    ast_node_val_t val = expression->expr_val;
-    if (val_override.is_concrete) val = val_override;
+    ast_node_val_t val_ = expression->expr_val;
+    if (val_override.is_concrete) val_ = val_override;
 
-    word_t data = val.word;
+    word_t data = val_.word;
     if (type_info->size > WORD_SIZE) {
         gen_constant(gen, expression->start.loc, function, data.as.p, expression->value_type);
         emit_push_reg(gen, expression->start.loc, function, REG_RESULT, REG_MOV_SIZE_MULTIWORD_ADDR, type_info->size);
     } else {
-        gen_constant(gen, expression->start.loc, function, &data, expression->value_type);
+        switch (type_info->kind) {
+        case TYPE_BOOL: {
+            u8 val = (u8)data.as.u;
+            gen_constant(gen, expression->start.loc, function, &val, expression->value_type);
+        }
+
+        case TYPE_NUMBER: {
+            switch (type_info->as.num) {
+            case NUM_TYPE_FLOAT: {
+                switch ((num_size_t)type_info->size) {
+                case NUM_SIZE_8:
+                case NUM_SIZE_16: UNREACHABLE(); break;
+
+                case NUM_SIZE_32: {
+                    f32 val = (f32)data.as.d;
+                    gen_constant(gen, expression->start.loc, function, &val, expression->value_type);
+                    break;
+                }
+
+                case NUM_SIZE_64: {
+                    f64 val = (f64)data.as.d;
+                    gen_constant(gen, expression->start.loc, function, &val, expression->value_type);
+                    break;
+                }
+                }
+                break;
+            }
+
+            case NUM_TYPE_SIGNED:
+            case NUM_TYPE_UNSIGNED: {
+                switch ((num_size_t)type_info->size) {
+                case NUM_SIZE_8: {
+                    u8 val = (u8)data.as.u;
+                    gen_constant(gen, expression->start.loc, function, &val, expression->value_type);
+                    break;
+                }
+                case NUM_SIZE_16: {
+                    u16 val = (u16)data.as.u;
+                    gen_constant(gen, expression->start.loc, function, &val, expression->value_type);
+                    break;
+                }
+
+                case NUM_SIZE_32: {
+                    u32 val = (u32)data.as.d;
+                    gen_constant(gen, expression->start.loc, function, &val, expression->value_type);
+                    break;
+                }
+
+                case NUM_SIZE_64: {
+                    u64 val = (u64)data.as.d;
+                    gen_constant(gen, expression->start.loc, function, &val, expression->value_type);
+                    break;
+                }
+                }
+                break;
+            }
+            }
+        }
+
+        case TYPE_POINTER:
+        case TYPE_TYPE:
+        case TYPE_FUNCTION:
+        case TYPE_INTRINSIC_FUNCTION:
+        case TYPE_ARRAY:
+        case TYPE_STRUCT: {
+            gen_constant(gen, expression->start.loc, function, &data, expression->value_type);
+            break;
+        }
+
+        case TYPE_STRING: UNREACHABLE(); break;
+        
+        case TYPE_VOID:
+        case TYPE_UNREACHABLE:
+        case TYPE_INVALID:
+        case TYPE_UNRESOLVED:
+        case TYPE_INFERRED:
+        case TYPE_INFERRED_FUNCTION:
+        case TYPE_COUNT: UNREACHABLE(); break;
+        }
     }
 }
 
@@ -1221,35 +1347,10 @@ static void gen_item_access(gen_t *gen, function_t *function, ast_node_t *item_a
         gen_lvalue(gen, function, item_access->lvalue_node);
 
         // move data from reg result addr to result reg
-        emit_mov_reg_to_reg(function, token_end_loc(&item_access->end),
-                type2movsize(gen, item_access->value_type), REG_MOV_TYPE_ADDR_TO_REG, REG_RESULT, REG_RESULT);
+        emit_addr_to_reg(gen, function, token_end_loc(&item_access->end), type2movsize(gen, item_access->value_type), REG_RESULT, REG_RESULT, 0);
     } else {
         UNREACHABLE();
     }
-}
-
-static void emit_reg_to_addr(gen_t *gen, function_t *function, texloc_t loc, reg_mov_size_t mov_size, reg_t reg_dest, reg_t reg_src, size_t offset) {
-    if (offset > UINT32_MAX) {
-        gen_error(gen, make_error_no_args(ERROR_CODEGEN_OFFSET_TOO_LARGE));
-        return;
-    }
-
-    instruction_t in = {0};
-    switch (mov_size) {
-    case REG_MOV_SIZE_0: return;
-    case REG_MOV_SIZE_U8: in.op = OP_MOVU8_ADDR_TO_REG; break;
-    case REG_MOV_SIZE_U16: in.op = OP_MOVU16_ADDR_TO_REG; break;
-    case REG_MOV_SIZE_U32: in.op = OP_MOVU32_ADDR_TO_REG; break;
-    case REG_MOV_SIZE_F32: in.op = OP_MOVF32_ADDR_TO_REG; break;
-    case REG_MOV_SIZE_WORD: in.op = OP_MOVWORD_ADDR_TO_REG; break;
-    case REG_MOV_SIZE_MULTIWORD_ADDR: in.op = OP_MOVWORD_ADDR_TO_REG; break;
-    }
-
-    in.as.mov_reg_to_reg.reg_destination = reg_dest;
-    in.as.mov_reg_to_reg.reg_source = reg_src;
-    in.as.mov_reg_to_reg.byte_offset = (u32)offset;
-
-    emit_instruction(function, loc, in);
 }
 
 static void gen_initializer_list(gen_t *gen, function_t *function, ast_node_t *list) {
@@ -1257,27 +1358,29 @@ static void gen_initializer_list(gen_t *gen, function_t *function, ast_node_t *l
 
     switch (list_type_td->kind) {
         case TYPE_ARRAY: {
-            emit_binu_reg_im(function, list->start.loc, REG_STACK_BOTTOM, REG_STACK_BOTTOM, b2w(list_type_td->size), '-');
+            emit_binu_reg_im(function, list->start.loc, REG_STACK_BOTTOM, REG_STACK_BOTTOM, b2w(list_type_td->size)*WORD_SIZE, '-');
 
             for (size_t i = an_list_start(list); i < an_list_end(list); ++i) {
+                size_t i_ = i - an_list_start(list);
                 ast_node_t *arg = list->children.items[i];
 
                 gen_expression(gen, function, arg);
                 typedata_t *arg_td = ast_type2td(gen->ast, arg->value_type);
-                if (arg_td->size < WORD_SIZE) {
-                    emit_reg_to_addr(gen, function, token_end_loc(&arg->end), type2movsize(gen, arg->value_type), REG_STACK_BOTTOM, REG_RESULT, i*arg_td->size);
-                } else {
-                    emit_reg_to_addr(gen, function, token_end_loc(&arg->end), type2movsize(gen, arg->value_type), REG_TMP, REG_RESULT, i*arg_td->size);
-                    emit_reg_to_addr(gen, function, token_end_loc(&arg->end), type2movsize(gen, arg->value_type), REG_STACK_BOTTOM, REG_TMP, i*arg_td->size);
+                if (arg_td->size > WORD_SIZE) {
+                    emit_addr_to_reg(gen, function, token_end_loc(&arg->end), type2movsize(gen, arg->value_type), REG_TMP, REG_RESULT, i_*arg_td->size);
+                    emit_reg_to_addr(gen, function, token_end_loc(&arg->end), type2movsize(gen, arg->value_type), REG_STACK_BOTTOM, REG_TMP, i_*arg_td->size);
 
-                    emit_popn_bytes(gen, function, b2w(arg_td->size), token_end_loc(&arg->end), true);
+                    emit_popn_bytes(gen, function, b2w(arg_td->size)*WORD_SIZE, token_end_loc(&arg->end), true);
+                } else {
+                    emit_reg_to_addr(gen, function, token_end_loc(&arg->end), type2movsize(gen, arg->value_type), REG_STACK_BOTTOM, REG_RESULT, i_*arg_td->size);
                 }
             }
 
-            if (list_type_td->size < WORD_SIZE) {
-                emit_mov_reg_to_reg(function, token_end_loc(&list->end), REG_MOV_SIZE_WORD, REG_MOV_TYPE_ADDR_TO_REG, REG_RESULT, REG_STACK_BOTTOM);
-            } else {
+            if (list_type_td->size > WORD_SIZE) {
                 emit_mov_reg_to_reg(function, token_end_loc(&list->end), REG_MOV_SIZE_WORD, REG_MOV_TYPE_REG_TO_REG, REG_RESULT, REG_STACK_BOTTOM);
+            } else {
+                emit_addr_to_reg(gen, function, token_end_loc(&list->end), REG_MOV_SIZE_WORD, REG_RESULT, REG_STACK_BOTTOM, 0);
+                emit_binu_reg_im(function, list->start.loc, REG_STACK_BOTTOM, REG_STACK_BOTTOM, b2w(list_type_td->size)*WORD_SIZE, '+');
             }
             break;
         }

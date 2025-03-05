@@ -68,9 +68,10 @@ string_t disassemble_instruction(instruction_t in, arena_t *allocator) {
         case OP_JMP: return string_format("OP_JMP(amount: %lu)", allocator, (u32)in.as.jmp.amount);
         case OP_LOOP: return string_format("OP_LOOP(amount: %lu)", allocator, (u32)in.as.jmp.amount);
 
-        #define OP_REG_TO_REG(SUFFIX) string_format("OP_MOV"#SUFFIX"(reg_source: %lu, regmem_destination: %lu)", allocator, \
+        #define OP_REG_TO_REG(SUFFIX) string_format("OP_MOV"#SUFFIX"(reg_src: %lu, reg_dst: %lu, offset: %d)", allocator, \
                 (u32)in.as.mov_reg_to_reg.reg_source, \
-                (u32)in.as.mov_reg_to_reg.reg_destination);
+                (u32)in.as.mov_reg_to_reg.reg_destination, \
+                (u32)in.as.mov_reg_to_reg.byte_offset);
 
         case OP_MOVU8_REG_TO_ADDR: return OP_REG_TO_REG(U8_REG_TO_REGADDR);
         case OP_MOVU16_REG_TO_ADDR: return OP_REG_TO_REG(U16_REG_TO_REGADDR);

@@ -542,7 +542,7 @@ void vm_step(vm_t *vm) {
             byte regaddr = in.as.mov_reg_to_reg.reg_source;
             byte reg_dest = in.as.mov_reg_to_reg.reg_destination;
             u32 offset = in.as.mov_reg_to_reg.byte_offset;
-            memcpy(&vm->registers[reg_dest] + offset, vm->registers[regaddr].as.p, sizeof(word_t));
+            memcpy(&vm->registers[reg_dest], vm->registers[regaddr].as.p + offset, sizeof(word_t));
             IP_ADV(1);
             break;
         }
