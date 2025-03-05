@@ -68,7 +68,7 @@ string_t disassemble_instruction(instruction_t in, arena_t *allocator) {
         case OP_JMP: return string_format("OP_JMP(amount: %lu)", allocator, (u32)in.as.jmp.amount);
         case OP_LOOP: return string_format("OP_LOOP(amount: %lu)", allocator, (u32)in.as.jmp.amount);
 
-        #define OP_REG_TO_REG(SUFFIX) string_format("OP_MOV"#SUFFIX"(reg_src: %lu, reg_dst: %lu, offset: %d)", allocator, \
+        #define OP_REG_TO_REG(SUFFIX) string_format("OP_MOV"#SUFFIX"(reg_src: %d, reg_dst: %d, offset: %d)", allocator, \
                 (u32)in.as.mov_reg_to_reg.reg_source, \
                 (u32)in.as.mov_reg_to_reg.reg_destination, \
                 (u32)in.as.mov_reg_to_reg.byte_offset);
@@ -166,7 +166,11 @@ string_t disassemble_instruction(instruction_t in, arena_t *allocator) {
         #undef OP_UNARY_REG_REG
 
         case OP_CALL: return lit2str("OP_CALL");
-        case OP_INTRINSIC_CALL: return lit2str("OP_INTRINSIC_CALL");
+        case OP_INTRINSIC_CALL: return string_format("OP_INTRINSIC(reg_arg_bot: %d, reg_op: %d, reg_result: %d, reg_result_size: %d)", allocator,
+                (u32)in.as.call.reg_arg_bottom_memaddr,
+                (u32)in.as.call.reg_op,
+                (u32)in.as.call.reg_result,
+                (u32)in.as.call.reg_result_size);
         case OP_RETURN: return lit2str("OP_RETURN");
     }
 }
@@ -228,6 +232,60 @@ bool debugger_step(debugger_t *debugger, vm_t *vm) {
             amount = string2size(arg);
         }
         show_line(vm, amount);
+    } else if (cstr_eq(command.cstr, "stack")) {
+        bool has_stack_location = false;
+        size_t stack_location = 0;
+        if (command_n_args.count > 1) {
+            has_stack_location = true;
+            stack_location = string2size(command_n_args.items[1]);
+        } 
+
+        bool has_type = false;
+        string_t type;
+        if (command_n_args.count == 3) {
+            has_type = true;
+            type = command_n_args.items[2];
+        } 
+
+        if (command_n_args.count > 3) {
+            println("expected 1 or 2 arguments (stack location and type)");
+            return true;
+        }
+
+        void *stack_bottom = vm->registers[REG_STACK_BOTTOM].as.p;
+        unless (has_stack_location) {
+            void *stack_frame = vm->registers[REG_STACK_FRAME].as.p;
+
+            size_t count = 0;
+            while (stack_bottom < stack_frame) {
+                u8 m = *((u8*)--stack_frame);
+                printf("%02x ", m);
+                ++count;
+                if (count == 8) {
+                    count = 0;
+                    println("");
+                }
+            }
+            println("");
+        } else {
+            void *loc = stack_bottom + stack_location;
+            bool print_as_word = true;
+            if (has_type) {
+                print_as_word = false;
+                if (string_eq(type, lit2str("f"))) {
+                    f32 f = *((f32*)loc);
+                    printf("%f\n", f);
+                } else {
+                    print_as_word = true;
+                }
+            }
+
+            if (print_as_word) {
+                word_t reg = *((word_t*)loc);
+                printf("%02zu: %lld, %llu, %lf, %p\n", stack_location, reg.as.s, reg.as.u, reg.as.d, reg.as.p);
+            }
+        }
+
     } else if (cstr_eq(command.cstr, "breaks")) {
         printfln("breakpoint count: %zu", debugger->breakpoints.count);
         for (size_t i = 0; i < debugger->breakpoints.count; ++i) {

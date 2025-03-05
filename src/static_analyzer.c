@@ -1623,6 +1623,7 @@ void resolve_expression(
             } 
 
             rhs = cast_implicitly_if_necessary(ast, lhs->value_type, rhs);
+            an_rhs(expr) = rhs;
 
             expr->value_type = lvalue_node->value_type;
 

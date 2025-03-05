@@ -587,7 +587,7 @@ void vm_step(vm_t *vm) {
         case OP_INTRINSIC_CALL: {
             void *ptr = vm->registers[in.as.call.reg_op].as.p;
             u64 result_size = vm->registers[in.as.call.reg_result_size].as.u;
-            void* args_address_bottom = MEMORY->data + vm->registers[in.as.call.reg_arg_bottom_memaddr].as.u;
+            void* args_address_bottom = vm->registers[in.as.call.reg_arg_bottom_memaddr].as.p;
 
             size_t size = b2w(result_size)*WORD_SIZE;
             if (size < WORD_SIZE) size = WORD_SIZE;
