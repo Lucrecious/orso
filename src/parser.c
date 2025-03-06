@@ -571,6 +571,13 @@ static ast_node_t *ast_primaryb(ast_t *ast, bool value, ast_node_t extra_params)
     return primary;
 }
 
+static ast_node_t *ast_statement(ast_t *ast, ast_node_t *expr) {
+    ast_node_t *statement_node = ast_node_new(ast, AST_NODE_TYPE_DECLARATION_STATEMENT, expr->start);
+    an_expression(statement_node) = expr;
+    statement_node->end = expr->end;
+    return statement_node;
+}
+
 static ast_node_t *ast_break(ast_t *ast, ast_node_t *expr, token_t label, token_t start) {
     ast_node_t *break_ = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_JMP, start);
     an_expression(break_) = expr;
@@ -1220,6 +1227,87 @@ static ast_node_t *parse_branch(parser_t *parser) {
     }
 }
 
+static ast_node_t *parse_for(parser_t *parser) {
+    token_t start = parser->previous;
+
+    ast_node_t *decl;
+    if (!match(parser, TOKEN_SEMICOLON)) {
+        decl = parse_decl(parser, false);
+        unless (consume(parser, TOKEN_SEMICOLON)) {
+            parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_SEMICOLON, parser->current, parser->previous));
+        }
+    } else {
+        decl = &nil_node;
+    }
+
+    ast_node_t *cond;
+    token_t end_of_check = start;
+    if (!match(parser, TOKEN_SEMICOLON)) {
+        cond = parse_expression(parser);
+        unless(consume(parser, TOKEN_SEMICOLON)) {
+            parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_SEMICOLON, parser->current, parser->previous));
+            end_of_check = start;
+        } else {
+            end_of_check = parser->previous;
+        }
+    } else {
+        cond = &nil_node;
+    }
+
+    ast_node_t *increment;
+    unless (check(parser, TOKEN_DO) || check(parser, TOKEN_BRACE_OPEN)) {
+        increment = parse_statement(parser);
+    } else {
+        increment = &nil_node;
+    }
+
+    ast_node_t *expression = &nil_node;
+    token_t expression_start = start;
+    if (match(parser, TOKEN_DO)) {
+        expression_start = parser->previous;
+        expression = parse_expression(parser);
+    } else if (match(parser, TOKEN_BRACE_OPEN)) {
+        expression_start = parser->previous;
+        expression = parse_block(parser);
+    } else {
+        parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_EXPRESSION, parser->previous, parser->current));
+    }
+
+    // true implicit condition if nothing
+    if (an_is_none(cond)) {
+        cond = ast_implicit_expr(parser->ast, typeid(TYPE_BOOL), WORDU(1), token_implicit_at_start(end_of_check));
+    }
+
+    ast_node_t *for_ = ast_block_begin(parser->ast, start);
+    {
+        // do declarations first
+        if (an_is_notnone(decl)) {
+            ast_block_decl(for_, decl);
+        }
+
+        // do loop inside another block
+        ast_node_t *inner_block = ast_block_begin(parser->ast, expression_start);
+        {
+            // statement goes first
+            ast_block_decl(inner_block, ast_statement(parser->ast, expression));
+
+            // increment after if it's there
+            if (an_is_notnone(increment)) {
+                ast_block_decl(inner_block, increment);
+            }
+        }
+        ast_block_end(inner_block, expression->end);
+
+        ast_node_t *nil = ast_nil(parser->ast, typeid(TYPE_VOID), token_implicit_at_end(inner_block->end));
+        ast_node_t *loop = ast_while(parser->ast, cond, false, inner_block, nil, start);
+
+        ast_block_decl(for_, ast_statement(parser->ast, loop));
+    }
+    ast_block_end(for_, expression->end);
+
+    return for_;
+}
+
 static bool is_incoming_function_signature(parser_t* parser) {
     token_t parenthesis_open = parser->previous;
     ASSERT(parenthesis_open.type == TOKEN_PARENTHESIS_OPEN, "must be starting to open a parenthesis");
@@ -1601,7 +1689,7 @@ parse_rule_t rules[] = {
     [TOKEN_UNLESS]                  = { parse_branch,       NULL,               PREC_BLOCK },
     [TOKEN_WHILE]                   = { parse_branch,       NULL,               PREC_BLOCK },
     [TOKEN_UNTIL]                   = { parse_branch,       NULL,               PREC_BLOCK },
-    [TOKEN_FOR]                     = { NULL,               NULL,               PREC_NONE },
+    [TOKEN_FOR]                     = { parse_for,          NULL,               PREC_BLOCK },
     [TOKEN_DO]                      = { parse_branch,       NULL,               PREC_NONE },
     [TOKEN_ELSE]                    = { NULL,               NULL,               PREC_NONE },
     [TOKEN_TRUE]                    = { parse_literal,      NULL,               PREC_NONE },
@@ -1735,11 +1823,8 @@ static ast_node_t *parse_expression(parser_t *parser) {
 }
 
 static ast_node_t *parse_statement(parser_t *parser) {
-    ast_node_t *statement_node = ast_node_new(parser->ast, AST_NODE_TYPE_DECLARATION_STATEMENT, parser->current);
-    an_expression(statement_node) = parse_expression(parser);
-
-    statement_node->end = parser->previous;
-
+    ast_node_t *expr = parse_expression(parser);
+    ast_node_t *statement_node = ast_statement(parser->ast, expr);
     return statement_node;
 }
 

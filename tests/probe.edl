@@ -1,84 +1,13 @@
-// array_t :: struct(u: type) {
-//     items: &[]u;
-//     count := 0;
-//     capacity := 0;
-// };
-
-// push :: (arr: array_t(~u), item: u, arena := global_arena) -> int {
-//     if count >= arr.capacity {
-//         new_capacity := if arr.capacity == 0 then 8 else arr.capacity*2;
-//         arr.items = realloc(arena, arr.items, sizeof([capacity]u), sizeof([new_capacity]u)) as &[]u;
-//         arr.capacity = new_capacity;
-//     };
-
-//     array.items[count] = item;
-//     count += 1;
-//     return count-1;
-// };
-
-// vec :: struct(size: size_t, t: type_t) {
-//     @assert size <= 4;
-
-//     c: [size]t;
-
-//     @if size >= 1, {
-//         @place c[0]
-//         x: t;
-
-//         @place c[0]
-//         r: t;
-//     };
-
-//     @if size >= 2, {
-//         @place c[1]
-//         y: t;
-
-//         @place c[1]
-//         g: t;
-//     };
-
-//     @if size >= 3, {
-//         @place c[2]
-//         z: t;
-
-//         @place c[2]
-//         b: t;
-//     };
-
-//     @if size == 4, {
-//         @place c[3]
-//         w: t;
-
-//         @place c[3]
-//         a: t;
-//     };
-// };
-
-// vec2f :: vec(2, f32);
-
 {
-    vec2f :: [2]f32;
-    vec2i :: [2]int;
-    vec2u8 :: [2]u8;
-    v := [10]int.{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+    count :: 10;
+    arr: [count]int;
 
-    c := 0;
-    sum := 0;
-    while c < 10 {
-        y := v[c];
-        sum += y;
-        printint(y);
-        println();
-
-        c += 1;
+    for i := 0; i < count; i += 1 {
+        arr[i] = i;
     };
 
-    printint(sum);
-    println();
-
-
-    // v: vec2f = .{4, 3};
-
-    // v[0] + v[1];
+    for i := 0; i < count; i += 1 {
+        printint(arr[i]);
+        println();
+    };
 }
-
