@@ -123,6 +123,7 @@ enum op_code_t {
     OP_MOVWORD_ADDR_TO_REG,
 
     OP_LOAD_ADDR,
+    OP_LOAD_REG_ADDR,
 
     OP_INTRINSIC_CALL,
     OP_CALL,
@@ -321,6 +322,15 @@ void vm_step(vm_t *vm) {
             u32 index = in.as.load_addr.memaddr;
 
             vm->registers[reg_dest].as.p = MEMORY->data + index;
+            IP_ADV(1);
+            break;
+        }
+
+        case OP_LOAD_REG_ADDR: {
+            byte reg_dest = in.as.load_addr.reg_dest;
+            byte reg_to_get_addr_of = (byte)in.as.load_addr.memaddr;
+
+            vm->registers[reg_dest].as.p = &vm->registers[reg_to_get_addr_of];
             IP_ADV(1);
             break;
         }

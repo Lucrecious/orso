@@ -1,13 +1,25 @@
 {
-    count :: 10;
-    arr: [count]int;
+    vec4::[4]s32;
 
-    for i := 0; i < count; ++i {
-        arr[i] = i;
+    add :: (a: vec4, b: vec4) -> vec4 {
+        sum := vec4.{a[0] + b[0], a[1]+ b[1], a[2] + b[2], a[3] + b[3]};
+        return sum;
     };
 
-    for i := 0; i < count; ++i {
-        printint(arr[i]);
-        println();
-    };
+    a := vec4.{1, 2, 3, 4};
+    b := vec4.{5, 6, 7, 8};
+
+    c := add(a, b);
+
+    c[3];
+
+    // c := do:test {
+    //     if false {
+    //         break vec2f.{1, 2};
+    //     };
+    // } then {
+    //     vec2f.{3, 4};
+    // };
+
+    // c[3];
 }
