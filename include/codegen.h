@@ -193,7 +193,6 @@ static reg_mov_size_t type2movsize(gen_t *gen, type_t t) {
     case TYPE_COUNT:
     case TYPE_UNREACHABLE:
     case TYPE_INFERRED_FUNCTION:
-    case TYPE_INFERRED:
     case TYPE_UNRESOLVED:
     case TYPE_INVALID: UNREACHABLE(); return REG_MOV_SIZE_WORD;
     }
@@ -722,7 +721,6 @@ static void gen_expr_val(gen_t *gen, function_t *function, ast_node_t *expressio
         case TYPE_UNREACHABLE:
         case TYPE_INVALID:
         case TYPE_UNRESOLVED:
-        case TYPE_INFERRED:
         case TYPE_INFERRED_FUNCTION:
         case TYPE_COUNT: UNREACHABLE(); break;
         }

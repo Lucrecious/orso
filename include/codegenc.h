@@ -417,7 +417,6 @@ static void cgen_constant(cgen_t *cgen, word_t word, typedata_t *typedata) {
         case TYPE_STRUCT: UNREACHABLE(); break;
 
         case TYPE_INFERRED_FUNCTION:
-        case TYPE_INFERRED:
         case TYPE_UNREACHABLE:
         case TYPE_INVALID:
         case TYPE_UNRESOLVED:

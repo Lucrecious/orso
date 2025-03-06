@@ -964,7 +964,6 @@ static void ast_copy_expr_val_to_dest(ast_t *ast, ast_node_t *expr, void *dest) 
 
     case TYPE_COUNT:
     case TYPE_UNREACHABLE:
-    case TYPE_INFERRED:
     case TYPE_UNRESOLVED:
     case TYPE_INVALID: UNREACHABLE(); break;
     }

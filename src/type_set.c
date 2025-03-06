@@ -138,7 +138,6 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
 
     static typedata_t type_invalid = {.name=lit2str("<invalid>"), .kind=TYPE_INVALID, .size=0};
     static typedata_t type_unresolved = {.name=lit2str("<unresolved>"), .kind=TYPE_UNRESOLVED, .size=0};
-    static typedata_t type_inferred = {.name=lit2str("<inferred>"), .kind=TYPE_INFERRED, .size=0};
     static typedata_t type_inferred_funcdef = {.name=lit2str("<inferred funcdef>"), .kind=TYPE_INFERRED_FUNCTION, .size=0};
     static typedata_t type_unreachable = {.name=lit2str("<unreachable>"), .kind=TYPE_UNREACHABLE, .size=0};
 
@@ -173,9 +172,6 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
 
     type_t unresolved = typeid(set->types.count);
     array_push(&set->types, &type_unresolved);
-
-    type_t inferred = typeid(set->types.count);
-    array_push(&set->types, &type_inferred);
 
     type_t inferred_funcdef = typeid(set->types.count);
     array_push(&set->types, &type_inferred_funcdef);
@@ -242,7 +238,6 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
     
     ASSERT(invalid.i == TYPE_INVALID, "must be same as type invalid");
     ASSERT(unresolved.i == TYPE_UNRESOLVED, "must be same as type unresolved");
-    ASSERT(inferred.i == TYPE_INFERRED, "must be same as type unresolved");
     ASSERT(inferred_funcdef.i == TYPE_INFERRED_FUNCTION, "must be same as type unresolved");
     ASSERT(unreachable.i == TYPE_UNREACHABLE, "must be same as type unreachable");
     ASSERT(set->void_.i == TYPE_VOID, "must be same as type void");

@@ -21,7 +21,6 @@ typedef enum type_kind_t {
     // analysis types
     TYPE_INVALID = 0,      // error type
     TYPE_UNRESOLVED,       // unresolved (not undefined, not error, not defined)
-    TYPE_INFERRED,         // 
     TYPE_INFERRED_FUNCTION,// inferred function definition, copies created at compile-time when called
     TYPE_UNREACHABLE,      // for jmp expressions (return, break, continue)
 
@@ -127,7 +126,6 @@ struct typedata_t {
 #define TYPE_IS_UNREACHABLE(TYPE) ((TYPE).i == TYPE_UNREACHABLE)
 #define TYPE_IS_UNRESOLVED(TYPE) ((TYPE).i == TYPE_UNRESOLVED)
 #define TYPE_IS_RESOLVED(TYPE) ((TYPE).i != TYPE_UNRESOLVED)
-#define TYPE_IS_INFERRED(TYPE) ((TYPE).i == TYPE_INFERRED)
 #define TYPE_IS_INFERRED_FUNCTION(TYPE) ((TYPE).i == TYPE_INFERRED_FUNCTION)
 
 struct type_table_t;
