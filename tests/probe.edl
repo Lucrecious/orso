@@ -6,20 +6,20 @@
         return sum;
     };
 
-    a := vec4.{1, 2, 3, 4};
-    b := vec4.{5, 6, 7, 8};
+    a := vec4.{11, 22, 33, 44};
+    b := vec4.{55, 66, 77, 88};
 
-    c := add(a, b);
-
-    c[3];
-
-    // c := do:test {
-    //     if false {
-    //         break vec2f.{1, 2};
-    //     };
-    // } then {
-    //     vec2f.{3, 4};
-    // };
+    // c := add(a, b);
 
     // c[3];
+
+    c := do:test {
+        if true {
+            break vec4.{1, 2, 3, 4};
+        };
+    } then {
+        vec4.{5, 6, 7, 8};
+    };
+
+    c[1];
 }

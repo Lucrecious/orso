@@ -784,7 +784,7 @@ static void gen_local_decl(gen_t *gen, function_t *function, ast_node_t *decl) {
     }
 }
 
-static void gen_block(gen_t *gen, function_t *function, ast_node_t *block) {
+static void gen_block_decls(gen_t *gen, function_t *function, ast_node_t *block) {
     for (size_t i = 0; i < block->children.count; ++i) {
         ast_node_t *declaration = block->children.items[i];
         gen_local_decl(gen, function, declaration);
@@ -1120,7 +1120,7 @@ void gen_function_def(ast_t *ast, env_t *env, ast_node_t *funcdef, error_functio
     }
 
     ast_node_t *block = an_func_def_block(funcdef);
-    gen_block(&gen, function, block);
+    gen_block_decls(&gen, function, block);
 
     allocator_return(tmp);
 }
@@ -1415,6 +1415,16 @@ static void gen_initializer_list(gen_t *gen, function_t *function, ast_node_t *l
     }
 }
 
+static void gen_block(gen_t *gen, function_t *function, ast_node_t *block) {
+    size_t stack_point = gen_stack_point(gen);
+    typedata_t *td = ast_type2td(gen->ast, block->value_type);
+    if (td->size > WORD_SIZE) {
+        stack_point += b2w(td->size)*WORD_SIZE;
+    }
+    gen_block_decls(gen, function, block);
+    gen_pop_until_stack_point(gen, function, token_end_loc(&block->end), stack_point, true);
+}
+
 static void gen_expression(gen_t *gen, function_t *function, ast_node_t *expression) {
     ASSERT(ast_node_type_is_expression(expression->node_type), "must be expression");
 
@@ -1453,9 +1463,7 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
         }
 
         case AST_NODE_TYPE_EXPRESSION_BLOCK: {
-            size_t stack_point = gen_stack_point(gen);
             gen_block(gen, function, expression);
-            gen_pop_until_stack_point(gen, function, token_end_loc(&expression->end), stack_point, true);
             break;
         }
 
