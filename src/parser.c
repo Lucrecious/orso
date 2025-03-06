@@ -1017,6 +1017,12 @@ static ast_node_t *parse_builtin_call(parser_t *parser) {
     return n;
 }
 
+static ast_node_t *ast_assignment(ast_t *ast, ast_node_t *lhs, ast_node_t *rhs, token_t equals) {
+    ast_node_t *assignment = ast_binary(ast, equals, lhs, rhs);
+    assignment->node_type = AST_NODE_TYPE_EXPRESSION_ASSIGNMENT;
+    return assignment;
+}
+
 static ast_node_t *convert_assignment_expression(parser_t *parser, ast_node_t *left, ast_node_t *assignment) {
     (void)parser;
     assignment->start = left->start;
@@ -1095,14 +1101,13 @@ static ast_node_t *convert_function_definition(parser_t *parser, ast_node_t *lef
 }
 
 static ast_node_t *parse_assignment(parser_t *parser) {
-    ast_node_t *expression_node = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_ASSIGNMENT, parser->previous);
-    expression_node->operator = parser->previous;
+    token_t equals = parser->previous;
 
     ast_node_t *rhs = parse_expression(parser);
-    an_rhs(expression_node) = rhs;
-    expression_node->end = parser->previous;
 
-    return expression_node;
+    ast_node_t *assignment = ast_assignment(parser->ast, &nil_node, rhs, equals);
+
+    return assignment;
 }
 
 static ast_node_t *parse_def_value(parser_t *parser) {
@@ -1481,9 +1486,27 @@ static ast_node_t *parse_unary(parser_t *parser) {
     token_t operator = parser->previous;
     ast_node_t *operand = parse_precedence(parser, PREC_UNARY);
 
-    ast_node_t *unary = ast_unary(parser->ast, operator, operand);
+    unless (operator.type == TOKEN_PLUS_PLUS || operator.type == TOKEN_MINUS_MINUS) {
+        ast_node_t *unary = ast_unary(parser->ast, operator, operand);
+        return unary;
+    } else {
+        token_t single_op = operator;
+        single_op.type= (single_op.type == TOKEN_MINUS_MINUS ? TOKEN_MINUS : TOKEN_PLUS);
+        --single_op.loc.column;
+        --single_op.view.length;
 
-    return unary;
+        ast_node_t *one = ast_implicit_expr(parser->ast, parser->ast->type_set.u64_, WORDU(1), single_op);
+        one->is_free_number = true;
+        ast_node_t *increment = ast_binary(parser->ast, single_op, operand, one);
+
+        token_t equals = single_op;
+        equals.type = TOKEN_EQUAL;
+        equals.view.length = 0;
+
+        ast_node_t *assignment = ast_assignment(parser->ast, operand, increment, equals);
+
+        return assignment;
+    }
 }
 
 static ast_node_t *parse_inferred_type_decl(parser_t *parser) {

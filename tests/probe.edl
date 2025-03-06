@@ -2,11 +2,11 @@
     count :: 10;
     arr: [count]int;
 
-    for i := 0; i < count; i += 1 {
+    for i := 0; i < count; ++i {
         arr[i] = i;
     };
 
-    for i := 0; i < count; i += 1 {
+    for i := 0; i < count; ++i {
         printint(arr[i]);
         println();
     };
