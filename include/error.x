@@ -46,6 +46,7 @@ X(ERROR_ANALYSIS_INVALID_CAST, "invalid cast operand; cannot perform cast", ANAL
 X(ERROR_ANALYSIS_ARITHMETIC_OPERANDS_REQUIRES_EXPLICIT_CAST, "arithmetic operands requires explicit cast", ANALYSIS)
 X(ERROR_ANALYSIS_ONLY_ADD_AND_SUB_ARE_VALID_IN_PTR_ARITHMEIC, "invalid pointer arithmetic; only addition and subtraction are allowed", ANALYSIS)
 X(ERROR_ANALYSIS_CANNOT_ADD_POINTERS, "cannot add pointers together", ANALYSIS)
+X(ERROR_ANALYSIS_INITIALIZER_LIST_TYPE_CANNOT_BE_INFERRED, "initializer list type cannot be inferred", ANALYSIS)
 X(ERROR_ANALYSIS_COMPARISON_OPERANDS_REQUIRES_EXPLICIT_CAST, "comparison operands requires explicit cast", ANALYSIS)
 X(ERROR_ANALYSIS_LOGICAL_OPERANDS_REQUIRES_EXPLICIT_CAST, "logical operands requires explicit cast", ANALYSIS)
 X(ERROR_ANALYSIS_INVALID_NOT_OPERAND, "invalid 'not' operand", ANALYSIS)
