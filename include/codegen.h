@@ -1391,10 +1391,14 @@ static void gen_initializer_list(gen_t *gen, function_t *function, ast_node_t *l
                 gen_expression(gen, function, arg);
                 typedata_t *arg_td = ast_type2td(gen->ast, arg->value_type);
                 if (arg_td->size > WORD_SIZE) {
-                    emit_addr_to_reg(gen, function, token_end_loc(&arg->end), type2movsize(gen, arg->value_type), REG_TMP, REG_RESULT, i_*arg_td->size);
-                    emit_reg_to_addr(gen, function, token_end_loc(&arg->end), type2movsize(gen, arg->value_type), REG_STACK_BOTTOM, REG_TMP, i_*arg_td->size);
-
                     emit_popn_bytes(gen, function, b2w(arg_td->size)*WORD_SIZE, token_end_loc(&arg->end), true);
+                    // emit_addr_to_reg(gen, function, token_end_loc(&arg->end), type2movsize(gen, arg->value_type), REG_TMP, REG_RESULT, i_*arg_td->size);
+                    // emit_reg_to_addr(gen, function, token_end_loc(&arg->end), type2movsize(gen, arg->value_type), REG_STACK_BOTTOM, REG_TMP, i_*arg_td->size);
+
+                    emit_binu_reg_im(function, token_end_loc(&arg->end), REG_TMP, REG_STACK_BOTTOM, arg_td->size*i_, '+');
+
+                    emit_multiword_addr_to_addr(gen, function, token_end_loc(&arg->end), REG_TMP, REG_RESULT, REG_TMP2, arg_td->size);
+
                 } else {
                     emit_reg_to_addr(gen, function, token_end_loc(&arg->end), type2movsize(gen, arg->value_type), REG_STACK_BOTTOM, REG_RESULT, i_*arg_td->size);
                 }
