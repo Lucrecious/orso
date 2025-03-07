@@ -2579,7 +2579,7 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
     }
 
     ast_node_t *funcblock = an_func_def_block(funcdef);
-    unless (TYPE_IS_UNREACHABLE(funcblock->value_type)) {
+    unless (TYPE_IS_UNREACHABLE(funcblock->value_type) || TYPE_IS_VOID(return_type)) {
         stan_error(analyzer, make_error_node(ERROR_ANALYSIS_FUNCTION_MUST_RETURN_ON_ALL_BRANCHES, funcdef));
     }
 
@@ -2604,7 +2604,7 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
         return;
     }
 
-    gen_function_def(ast, analyzer->env_or_null, funcdef, analyzer->error_fn);
+    gen_funcdef(ast, analyzer->env_or_null, funcdef, analyzer->error_fn);
 }
 
 // footnote(struct-resolution)

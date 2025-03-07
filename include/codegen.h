@@ -7,7 +7,7 @@
 
 bool compile_program(vm_t *vm, ast_t *ast);
 
-void gen_function_def(ast_t *ast, env_t *env, ast_node_t *funcdef, error_function_t error_fn);
+void gen_funcdef(ast_t *ast, env_t *env, ast_node_t *funcdef, error_function_t error_fn);
 bool compile_modules(ast_t *ast, error_function_t error_fn, memarr_t *program_memory, arena_t *funcarea, function_t *global_init_func);
 bool compile_expr_to_function(function_t *function, ast_t *ast, ast_node_t *expr, error_function_t error_fn, memarr_t *program_memory, arena_t *function_arena);
 
@@ -486,6 +486,31 @@ static void emit_return(texloc_t loc, function_t *function) {
     emit_instruction(function, loc, instruction);
 }
 
+static void gen_pop_until_stack_point(gen_t *gen, function_t *function, texloc_t location, size_t stack_point, bool update_gen) {
+    ASSERT(stack_point <= gen->stack_size, "stack point cannot be larger than current stack size");
+    size_t pop_amount = 0;
+    for (size_t i = gen->locals.count; i > 0; --i) {
+        size_t i_ = i-1;
+        local_t *local = &gen->locals.items[i_];
+        if (local->stack_location <= stack_point) {
+            break;
+        }
+        ++pop_amount;
+    }
+
+    if (update_gen) gen->locals.count -= pop_amount;
+
+    size_t pop_size_bytes = gen->stack_size - stack_point;
+    ASSERT(pop_size_bytes % WORD_SIZE == 0, "stuff being popped off stack should be word aligned");
+
+    emit_popn_bytes(gen, function, pop_size_bytes, location, update_gen);
+}
+
+static void gen_return(gen_t *gen, texloc_t loc, function_t *function) {
+    gen_pop_until_stack_point(gen, function, loc, 0, false);
+    emit_return(loc, function);
+}
+
 static void gen_expression(gen_t *gen, function_t *function, ast_node_t *expression);
 
 static size_t gen_jmp_if_reg(function_t *function, texloc_t location, reg_t condition_reg, bool jmp_condition) {
@@ -856,26 +881,6 @@ static size_t gen_global_decldef(gen_t *gen, ast_node_t *decldef) {
     return global_index;
 }
 
-static void gen_pop_until_stack_point(gen_t *gen, function_t *function, texloc_t location, size_t stack_point, bool update_gen) {
-    ASSERT(stack_point <= gen->stack_size, "stack point cannot be larger than current stack size");
-    size_t pop_amount = 0;
-    for (size_t i = gen->locals.count; i > 0; --i) {
-        size_t i_ = i-1;
-        local_t *local = &gen->locals.items[i_];
-        if (local->stack_location <= stack_point) {
-            break;
-        }
-        ++pop_amount;
-    }
-
-    if (update_gen) gen->locals.count -= pop_amount;
-
-    size_t pop_size_bytes = gen->stack_size - stack_point;
-    ASSERT(pop_size_bytes % WORD_SIZE == 0, "stuff being popped off stack should be word aligned");
-
-    emit_popn_bytes(gen, function, pop_size_bytes, location, update_gen);
-}
-
 static size_t gen_stack_point(gen_t *gen) {
     return gen->stack_size;
 }
@@ -1098,8 +1103,7 @@ static void gen_jmp_expr(gen_t *gen, function_t *function, ast_node_t *jmp_expr)
                 emit_reg_to_reg(function, token_end_loc(&jmp_expr->end), REG_RESULT, REG_TMP);
             }
 
-            gen_pop_until_stack_point(gen, function, token_end_loc(&jmp_expr->end), 0, false);
-            emit_return(token_end_loc(&jmp_expr->end), function);
+            gen_return(gen, token_end_loc(&jmp_expr->end), function);
             break;
         }
 
@@ -1122,7 +1126,7 @@ static gen_t make_gen(ast_t *ast, memarr_t *program_memory, error_function_t err
     return gen;
 }
 
-void gen_function_def(ast_t *ast, env_t *env, ast_node_t *funcdef, error_function_t error_fn) {
+void gen_funcdef(ast_t *ast, env_t *env, ast_node_t *funcdef, error_function_t error_fn) {
     ASSERT(funcdef->expr_val.is_concrete, "should have something there");
     function_t *function = (function_t*)funcdef->expr_val.word.as.p;
     if (function_is_compiled(function)) return;
@@ -1139,6 +1143,8 @@ void gen_function_def(ast_t *ast, env_t *env, ast_node_t *funcdef, error_functio
 
     ast_node_t *block = an_func_def_block(funcdef);
     gen_block_decls(&gen, function, block);
+
+    gen_return(&gen, token_end_loc(&funcdef->end), function);
 
     allocator_return(tmp);
 }

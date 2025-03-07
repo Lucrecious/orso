@@ -14,11 +14,10 @@ do:gol {
                 (*arr)[w][h] = value;
             };
         };
-        return;
     };
 
     board_: [height][width]u8;
-    buffer_: [height][width]u8;
+    buffer_ := board_;
 
     board := &board_;
     buffer := &buffer_;
