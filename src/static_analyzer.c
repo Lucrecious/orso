@@ -778,6 +778,16 @@ static type_t stan_pattern_match_or_error(analyzer_t *analyzer, ast_node_t *decl
         return stan_pattern_match_or_error(analyzer, decl, expected->next, td->as.ptr.type);
     }
 
+    case TYPE_ARRAY: {
+        if (td->kind != TYPE_ARRAY) {
+            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_COULD_NOT_PATTERN_MATCH_TYPE, decl));
+            return typeid(TYPE_INVALID);
+        }
+
+        return stan_pattern_match_or_error(analyzer, decl, expected->next, td->as.arr.type);
+        break;
+    }
+
     case TYPE_COUNT: {
         return actual;
     }
@@ -2146,7 +2156,16 @@ static void forward_scan_inferred_types(ast_node_t *decl, ast_node_t *decl_type,
         }
 
         case AST_NODE_TYPE_EXPRESSION_ARRAY_TYPE: {
-            // UNREACHABLE(); // todo
+            forward_scan_inferred_types(decl, an_array_type_expr(decl_type), arena, patterns);
+
+            for (size_t i = 0; i < patterns->count; ++i) {
+                type_path_t *current = patterns->items[i].expected;
+                type_path_t *path = arena_alloc(arena, sizeof(type_path_t));
+                *path = zer0(type_path_t);
+                path->kind = TYPE_ARRAY;
+                path->next = current;
+                patterns->items[i].expected = path;
+            }
             break;
         }
 
