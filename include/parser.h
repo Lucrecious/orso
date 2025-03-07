@@ -140,9 +140,15 @@ ast_node_t nil_node;
 #define an_cast_type(n) ((n)->children.items[1])
 #define an_decl_type(n) ((n)->children.items[0])
 #define an_decl_expr(n) ((n)->children.items[1])
+
+// if, unless, while, until, do, for
 #define an_condition(n) ((n)->children.items[0])
 #define an_then(n) ((n)->children.items[1])
 #define an_else(n) ((n)->children.items[2])
+#define an_for_decl(n) ((n)->children.items[3])
+#define an_for_incr(n) ((n)->children.items[4])
+
+
 #define an_func_def_return(n) ((n)->children.items[0])
 #define an_func_def_block(n) ((n)->children.items[1])
 #define an_func_def_arg_start(n) (2)
@@ -172,6 +178,7 @@ enum ast_branch_type_t {
     BRANCH_TYPE_LOOPING,
     BRANCH_TYPE_IFTHEN,
     BRANCH_TYPE_DO,
+    BRANCH_TYPE_FOR,
 };
 
 typedef struct ast_node_val_t ast_node_val_t;

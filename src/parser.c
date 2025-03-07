@@ -245,6 +245,8 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start) {
             array_push(&node->children, &nil_node);
             array_push(&node->children, &nil_node);
             array_push(&node->children, &nil_node);
+            array_push(&node->children, &nil_node);
+            array_push(&node->children, &nil_node);
             break;
         }
 
@@ -698,6 +700,18 @@ static ast_node_t *ast_unary(ast_t *ast, token_t operator, ast_node_t *operand) 
     unary->end = operand->end;
     an_operand(unary) = operand;
     return unary;
+}
+
+static ast_node_t *ast_for(ast_t *ast, ast_node_t *decl, ast_node_t *cond, ast_node_t *incr, ast_node_t *loop, ast_node_t *then, token_t start) {
+    ast_node_t *n = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_BRANCHING, start);
+    n->branch_type = BRANCH_TYPE_FOR;
+    an_for_decl(n) = decl;
+    an_condition(n) = cond;
+    an_for_incr(n) = incr;
+    an_then(n) = loop;
+    an_else(n) = then;
+
+    return n;
 }
 
 static void parser_init(parser_t *parser, ast_t *ast, string_t file_path, string_view_t source, error_function_t error_fn) {
@@ -1229,6 +1243,8 @@ static ast_node_t *parse_branch(parser_t *parser) {
             ast_node_t *do_ = ast_do(parser->ast, label, then_branch, else_branch, start_token);
             return do_;
         }
+        
+        case BRANCH_TYPE_FOR: UNREACHABLE(); break; // handled separately
     }
 }
 
@@ -1261,21 +1277,25 @@ static ast_node_t *parse_for(parser_t *parser) {
 
     ast_node_t *increment;
     unless (check(parser, TOKEN_DO) || check(parser, TOKEN_BRACE_OPEN)) {
-        increment = parse_statement(parser);
+        increment = parse_expression(parser);
     } else {
         increment = &nil_node;
     }
 
-    ast_node_t *expression = &nil_node;
-    token_t expression_start = start;
+    ast_node_t *loop = &nil_node;
     if (match(parser, TOKEN_DO)) {
-        expression_start = parser->previous;
-        expression = parse_expression(parser);
+        loop = parse_expression(parser);
     } else if (match(parser, TOKEN_BRACE_OPEN)) {
-        expression_start = parser->previous;
-        expression = parse_block(parser);
+        loop = parse_block(parser);
     } else {
         parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_EXPRESSION, parser->previous, parser->current));
+    }
+
+    ast_node_t *then;
+    if (match(parser, TOKEN_THEN)) {
+        then = parse_expression(parser);
+    } else {
+        then = ast_nil(parser->ast, typeid(TYPE_VOID), token_implicit_at_end(loop->end));
     }
 
     // true implicit condition if nothing
@@ -1283,32 +1303,7 @@ static ast_node_t *parse_for(parser_t *parser) {
         cond = ast_implicit_expr(parser->ast, typeid(TYPE_BOOL), WORDU(1), token_implicit_at_start(end_of_check));
     }
 
-    ast_node_t *for_ = ast_block_begin(parser->ast, start);
-    {
-        // do declarations first
-        if (an_is_notnone(decl)) {
-            ast_block_decl(for_, decl);
-        }
-
-        // do loop inside another block
-        ast_node_t *inner_block = ast_block_begin(parser->ast, expression_start);
-        {
-            // statement goes first
-            ast_block_decl(inner_block, ast_statement(parser->ast, expression));
-
-            // increment after if it's there
-            if (an_is_notnone(increment)) {
-                ast_block_decl(inner_block, increment);
-            }
-        }
-        ast_block_end(inner_block, expression->end);
-
-        ast_node_t *nil = ast_nil(parser->ast, typeid(TYPE_VOID), token_implicit_at_end(inner_block->end));
-        ast_node_t *loop = ast_while(parser->ast, cond, false, inner_block, nil, start);
-
-        ast_block_decl(for_, ast_statement(parser->ast, loop));
-    }
-    ast_block_end(for_, expression->end);
+    ast_node_t *for_ = ast_for(parser->ast, decl, cond, increment, loop, then, start);
 
     return for_;
 }
@@ -2191,6 +2186,31 @@ static void ast_print_ast_node(typedatas_t types, ast_node_t *node, u32 level) {
             switch (node->branch_type) {
                 case BRANCH_TYPE_DO: {
                     print_line("branch (do:%.*s): %s", node->start.view.length, node->start.view.data, type2cstr(node));
+
+                    print_indent(level + 1);
+                    print_line("do");
+                    ast_print_ast_node(types, an_then(node), level + 2);
+
+                    print_indent(level + 1);
+                    print_line("then");
+                    ast_print_ast_node(types, an_else(node), level + 2);
+                    break;
+                }
+
+                case BRANCH_TYPE_FOR: {
+                    print_line("branch (for:%.*s): %s", node->start.view.length, node->start.view.data, type2cstr(node));
+
+                    print_indent(level + 1);
+                    print_line("decl");
+                    ast_print_ast_node(types, an_for_decl(node), level + 2);
+
+                    print_indent(level + 1);
+                    print_line("cond");
+                    ast_print_ast_node(types, an_condition(node), level + 2);
+
+                    print_indent(level + 1);
+                    print_line("incr");
+                    ast_print_ast_node(types, an_for_incr(node), level + 2);
 
                     print_indent(level + 1);
                     print_line("do");

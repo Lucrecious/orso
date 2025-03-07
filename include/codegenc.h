@@ -946,6 +946,11 @@ static void cgen_branching(cgen_t *cgen, ast_node_t *branch, cgen_var_t var) {
             cgen_if(cgen, branch, var);
             break;
         }
+
+        case BRANCH_TYPE_FOR: {
+            UNREACHABLE();
+            break;
+        }
     }
 }
 

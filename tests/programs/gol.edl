@@ -8,7 +8,7 @@ do:gol {
         break:gol 1;
     };
 
-    fill :: (arr: &[height][width]u, value: ~u) -> void {
+    fill :: (arr: &[height][width]!u, value: u) -> void {
         for w := 0; w < width; ++w {
             for h := 0; h < height; ++h {
                 (*arr)[w][h] = value;
@@ -75,9 +75,6 @@ do:gol {
                 xn := xs + xi;
                 yn := ys + yi;
 
-                printint(xi);
-                println();
-
                 if xn == x and yn == y then continue;
                 if xn < 0 or yn < 0 or xn >= width or yn >= height then continue;
 
@@ -85,14 +82,11 @@ do:gol {
             };
         };
 
-        printint(600);
-        println();
-
         return sum;
     };
 
-    for in := readint(); in != 0; {
-        fill(buffer, 0u8);
+    while readint() != 0 {
+        fill(buffer, 0);
 
         for y := 0; y < height; ++y {
             for x := 0; x < width; ++x {

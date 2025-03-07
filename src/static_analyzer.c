@@ -1744,6 +1744,10 @@ void resolve_expression(
         }
 
         case AST_NODE_TYPE_EXPRESSION_BRANCHING: {
+            if (an_is_notnone(an_for_decl(expr))) {
+                resolve_declaration(analyzer, ast, state, an_for_decl(expr));
+            }
+
             {
                 scope_t condition_scope = {0};
                 scope_init(&condition_scope, &ast->allocator, SCOPE_TYPE_CONDITION, state.scope, an_condition(expr));
@@ -1758,6 +1762,8 @@ void resolve_expression(
             analysis_state_t return_state = state;
 
             switch (expr->branch_type) {
+
+                case BRANCH_TYPE_FOR:
                 case BRANCH_TYPE_DO:
                 case BRANCH_TYPE_LOOPING: {
                     scope_init(&return_scope, &analyzer->allocator, SCOPE_TYPE_JMPABLE, state.scope, expr);
@@ -1768,6 +1774,10 @@ void resolve_expression(
                 }
 
                 case BRANCH_TYPE_IFTHEN: break;
+            }
+
+            if (an_is_notnone(an_for_incr(expr))) {
+                resolve_expression(analyzer, ast, state, typeid(TYPE_UNRESOLVED), an_for_incr(expr));
             }
 
             resolve_expression(analyzer, ast, return_state, implicit_type, an_then(expr));

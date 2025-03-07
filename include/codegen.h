@@ -245,6 +245,8 @@ static void emit_pop_to_reg(gen_t *gen, texloc_t loc, function_t *function, reg_
 }
 
 static void emit_popn_bytes(gen_t *gen, function_t *function, u32 pop_size_bytes, texloc_t loc, bool decrement_stack) {
+    if (pop_size_bytes == 0) return; // noop
+
     if (decrement_stack) {
         gen->stack_size -= pop_size_bytes;
     }
@@ -854,38 +856,6 @@ static size_t gen_global_decldef(gen_t *gen, ast_node_t *decldef) {
     return global_index;
 }
 
-static void gen_local_decl(gen_t *gen, function_t *function, ast_node_t *decl) {
-    switch (decl->node_type) {
-        case AST_NODE_TYPE_DECLARATION_DEFINITION: {
-            if (decl->is_mutable) {
-                gen_local_decldef(gen, function, decl);
-            } else {
-                // todo
-            }
-            break;
-        }
-
-        case AST_NODE_TYPE_DECLARATION_STATEMENT: {
-            ast_node_t *expression = an_expression(decl);
-            gen_expression(gen, function, expression);
-            break;
-        }
-
-        default: UNREACHABLE();
-    }
-}
-
-static void gen_block_decls(gen_t *gen, function_t *function, ast_node_t *block) {
-    for (size_t i = 0; i < block->children.count; ++i) {
-        ast_node_t *declaration = block->children.items[i];
-        gen_local_decl(gen, function, declaration);
-    }
-}
-
-static size_t gen_stack_point(gen_t *gen) {
-    return gen->stack_size;
-}
-
 static void gen_pop_until_stack_point(gen_t *gen, function_t *function, texloc_t location, size_t stack_point, bool update_gen) {
     ASSERT(stack_point <= gen->stack_size, "stack point cannot be larger than current stack size");
     size_t pop_amount = 0;
@@ -904,6 +874,44 @@ static void gen_pop_until_stack_point(gen_t *gen, function_t *function, texloc_t
     ASSERT(pop_size_bytes % WORD_SIZE == 0, "stuff being popped off stack should be word aligned");
 
     emit_popn_bytes(gen, function, pop_size_bytes, location, update_gen);
+}
+
+static size_t gen_stack_point(gen_t *gen) {
+    return gen->stack_size;
+}
+
+static void gen_statement(gen_t *gen, function_t *function, ast_node_t *expr) {
+    size_t stack_point = gen_stack_point(gen);
+    gen_expression(gen, function, expr);
+    gen_pop_until_stack_point(gen, function, token_end_loc(&expr->end), stack_point, true);
+}
+
+static void gen_local_decl(gen_t *gen, function_t *function, ast_node_t *decl) {
+    switch (decl->node_type) {
+        case AST_NODE_TYPE_DECLARATION_DEFINITION: {
+            if (decl->is_mutable) {
+                gen_local_decldef(gen, function, decl);
+            } else {
+                // todo
+            }
+            break;
+        }
+
+        case AST_NODE_TYPE_DECLARATION_STATEMENT: {
+            ast_node_t *expression = an_expression(decl);
+            gen_statement(gen, function, expression);
+            break;
+        }
+
+        default: UNREACHABLE();
+    }
+}
+
+static void gen_block_decls(gen_t *gen, function_t *function, ast_node_t *block) {
+    for (size_t i = 0; i < block->children.count; ++i) {
+        ast_node_t *declaration = block->children.items[i];
+        gen_local_decl(gen, function, declaration);
+    }
 }
 
 static void gen_global_addr(texloc_t loc, function_t *function, size_t index, reg_t reg_dest) {
@@ -983,6 +991,12 @@ static size_t gen_condition(gen_t *gen, ast_node_t *branch, function_t *function
 }
 
 static void gen_branching(gen_t *gen, function_t *function, ast_node_t *branch) {
+    size_t stack_point = gen_stack_point(gen);
+
+    if (branch->branch_type == BRANCH_TYPE_FOR && an_is_notnone(an_for_decl(branch))) {
+        gen_local_decl(gen, function, an_for_decl(branch));
+    }
+
     branch->vm_stack_point = gen_stack_point(gen);
 
     switch (branch->branch_type) {
@@ -1007,12 +1021,19 @@ static void gen_branching(gen_t *gen, function_t *function, ast_node_t *branch) 
             gen_patch_jmp(gen, function, else_index);
             break;
         }
+
+        case BRANCH_TYPE_FOR:
         case BRANCH_TYPE_LOOPING: {
             size_t loop_index = function->code.count;
             size_t then_index = gen_condition(gen, branch, function);
             gen_expression(gen, function, an_then(branch));
 
             gen_patch_jmps(gen, function, branch, TOKEN_CONTINUE);
+
+            if (branch->branch_type == BRANCH_TYPE_FOR && an_is_notnone(an_for_incr(branch))) {
+                gen_statement(gen, function, an_for_incr(branch));
+            }
+
             gen_loop(gen, function, token_end_loc(&an_then(branch)->end), loop_index);
 
             size_t else_index = gen_jmp(function, token_end_loc(&an_then(branch)->end));
@@ -1025,6 +1046,8 @@ static void gen_branching(gen_t *gen, function_t *function, ast_node_t *branch) 
             break;
         }
     }
+
+    gen_pop_until_stack_point(gen, function, token_end_loc(&branch->end), stack_point, true);
 }
 
 static void gen_assignment(gen_t *gen, function_t *function, ast_node_t *assignment) {
