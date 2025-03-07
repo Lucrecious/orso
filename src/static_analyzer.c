@@ -1229,9 +1229,7 @@ void resolve_expression(
                 case TYPE_ARRAY: {
                     type_t array_type = init_type_td->as.arr.type;
 
-                    typedata_t *array_type_td = ast_type2td(ast, array_type);
-
-                    bool is_constant = false;
+                    bool is_constant = true;
 
                     for (size_t i = an_list_start(expr); i < an_list_end(expr); ++i) {
                         ast_node_t *arg = expr->children.items[i];
@@ -1273,12 +1271,11 @@ void resolve_expression(
                             start = &expr->expr_val.word;
                         }
 
-                        // constant fold concrete arguments
+                        // constant fold  arguments
                         for (size_t i = an_list_start(expr); i < an_list_end(expr); ++i) {
                             size_t offset = i - an_list_start(expr);
                             ast_node_t *arg = expr->children.items[i];
-                            if (!arg->expr_val.is_concrete) continue;
-                            ast_copy_expr_val_to_dest(ast, arg, ((void*)start)+(offset*array_type_td->size));
+                            ast_copy_expr_val_to_dest(ast, arg, ((void*)start)+(offset*init_type_td->as.arr.item_size));
                         }
                     }
 

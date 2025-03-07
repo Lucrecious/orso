@@ -57,8 +57,6 @@ do:gol {
             };
             println();
         };
-
-        return;
     };
 
     render_board(board);

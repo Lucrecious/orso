@@ -114,6 +114,7 @@ struct typedata_t {
 
         struct {
             size_t size;
+            size_t item_size; // word-aligned
             type_t type;
         } arr;
     } as;

@@ -79,13 +79,21 @@ typedata_t *pointer_type_new(type_table_t *set, type_t type) {
     return pointer;
 }
 
+// bytes to array item size (word aligned)
+static size_t b2ais(size_t s) {
+    if (s == 1 || s == 2 || s == 4) return s;
+    if (s == 3) return 4;
+    return b2w(s)*WORD_SIZE;
+}
+
 typedata_t *array_type_new(type_table_t *set, size_t size, type_t type) {
     size_t type_size = set->types.items[type.i]->size;
     typedata_t *array_type = ALLOC(typedata_t);
     array_type->kind = TYPE_ARRAY;
     array_type->as.arr.type = type;
     array_type->as.arr.size = size;
-    array_type->size = type_size*size;
+    array_type->as.arr.item_size = b2ais(type_size);
+    array_type->size = b2ais(type_size)*size;
     array_type->capabilities = TYPE_CAP_NONE;
 
     return array_type;
@@ -300,6 +308,7 @@ static u64 hash_type(typedata_t *type) {
     } else if (type->kind == TYPE_ARRAY) {
         ADD_HASH(hash, (u64)(type->as.arr.type.i));
         ADD_HASH(hash, (u64)(type->as.arr.size));
+        ADD_HASH(hash, (u64)(type->as.arr.item_size));
     }
 
     return hash;
@@ -333,8 +342,9 @@ type_t type_set_fetch_array(type_table_t *set, size_t size, type_t value_type) {
     typedata_t array_type = {
         .kind = TYPE_ARRAY,
         .as.arr.size = size,
+        .as.arr.item_size = b2ais(value_type_size),
         .as.arr.type = value_type,
-        .size = value_type_size*size,
+        .size = b2ais(value_type_size)*size,
         .capabilities = TYPE_CAP_NONE,
     };
 

@@ -73,7 +73,7 @@ bool type_equal(typedata_t *a, typedata_t *b) {
         }
 
         case TYPE_ARRAY: {
-            return typeid_eq(a->as.arr.type, b->as.arr.type) && a->as.arr.size == b->as.arr.size;
+            return typeid_eq(a->as.arr.type, b->as.arr.type) && a->as.arr.size == b->as.arr.size && a->as.arr.item_size == b->as.arr.item_size;
         }
 
         case TYPE_BOOL: return true;
