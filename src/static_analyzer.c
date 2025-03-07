@@ -1509,6 +1509,12 @@ void resolve_expression(
                         break;
                     }
 
+                    case AST_NODE_TYPE_EXPRESSION_ITEM_ACCESS: {
+                        type_t type = type_set_fetch_pointer(&ast->type_set, op->lvalue_node->value_type);
+                        expr->value_type = type;
+                        break;
+                    }
+
                     default: {
                         INVALIDATE(expr);
                         stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_OPERAND_FOR_ADDRESS_OPERATOR, expr));
@@ -2140,7 +2146,7 @@ static void forward_scan_inferred_types(ast_node_t *decl, ast_node_t *decl_type,
         }
 
         case AST_NODE_TYPE_EXPRESSION_ARRAY_TYPE: {
-            UNREACHABLE(); // todo
+            // UNREACHABLE(); // todo
             break;
         }
 

@@ -1,63 +1,29 @@
 do:gol {
-    width := readint();
-    height := readint();
-    tile_count := width*height;
+    width :: @run readint();
+    height :: @run readint();
 
-
-    if tile_count == 0 {
+    if width*height == 0 {
         printint(0);
         println();
         break:gol 1;
     };
 
-    // new generics addition here...
-
-    // generic 'at' function to get address of an item
-    at :: (arr: &~u, i: ~v) -> &u {
-
-        // 'as' is used for casting rather than '<<'
-        return arr + (i as ptrdiff_t);
-    };
-
-    // another generic 'at' function
-    atxy :: (arr: &~u, x: ~v, y: v, width: v) -> &u8 {
-        return arr + (y*width + x as ptrdiff_t);
-    };
-
-    // generic array fill
-    fill :: (arr: &~u, value: u, count: ~v) -> void {
-        c: v = 0;
-        while c < count {
-            *at(arr, c) = value;
-
-            // added '<op>=' syntax
-            c += 1;
+    fill :: (arr: &[height][width]u, value: ~u) -> void {
+        for w := 0; w < width; ++w {
+            for h := 0; h < height; ++h {
+                (*arr)[w][h] = value;
+            };
         };
-
         return;
     };
 
-    // generic array maker
-    make_arr :: (value: ~u, count: ~v) -> &u {
-        arr := mreserve(sizeof(u)*(count as size_t)) as &u;
-        mmarkrw(arr, sizeof(u)*(count as size_t));
+    board_: [height][width]u8;
+    buffer_: [height][width]u8;
 
-        fill(arr, value, count);
+    board := &board_;
+    buffer := &buffer_;
 
-        return arr;
-    };
-
-    arr_free :: (arr: &~u, count: ~v) -> void {
-        mfree(arr, sizeof(u)*(count as size_t));
-        return;
-    };
-
-    // infers array type as 'u8', and infers the size given the expression
-    board := make_arr(0u8, tile_count*2);
-    buffer := at(board, tile_count);
     
-    // the rest is pretty much the same as the previous version but using the new inferred function semantics
-
     printint(1);
     println();
     println();
@@ -73,7 +39,7 @@ do:gol {
             printint(0);
             println();
         } else {
-            *atxy(board, x, y, width) = 1;
+            (*board)[y][x] = 1;
             printint(1);
             println();
         };
@@ -84,96 +50,78 @@ do:gol {
     };
     println();
 
-    render_board :: (board: &u8, width: int, height: int) -> void {
-        w := 0;
-        h := 0;
-
-        while h < height {
-            while w < width {
-                tile := *atxy(board, w, h, width) as int;
+    render_board :: (board: &[height][width]u8) -> void {
+        for h := 0; h < height; ++h {
+            for w := 0; w < width; ++w {
+                tile := (*board)[h][w] as int;
                 printint(tile);
-
-                w = w + 1;
             };
-            w = 0;
-            h = h + 1;
             println();
         };
-
-        println();
 
         return;
     };
 
-    render_board(board, width, height);
+    render_board(board);
 
-    neighbors :: (board: &u8, x: int, y: int, w: int, h: int) -> int {
+    neighbors :: (board: &[height][width]u8, x: int, y: int) -> int {
         sum := 0;
-
-        xi := 0;
-        yi := 0;
 
         xs := x - 1;
         ys := y - 1;
 
-        while yi < 3 {
-            while xi < 3 {
+        for yi := 0; yi < 3; ++yi {
+            for xi := 0; xi < 3; ++xi {
                 xn := xs + xi;
                 yn := ys + yi;
 
-                xi += 1;
+                printint(xi);
+                println();
 
                 if xn == x and yn == y then continue;
-                if xn < 0 or yn < 0 or xn >= w or yn >= h then continue;
+                if xn < 0 or yn < 0 or xn >= width or yn >= height then continue;
 
-                sum = sum + (*atxy(board, xn, yn, w) as int);
+                sum += (*board)[yn][xn] as int;
             };
-            xi = 0;
-            yi += 1;
         };
+
+        printint(600);
+        println();
 
         return sum;
     };
 
-    while readint() != 0 {
-        fill(buffer, 0, tile_count);
+    for in := readint(); in != 0; {
+        fill(buffer, 0u8);
 
-        x := 0;
-        y := 0;
-        while y < height {
-            while x < width {
-                n := neighbors(board, x, y, width, height);
-                alive := *atxy(board, x, y, width);
+        for y := 0; y < height; ++y {
+            for x := 0; x < width; ++x {
+                n := neighbors(board, x, y);
+                alive := (*board)[y][x];
 
                 // death by underpopulation
                 if alive > 0 and n < 2 then
-                    *atxy(buffer, x, y, width) = 0
+                    (*buffer)[y][x] = 0
                 
                 // lives to next generation
                 else if alive > 0 and (n == 2 or n == 3) then
-                    *atxy(buffer, x, y, width) = 1
+                    (*buffer)[y][x] = 1
 
                 // death by overpopulation
                 else if alive > 0 and n > 3 then
-                    *atxy(buffer, x, y, width) = 0
+                    (*buffer)[y][x] = 0
 
                 // reproduction
                 else if alive < 1 and n == 3 then
-                    *atxy(buffer, x, y, width) = 1;
-                
-                x += 1;
+                    (*buffer)[y][x] = 1;
             };
-            x = 0;
-            y += 1;
         };
 
         tmp := board;
         board = buffer;
         buffer = tmp;
-        render_board(board, width, height);
+        render_board(board);
     };
-
-    arr_free(board, tile_count*2);
 
     0;
 }

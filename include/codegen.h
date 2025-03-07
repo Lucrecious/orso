@@ -607,14 +607,107 @@ static local_t *find_local(gen_t *gen, ast_node_t *ref_decl) {
     return NULL;
 }
 
+size_t get_inner_data_type(ast_t *ast, type_t type) {
+    typedata_t *td = ast_type2td(ast, type);
+
+    switch (td->kind) {
+    case TYPE_ARRAY: {
+        typedata_t *inner = ast_type2td(ast, td->as.arr.type);
+        return inner->size;
+    }
+
+    case TYPE_POINTER: {
+        typedata_t *inner = ast_type2td(ast, td->as.ptr.type);
+        return inner->size;
+    }
+
+    default: UNREACHABLE();
+    }
+}
+
+static void gen_item_access_array_addr(gen_t *gen, function_t *function, texloc_t loc, reg_t reg_dst, reg_t reg_lvalue, ast_node_t *accessor, type_t inner_lvalue_type) {
+        // push lvalue
+    emit_push_reg(gen, loc, function, reg_lvalue, REG_MOV_SIZE_WORD, 0);
+
+    gen_expression(gen, function, accessor);
+
+    type_t accessor_type = accessor->value_type;
+
+    // push offset
+    reg_mov_size_t accessor_mov_size = type2movsize(gen, accessor_type);
+
+    emit_push_reg(gen, loc, function, REG_RESULT, accessor_mov_size, 0);
+
+    {
+        size_t inner_data_size = get_inner_data_type(gen->ast, inner_lvalue_type);
+        // size of td size in result reg
+        gen_constant(gen, loc, function, &inner_data_size, gen->ast->type_set.u64_);
+
+        typedata_t *td = ast_type2td(gen->ast, gen->ast->type_set.u64_);
+        // pop offset and multiply by td size
+        emit_pop_to_reg(gen, loc, function, REG_TMP, accessor_type);
+        emit_bin_op(loc, function, TOKEN_STAR, td, REG_TMP, REG_RESULT, REG_RESULT);
+
+        // pop lvalue and add it with offset
+        emit_pop_to_reg(gen, loc, function, REG_TMP, gen->ast->type_set.u64_);
+        emit_bin_op(loc, function, TOKEN_PLUS, td, REG_TMP, REG_RESULT, reg_dst);
+    }
+}
+
+static void gen_lvalue(gen_t *gen, function_t *function, ast_node_t *lvalue) {
+    // special case if no lvalue
+    // generate the expression, put it on the stack, and take the address of the stack position
+    // is responsibility of caller to pop items off the stack if necessary afterwards
+    if (an_is_none(lvalue->lvalue_node)) {
+        UNREACHABLE(); // todo
+        return;
+    }
+
+    lvalue = lvalue->lvalue_node;
+
+    switch (lvalue->node_type) {
+    case AST_NODE_TYPE_EXPRESSION_DEF_VALUE: {
+        ast_node_t *ref_decl = lvalue->ref_decl;
+
+        local_t *local = find_local(gen, ref_decl);
+
+        gen_local_addr(lvalue->end.loc, function, local, REG_RESULT);
+        break;
+    }
+
+    case AST_NODE_TYPE_EXPRESSION_UNARY: {
+        ASSERT(lvalue->operator.type == TOKEN_STAR, "must");
+
+        // gen address
+        ast_node_t *addr_node = an_operand(lvalue);
+        gen_expression(gen, function, addr_node);
+        break;
+    }
+
+    case AST_NODE_TYPE_EXPRESSION_ITEM_ACCESS: {
+        ast_node_t *accessee = an_item_accessee(lvalue);
+
+        ast_node_t *inner_lvalue = accessee->lvalue_node;
+
+        gen_lvalue(gen, function, inner_lvalue);
+
+        texloc_t end = token_end_loc(&lvalue->end);
+
+        ast_node_t *accessor = an_item_accessor(lvalue);
+        gen_item_access_array_addr(gen, function, end, REG_RESULT, REG_RESULT, accessor, inner_lvalue->value_type);
+        break;
+    }
+
+    default: UNREACHABLE(); break;
+    }
+
+}
+
 static void gen_unary(gen_t *gen, function_t *function, ast_node_t *unary) {
     ast_node_t *expr = an_expression(unary);
 
     if (unary->operator.type == TOKEN_AMPERSAND) {
-        ast_node_t *ref_decl = an_operand(unary)->lvalue_node->ref_decl;
-        local_t *local = find_local(gen, ref_decl);
-
-        gen_local_addr(token_end_loc(&unary->end), function, local, REG_RESULT);
+        gen_lvalue(gen, function, an_operand(unary)->lvalue_node);
     } else {
         gen_expression(gen, function, expr);
 
@@ -932,102 +1025,6 @@ static void gen_branching(gen_t *gen, function_t *function, ast_node_t *branch) 
             break;
         }
     }
-}
-
-size_t get_inner_data_type(ast_t *ast, type_t type) {
-    typedata_t *td = ast_type2td(ast, type);
-
-    switch (td->kind) {
-    case TYPE_ARRAY: {
-        typedata_t *inner = ast_type2td(ast, td->as.arr.type);
-        return inner->size;
-    }
-
-    case TYPE_POINTER: {
-        typedata_t *inner = ast_type2td(ast, td->as.ptr.type);
-        return inner->size;
-    }
-
-    default: UNREACHABLE();
-    }
-}
-
-static void gen_item_access_array_addr(gen_t *gen, function_t *function, texloc_t loc, reg_t reg_dst, reg_t reg_lvalue, ast_node_t *accessor, type_t inner_lvalue_type) {
-        // push lvalue
-    emit_push_reg(gen, loc, function, reg_lvalue, REG_MOV_SIZE_WORD, 0);
-
-    gen_expression(gen, function, accessor);
-
-    type_t accessor_type = accessor->value_type;
-
-    // push offset
-    reg_mov_size_t accessor_mov_size = type2movsize(gen, accessor_type);
-
-    emit_push_reg(gen, loc, function, REG_RESULT, accessor_mov_size, 0);
-
-    {
-        size_t inner_data_size = get_inner_data_type(gen->ast, inner_lvalue_type);
-        // size of td size in result reg
-        gen_constant(gen, loc, function, &inner_data_size, gen->ast->type_set.u64_);
-
-        typedata_t *td = ast_type2td(gen->ast, gen->ast->type_set.u64_);
-        // pop offset and multiply by td size
-        emit_pop_to_reg(gen, loc, function, REG_TMP, accessor_type);
-        emit_bin_op(loc, function, TOKEN_STAR, td, REG_TMP, REG_RESULT, REG_RESULT);
-
-        // pop lvalue and add it with offset
-        emit_pop_to_reg(gen, loc, function, REG_TMP, gen->ast->type_set.u64_);
-        emit_bin_op(loc, function, TOKEN_PLUS, td, REG_TMP, REG_RESULT, reg_dst);
-    }
-}
-
-static void gen_lvalue(gen_t *gen, function_t *function, ast_node_t *lvalue) {
-    // special case if no lvalue
-    // generate the expression, put it on the stack, and take the address of the stack position
-    // is responsibility of caller to pop items off the stack if necessary afterwards
-    if (an_is_none(lvalue->lvalue_node)) {
-        UNREACHABLE(); // todo
-        return;
-    }
-
-    lvalue = lvalue->lvalue_node;
-
-    switch (lvalue->node_type) {
-    case AST_NODE_TYPE_EXPRESSION_DEF_VALUE: {
-        ast_node_t *ref_decl = lvalue->ref_decl;
-
-        local_t *local = find_local(gen, ref_decl);
-
-        gen_local_addr(lvalue->end.loc, function, local, REG_RESULT);
-        break;
-    }
-
-    case AST_NODE_TYPE_EXPRESSION_UNARY: {
-        ASSERT(lvalue->operator.type == TOKEN_STAR, "must");
-
-        // gen address
-        ast_node_t *addr_node = an_operand(lvalue);
-        gen_expression(gen, function, addr_node);
-        break;
-    }
-
-    case AST_NODE_TYPE_EXPRESSION_ITEM_ACCESS: {
-        ast_node_t *accessee = an_item_accessee(lvalue);
-
-        ast_node_t *inner_lvalue = accessee->lvalue_node;
-
-        gen_lvalue(gen, function, inner_lvalue);
-
-        texloc_t end = token_end_loc(&lvalue->end);
-
-        ast_node_t *accessor = an_item_accessor(lvalue);
-        gen_item_access_array_addr(gen, function, end, REG_RESULT, REG_RESULT, accessor, inner_lvalue->value_type);
-        break;
-    }
-
-    default: UNREACHABLE(); break;
-    }
-
 }
 
 static void gen_assignment(gen_t *gen, function_t *function, ast_node_t *assignment) {
