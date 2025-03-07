@@ -1167,6 +1167,8 @@ static ast_node_t *parse_branch(parser_t *parser) {
     ast_node_t *then_branch = NULL;
     ast_node_t *else_branch = NULL;
 
+    ast_node_t *decl_block = NULL;
+
     token_t label = nil_token;
 
 
@@ -1198,7 +1200,31 @@ static ast_node_t *parse_branch(parser_t *parser) {
             branch_type = BRANCH_TYPE_IFTHEN;
         }
 
-        condition = parse_expression(parser);
+        decl_block = ast_block_begin(parser->ast, start_token);
+
+        // declares before condition for blocks 
+        ast_node_t *last_decl;
+        while (true) {
+            last_decl = parse_decl(parser, false);
+
+            if (check(parser, TOKEN_BRACE_OPEN) || (check(parser, TOKEN_DO) || check(parser, TOKEN_THEN))) break;
+
+            unless (consume(parser, TOKEN_SEMICOLON)) {
+                parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_SEMICOLON, parser->previous, parser->current));
+                break;
+            }
+
+            ast_block_decl(decl_block, last_decl);
+        }
+
+        condition = last_decl;
+        if (last_decl->node_type != AST_NODE_TYPE_DECLARATION_STATEMENT) {
+            parser_error(parser, make_error_node(ERROR_PARSEREX_EXPECTED_EXPRESSION, last_decl));
+        } else {
+            condition = an_expression(last_decl);
+        }
+
+        // condition = parse_expression(parser);
         if (match(parser, TOKEN_BRACE_OPEN)) {
             then_branch = parse_block(parser);
         } else {
@@ -1232,10 +1258,25 @@ static ast_node_t *parse_branch(parser_t *parser) {
     switch (branch_type) {
         case BRANCH_TYPE_LOOPING: {
             ast_node_t *while_ = ast_while(parser->ast, condition, condition_negated, then_branch, else_branch, start_token);
+            ASSERT(decl_block, "must");
+
+            if (decl_block->children.count > 0) {
+                ast_block_decl(decl_block, ast_statement(parser->ast, while_));
+                ast_block_end(decl_block, while_->end);
+                while_ = decl_block;
+            }
+
             return while_;
         }
         case BRANCH_TYPE_IFTHEN: {
             ast_node_t *ifthen = ast_ifthen(parser->ast, condition, condition_negated, then_branch, else_branch, start_token);
+            ASSERT(decl_block, "must");
+
+            if (decl_block->children.count > 0) {
+                ast_block_decl(decl_block, ast_statement(parser->ast, ifthen));
+                ast_block_end(decl_block, ifthen->end);
+                ifthen = decl_block;
+            }
             return ifthen;
         }
 
