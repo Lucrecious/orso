@@ -68,7 +68,7 @@ type_t type_set_fetch_anonymous_struct(
 
 type_t type_set_fetch_pointer(type_table_t *set, type_t type);
 
-type_t type_set_fetch_array(type_table_t *set, size_t size, type_t value_type);
+type_t type_set_fetch_array(type_table_t *set, type_t value_type, bool sized_at_runtime, size_t size);
 
 type_t type_create_struct(type_table_t *set, cstr_t name, s32 name_length, typedata_t *anonymous_struct);
 

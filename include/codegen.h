@@ -651,7 +651,7 @@ size_t get_inner_data_type(ast_t *ast, type_t type) {
     }
 }
 
-static void gen_item_access_array_addr(gen_t *gen, function_t *function, texloc_t loc, reg_t reg_dst, reg_t reg_lvalue, ast_node_t *accessor, type_t inner_lvalue_type) {
+static void gen_item_access_array_addr(gen_t *gen, function_t *function, texloc_t loc, reg_t reg_dst, reg_t reg_lvalue, ast_node_t *accessor, type_t accessee_type) {
         // push lvalue
     emit_push_reg(gen, loc, function, reg_lvalue, REG_MOV_SIZE_WORD, 0);
 
@@ -665,7 +665,7 @@ static void gen_item_access_array_addr(gen_t *gen, function_t *function, texloc_
     emit_push_reg(gen, loc, function, REG_RESULT, accessor_mov_size, 0);
 
     {
-        size_t inner_data_size = get_inner_data_type(gen->ast, inner_lvalue_type);
+        size_t inner_data_size = get_inner_data_type(gen->ast, accessee_type);
         // size of td size in result reg
         gen_constant(gen, loc, function, &inner_data_size, gen->ast->type_set.u64_);
 
@@ -712,15 +712,30 @@ static void gen_lvalue(gen_t *gen, function_t *function, ast_node_t *lvalue) {
 
     case AST_NODE_TYPE_EXPRESSION_ITEM_ACCESS: {
         ast_node_t *accessee = an_item_accessee(lvalue);
+        typedata_t *accessee_td = ast_type2td(gen->ast, accessee->value_type);
+        type_t accessee_type;
+        switch (accessee_td->kind) {
+        case TYPE_POINTER: {
+            // gen address
+            gen_expression(gen, function, accessee);
+            accessee_type = accessee_td->as.ptr.type;
+            break;
+        }
 
-        ast_node_t *inner_lvalue = accessee->lvalue_node;
+        case TYPE_ARRAY: {
+            ast_node_t *inner_lvalue = accessee->lvalue_node;
+            gen_lvalue(gen, function, inner_lvalue);
+            accessee_type = inner_lvalue->value_type;
+            break;
+        }
 
-        gen_lvalue(gen, function, inner_lvalue);
+        default: UNREACHABLE(); break;
+        }
 
         texloc_t end = token_end_loc(&lvalue->end);
 
         ast_node_t *accessor = an_item_accessor(lvalue);
-        gen_item_access_array_addr(gen, function, end, REG_RESULT, REG_RESULT, accessor, inner_lvalue->value_type);
+        gen_item_access_array_addr(gen, function, end, REG_RESULT, REG_RESULT, accessor, accessee_type);
         break;
     }
 
@@ -1357,7 +1372,7 @@ static void gen_item_access(gen_t *gen, function_t *function, ast_node_t *item_a
     
 
     if (an_is_notnone(item_access->lvalue_node)) {
-        ASSERT(accessee_td->kind == TYPE_ARRAY, "only array type for now");
+        ASSERT(accessee_td->kind == TYPE_ARRAY || accessee_td->kind == TYPE_POINTER, "only array type for now");
 
         gen_lvalue(gen, function, item_access->lvalue_node);
 

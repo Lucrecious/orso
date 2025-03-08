@@ -1447,7 +1447,11 @@ static ast_node_t *parse_function_definition(parser_t *parser) {
 static ast_node_t *parse_array_type(parser_t *parser) {
     token_t start = parser->previous;
 
-    ast_node_t *size_expr = parse_expression(parser);
+    ast_node_t *size_expr = &nil_node;
+
+    if (!check(parser, TOKEN_BRACKET_CLOSE)) {
+        size_expr = parse_expression(parser);
+    }
 
     unless (consume(parser, TOKEN_BRACKET_CLOSE)) {
         parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_CLOSE_BRACKET_AFTER_SIZE_EXPRESSION, parser->previous, start));

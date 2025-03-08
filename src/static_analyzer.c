@@ -1070,41 +1070,8 @@ void resolve_expression(
         }
 
         case AST_NODE_TYPE_EXPRESSION_ARRAY_TYPE: {
-            ast_node_t *size_expr = an_array_size_expr(expr);
-            resolve_expression(analyzer, ast, state, typeid(TYPE_UNRESOLVED), size_expr);
-
             ast_node_t *type_expr = an_array_type_expr(expr);
             resolve_expression(analyzer, ast, state, typeid(TYPE_UNRESOLVED), type_expr);
-
-            if (TYPE_IS_INVALID(size_expr->value_type)) {
-                INVALIDATE(expr);
-                break;
-            }
-
-            typedata_t *td = ast_type2td(ast, size_expr->value_type);
-            if (td->kind != TYPE_NUMBER) {
-                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_ARRAY_SIZE_MUST_BE_A_SIGNED_OR_UNSIGNED_INTEGER, size_expr));
-                INVALIDATE(expr);
-                break;
-            }
-            
-            if (td->as.num == NUM_TYPE_FLOAT) {
-                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_ARRAY_SIZE_MUST_BE_A_SIGNED_OR_UNSIGNED_INTEGER, size_expr));
-                INVALIDATE(expr);
-                break;
-            }
-            
-            if (!size_expr->expr_val.is_concrete) {
-                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_ARRAY_SIZE_MUST_BE_A_COMPILE_TIME_CONSTANT, size_expr));
-                INVALIDATE(expr);
-                break;
-            }
-
-            if (td->as.num == NUM_TYPE_SIGNED && size_expr->expr_val.word.as.s < 0) {
-                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_ARRAY_SIZE_MUST_BE_POSITIVE, size_expr));
-                INVALIDATE(expr);
-                break;
-            }
 
             if (!TYPE_IS_TYPE(type_expr->value_type)) {
                 stan_error(analyzer, make_error_node(ERROR_ANALYSIS_ARRAY_TYPE_IS_NOT_A_TYPE, type_expr));
@@ -1118,13 +1085,54 @@ void resolve_expression(
                 break;
             }
 
-            type_t array_value_type = type_expr->expr_val.word.as.t;
-            size_t array_size = size_expr->expr_val.word.as.u;
+            ast_node_t *size_expr = an_array_size_expr(expr);
+            if (an_is_notnone(size_expr)) {
+                resolve_expression(analyzer, ast, state, typeid(TYPE_UNRESOLVED), size_expr);
 
-            type_t array_type = type_set_fetch_array(&ast->type_set, array_size, array_value_type);
+                if (TYPE_IS_INVALID(size_expr->value_type)) {
+                    INVALIDATE(expr);
+                    break;
+                }
 
-            expr->value_type = typeid(TYPE_TYPE);
-            expr->expr_val = ast_node_val_word(WORDT(array_type));
+                typedata_t *td = ast_type2td(ast, size_expr->value_type);
+                if (td->kind != TYPE_NUMBER) {
+                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_ARRAY_SIZE_MUST_BE_A_SIGNED_OR_UNSIGNED_INTEGER, size_expr));
+                    INVALIDATE(expr);
+                    break;
+                }
+                
+                if (td->as.num == NUM_TYPE_FLOAT) {
+                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_ARRAY_SIZE_MUST_BE_A_SIGNED_OR_UNSIGNED_INTEGER, size_expr));
+                    INVALIDATE(expr);
+                    break;
+                }
+                
+                if (!size_expr->expr_val.is_concrete) {
+                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_ARRAY_SIZE_MUST_BE_A_COMPILE_TIME_CONSTANT, size_expr));
+                    INVALIDATE(expr);
+                    break;
+                }
+
+                if (td->as.num == NUM_TYPE_SIGNED && size_expr->expr_val.word.as.s < 0) {
+                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_ARRAY_SIZE_MUST_BE_POSITIVE, size_expr));
+                    INVALIDATE(expr);
+                    break;
+                }
+
+                type_t array_value_type = type_expr->expr_val.word.as.t;
+                size_t array_size = size_expr->expr_val.word.as.u;
+
+                type_t array_type = type_set_fetch_array(&ast->type_set, array_value_type, false, array_size);
+
+                expr->value_type = typeid(TYPE_TYPE);
+                expr->expr_val = ast_node_val_word(WORDT(array_type));
+            } else {
+                type_t array_value_type = type_expr->expr_val.word.as.t;
+                type_t array_type = type_set_fetch_array(&ast->type_set, array_value_type, true, 0);
+
+                expr->value_type = typeid(TYPE_TYPE);
+                expr->expr_val = ast_node_val_word(WORDT(array_type));
+            }
             break;
         }
 
@@ -1150,12 +1158,36 @@ void resolve_expression(
             }
 
             typedata_t *accessee_td = ast_type2td(ast, accessee->value_type);
+            type_t item_type = typeid(TYPE_INVALID);
             // accessee
             {
-                if (accessee_td->kind != TYPE_ARRAY) {
+                if (accessee_td->kind != TYPE_ARRAY && accessee_td->kind != TYPE_POINTER) {
                     stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_ACCESSEE_TYPE, accessor));
                     INVALIDATE(expr);
                     break;
+                }
+
+                switch (accessee_td->kind) {
+                case TYPE_POINTER: {
+                    type_t ptr_inner = accessee_td->as.ptr.type;
+                    typedata_t *ptr_inner_td = ast_type2td(ast, ptr_inner);
+
+                    if (ptr_inner_td->kind != TYPE_ARRAY) {
+                        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_ACCESSEE_TYPE, accessor));
+                        INVALIDATE(expr);
+                        break;
+                    }
+
+                    item_type = ptr_inner_td->as.arr.type;
+                    break;
+                }
+
+                case TYPE_ARRAY: {
+                    item_type = accessee_td->as.arr.type;
+                    break;
+                }
+
+                default: UNREACHABLE(); break;
                 }
             }
 
@@ -1169,7 +1201,7 @@ void resolve_expression(
                 }
             }
 
-            expr->value_type = accessee_td->as.arr.type;
+            expr->value_type = item_type;
 
             if (accessee->expr_val.is_concrete && accessor->expr_val.is_concrete) {
                 // todo
@@ -2220,7 +2252,10 @@ static void forward_scan_inferred_types(ast_node_t *decl, ast_node_t *decl_type,
 
             {
                 type_patterns_t array_size_patterns = {.allocator=tmp->allocator};
-                forward_scan_inferred_types(decl, an_array_size_expr(decl_type), arena, &array_size_patterns);
+                if (an_is_notnone(an_array_size_expr(decl_type))) {
+                    forward_scan_inferred_types(decl, an_array_size_expr(decl_type), arena, &array_size_patterns);
+                }
+
                 for (size_t i = 0; i < array_size_patterns.count; ++i) {
                     type_path_t *current = array_size_patterns.items[i].expected;
                     type_path_t *path = new_type_path(MATCH_TYPE_ARRAY_SIZE, current, arena);
