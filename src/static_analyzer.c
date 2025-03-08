@@ -795,7 +795,7 @@ static matched_value_t stan_pattern_match_or_error(analyzer_t *analyzer, ast_nod
 
         return (matched_value_t){
             .type=analyzer->ast->type_set.size_t_,
-            .word=WORDU(td->as.arr.size),
+            .word=WORDU(td->as.arr.count),
         };
     }
 
@@ -1279,7 +1279,7 @@ void resolve_expression(
 
                     size_t arg_count = an_list_end(expr) - an_list_start(expr);
 
-                    if (init_type_td->as.arr.size < arg_count) {
+                    if (init_type_td->as.arr.count < arg_count) {
                         stan_error(analyzer, make_error_node(ERROR_ANALYSIS_TOO_MANY_ARGUMENTS_IN_LIST_INIT, expr->children.items[an_list_start(expr)]));
                         break;
                     }
@@ -2019,9 +2019,10 @@ void resolve_expression(
             }
             
             case TOKEN_SIZEOF: {
+                expr->value_type = ast->type_set.size_t_;
+
                 unless (count == 1) {
                     stan_error(analyzer, make_error_node(ERROR_ANALYSIS_SIZEOF_REQUIRES_ONE_ARG, expr));
-                    INVALIDATE(expr);
                     break;
                 }
 
@@ -2031,8 +2032,7 @@ void resolve_expression(
 
                 if (TYPE_IS_TYPE(expr_type) && !expr_arg->expr_val.is_concrete) {
                     stan_error(analyzer, make_error_node(ERROR_ANALYSIS_SIZEOF_BUILTIN_REQUIRES_A_CONSTANT_TYPE_OR_ANOTHER_EXPRESSION_TYPE, expr_arg));
-                    INVALIDATE(expr);
-                    return;
+                    break;
                 }
 
                 if (!TYPE_IS_TYPE(expr_type)) {
@@ -2044,15 +2044,34 @@ void resolve_expression(
                     expr_arg->value_type = typeid(TYPE_TYPE);
                     expr_arg->expr_val = ast_node_val_word(WORDT(expr_arg->expr_val.word.as.t));
                 }
+                break;
+            }
 
-                if (TYPE_IS_INVALID(expr_arg->value_type)) {
-                    INVALIDATE(expr);
+            case TOKEN_LEN: {
+                expr->value_type = ast->type_set.size_t_;
+
+                unless (count == 1) {
+                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_LEN_REQUIRES_ONE_ARRAY_ARG, expr));
                     break;
                 }
 
-                expr->value_type = ast->type_set.size_t_;
+                ast_node_t *arg = expr->children.items[arg_start];
+                resolve_expression(analyzer, ast, state, typeid(TYPE_UNRESOLVED), arg);
+
+                type_t arg_type = arg->value_type;
+                typedata_t *argtd = ast_type2td(ast, arg_type);
+
+                if (argtd->kind != TYPE_ARRAY) {
+                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_LEN_REQUIRES_ONE_ARRAY_ARG, expr));
+                    break;
+                }
+
+                if (!argtd->as.arr.sized_at_runtime) {
+                    expr->expr_val = ast_node_val_word(WORDU(argtd->as.arr.count));
+                }
                 break;
             }
+
             default: UNREACHABLE(); break;
             }
             break;

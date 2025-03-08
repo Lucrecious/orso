@@ -290,6 +290,7 @@ static token_type_t identifier_type(lexer_t *lexer) {
             break;
         }
         case 'i': return check_keyword(lexer, 1, 1, "f", TOKEN_IF);
+        case 'l': return check_keyword(lexer, 1, 2, "en", TOKEN_LEN);
         case 'n': return check_keyword(lexer, 1, 2, "ot", TOKEN_NOT);
         case 'o': return check_keyword(lexer, 1, 1, "r", TOKEN_OR);
         case 'r': return check_keyword(lexer, 1, 5, "eturn", TOKEN_RETURN);

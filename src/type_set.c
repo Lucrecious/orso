@@ -91,7 +91,7 @@ typedata_t *array_type_new(type_table_t *set, size_t size, type_t type) {
     typedata_t *array_type = ALLOC(typedata_t);
     array_type->kind = TYPE_ARRAY;
     array_type->as.arr.type = type;
-    array_type->as.arr.size = size;
+    array_type->as.arr.count = size;
     array_type->as.arr.item_size = b2ais(type_size);
     array_type->size = b2ais(type_size)*size;
     array_type->capabilities = TYPE_CAP_NONE;
@@ -126,7 +126,7 @@ typedata_t *type_copy_new(type_table_t *set, typedata_t *type) {
     }
 
     if (type->kind == TYPE_ARRAY) {
-        return array_type_new(set, type->as.arr.size, type->as.arr.type);
+        return array_type_new(set, type->as.arr.count, type->as.arr.type);
     }
 
     UNREACHABLE();
@@ -307,7 +307,7 @@ static u64 hash_type(typedata_t *type) {
         ADD_HASH(hash, (u64)(type->as.ptr.type.i));
     } else if (type->kind == TYPE_ARRAY) {
         ADD_HASH(hash, (u64)(type->as.arr.type.i));
-        ADD_HASH(hash, (u64)(type->as.arr.size));
+        ADD_HASH(hash, (u64)(type->as.arr.count));
         ADD_HASH(hash, (u64)(type->as.arr.item_size));
     }
 
@@ -341,7 +341,7 @@ type_t type_set_fetch_array(type_table_t *set, size_t size, type_t value_type) {
     size_t value_type_size = set->types.items[value_type.i]->size;
     typedata_t array_type = {
         .kind = TYPE_ARRAY,
-        .as.arr.size = size,
+        .as.arr.count = size,
         .as.arr.item_size = b2ais(value_type_size),
         .as.arr.type = value_type,
         .size = b2ais(value_type_size)*size,
