@@ -304,9 +304,16 @@ static void cgen_cache_requires_tmp(typedatas_t *types, ast_node_t *expression) 
 
     for (size_t i = 0; i < expression->children.count; ++i) {
         ast_node_t *child = expression->children.items[i];
-        cgen_cache_requires_tmp(types, child);
-        if (expression->node_type != AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION && child->requires_tmp_for_cgen) {
-            expression->requires_tmp_for_cgen = true;
+        if (TYPE_IS_INFERRED_FUNCTION(child->value_type) && child->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION) {
+            for (size_t i = 0; i < child->realized_funcdef_copies.count; ++i) {
+                inferred_funcdef_copy_t funcdef_copy = child->realized_funcdef_copies.items[i];
+                cgen_cache_requires_tmp(types, funcdef_copy.funcdef);
+            }
+        } else {
+            cgen_cache_requires_tmp(types, child);
+            if (expression->node_type != AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION && child->requires_tmp_for_cgen) {
+                expression->requires_tmp_for_cgen = true;
+            }
         }
     }
 }
@@ -440,6 +447,9 @@ static void cgen_statement(cgen_t *cgen, ast_node_t *expression, cgen_var_t var,
 static void cgen_declaration(cgen_t *cgen, ast_node_t *declaration) {
     switch (declaration->node_type) {
         case AST_NODE_TYPE_DECLARATION_DEFINITION: {
+            // skip over the constants since they are inlined
+            if (!declaration->is_mutable) break;
+
             cgen_var_t var = cgen_user_var(cgen, declaration->identifier.view, declaration->value_type);
             cgen_statement(cgen, an_decl_expr(declaration), var, true);
             break;
@@ -1242,6 +1252,14 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
 }
 
 static void cgen_generate_function_names(cgen_t *cgen, ast_node_t *node) {
+    if (node->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION && TYPE_IS_INFERRED_FUNCTION(node->value_type)) {
+        for (size_t i = 0; i < node->realized_funcdef_copies.count; ++i) {
+            inferred_funcdef_copy_t copy = node->realized_funcdef_copies.items[i];
+            cgen_generate_function_names(cgen, copy.funcdef);
+        }
+        return;
+    }
+
     typedata_t *td = type2typedata(&cgen->ast->type_set.types, node->value_type);
     if (node->expr_val.is_concrete && td->kind == TYPE_FUNCTION) {
         function_t *function = node->expr_val.word.as.p;
@@ -1292,6 +1310,14 @@ void cgen_forward_declare_functions(cgen_t *cgen) {
 
 static void cgen_function_definitions(cgen_t *cgen, ast_node_t *node) {
     if (node->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION) {
+        if (TYPE_IS_INFERRED_FUNCTION(node->value_type)) {
+            for (size_t i = 0; i < node->realized_funcdef_copies.count; ++i) {
+                inferred_funcdef_copy_t copy = node->realized_funcdef_copies.items[i];
+                cgen_function_definitions(cgen, copy.funcdef);
+            }
+            return;
+        }
+
         // <ret_type> <func_name>(<arg1_type> <arg1_name>, <arg2_type> <arg2_name>, ..., <argn_type> <argn_name>) {
         typedata_t *td = type2typedata(&cgen->ast->type_set.types, node->value_type);
 
@@ -1399,6 +1425,7 @@ static void cgen_generate_cnames_for_types(ast_t *ast) {
 
         case TYPE_STRING: break;
 
+        case TYPE_INFERRED_FUNCTION:
         case TYPE_UNREACHABLE:
         case TYPE_UNRESOLVED:
         case TYPE_INVALID: break;

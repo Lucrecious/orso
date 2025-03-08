@@ -826,19 +826,25 @@ static matched_value_t stan_pattern_match_or_error(analyzer_t *analyzer, ast_nod
     }
 }
 
+static bool matched_values_eq(matched_values_t a, matched_values_t b) {
+    if (a.count != b.count) return false;
+
+    for (size_t i = 0; i < a.count; ++i) {
+        matched_value_t mva = a.items[i];
+        matched_value_t mvb = b.items[i];
+        if (typeid_nq(mva.type, mvb.type)) return false;
+        if (mva.word.as.u != mvb.word.as.u) return false;
+    }
+
+    return true;
+}
+
 static ast_node_t *find_realized_funcdef_or_null_by_inferred_types(inferred_funcdef_copies_t copies, matched_values_t key) {
     for (size_t i = 0; i < copies.count; ++i) {
         inferred_funcdef_copy_t copy = copies.items[i];
         ASSERT(copy.key.count == key.count, "the keys should be the same size at this point");
 
-        bool found = true;
-        for (size_t ti = 0; ti < copy.key.count; ++ti) {
-            matched_value_t mv = copy.key.items[ti];
-            if (typeid_nq(mv.type, key.items[i].type) || (mv.word.as.u != key.items[i].word.as.u)) {
-                found = false;
-                break;
-            }
-        }
+        bool found = matched_values_eq(key, copy.key);
 
         if (found) return copy.funcdef;
     }
@@ -1955,8 +1961,8 @@ void resolve_expression(
                     break;
                 }
 
-                callee = realized_funcdef;
-                callee_type = realized_funcdef->value_type;
+                callee = ast_implicit_expr(ast, realized_funcdef->value_type, realized_funcdef->expr_val.word, callee->start);
+                callee_type = callee->value_type;
                 callee_td = ast_type2td(ast, callee_type);
                 an_callee(expr) = callee;
             }
