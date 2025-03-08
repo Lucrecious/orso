@@ -192,9 +192,31 @@ struct ast_node_val_t {
 
 #define an_is_constant(n) (!(n)->is_mutable)
 
+typedef enum match_type_t match_type_t;
+enum match_type_t {
+    MATCH_TYPE_IDENTIFIER,
+    MATCH_TYPE_POINTER,
+    MATCH_TYPE_ARRAY_TYPE,
+    MATCH_TYPE_ARRAY_SIZE,
+};
+
+typedef struct matched_value_t matched_value_t;
+struct matched_value_t {
+    type_t type;
+    word_t word;
+};
+
+typedef struct matched_values_t matched_values_t;
+struct matched_values_t {
+    matched_value_t *items;
+    size_t count;
+    size_t capacity;
+    arena_t *allocator;
+};
+
 typedef struct type_path_t type_path_t;
 struct type_path_t {
-    type_kind_t kind;
+    match_type_t kind;
     type_path_t *next;
 };
 
@@ -206,7 +228,7 @@ struct type_pattern_t {
 
 typedef struct inferred_funcdef_copy_t inferred_funcdef_copy_t;
 struct inferred_funcdef_copy_t {
-    types_t key;
+    matched_values_t key;
     ast_node_t *funcdef;
 };
 

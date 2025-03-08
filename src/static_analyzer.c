@@ -761,50 +761,64 @@ static bool stan_run(analyzer_t *analyzer, env_t *env, ast_node_t *expr, word_t 
     return true;
 }
 
-static type_t stan_pattern_match_or_error(analyzer_t *analyzer, ast_node_t *decl, type_path_t *expected, type_t actual) {
+static matched_value_t stan_pattern_match_or_error(analyzer_t *analyzer, ast_node_t *decl, type_path_t *expected, type_t actual) {
     typedata_t *td = ast_type2td(analyzer->ast, actual);
     switch (expected->kind) {
-    case TYPE_FUNCTION: {
-        UNREACHABLE(); // todo
-        break;
-    }
-
-    case TYPE_POINTER: {
+    case MATCH_TYPE_POINTER: {
         if (td->kind != TYPE_POINTER) {
             stan_error(analyzer, make_error_node(ERROR_ANALYSIS_COULD_NOT_PATTERN_MATCH_TYPE, decl));
-            return typeid(TYPE_INVALID);
+            return (matched_value_t){.type=typeid(TYPE_INVALID)};
         }
 
         return stan_pattern_match_or_error(analyzer, decl, expected->next, td->as.ptr.type);
     }
 
-    case TYPE_ARRAY: {
+    case MATCH_TYPE_ARRAY_TYPE: {
         if (td->kind != TYPE_ARRAY) {
             stan_error(analyzer, make_error_node(ERROR_ANALYSIS_COULD_NOT_PATTERN_MATCH_TYPE, decl));
-            return typeid(TYPE_INVALID);
+            return (matched_value_t){.type=typeid(TYPE_INVALID)};
         }
 
         return stan_pattern_match_or_error(analyzer, decl, expected->next, td->as.arr.type);
-        break;
     }
 
-    case TYPE_COUNT: {
-        return actual;
+    case MATCH_TYPE_ARRAY_SIZE: {
+        if (td->kind != TYPE_ARRAY) {
+            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_COULD_NOT_PATTERN_MATCH_TYPE, decl));
+            return (matched_value_t){.type=typeid(TYPE_INVALID)};
+        }
+
+        if (expected->next->kind != MATCH_TYPE_IDENTIFIER) {
+            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_COULD_NOT_PATTERN_MATCH_TYPE, decl));
+            return (matched_value_t){.type=typeid(TYPE_INVALID)};
+        }
+
+        return (matched_value_t){
+            .type=analyzer->ast->type_set.size_t_,
+            .word=WORDU(td->as.arr.size),
+        };
+    }
+
+    case MATCH_TYPE_IDENTIFIER: {
+        return (matched_value_t){
+            .type=typeid(TYPE_TYPE),
+            .word=WORDT(actual),
+        };
     }
 
     default: UNREACHABLE();
     }
 }
 
-static ast_node_t *find_realized_funcdef_or_null_by_inferred_types(inferred_funcdef_copies_t copies, types_t key) {
+static ast_node_t *find_realized_funcdef_or_null_by_inferred_types(inferred_funcdef_copies_t copies, matched_values_t key) {
     for (size_t i = 0; i < copies.count; ++i) {
         inferred_funcdef_copy_t copy = copies.items[i];
         ASSERT(copy.key.count == key.count, "the keys should be the same size at this point");
 
         bool found = true;
         for (size_t ti = 0; ti < copy.key.count; ++ti) {
-            type_t t = copy.key.items[ti];
-            if (typeid_nq(t, key.items[i])) {
+            matched_value_t mv = copy.key.items[ti];
+            if (typeid_nq(mv.type, key.items[i].type) || (mv.word.as.u != key.items[i].word.as.u)) {
                 found = false;
                 break;
             }
@@ -816,6 +830,13 @@ static ast_node_t *find_realized_funcdef_or_null_by_inferred_types(inferred_func
     return NULL;
 }
 
+void resolve_expression(
+        analyzer_t *analyzer,
+        ast_t *ast,
+        analysis_state_t state,
+        type_t implicit_type,
+        ast_node_t *expr);
+
 static ast_node_t *stan_realize_inferred_funcdef_or_error_and_null(analyzer_t *analyzer, analysis_state_t state, ast_node_t *call, ast_node_t *inferred_funcdef) {
     scope_t scope = {0};
     scope_init(&scope, &analyzer->allocator, SCOPE_TYPE_INFERRED_PARAMS, state.scope, call);
@@ -824,7 +845,7 @@ static ast_node_t *stan_realize_inferred_funcdef_or_error_and_null(analyzer_t *a
     new_state.scope = &scope;
 
     tmp_arena_t *tmp = allocator_borrow();
-    types_t types = {.allocator=tmp->allocator};
+    matched_values_t matched_values = {.allocator=tmp->allocator};
 
     bool had_error = false;
 
@@ -838,16 +859,18 @@ static ast_node_t *stan_realize_inferred_funcdef_or_error_and_null(analyzer_t *a
         for (size_t t = 0; t < decl->type_decl_patterns.count; ++t)  {
             type_pattern_t pattern = decl->type_decl_patterns.items[t];
 
-            type_t matched_type = stan_pattern_match_or_error(analyzer, decl, pattern.expected, call_arg->value_type);
-            array_push(&types, matched_type);
+            resolve_expression(analyzer, analyzer->ast, state, typeid(TYPE_UNRESOLVED), call_arg);
+            
+            matched_value_t matched_value = stan_pattern_match_or_error(analyzer, decl, pattern.expected, call_arg->value_type);
+            array_push(&matched_values, matched_value);
 
-            if (TYPE_IS_INVALID(matched_type)) {
+            if (TYPE_IS_INVALID(matched_value.type)) {
                 had_error = true;
                 continue;
             }
 
-            ast_node_t *implicit_type_decl = ast_implicit_expr(analyzer->ast, typeid(TYPE_TYPE), WORDT(typeid(TYPE_TYPE)), token_implicit_at_end(pattern.identifier));
-            ast_node_t *implicit_init_expr = ast_implicit_expr(analyzer->ast, typeid(TYPE_TYPE), WORDT(matched_type), token_implicit_at_end(pattern.identifier));
+            ast_node_t *implicit_type_decl = ast_implicit_expr(analyzer->ast, typeid(TYPE_TYPE), WORDT(matched_value.type), token_implicit_at_end(pattern.identifier));
+            ast_node_t *implicit_init_expr = ast_implicit_expr(analyzer->ast, matched_value.type, matched_value.word, token_implicit_at_end(pattern.identifier));
             ast_node_t *implicit_constant_decl = ast_decldef(analyzer->ast, pattern.identifier, implicit_type_decl, implicit_init_expr);
             implicit_constant_decl->is_mutable = false;
 
@@ -857,7 +880,7 @@ static ast_node_t *stan_realize_inferred_funcdef_or_error_and_null(analyzer_t *a
 
     ast_node_t *result = NULL;
     unless (had_error) {
-        result = find_realized_funcdef_or_null_by_inferred_types(inferred_funcdef->realized_funcdef_copies, types);
+        result = find_realized_funcdef_or_null_by_inferred_types(inferred_funcdef->realized_funcdef_copies, matched_values);
         unless(result) {
             result = ast_node_copy(analyzer->ast, inferred_funcdef);
             for (size_t i = an_func_def_arg_start(result); i < an_func_def_arg_end(result); ++i) {
@@ -867,11 +890,11 @@ static ast_node_t *stan_realize_inferred_funcdef_or_error_and_null(analyzer_t *a
 
             resolve_funcdef(analyzer, analyzer->ast, new_state, result);
 
-            types_t types_ = {.allocator=&analyzer->ast->allocator};
-            for (size_t i = 0; i < types.count; ++i) array_push(&types_, types.items[i]);
+            matched_values_t matched_values_ = {.allocator=&analyzer->ast->allocator};
+            for (size_t i = 0; i < matched_values.count; ++i) array_push(&matched_values_, matched_values.items[i]);
 
             inferred_funcdef_copy_t copy = {
-                .key = types_,
+                .key = matched_values_,
                 .funcdef = result,
             };
 
@@ -1863,27 +1886,6 @@ void resolve_expression(
             type_t callee_type = callee->value_type;
             typedata_t *callee_td = ast_type2td(ast, callee_type);
 
-            bool argument_invalid = false;
-            for (size_t i = an_call_arg_start(expr); i < an_call_arg_end(expr); ++i) {
-                ast_node_t *argument = expr->children.items[i];
-
-                type_t arg_implicit_type = typeid(TYPE_UNRESOLVED);
-                if (callee_td->kind == TYPE_FUNCTION || callee_td->kind == TYPE_FUNCTION) {
-                    size_t argi = i - an_call_arg_start(expr);
-                    arg_implicit_type = callee_td->as.function.argument_types.items[argi];
-                }
-
-                resolve_expression(analyzer, ast, state, arg_implicit_type, argument);
-                if (TYPE_IS_INVALID(argument->value_type)) {
-                    argument_invalid = true;
-                }
-            }
-
-            if (argument_invalid || TYPE_IS_INVALID(callee->value_type)) {
-                INVALIDATE(expr);
-                break;
-            }
-
             if (callee_td->kind == TYPE_INFERRED_FUNCTION) {
                 unless (callee->expr_val.is_concrete) {
                     stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INFERRED_CALLEE_MUST_BE_CONSTANT, callee));
@@ -1913,6 +1915,24 @@ void resolve_expression(
 
             if ((!type_is_function(ast->type_set.types, callee_type) && !type_is_intrinsic_function(ast->type_set.types, callee_type))) {
                 stan_error(analyzer, make_error_node(ERROR_ANALYSIS_EXPECTED_CALLABLE, an_callee(expr)));
+                break;
+            }
+
+            bool argument_invalid = false;
+            for (size_t i = an_call_arg_start(expr); i < an_call_arg_end(expr); ++i) {
+                ast_node_t *argument = expr->children.items[i];
+
+                size_t argi = i - an_call_arg_start(expr);
+                type_t arg_implicit_type = callee_td->as.function.argument_types.items[argi];
+
+                resolve_expression(analyzer, ast, state, arg_implicit_type, argument);
+                if (TYPE_IS_INVALID(argument->value_type)) {
+                    argument_invalid = true;
+                }
+            }
+
+            if (argument_invalid || TYPE_IS_INVALID(callee->value_type)) {
+                INVALIDATE(expr);
                 break;
             }
 
@@ -2102,6 +2122,14 @@ static void declare_definition(analyzer_t *analyzer, scope_t *scope, ast_node_t 
     allocator_return(tmp);
 }
 
+static type_path_t *new_type_path(match_type_t kind, type_path_t *next, arena_t *arena) {
+    type_path_t *path = arena_alloc(arena, sizeof(type_path_t));
+    *path = zer0(type_path_t);
+    path->kind = kind;
+    path->next = next;
+    return path;
+}
+
 static void forward_scan_inferred_types(ast_node_t *decl, ast_node_t *decl_type, arena_t *arena, type_patterns_t *patterns) {
     switch (decl_type->node_type) {
         case AST_NODE_TYPE_NONE:
@@ -2128,13 +2156,10 @@ static void forward_scan_inferred_types(ast_node_t *decl, ast_node_t *decl_type,
         case AST_NODE_TYPE_EXPRESSION_JMP: break;
 
         case AST_NODE_TYPE_EXPR_INFERRED_TYPE_DECL: {
-            type_path_t *path = arena_alloc(arena, sizeof(type_path_t));
-            *path = zer0(type_path_t);
-            path->kind = TYPE_COUNT;
-            path->next = NULL;
 
             decl_type->node_type = AST_NODE_TYPE_EXPRESSION_DEF_VALUE;
             decl_type->value_type = typeid(TYPE_UNRESOLVED);
+            type_path_t *path = new_type_path(MATCH_TYPE_IDENTIFIER, NULL, arena);
 
             type_pattern_t pattern = {
                 .identifier = decl_type->identifier,
@@ -2153,26 +2178,40 @@ static void forward_scan_inferred_types(ast_node_t *decl, ast_node_t *decl_type,
 
             for (size_t i = 0; i < patterns->count; ++i) {
                 type_path_t *current = patterns->items[i].expected;
-                type_path_t *path = arena_alloc(arena, sizeof(type_path_t));
-                *path = zer0(type_path_t);
-                path->kind = TYPE_POINTER;
-                path->next = current;
+                type_path_t *path = new_type_path(MATCH_TYPE_POINTER, current, arena);
                 patterns->items[i].expected = path;
             }
             break;
         }
 
         case AST_NODE_TYPE_EXPRESSION_ARRAY_TYPE: {
-            forward_scan_inferred_types(decl, an_array_type_expr(decl_type), arena, patterns);
+            tmp_arena_t *tmp = allocator_borrow();
 
-            for (size_t i = 0; i < patterns->count; ++i) {
-                type_path_t *current = patterns->items[i].expected;
-                type_path_t *path = arena_alloc(arena, sizeof(type_path_t));
-                *path = zer0(type_path_t);
-                path->kind = TYPE_ARRAY;
-                path->next = current;
-                patterns->items[i].expected = path;
+            {
+                type_patterns_t array_type_patterns = {.allocator=tmp->allocator};
+                forward_scan_inferred_types(decl, an_array_type_expr(decl_type), arena, &array_type_patterns);
+                for (size_t i = 0; i < array_type_patterns.count; ++i) {
+                    type_path_t *current = array_type_patterns.items[i].expected;
+                    type_path_t *path = new_type_path(MATCH_TYPE_ARRAY_TYPE, current, arena);
+                    array_type_patterns.items[i].expected = path;
+
+                    array_push(patterns, array_type_patterns.items[i]);
+                }
             }
+
+            {
+                type_patterns_t array_size_patterns = {.allocator=tmp->allocator};
+                forward_scan_inferred_types(decl, an_array_size_expr(decl_type), arena, &array_size_patterns);
+                for (size_t i = 0; i < array_size_patterns.count; ++i) {
+                    type_path_t *current = array_size_patterns.items[i].expected;
+                    type_path_t *path = new_type_path(MATCH_TYPE_ARRAY_SIZE, current, arena);
+                    array_size_patterns.items[i].expected = path;
+
+                    array_push(patterns, array_size_patterns.items[i]);
+                }
+            }
+
+            allocator_return(tmp);
             break;
         }
 

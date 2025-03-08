@@ -1,0 +1,10 @@
+{
+    x := 4;
+    if w := 2; y := 3 + x*w; t := 0; {
+        printint(w);
+        println();
+    } else {
+        printint(y);
+        println();
+    };
+}
