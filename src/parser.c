@@ -1449,7 +1449,7 @@ static ast_node_t *parse_array_type(parser_t *parser) {
 
     ast_node_t *size_expr = &nil_node;
 
-    if (!check(parser, TOKEN_BRACKET_CLOSE)) {
+    if (true || !check(parser, TOKEN_BRACKET_CLOSE)) {
         size_expr = parse_expression(parser);
     }
 

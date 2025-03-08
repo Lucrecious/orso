@@ -1,8 +1,2 @@
 {
-    print_all :: (arr: &[]!u) -> void {
-        for i := 0; i < len(src); ++i {
-            printint(src[i]);
-            println();
-        };
-    };
 }
