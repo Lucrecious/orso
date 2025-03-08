@@ -86,7 +86,7 @@ static size_t b2ais(size_t s) {
     return b2w(s)*WORD_SIZE;
 }
 
-typedata_t *array_type_new(type_table_t *set, size_t size, type_t type, bool sized_at_runtime) {
+typedata_t *array_type_new(type_table_t *set, size_t size, type_t type) {
     size_t type_size = set->types.items[type.i]->size;
     typedata_t *array_type = ALLOC(typedata_t);
     array_type->kind = TYPE_ARRAY;
@@ -95,7 +95,6 @@ typedata_t *array_type_new(type_table_t *set, size_t size, type_t type, bool siz
     array_type->as.arr.item_size = b2ais(type_size);
     array_type->size = b2ais(type_size)*size;
     array_type->capabilities = TYPE_CAP_NONE;
-    array_type->as.arr.sized_at_runtime = sized_at_runtime;
 
     return array_type;
 }
@@ -127,7 +126,7 @@ typedata_t *type_copy_new(type_table_t *set, typedata_t *type) {
     }
 
     if (type->kind == TYPE_ARRAY) {
-        return array_type_new(set, type->as.arr.count, type->as.arr.type, type->as.arr.sized_at_runtime);
+        return array_type_new(set, type->as.arr.count, type->as.arr.type);
     }
 
     UNREACHABLE();
@@ -308,11 +307,7 @@ static u64 hash_type(typedata_t *type) {
         ADD_HASH(hash, (u64)(type->as.ptr.type.i));
     } else if (type->kind == TYPE_ARRAY) {
         ADD_HASH(hash, (u64)(type->as.arr.type.i));
-
-        if (!type->as.arr.sized_at_runtime) {
-            ADD_HASH(hash, (u64)(type->as.arr.count));
-        }
-
+        ADD_HASH(hash, (u64)(type->as.arr.count));
         ADD_HASH(hash, (u64)(type->as.arr.item_size));
     }
 
@@ -342,14 +337,13 @@ type_t type_set_fetch_pointer(type_table_t* set, type_t inner_type) {
     return type;
 }
 
-type_t type_set_fetch_array(type_table_t *set, type_t value_type, bool sized_at_runtime, size_t size) {
+type_t type_set_fetch_array(type_table_t *set, type_t value_type, size_t size) {
     size_t value_type_size = set->types.items[value_type.i]->size;
     typedata_t array_type = {
         .kind = TYPE_ARRAY,
         .as.arr.count = size,
         .as.arr.item_size = b2ais(value_type_size),
         .as.arr.type = value_type,
-        .as.arr.sized_at_runtime = sized_at_runtime,
         .size = b2ais(value_type_size)*size,
         .capabilities = TYPE_CAP_NONE,
     };

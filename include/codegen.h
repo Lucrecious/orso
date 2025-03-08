@@ -90,15 +90,6 @@ static void emit_reg_to_reg(function_t *function, texloc_t loc, reg_t reg_dst, r
     emit_instruction(function, loc, in);
 }
 
-static void emit_load_reg_addr(function_t *function, texloc_t loc, reg_t reg_dst, reg_t reg_to_get_addr_of) {
-    instruction_t in = {0};
-    in.op = OP_LOAD_REG_ADDR;
-    in.as.load_addr.memaddr = reg_to_get_addr_of;
-    in.as.load_addr.reg_dest = reg_dst;
-
-    emit_instruction(function, loc, in);
-}
-
 static void emit_addr_to_reg(gen_t *gen, function_t *function, texloc_t loc, reg_mov_size_t mov_size, reg_t reg_dest, reg_t reg_src, size_t offset) {
     if (offset > UINT32_MAX) {
         gen_error(gen, make_error_no_args(ERROR_CODEGEN_OFFSET_TOO_LARGE));
@@ -1241,6 +1232,11 @@ static void gen_bcall(gen_t *gen, function_t *function, ast_node_t *call) {
         typedata_t *td = type2typedata(&gen->ast->type_set.types, call->children.items[arg1_index]->expr_val.word.as.t);
         ast_node_val_t val = ast_node_val_word(WORDU(td->size));
         gen_expr_val(gen, function, call, val);
+        break;
+    }
+
+    case TOKEN_LEN: {
+        UNREACHABLE(); // todo for slices
         break;
     }
 

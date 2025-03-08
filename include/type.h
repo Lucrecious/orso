@@ -116,7 +116,6 @@ struct typedata_t {
             size_t count;
             size_t item_size; // word-aligned
             type_t type;
-            bool sized_at_runtime;
         } arr;
     } as;
 };

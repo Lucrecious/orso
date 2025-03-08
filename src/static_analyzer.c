@@ -522,12 +522,8 @@ static bool stan_can_cast(typedatas_t *types, type_t dst, type_t src) {
 
         if (src_inner_td->kind == dst_inner_td->kind && src_inner_td->kind == TYPE_ARRAY) {
             if (typeid_eq(src_inner_td->as.arr.type, dst_inner_td->as.arr.type)) {
-                if (!dst_inner_td->as.arr.sized_at_runtime && !src_inner_td->as.arr.sized_at_runtime) {
-                    if (dst_inner_td->as.arr.count > src_inner_td->as.arr.count) return false;
-                    return true;
-                } else {
-                    return true;
-                }
+                if (dst_inner_td->as.arr.count > src_inner_td->as.arr.count) return false;
+                return true;
             } 
         }
 
@@ -1142,13 +1138,13 @@ void resolve_expression(
                 type_t array_value_type = type_expr->expr_val.word.as.t;
                 size_t array_size = size_expr->expr_val.word.as.u;
 
-                type_t array_type = type_set_fetch_array(&ast->type_set, array_value_type, false, array_size);
+                type_t array_type = type_set_fetch_array(&ast->type_set, array_value_type, array_size);
 
                 expr->value_type = typeid(TYPE_TYPE);
                 expr->expr_val = ast_node_val_word(WORDT(array_type));
             } else {
                 type_t array_value_type = type_expr->expr_val.word.as.t;
-                type_t array_type = type_set_fetch_array(&ast->type_set, array_value_type, true, 0);
+                type_t array_type = type_set_fetch_array(&ast->type_set, array_value_type, 0);
 
                 expr->value_type = typeid(TYPE_TYPE);
                 expr->expr_val = ast_node_val_word(WORDT(array_type));
@@ -2118,9 +2114,8 @@ void resolve_expression(
                     break;
                 }
 
-                if (!argtd->as.arr.sized_at_runtime) {
-                    expr->expr_val = ast_node_val_word(WORDU(argtd->as.arr.count));
-                }
+                typedata_t *array_td = argtd;
+                expr->expr_val = ast_node_val_word(WORDU(array_td->as.arr.count));
                 break;
             }
 
