@@ -513,7 +513,27 @@ static bool stan_can_cast(typedatas_t *types, type_t dst, type_t src) {
     typedata_t *dsttd = type2typedata(types, dst);
 
     if (srctd->kind == TYPE_NUMBER && dsttd->kind == TYPE_NUMBER) return true;
-    if (srctd->kind == TYPE_POINTER && dsttd->kind == TYPE_POINTER) return true;
+    if (srctd->kind == TYPE_POINTER && dsttd->kind == TYPE_POINTER) {
+        if (TYPE_IS_VOID(dsttd->as.ptr.type)) return true;
+        if (TYPE_IS_VOID(srctd->as.ptr.type)) return true;
+
+        typedata_t *src_inner_td = type2typedata(types, srctd->as.ptr.type);
+        typedata_t *dst_inner_td = type2typedata(types, dsttd->as.ptr.type);
+
+        if (src_inner_td->kind == dst_inner_td->kind && src_inner_td->kind == TYPE_ARRAY) {
+            if (typeid_eq(src_inner_td->as.arr.type, dst_inner_td->as.arr.type)) {
+                if (!dst_inner_td->as.arr.sized_at_runtime && !src_inner_td->as.arr.sized_at_runtime) {
+                    if (dst_inner_td->as.arr.count > src_inner_td->as.arr.count) return false;
+                    return true;
+                } else {
+                    return true;
+                }
+            } 
+        }
+
+        return false;
+    }
+
     if (srctd->kind == TYPE_FUNCTION && dsttd->kind == TYPE_POINTER && TYPE_IS_VOID(dsttd->as.ptr.type)) return true;
     if (srctd->kind == TYPE_POINTER && TYPE_IS_VOID(srctd->as.ptr.type) && dsttd->kind == TYPE_FUNCTION) return true;
 
