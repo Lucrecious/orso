@@ -417,8 +417,36 @@ static void cgen_constant(cgen_t *cgen, word_t word, typedata_t *typedata) {
             break;
         }
 
+        case TYPE_ARRAY: {
+            type_t inner_type = typedata->as.arr.type;
+            typedata_t *innertd = ast_type2td(cgen->ast, inner_type);
+            sb_add_format(&cgen->sb, "(%s){ .arr={", typedata->name.cstr, innertd->name.cstr);
+
+            void *data_addr;
+            if (typedata->size > WORD_SIZE) {
+                data_addr = word.as.p;
+            } else {
+                data_addr = &word;
+            }
+
+            for (size_t i = 0; i < typedata->as.arr.count; ++i) {
+                if (i != 0) {
+                    sb_add_cstr(&cgen->sb, ", ");
+                }
+                void *item_data_addr = data_addr + i*typedata->as.arr.item_size;
+                if (innertd->size > WORD_SIZE) {
+                    cgen_constant(cgen, WORDP(item_data_addr), innertd);
+                } else {
+                    word_t val = ast_mem2word(cgen->ast, item_data_addr, inner_type);
+                    cgen_constant(cgen, val, innertd);
+                }
+            }
+                
+            sb_add_cstr(&cgen->sb, "} }");
+            break;
+        }
+
         case TYPE_POINTER:
-        case TYPE_ARRAY:
         case TYPE_VOID:
         case TYPE_STRING:
         case TYPE_STRUCT: UNREACHABLE(); break;
@@ -435,6 +463,10 @@ static void cgen_constant(cgen_t *cgen, word_t word, typedata_t *typedata) {
 
 static void cgen_semicolon_nl(cgen_t *cgen) {
     sb_add_cstr(&cgen->sb, ";\n");
+}
+
+static void cgen_nl(cgen_t *cgen) {
+    sb_add_cstr(&cgen->sb, "\n");
 }
 
 static void cgen_statement(cgen_t *cgen, ast_node_t *expression, cgen_var_t var, bool add_indent) {
@@ -652,6 +684,7 @@ static void cgen_assignment(cgen_t *cgen, ast_node_t *assignment, cgen_var_t var
             }
             break;
         }
+
         case AST_NODE_TYPE_EXPRESSION_DEF_VALUE: {
             ASSERT(!lhs->requires_tmp_for_cgen, "def values do not require tmp");
             cgen_var_t lhs_var = cgen_user_var(cgen, lhs->lvalue_node->identifier.view, lhs->value_type);
@@ -681,6 +714,44 @@ static void cgen_assignment(cgen_t *cgen, ast_node_t *assignment, cgen_var_t var
                 }
 
                 sb_add_format(&cgen->sb, "(%s = %s)", cgen_var_name(cgen, lhs_var), cgen_var_name(cgen, rhs_var));
+            }
+            break;
+        }
+
+        case AST_NODE_TYPE_EXPRESSION_ITEM_ACCESS: {
+            ast_node_t *lvalue = lhs->lvalue_node;
+            typedata_t *lvalue_td = ast_type2td(cgen->ast, lvalue->value_type);
+
+            ast_node_t *accessee = an_item_accessee(lvalue);
+            typedata_t *accessee_td = ast_type2td(cgen->ast, accessee->value_type);
+
+            switch (accessee_td->kind) {
+            case TYPE_ARRAY: {
+                unless (assignment->requires_tmp_for_cgen) {
+                    if (has_var(var)) {
+                        sb_add_format(&cgen->sb, "%s = (", cgen_var(cgen, var));
+                    }
+
+                    cgen_expression(cgen, lvalue, nil_cvar);
+
+                    sb_add_cstr(&cgen->sb, " = ");
+
+                    cgen_expression(cgen, an_rhs(assignment), nil_cvar);
+
+                    if (has_var(var)) {
+                        sb_add_cstr(&cgen->sb, ")");
+                    }
+                } else {
+                }
+                break;
+            }
+
+            case TYPE_POINTER: {
+                UNREACHABLE(); //todo
+                break;
+            }
+
+            default: UNREACHABLE(); break;
             }
             break;
         }
@@ -873,12 +944,16 @@ static void cgen_if(cgen_t *cgen, ast_node_t *branch, cgen_var_t var) {
     cgen_end_branch(cgen);
 }
 
-static void cgen_while(cgen_t *cgen, ast_node_t *branch, cgen_var_t var)  {
+static void cgen_while_or_for(cgen_t *cgen, ast_node_t *branch, cgen_var_t var)  {
     ASSERT(branch->requires_tmp_for_cgen, "branches always require a tmp");
     cgen_begin_branch(cgen, branch, var, false);
+    cgen_indent(cgen);
+
+    if (branch->branch_type == BRANCH_TYPE_FOR) {
+        cgen_declaration(cgen, an_for_decl(branch));
+    }
 
     cstr_t while_or_until = branch->condition_negated ? "until" : "while";
-    cgen_indent(cgen);
     cgen_condition_and_open_block(cgen, branch, while_or_until);
 
     cgen_then(cgen, branch, var);
@@ -887,8 +962,14 @@ static void cgen_while(cgen_t *cgen, ast_node_t *branch, cgen_var_t var)  {
     cgen_jmp_label(cgen, branch->ccode_continue_label);
     cgen_semicolon_nl(cgen);
 
-    cgen_unindent(cgen);
+    if (branch->branch_type == BRANCH_TYPE_FOR) {
+        ast_node_t *incr = an_for_incr(branch);
+        cgen_add_indent(cgen);
+        cgen_expression(cgen, incr, nil_cvar);
+        cgen_semicolon_nl(cgen);
+    }
 
+    cgen_unindent(cgen);
     cgen_add_indent(cgen);
     sb_add_cstr(&cgen->sb, "}\n");
 
@@ -938,14 +1019,15 @@ static void cgen_do(cgen_t *cgen, ast_node_t *branch, cgen_var_t var) {
 static void cgen_branching(cgen_t *cgen, ast_node_t *branch, cgen_var_t var) {
     switch (branch->branch_type) {
         case BRANCH_TYPE_LOOPING:
+        case BRANCH_TYPE_FOR:
         case BRANCH_TYPE_DO: {
             if (has_var(var)) {
                 branch->ccode_var_name = cstr2string(cgen_var(cgen, cgen_var_used(var)), &cgen->ast->allocator);
             }
             branch->ccode_break_label = string_copy(cgen_next_label(cgen, "break"), &cgen->ast->allocator);
             branch->ccode_continue_label = string_copy(cgen_next_label(cgen, "continue"), &cgen->ast->allocator);
-            if (branch->branch_type == BRANCH_TYPE_LOOPING) {
-                cgen_while(cgen, branch, var);
+            if (branch->branch_type == BRANCH_TYPE_LOOPING || branch->branch_type == BRANCH_TYPE_FOR) {
+                cgen_while_or_for(cgen, branch, var);
             } else {
                 cgen_do(cgen, branch, var);
             }
@@ -954,11 +1036,6 @@ static void cgen_branching(cgen_t *cgen, ast_node_t *branch, cgen_var_t var) {
 
         case BRANCH_TYPE_IFTHEN: {
             cgen_if(cgen, branch, var);
-            break;
-        }
-
-        case BRANCH_TYPE_FOR: {
-            UNREACHABLE();
             break;
         }
     }
@@ -1163,6 +1240,94 @@ static void cgen_cast(cgen_t *cgen, ast_node_t *cast, cgen_var_t var) {
     }
 }
 
+static void cgen_item_access(cgen_t *cgen, ast_node_t *item_access, cgen_var_t var) {
+    ast_node_t *accessee = an_item_accessee(item_access);
+
+    if (has_var(var)) {
+        sb_add_format(&cgen->sb, "%s = (", cgen_var(cgen, var));
+    }
+
+    cgen_expression(cgen, accessee, nil_cvar);
+
+    sb_add_cstr(&cgen->sb, ".arr[");
+
+    ast_node_t *accessor = an_item_accessor(item_access);
+    cgen_expression(cgen, accessor, nil_cvar);
+
+    sb_add_cstr(&cgen->sb, "]");
+
+    if (has_var(var)) {
+        sb_add_cstr(&cgen->sb, ")");
+    }
+}
+
+static void cgen_initializer_list(cgen_t *cgen, ast_node_t *list, cgen_var_t var) {
+    type_t list_type = list->value_type;
+    typedata_t *list_td = ast_type2td(cgen->ast, list_type);
+
+    switch (list_td->kind) {
+    case TYPE_ARRAY: {
+        size_t list_start = an_list_start(list);
+        size_t list_end = an_list_end(list);
+        size_t last_requires_tmp_arg = an_list_start(list);
+        for (size_t i = list_end; i > list_start; --i) {
+            size_t i_ = i - 1;
+            if (list->children.items[i_]->requires_tmp_for_cgen) {
+                last_requires_tmp_arg = i;
+                break;
+            }
+        }
+
+        size_t length = list_end - list_start;
+        cgen_var_t tmp_vars[length];
+
+        for (size_t i = list_start; i < last_requires_tmp_arg; ++i) {
+            ast_node_t *arg = list->children.items[i];
+
+            cgen_var_t tmpvar = cgen_next_tmpid(cgen, arg->value_type);
+            tmp_vars[i-list_start] = tmpvar;
+
+            cgen_statement(cgen, arg, tmpvar, i != list_start);
+
+            if (i == last_requires_tmp_arg-1) {
+                cgen_add_indent(cgen);
+            }
+        }
+
+        if (has_var(var)) {
+            sb_add_format(&cgen->sb, "%s = (", cgen_var(cgen, var));
+        }
+
+        sb_add_format(&cgen->sb, "(%s){ .arr={", ast_type2td(cgen->ast, list->value_type)->name);
+
+        for (size_t i = list_start; i < list_end; ++i) {
+            if (i != list_start) {
+                sb_add_cstr(&cgen->sb, ", ");
+            }
+
+            if (i < last_requires_tmp_arg) {
+                sb_add_format(&cgen->sb, "%s", cgen_var_name(cgen, tmp_vars[i-list_start]));
+            } else {
+                ast_node_t *arg = list->children.items[i];
+                cgen_expression(cgen, arg, nil_cvar);
+            }
+        }
+
+        sb_add_cstr(&cgen->sb, "}}");
+        if (has_var(var)) {
+            sb_add_cstr(&cgen->sb, ")");
+        }
+
+        if (list->requires_tmp_for_cgen) {
+            cgen_semicolon_nl(cgen);
+        }
+        break;
+    }
+
+    default: UNREACHABLE(); break;
+    }
+}
+
 static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var) {
     if (expression->expr_val.is_concrete) {
         cgen_constant_or_nil(cgen, expression, var);
@@ -1244,6 +1409,16 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
 
         case AST_NODE_TYPE_EXPRESSION_CAST: {
             cgen_cast(cgen, expression, var);
+            break;
+        }
+
+        case AST_NODE_TYPE_EXPRESSION_ITEM_ACCESS: {
+            cgen_item_access(cgen, expression, var);
+            break;
+        }
+        
+        case AST_NODE_TYPE_EXPRESSION_INITIALIZER_LIST: {
+            cgen_initializer_list(cgen, expression, var);
             break;
         }
 
@@ -1423,6 +1598,19 @@ static void cgen_generate_cnames_for_types(ast_t *ast) {
             break;
         }
 
+        case TYPE_ARRAY: {
+            //arr_<size>_<type>
+            tmp_arena_t *tmp = allocator_borrow();
+            string_builder_t sb = {.allocator=tmp->allocator};
+
+            
+            sb_add_format(&sb, "arr_%zu_%s", td->as.arr.count, type2typedata(tds, td->as.arr.type)->name.cstr);
+
+            td->name = sb_render(&sb, arena);
+            allocator_return(tmp);
+            break;
+        }
+
         case TYPE_STRING: break;
 
         case TYPE_INFERRED_FUNCTION:
@@ -1438,6 +1626,15 @@ static void cgen_typedefs(cgen_t *cgen, typedatas_t *tds) {
     for (size_t i = 0; i < tds->count; ++i) {
         typedata_t *td = tds->items[i];
         switch (td->kind) {
+        case TYPE_ARRAY:  {
+            // typedef <type> <typename>[<count>]
+            typedata_t *innertd = type2typedata(tds, td->as.arr.type);
+
+            sb_add_format(&cgen->sb, "typedef struct %s %s; ", td->name.cstr, td->name.cstr);
+            sb_add_format(&cgen->sb, "struct %s { %s arr[%zu]; };\n", td->name.cstr, innertd->name.cstr, td->as.arr.count);
+            break;
+        }
+
         case TYPE_POINTER: {
             // typedef <inner_typename>* <typename>
 

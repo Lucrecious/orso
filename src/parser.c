@@ -2044,6 +2044,54 @@ word_t *ast_multiword_value(ast_t *ast, size_t size_words) {
     return start;
 }
 
+word_t ast_mem2word(ast_t *ast, void *data, type_t type) {
+    typedata_t *td = ast_type2td(ast, type);
+
+    switch (td->kind) {
+    case TYPE_UNREACHABLE:
+    case TYPE_INFERRED_FUNCTION:
+    case TYPE_UNRESOLVED:
+    case TYPE_INVALID: return (word_t){0};
+
+    case TYPE_VOID: return (word_t){0};
+
+    case TYPE_BOOL: return (word_t){ .as.u = (*((u8*)data)) };
+
+    case TYPE_STRING: UNREACHABLE(); return (word_t){0}; //todo
+
+    case TYPE_POINTER:
+    case TYPE_INTRINSIC_FUNCTION:
+    case TYPE_FUNCTION:
+    case TYPE_TYPE: return *((word_t*)data);
+
+    case TYPE_NUMBER: {
+        switch (td->as.num) {
+        case NUM_TYPE_FLOAT: return td->size == NUM_SIZE_32 ? WORDD(*((f32*)data)) : *((word_t*)data);
+        case NUM_TYPE_SIGNED:
+        case NUM_TYPE_UNSIGNED: {
+            switch ((num_size_t)td->size) {
+            case NUM_SIZE_8: return WORDU(*((u8*)data));
+            case NUM_SIZE_16: return WORDU(*((u16*)data));
+            case NUM_SIZE_32: return WORDU(*((u32*)data));
+            case NUM_SIZE_64: return *((word_t*)data);
+            }
+        }
+        }
+    }
+
+    case TYPE_STRUCT:
+    case TYPE_ARRAY: {
+        if (td->size > WORD_SIZE) {
+            return WORDP(data);
+        } else {
+            return *((word_t*)data);
+        }
+    }
+
+    case TYPE_COUNT: UNREACHABLE(); return (word_t){0};
+    }
+}
+
 ast_node_val_t zero_value(ast_t *ast, type_t type) {
     if (TYPE_IS_UNRESOLVED(type)) return ast_node_val_word(WORDU(0));
 

@@ -929,7 +929,7 @@ static ast_node_t *stan_realize_inferred_funcdef_or_error_and_null(analyzer_t *a
     return result;
 }
 
-static void ast_copy_expr_val_to_dest(ast_t *ast, ast_node_t *expr, void *dest) {
+static void ast_copy_expr_val_to_memory(ast_t *ast, ast_node_t *expr, void *dest) {
     typedata_t *td = ast_type2td(ast, expr->value_type);
 
     switch (td->kind) {
@@ -1352,7 +1352,7 @@ void resolve_expression(
                         for (size_t i = an_list_start(expr); i < an_list_end(expr); ++i) {
                             size_t offset = i - an_list_start(expr);
                             ast_node_t *arg = expr->children.items[i];
-                            ast_copy_expr_val_to_dest(ast, arg, ((void*)start)+(offset*init_type_td->as.arr.item_size));
+                            ast_copy_expr_val_to_memory(ast, arg, ((void*)start)+(offset*init_type_td->as.arr.item_size));
                         }
                     }
 
@@ -2103,6 +2103,7 @@ void resolve_expression(
 
             case TOKEN_LEN: {
                 expr->value_type = ast->type_set.size_t_;
+                expr->is_free_number = true;
 
                 unless (count == 1) {
                     stan_error(analyzer, make_error_node(ERROR_ANALYSIS_LEN_REQUIRES_ONE_ARRAY_ARG, expr));

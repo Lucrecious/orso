@@ -357,6 +357,7 @@ void ast_end_module(ast_node_t *module);
 void ast_add_module(ast_t *ast, ast_node_t *module, string_t moduleid);
 ast_node_t *ast_implicit_expr(ast_t *ast, type_t type, word_t value, token_t where);
 word_t *ast_multiword_value(ast_t *ast, size_t size_words);
+word_t ast_mem2word(ast_t *ast, void *data, type_t type);
 
 bool ast_node_type_is_expression(ast_node_type_t node_type);
 
