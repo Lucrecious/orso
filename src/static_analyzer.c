@@ -1175,11 +1175,11 @@ void resolve_expression(
                 break;
             }
 
-            if (an_is_notnone(accessee->lvalue_node)) {
+            typedata_t *accessee_td = ast_type2td(ast, accessee->value_type);
+            if (an_is_notnone(accessee->lvalue_node) || accessee_td->kind == TYPE_POINTER) {
                 expr->lvalue_node = expr;
             }
 
-            typedata_t *accessee_td = ast_type2td(ast, accessee->value_type);
             type_t item_type = typeid(TYPE_INVALID);
             // accessee
             {

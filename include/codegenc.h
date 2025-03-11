@@ -742,12 +742,70 @@ static void cgen_assignment(cgen_t *cgen, ast_node_t *assignment, cgen_var_t var
                         sb_add_cstr(&cgen->sb, ")");
                     }
                 } else {
+                    ast_node_t *accessor = an_item_accessor(lvalue);
+                    cgen_var_t offset_var = cgen_next_tmpid(cgen, accessor->value_type);
+                    cgen_statement(cgen, accessor, offset_var, false);
+
+                    cgen_var_t rhs_var = cgen_next_tmpid(cgen, an_rhs(assignment)->value_type);
+                    cgen_statement(cgen, an_rhs(assignment), rhs_var, true);
+
+                    ASSERT(!accessee->requires_tmp_for_cgen, "im not sure, but this shouldn't happen... and if it does, it means i need to write a proper cgen_lvalue() function");
+
+                    cgen_add_indent(cgen);
+
+                    if (has_var(var)) {
+                        sb_add_format(&cgen->sb, "%s = (", cgen_var_name(cgen, var));
+                    }
+
+                    cgen_expression(cgen, accessee, nil_cvar);
+
+                    sb_add_format(&cgen->sb, ".arr[%s] = %s", cgen_var_name(cgen, offset_var), cgen_var_name(cgen, rhs_var));
+
+                    if (has_var(var)) {
+                        sb_add_cstr(&cgen->sb, ")");
+                    }
                 }
                 break;
             }
 
             case TYPE_POINTER: {
-                UNREACHABLE(); //todo
+                unless (assignment->requires_tmp_for_cgen) {
+                    if (has_var(var)) {
+                        sb_add_format(&cgen->sb, "%s = (", cgen_var(cgen, var));
+                    }
+
+                    cgen_expression(cgen, lvalue, nil_cvar);
+
+                    sb_add_cstr(&cgen->sb, " = ");
+
+                    cgen_expression(cgen, an_rhs(assignment), nil_cvar);
+
+                    if (has_var(var)) {
+                        sb_add_cstr(&cgen->sb, ")");
+                    }
+                } else {
+                    cgen_var_t ptr_var = cgen_next_tmpid(cgen, accessee->value_type);
+                    cgen_statement(cgen, accessee, ptr_var, false);
+
+                    ast_node_t *accessor = an_item_accessor(lvalue);
+                    cgen_var_t offset_var = cgen_next_tmpid(cgen, accessor->value_type);
+                    cgen_statement(cgen, accessor, offset_var, true);
+
+                    cgen_var_t rhs_var = cgen_next_tmpid(cgen, an_rhs(assignment)->value_type);
+                    cgen_statement(cgen, an_rhs(assignment), rhs_var, true);
+
+                    cgen_add_indent(cgen);
+
+                    if (has_var(var)) {
+                        sb_add_format(&cgen->sb, "%s = (", cgen_var(cgen, var));
+                    }
+
+                    sb_add_format(&cgen->sb, "%s->arr[%s] = %s", cgen_var_name(cgen, ptr_var), cgen_var_name(cgen, offset_var), cgen_var_name(cgen, rhs_var));
+
+                    if (has_var(var)) {
+                        sb_add_cstr(&cgen->sb, ")");
+                    }
+                }
                 break;
             }
 
@@ -1242,22 +1300,59 @@ static void cgen_cast(cgen_t *cgen, ast_node_t *cast, cgen_var_t var) {
 
 static void cgen_item_access(cgen_t *cgen, ast_node_t *item_access, cgen_var_t var) {
     ast_node_t *accessee = an_item_accessee(item_access);
+    typedata_t *accessee_td = ast_type2td(cgen->ast, accessee->value_type);
 
-    if (has_var(var)) {
-        sb_add_format(&cgen->sb, "%s = (", cgen_var(cgen, var));
-    }
+    unless (item_access->requires_tmp_for_cgen) {
+        if (has_var(var)) {
+            sb_add_format(&cgen->sb, "%s = (", cgen_var(cgen, var));
+        }
 
-    cgen_expression(cgen, accessee, nil_cvar);
+        cgen_expression(cgen, accessee, nil_cvar);
 
-    sb_add_cstr(&cgen->sb, ".arr[");
+        if (accessee_td->kind == TYPE_POINTER) {
+            sb_add_cstr(&cgen->sb, "->");
+        } else {
+            sb_add_cstr(&cgen->sb, ".");
+        }
 
-    ast_node_t *accessor = an_item_accessor(item_access);
-    cgen_expression(cgen, accessor, nil_cvar);
+        sb_add_cstr(&cgen->sb, "arr[");
 
-    sb_add_cstr(&cgen->sb, "]");
+        ast_node_t *accessor = an_item_accessor(item_access);
+        cgen_expression(cgen, accessor, nil_cvar);
 
-    if (has_var(var)) {
-        sb_add_cstr(&cgen->sb, ")");
+        sb_add_cstr(&cgen->sb, "]");
+
+        if (has_var(var)) {
+            sb_add_cstr(&cgen->sb, ")");
+        }
+    } else {
+        cgen_var_t accessee_var = cgen_next_tmpid(cgen, accessee->value_type);
+        cgen_statement(cgen, accessee, accessee_var, false);
+
+        ast_node_t *accessor = an_item_accessor(item_access);
+        cgen_var_t accessor_var = cgen_next_tmpid(cgen, accessor->value_type);
+        cgen_statement(cgen, accessor, accessor_var, true);
+
+        cgen_add_indent(cgen);
+
+        if (has_var(var)) {
+            sb_add_format(&cgen->sb, "%s = (", cgen_var(cgen, var));
+        }
+
+        sb_add_format(&cgen->sb, "%s", cgen_var_name(cgen, accessee_var));
+
+        typedata_t *accessee_td = ast_type2td(cgen->ast, accessee->value_type);
+        if (accessee_td->kind == TYPE_POINTER) {
+            sb_add_cstr(&cgen->sb, "->");
+        } else {
+            sb_add_cstr(&cgen->sb, ".");
+        }
+
+        sb_add_format(&cgen->sb, "arr[%s]", cgen_var_name(cgen, accessor_var));
+
+        if (has_var(var)) {
+            sb_add_cstr(&cgen->sb, ")");
+        }
     }
 }
 

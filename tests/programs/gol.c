@@ -12,12 +12,12 @@ typedef int(*fn_int)();
 typedef void(*fn_int_void)(int);
 typedef void(*fn_void)();
 typedef f64(*fn_u64_f64)(u64);
-typedef u8* p_u8;
-typedef void(*fn_p_u8_int_void)(p_u8,int);
-typedef p_u8(*fn_p_u8_s64_p_u8)(p_u8,s64);
-typedef p_u8(*fn_p_u8_int_int_int_p_u8)(p_u8,int,int,int);
-typedef void(*fn_p_u8_int_int_void)(p_u8,int,int);
-typedef int(*fn_p_u8_int_int_int_int_int)(p_u8,int,int,int,int);
+typedef struct arr_5_u8 arr_5_u8; struct arr_5_u8 { u8 arr[5]; };
+typedef struct arr_5_arr_5_u8 arr_5_arr_5_u8; struct arr_5_arr_5_u8 { arr_5_u8 arr[5]; };
+typedef arr_5_arr_5_u8* p_arr_5_arr_5_u8;
+typedef void(*fn_p_arr_5_arr_5_u8_void)(p_arr_5_arr_5_u8);
+typedef void(*fn_p_arr_5_arr_5_u8_u8_void)(p_arr_5_arr_5_u8,u8);
+typedef int(*fn_p_arr_5_arr_5_u8_int_int_int)(p_arr_5_arr_5_u8,int,int);
 f64 ns2sec_odlfn1_(u64);
 
 f64 ns2sec_odlfn1_(u64 ns_) {
@@ -31,139 +31,111 @@ f64 ns2sec_odlfn1_(u64 ns_) {
 void _module_init_3(void) {
 }
 
-p_u8 at_odlfn1_(p_u8, s64);
-p_u8 atxy_odlfn2_(p_u8, int, int, int);
-int neighbors_odlfn5_(p_u8, int, int, int, int);
-void board_clear_odlfn3_(p_u8, int);
-void render_board_odlfn4_(p_u8, int, int);
+void func1(p_arr_5_arr_5_u8, u8);
+void render_board_odlfn2_(p_arr_5_arr_5_u8);
+int neighbors_odlfn3_(p_arr_5_arr_5_u8, int, int);
 
-p_u8 at_odlfn1_(p_u8 board_, s64 index_) {
+void func1(p_arr_5_arr_5_u8 arr_, u8 value_) {
   {
-    p_u8 tmp6 = (addptr_((p_u8)board_, index_));
-    return tmp6;
-  };
-}
-
-p_u8 atxy_odlfn2_(p_u8 board_, int x_, int y_, int width_) {
-  {
-    p_u8 tmp7 = addptr_((p_u8)board_, cast(s64, adds32_(muls32_(y_, width_), x_)));
-    return tmp7;
-  };
-}
-
-void board_clear_odlfn3_(p_u8 board_, int count_) {
-  {
-    s64 i_ = 0ll;
-
     {
-      while ((i_ < cast(s64, count_))) {
-        {
-          (*(((at_odlfn1_)(board_, i_))) = int_(0));
-
-          (i_ = adds64_(i_, 1ll));
-        };
-        continue9_:;
-      }
-    } break8_:;
-
-    return;
-  };
-}
-
-void render_board_odlfn4_(p_u8 board_, int width_, int height_) {
-  {
-    int w_ = int_(0);
-
-    int h_ = int_(0);
-
-    {
-      while ((h_ < height_)) {
+      int w_ = int_(0);
+      while ((w_ < int_(5))) {
         {
           {
-            while ((w_ < width_)) {
+            int h_ = int_(0);
+            while ((h_ < int_(5))) {
               {
-                int tile_ = cast(int, *(((atxy_odlfn2_)(board_, w_, h_, width_))));
-
-                ((odlprintint)(tile_));
-
-                (w_ = adds32_(w_, int_(1)));
+                (*(arr_)).arr[w_].arr[h_] = value_;
               };
-              continue13_:;
+              continue7_:;
+              (h_ = adds32_(h_, int_(1)));
             }
-          } break12_:;
-
-          (w_ = int_(0));
-
-          (h_ = adds32_(h_, int_(1)));
-
-          ((odlprintln)());
-
+          } break6_:;
         };
-        continue11_:;
+        continue5_:;
+        (w_ = adds32_(w_, int_(1)));
       }
-    } break10_:;
-
-    ((odlprintln)());
-
-    return;
+    } break4_:;
   };
 }
 
-int neighbors_odlfn5_(p_u8 board_, int x_, int y_, int w_, int h_) {
+void render_board_odlfn2_(p_arr_5_arr_5_u8 board_) {
+  {
+    {
+      int h_ = int_(0);
+      while ((h_ < int_(5))) {
+        {
+          {
+            int w_ = int_(0);
+            while ((w_ < int_(5))) {
+              {
+                int tile_ = cast(int, (*(board_)).arr[h_].arr[w_]);
+
+                ((odlprintint)(tile_));
+              };
+              continue11_:;
+              (w_ = adds32_(w_, int_(1)));
+            }
+          } break10_:;
+
+          ((odlprintln)());
+        };
+        continue9_:;
+        (h_ = adds32_(h_, int_(1)));
+      }
+    } break8_:;
+  };
+}
+
+int neighbors_odlfn3_(p_arr_5_arr_5_u8 board_, int x_, int y_) {
   {
     int sum_ = int_(0);
-
-    int xi_ = int_(0);
-
-    int yi_ = int_(0);
 
     int xs_ = subs32_(x_, int_(1));
 
     int ys_ = subs32_(y_, int_(1));
 
     {
+      int yi_ = int_(0);
       while ((yi_ < int_(3))) {
         {
           {
+            int xi_ = int_(0);
             while ((xi_ < int_(3))) {
               {
                 int xn_ = adds32_(xs_, xi_);
 
                 int yn_ = adds32_(ys_, yi_);
 
-                (xi_ = adds32_(xi_, int_(1)));
-
                 {
                   if (((xn_ == x_) && (yn_ == y_))) {
                     ;
-                    goto continue17_;
+                    goto continue15_;
                   }
                 };
 
                 {
-                  if (((((xn_ < int_(0)) || (yn_ < int_(0))) || (xn_ >= w_)) || (yn_ >= h_))) {
+                  if (((((xn_ < int_(0)) || (yn_ < int_(0))) || (xn_ >= int_(5))) || (yn_ >= int_(5)))) {
                     ;
-                    goto continue17_;
+                    goto continue15_;
                   }
                 };
 
-                (sum_ = adds32_(sum_, cast(int, *(((atxy_odlfn2_)(board_, xn_, yn_, w_))))));
+                (sum_ = adds32_(sum_, cast(int, (*(board_)).arr[yn_].arr[xn_])));
               };
-              continue17_:;
+              continue15_:;
+              (xi_ = adds32_(xi_, int_(1)));
             }
-          } break16_:;
-
-          (xi_ = int_(0));
-
-          (yi_ = adds32_(yi_, int_(1)));
+          } break14_:;
         };
-        continue15_:;
+        continue13_:;
+        (yi_ = adds32_(yi_, int_(1)));
       }
-    } break14_:;
+    } break12_:;
 
-    int tmp18 = sum_;
+    int tmp16 = sum_;
 ;
-    return tmp18;
+    return tmp16;
   };
 }
 
@@ -171,47 +143,39 @@ int neighbors_odlfn5_(p_u8 board_, int x_, int y_, int w_, int h_) {
 int expr(void) {
   _module_init_3();
 
-  int tmp19; {
+  int tmp17; {
     do {
       {
-        int width_ = ((odlreadint)());
 
-        int height_ = ((odlreadint)());
-
-        int tile_count_ = muls32_(width_, height_);
 
         {
-          if ((tile_count_ == int_(0))) {
+          if (false) {
             {
               ((odlprintint)(int_(0)));
 
               ((odlprintln)());
 
-              tmp19 = int_(1);
-              goto break20_;
+              tmp17 = int_(1);
+              goto break18_;
             };
           }
         };
 
-        p_u8 board_ = cast(p_u8, ((odlmreserve)(cast(size_t, muls32_(tile_count_, int_(2))))));
 
-        p_u8 buffer_ = addptr_((p_u8)board_, (cast(s64, tile_count_)));
+        arr_5_arr_5_u8 board__ = (arr_5_arr_5_u8){ .arr={(arr_5_u8){ .arr={u8_(0), u8_(0), u8_(0), u8_(0), u8_(0)} }, (arr_5_u8){ .arr={u8_(0), u8_(0), u8_(0), u8_(0), u8_(0)} }, (arr_5_u8){ .arr={u8_(0), u8_(0), u8_(0), u8_(0), u8_(0)} }, (arr_5_u8){ .arr={u8_(0), u8_(0), u8_(0), u8_(0), u8_(0)} }, (arr_5_u8){ .arr={u8_(0), u8_(0), u8_(0), u8_(0), u8_(0)} }} };
 
-        ((odlmmarkrw)(cast(p_void, board_), cast(size_t, muls32_(tile_count_, int_(2)))));
+        arr_5_arr_5_u8 buffer__ = board__;
+;
+
+        p_arr_5_arr_5_u8 board_ = &(board__);
+
+        p_arr_5_arr_5_u8 buffer_ = &(buffer__);
 
         ((odlprintint)(int_(1)));
 
         ((odlprintln)());
 
         ((odlprintln)());
-
-        fn_p_u8_s64_p_u8 at_ = (at_odlfn1_);
-
-        fn_p_u8_int_int_int_p_u8 atxy_ = (atxy_odlfn2_);
-
-        fn_p_u8_int_void board_clear_ = (board_clear_odlfn3_);
-
-        ((board_clear_odlfn3_)(board_, tile_count_));
 
         int initx_ = ((odlreadint)());
 
@@ -225,7 +189,7 @@ int expr(void) {
               int y_ = subs32_(inity_, int_(1));
 
               {
-                if (((((x_ < int_(0)) || (y_ < int_(0))) || (x_ >= width_)) || (y_ >= height_))) {
+                if (((((x_ < int_(0)) || (y_ < int_(0))) || (x_ >= int_(5))) || (y_ >= int_(5)))) {
                   {
                     ((odlprintint)(int_(0)));
 
@@ -233,7 +197,7 @@ int expr(void) {
                   };
                 } else {
                   {
-                    (*(((atxy_odlfn2_)(board_, x_, y_, width_))) = int_(1));
+                    (*(board_)).arr[y_].arr[x_] = u8_(1);
 
                     ((odlprintint)(int_(1)));
 
@@ -249,52 +213,48 @@ int expr(void) {
 
               (inity_ = ((odlreadint)()));
             };
-            continue23_:;
+            continue21_:;
           }
-        } break22_:;
+        } break20_:;
 
         ((odlprintln)());
 
-        fn_p_u8_int_int_void render_board_ = (render_board_odlfn4_);
 
-        ((render_board_odlfn4_)(board_, width_, height_));
+        ((render_board_odlfn2_)(board_));
 
-        fn_p_u8_int_int_int_int_int neighbors_ = (neighbors_odlfn5_);
 
         {
           while ((((odlreadint)()) != int_(0))) {
             {
-              ((board_clear_odlfn3_)(buffer_, tile_count_));
-
-              int x_ = int_(0);
-
-              int y_ = int_(0);
+              ((func1)(buffer_, u8_(0)));
 
               {
-                while ((y_ < height_)) {
+                int y_ = int_(0);
+                while ((y_ < int_(5))) {
                   {
                     {
-                      while ((x_ < width_)) {
+                      int x_ = int_(0);
+                      while ((x_ < int_(5))) {
                         {
-                          int n_ = ((neighbors_odlfn5_)(board_, x_, y_, width_, height_));
+                          int n_ = ((neighbors_odlfn3_)(board_, x_, y_));
 
-                          u8 alive_ = *(((atxy_odlfn2_)(board_, x_, y_, width_)));
+                          u8 alive_ = ((*(board_)).arr[y_].arr[x_]);
 
                           {
                             if (((alive_ > u8_(0)) && (n_ < int_(2)))) {
-                              (*(((atxy_odlfn2_)(buffer_, x_, y_, width_))) = int_(0));
+                              (*(buffer_)).arr[y_].arr[x_] = u8_(0);
                             } else {
                               {
                                 if (((alive_ > u8_(0)) && (((n_ == int_(2)) || (n_ == int_(3)))))) {
-                                  (*(((atxy_odlfn2_)(buffer_, x_, y_, width_))) = int_(1));
+                                  (*(buffer_)).arr[y_].arr[x_] = u8_(1);
                                 } else {
                                   {
                                     if (((alive_ > u8_(0)) && (n_ > int_(3)))) {
-                                      (*(((atxy_odlfn2_)(buffer_, x_, y_, width_))) = int_(0));
+                                      (*(buffer_)).arr[y_].arr[x_] = u8_(0);
                                     } else {
                                       {
                                         if (((alive_ < u8_(1)) && (n_ == int_(3)))) {
-                                          (*(((atxy_odlfn2_)(buffer_, x_, y_, width_))) = int_(1));
+                                          (*(buffer_)).arr[y_].arr[x_] = u8_(1);
                                         }
                                       };
                                     }
@@ -303,43 +263,41 @@ int expr(void) {
                               };
                             }
                           };
-
-                          (x_ = adds32_(x_, int_(1)));
                         };
-                        continue29_:;
+                        continue27_:;
+                        (x_ = adds32_(x_, int_(1)));
                       }
-                    } break28_:;
-
-                    (x_ = int_(0));
-
-                    (y_ = adds32_(y_, int_(1)));
+                    } break26_:;
                   };
-                  continue27_:;
+                  continue25_:;
+                  (y_ = adds32_(y_, int_(1)));
                 }
-              } break26_:;
+              } break24_:;
 
-              p_u8 tmp_ = board_;
+              p_arr_5_arr_5_u8 tmp_ = board_;
 ;
 
               (board_ = buffer_);
 
               (buffer_ = tmp_);
 
-              ((render_board_odlfn4_)(board_, width_, height_));
+              ((render_board_odlfn2_)(board_));
 
             };
-            continue25_:;
+            continue23_:;
           }
-        } break24_:;
+        } break22_:;
 
-        ((odlmfree)(cast(p_void, board_), cast(size_t, muls32_(tile_count_, int_(2)))));
-
-        tmp19 = int_(0);
+        tmp17 = int_(0);
       };
-    continue21_:;
+    continue19_:;
     } while(false); 
-    tmp19 = int_(0);
-  } break20_:;
+    tmp17 = int_(0);
+  } break18_:;
 
-  return tmp19;
+  return tmp17;
+}
+
+int main() {
+  expr();
 }
