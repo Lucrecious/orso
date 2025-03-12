@@ -1734,8 +1734,36 @@ void resolve_expression(
             ast_node_t *rhs = an_rhs(expr);
             resolve_expression(analyzer, ast, state, lvalue_node->value_type, rhs);
 
+            switch (expr->operator.type) {
+            case TOKEN_PLUS_EQUAL:
+            case TOKEN_MINUS_EQUAL:
+            case TOKEN_STAR_EQUAL:
+            case TOKEN_SLASH_EQUAL:
+            case TOKEN_PERCENT_EQUAL:
+            case TOKEN_PERCENT_PERCENT_EQUAL: {
+                typedata_t *td = ast_type2td(ast, lhs->value_type);
+                if ((td->capabilities & TYPE_CAP_ARITHMETIC) == 0) {
+                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_ARITHMETIC_OPERAND_TYPES, lhs));
+                }
+                break;
+            }
+
+            case TOKEN_OR_EQUAL:
+            case TOKEN_AND_EQUAL:
+            case TOKEN_NOT_EQUAL: {
+                typedata_t *td = ast_type2td(ast, lhs->value_type);
+                if ((td->capabilities & TYPE_CAP_LOGICAL) == 0) {
+                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_LOGICAL_OPERAND_TYPES, lhs));
+                }
+                break;
+            }
+
+            case TOKEN_EQUAL: break;
+
+            default: UNREACHABLE(); break;
+            }
+
             if (TYPE_IS_INVALID(rhs->value_type)) {
-                INVALIDATE(expr);
                 break;
             }
 

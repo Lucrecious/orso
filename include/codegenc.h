@@ -636,6 +636,28 @@ static void cgen_unary(cgen_t *cgen, ast_node_t *unary, cgen_var_t var) {
 }
 
 static void cgen_assignment(cgen_t *cgen, ast_node_t *assignment, cgen_var_t var) {
+    // unless (assignment->requires_tmp_for_cgen) {
+    //     if (has_var(var)) {
+    //         sb_add_format(&cgen->sb, "%s = (", cgen_var(cgen, var));
+    //     }
+
+    //     sb_add_cstr(&cgen->sb, "(");
+    //     cgen_expression(cgen, an_lhs(assignment), nil_cvar);
+
+    //     sb_add_cstr(&cgen->sb, " = ");
+        
+    //     cgen_expression(cgen, an_rhs(assignment), nil_cvar);
+
+    //     sb_add_cstr(&cgen->sb, ")");
+
+    //     if (has_var(var)) {
+    //         sb_add_cstr(&cgen->sb, ")");
+    //     }
+
+    // } else {
+
+    // }
+
     ast_node_t *lhs = an_lhs(assignment);
     switch (lhs->lvalue_node->node_type) {
         case AST_NODE_TYPE_EXPRESSION_UNARY: {

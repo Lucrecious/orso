@@ -1064,19 +1064,74 @@ static void gen_assignment(gen_t *gen, function_t *function, ast_node_t *assignm
     ast_node_t *lhs = an_lhs(assignment);
     gen_lvalue(gen, function, lhs);
 
+    typedata_t *td = ast_type2td(gen->ast, assignment->value_type);
+
+    size_t jmp_loc = 0;
+    if (assignment->operator.type == TOKEN_AND_EQUAL || assignment->operator.type == TOKEN_OR_EQUAL) {
+        if (td->size > WORD_SIZE) {
+            UNREACHABLE(); // todo
+        } else {
+            emit_reg_to_reg(function, assignment->operator.loc, REG_TMP, REG_RESULT);
+
+            emit_addr_to_reg(gen, function, assignment->operator.loc, type2movsize(gen, assignment->value_type), REG_RESULT, REG_RESULT, 0);
+
+            jmp_loc = gen_jmp_if_reg(function, assignment->operator.loc, REG_TMP, assignment->operator.type == TOKEN_AND_EQUAL ? false : true);
+
+            emit_reg_to_addr(gen, function, assignment->operator.loc, type2movsize(gen, assignment->value_type), REG_RESULT, REG_TMP, 0);
+        }
+    }
+
     emit_push_reg(gen, token_end_loc(&lhs->end), function, REG_RESULT, REG_MOV_SIZE_WORD, 0);
-    // emit_push_reg(gen, (texloc_t){.line=1000}, function, REG_RESULT, REG_MOV_SIZE_WORD, 0);
 
     ast_node_t *rhs = an_rhs(assignment);
     gen_expression(gen, function, rhs);
 
     emit_pop_to_reg(gen, token_end_loc(&rhs->end), function, REG_TMP, gen->ast->type_set.u64_);
 
-    emit_reg_to_addr(gen, function, token_end_loc(&assignment->end),
-            type2movsize(gen, assignment->value_type), REG_TMP, REG_RESULT, 0);
+    bool is_not = false;
+    if (td->size > WORD_SIZE) {
+        ASSERT(assignment->operator.type == TOKEN_EQUAL, "only equals for biggers for now");
+        emit_multiword_addr_to_addr(gen, function, token_end_loc(&assignment->end), REG_TMP, REG_RESULT, REG_TMP2, td->size);
+    } else {
+        token_t op = assignment->operator;
+        switch (assignment->operator.type) {
+        case TOKEN_PLUS_EQUAL: op.type = TOKEN_PLUS; break;
+        case TOKEN_MINUS_EQUAL: op.type = TOKEN_MINUS; break;
+        case TOKEN_STAR_EQUAL: op.type = TOKEN_STAR; break;
+        case TOKEN_SLASH_EQUAL: op.type = TOKEN_SLASH; break;
+        case TOKEN_PERCENT_EQUAL: op.type = TOKEN_PERCENT; break;
+        case TOKEN_PERCENT_PERCENT_EQUAL: op.type = TOKEN_PERCENT_PERCENT; break;
 
-    emit_addr_to_reg(gen, function, token_end_loc(&assignment->end),
-            type2movsize(gen, assignment->value_type), REG_RESULT, REG_TMP, 0);
+        case TOKEN_OR_EQUAL:
+        case TOKEN_AND_EQUAL: break;
+        case TOKEN_NOT_EQUAL: is_not = true; break;
+
+        case TOKEN_EQUAL: break;
+        default: UNREACHABLE(); break;
+        }
+
+        if (op.type != TOKEN_EQUAL) {
+            emit_addr_to_reg(gen, function, token_end_loc(&assignment->end),
+                    type2movsize(gen, assignment->value_type), REG_TMP2, REG_TMP, 0);
+
+            emit_bin_op(token_end_loc(&assignment->end), function, op.type, td, REG_TMP2, REG_RESULT, REG_RESULT);
+        } else if (is_not) {
+            emit_addr_to_reg(gen, function, token_end_loc(&assignment->end),
+                    type2movsize(gen, assignment->value_type), REG_TMP2, REG_TMP, 0);
+
+            emit_unary(gen, token_end_loc(&assignment->end), function, TOKEN_NOT, assignment->value_type, REG_TMP2, REG_RESULT);
+        }
+
+        emit_reg_to_addr(gen, function, token_end_loc(&assignment->end),
+                type2movsize(gen, assignment->value_type), REG_TMP, REG_RESULT, 0);
+
+        emit_addr_to_reg(gen, function, token_end_loc(&assignment->end),
+                type2movsize(gen, assignment->value_type), REG_RESULT, REG_TMP, 0);
+    }
+
+    if (assignment->operator.type == TOKEN_AND_EQUAL || assignment->operator.type == TOKEN_OR_EQUAL) {
+        gen_patch_jmp(gen, function, jmp_loc);
+    }
 }
 
 

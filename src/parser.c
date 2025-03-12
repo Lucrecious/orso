@@ -1042,41 +1042,6 @@ static ast_node_t *convert_assignment_expression(parser_t *parser, ast_node_t *l
     assignment->start = left->start;
     an_lhs(assignment) = left;
 
-    if (assignment->operator.type != TOKEN_EQUAL) {
-        token_t op = assignment->operator;
-
-        // remove the equals at the end
-        op.view.length -= 1;
-        switch (op.type) {
-            case TOKEN_PLUS_EQUAL: op.type = TOKEN_PLUS; break;
-            case TOKEN_MINUS_EQUAL: op.type = TOKEN_MINUS; break;
-            case TOKEN_SLASH_EQUAL: op.type = TOKEN_SLASH; break;
-            case TOKEN_STAR_EQUAL: op.type = TOKEN_STAR; break;
-            case TOKEN_PERCENT_EQUAL: op.type = TOKEN_PERCENT; break;
-            case TOKEN_PERCENT_PERCENT_EQUAL: op.type = TOKEN_PERCENT_PERCENT; break;
-            case TOKEN_AND_EQUAL: op.type = TOKEN_AND; break;
-            case TOKEN_OR_EQUAL: op.type = TOKEN_OR; break;
-            case TOKEN_NOT_EQUAL: op.type = TOKEN_NOT; break;
-
-            default: UNREACHABLE(); break;
-        }
-
-        ast_node_t *rhs;
-        if (op.type == TOKEN_NOT) {
-            rhs = ast_unary(parser->ast, op, an_rhs(assignment));
-        } else {
-            rhs = ast_binary(parser->ast, op, an_lhs(assignment), an_rhs(assignment));
-        }
-
-        an_rhs(assignment) = rhs;
-
-
-        // make the operator only the equals
-        assignment->operator.loc.column += op.view.length;
-        assignment->operator.view.data += op.view.length;
-        assignment->operator.view.length = 1;
-    }
-
     return assignment;
 }
 
