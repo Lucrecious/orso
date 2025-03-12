@@ -228,7 +228,7 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start) {
             break;
         }
 
-        case AST_NODE_TYPE_EXPRESSION_ITEM_ACCESS:
+        case AST_NODE_TYPE_EXPRESSION_ARRAY_ITEM_ACCESS:
         case AST_NODE_TYPE_EXPRESSION_ASSIGNMENT:
         case AST_NODE_TYPE_EXPRESSION_BINARY: {
             array_push(&node->children, &nil_node);
@@ -687,7 +687,7 @@ static ast_node_t *ast_array_type(ast_t *ast, ast_node_t *size_expr, ast_node_t 
 }
 
 static ast_node_t *ast_item_access(ast_t *ast, ast_node_t *accessee, ast_node_t *accessor) {
-    ast_node_t *item_access = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_ITEM_ACCESS, accessee->start);
+    ast_node_t *item_access = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_ARRAY_ITEM_ACCESS, accessee->start);
     an_item_accessee(item_access) = accessee;
     an_item_accessor(item_access) = accessor;
     item_access->end = accessor->end;
@@ -1767,7 +1767,7 @@ static ast_node_t *parse_precedence(parser_t *parser, prec_t precedence) {
                 break;
             }
 
-            case AST_NODE_TYPE_EXPRESSION_ITEM_ACCESS: {
+            case AST_NODE_TYPE_EXPRESSION_ARRAY_ITEM_ACCESS: {
                 ast_node_t *accessee = left_operand;
                 an_item_accessee(right_operand) = accessee;
                 right_operand->start = left_operand->start;
@@ -2146,7 +2146,7 @@ static void ast_print_ast_node(typedatas_t types, ast_node_t *node, u32 level) {
             break;
         }
 
-        case AST_NODE_TYPE_EXPRESSION_ITEM_ACCESS: {
+        case AST_NODE_TYPE_EXPRESSION_ARRAY_ITEM_ACCESS: {
             print_indent(level);
             print_line("item access: %s", type2cstr(node));
 

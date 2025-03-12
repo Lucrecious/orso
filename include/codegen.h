@@ -701,7 +701,7 @@ static void gen_lvalue(gen_t *gen, function_t *function, ast_node_t *lvalue) {
         break;
     }
 
-    case AST_NODE_TYPE_EXPRESSION_ITEM_ACCESS: {
+    case AST_NODE_TYPE_EXPRESSION_ARRAY_ITEM_ACCESS: {
         ast_node_t *accessee = an_item_accessee(lvalue);
         typedata_t *accessee_td = ast_type2td(gen->ast, accessee->value_type);
         type_t accessee_type;
@@ -1595,7 +1595,7 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
             break;
         }
 
-        case AST_NODE_TYPE_EXPRESSION_ITEM_ACCESS: {
+        case AST_NODE_TYPE_EXPRESSION_ARRAY_ITEM_ACCESS: {
             gen_item_access(gen, function, expression);
             break;
         }

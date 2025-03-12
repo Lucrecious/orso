@@ -12,8 +12,7 @@ typedef int(*fn_int)();
 typedef void(*fn_int_void)(int);
 typedef void(*fn_void)();
 typedef f64(*fn_u64_f64)(u64);
-typedef struct arr_5_int arr_5_int; struct arr_5_int { int arr[5]; };
-typedef arr_5_int* p_arr_5_int;
+typedef struct arr_4_int arr_4_int; struct arr_4_int { int arr[4]; };
 f64 ns2sec_odlfn1_(u64);
 
 f64 ns2sec_odlfn1_(u64 ns_) {
@@ -33,20 +32,19 @@ int expr(void) {
   _module_init_3();
 
   int tmp1; {
-    arr_5_int a_ = (arr_5_int){ .arr={int_(1), int_(2), int_(3), int_(4), int_(5)} };
+    int l_ = int_(1);
 
-    arr_5_int b_ = (arr_5_int){ .arr={int_(6), int_(7), int_(8), int_(9), int_(10)} };
+    arr_4_int x_ = ((arr_4_int){ .arr={l_, l_, l_, l_}});
 
-    p_arr_5_int tmp2; {
-      if ((a_.arr[int_(0)] > b_.arr[int_(0)])) {
-        tmp2 = &(a_);
-      } else {
-        tmp2 = &(b_);
-      }
+    int y_ = int_(1);
+
+    int *tmp3 = (x_.arr);
+    int tmp4; {
+      tmp4 = adds32_(y_, int_(1));
     };
-    int tmp3 = int_(0);
-    int tmp4 = int_(0);
-    tmp1 = (tmp2->arr[tmp3] = tmp4);
+    int *tmp2 = tmp3 + tmp4;
+    int tmp5 = int_(5);
+    tmp1 = (*(tmp2) = tmp5);
   };
 
   return tmp1;

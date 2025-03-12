@@ -1158,7 +1158,7 @@ void resolve_expression(
             break;
         }
 
-        case AST_NODE_TYPE_EXPRESSION_ITEM_ACCESS: {
+        case AST_NODE_TYPE_EXPRESSION_ARRAY_ITEM_ACCESS: {
             ast_node_t *accessee = an_item_accessee(expr);
             resolve_expression(analyzer, ast, state, typeid(TYPE_UNRESOLVED), accessee);
 
@@ -1593,7 +1593,7 @@ void resolve_expression(
                         break;
                     }
 
-                    case AST_NODE_TYPE_EXPRESSION_ITEM_ACCESS: {
+                    case AST_NODE_TYPE_EXPRESSION_ARRAY_ITEM_ACCESS: {
                         type_t type = type_set_fetch_pointer(&ast->type_set, op->lvalue_node->value_type);
                         expr->value_type = type;
                         break;
@@ -2239,7 +2239,7 @@ static void forward_scan_inferred_types(ast_node_t *decl, ast_node_t *decl_type,
         case AST_NODE_TYPE_EXPRESSION_ASSIGNMENT:
         case AST_NODE_TYPE_DECLARATION_DEFINITION: UNREACHABLE(); break;
 
-        case AST_NODE_TYPE_EXPRESSION_ITEM_ACCESS:
+        case AST_NODE_TYPE_EXPRESSION_ARRAY_ITEM_ACCESS:
         case AST_NODE_TYPE_EXPRESSION_CAST:
         case AST_NODE_TYPE_EXPRESSION_BINARY:
         case AST_NODE_TYPE_EXPRESSION_DOT:
