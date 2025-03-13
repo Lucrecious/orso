@@ -1844,17 +1844,6 @@ void cgen_module(cgen_t *cgen, string_t moduleid, ast_node_t *module) {
     cgen_global_decls(cgen, module);
 }
 
-ast_node_t *find_main_or_null(ast_nodes_t decls) {
-    for (size_t i = 0; i < decls.count; ++i) {
-        ast_node_t *decl = decls.items[i];
-        if (sv_eq(decl->identifier.view, lit2sv("main"))) {
-            return decl;
-        }
-    }
-
-    return NULL;
-}
-
 void compile_ast_to_c(ast_t *ast, string_builder_t *sb) {
     cgen_generate_cnames_for_types(ast);
     cgen_t cgen = make_cgen(ast);
@@ -1865,14 +1854,12 @@ void compile_ast_to_c(ast_t *ast, string_builder_t *sb) {
     kh_foreach(ast->moduleid2node, moduleid, module, cgen_cache_requires_tmp(&ast->type_set.types, module));
     kh_foreach(ast->moduleid2node, moduleid, module, cgen_module(&cgen, moduleid, module));
 
-    kh_foreach(ast->moduleid2node, moduleid, module, ({
-        ast_node_t *main_or_null = find_main_or_null(module->children);
-        if (!main_or_null) continue;
+    function_t *main_or_null = find_main_or_null(ast);
 
-        function_t *function = main_or_null->expr_val.word.as.p;
-        string_t funcname = cgen_get_function_name(&cgen, function);
+    if (main_or_null) {
+        string_t funcname = cgen_get_function_name(&cgen, main_or_null);
         sb_add_format(&cgen.sb, "int main() { %s(); }\n\n", funcname.cstr);
-    }));
+    }
 
     sb_add_format(sb, "%.*s", cgen.sb.count, cgen.sb.items);
 }

@@ -189,7 +189,7 @@ static bool load_file(string_t in, string_t *source, arena_t *arena) {
     return true;
 }
 
-ast_t *create_ast(string_t source, arena_t *arena, string_t file_path) {
+ast_t *build_ast(string_t source, arena_t *arena, string_t file_path) {
     ast_t *ast = arena_alloc(arena, sizeof(ast_t));
     ast_init(ast, arena);
 
@@ -238,20 +238,64 @@ bool compile(string_t input_file_path, string_t output_file_path) {
     bool success = load_file(input_file_path, &source, &arena);
     if (!success) exit(1);
 
-    ast_t *ast = create_ast(source, &arena, input_file_path);
+    ast_t *ast = build_ast(source, &arena, input_file_path);
+
+    bool result = false;
 
     if (!ast->resolved) {
         print_errors(ast);
-        return false;
+        return_defer(false);
     }
 
     success = generate_exe(ast, output_file_path);
     if (!success) {
         print_errors(ast);
-        return false;
+        return_defer(false);
+        goto defer;
     }
 
-    return true;
+    return_defer(true);
+
+defer:
+    arena_free(&arena);
+    return result;
+}
+
+bool interpret(string_t input_file_path) {
+    arena_t arena = {0};
+
+    string_t source;
+    bool success = load_file(input_file_path, &source, &arena);
+    if (!success) exit(1);
+
+    ast_t *ast = build_ast(source, &arena, input_file_path);
+
+    bool result = false;
+
+    if (!ast->resolved) {
+        print_errors(ast);
+        return_defer(false);
+    }
+
+    vm_t *vm = vm_default(&arena);
+    success = compile_program(vm, ast);
+    if (!success) {
+        print_errors(ast);
+        return_defer(false);
+        goto defer;
+    }
+
+    function_t *main_or_null = find_main_or_null(ast);
+    if (main_or_null) {
+        vm_fresh_run(vm, main_or_null);
+    }
+
+
+    return_defer(true);
+
+defer:
+    arena_free(&arena);
+    return result;
 }
 
 int main(int argc, char **argv) {
@@ -260,7 +304,8 @@ int main(int argc, char **argv) {
     if (argc) {
         cstr_t filename = nob_shift(argv, argc);
         string_t file = {.cstr=filename, .length=strlen(filename)};
-        compile(file, lit2str("a.out"));
+        interpret(file);
+        // compile(file, lit2str("a.out"));
 
     } else {
         print_usage();

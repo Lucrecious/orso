@@ -9,7 +9,7 @@
 typedef struct analyzer_t {
     ast_t *ast;
     bool had_error;
-    env_t *run_env;
+    vm_t *run_vm;
 
     function_t placeholder;
 
@@ -24,5 +24,6 @@ typedef struct analyzer_t {
 } analyzer_t;
 
 bool resolve_ast(ast_t *ast);
+function_t *find_main_or_null(ast_t *ast);
 
 #endif

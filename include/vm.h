@@ -229,6 +229,11 @@ struct vm_t {
     size_t call_frame_count;
     call_frame_t call_frame;
     word_t registers[REGISTER_COUNT];
+
+    arena_t *arena;
+    memarr_t *program_mem;
+
+    function_t *global_init_func;
     bool halted;
 };
 
@@ -236,16 +241,10 @@ void vm_init(vm_t *vm);
 
 void vm_set_entry_point(vm_t *vm, function_t *entry_point);
 void vm_step(vm_t *vm);
+void vm_global_init(vm_t *vm);
 void vm_fresh_run(vm_t *vm, function_t *entry_point);
 
-typedef struct env_t env_t;
-struct env_t {
-    vm_t *vm;
-    arena_t *arena;
-    memarr_t *memory;
-};
-
-env_t *vm_default_env(arena_t *arena);
+vm_t *vm_default(arena_t *arena);
 
 #endif
 
@@ -279,12 +278,16 @@ void vm_set_entry_point(vm_t *vm, function_t *entry_point) {
     vm->call_frame.pc = 0;
 }
 
+void vm_global_init(vm_t *vm) {
+    vm_fresh_run(vm, vm->global_init_func);
+}
+
 void vm_fresh_run(vm_t *vm, function_t *entry_point) {
     vm_set_entry_point(vm, entry_point);
     until (vm->halted) vm_step(vm);
 }
 
-env_t *vm_default_env(arena_t *arena) {
+vm_t *vm_default(arena_t *arena) {
     memarr_t *memory = arena_alloc(arena, sizeof(memarr_t));
     *memory = (memarr_t){0};
 
@@ -297,10 +300,13 @@ env_t *vm_default_env(arena_t *arena) {
     vm_init(vm);
     vm->registers[REG_STACK_FRAME].as.p = (memory->data + stack_size);
     vm->registers[REG_STACK_BOTTOM].as.p = (memory->data + stack_size);
-    
-    env_t *env = arena_alloc(arena, sizeof(env_t));
-    *env = (env_t){.vm=(vm), .memory=(memory), .arena=(arena)};
-    return env;
+
+    vm->global_init_func = new_function(memory, arena);
+
+    vm->arena = arena;
+    vm->program_mem = memory;
+
+    return vm;
 }
 
 void vm_step(vm_t *vm) {

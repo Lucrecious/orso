@@ -7,8 +7,8 @@
 
 bool compile_program(vm_t *vm, ast_t *ast);
 
-void gen_funcdef(ast_t *ast, env_t *env, ast_node_t *funcdef);
-bool compile_modules(ast_t *ast, memarr_t *program_memory, arena_t *funcarea, function_t *global_init_func);
+void gen_funcdef(ast_t *ast, vm_t *vm, ast_node_t *funcdef);
+bool compile_modules(vm_t *vm, ast_t *ast);
 bool compile_expr_to_function(function_t *function, ast_t *ast, ast_node_t *expr, memarr_t *program_memory, arena_t *function_arena);
 
 #endif
@@ -1184,13 +1184,13 @@ static gen_t make_gen(ast_t *ast, memarr_t *program_memory, arena_t *gen_arena, 
     return gen;
 }
 
-void gen_funcdef(ast_t *ast, env_t *env, ast_node_t *funcdef) {
+void gen_funcdef(ast_t *ast, vm_t *vm, ast_node_t *funcdef) {
     ASSERT(funcdef->expr_val.is_concrete, "should have something there");
     function_t *function = (function_t*)funcdef->expr_val.word.as.p;
     if (function_is_compiled(function)) return;
 
     tmp_arena_t *tmp = allocator_borrow();
-    gen_t gen = make_gen(ast, env->memory, tmp->allocator, env->arena);
+    gen_t gen = make_gen(ast, vm->program_mem, tmp->allocator, vm->arena);
 
     for (size_t i = an_func_def_arg_start(funcdef); i < an_func_def_arg_end(funcdef); ++i) {
         ast_node_t *arg = funcdef->children.items[i];
@@ -1636,15 +1636,15 @@ static void gen_module(gen_t *gen, ast_node_t *module, function_t *init_func) {
     }
 }
 
-bool compile_modules(ast_t *ast, memarr_t *program_memory, arena_t *program_arena, function_t *global_init_func) {
+bool compile_modules(vm_t *vm, ast_t *ast) {
     arena_t arena = {0};
 
-    gen_t gen = make_gen(ast, program_memory, &arena, program_arena);
+    gen_t gen = make_gen(ast, vm->program_mem, &arena, vm->arena);
 
     ast_node_t *module;
-    kh_foreach_value(ast->moduleid2node, module, gen_module(&gen, module, global_init_func));
+    kh_foreach_value(ast->moduleid2node, module, gen_module(&gen, module, vm->global_init_func));
 
-    emit_return(token_end_loc(&module->end), global_init_func);
+    emit_return(token_end_loc(&module->end), vm->global_init_func);
 
     return !gen.had_error;
 }
@@ -1664,54 +1664,12 @@ bool compile_expr_to_function(function_t *function, ast_t *ast, ast_node_t *expr
 }
 
 bool compile_program(vm_t *vm, ast_t *ast) {
-    UNUSED(vm);
-    UNUSED(ast);
-    return false;
-    // tmp_arena_t *tmp = allocator_borrow();
+    bool success = compile_modules(vm, ast);
 
-    // ast_node_t *root = ast->root;
-    // assert(root->node_type == AST_NODE_TYPE_EXPRESSION_BLOCK);
+    if (!success) return false;
 
-    // ast_node_t *main_node = NULL;
-    // string_view_t main_name = cstr2sv("main");
-    // for (size_t i = 0; i < root->as.block.count; ++i) {
-    //     ast_node_t *node = root->as.block.items[i];
-    //     assert(node->node_type == AST_NODE_TYPE_DECLARATION_DEFINITION);
-
-    //     string_view_t identifier = token2sv(node->as.declaration.identifier);
-    //     if (sv_eq(identifier, main_name)) {
-    //         main_node = node;
-    //         break;
-    //     }
-    // }
-
-    // if (!main_node) {
-    //     return false;
-    // }
-
-    // ast_node_t *initial_expression = main_node->as.declaration.initial_value_expression;
-    // if (initial_expression->value_index < 0) {
-    //     return false;
-    // }
-
-    // if (!type_is_function(ast->type_set.types, initial_expression->value_type)) {
-    //     return false;
-    // }
-
-    // // TODO: ignoring the parameters for main
-
-    // assert(initial_expression->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION);
-
-    // //size_t instruction_index = builder.code.count;
-
-    // gen_t gen = {0};
-    // gen.ast = ast;
-    // gen.error_fn = error_fn;
-    // gen_block(&gen, initial_expression->as.function.block);
-
-    // allocator_return(tmp);
-
-    // return true;
+    vm_global_init(vm);
+    return true;
 }
 
 #undef CODEGEN_IMPLEMENTATION

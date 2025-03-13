@@ -768,15 +768,15 @@ static ast_node_t *cast_implicitly_if_necessary(ast_t *ast, type_t dst_type, ast
     return cast;
 }
 
-static bool stan_run(analyzer_t *analyzer, env_t *env, ast_node_t *expr, word_t *out_result) {
+static bool stan_run(analyzer_t *analyzer, vm_t *vm, ast_node_t *expr, word_t *out_result) {
     tmp_arena_t *tmp = allocator_borrow();
 
-    function_t *function = new_function(env->memory, tmp->allocator);
-    compile_expr_to_function(function, analyzer->ast, expr, env->memory, env->arena);
+    function_t *function = new_function(vm->program_mem, tmp->allocator);
+    compile_expr_to_function(function, analyzer->ast, expr, vm->program_mem, vm->arena);
 
-    vm_fresh_run(analyzer->run_env->vm, function);
+    vm_fresh_run(analyzer->run_vm, function);
 
-    word_t result = analyzer->run_env->vm->registers[REG_RESULT];
+    word_t result = analyzer->run_vm->registers[REG_RESULT];
     *out_result = result;
 
     allocator_return(tmp);
@@ -1060,14 +1060,14 @@ void resolve_expression(
 
             --analyzer->pending_dependencies.count;
 
-            if (!analyzer->had_error && analyzer->run_env) {
+            if (!analyzer->had_error && analyzer->run_vm) {
                 unless (TYPE_IS_INVALID(child->value_type)) {
                     typedata_t *td = ast_type2td(ast, child->value_type);
                     size_t size = b2w(td->size);
                     ASSERT(size == 1, "for now types can only be as large as a word");
 
                     word_t result[size];
-                    bool success = stan_run(analyzer, analyzer->run_env, child, result);
+                    bool success = stan_run(analyzer, analyzer->run_vm, child, result);
                     if (success) {
                         expr->expr_val = ast_node_val_word(result[0]);
                         expr->value_type = child->value_type;
@@ -2706,8 +2706,8 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
     // create empty placeholder function immeidately in case definition is recursive
     function_t *function = NULL;
     unless (TYPE_IS_INVALID(an_func_def_block(funcdef)->value_type)) {
-        if (analyzer->run_env) {
-            function = new_function(analyzer->run_env->memory, analyzer->run_env->arena);
+        if (analyzer->run_vm) {
+            function = new_function(analyzer->run_vm->program_mem, analyzer->run_vm->arena);
         } else {
             function = &analyzer->placeholder;
         }
@@ -2748,11 +2748,11 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
         goto defer;
     }
 
-    unless (analyzer->run_env) {
+    unless (analyzer->run_vm) {
         goto defer;
     }
 
-    gen_funcdef(ast, analyzer->run_env, funcdef);
+    gen_funcdef(ast, analyzer->run_vm, funcdef);
 
 defer:
     allocator_return(tmp);
@@ -2820,7 +2820,7 @@ static void analyzer_init(analyzer_t *analyzer, ast_t *ast, arena_t *arena) {
     *analyzer = zer0(analyzer_t);
 
     analyzer->had_error = false;
-    analyzer->run_env = vm_default_env(arena);
+    analyzer->run_vm = vm_default(arena);
     analyzer->ast = ast;
 
     analyzer->arena = arena;
@@ -2850,4 +2850,19 @@ bool resolve_ast(ast_t *ast) {
 
     allocator_return(tmp);
     return ast->resolved;
+}
+
+function_t *find_main_or_null(ast_t *ast) {
+    string_t moduleid;
+    ast_node_t *module;
+    kh_foreach(ast->moduleid2node, moduleid, module, ({
+        for (size_t i = 0; i < module->children.count; ++i) {
+            ast_node_t *decl = module->children.items[i];
+            if (sv_eq(decl->identifier.view, lit2sv("main"))) {
+                return decl->expr_val.word.as.p;
+            }
+        }
+    }));
+
+    return NULL;
 }
