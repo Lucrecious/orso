@@ -1,0 +1,4 @@
+main :: () -> void {
+    printint(1);
+    println();
+};
