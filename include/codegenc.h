@@ -7,7 +7,6 @@
 #include <inttypes.h>
 
 void compile_ast_to_c(ast_t *ast, string_builder_t *sb);
-void compile_expr_to_c(ast_t *ast, ast_node_t *expr_node, string_builder_t *sb);
 
 #endif
 
@@ -1874,44 +1873,6 @@ void compile_ast_to_c(ast_t *ast, string_builder_t *sb) {
         string_t funcname = cgen_get_function_name(&cgen, function);
         sb_add_format(&cgen.sb, "int main() { %s(); }\n\n", funcname.cstr);
     }));
-
-    sb_add_format(sb, "%.*s", cgen.sb.count, cgen.sb.items);
-}
-
-void compile_expr_to_c(ast_t *ast, ast_node_t *expr_node, string_builder_t *sb) {
-    cgen_t cgen = make_cgen(ast);
-
-    compile_ast_to_c(ast, &cgen.sb);
-
-    cgen_cache_requires_tmp(&ast->type_set.types, expr_node);
-
-    cgen_functions(&cgen, expr_node);
-
-    sb_add_cstr(&cgen.sb, "\n");
-
-    sb_add_format(&cgen.sb, "%s expr(void) {\n", cgen_type_name(&cgen, expr_node->value_type));
-    cgen_indent(&cgen);
-
-    // call init functions here
-    ast_node_t *module;
-    kh_foreach_value(ast->moduleid2node, module, {
-        cgen_add_indent(&cgen);
-        sb_add_format(&cgen.sb, "%s();\n", module->ccode_init_func_name.cstr);
-    });
-    sb_add_cstr(&cgen.sb, "\n");
-
-    cgen_var_t var = cgen_next_tmpid(&cgen, expr_node->value_type);
-    cgen_statement(&cgen, expr_node, var, true);
-
-    sb_add_cstr(&cgen.sb, "\n");
-
-    cgen_add_indent(&cgen);
-
-    sb_add_format(&cgen.sb, "return %s;\n", cgen_var_name(&cgen, var));
-
-    cgen_unindent(&cgen);
-
-    sb_add_cstr(&cgen.sb, "}\n");
 
     sb_add_format(sb, "%.*s", cgen.sb.count, cgen.sb.items);
 }
