@@ -1,0 +1,52 @@
+main :: () -> void {
+
+    if i := some(&maybe_int); i {
+        printint(*i);
+        println();
+    };
+
+    x := 1;
+    assert(x == 1);
+
+    // x is an lvalue
+    x = 2;
+    assert(x == 2);
+
+    // taking address of variable
+    ptr := &x;
+
+    // *ptr is an lvalue
+    *ptr = 3;
+    assert(*ptr == x and x == 3);
+
+    y := 0;
+    ptr2 := &y;
+
+    *{if y < x then ptr2 else ptr1;} = 4;
+    assert(y == 4 and x == 3);
+
+    arr := [4]int.{1, 2, 3, 4};
+
+    // setting to array
+    arr[2] = 5;
+    assert(arr[2] == 5);
+
+    // block expression inside accessor
+    arr[{x := 1; x + 1;}] = 8;
+    assert(arr[2] == 8);
+
+    // taking address of array index
+    index_ptr := &arr[3];
+
+    // setting it
+    *index_ptr = 6;
+    assert(*index_ptr == arr[3] and arr[3] == 6);
+
+    arr_ptr := &arr;
+
+    // array access works for arr ptrs as well
+    arr_ptr[1] = 7;
+    assert(arr[1] == 7);
+
+
+};

@@ -53,11 +53,11 @@ static ast_node_t *add_builtin_definition(ast_t *ast, string_view_t identifier, 
     decl->expr_val = ast_node_val_word(word);
     decl->is_mutable = false;
 
-    table_put(s2w, ast->builtins, sv2string(identifier, &ast->allocator), WORDP(decl));
+    table_put(s2w, ast->builtins, sv2string(identifier, ast->arena), WORDP(decl));
 
     for (size_t i = 0; i < INTRINSIC_FUNCTION_COUNT; ++i) {
-        string_t name = cstr2string(intrinsic_fns[i].name, &ast->allocator);
-        string_t cname = cstr2string(intrinsic_fns[i].cname, &ast->allocator);
+        string_t name = cstr2string(intrinsic_fns[i].name, ast->arena);
+        string_t cname = cstr2string(intrinsic_fns[i].cname, ast->arena);
         intrinsic_fn_t fn = intrinsic_fns[i].fn;
 
         table_put(s2w, ast->intrinsic_fns, name, WORDP(fn));
@@ -69,7 +69,7 @@ static ast_node_t *add_builtin_definition(ast_t *ast, string_view_t identifier, 
 
 static void stan_error(analyzer_t *analyzer, error_t error) {
     analyzer->had_error = true;
-    if (analyzer->error_fn) analyzer->error_fn(analyzer->ast, error);
+    array_push(&analyzer->ast->errors, error);
 }
 
 static ast_node_t *get_defval_or_null_by_identifier_and_error(
@@ -177,7 +177,9 @@ static bool fold_funcsig_or_error(analyzer_t *analyzer, ast_t *ast, ast_node_t *
     }
 
     bool hit_error = false;
-    types_t parameter_types = {.allocator=&ast->allocator};
+
+    tmp_arena_t *tmp = allocator_borrow();
+    types_t parameter_types = {.allocator=tmp->allocator};
 
     bool type_is_inferred = false;
 
@@ -204,19 +206,25 @@ static bool fold_funcsig_or_error(analyzer_t *analyzer, ast_t *ast, ast_node_t *
         array_push(&parameter_types, type);
     }
 
+    bool result = false;
+
     if (type_is_inferred) {
         expression->expr_val = ast_node_val_word(WORDT(typeid(TYPE_UNRESOLVED)));
-        return true;
+
+        result = true;
+        goto defer;
     }
 
     if (hit_error) {
-        return false;
+        result = false;
+        goto defer;
     }
 
     ast_node_t *return_type_expression = an_func_def_return(expression);
     if (return_type_expression && !TYPE_IS_TYPE(return_type_expression->value_type)) {
         stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_RETURN_TYPE, return_type_expression));
-        return false;
+        result = false;
+        goto defer;
     }
 
     type_t return_type = typeid(return_type_expression->expr_val.word.as.u);
@@ -228,7 +236,11 @@ static bool fold_funcsig_or_error(analyzer_t *analyzer, ast_t *ast, ast_node_t *
     expression->foldable = true;
     expression->expr_val = ast_node_val_word(funcsig_word);
 
-    return true;
+    result = true;
+
+defer:
+    allocator_return(tmp);
+    return result;
 }
 
 static bool get_nearest_scope_in_func_or_error(
@@ -354,12 +366,6 @@ static void resolve_funcdef(
         ast_t *ast,
         analysis_state_t state,
         ast_node_t *function_definition_expression);
-
-static void resolve_struct_definition(
-    analyzer_t *analyzer,
-    ast_t *ast,
-    analysis_state_t state,
-    ast_node_t *struct_definition);
 
 static void declare_definition(analyzer_t *analyzer, scope_t *scope, ast_node_t *definition);
 
@@ -766,11 +772,11 @@ static bool stan_run(analyzer_t *analyzer, env_t *env, ast_node_t *expr, word_t 
     tmp_arena_t *tmp = allocator_borrow();
 
     function_t *function = new_function(env->memory, tmp->allocator);
-    compile_expr_to_function(function, analyzer->ast, expr, analyzer->error_fn, env->memory, env->arena);
+    compile_expr_to_function(function, analyzer->ast, expr, env->memory, env->arena);
 
-    vm_fresh_run(analyzer->env_or_null->vm, function);
+    vm_fresh_run(analyzer->run_env->vm, function);
 
-    word_t result = analyzer->env_or_null->vm->registers[REG_RESULT];
+    word_t result = analyzer->run_env->vm->registers[REG_RESULT];
     *out_result = result;
 
     allocator_return(tmp);
@@ -861,7 +867,7 @@ void resolve_expression(
 
 static ast_node_t *stan_realize_inferred_funcdef_or_error_and_null(analyzer_t *analyzer, analysis_state_t state, ast_node_t *call, ast_node_t *inferred_funcdef) {
     scope_t scope = {0};
-    scope_init(&scope, &analyzer->allocator, SCOPE_TYPE_INFERRED_PARAMS, state.scope, call);
+    scope_init(&scope, analyzer->ast->arena, SCOPE_TYPE_INFERRED_PARAMS, state.scope, call);
 
     analysis_state_t new_state = state;
     new_state.scope = &scope;
@@ -912,7 +918,7 @@ static ast_node_t *stan_realize_inferred_funcdef_or_error_and_null(analyzer_t *a
 
             resolve_funcdef(analyzer, analyzer->ast, new_state, result);
 
-            matched_values_t matched_values_ = {.allocator=&analyzer->ast->allocator};
+            matched_values_t matched_values_ = {.allocator=analyzer->ast->arena};
             for (size_t i = 0; i < matched_values.count; ++i) array_push(&matched_values_, matched_values.items[i]);
 
             inferred_funcdef_copy_t copy = {
@@ -1042,7 +1048,7 @@ void resolve_expression(
             ASSERT(sv_eq(expr->identifier.view, lit2sv("@run")), "only run is implemented right now");
 
             scope_t scope = {0};
-            scope_init(&scope, &analyzer->allocator, SCOPE_TYPE_FOLD_DIRECTIVE, state.scope, expr);
+            scope_init(&scope, analyzer->ast->arena, SCOPE_TYPE_FOLD_DIRECTIVE, state.scope, expr);
             analysis_state_t new_state = state;
             new_state.scope = &scope;
 
@@ -1054,14 +1060,14 @@ void resolve_expression(
 
             --analyzer->pending_dependencies.count;
 
-            if (!analyzer->had_error && analyzer->env_or_null) {
+            if (!analyzer->had_error && analyzer->run_env) {
                 unless (TYPE_IS_INVALID(child->value_type)) {
                     typedata_t *td = ast_type2td(ast, child->value_type);
                     size_t size = b2w(td->size);
                     ASSERT(size == 1, "for now types can only be as large as a word");
 
                     word_t result[size];
-                    bool success = stan_run(analyzer, analyzer->env_or_null, child, result);
+                    bool success = stan_run(analyzer, analyzer->run_env, child, result);
                     if (success) {
                         expr->expr_val = ast_node_val_word(result[0]);
                         expr->value_type = child->value_type;
@@ -1783,7 +1789,7 @@ void resolve_expression(
 
         case AST_NODE_TYPE_EXPRESSION_BLOCK: {
             scope_t block_scope;
-            scope_init(&block_scope, &analyzer->allocator, SCOPE_TYPE_BLOCK, state.scope, expr);
+            scope_init(&block_scope, analyzer->ast->arena, SCOPE_TYPE_BLOCK, state.scope, expr);
 
             forward_scan_constant_names(analyzer, &block_scope, expr->children);
 
@@ -1852,7 +1858,7 @@ void resolve_expression(
 
             {
                 scope_t condition_scope = {0};
-                scope_init(&condition_scope, &ast->allocator, SCOPE_TYPE_CONDITION, state.scope, an_condition(expr));
+                scope_init(&condition_scope, ast->arena, SCOPE_TYPE_CONDITION, state.scope, an_condition(expr));
 
                 analysis_state_t cond_state = state;
                 cond_state.scope = &condition_scope;
@@ -1868,7 +1874,7 @@ void resolve_expression(
                 case BRANCH_TYPE_FOR:
                 case BRANCH_TYPE_DO:
                 case BRANCH_TYPE_LOOPING: {
-                    scope_init(&return_scope, &analyzer->allocator, SCOPE_TYPE_JMPABLE, state.scope, expr);
+                    scope_init(&return_scope, analyzer->ast->arena, SCOPE_TYPE_JMPABLE, state.scope, expr);
 
                     return_state = state;
                     return_state.scope = &return_scope;
@@ -2043,7 +2049,7 @@ void resolve_expression(
         }
 
         case AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION: {
-            resolve_struct_definition(analyzer, ast, state, expr);
+            UNREACHABLE();
             break;
         }
         
@@ -2218,7 +2224,7 @@ static void declare_definition(analyzer_t *analyzer, scope_t *scope, ast_node_t 
         return;
     }
 
-    add_definition(scope, &analyzer->allocator, string2sv(identifier), definition);
+    add_definition(scope, analyzer->ast->arena, string2sv(identifier), definition);
 
     allocator_return(tmp);
 }
@@ -2337,7 +2343,7 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
     if (TYPE_IS_UNRESOLVED(decl->value_type)) {
         analysis_state_t new_state = state;
         scope_t type_context = {0};
-        scope_init(&type_context, &ast->allocator, SCOPE_TYPE_TYPE_CONTEXT, state.scope, decl_type);
+        scope_init(&type_context, ast->arena, SCOPE_TYPE_TYPE_CONTEXT, state.scope, decl_type);
         new_state.scope = &type_context;
 
         resolve_expression(analyzer, ast, new_state, typeid(TYPE_UNRESOLVED), decl_type);
@@ -2364,7 +2370,7 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
     }
 
     if (TYPE_IS_UNRESOLVED(decl->value_type) && state.scope->type == SCOPE_TYPE_FUNCDEF) {
-        add_definition(state.scope, &analyzer->allocator, decl->identifier.view, decl);
+        add_definition(state.scope, ast->arena, decl->identifier.view, decl);
         return;
     }
 
@@ -2408,7 +2414,7 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
         decl->expr_val = an_decl_expr(decl)->expr_val;
     }
     
-    add_definition(state.scope, &analyzer->allocator, decl->identifier.view, decl);
+    add_definition(state.scope, ast->arena, decl->identifier.view, decl);
 
     // bind it to intrinsic if intrinsic
     {
@@ -2618,8 +2624,10 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
     ASSERT(funcdef->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION, "must be function declaration at this point");
 
     scope_t funcdef_scope;
-    scope_init(&funcdef_scope, &analyzer->allocator, SCOPE_TYPE_FUNCDEF, state.scope, funcdef);
-    types_t parameter_types = {.allocator=&ast->allocator};
+    scope_init(&funcdef_scope, ast->arena, SCOPE_TYPE_FUNCDEF, state.scope, funcdef);
+    
+    tmp_arena_t *tmp = allocator_borrow();
+    types_t parameter_types = {.allocator=tmp->allocator};
 
     // forward scan paramters
     {
@@ -2641,8 +2649,8 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
         for (size_t i = an_func_def_arg_start(funcdef); i < an_func_def_arg_end(funcdef); ++i) {
             ast_node_t *decl = funcdef->children.items[i];
             ast_node_t *decl_type = an_decl_type(decl);
-            type_patterns_t patterns = {.allocator=&ast->allocator};
-            forward_scan_inferred_types(decl, decl_type, &analyzer->allocator, &patterns);
+            type_patterns_t patterns = {.allocator=ast->arena};
+            forward_scan_inferred_types(decl, decl_type, ast->arena, &patterns);
 
             decl->type_decl_patterns.count = 0;
             if (patterns.count > 0) {
@@ -2657,7 +2665,7 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
         type_t function_type = typeid(TYPE_INFERRED_FUNCTION);
         funcdef->value_type = function_type;
         funcdef->expr_val = ast_node_val_word(WORDP(funcdef));
-        return;
+        goto defer;
     }
 
     bool parameter_invalid = false;
@@ -2689,7 +2697,7 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
 
     if (parameter_invalid || TYPE_IS_INVALID(return_type)) {
         INVALIDATE(funcdef);
-        return;
+        goto defer;
     }
 
     type_t function_type = type_set_fetch_function(&ast->type_set, return_type, parameter_types);
@@ -2698,8 +2706,8 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
     // create empty placeholder function immeidately in case definition is recursive
     function_t *function = NULL;
     unless (TYPE_IS_INVALID(an_func_def_block(funcdef)->value_type)) {
-        if (analyzer->env_or_null) {
-            function = new_function(analyzer->env_or_null->memory, analyzer->env_or_null->arena);
+        if (analyzer->run_env) {
+            function = new_function(analyzer->run_env->memory, analyzer->run_env->arena);
         } else {
             function = &analyzer->placeholder;
         }
@@ -2713,7 +2721,7 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
         analysis_state_t new_state = state;
 
         scope_t function_scope;
-        scope_init(&function_scope, &analyzer->allocator, SCOPE_TYPE_FUNC_DEF_BODY, &funcdef_scope, funcdef);
+        scope_init(&function_scope, ast->arena, SCOPE_TYPE_FUNC_DEF_BODY, &funcdef_scope, funcdef);
         new_state.scope = &function_scope;
         resolve_expression(analyzer, ast, new_state, typeid(TYPE_UNRESOLVED), an_func_def_block(funcdef));
     }
@@ -2737,150 +2745,17 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
     --analyzer->pending_dependencies.count;
 
     if (analyzer->had_error) {
-        return;
+        goto defer;
     }
 
-    unless (analyzer->env_or_null) {
-        return;
+    unless (analyzer->run_env) {
+        goto defer;
     }
 
-    gen_funcdef(ast, analyzer->env_or_null, funcdef, analyzer->error_fn);
-}
+    gen_funcdef(ast, analyzer->run_env, funcdef);
 
-// footnote(struct-resolution)
-static void resolve_struct_definition(analyzer_t *analyzer, ast_t *ast, analysis_state_t state, ast_node_t *struct_definition) {
-    scope_t struct_scope;
-    scope_init(&struct_scope, &analyzer->allocator, SCOPE_TYPE_STRUCT, state.scope, struct_definition);
-
-    state.scope = &struct_scope;
-
-    // forward_scan_constant_names(analyzer, state.scope, struct_definition->as.struct_.declarations);
-
-    // s32 declarations_count = struct_definition->as.struct_.declarations.count;
-
-    type_t incomplete_struct_id = type_unique_incomplete_struct_type(&ast->type_set);
-    struct_definition->value_type = incomplete_struct_id;
-
-    // todo: correct value
-    UNREACHABLE();
-    // struct_definition->value_index = value_index_(0);
-
-    ast_node_and_scope_t node_and_scope = {
-        .node = struct_definition,
-        .scope = &struct_scope
-    };
-    table_put(type2ns, ast->type_to_creation_node, struct_definition->value_type, node_and_scope);
-
-    // s32 field_count = 0;
-
-    bool invalid_struct = false;
-    // for (s32 i = 0; i < declarations_count; i++) {
-    //     ast_node_t* declaration = struct_definition->as.struct_.declarations.items[i];
-    //     field_count += (declaration->is_mutable);
-
-    //     resolve_declaration_definition(analyzer, ast, state, declaration);
-
-    //     if (TYPE_IS_INVALID(declaration->value_type) || TYPE_IS_UNRESOLVED(declaration->value_type)) {
-    //         invalid_struct = true;
-    //         break;
-    //     }
-    // }
-
-    if (invalid_struct) {
-        INVALIDATE(struct_definition);
-        ast_node_and_scope_t node_and_scope;
-        table_get(type2ns, ast->type_to_creation_node, struct_definition->value_type, &node_and_scope);
-        node_and_scope.scope = NULL;
-        table_put(type2ns, ast->type_to_creation_node, struct_definition->value_type, node_and_scope);
-        return;
-    }
-
-    // s32 constant_count = declarations_count - field_count;
-
-    // struct_field_t fields[field_count];
-    // ast_node_t* ast_fields[field_count];
-    // struct_constant_t constants[constant_count];
-
-    // {
-    //     s32 field_counter = 0;
-    //     s32 constant_counter = 0;
-
-    //     for (s32 i = 0; i < declarations_count; ++i) {
-    //         token_t identifier = struct_definition->as.struct_.declarations.items[i]->identifier;
-    //         char* name = arena_alloc(&analyzer->allocator, sizeof(char)*(identifier.view.length + 1));
-
-    //         memcpy(name, identifier.view.data, identifier.view.length);
-            
-    //         name[identifier.view.length] = '\0';
-
-    //         if (struct_definition->as.struct_.declarations.items[i]->is_mutable) {
-    //             fields[field_counter].type = struct_definition->as.struct_.declarations.items[i]->value_type;
-    //             fields[field_counter].name = name;
-
-    //             ast_fields[field_counter] = struct_definition->as.struct_.declarations.items[i];
-
-    //             ++field_counter;
-    //         } else {
-    //             constants[constant_counter].type = struct_definition->as.struct_.declarations.items[i]->value_type;
-    //             constants[constant_counter].name = name;
-    //             ++constant_counter;
-    //         }
-    //     }
-    // }
-
-    // typedata_t *complete_struct_type_info;
-
-    // type_t complete_struct_type = type_set_fetch_anonymous_struct(&ast->type_set, field_count, fields, constant_count, constants);
-    // complete_struct_type_info = ast->type_set.types.items[complete_struct_type.i];
-
-    // s32 incomplete_index = -1;
-    // for (s32 i = 0; i < complete_struct_type_info->as.struct_.field_count; i++) {
-    //     type_t field_type = complete_struct_type_info->as.struct_.fields[i].type;
-    //     typedata_t *field_type_info = ast->type_set.types.items[field_type.i];
-    //     if (struct_type_is_incomplete(field_type_info)) {
-    //         incomplete_index = i;
-    //         break;
-    //     }
-    // }
-
-    // if (incomplete_index < 0) {
-    //     struct_definition->value_type = complete_struct_type;
-
-    //     ASSERT(complete_struct_type_info->as.struct_.field_count == field_count, "completed struct must have the same number as fields as ast field declaration nodes");
-
-    //     u64 size_in_slots = b2w(complete_struct_type_info->size);
-    //     byte struct_data[size_in_slots * sizeof(word_t)];
-    //     for (u64 i = 0; i < size_in_slots * sizeof(word_t); i++) {
-    //         struct_data[i] = 0;
-    //     }
-
-        // for (s32 i = 0; i < field_count; i++) {
-            // type_t field_type = complete_struct_type_info->data.struct_.fields[i].type;
-            // u32 offset = complete_struct_type_info->data.struct_.fields[i].offset;
-            // ast_node_t *declaration = ast_fields[i];
-
-    //         // typedata_t *field_type_info = type2typedata(&ast->type_set.types, field_type);
-
-    //         // u32 bytes_to_copy = field_type_info->size;
-
-    //         UNREACHABLE();
-    //         // todo: struct copy
-    //         // void *value_src = ast->constants.data + declaration->value_index.index;
-    //         // memcpy(struct_data + offset, value_src, bytes_to_copy);
-    //     // }
-
-    //     UNREACHABLE();
-    //     // todo: store struct value somewhere
-    //     // struct_definition->value_index = ast_push_constant(ast, struct_data, complete_struct_type);
-
-    //     node_and_scope.scope = NULL;
-    //     table_put(type2ns, ast->type_to_creation_node, complete_struct_type, node_and_scope);
-    // } else {
-    //     INVALIDATE(struct_definition);
-
-    //     // ast_node_t *incomplete_field = struct_definition->as.struct_.declarations.items[incomplete_index];
-    //     // stan_error(analyzer, make_error_node(ERROR_ANALYSIS_EXPECTED_RESOLVED, incomplete_field));
-    // }
+defer:
+    allocator_return(tmp);
 }
 
 static void resolve_declaration_statement(
@@ -2941,53 +2816,38 @@ void resolve_declarations(analyzer_t* analyzer, ast_t* ast, analysis_state_t sta
     }
 }
 
-bool resolve_ast(analyzer_t *analyzer, ast_t *ast) {
+static void analyzer_init(analyzer_t *analyzer, ast_t *ast, arena_t *arena) {
+    *analyzer = zer0(analyzer_t);
+
+    analyzer->had_error = false;
+    analyzer->run_env = vm_default_env(arena);
+    analyzer->ast = ast;
+
+    analyzer->arena = arena;
+    analyzer->placeholder = zer0(function_t);
+    analyzer->pending_dependencies.allocator = arena;
+}
+
+bool resolve_ast(ast_t *ast) {
+    analyzer_t analyzer = {0};
+    tmp_arena_t *tmp = allocator_borrow();
+
+    analyzer_init(&analyzer, ast, tmp->allocator);
+
     ast_node_t *module;
     kh_foreach_value(ast->moduleid2node, module, {
         scope_t global_scope = {0};
-        scope_init(&global_scope, &analyzer->allocator, SCOPE_TYPE_MODULE, NULL, module);
+        scope_init(&global_scope, ast->arena, SCOPE_TYPE_MODULE, NULL, module);
         analysis_state_t state = (analysis_state_t) {
             .scope = &global_scope
         };
 
-        forward_scan_constant_names(analyzer, &global_scope, module->children);
-        resolve_declarations(analyzer, ast, state, module->children);
+        forward_scan_constant_names(&analyzer, &global_scope, module->children);
+        resolve_declarations(&analyzer, ast, state, module->children);
     });
 
-    ast->resolved = !analyzer->had_error;
+    ast->resolved = !analyzer.had_error;
+
+    allocator_return(tmp);
     return ast->resolved;
-}
-
-bool resolve_ast_expr(analyzer_t *analyzer, ast_t *ast, ast_node_t *expr) {
-    scope_t global_scope = {0};
-    scope_init(&global_scope, &analyzer->allocator, SCOPE_TYPE_MODULE, NULL, NULL);
-    analysis_state_t state = (analysis_state_t) {
-        .scope = &global_scope
-    };
-
-    resolve_expression(analyzer, ast, state, typeid(TYPE_UNRESOLVED), expr);
-
-    return !analyzer->had_error;
-}
-
-void analyzer_init(analyzer_t *analyzer, env_t *env, write_function_t write_fn, error_function_t error_fn) {
-    *analyzer = zer0(analyzer_t);
-
-    analyzer->error_fn = error_fn;
-    analyzer->had_error = false;
-    analyzer->env_or_null = env;
-
-    analyzer->allocator = zer0(arena_t);
-    analyzer->placeholder = zer0(function_t);
-    analyzer->pending_dependencies.allocator = &analyzer->allocator;
-
-    // TODO: fix
-    (void)write_fn;
-}
-
-void analyzer_free(analyzer_t *analyzer) {
-    analyzer->ast = NULL;
-
-    analyzer->error_fn = NULL;
-    analyzer->had_error = false;
 }

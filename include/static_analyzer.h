@@ -7,10 +7,9 @@
 #include "vm.h"
 
 typedef struct analyzer_t {
-    error_function_t error_fn;
     ast_t *ast;
     bool had_error;
-    env_t *env_or_null;
+    env_t *run_env;
 
     function_t placeholder;
 
@@ -21,13 +20,9 @@ typedef struct analyzer_t {
         arena_t *allocator;
     } pending_dependencies;
 
-    arena_t allocator;
+    arena_t *arena;
 } analyzer_t;
 
-void analyzer_init(analyzer_t *analyzer, env_t *env, write_function_t write_fn, error_function_t error_fn);
-void analyzer_free(analyzer_t *analyzer);
-
-bool resolve_ast(analyzer_t *analyzer, ast_t *ast);
-bool resolve_ast_expr(analyzer_t *analyzer, ast_t *ast, ast_node_t *expr);
+bool resolve_ast(ast_t *ast);
 
 #endif

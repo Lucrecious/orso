@@ -245,6 +245,8 @@ struct env_t {
     memarr_t *memory;
 };
 
+env_t *vm_default_env(arena_t *arena);
+
 #endif
 
 #ifdef VM_IMPLEMENTATION
@@ -280,6 +282,25 @@ void vm_set_entry_point(vm_t *vm, function_t *entry_point) {
 void vm_fresh_run(vm_t *vm, function_t *entry_point) {
     vm_set_entry_point(vm, entry_point);
     until (vm->halted) vm_step(vm);
+}
+
+env_t *vm_default_env(arena_t *arena) {
+    memarr_t *memory = arena_alloc(arena, sizeof(memarr_t));
+    *memory = (memarr_t){0};
+
+    memarr_init(memory, megabytes(2.5));
+    size_t stack_size = (size_t)megabytes(0.5);
+    memory->count = stack_size;
+    memset(memory->data, 0, stack_size);
+
+    vm_t *vm = arena_alloc(arena, sizeof(vm_t));
+    vm_init(vm);
+    vm->registers[REG_STACK_FRAME].as.p = (memory->data + stack_size);
+    vm->registers[REG_STACK_BOTTOM].as.p = (memory->data + stack_size);
+    
+    env_t *env = arena_alloc(arena, sizeof(env_t));
+    *env = (env_t){.vm=(vm), .memory=(memory), .arena=(arena)};
+    return env;
 }
 
 void vm_step(vm_t *vm) {

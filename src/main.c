@@ -38,6 +38,9 @@
 #define DYNLIB_IMPLEMENTATION
 #include "dynlib.h"
 
+#define TMPFILE_IMPLEMENTATION
+#include "tmpfile.h"
+
 #include "debugger.h"
 
 #include "parser.h"
@@ -146,415 +149,122 @@ void myerror(ast_t *ast, error_t error) {
     }
 }
 
+void print_errors(ast_t *ast) {
+    for (size_t i = 0; i < ast->errors.count; ++i) {
+        error_t error = ast->errors.items[i];
+        myerror(ast, error);
+    }
+}
+
 void mywrite(cstr_t chars) {
     printf("%s", chars);
 }
 
+static void print_usage() {
+    // println("usage:");
+    // println("  orso <filepath> [...]        - runs the given file in the orso interpreter and the optional program arguments");
+    // println("  orso debug <filepath>        - runs the given file in the orso interpreter debugger");
+    // println("  orso build <filepath>        - creates a build.odl file with template code for building orso projects natively");
+    // println("  orso hello <filepath>        - generates a small sample demo of orso into the given file path");
+    // println("");
+    println("usage:");
+    println("  orso run <filepath>          - runs the interpreter on given <filepath>");
+    println("  orso debug <filepath>        - runs the given <filepath> in the orso interpreter debugger");
+    println("  orso build <in> <out>        - creates a native build of the given <in> into an exe <out>");
+    println("");
+}
 
-bool parse_expr_cstr(ast_t *ast, string_view_t expr_source, string_t file_path, env_t *program_env_or_null, ast_node_t **result_expr) {
-    bool success = parse_expr(ast, file_path, expr_source, myerror, result_expr);
+static bool load_file(string_t in, string_t *source, arena_t *arena) {
+    String_Builder sb = {0};
+    bool success = nob_read_entire_file(in.cstr, &sb);
+    if (!success) return false;
 
-    if (success) {
-        analyzer_t analyzer = {0};
-        analyzer_init(&analyzer, program_env_or_null, mywrite, myerror);
-        analyzer.ast = ast;
+    string_builder_t sb_ = {.items=sb.items, .count=sb.count};
+    string_t src = sb_render(&sb_, arena);
 
-        success = resolve_ast_expr(&analyzer, ast, *result_expr);
+    nob_sb_free(sb);
 
-        analyzer_free(&analyzer);
+    *source = src;
+
+    return true;
+}
+
+ast_t *create_ast(string_t source, arena_t *arena, string_t file_path) {
+    ast_t *ast = arena_alloc(arena, sizeof(ast_t));
+    ast_init(ast, arena);
+
+    bool parsed = parse(ast, file_path, string2sv(source));
+
+    if (parsed) {
+        resolve_ast(ast);
     }
+
+    return ast;
+}
+
+bool generate_exe(ast_t *ast, string_t output_path) {
+    tmp_arena_t *tmp = allocator_borrow();
+
+    string_builder_t sb = {.allocator=tmp->allocator};
+
+    compile_ast_to_c(ast, &sb);
+
+    bool success = write_entire_file("./build/tmp.c", sb.items, sb.count);
+
+    cc_t cc = cc_make(CC_GCC, tmp->allocator);
+    cc.output_type = CC_EXE;
+    cc.output_path = string_copy(output_path, tmp->allocator);
+
+    cc_source(&cc, lit2str("./build/tmp.c"));
+
+    cc_include_dir(&cc, lit2str("./lib"));
+    cc_no_warning(&cc, lit2str("unused-value"));
+    
+    // stops warnings from ((x == y)) type of conditions
+    cc_no_warning(&cc, lit2str("parentheses-equality"));
+
+    cc_build(&cc);
+
+    allocator_return(tmp);
+
 
     return success;
 }
 
-typedef enum compiler_mode_type_t compiler_mode_type_t;
-enum compiler_mode_type_t {
-    COMPILER_MODE_TEST,
-    COMPILER_MODE_TEST_GEN,
-    COMPILER_MODE_DEBUG,
-    COMPILER_MODE_AST,
-};
+bool compile(string_t input_file_path, string_t output_file_path) {
+    arena_t arena = {0};
 
-typedef struct compiler_mode_t compiler_mode_t;
-struct compiler_mode_t  {
-    compiler_mode_type_t type;
-    string_t file_or_dir;
-};
+    string_t source;
+    bool success = load_file(input_file_path, &source, &arena);
+    if (!success) exit(1);
 
-compiler_mode_t get_compiler_mode_from_args(int argc, char **argv, arena_t *arena) {
-    compiler_mode_t mode = {0};
-    nob_shift_args(&argc, &argv);
+    ast_t *ast = create_ast(source, &arena, input_file_path);
 
-    while (argc > 0) {
-        cstr_t arg = shift_args(&argc, &argv);
-        if (cstr_eq(arg, "test")) {
-            mode.type = COMPILER_MODE_TEST;
-        } else if (cstr_eq(arg, "testgen")) {
-            mode.type = COMPILER_MODE_TEST_GEN;
-        } else if (cstr_eq(arg, "dbg")) {
-            mode.type = COMPILER_MODE_DEBUG;
-        } else if (cstr_eq(arg, "ast")) {
-            mode.type = COMPILER_MODE_AST;
-        } else {
-            mode.file_or_dir = cstr2string(arg, arena);
-        }
-    }
-
-    return mode;
-}
-
-bool get_first_different_line(string_view_t expected, string_view_t actual, size_t *first_different_line) {
-    *first_different_line = 0;
-    bool is_different = expected.length != actual.length;
-
-    size_t min_size = expected.length < actual.length ? expected.length : actual.length;
-    for (size_t i = 0; i < min_size; ++i) {
-        if (expected.data[i] != actual.data[i]) {
-            return false;
-        }
-
-        *first_different_line += (actual.data[i] == '\n');
-    }
-
-    return !is_different;
-}
-
-string_t coutput_file_from_edl(string_t file, arena_t *arena) {
-    string_view_t coutput_file_prefix = string2sv(file);
-    coutput_file_prefix.length -= 4;
-    string_t coutput_file = string_format("%.*s.c", arena, coutput_file_prefix.length, coutput_file_prefix.data);
-    return coutput_file;
-}
-
-bool parse_expr_file(ast_t *ast, string_t expr_file, env_t *program_env_or_null, ast_node_t **out_expr) {
-    String_Builder sb = {0};
-    bool success = read_entire_file(expr_file.cstr, &sb);
-
-    if (!success) {
+    if (!ast->resolved) {
+        print_errors(ast);
         return false;
     }
-    
-    String_View nob_sv = sb_to_sv(sb);
-    string_view_t code = { .data = nob_sv.data, .length = nob_sv.count };
 
-    code = string2sv(sv2string(code, &ast->allocator));
-
-    success = parse_expr_cstr(ast, code, expr_file, program_env_or_null, out_expr);
-
-    sb_free(sb);
-
-    unless (success) {
+    success = generate_exe(ast, output_file_path);
+    if (!success) {
+        print_errors(ast);
         return false;
     }
 
     return true;
 }
 
-static ast_node_t *parse_module(ast_t *ast, string_t filepath) {
-    String_Builder sb = {0};
-    bool success = read_entire_file(filepath.cstr, &sb);
-    if (!success) {
-        nob_log(ERROR, "cannot read given module at %s", filepath.cstr);
-        exit(1);
-    }
-
-    string_t source;
-    {
-        string_t tmp;
-        tmp.cstr = sb.items;
-        tmp.length = sb.count;
-
-        source = string_copy(tmp, &ast->allocator);
-    }
-
-    sb_free(sb);
-
-    ast_node_t *module = ast_begin_module(ast);
-    success = parse_string_to_module(ast, module, filepath, source, myerror);
-
-    ast_end_module(module);
-
-    return module;
-}
-
-env_t make_test_env(ast_t *ast, vm_t *vm, arena_t *program_arena) {
-    memarr_t *memory = arena_alloc(program_arena, sizeof(memarr_t));
-    *memory = (memarr_t){0};
-
-    memarr_init(memory, megabytes(2.5));
-    size_t stack_size = (size_t)megabytes(0.5);
-    memory->count = stack_size;
-    memset(memory->data, 0, stack_size);
-
-    vm_init(vm);
-    vm->registers[REG_STACK_FRAME].as.p = (memory->data + stack_size);
-    vm->registers[REG_STACK_BOTTOM].as.p = (memory->data + stack_size);
-    
-    env_t env = {.vm=(vm), .memory=(memory), .arena=(program_arena)};
-
-    ast_node_t *module = parse_module(ast, str("./bin/core.odl"));
-    ast_add_module(ast, module, str(CORE_MODULE_NAME));
-
-    analyzer_t analyzer = {0};
-    analyzer_init(&analyzer, &env, mywrite, myerror);
-
-    resolve_ast(&analyzer, ast);
-
-    analyzer_free(&analyzer);
-
-    return env;
-}
-
-static function_t *compile_expr_and_prepare_vm(vm_t *vm, ast_t *ast, env_t *env, ast_node_t *expr) {
-    function_t *init_function = new_function(env->memory, env->arena);
-    compile_modules(ast, myerror, env->memory, env->arena, init_function);
-
-    // tmp_arena_t *tmp = allocator_borrow();
-    // for (size_t i = 0; i < init_function->code.count; ++i) {
-    //     printf("%s\n", disassemble_instruction(init_function->code.items[i], tmp->allocator).cstr);
-    // }
-    // allocator_return(tmp);
-
-    vm_fresh_run(vm, init_function);
-
-    function_t *expr_function = new_function(env->memory, env->arena);
-    compile_expr_to_function(expr_function, ast, expr, myerror, env->memory, env->arena);
-
-    return expr_function;
-}
-
-void test_expr_file(string_t expr_file, arena_t *test_arena) {
-    nob_log(INFO, "---- test: %s", expr_file.cstr);
-
-    ast_t ast = {0};
-    ast_init(&ast);
-
-    vm_t vm = {0};
-    env_t env = make_test_env(&ast, &vm, test_arena);
-
-    ast_node_t *expr;
-    unless (parse_expr_file(&ast, expr_file, &env, &expr)) {
-        nob_log(ERROR, "could not parse: %s", expr_file.cstr);
-        return;
-    }
-    
-    s64 resultvm = INT64_MIN;
-    if (true)
-    {
-        function_t *expr_function = compile_expr_and_prepare_vm(&vm, &ast, &env, expr);
-
-        vm_fresh_run(&vm, expr_function);
-        resultvm = vm.registers[REG_RESULT].as.s;
-    }
-
-    s64 resultc = INT64_MIN;
-    string_t cexpr_str;
-    if (true)
-    {
-        tmp_arena_t *tmp = allocator_borrow();
-        string_builder_t cexpr_sb = {.allocator=tmp->allocator};
-        compile_expr_to_c(&ast, expr, &cexpr_sb);
-
-        cexpr_str = sb_render(&cexpr_sb, test_arena);
-
-        allocator_return(tmp);
-
-        cc_t cc = cc_make(CC_GCC, test_arena);
-        cc.output_type = CC_DYNAMIC;
-
-        cc_mem_source(&cc, cexpr_str);
-
-        cc_include_dir(&cc, lit2str("./lib"));
-        cc_no_warning(&cc, lit2str("unused-value"));
-        
-        // stops warnings from ((x == y)) type of conditions
-        cc_no_warning(&cc, lit2str("parentheses-equality"));
-
-        string_view_t filename_ = sv_filename(string2sv(expr_file));
-        string_t filename = string_format("%.*s.so", test_arena, filename_.length, filename_.data);
-        cc.output_name = filename;
-
-        bool success = cc_build(&cc);
-
-        if (!success) {
-            nob_log(ERROR, "could not build c version of file: %s", expr_file.cstr);
-            return;
-        }
-
-        
-        string_t dll_path = string_format("%s/%s", test_arena, cc.build_dir.cstr, filename.cstr);
-        dynlib_t lib = dynlib_load(dll_path);
-
-        s64 (*expr)(void) = dynlib_symbol(lib, lit2str("expr"));
-
-        dynlib_unload(lib);
-
-        resultc = expr();
-    }
-
-    string_t coutput_file = coutput_file_from_edl(expr_file, test_arena);
-
-    string_view_t ccode = {0};
-    {
-        String_Builder sb = {0};
-        if (file_exists(coutput_file.cstr) && read_entire_file(coutput_file.cstr, &sb)) {
-            String_View nob_sv = sb_to_sv(sb);
-            ccode = (string_view_t){.data = nob_sv.data, .length=nob_sv.count};
-        } else {
-        }
-    }
-
-    if (resultc != resultvm) {
-        nob_log(ERROR, "c value != vm value; %lld != %lld", resultc, resultvm);
-    }
-
-    size_t first_different_line = 0;
-    bool is_same = false;
-    if (ccode.length) {
-        is_same = get_first_different_line(ccode, string2sv(cexpr_str), &first_different_line);
-        if (!is_same) {
-            nob_log(WARNING, "generated c file does not match expected c file starting at %zu", first_different_line+1);
-        }
-    } else {
-        nob_log(WARNING, "no c file output to test against; test will fail");
-    }
-
-    nob_log(INFO, "TEST: %s\n", (resultc == resultvm && is_same) ? "PASS" : "FAIL");
-}
-
-void test_gen_expr_file(string_t expr_file, arena_t *arena) {
-    ast_t ast = {0};
-    ast_init(&ast);
-
-    vm_t vm = {0};
-    env_t env = make_test_env(&ast, &vm, arena);
-
-    ast_node_t *expr;
-    unless (parse_expr_file(&ast, expr_file, &env, &expr)) {
-        nob_log(ERROR, "could not parse: %s", expr_file.cstr);
-        return;
-    }
-
-    tmp_arena_t *tmp = allocator_borrow();
-    string_builder_t sb = {.allocator=tmp->allocator};
-    compile_expr_to_c(&ast, expr, &sb);
-    string_t expr_str = sb_render(&sb, arena);
-    allocator_return(tmp);
-
-    string_t coutput_file = coutput_file_from_edl(expr_file, arena);
-
-    bool success = write_entire_file(coutput_file.cstr, expr_str.cstr, expr_str.length);
-
-    unless (success) {
-        nob_log(ERROR, "could not write to file: %s", coutput_file.cstr);
-    }
-}
-
-void debug_expr_file(string_t expr_file, arena_t *arena) {
-    ast_t ast = {0};
-    ast_init(&ast);
-
-    vm_t vm = {0};
-    env_t env = make_test_env(&ast, &vm, arena);
-
-
-    ast_node_t *expr;
-    unless (parse_expr_file(&ast, expr_file, &env, &expr)) {
-        nob_log(ERROR, "could not parse: %s", expr_file.cstr);
-        return;
-    }
-
-    function_t *expr_function = compile_expr_and_prepare_vm(&vm, &ast, &env, expr);
-    vm_set_entry_point(&vm, expr_function);
-
-    debugger_t debugger = {0};
-    debugger_init(&debugger, arena);
-    while (debugger_step(&debugger, &vm));
-
-}
-
-void ast_expr_file(string_t expr_file, arena_t *arena) {
-    ast_t ast = {0};
-    ast_init(&ast);
-
-    vm_t vm = {0};
-    make_test_env(&ast, &vm, arena);
-
-    ast_node_t *expr;
-    unless (parse_expr_file(&ast, expr_file, NULL, &expr)) {
-        nob_log(ERROR, "could not parse: %s", expr_file.cstr);
-    }
-
-    printf("modules = \n");
-    ast_print(&ast, expr_file.cstr);
-    printf("\n");
-
-    printf("expr = \n");
-    ast_print_node(&ast, expr);
-}
-
 int main(int argc, char **argv) {
-    arena_t arena = {0};
+    nob_shift(argv, argc);
 
-    compiler_mode_t mode = get_compiler_mode_from_args(argc, argv, &arena);
-    if (sv_ends_with(string2sv(mode.file_or_dir), ".edl")) {
-        switch (mode.type) {
-            case COMPILER_MODE_TEST: {
-                test_expr_file(mode.file_or_dir, &arena);
-                break;
-            }
+    if (argc) {
+        cstr_t filename = nob_shift(argv, argc);
+        string_t file = {.cstr=filename, .length=strlen(filename)};
+        compile(file, lit2str("a.out"));
 
-            case COMPILER_MODE_TEST_GEN: {
-                test_gen_expr_file(mode.file_or_dir, &arena);
-                break;
-            }
-
-            case COMPILER_MODE_DEBUG: {
-                debug_expr_file(mode.file_or_dir, &arena);
-                break;
-            }
-
-            case COMPILER_MODE_AST: {
-                ast_expr_file(mode.file_or_dir, &arena);
-                break;
-            }
-        }
     } else {
-        File_Paths paths = {0};
-        unless (read_entire_dir(mode.file_or_dir.cstr, &paths)) {
-            nob_log(ERROR, "could not read files in dir: %s", mode.file_or_dir.cstr);
-            return 1;
-        }
-
-        arena_t loop_arena = {0};
-        for (size_t i = 0; i < paths.count; ++i) {
-            arena_reset(&loop_arena);
-
-            string_t file = string_format("%s/%s", &loop_arena, mode.file_or_dir.cstr, paths.items[i]);
-            if (sv_ends_with(string2sv(file), ".edl")) {
-                switch (mode.type) {
-                    case COMPILER_MODE_TEST: {
-                        test_expr_file(file, &loop_arena);
-                        break;
-                    }
-
-                    case COMPILER_MODE_TEST_GEN: {
-                        test_gen_expr_file(file, &loop_arena);
-                        break;
-                    }
-
-                    case COMPILER_MODE_DEBUG: {
-                        debug_expr_file(file, &loop_arena);
-                        break;
-                    }
-
-                    case COMPILER_MODE_AST: {
-                        ast_expr_file(mode.file_or_dir, &loop_arena);
-                        break;
-                    }
-                }
-            }
-        }
+        print_usage();
+        exit(1);
     }
 }
 

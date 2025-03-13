@@ -7,9 +7,9 @@
 
 bool compile_program(vm_t *vm, ast_t *ast);
 
-void gen_funcdef(ast_t *ast, env_t *env, ast_node_t *funcdef, error_function_t error_fn);
-bool compile_modules(ast_t *ast, error_function_t error_fn, memarr_t *program_memory, arena_t *funcarea, function_t *global_init_func);
-bool compile_expr_to_function(function_t *function, ast_t *ast, ast_node_t *expr, error_function_t error_fn, memarr_t *program_memory, arena_t *function_arena);
+void gen_funcdef(ast_t *ast, env_t *env, ast_node_t *funcdef);
+bool compile_modules(ast_t *ast, memarr_t *program_memory, arena_t *funcarea, function_t *global_init_func);
+bool compile_expr_to_function(function_t *function, ast_t *ast, ast_node_t *expr, memarr_t *program_memory, arena_t *function_arena);
 
 #endif
 
@@ -33,7 +33,6 @@ define_table(ptr2sz, void*, size_t, ptr_hash__, ptr_eq__);
 
 typedef struct gen_t gen_t;
 struct gen_t {
-    error_function_t error_fn;
     ast_t *ast;
     size_t stack_size;
     arena_t *gen_arena;
@@ -55,7 +54,7 @@ struct gen_t {
 
 static void gen_error(gen_t *gen, error_t error) {
     gen->had_error = true;
-    if (gen->error_fn) gen->error_fn(gen->ast, error);
+    array_push(&gen->ast->errors, error);
 }
 
 static void emit_instruction(function_t *function, texloc_t location, instruction_t instruction) {
@@ -1172,10 +1171,9 @@ static void gen_jmp_expr(gen_t *gen, function_t *function, ast_node_t *jmp_expr)
     }
 }
 
-static gen_t make_gen(ast_t *ast, memarr_t *program_memory, error_function_t error_fn, arena_t *gen_arena, arena_t *program_arena) {
+static gen_t make_gen(ast_t *ast, memarr_t *program_memory, arena_t *gen_arena, arena_t *program_arena) {
     gen_t gen = {0};
     gen.ast = ast;
-    gen.error_fn = error_fn;
     gen.gen_arena = gen_arena;
     gen.locals.allocator = gen_arena;
     gen.program_arena = program_arena;
@@ -1186,13 +1184,13 @@ static gen_t make_gen(ast_t *ast, memarr_t *program_memory, error_function_t err
     return gen;
 }
 
-void gen_funcdef(ast_t *ast, env_t *env, ast_node_t *funcdef, error_function_t error_fn) {
+void gen_funcdef(ast_t *ast, env_t *env, ast_node_t *funcdef) {
     ASSERT(funcdef->expr_val.is_concrete, "should have something there");
     function_t *function = (function_t*)funcdef->expr_val.word.as.p;
     if (function_is_compiled(function)) return;
 
     tmp_arena_t *tmp = allocator_borrow();
-    gen_t gen = make_gen(ast, env->memory, error_fn, tmp->allocator, env->arena);
+    gen_t gen = make_gen(ast, env->memory, tmp->allocator, env->arena);
 
     for (size_t i = an_func_def_arg_start(funcdef); i < an_func_def_arg_end(funcdef); ++i) {
         ast_node_t *arg = funcdef->children.items[i];
@@ -1638,10 +1636,10 @@ static void gen_module(gen_t *gen, ast_node_t *module, function_t *init_func) {
     }
 }
 
-bool compile_modules(ast_t *ast, error_function_t error_fn, memarr_t *program_memory, arena_t *program_arena, function_t *global_init_func) {
+bool compile_modules(ast_t *ast, memarr_t *program_memory, arena_t *program_arena, function_t *global_init_func) {
     arena_t arena = {0};
 
-    gen_t gen = make_gen(ast, program_memory, error_fn, &arena, program_arena);
+    gen_t gen = make_gen(ast, program_memory, &arena, program_arena);
 
     ast_node_t *module;
     kh_foreach_value(ast->moduleid2node, module, gen_module(&gen, module, global_init_func));
@@ -1651,10 +1649,10 @@ bool compile_modules(ast_t *ast, error_function_t error_fn, memarr_t *program_me
     return !gen.had_error;
 }
 
-bool compile_expr_to_function(function_t *function, ast_t *ast, ast_node_t *expr, error_function_t error_fn, memarr_t *program_memory, arena_t *program_arena) {
+bool compile_expr_to_function(function_t *function, ast_t *ast, ast_node_t *expr, memarr_t *program_memory, arena_t *program_arena) {
     arena_t arena = {0};
 
-    gen_t gen = make_gen(ast, program_memory, error_fn, &arena, program_arena);
+    gen_t gen = make_gen(ast, program_memory, &arena, program_arena);
 
     gen_expression(&gen, function, expr);
 

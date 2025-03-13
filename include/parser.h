@@ -315,13 +315,23 @@ struct fd_pairs_t {
 
 declare_table(p2s, void*, string_t);
 
+typedef struct errors_t errors_t;
+struct errors_t {
+    error_t *items;
+    size_t count;
+    size_t capacity;
+    arena_t *allocator;
+};
+
 typedef struct ast_t {
-    arena_t allocator;
+    arena_t *arena;
 
     bool resolved;
     type_table_t type_set;
 
     memarr_t multiword_data;
+
+    errors_t errors;
 
     table_t(s2w) *builtins;
     table_t(s2w) *intrinsic_fns;
@@ -336,12 +346,10 @@ typedef struct ast_t {
 void ast_print_node(ast_t *ast, ast_node_t *node);
 void ast_print(ast_t *ast, const char *name);
 
-bool parse_string_to_module(ast_t *ast, ast_node_t *module, string_t filepath, string_t source, error_function_t error_fn);
-bool parse_expr(ast_t *ast, string_t file_path, string_view_t source, error_function_t error_fn, ast_node_t **result);
-bool parse(ast_t *ast, string_t file_path, string_view_t source, error_function_t error_fn);
+bool parse_string_to_module(ast_t *ast, ast_node_t *module, string_t filepath, string_view_t source);
+bool parse(ast_t *ast, string_t file_path, string_view_t source);
 
-void ast_init(ast_t *ast);
-void ast_free(ast_t *ast);
+void ast_init(ast_t *ast, arena_t *arena);
 
 #define ast_type2td(ast, type) type2typedata(&((ast)->type_set.types), (type))
 

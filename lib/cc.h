@@ -20,16 +20,15 @@ typedef struct cc_t cc_t;
 struct cc_t {
     arena_t *arena;
     cc_cc_t cc;
-    string_t output_name;
-    string_t build_dir;
+    string_t output_path;
     cc_output_type_t output_type;
-    strings_t mem_sources;
+    strings_t sources;
     strings_t include_dirs;
     strings_t no_warnings;
 };
 
 cc_t cc_make(cc_cc_t cc_cc, arena_t *arena);
-void cc_mem_source(cc_t *cc, string_t mem_source);
+void cc_source(cc_t *cc, string_t mem_source);
 void cc_include_dir(cc_t *cc, string_t dir);
 void cc_no_warning(cc_t *cc, string_t warning);
 bool cc_build(cc_t *cc);
@@ -42,17 +41,16 @@ cc_t cc_make(cc_cc_t cc_cc, arena_t *arena) {
     return (cc_t){
         .cc = cc_cc,
         .arena = arena, 
-        .mem_sources = {.allocator=arena},
+        .sources = {.allocator=arena},
         .include_dirs = {.allocator=arena},
         .no_warnings = {.allocator=arena},
-        .output_name = lit2str("a.out"),
-        .build_dir = lit2str("./build"),
+        .output_path = lit2str("a.out"),
         .output_type = CC_EXE
     };
 }
 
-void cc_mem_source(cc_t *cc, string_t mem_source) {
-    array_push(&cc->mem_sources, string_copy(mem_source, cc->arena));
+void cc_source(cc_t *cc, string_t source_path) {
+    array_push(&cc->sources, string_copy(source_path, cc->arena));
 }
 
 void cc_include_dir(cc_t *cc, string_t dir) {
@@ -75,19 +73,11 @@ bool cc_build(cc_t *cc) {
     strings_t source_paths = {.allocator=cc->arena};
     strings_t source_out_paths = {.allocator=cc->arena};
 
-    bool success = mkdir_if_not_exists(cc->build_dir.cstr);
-    if (!success) return false;
-
-    // write mem sources
-    for (size_t i = 0; i < cc->mem_sources.count; ++i) {
-        string_t path = string_format("%s/%s%llu.c", cc->arena, cc->build_dir.cstr, "tmp", i);
+    for (size_t i = 0; i < cc->sources.count; ++i) {
+        string_t path = cc->sources.items[i];
         array_push(&source_paths, path);
 
-        string_t mem_source = cc->mem_sources.items[i];
-        bool success = write_entire_file(path.cstr, mem_source.cstr, mem_source.length);
-        if (!success) return false;
-
-        string_t patho = string_format("%s/%s%llu.o", cc->arena, cc->build_dir.cstr, "tmp", i);
+        string_t patho = string_format("%s%llu.o", cc->arena, path.cstr, i);
         array_push(&source_out_paths, patho);
     }
 
@@ -119,11 +109,11 @@ bool cc_build(cc_t *cc) {
         string_t source_out_path = source_out_paths.items[i];
         cmd_append(&cmd, source_out_path.cstr);
 
-        success = cmd_run_sync_and_reset(&cmd);
+        bool success = cmd_run_sync_and_reset(&cmd);
         if (!success) return false;
     }
 
-    string_t outfile = string_format("%s/%s", cc->arena, cc->build_dir.cstr, cc->output_name.cstr);
+    string_t outfile = string_format("%s", cc->arena, cc->output_path.cstr);
 
     switch (cc->output_type) {
         case CC_DYNAMIC: {
@@ -138,17 +128,33 @@ bool cc_build(cc_t *cc) {
                 cmd_append(&cmd, source_out_path.cstr);
             }
 
-            success = cmd_run_sync_and_reset(&cmd);
+            bool success = cmd_run_sync_and_reset(&cmd);
             if (!success) return false;
 
             break;
         }
 
-        case CC_EXE:
+        case CC_EXE: {
+            cmd_append(&cmd, cc_name_.cstr);
+
+            cmd_append(&cmd, "-o");
+
+            cmd_append(&cmd, outfile.cstr);
+
+            for (size_t i = 0; i < source_out_paths.count; ++i) {
+                string_t source_out_path = source_out_paths.items[i];
+                cmd_append(&cmd, source_out_path.cstr);
+            }
+
+            bool success = cmd_run_sync_and_reset(&cmd);
+            if (!success) return false;
+
+            break;
+        }
         case CC_STATIC: UNREACHABLE(); break;
     }
 
-    return success;
+    return true;
 }
 
 #undef CC_IMPLEMENTATION

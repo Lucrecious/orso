@@ -1081,10 +1081,10 @@ static void cgen_branching(cgen_t *cgen, ast_node_t *branch, cgen_var_t var) {
         case BRANCH_TYPE_FOR:
         case BRANCH_TYPE_DO: {
             if (has_var(var)) {
-                branch->ccode_var_name = cstr2string(cgen_var(cgen, cgen_var_used(var)), &cgen->ast->allocator);
+                branch->ccode_var_name = cstr2string(cgen_var(cgen, cgen_var_used(var)), cgen->ast->arena);
             }
-            branch->ccode_break_label = string_copy(cgen_next_label(cgen, "break"), &cgen->ast->allocator);
-            branch->ccode_continue_label = string_copy(cgen_next_label(cgen, "continue"), &cgen->ast->allocator);
+            branch->ccode_break_label = string_copy(cgen_next_label(cgen, "break"), cgen->ast->arena);
+            branch->ccode_continue_label = string_copy(cgen_next_label(cgen, "continue"), cgen->ast->arena);
             if (branch->branch_type == BRANCH_TYPE_LOOPING || branch->branch_type == BRANCH_TYPE_FOR) {
                 cgen_while_or_for(cgen, branch, var);
             } else {
@@ -1651,7 +1651,7 @@ void cgen_functions(cgen_t *cgen, ast_node_t *top_node) {
 
 static void cgen_generate_cnames_for_types(ast_t *ast) {
     typedatas_t *tds = &ast->type_set.types;
-    arena_t *arena = &ast->allocator;
+    arena_t *arena = ast->arena;
 
     for (size_t i = 0; i < tds->count; ++i) {
         typedata_t *td = tds->items[i];
@@ -1845,6 +1845,17 @@ void cgen_module(cgen_t *cgen, string_t moduleid, ast_node_t *module) {
     cgen_global_decls(cgen, module);
 }
 
+ast_node_t *find_main_or_null(ast_nodes_t decls) {
+    for (size_t i = 0; i < decls.count; ++i) {
+        ast_node_t *decl = decls.items[i];
+        if (sv_eq(decl->identifier.view, lit2sv("main"))) {
+            return decl;
+        }
+    }
+
+    return NULL;
+}
+
 void compile_ast_to_c(ast_t *ast, string_builder_t *sb) {
     cgen_generate_cnames_for_types(ast);
     cgen_t cgen = make_cgen(ast);
@@ -1854,6 +1865,15 @@ void compile_ast_to_c(ast_t *ast, string_builder_t *sb) {
     ast_node_t *module;
     kh_foreach(ast->moduleid2node, moduleid, module, cgen_cache_requires_tmp(&ast->type_set.types, module));
     kh_foreach(ast->moduleid2node, moduleid, module, cgen_module(&cgen, moduleid, module));
+
+    kh_foreach(ast->moduleid2node, moduleid, module, ({
+        ast_node_t *main_or_null = find_main_or_null(module->children);
+        if (!main_or_null) continue;
+
+        function_t *function = main_or_null->expr_val.word.as.p;
+        string_t funcname = cgen_get_function_name(&cgen, function);
+        sb_add_format(&cgen.sb, "int main() { %s(); }\n\n", funcname.cstr);
+    }));
 
     sb_add_format(sb, "%.*s", cgen.sb.count, cgen.sb.items);
 }

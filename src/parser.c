@@ -102,7 +102,6 @@ static bool hasheq_(void *a, void *b) {
 implement_table(p2s, void*, string_t, hashptr_, hasheq_);
 
 typedef struct parser_t {
-    error_function_t error_fn;
     ast_t *ast;
     lexer_t lexer;
     token_t previous;
@@ -139,26 +138,24 @@ typedef struct {
     prec_t precedence;
 } parse_rule_t;
 
-void ast_init(ast_t *ast) {
+void ast_init(ast_t *ast, arena_t *arena) {
     *ast = zer0(ast_t);
-    ast->allocator = (arena_t){0};
+    ast->arena = arena;
     ast->resolved = false;
     
-    type_set_init(&ast->type_set, &ast->allocator);
+    type_set_init(&ast->type_set, ast->arena);
 
     memarr_init(&ast->multiword_data, megabytes(0.5));
 
-    ast->builtins = table_new(s2w, &ast->allocator);
-    ast->intrinsic_fns = table_new(s2w, &ast->allocator);
-    ast->intrinsicfn2cname = table_new(p2s, &ast->allocator);
-    ast->moduleid2node = table_new(s2n, &ast->allocator);
+    ast->errors = (errors_t){.allocator=arena};
 
-    ast->type_to_zero_word = table_new(t2w, &ast->allocator);
-    ast->type_to_creation_node = table_new(type2ns, &ast->allocator);
-}
+    ast->builtins = table_new(s2w, ast->arena);
+    ast->intrinsic_fns = table_new(s2w, ast->arena);
+    ast->intrinsicfn2cname = table_new(p2s, ast->arena);
+    ast->moduleid2node = table_new(s2n, ast->arena);
 
-void ast_free(ast_t *ast) {
-    arena_free(&ast->allocator);
+    ast->type_to_zero_word = table_new(t2w, ast->arena);
+    ast->type_to_creation_node = table_new(type2ns, ast->arena);
 }
 
 ast_node_t nil_node = {
@@ -180,7 +177,7 @@ ast_node_t nil_node = {
 };
 
 ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start) {
-    ast_node_t *node = (ast_node_t*)arena_alloc(&ast->allocator, sizeof(ast_node_t));
+    ast_node_t *node = (ast_node_t*)arena_alloc(ast->arena, sizeof(ast_node_t));
     *node = (ast_node_t){0};
     
     node->node_type = node_type;
@@ -204,7 +201,7 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start) {
     node->identifier = nil_token;
     node->ref_decl = &nil_node;
 
-    node->jmp_nodes.allocator = &ast->allocator;
+    node->jmp_nodes.allocator = ast->arena;
     node->jmp_out_scope_node = &nil_node;
 
     node->lvalue_node = &nil_node;
@@ -213,9 +210,9 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start) {
 
     node->last_statement = &nil_node;
 
-    node->children = (ast_nodes_t){.allocator=&ast->allocator};
-    node->realized_funcdef_copies = (inferred_funcdef_copies_t){.allocator=&ast->allocator};
-    node->type_decl_patterns = (type_patterns_t){.allocator=&ast->allocator};
+    node->children = (ast_nodes_t){.allocator=ast->arena};
+    node->realized_funcdef_copies = (inferred_funcdef_copies_t){.allocator=ast->arena};
+    node->type_decl_patterns = (type_patterns_t){.allocator=ast->arena};
 
     switch (node_type) {
         case AST_NODE_TYPE_DECLARATION_DEFINITION: {
@@ -356,7 +353,7 @@ ast_node_t *ast_node_copy(ast_t *ast, ast_node_t *node) {
     for (size_t i = 0; i < node->type_decl_patterns.count; ++i) {
         type_pattern_t pattern = node->type_decl_patterns.items[i];
 
-        pattern.expected = type_path_copy(pattern.expected, &ast->allocator);
+        pattern.expected = type_path_copy(pattern.expected, ast->arena);
 
         array_push(&copy->type_decl_patterns, pattern);
     }
@@ -394,7 +391,7 @@ void ast_end_module(ast_node_t *module) {
 }
 
 void ast_add_module(ast_t *ast, ast_node_t *module, string_t moduleid) {
-    moduleid = string_copy(moduleid, &ast->allocator);
+    moduleid = string_copy(moduleid, ast->arena);
     table_put(s2n, ast->moduleid2node, moduleid, module);
 }
 
@@ -714,10 +711,9 @@ static ast_node_t *ast_for(ast_t *ast, ast_node_t *decl, ast_node_t *cond, ast_n
     return n;
 }
 
-static void parser_init(parser_t *parser, ast_t *ast, string_t file_path, string_view_t source, error_function_t error_fn) {
+static void parser_init(parser_t *parser, ast_t *ast, string_t file_path, string_view_t source) {
     lexer_init(&parser->lexer, file_path, source);
     parser->ast = ast;
-    parser->error_fn = error_fn;
     parser->had_error = false;
     parser->panic_mode = false;
     parser->inside_type_context = false;
@@ -731,7 +727,7 @@ static void parser_error(parser_t *parser, error_t error) {
         parser->panic_mode = true;
     }
 
-    if (parser->error_fn) parser->error_fn(parser->ast, error);
+    array_push(&parser->ast->errors, error);
 }
 
 static void advance(parser_t *parser) {
@@ -1952,9 +1948,9 @@ static void parse_into_module(parser_t *parser, ast_node_t *module) {
     }
 }
 
-bool parse_string_to_module(ast_t *ast, ast_node_t *module, string_t filepath, string_t source, error_function_t error_fn) {
+bool parse_string_to_module(ast_t *ast, ast_node_t *module, string_t filepath, string_view_t source) {
     parser_t parser = {0};
-    parser_init(&parser, ast, filepath, string2sv(source), error_fn);
+    parser_init(&parser, ast, filepath, source);
     
     advance(&parser);
 
@@ -1963,39 +1959,14 @@ bool parse_string_to_module(ast_t *ast, ast_node_t *module, string_t filepath, s
     return !parser.had_error;
 }
 
-bool parse_expr(ast_t *ast, string_t file_path, string_view_t source, error_function_t error_fn, ast_node_t **result) {
-    parser_t parser = {0};
-    parser_init(&parser, ast, file_path, source, error_fn);
+bool parse(ast_t *ast, string_t file_path, string_view_t source) {
+    ast_node_t *module = ast_begin_module(ast);
+    parse_string_to_module(ast, module, file_path, source);
+    ast_end_module(module);
 
-    advance(&parser);
+    ast_add_module(ast, module, lit2str("program"));
 
-    parser.inside_type_context = false;
-    ast_node_t *expr = parse_precedence(&parser, PREC_BLOCK);
-
-    unless (consume(&parser, TOKEN_EOF)) {
-        parser_error(&parser, make_error_token(ERROR_PARSER_EXPECTED_EOF_AFTER_EXPRESSION, parser.current, parser.previous));
-    }
-
-    *result = expr;
-
-    return !parser.had_error;
-}
-
-// todo: needs more thought, why have two functions (expr and parse), should be we parse into a module
-bool parse(ast_t *ast, string_t file_path, string_view_t source, error_function_t error_fn) {
-    UNUSED(ast);
-    UNUSED(file_path);
-    UNUSED(source);
-    UNUSED(error_fn);
-    // parser_t parser = {0};
-    // parser_init(&parser, ast, file_path, source, error_fn);
-
-    // advance(&parser);
-
-    // ast->root = ast_node_new(parser.ast, AST_NODE_TYPE_EXPRESSION_BLOCK, parser.previous);
-
-    // return !parser.had_error;
-    return false;
+    return ast->errors.count == 0;
 }
 
 word_t *ast_multiword_value(ast_t *ast, size_t size_words) {
