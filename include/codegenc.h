@@ -631,7 +631,7 @@ static void cgen_unary(cgen_t *cgen, ast_node_t *unary, cgen_var_t var) {
         sb_add_cstr(&cgen->sb, ")");
     } else {
         cgen_var_t op_var = cgen_next_tmpid(cgen, an_operand(unary)->value_type);
-        cgen_statement(cgen, an_operand(unary), var, false);
+        cgen_statement(cgen, an_operand(unary), op_var, false);
 
         cgen_add_indent(cgen);
 
@@ -646,19 +646,27 @@ static void cgen_unary(cgen_t *cgen, ast_node_t *unary, cgen_var_t var) {
 static void cgen_lvalue(cgen_t *cgen, ast_node_t *lvalue, cgen_var_t var) {
     switch (lvalue->node_type) {
     case AST_NODE_TYPE_EXPRESSION_UNARY: {
+        ASSERT(lvalue->operator.type == TOKEN_STAR, "must");
         ast_node_t *operand = an_operand(lvalue);
 
-        cgen_expression(cgen, operand, var);
-        // unless (lvalue->requires_tmp_for_cgen) {
-        //     ASSERT(lvalue->operator.type == TOKEN_STAR, "must");
+        unless (lvalue->requires_tmp_for_cgen) {
+            if (has_var(var)) {
+                sb_add_format(&cgen->sb, "%s = ", cgen_lvar(cgen, var));
+            }
 
-        //     if (has_var(var)) {
-        //         sb_add_format(&cgen->sb, "%s = ", cgen_lvar(cgen, var));
-        //     }
+            cgen_expression(cgen, operand, nil_cvar);
+        } else {
+            cgen_var_t lvalue_var = cgen_next_tmpid(cgen, operand->value_type);
+            cgen_statement(cgen, operand, lvalue_var, false);
 
-        //     cgen_expression(cgen, operand, nil_cvar);
-        // } else {
-        // }
+            cgen_add_indent(cgen);
+
+            if (has_var(var)) {
+                sb_add_format(&cgen->sb, "%s = ", cgen_lvar(cgen, var));
+            }
+
+            sb_add_format(&cgen->sb, "%s", cgen_var_name(cgen, lvalue_var));
+        }
         break;
     }
 
@@ -711,10 +719,20 @@ static void cgen_lvalue(cgen_t *cgen, ast_node_t *lvalue, cgen_var_t var) {
             default: UNREACHABLE(); break;
             }
 
-            cgen_var_t lvalue_var = cgen_next_tmpid(cgen, lvalue->value_type);
+            cgen_var_t lvalue_var;
             if (is_pointer) {
+                lvalue_var = cgen_next_tmpid(cgen, accessee->value_type);
                 cgen_expression(cgen, accessee, lvalue_var);
+                cgen_semicolon_nl(cgen);
+
+                cgen_var_t ptr_var = lvalue_var;
+                lvalue_var = cgen_next_tmpid(cgen, lvalue->value_type);
+
+                cgen_add_indent(cgen);
+                sb_add_format(&cgen->sb, "%s = %s->arr", cgen_lvar(cgen, lvalue_var), cgen_var_name(cgen, ptr_var));
+
             } else {
+                lvalue_var = cgen_next_tmpid(cgen, lvalue->value_type);
                 cgen_lvalue(cgen, accessee->lvalue_node, lvalue_var);
             }
 

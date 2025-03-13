@@ -6,7 +6,7 @@ typedef const char *cstr_t;
 void print_usage(void) {
     printf("usage :\n");
     printf("  test              - prints this usage text\n");
-    printf("  test <testpath>   - <testpath> is the relative path to the odl file to test\n");
+    printf("  test <testpath>   - <testpath> is the relative path to the odl file to test, paths ending in / or \\\\ will test the directory recursively\n");
     printf("\n");
 }
 
@@ -36,7 +36,7 @@ int main(int argc, char *argv[]) {
 
     nob_cmd_append(&cmd, "./bin/orso", "build", test_file_path, executable_file_path);
 
-    if (!nob_cmd_run_sync_and_reset(&cmd)) exit(1);
+    if (!nob_cmd_run_sync_and_reset(&cmd)) nob_return_defer(1);
 
     cstr_t call_test = nob_temp_sprintf("./%s", executable_file_path);
     nob_cmd_append(&cmd, call_test);

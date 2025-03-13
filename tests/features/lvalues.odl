@@ -1,52 +1,106 @@
 main :: () -> void {
+    {
+        x := 1;
+        y := 3;
 
-    if i := some(&maybe_int); i {
-        printint(*i);
+        printint(x);
+        printint(y);
+        println();
+
+        x = 5;
+        printint(x);
+        printint(y);
+        println();
+
+        y = 10;
+
+        printint(x);
+        printint(y);
         println();
     };
 
-    x := 1;
-    assert(x == 1);
+    {
+        a := 10;
+        a_ptr := &a;
+        a_ptr = &(((a)));
 
-    // x is an lvalue
-    x = 2;
-    assert(x == 2);
+        b := *a_ptr;
+        b = *(((a_ptr)));
+        printint(a);
+        printint(b);
+        println();
 
-    // taking address of variable
-    ptr := &x;
-
-    // *ptr is an lvalue
-    *ptr = 3;
-    assert(*ptr == x and x == 3);
-
-    y := 0;
-    ptr2 := &y;
-
-    *{if y < x then ptr2 else ptr1;} = 4;
-    assert(y == 4 and x == 3);
-
-    arr := [4]int.{1, 2, 3, 4};
-
-    // setting to array
-    arr[2] = 5;
-    assert(arr[2] == 5);
-
-    // block expression inside accessor
-    arr[{x := 1; x + 1;}] = 8;
-    assert(arr[2] == 8);
-
-    // taking address of array index
-    index_ptr := &arr[3];
-
-    // setting it
-    *index_ptr = 6;
-    assert(*index_ptr == arr[3] and arr[3] == 6);
-
-    arr_ptr := &arr;
-
-    // array access works for arr ptrs as well
-    arr_ptr[1] = 7;
-    assert(arr[1] == 7);
+        a = 11;
+        b = *{a_ptr;};
+        printint(a);
+        printint(b);
+        println();
 
 
+        *((a_ptr)) = 12;
+        printint(*a_ptr);
+        printint(a);
+        printint(b);
+        println();
+
+        *{a_ptr;} = 15;
+        printint(*a_ptr);
+        printint(a);
+        println();
+    };
+
+    {
+        arr := [10]int.{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+
+        a := arr[5];
+        printint(a);
+        printint(arr[5]);
+        println();
+
+        a = 10;
+        printint(a);
+        printint(arr[5]);
+        println();
+
+        a = ((arr))[{5;}];
+        printint(a);
+        printint(arr[5]);
+        println();
+
+        ((arr))[5] = 100;
+        printint(arr[5]);
+        println();
+
+        ((arr))[{5;}] = 200;
+        printint(arr[5]);
+        println();
+    };
+
+    {
+        arr_ := [10]int.{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+        arr := &arr_;
+
+        a := arr[5];
+        printint(a);
+        printint(arr[5]);
+        println();
+
+        a = 10;
+        printint(a);
+        printint(arr[5]);
+        println();
+
+        a = ((arr))[{5;}];
+        printint(a);
+        printint(arr[5]);
+        println();
+
+        ((arr))[5] = 100;
+        printint(arr[5]);
+        println();
+
+        ((arr))[{5;}] = 200;
+        printint(arr[5]);
+        println();
+    };
 };
