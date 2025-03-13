@@ -136,6 +136,18 @@ int main(int argc, char **argv) {
 
     nob_mkdir_if_not_exists("./bin");
 
+    // build test
+    {
+        c_builder_t cb = {.allocator=&allocator};
+        cb.std = cb_std_c99;
+        cb_flags(&cb, 3, "-Wall", "-Wextra", "-fsanitize=address");
+
+        cb_source(&cb, "./tests/test.c");
+        cb.output = nob_temp_sprintf("./bin/test");
+
+        cb_build(&cb);
+    }
+
     c_builder_t cb = {.allocator=&allocator};
     cb.std = cb_std_c99;
     cb_flags(&cb, 3, "-Wall", "-Wextra", "-fsanitize=address");

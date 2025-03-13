@@ -168,6 +168,7 @@ static void print_usage() {
     // println("  orso hello <filepath>        - generates a small sample demo of orso into the given file path");
     // println("");
     println("usage:");
+    println("  orso                         - prints this usage text");
     println("  orso run <filepath>          - runs the interpreter on given <filepath>");
     println("  orso debug <filepath>        - runs the given <filepath> in the orso interpreter debugger");
     println("  orso build <in> <out>        - creates a native build of the given <in> into an exe <out>");
@@ -299,17 +300,39 @@ defer:
 }
 
 int main(int argc, char **argv) {
-    nob_shift(argv, argc);
+    shift(argv, argc);
+
+    arena_t arena = {0};
 
     if (argc) {
-        cstr_t filename = nob_shift(argv, argc);
-        string_t file = {.cstr=filename, .length=strlen(filename)};
-        interpret(file);
-        // compile(file, lit2str("a.out"));
+        cstr_t option = shift(argv, argc);
+        if (strncmp(option, "build", 5) == 0) {
+            if (argc != 2) {
+                fprintf(stderr, "build option requires input and output odl file\n");
+                exit(1);
+            }
 
+            cstr_t input = shift(argv, argc);
+            cstr_t output = shift(argv, argc);
+
+            string_t sinput = cstr2string(input, &arena);
+            string_t soutput = cstr2string(output, &arena);
+
+            compile(sinput, soutput);
+
+        } else if (strncmp(option, "run", 3) == 0) {
+            if (argc != 1) {
+                fprintf(stderr, "run option requires input odl file\n");
+                exit(1);
+            }
+
+            cstr_t filename = shift(argv, argc);
+            string_t file = {.cstr=filename, .length=strlen(filename)};
+            interpret(file);
+        }
     } else {
         print_usage();
-        exit(1);
+        exit(0);
     }
 }
 
