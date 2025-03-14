@@ -193,6 +193,7 @@ static bool load_file(string_t in, string_t *source, arena_t *arena) {
 ast_t *build_ast(string_t source, arena_t *arena, string_t file_path) {
     ast_t *ast = arena_alloc(arena, sizeof(ast_t));
     ast_init(ast, arena);
+    ast->vm = vm_default(arena);
 
     bool parsed = parse(ast, file_path, string2sv(source));
 
@@ -269,9 +270,7 @@ bool interpret(string_t input_file_path) {
     bool success = load_file(input_file_path, &source, &arena);
     if (!success) exit(1);
 
-    vm_t *vm = vm_default(&arena);
     ast_t *ast = build_ast(source, &arena, input_file_path);
-    ast->vm = vm;
 
     bool result = false;
 
@@ -280,7 +279,7 @@ bool interpret(string_t input_file_path) {
         return_defer(false);
     }
 
-    success = compile_program(vm, ast);
+    success = compile_program(ast->vm, ast);
     if (!success) {
         print_errors(ast);
         return_defer(false);
@@ -289,7 +288,7 @@ bool interpret(string_t input_file_path) {
 
     function_t *main_or_null = find_main_or_null(ast);
     if (main_or_null) {
-        vm_fresh_run(vm, main_or_null);
+        vm_fresh_run(ast->vm, main_or_null);
     }
 
 
@@ -316,8 +315,7 @@ bool debug(string_t input_file_path) {
         return_defer(false);
     }
 
-    vm_t *vm = vm_default(&arena);
-    success = compile_program(vm, ast);
+    success = compile_program(ast->vm, ast);
     if (!success) {
         print_errors(ast);
         return_defer(false);
@@ -329,8 +327,8 @@ bool debug(string_t input_file_path) {
         debugger_t debugger = {0};
         debugger_init(&debugger, &arena);
 
-        vm_set_entry_point(vm, main_or_null);
-        while(debugger_step(&debugger, vm));
+        vm_set_entry_point(ast->vm, main_or_null);
+        while(debugger_step(&debugger, ast->vm));
     }
 
     return_defer(true);

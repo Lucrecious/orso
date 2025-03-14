@@ -330,7 +330,7 @@ bool debugger_step(debugger_t *debugger, vm_t *vm) {
             show_line(vm, 3);
         }
     } else if (cstr_eq(command.cstr, "run") || cstr_eq(command.cstr, "r")) {
-        while(try_vm_step(vm));
+        while(try_vm_step(vm)) show_line(vm, 0);
     } else if (cstr_eq(command.cstr, "reg")) {
         size_t number = REGISTER_COUNT;
         if (command_n_args.count > 1) {

@@ -859,6 +859,11 @@ static void gen_add_local(gen_t *gen, ast_node_t *declaration, size_t stack_loca
     array_push(&gen->locals, local);
 }
 
+static size_t gen_stack_point(gen_t *gen) {
+    return gen->stack_size;
+}
+
+
 static void gen_local_decldef(gen_t *gen, function_t *function, ast_node_t *declaration) {
     gen_expression(gen, function, an_decl_expr(declaration));
 
@@ -868,7 +873,7 @@ static void gen_local_decldef(gen_t *gen, function_t *function, ast_node_t *decl
         emit_push_reg(gen, token_end_loc(&declaration->end), function, REG_RESULT, type2movsize(gen, declaration->value_type), 0);
     }
 
-    size_t local_location = gen->stack_size;
+    size_t local_location = gen_stack_point(gen);
     gen_add_local(gen, declaration, local_location);
 }
 
@@ -883,10 +888,6 @@ static size_t gen_global_decldef(gen_t *gen, ast_node_t *decldef) {
     table_put(ptr2sz, gen->decl2index, decldef, global_index);
 
     return global_index;
-}
-
-static size_t gen_stack_point(gen_t *gen) {
-    return gen->stack_size;
 }
 
 static void gen_statement(gen_t *gen, function_t *function, ast_node_t *expr) {
@@ -1081,16 +1082,29 @@ static void gen_assignment(gen_t *gen, function_t *function, ast_node_t *assignm
     }
 
     emit_push_reg(gen, token_end_loc(&lhs->end), function, REG_RESULT, REG_MOV_SIZE_WORD, 0);
+    size_t lvalue_stack_point = gen_stack_point(gen);
 
     ast_node_t *rhs = an_rhs(assignment);
     gen_expression(gen, function, rhs);
 
-    emit_pop_to_reg(gen, token_end_loc(&rhs->end), function, REG_TMP, gen->ast->type_set.u64_);
+    typedata_t *rhs_td = ast_type2td(gen->ast, rhs->value_type);
+    if (rhs_td->size > WORD_SIZE) {
+        emit_reg_to_reg(function, token_end_loc(&rhs->end), REG_TMP, REG_STACK_FRAME);
+        emit_binu_reg_im(function, token_end_loc(&rhs->end), REG_TMP, REG_TMP, lvalue_stack_point, '-');
+        emit_addr_to_reg(gen, function, token_end_loc(&rhs->end), REG_MOV_SIZE_WORD, REG_TMP, REG_TMP, 0);
+    } else {
+        emit_pop_to_reg(gen, token_end_loc(&rhs->end), function, REG_TMP, gen->ast->type_set.u64_);
+    }
 
     bool is_not = false;
     if (td->size > WORD_SIZE) {
         ASSERT(assignment->operator.type == TOKEN_EQUAL, "only equals for biggers for now");
         emit_multiword_addr_to_addr(gen, function, token_end_loc(&assignment->end), REG_TMP, REG_RESULT, REG_TMP2, td->size);
+
+        emit_binu_reg_im(function, token_end_loc(&assignment->end), REG_TMP, REG_STACK_BOTTOM, WORD_SIZE, '+');
+
+        emit_multiword_addr_to_addr(gen, function, token_end_loc(&assignment->end), REG_TMP, REG_RESULT, REG_TMP2, td->size);
+        emit_popn_bytes(gen, function, WORD_SIZE, token_end_loc(&assignment->end), true);
     } else {
         token_t op = assignment->operator;
         switch (assignment->operator.type) {
