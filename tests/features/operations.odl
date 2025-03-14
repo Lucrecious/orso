@@ -1,17 +1,69 @@
-result_t :: struct {
-    success: bool;
-    value: int;
-};
-
-get_result :: () -> result_t {
-    return .{.success=false, .value=0};
-};
-
 main :: () -> void {
-    x := 1;
+    //int
 
-    y := x + {
-        result := get_result();
-        if result.success then return else result.value;
+    // scaler add
+    {
+        a := 1;
+        b := 2;
+        c := a + b;
+        printint(a);
+        printint(b);
+        printint(c);
+        println();
+    };
+
+    // scaler mult
+    {
+        a := 4;
+        b := 5;
+        c := a*b;
+        printint(a);
+        printint(b);
+        printint(c);
+        println();
+    };
+
+    // scaler sub
+    {
+        a := 10;
+        b := 4;
+        c := a - b;
+        printint(a);
+        printint(b);
+        printint(c);
+        println();
+    };
+
+    // scaler div
+    {
+        a := 100;
+        b := 5;
+        c := a / b;
+        printint(a);
+        printint(b);
+        printint(c);
+        println();
+    };
+
+    // scaler mod
+    {
+        a := -7;
+        b := 5;
+        c := a % b;
+        printint(a);
+        printint(b);
+        printint(c);
+        println();
+    };
+
+    // scaler rem
+    {
+        a := -7;
+        b := 5;
+        c := a %% b;
+        printint(a);
+        printint(b);
+        printint(c);
+        println();
     };
 };

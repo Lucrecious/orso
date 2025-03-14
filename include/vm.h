@@ -113,12 +113,18 @@ enum op_code_t {
     OP_MOVU8_REG_TO_ADDR,
     OP_MOVU16_REG_TO_ADDR,
     OP_MOVU32_REG_TO_ADDR,
+
     OP_MOVF32_REG_TO_ADDR,
     OP_MOVWORD_REG_TO_ADDR,
 
     OP_MOVU8_ADDR_TO_REG,
     OP_MOVU16_ADDR_TO_REG,
     OP_MOVU32_ADDR_TO_REG,
+
+    OP_MOVS8_ADDR_TO_REG,
+    OP_MOVS16_ADDR_TO_REG,
+    OP_MOVS32_ADDR_TO_REG,
+
     OP_MOVF32_ADDR_TO_REG,
     OP_MOVWORD_ADDR_TO_REG,
 
@@ -471,14 +477,14 @@ void vm_step(vm_t *vm) {
         case_bini_reg_reg(SUBI, sub, s);
         case_bini_reg_reg(MULI, mul, s);
         case_bini_reg_reg(DIVI, div, s);
-        case_bini_reg_reg(MODI, rem, s);
+        case_bini_reg_reg(MODI, mod, s);
         case_bini_reg_reg(REMI, rem, s);
 
         case_bini_reg_reg(ADDU, add, u);
         case_bini_reg_reg(SUBU, sub, u);
         case_bini_reg_reg(MULU, mul, u);
         case_bini_reg_reg(DIVU, div, u);
-        case_bini_reg_reg(MODU, rem, u);
+        case_bini_reg_reg(MODU, mod, u);
         case_bini_reg_reg(REMU, rem, u);
 
         #undef case_bini_reg_reg
@@ -571,6 +577,11 @@ void vm_step(vm_t *vm) {
         case_mov_regaddr_to_reg(U8, u, u8, 0xF);
         case_mov_regaddr_to_reg(U16, u, u16, 0xFF);
         case_mov_regaddr_to_reg(U32, u, u32, 0xFFFF);
+
+        case_mov_regaddr_to_reg(S8, s, s8, 0xF);
+        case_mov_regaddr_to_reg(S16, s, s16, 0xFF);
+        case_mov_regaddr_to_reg(S32, s, s32, 0xFFFF);
+
         case_mov_regaddr_to_reg(F32, d, f32, 0xFFFF);
 
         #undef case_mov_regaddr_to_reg

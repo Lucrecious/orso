@@ -86,6 +86,11 @@ string_t disassemble_instruction(instruction_t in, arena_t *allocator) {
         case OP_MOVU8_ADDR_TO_REG: return OP_REG_TO_REG(U8_REGADDR_TO_REG);
         case OP_MOVU16_ADDR_TO_REG: return OP_REG_TO_REG(U16_REGADDR_TO_REG);
         case OP_MOVU32_ADDR_TO_REG: return OP_REG_TO_REG(U32_REGADDR_TO_REG);
+
+        case OP_MOVS8_ADDR_TO_REG: return OP_REG_TO_REG(S8_REGADDR_TO_REG);
+        case OP_MOVS16_ADDR_TO_REG: return OP_REG_TO_REG(S16_REGADDR_TO_REG);
+        case OP_MOVS32_ADDR_TO_REG: return OP_REG_TO_REG(S32_REGADDR_TO_REG);
+
         case OP_MOVF32_ADDR_TO_REG: return OP_REG_TO_REG(F32_REGADDR_TO_REG);
         case OP_MOVWORD_ADDR_TO_REG: return OP_REG_TO_REG(WORD_REGADDR_TO_REG);
 

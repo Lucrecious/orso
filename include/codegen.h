@@ -75,6 +75,9 @@ enum reg_mov_size_t {
     REG_MOV_SIZE_U8,
     REG_MOV_SIZE_U16,
     REG_MOV_SIZE_U32,
+    REG_MOV_SIZE_S8,
+    REG_MOV_SIZE_S16,
+    REG_MOV_SIZE_S32,
     REG_MOV_SIZE_F32,
     REG_MOV_SIZE_WORD,
     REG_MOV_SIZE_MULTIWORD_ADDR,
@@ -101,7 +104,13 @@ static void emit_addr_to_reg(gen_t *gen, function_t *function, texloc_t loc, reg
     case REG_MOV_SIZE_U8: in.op = OP_MOVU8_ADDR_TO_REG; break;
     case REG_MOV_SIZE_U16: in.op = OP_MOVU16_ADDR_TO_REG; break;
     case REG_MOV_SIZE_U32: in.op = OP_MOVU32_ADDR_TO_REG; break;
+
+    case REG_MOV_SIZE_S8: in.op = OP_MOVS8_ADDR_TO_REG; break;
+    case REG_MOV_SIZE_S16: in.op = OP_MOVS16_ADDR_TO_REG; break;
+    case REG_MOV_SIZE_S32: in.op = OP_MOVS32_ADDR_TO_REG; break;
+
     case REG_MOV_SIZE_F32: in.op = OP_MOVF32_ADDR_TO_REG; break;
+
     case REG_MOV_SIZE_WORD: in.op = OP_MOVWORD_ADDR_TO_REG; break;
     case REG_MOV_SIZE_MULTIWORD_ADDR: in.op = OP_MOVWORD_ADDR_TO_REG; break;
     }
@@ -122,9 +131,16 @@ static void emit_reg_to_addr(gen_t *gen, function_t *function, texloc_t loc, reg
     instruction_t in = {0};
     switch (mov_size) {
     case REG_MOV_SIZE_0: return;
+
+    case REG_MOV_SIZE_S8:
     case REG_MOV_SIZE_U8: in.op = OP_MOVU8_REG_TO_ADDR; break;
+    
+    case REG_MOV_SIZE_S16:
     case REG_MOV_SIZE_U16: in.op = OP_MOVU16_REG_TO_ADDR; break;
+
+    case REG_MOV_SIZE_S32:
     case REG_MOV_SIZE_U32: in.op = OP_MOVU32_REG_TO_ADDR; break;
+
     case REG_MOV_SIZE_F32: in.op = OP_MOVF32_REG_TO_ADDR; break;
     case REG_MOV_SIZE_WORD: in.op = OP_MOVWORD_REG_TO_ADDR; break;
     case REG_MOV_SIZE_MULTIWORD_ADDR: in.op = OP_MOVWORD_REG_TO_ADDR; break;
@@ -154,7 +170,15 @@ static reg_mov_size_t type2movsize(gen_t *gen, type_t t) {
     case TYPE_NUMBER: {
         switch (td->as.num) {
         case NUM_TYPE_FLOAT: return td->size == NUM_SIZE_32 ? REG_MOV_SIZE_F32 : REG_MOV_SIZE_WORD;
-        case NUM_TYPE_SIGNED:
+        case NUM_TYPE_SIGNED: {
+            switch ((num_size_t)td->size) {
+            case NUM_SIZE_8: return REG_MOV_SIZE_S8;
+            case NUM_SIZE_16: return REG_MOV_SIZE_S16;
+            case NUM_SIZE_32: return REG_MOV_SIZE_S32;
+            case NUM_SIZE_64: return REG_MOV_SIZE_WORD;
+            }
+            break;
+        }
         case NUM_TYPE_UNSIGNED: {
             switch ((num_size_t)td->size) {
             case NUM_SIZE_8: return REG_MOV_SIZE_U8;
