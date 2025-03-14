@@ -1101,9 +1101,17 @@ static void gen_assignment(gen_t *gen, function_t *function, ast_node_t *assignm
         ASSERT(assignment->operator.type == TOKEN_EQUAL, "only equals for biggers for now");
         emit_multiword_addr_to_addr(gen, function, token_end_loc(&assignment->end), REG_TMP, REG_RESULT, REG_TMP2, td->size);
 
-        emit_binu_reg_im(function, token_end_loc(&assignment->end), REG_TMP, REG_STACK_BOTTOM, WORD_SIZE, '+');
+        emit_reg_to_reg(function, token_end_loc(&rhs->end), REG_TMP, REG_STACK_BOTTOM);
 
-        emit_multiword_addr_to_addr(gen, function, token_end_loc(&assignment->end), REG_TMP, REG_RESULT, REG_TMP2, td->size);
+        // i need to move up the elements backwards so it doesn't overwrite itself
+        for (size_t i = 0; i < b2w(td->size); ++i) {
+            emit_binu_reg_im(function, token_end_loc(&rhs->end), REG_RESULT, REG_TMP, (b2w(td->size)-i)*WORD_SIZE, '+');
+            emit_binu_reg_im(function, token_end_loc(&rhs->end), REG_TMP2, REG_RESULT, WORD_SIZE, '-');
+            emit_addr_to_reg(gen, function, token_end_loc(&rhs->end), REG_MOV_SIZE_WORD, REG_TMP2, REG_TMP2, 0);
+            emit_reg_to_addr(gen, function, token_end_loc(&rhs->end), REG_MOV_SIZE_WORD, REG_RESULT, REG_TMP2, 0);
+        }
+
+        // manually pop off lvalue
         emit_popn_bytes(gen, function, WORD_SIZE, token_end_loc(&assignment->end), true);
     } else {
         token_t op = assignment->operator;
