@@ -329,6 +329,8 @@ typedef struct ast_t {
     bool resolved;
     type_table_t type_set;
 
+    void *vm;
+
     memarr_t multiword_data;
 
     errors_t errors;

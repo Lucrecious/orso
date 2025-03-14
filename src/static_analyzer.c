@@ -2820,7 +2820,7 @@ static void analyzer_init(analyzer_t *analyzer, ast_t *ast, arena_t *arena) {
     *analyzer = zer0(analyzer_t);
 
     analyzer->had_error = false;
-    analyzer->run_vm = vm_default(arena);
+    analyzer->run_vm = ast->vm; //vm_default(arena);
     analyzer->ast = ast;
 
     analyzer->arena = arena;
@@ -2830,9 +2830,10 @@ static void analyzer_init(analyzer_t *analyzer, ast_t *ast, arena_t *arena) {
 
 bool resolve_ast(ast_t *ast) {
     analyzer_t analyzer = {0};
-    tmp_arena_t *tmp = allocator_borrow();
+    // tmp_arena_t *tmp = allocator_borrow();
 
-    analyzer_init(&analyzer, ast, tmp->allocator);
+    // analyzer_init(&analyzer, ast, tmp->allocator);
+    analyzer_init(&analyzer, ast, ast->arena);
 
     ast_node_t *module;
     kh_foreach_value(ast->moduleid2node, module, {
@@ -2848,7 +2849,7 @@ bool resolve_ast(ast_t *ast) {
 
     ast->resolved = !analyzer.had_error;
 
-    allocator_return(tmp);
+    // allocator_return(tmp);
     return ast->resolved;
 }
 

@@ -269,7 +269,9 @@ bool interpret(string_t input_file_path) {
     bool success = load_file(input_file_path, &source, &arena);
     if (!success) exit(1);
 
+    vm_t *vm = vm_default(&arena);
     ast_t *ast = build_ast(source, &arena, input_file_path);
+    ast->vm = vm;
 
     bool result = false;
 
@@ -278,7 +280,6 @@ bool interpret(string_t input_file_path) {
         return_defer(false);
     }
 
-    vm_t *vm = vm_default(&arena);
     success = compile_program(vm, ast);
     if (!success) {
         print_errors(ast);
