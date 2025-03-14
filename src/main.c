@@ -299,6 +299,46 @@ defer:
     return result;
 }
 
+bool debug(string_t input_file_path) {
+    arena_t arena = {0};
+
+    string_t source;
+    bool success = load_file(input_file_path, &source, &arena);
+    if (!success) exit(1);
+
+    ast_t *ast = build_ast(source, &arena, input_file_path);
+
+    bool result = false;
+
+    if (!ast->resolved) {
+        print_errors(ast);
+        return_defer(false);
+    }
+
+    vm_t *vm = vm_default(&arena);
+    success = compile_program(vm, ast);
+    if (!success) {
+        print_errors(ast);
+        return_defer(false);
+        goto defer;
+    }
+
+    function_t *main_or_null = find_main_or_null(ast);
+    if (main_or_null) {
+        debugger_t debugger = {0};
+        debugger_init(&debugger, &arena);
+
+        vm_set_entry_point(vm, main_or_null);
+        while(debugger_step(&debugger, vm));
+    }
+
+    return_defer(true);
+
+defer:
+    arena_free(&arena);
+    return result;
+}
+
 int main(int argc, char **argv) {
     shift(argv, argc);
 
@@ -329,6 +369,15 @@ int main(int argc, char **argv) {
             cstr_t filename = shift(argv, argc);
             string_t file = {.cstr=filename, .length=strlen(filename)};
             interpret(file);
+        } else if (strncmp(option, "dbg", 3) == 0) {
+            if (argc != 1) {
+                fprintf(stderr, "dbg option requires input odl file\n");
+                exit(1);
+            }
+
+            cstr_t filename = shift(argv, argc);
+            string_t file = {.cstr=filename, .length=strlen(filename)};
+            debug(file);
         }
     } else {
         print_usage();
