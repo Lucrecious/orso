@@ -1,4 +1,5 @@
 main :: () -> void {
+    // variables are lvalues
     {
         x := 1;
         y := 3;
@@ -7,7 +8,7 @@ main :: () -> void {
         printint(y);
         println();
 
-        x = 5;
+        ((x)) = 5;
         printint(x);
         printint(y);
         println();
@@ -19,6 +20,7 @@ main :: () -> void {
         println();
     };
 
+    // *<ptr> is an lvalue
     {
         a := 10;
         a_ptr := &a;
@@ -49,6 +51,7 @@ main :: () -> void {
         println();
     };
 
+    // <array var>[<index>] is an lvalue
     {
         arr := [10]int.{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
 
@@ -76,6 +79,8 @@ main :: () -> void {
         println();
     };
 
+    
+    // &<array var>[<index>] is an lvalue
     {
         arr_ := [10]int.{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
         arr := &arr_;
@@ -102,5 +107,15 @@ main :: () -> void {
         ((arr))[{5;}] = 200;
         printint(arr[5]);
         println();
+    };
+
+    // inlines
+    {
+        arr := [5]int.{0, 1, 2, 3, 4};
+
+        {(&arr);}[2] = 50;
+        printint(arr[2]);
+        println();
+
     };
 };
