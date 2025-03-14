@@ -1,5 +1,4 @@
 main :: () -> void {
-    a := -7;
-    b := 5;
-    a%%b;
+    a := true;
+    a and= true;
 };

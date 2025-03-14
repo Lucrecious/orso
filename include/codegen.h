@@ -1099,9 +1099,9 @@ static void gen_assignment(gen_t *gen, function_t *function, ast_node_t *assignm
 
             emit_addr_to_reg(gen, function, assignment->operator.loc, type2movsize(gen, assignment->value_type), REG_RESULT, REG_RESULT, 0);
 
-            jmp_loc = gen_jmp_if_reg(function, assignment->operator.loc, REG_TMP, assignment->operator.type == TOKEN_AND_EQUAL ? false : true);
+            jmp_loc = gen_jmp_if_reg(function, assignment->operator.loc, REG_RESULT, assignment->operator.type == TOKEN_AND_EQUAL ? false : true);
 
-            emit_reg_to_addr(gen, function, assignment->operator.loc, type2movsize(gen, assignment->value_type), REG_RESULT, REG_TMP, 0);
+            emit_reg_to_reg(function, assignment->operator.loc, REG_RESULT, REG_TMP);
         }
     }
 
