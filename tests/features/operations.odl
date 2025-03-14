@@ -1,0 +1,17 @@
+result_t :: struct {
+    success: bool;
+    value: int;
+};
+
+get_result :: () -> result_t {
+    return .{.success=false, .value=0};
+};
+
+main :: () -> void {
+    x := 1;
+
+    y := x + {
+        result := get_result();
+        if result.success then return else result.value;
+    };
+};

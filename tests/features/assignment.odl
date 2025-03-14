@@ -1,0 +1,52 @@
+main :: () -> void {
+    // scaler values
+    {
+        x := 1;
+        printint(x);
+        println();
+
+        x = 2;
+        printint(x);
+        println();
+    };
+
+    // array values
+    {
+        arr := [5]int.{0, 1, 2, 3, 4};
+        for i := 0; i < len(arr); ++i {
+            printint(arr[i]);
+        };
+        println();
+
+        // copy by value
+        arr_copy := arr;
+        for i := 0; i < len(arr); ++i {
+            arr_copy[i] = i + len(arr);
+        };
+
+        for i := 0; i < len(arr); ++i do printint(arr[i]);
+        println();
+
+        for i := 0; i < len(arr_copy); ++i do printint(arr_copy[i]);
+        println();
+
+        // assign new values
+        arr = .{-1, -2, -3, -4, -5};
+
+        for i := 0; i < len(arr); ++i do printint(arr[i]);
+        println();
+
+        arr2: [5]int;
+
+        arr2 = arr_copy = arr;
+
+        for i := 0; i < len(arr); ++i do printint(arr2[i]);
+        println();
+
+        for i := 0; i < len(arr); ++i do printint(arr_copy[i]);
+        println();
+
+        for i := 0; i < len(arr); ++i do printint(arr[i]);
+        println();
+    };
+};
