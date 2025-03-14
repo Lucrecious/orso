@@ -1139,21 +1139,7 @@ static void gen_assignment(gen_t *gen, function_t *function, ast_node_t *assignm
         emit_popn_bytes(gen, function, WORD_SIZE, token_end_loc(&assignment->end), true);
     } else {
         token_t op = assignment->operator;
-        switch (assignment->operator.type) {
-        case TOKEN_PLUS_EQUAL: op.type = TOKEN_PLUS; break;
-        case TOKEN_MINUS_EQUAL: op.type = TOKEN_MINUS; break;
-        case TOKEN_STAR_EQUAL: op.type = TOKEN_STAR; break;
-        case TOKEN_SLASH_EQUAL: op.type = TOKEN_SLASH; break;
-        case TOKEN_PERCENT_EQUAL: op.type = TOKEN_PERCENT; break;
-        case TOKEN_PERCENT_PERCENT_EQUAL: op.type = TOKEN_PERCENT_PERCENT; break;
-
-        case TOKEN_OR_EQUAL:
-        case TOKEN_AND_EQUAL: break;
-        case TOKEN_NOT_EQUAL: is_not = true; break;
-
-        case TOKEN_EQUAL: break;
-        default: UNREACHABLE(); break;
-        }
+        op.type = parser_opeq2op(op.type);
 
         if (op.type != TOKEN_EQUAL) {
             emit_addr_to_reg(gen, function, token_end_loc(&assignment->end),

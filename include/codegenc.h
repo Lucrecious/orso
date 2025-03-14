@@ -284,6 +284,11 @@ static bool cgen_binary_is_macro(token_type_t type, typedata_t *optd, cstr_t *op
 
 static void cgen_cache_requires_tmp(typedatas_t *types, ast_node_t *expression) {
     switch (expression->node_type) {
+        case AST_NODE_TYPE_EXPRESSION_ASSIGNMENT: {
+            expression->requires_tmp_for_cgen = (expression->operator.type != TOKEN_EQUAL);
+            break;
+        }
+
         case AST_NODE_TYPE_EXPRESSION_BRANCHING:
         case AST_NODE_TYPE_EXPRESSION_JMP:
         case AST_NODE_TYPE_EXPRESSION_BLOCK: {
@@ -797,6 +802,8 @@ static void cgen_lvalue(cgen_t *cgen, ast_node_t *lvalue, cgen_var_t var) {
 
 static void cgen_assignment(cgen_t *cgen, ast_node_t *assignment, cgen_var_t var) {
     unless (assignment->requires_tmp_for_cgen) {
+        ASSERT(assignment->operator.type == TOKEN_EQUAL, "other operators require a tmp");
+
         if (has_var(var)) {
             sb_add_format(&cgen->sb, "%s = (", cgen_var(cgen, var));
         }
@@ -830,7 +837,26 @@ static void cgen_assignment(cgen_t *cgen, ast_node_t *assignment, cgen_var_t var
             sb_add_format(&cgen->sb, "%s = (", cgen_var(cgen, var));
         }
 
-        sb_add_format(&cgen->sb, "*(%s) = %s", cgen_var_name(cgen, lvalue_var), cgen_var_name(cgen, rhs_var));
+        if (assignment->operator.type != TOKEN_EQUAL) {
+            typedata_t *td = ast_type2td(cgen->ast, assignment->value_type);
+            cstr_t func_or_op;
+            bool is_macro = cgen_binary_is_macro(parser_opeq2op(assignment->operator.type), td, &func_or_op);
+            if (is_macro) {
+                sb_add_format(&cgen->sb, "*(%s) = %s(*(%s), %s)",
+                    cgen_var_name(cgen, lvalue_var),
+                    func_or_op,
+                    cgen_var_name(cgen, lvalue_var),
+                    cgen_var_name(cgen, rhs_var));
+            } else {
+                sb_add_format(&cgen->sb, "*(%s) = (*(%s) + %s)",
+                    cgen_var_name(cgen, lvalue_var),
+                    cgen_var_name(cgen, lvalue_var),
+                    func_or_op,
+                    cgen_var_name(cgen, rhs_var));
+            }
+        } else {
+            sb_add_format(&cgen->sb, "*(%s) = %s", cgen_var_name(cgen, lvalue_var), cgen_var_name(cgen, rhs_var));
+        }
 
         if (has_var(var)) {
             sb_add_format(&cgen->sb, ")");

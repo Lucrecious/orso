@@ -1988,6 +1988,22 @@ bool parse(ast_t *ast, string_t file_path, string_view_t source) {
     return ast->errors.count == 0;
 }
 
+token_type_t parser_opeq2op(token_type_t type) {
+    switch (type) {
+    case TOKEN_PLUS_EQUAL: return TOKEN_PLUS;
+    case TOKEN_MINUS_EQUAL: return TOKEN_MINUS;
+    case TOKEN_STAR_EQUAL: return TOKEN_STAR;
+    case TOKEN_SLASH_EQUAL: return TOKEN_SLASH;
+    case TOKEN_PERCENT_EQUAL: return TOKEN_PERCENT;
+    case TOKEN_PERCENT_PERCENT_EQUAL: return TOKEN_PERCENT_PERCENT;
+    case TOKEN_OR_EQUAL: return TOKEN_OR;
+    case TOKEN_AND_EQUAL: return TOKEN_AND;
+    case TOKEN_NOT_EQUAL: return TOKEN_NOT;
+
+    default: return TOKEN_EQUAL;
+    }
+}
+
 word_t *ast_multiword_value(ast_t *ast, size_t size_words) {
     word_t z = {.as.u = 0};
 
