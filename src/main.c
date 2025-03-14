@@ -346,13 +346,16 @@ int main(int argc, char **argv) {
     if (argc) {
         cstr_t option = shift(argv, argc);
         if (strncmp(option, "build", 5) == 0) {
-            if (argc != 2) {
-                fprintf(stderr, "build option requires input and output odl file\n");
+            cstr_t output = "a.out";
+            if (argc > 2) {
+                fprintf(stderr, "build option requires at least an input and optional output odl file\n");
                 exit(1);
             }
 
             cstr_t input = shift(argv, argc);
-            cstr_t output = shift(argv, argc);
+            if (argc) {
+                output = shift(argv, argc);
+            }
 
             string_t sinput = cstr2string(input, &arena);
             string_t soutput = cstr2string(output, &arena);

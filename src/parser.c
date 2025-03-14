@@ -1491,20 +1491,14 @@ static ast_node_t *parse_unary(parser_t *parser) {
         ast_node_t *unary = ast_unary(parser->ast, operator, operand);
         return unary;
     } else {
-        token_t single_op = operator;
-        single_op.type= (single_op.type == TOKEN_MINUS_MINUS ? TOKEN_MINUS : TOKEN_PLUS);
-        --single_op.loc.column;
-        --single_op.view.length;
-
-        ast_node_t *one = ast_implicit_expr(parser->ast, parser->ast->type_set.u64_, WORDU(1), single_op);
-        one->is_free_number = true;
-        ast_node_t *increment = ast_binary(parser->ast, single_op, operand, one);
-
-        token_t equals = single_op;
-        equals.type = TOKEN_EQUAL;
+        token_t equals = operator;
+        equals.type= (equals.type == TOKEN_MINUS_MINUS ? TOKEN_MINUS_EQUAL : TOKEN_PLUS_EQUAL);
         equals.view.length = 0;
 
-        ast_node_t *assignment = ast_assignment(parser->ast, operand, increment, equals);
+        ast_node_t *one = ast_implicit_expr(parser->ast, parser->ast->type_set.u64_, WORDU(1), equals);
+        one->is_free_number = true;
+
+        ast_node_t *assignment = ast_assignment(parser->ast, operand, one, equals);
 
         return assignment;
     }

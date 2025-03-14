@@ -1120,7 +1120,6 @@ static void gen_assignment(gen_t *gen, function_t *function, ast_node_t *assignm
         emit_pop_to_reg(gen, token_end_loc(&rhs->end), function, REG_TMP, gen->ast->type_set.u64_);
     }
 
-    bool is_not = false;
     if (td->size > WORD_SIZE) {
         ASSERT(assignment->operator.type == TOKEN_EQUAL, "only equals for biggers for now");
         emit_multiword_addr_to_addr(gen, function, token_end_loc(&assignment->end), REG_TMP, REG_RESULT, REG_TMP2, td->size);
@@ -1141,16 +1140,17 @@ static void gen_assignment(gen_t *gen, function_t *function, ast_node_t *assignm
         token_t op = assignment->operator;
         op.type = parser_opeq2op(op.type);
 
-        if (op.type != TOKEN_EQUAL) {
-            emit_addr_to_reg(gen, function, token_end_loc(&assignment->end),
-                    type2movsize(gen, assignment->value_type), REG_TMP2, REG_TMP, 0);
-
-            emit_bin_op(token_end_loc(&assignment->end), function, op.type, td, REG_TMP2, REG_RESULT, REG_RESULT);
-        } else if (is_not) {
+        if (op.type == TOKEN_AND || op.type == TOKEN_OR) {
+        } else if (op.type == TOKEN_NOT) {
             emit_addr_to_reg(gen, function, token_end_loc(&assignment->end),
                     type2movsize(gen, assignment->value_type), REG_TMP2, REG_TMP, 0);
 
             emit_unary(gen, token_end_loc(&assignment->end), function, TOKEN_NOT, assignment->value_type, REG_TMP2, REG_RESULT);
+        } else if (op.type != TOKEN_EQUAL) {
+            emit_addr_to_reg(gen, function, token_end_loc(&assignment->end),
+                    type2movsize(gen, assignment->value_type), REG_TMP2, REG_TMP, 0);
+
+            emit_bin_op(token_end_loc(&assignment->end), function, op.type, td, REG_TMP2, REG_RESULT, REG_RESULT);
         }
 
         emit_reg_to_addr(gen, function, token_end_loc(&assignment->end),

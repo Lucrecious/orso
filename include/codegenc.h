@@ -573,28 +573,42 @@ static void cgen_binary(cgen_t *cgen, ast_node_t *binary, cgen_var_t var) {
 
         cgen_statement(cgen, lhs, lhs_var, false);
 
+        cgen_add_indent(cgen);
+        sb_add_format(&cgen->sb, "%s;\n", cgen_var(cgen, rhs_var));
+        rhs_var.is_new = false;
+
+        bool close_if = false;
+
         switch (binary->operator.type) {
             case TOKEN_AND: {
+                close_if = true;
+
                 cgen_add_indent(cgen);
 
-                sb_add_format(&cgen->sb, "if (%s) ", cgen_var_name(cgen, lhs_var));
+                sb_add_format(&cgen->sb, "if (%s) {\n", cgen_var_name(cgen, lhs_var));
+                cgen_indent(cgen);
                 break;
             }
 
             case TOKEN_OR: {
+                close_if = true;
                 cgen_add_indent(cgen);
 
-                sb_add_format(&cgen->sb, "unless (%s) ", cgen_var_name(cgen, lhs_var));
+                sb_add_format(&cgen->sb, "unless (%s) {\n", cgen_var_name(cgen, lhs_var));
+                cgen_indent(cgen);
                 break;
             }
 
-            default: {
-                cgen_add_indent(cgen);
-                break;
-            }
+            default: break;
         }
 
-        cgen_statement(cgen, rhs, rhs_var, false);
+        cgen_statement(cgen, rhs, rhs_var, true);
+
+        if (close_if) {
+            cgen_unindent(cgen);
+            cgen_add_indent(cgen);
+            sb_add_cstr(&cgen->sb, "}\n");
+        }
         
         cgen_add_indent(cgen);
         if (has_var(var)) {
@@ -827,9 +841,37 @@ static void cgen_assignment(cgen_t *cgen, ast_node_t *assignment, cgen_var_t var
         cgen_lvalue(cgen, lhs->lvalue_node, lvalue_var);
         cgen_semicolon_nl(cgen);
 
+        token_type_t equals_tok = assignment->operator.type;
+
         ast_node_t *rhs = an_rhs(assignment);
         cgen_var_t rhs_var = cgen_next_tmpid(cgen, rhs->value_type);
-        cgen_statement(cgen, rhs, rhs_var, true);
+
+        if (equals_tok == TOKEN_AND || equals_tok == TOKEN_OR) {
+            cgen_add_indent(cgen);
+
+            sb_add_format(&cgen->sb, "%s;", cgen_var(cgen, rhs_var));
+            rhs_var.is_new = false;
+
+            sb_add_format(&cgen->sb, "if (%s(*(%s))) {\n",
+                equals_tok == TOKEN_AND ? "" : "!",
+                cgen_var_name(cgen, lvalue_var));
+            cgen_indent(cgen);
+
+                cgen_statement(cgen, rhs, rhs_var, true);
+
+            cgen_unindent(cgen);
+            sb_add_cstr(&cgen->sb, "} else {\n");
+            cgen_indent(cgen);
+
+                sb_add_format(&cgen->sb, "%s = *(%s)", cgen_var_name(cgen, rhs_var), cgen_var_name(cgen, lvalue_var));
+
+            cgen_unindent(cgen);
+            sb_add_cstr(&cgen->sb, "}\n");
+
+
+        } else {
+            cgen_statement(cgen, rhs, rhs_var, true);
+        }
 
         cgen_add_indent(cgen);
 
@@ -837,10 +879,12 @@ static void cgen_assignment(cgen_t *cgen, ast_node_t *assignment, cgen_var_t var
             sb_add_format(&cgen->sb, "%s = (", cgen_var(cgen, var));
         }
 
-        if (assignment->operator.type != TOKEN_EQUAL) {
+        if (equals_tok == TOKEN_EQUAL || equals_tok == TOKEN_AND || equals_tok == TOKEN_OR) {
+            sb_add_format(&cgen->sb, "*(%s) = %s", cgen_var_name(cgen, lvalue_var), cgen_var_name(cgen, rhs_var));
+        } else {
             typedata_t *td = ast_type2td(cgen->ast, assignment->value_type);
             cstr_t func_or_op;
-            bool is_macro = cgen_binary_is_macro(parser_opeq2op(assignment->operator.type), td, &func_or_op);
+            bool is_macro = cgen_binary_is_macro(parser_opeq2op(equals_tok), td, &func_or_op);
             if (is_macro) {
                 sb_add_format(&cgen->sb, "*(%s) = %s(*(%s), %s)",
                     cgen_var_name(cgen, lvalue_var),
@@ -854,8 +898,6 @@ static void cgen_assignment(cgen_t *cgen, ast_node_t *assignment, cgen_var_t var
                     func_or_op,
                     cgen_var_name(cgen, rhs_var));
             }
-        } else {
-            sb_add_format(&cgen->sb, "*(%s) = %s", cgen_var_name(cgen, lvalue_var), cgen_var_name(cgen, rhs_var));
         }
 
         if (has_var(var)) {
