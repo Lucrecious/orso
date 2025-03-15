@@ -841,7 +841,7 @@ static void cgen_assignment(cgen_t *cgen, ast_node_t *assignment, cgen_var_t var
         cgen_lvalue(cgen, lhs->lvalue_node, lvalue_var);
         cgen_semicolon_nl(cgen);
 
-        token_type_t equals_tok = assignment->operator.type;
+        token_type_t equals_tok = parser_opeq2op(assignment->operator.type);
 
         ast_node_t *rhs = an_rhs(assignment);
         cgen_var_t rhs_var = cgen_next_tmpid(cgen, rhs->value_type);
@@ -863,7 +863,9 @@ static void cgen_assignment(cgen_t *cgen, ast_node_t *assignment, cgen_var_t var
             sb_add_cstr(&cgen->sb, "} else {\n");
             cgen_indent(cgen);
 
+                cgen_add_indent(cgen);
                 sb_add_format(&cgen->sb, "%s = *(%s)", cgen_var_name(cgen, rhs_var), cgen_var_name(cgen, lvalue_var));
+                cgen_semicolon_nl(cgen);
 
             cgen_unindent(cgen);
             sb_add_cstr(&cgen->sb, "}\n");
@@ -884,7 +886,7 @@ static void cgen_assignment(cgen_t *cgen, ast_node_t *assignment, cgen_var_t var
         } else {
             typedata_t *td = ast_type2td(cgen->ast, assignment->value_type);
             cstr_t func_or_op;
-            bool is_macro = cgen_binary_is_macro(parser_opeq2op(equals_tok), td, &func_or_op);
+            bool is_macro = cgen_binary_is_macro(equals_tok, td, &func_or_op);
             if (is_macro) {
                 sb_add_format(&cgen->sb, "*(%s) = %s(*(%s), %s)",
                     cgen_var_name(cgen, lvalue_var),
@@ -892,7 +894,7 @@ static void cgen_assignment(cgen_t *cgen, ast_node_t *assignment, cgen_var_t var
                     cgen_var_name(cgen, lvalue_var),
                     cgen_var_name(cgen, rhs_var));
             } else {
-                sb_add_format(&cgen->sb, "*(%s) = (*(%s) + %s)",
+                sb_add_format(&cgen->sb, "*(%s) = (*(%s) %s %s)",
                     cgen_var_name(cgen, lvalue_var),
                     cgen_var_name(cgen, lvalue_var),
                     func_or_op,
