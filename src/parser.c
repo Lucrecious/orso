@@ -1258,7 +1258,7 @@ static ast_node_t *parse_branch(parser_t *parser) {
             parser_error(parser, OR_ERROR(
                 .tag = ERROR_PARSER_EXPECTED_EXPRESSION,
                 .level = ERROR_SOURCE_PARSER,
-                .msg = lit2str("expected expression as the condition for $0.kind branch"),
+                .msg = lit2str("expected expression as the condition for '$0.kind$' branch"),
                 .args = ORERR_ARGS(error_arg_token(start_token), error_arg_node(last_decl)),
                 .show_code_lines = ORERR_LINES(1),
             ));
