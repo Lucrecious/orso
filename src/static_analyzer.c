@@ -284,7 +284,7 @@ static bool get_nearest_scope_in_func_or_error(
     }
     return false;
 }
-type_t resolve_block_return_types(ast_node_t *block) {
+type_t resolve_block_return_types(ast_t *ast, ast_node_t *block) {
     switch (block->node_type) {
         case AST_NODE_TYPE_EXPRESSION_BRANCHING: {
             ast_node_t *then = an_then(block);
@@ -292,6 +292,7 @@ type_t resolve_block_return_types(ast_node_t *block) {
 
             tmp_arena_t *tmp = allocator_borrow();
             types_t types = {.allocator=tmp->allocator};
+            ast_nodes_t void_jmp_xprs = {.allocator=tmp->allocator};
 
             unless (TYPE_IS_UNREACHABLE(then->value_type)) {
                 array_push(&types, then->value_type);
@@ -302,9 +303,14 @@ type_t resolve_block_return_types(ast_node_t *block) {
             }
 
             for (size_t i = 0; i < block->jmp_nodes.count; ++i) {
-                ast_node_t *jmp_node_expr = an_expression(block->jmp_nodes.items[i]);
+                ast_node_t *jmp_node = block->jmp_nodes.items[i];
+                ast_node_t *jmp_node_expr = an_expression(jmp_node);
                 unless (TYPE_IS_UNREACHABLE(jmp_node_expr->value_type)) {
                     array_push(&types, jmp_node_expr->value_type);
+                }
+
+                if (TYPE_IS_VOID(jmp_node_expr->value_type)) {
+                    array_push(&void_jmp_xprs, jmp_node_expr);
                 }
             }
 
@@ -323,6 +329,15 @@ type_t resolve_block_return_types(ast_node_t *block) {
                 unless (typeid_eq(sans_void.items[i], type)) {
                     type = typeid(TYPE_INVALID);
                     break;
+                }
+            }
+
+            unless (TYPE_IS_INVALID(type)) {
+                for (size_t i = 0; i < void_jmp_xprs.count; ++i) {
+                    ast_node_t *expr = void_jmp_xprs.items[i];
+                    expr->node_type = AST_NODE_TYPE_EXPRESSION_PRIMARY;
+                    expr->value_type = type;
+                    expr->expr_val = zero_value(ast, type);
                 }
             }
 
@@ -1755,8 +1770,7 @@ void resolve_expression(
             }
 
             case TOKEN_OR_EQUAL:
-            case TOKEN_AND_EQUAL:
-            case TOKEN_NOT_EQUAL: {
+            case TOKEN_AND_EQUAL: {
                 typedata_t *td = ast_type2td(ast, lhs->value_type);
                 if ((td->capabilities & TYPE_CAP_LOGICAL) == 0) {
                     stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_LOGICAL_OPERAND_TYPES, lhs));
@@ -1892,7 +1906,7 @@ void resolve_expression(
 
             resolve_expression(analyzer, ast, state, implicit_type, an_else(expr));
 
-            type_t branch_type = resolve_block_return_types(expr);
+            type_t branch_type = resolve_block_return_types(ast, expr);
             expr->value_type = branch_type;
 
             unless (TYPE_IS_UNREACHABLE(branch_type)) {

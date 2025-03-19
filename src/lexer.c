@@ -395,10 +395,10 @@ token_t _lexer_next_token(lexer_t *lexer) {
         token_t t = identifier(lexer);
 
         // special case if certain keyword and =s after
-        if ((t.type == TOKEN_AND || t.type == TOKEN_OR || t.type == TOKEN_NOT) && match(lexer, '=')) {
+        if ((t.type == TOKEN_AND || t.type == TOKEN_OR) && match(lexer, '=')) {
             t.type = t.type == TOKEN_AND
-                    ? TOKEN_AND_EQUAL : (t.type == TOKEN_OR
-                    ? TOKEN_OR_EQUAL : TOKEN_NOT_EQUAL);
+                    ? TOKEN_AND_EQUAL : TOKEN_OR_EQUAL;
+            
             t.view.length += 1;
             t.loc.column += 1;
             return t;

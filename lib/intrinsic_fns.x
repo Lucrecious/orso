@@ -51,6 +51,24 @@ X(printint, odlprintint, void, {
     odlprintint(i);
 }, int)
 
+X(printf64, odlprintf64, void, {
+    XARG(i, f64);
+    UNUSED(result);
+    odlprintf64(i);
+}, f64)
+
+X(printu64, odlprintu64, void, {
+    XARG(i, u64);
+    UNUSED(result);
+    odlprintu64(i);
+}, u64)
+
+X(prints64, odlprints64, void, {
+    XARG(i, s64);
+    UNUSED(result);
+    odlprints64(i);
+}, s64)
+
 X(println, odlprintln, void, {
     UNUSED(args);
     UNUSED(result);

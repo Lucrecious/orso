@@ -67,6 +67,18 @@ void odlprintint(int n) {
     printf("%d", n);
 }
 
+void odlprintf64(f64 n) {
+    printf("%g", n);
+}
+
+void odlprintu64(u64 n) {
+    printf("%llu", n);
+}
+
+void odlprints64(s64 n) {
+    printf("%lld", n);
+}
+
 void odlprintln(void) {
     printf("\n");
 }

@@ -1,0 +1,147 @@
+main :: () -> void {
+    //int
+
+    // scaler add
+    {
+        a := 1;
+        b := 2;
+        c := a + b;
+        c += 1;
+        printint(a);
+        printint(b);
+        printint(c);
+        println();
+    };
+
+    // scaler mult
+    {
+        a := 4;
+        b := 5;
+        c := a*b;
+        c *= 5;
+        printint(a);
+        printint(b);
+        printint(c);
+        println();
+    };
+
+    // scaler sub
+    {
+        a := 10;
+        b := 4;
+        c := a - b;
+        c -= 10;
+        printint(a);
+        printint(b);
+        printint(c);
+        println();
+    };
+
+    // scaler div
+    {
+        a := 100;
+        b := 5;
+        c := a / b;
+        c /= 5;
+        printint(a);
+        printint(b);
+        printint(c);
+        println();
+    };
+
+    // scaler mod
+    {
+        a := -7;
+        b := 5;
+        c := a % b;
+        printint(a);
+        printint(b);
+        printint(c);
+        println();
+
+        c = -7;
+        c %= 5;
+        printint(c);
+        println();
+    };
+
+    // scaler rem
+    {
+        a := -7;
+        b := 5;
+        c := a %% b;
+        printint(a);
+        printint(b);
+        printint(c);
+        println();
+
+        c = -7;
+        c %%= 5;
+        printint(c);
+        println();
+    };
+
+    // logical and
+    {
+        n := 0;
+
+        a := false;
+        
+        // short-circuit
+        c := a and (++n == 1);
+        printint(if n == 0 then 1 else 0);
+        printint(if c then 1 else 0);
+        println();
+
+        // short-circuit
+        a and= ++n == 1;
+        printint(if n == 0 then 1 else 0);
+        printint(if a then 1 else 0);
+        println();
+
+        // not short-circuit
+        a = true;
+        c = a and (++n == 1);
+        printint(if n == 1 then 1 else 0);
+        printint(if c then 1 else 0);
+        println();
+
+        // not short-circuit
+        a and= ++n == 2;
+        printint(if n == 2 then 1 else 0);
+        printint(if a then 1 else 0);
+        println();
+    };
+
+    // logical or
+    {
+        n := 0;
+
+        a := true;
+        
+        // short-circuit
+        c := a or (++n == 1);
+        printint(if n == 0 then 1 else 0);
+        printint(if c then 1 else 0);
+        println();
+
+        // short-circuit
+        a or= ++n == 1;
+        printint(if n == 0 then 1 else 0);
+        printint(if a then 1 else 0);
+        println();
+
+        // not short-circuit
+        a = false;
+        c = a or (++n == 1);
+        printint(if n == 1 then 1 else 0);
+        printint(if c then 1 else 0);
+        println();
+
+        // not short-circuit
+        a or= ++n == 2;
+        printint(if n == 2 then 1 else 0);
+        printint(if a then 1 else 0);
+        println();
+    };
+};

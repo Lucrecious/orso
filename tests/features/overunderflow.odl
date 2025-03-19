@@ -1,133 +1,182 @@
-{
+main :: () -> void {
     sum := 0;
 
     min8 := -128s8;
 	max8 := 127s8;
 
+    printint(min8 as int);
+    printint(max8 as int);
+    println();
+
     {
         a := min8;
         a = a - 1s8;
+        printint(a as int);
 
         if a == max8 then
             sum = sum + 1;
 
         a = a + 1s8;
+        printint(a as int);
 
         if a == min8 then
             sum = sum + 1;
     };
 
+    println();
+
 	minu8 := 0u8;
 	maxu8 := 255u8;
+    printint(minu8 as int);
+    printint(maxu8 as int);
+    println();
 
     {
         a := minu8;
         a = a - 1u8;
+        printint(a as int);
 
         if a == maxu8 then
             sum = sum + 1;
 
         a = a + 1u8;
+        printint(a as int);
 
         if a == minu8 then
             sum = sum + 1;
     };
+    println();
 
 	min16 := -32768s16;
 	max16 := 32767s16;
+    printint(min16 as int);
+    printint(max16 as int);
+    println();
 
     {
         a := min16;
         a = a - 1s16;
+        printint(a as int);
 
         if a == max16 then
             sum = sum + 1;
 
         a = a + 1s16;
+        printint(a as int);
 
         if a == min16 then
             sum = sum + 1;
     };
+    println();
 
 	minu16 := 0u16;
 	maxu16 := 65535u16;
+    printint(minu16 as int);
+    printint(maxu16 as int);
+    println();
 
     {
         a := minu16;
         a = a - 1u16;
+        printint(a as int);
 
         if a == maxu16 then
             sum = sum + 1;
 
         a = a + 1u16;
+        printint(a as int);
 
         if a == minu16 then
             sum = sum + 1;
     };
+    println();
 
 	min32 := -2147483648s32;
 	max32 := 2147483647s32;
+    prints64(min32);
+    prints64(max32);
+    println();
 
     {
         a := min32;
         a = a - 1s32;
+        prints64(a);
 
         if a == max32 then
             sum = sum + 1;
 
         a = a + 1s32;
+        prints64(a);
 
         if a == min32 then
             sum = sum + 1;
     };
+    println();
 
 	minu32 := 0u32;
 	maxu32 := 4294967295u32;
+    printu64(minu32);
+    printu64(maxu32);
+    println();
 
     {
         a := minu32;
         a = a - 1u32;
+        printu64(a);
 
         if a == maxu32 then
             sum = sum + 1;
 
         a = a + 1u32;
+        printu64(a);
 
         if a == minu32 then
             sum = sum + 1;
     };
+    println();
 
 	min64 := -9223372036854775808s64;
 	max64 := 9223372036854775807s64;
+    prints64(min64);
+    prints64(max64);
+    println();
 
     {
         a := min64;
         a = a - 1s64;
+        prints64(a);
 
         if a == max64 then
             sum = sum + 1;
 
         a = a + 1s64;
+        prints64(a);
 
         if a == min64 then
             sum = sum + 1;
     };
+    println();
 
 	minu64 := 0u64;
 	maxu64 := 18446744073709551615u64;
+    printu64(minu64);
+    printu64(maxu64);
+    println();
 
     {
         a := minu64;
         a = a - 1u64;
+        printu64(a);
 
-        if a == maxu64 then
-            sum = sum + 1;
+        if a == maxu64 then ++sum;
 
         a = a + 1u64;
+        printu64(a);
 
-        if a == minu64 then
-            sum = sum + 1;
+        if a == minu64 then ++sum;
     };
+    println();
 
-    sum;
-}
+    printint(if sum == 16 then 1 else 0);
+    println();
+};

@@ -725,9 +725,9 @@ static void parser_error(parser_t *parser, error_t error) {
     unless (error.is_warning) {
         parser->had_error = true;
         parser->panic_mode = true;
+        array_push(&parser->ast->errors, error);
     }
 
-    array_push(&parser->ast->errors, error);
 }
 
 static void advance(parser_t *parser) {
@@ -1673,7 +1673,6 @@ parse_rule_t rules[] = {
     [TOKEN_PERCENT_PERCENT_EQUAL]   = { NULL,               parse_assignment,   PREC_ASSIGNMENT},
     [TOKEN_AND_EQUAL]               = { NULL,               parse_assignment,   PREC_ASSIGNMENT},
     [TOKEN_OR_EQUAL]                = { NULL,               parse_assignment,   PREC_ASSIGNMENT},
-    [TOKEN_NOT_EQUAL]               = { NULL,               parse_assignment,   PREC_ASSIGNMENT},
 
     [TOKEN_BANG]                    = { parse_inferred_type_decl, NULL,         PREC_UNARY },
     [TOKEN_LESS]                    = { NULL,               parse_binary,       PREC_COMPARISON },
@@ -1992,7 +1991,6 @@ token_type_t parser_opeq2op(token_type_t type) {
     case TOKEN_PERCENT_PERCENT_EQUAL: return TOKEN_PERCENT_PERCENT;
     case TOKEN_OR_EQUAL: return TOKEN_OR;
     case TOKEN_AND_EQUAL: return TOKEN_AND;
-    case TOKEN_NOT_EQUAL: return TOKEN_NOT;
 
     default: return TOKEN_EQUAL;
     }

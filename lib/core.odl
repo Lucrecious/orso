@@ -11,6 +11,9 @@
 @intrinsic readint :: () -> int;
 
 @intrinsic printint :: (int) -> void;
+@intrinsic printf64 :: (f64) -> void;
+@intrinsic printu64 :: (u64) -> void;
+@intrinsic prints64 :: (s64) -> void;
 @intrinsic println :: () -> void;
 
 ns2sec :: (ns: u64) -> f64 {
