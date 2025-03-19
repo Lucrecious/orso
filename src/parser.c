@@ -1204,7 +1204,7 @@ static ast_node_t *parse_branch(parser_t *parser) {
                 parser_error(parser, OR_ERROR(
                     .tag = ERROR_PARSER_EXPECTED_JMP_LABEL_AFTER_COLON,
                     .level = ERROR_SOURCE_PARSER,
-                    .msg = lit2str("expected identifier after ':' on a jmp expression"),
+                    .msg = lit2str("expected identifier after ':' on a do expression"),
                     .args = ORERR_ARGS(error_arg_token(parser->current)),
                     .show_code_lines = ORERR_LINES(0),
                 ));
