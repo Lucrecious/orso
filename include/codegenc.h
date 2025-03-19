@@ -478,10 +478,6 @@ static void cgen_semicolon_nl(cgen_t *cgen) {
     sb_add_cstr(&cgen->sb, ";\n");
 }
 
-static void cgen_nl(cgen_t *cgen) {
-    sb_add_cstr(&cgen->sb, "\n");
-}
-
 static void cgen_statement(cgen_t *cgen, ast_node_t *expression, cgen_var_t var, bool add_indent) {
     if (add_indent) cgen_add_indent(cgen);
     cgen_expression(cgen, expression, var);

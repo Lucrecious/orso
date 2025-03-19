@@ -114,30 +114,12 @@ void myerror(ast_t *ast, error_t error) {
     fprintf(stderr, "%s:%lu:%lu: %s\n", file_path, line, column, error.message);
 
     switch (error_source) {
+    case ERROR_SOURCE_PARSEREX:
     case ERROR_SOURCE_PARSER: {
-        print_error_location_hint(error.after_token, token_end_loc(&error.after_token).column);
-        break;
-    }
-
-    case ERROR_SOURCE_PARSEREX: {
-        switch (error.type) {
-        case ERROR_PARSEREX_EXPECTED_EOF_AFTER_MODULE:
-        case ERROR_PARSEREX_EXPECTED_SEMICOLON_AFTER_STRUCT_DECLARATION:
-        case ERROR_PARSEREX_EXPECTED_SEMICOLON_AFTER_DECLARATION: {
-            print_error_location_hint(error.node->end, token_end_loc(&error.node->end).column);
-            break;
-        }
-
-        case ERROR_PARSEREX_EXPECTED_TYPE:
-        case ERROR_PARSEREX_EXPECTED_EXPRESSION:
-        case ERROR_PARSEREX_TOO_MANY_PARAMETERS:
-        case ERROR_PARSEREX_EXPECTED_DECLARATION: {
-            print_error_location_hint(error.node->start, error.node->start.loc.column);
-            break;
-        }
-
-        default:UNREACHABLE();
-        }
+        tmp_arena_t *tmp = allocator_borrow();
+        string_t error_str = error2richstring(error, tmp->allocator);
+        fprintf(stderr, "%s\n", error_str.cstr);
+        allocator_return(tmp);
         break;
     }
 

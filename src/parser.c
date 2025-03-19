@@ -859,11 +859,23 @@ static ast_node_t *parse_number(parser_t *parser) {
                 case NUM_SIZE_8: {
                     if (do_signed) {
                         if (value > INT8_MAX) {
-                            parser_error(parser, make_warning(WARNING_PARSER_NUMBER_OVERFLOW, token));
+                            parser_error(parser, OR_ERROR(
+                                .tag = WARNING_PARSER_NUMBER_OVERFLOW,
+                                .level = ERROR_SOURCE_PARSER,
+                                .msg = lit2str("number too large to fit in an 's8'"),
+                                .args = ORERR_ARGS(error_arg_token(token)),
+                                .show_code_lines = ORERR_LINES(0),
+                            ));
                         }
                     } else {
                         if (value > UINT8_MAX) {
-                            parser_error(parser, make_warning(WARNING_PARSER_NUMBER_OVERFLOW, token));
+                            parser_error(parser, OR_ERROR(
+                                .tag = WARNING_PARSER_NUMBER_OVERFLOW,
+                                .level = ERROR_SOURCE_PARSER,
+                                .msg = lit2str("number too large to fit in a 'u8'"),
+                                .args = ORERR_ARGS(error_arg_token(token)),
+                                .show_code_lines = ORERR_LINES(0),
+                            ));
                         }
                     }
                     break;
@@ -872,11 +884,23 @@ static ast_node_t *parse_number(parser_t *parser) {
                 case NUM_SIZE_16: {
                     if (do_signed) {
                         if (value > INT16_MAX) {
-                            parser_error(parser, make_warning(WARNING_PARSER_NUMBER_OVERFLOW, token));
+                            parser_error(parser, OR_ERROR(
+                                .tag = WARNING_PARSER_NUMBER_OVERFLOW,
+                                .level = ERROR_SOURCE_PARSER,
+                                .msg = lit2str("number too large to fit in a 's16'"),
+                                .args = ORERR_ARGS(error_arg_token(token)),
+                                .show_code_lines = ORERR_LINES(0),
+                            ));
                         }
                     } else {
                         if (value > UINT16_MAX) {
-                            parser_error(parser, make_warning(WARNING_PARSER_NUMBER_OVERFLOW, token));
+                            parser_error(parser, OR_ERROR(
+                                .tag = WARNING_PARSER_NUMBER_OVERFLOW,
+                                .level = ERROR_SOURCE_PARSER,
+                                .msg = lit2str("number too large to fit in a 'u16'"),
+                                .args = ORERR_ARGS(error_arg_token(token)),
+                                .show_code_lines = ORERR_LINES(0),
+                            ));
                         }
                     }
                     break;
@@ -885,11 +909,23 @@ static ast_node_t *parse_number(parser_t *parser) {
                 case NUM_SIZE_32: {
                     if (do_signed) {
                         if (value > INT32_MAX) {
-                            parser_error(parser, make_warning(WARNING_PARSER_NUMBER_OVERFLOW, token));
+                            parser_error(parser, OR_ERROR(
+                                .tag = WARNING_PARSER_NUMBER_OVERFLOW,
+                                .level = ERROR_SOURCE_PARSER,
+                                .msg = lit2str("number too large to fit in a 's32'"),
+                                .args = ORERR_ARGS(error_arg_token(token)),
+                                .show_code_lines = ORERR_LINES(0),
+                            ));
                         }
                     } else {
                         if (value > UINT32_MAX) {
-                            parser_error(parser, make_warning(WARNING_PARSER_NUMBER_OVERFLOW, token));
+                            parser_error(parser, OR_ERROR(
+                                .tag = WARNING_PARSER_NUMBER_OVERFLOW,
+                                .level = ERROR_SOURCE_PARSER,
+                                .msg = lit2str("number too large to fit in a 'u32'"),
+                                .args = ORERR_ARGS(error_arg_token(token)),
+                                .show_code_lines = ORERR_LINES(0),
+                            ));
                         }
                     }
                     break;
@@ -941,7 +977,13 @@ static ast_node_t *parse_jmp(parser_t *parser) {
     if (jmp_type == TOKEN_BREAK || jmp_type == TOKEN_CONTINUE) {
         if (match(parser, TOKEN_COLON)) {
             unless (consume(parser, TOKEN_IDENTIFIER)) {
-                parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_JMP_LABEL, parser->current, parser->previous));
+                parser_error(parser, OR_ERROR(
+                    .tag = ERROR_PARSER_EXPECTED_JMP_LABEL_AFTER_COLON,
+                    .level = ERROR_SOURCE_PARSER,
+                    .msg = lit2str("expected a jmp label after ':'"),
+                    .args = ORERR_ARGS(error_arg_token(parser->previous)),
+                    .show_code_lines = ORERR_LINES(0),
+                ));
             }
             label = parser->previous;
         }
@@ -992,22 +1034,21 @@ static ast_node_t *parse_literal(parser_t *parser) {
 }
 
 static void parse_arguments(parser_t* parser, ast_node_t *parent) {
-    size_t parameter_count = 0;
     unless (check(parser, TOKEN_PARENTHESIS_CLOSE)) {
         do {
             ast_node_t *argument = parse_expression(parser);
             array_push(&parent->children, argument);
-            ++parameter_count;
         } while (match(parser, TOKEN_COMMA));
     }
 
     unless (consume(parser, TOKEN_PARENTHESIS_CLOSE)) {
-        parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_CLOSE_PARENTHESIS, parser->current, parser->previous));
-    }
-
-    if (parameter_count > MAX_PARAMETERS - 1) {
-        error_t error = make_error_node(ERROR_PARSEREX_TOO_MANY_PARAMETERS, parent);
-        parser_error(parser, error);
+        parser_error(parser, OR_ERROR(
+            .tag = ERROR_PARSER_EXPECTED_CLOSE_PARENTHESIS,
+            .level = ERROR_SOURCE_PARSER,
+            .msg = lit2str("expected close parenthesis"),
+            .args = ORERR_ARGS(error_arg_token(parser->current)),
+            .show_code_lines = ORERR_LINES(0),
+        ));
     }
 }
 
@@ -1015,7 +1056,13 @@ static ast_node_t *parse_builtin_call(parser_t *parser) {
     token_t identifier = parser->previous;
 
     unless (consume(parser, TOKEN_PARENTHESIS_OPEN)) {
-        parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_OPEN_PARENTHESIS_BUILTIN_FUNC, parser->previous, identifier));
+        parser_error(parser, OR_ERROR(
+            .tag = ERROR_PARSER_EXPECTED_OPEN_PARENTHESIS_BUILTIN_FUNC,
+            .level = ERROR_SOURCE_PARSER,
+            .msg = lit2str("expected open parenthesis after builtin function name"),
+            .args = ORERR_ARGS(error_arg_token(parser->previous)),
+            .show_code_lines = ORERR_LINES(0),
+        ));
     }
 
     ast_node_t *n = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_BUILTIN_CALL, identifier);
@@ -1051,9 +1098,13 @@ static ast_node_t *convert_function_definition(parser_t *parser, ast_node_t *lef
     for (size_t i = an_func_def_arg_start(left_operand); i < an_func_def_arg_end(left_operand); ++i) {
         ast_node_t *parameter = left_operand->children.items[i];
         if (parameter->node_type != AST_NODE_TYPE_DECLARATION_DEFINITION) {
-            parser_error(parser, make_error_node(ERROR_PARSEREX_EXPECTED_DECLARATION, parameter));
-            left_operand->node_type = AST_NODE_TYPE_NONE;
-            return left_operand;
+            parser_error(parser, OR_ERROR(
+                .tag = ERROR_PARSEREX_EXPECTED_DECLARATION,
+                .level = ERROR_SOURCE_PARSER,
+                .msg = lit2str("expected declaration"),
+                .args = ORERR_ARGS(error_arg_node(parameter)),
+                .show_code_lines = ORERR_LINES(0),
+            ));
         }
     }
 
@@ -1101,7 +1152,13 @@ static ast_node_t *parse_block(parser_t *parser) {
         ast_node_t *decl_node = parse_decl(parser, false);
 
         unless (consume(parser, TOKEN_SEMICOLON)) {
-            parser_error(parser, make_error_node(ERROR_PARSEREX_EXPECTED_SEMICOLON_AFTER_DECLARATION, decl_node));
+            parser_error(parser, OR_ERROR(
+                .tag = ERROR_PARSEREX_EXPECTED_SEMICOLON_AFTER_DECLARATION,
+                .level = ERROR_SOURCE_PARSER,
+                .msg = lit2str("expected ';' after declaration"),
+                .args = ORERR_ARGS(error_arg_node(decl_node)),
+                .show_code_lines = ORERR_LINES(0),
+            ));
         }
 
         ast_block_decl(block, decl_node);
@@ -1110,7 +1167,13 @@ static ast_node_t *parse_block(parser_t *parser) {
     }
 
     unless (consume(parser, TOKEN_BRACE_CLOSE)) {
-        parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_CLOSE_BRACE_FOR_BLOCK, parser->current, parser->previous));
+        parser_error(parser, OR_ERROR(
+            .tag = ERROR_PARSER_EXPECTED_CLOSE_BRACE_FOR_BLOCK,
+            .level = ERROR_SOURCE_PARSER,
+            .msg = lit2str("expected '}' to close block"),
+            .args = ORERR_ARGS(error_arg_token(parser->current), error_arg_token(block->start)),
+            .show_code_lines = ORERR_LINES(0, 1),
+        ));
     }
 
     ast_block_end(block, parser->previous);
@@ -1138,7 +1201,13 @@ static ast_node_t *parse_branch(parser_t *parser) {
 
         if (match(parser, TOKEN_COLON)) {
             unless (consume(parser, TOKEN_IDENTIFIER)) {
-                parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_JMP_LABEL, parser->current, parser->previous));
+                parser_error(parser, OR_ERROR(
+                    .tag = ERROR_PARSER_EXPECTED_JMP_LABEL_AFTER_COLON,
+                    .level = ERROR_SOURCE_PARSER,
+                    .msg = lit2str("expected identifier after ':' on a jmp expression"),
+                    .args = ORERR_ARGS(error_arg_token(parser->current)),
+                    .show_code_lines = ORERR_LINES(0),
+                ));
             }
             label = parser->previous;
         }
@@ -1171,7 +1240,13 @@ static ast_node_t *parse_branch(parser_t *parser) {
             if (check(parser, TOKEN_BRACE_OPEN) || (check(parser, TOKEN_DO) || check(parser, TOKEN_THEN))) break;
 
             unless (consume(parser, TOKEN_SEMICOLON)) {
-                parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_SEMICOLON, parser->previous, parser->current));
+                parser_error(parser, OR_ERROR(
+                    .tag = ERROR_PARSER_EXPECTED_SEMICOLON,
+                    .level = ERROR_SOURCE_PARSER,
+                    .msg = lit2str("expected ';'"),
+                    .args = ORERR_ARGS(error_arg_token(parser->current)),
+                    .show_code_lines = ORERR_LINES(0),
+                ));
                 break;
             }
 
@@ -1180,7 +1255,13 @@ static ast_node_t *parse_branch(parser_t *parser) {
 
         condition = last_decl;
         if (last_decl->node_type != AST_NODE_TYPE_DECLARATION_STATEMENT) {
-            parser_error(parser, make_error_node(ERROR_PARSEREX_EXPECTED_EXPRESSION, last_decl));
+            parser_error(parser, OR_ERROR(
+                .tag = ERROR_PARSER_EXPECTED_EXPRESSION,
+                .level = ERROR_SOURCE_PARSER,
+                .msg = lit2str("expected expression as the condition for $0.kind branch"),
+                .args = ORERR_ARGS(error_arg_token(start_token), error_arg_node(last_decl)),
+                .show_code_lines = ORERR_LINES(1),
+            ));
         } else {
             condition = an_expression(last_decl);
         }
@@ -1191,11 +1272,23 @@ static ast_node_t *parse_branch(parser_t *parser) {
         } else {
             if (branch_type == BRANCH_TYPE_LOOPING) {
                 unless (consume(parser, TOKEN_DO)) {
-                    parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_DO_OR_BRACE_AFTER_LOOP_CONDITION, parser->current, condition->end));
+                    parser_error(parser, OR_ERROR(
+                        .tag = ERROR_PARSER_EXPECTED_EXPRESSION,
+                        .level = ERROR_SOURCE_PARSER,
+                        .msg = lit2str("expected expression as the condition for $0.kind branch"),
+                        .args = ORERR_ARGS(error_arg_token(start_token), error_arg_node(last_decl)),
+                        .show_code_lines = ORERR_LINES(1),
+                    ));
                 }
             } else {
                 unless (consume(parser, TOKEN_THEN)) {
-                    parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_THEN_OR_BRACE_AFTER_BRANCH_CONDITION, parser->current, condition->end));
+                    parser_error(parser, OR_ERROR(
+                        .tag = ERROR_PARSER_EXPECTED_THEN_OR_BRACE_AFTER_BRANCH_CONDITION,
+                        .level = ERROR_SOURCE_PARSER,
+                        .msg = lit2str("expected 'then' or '{' after $0.kind condition"),
+                        .args = ORERR_ARGS(error_arg_token(start_token), error_arg_token(parser->current)),
+                        .show_code_lines = ORERR_LINES(1),
+                    ));
                 }
             }
 
@@ -1257,7 +1350,13 @@ static ast_node_t *parse_for(parser_t *parser) {
     if (!match(parser, TOKEN_SEMICOLON)) {
         decl = parse_decl(parser, false);
         unless (consume(parser, TOKEN_SEMICOLON)) {
-            parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_SEMICOLON, parser->current, parser->previous));
+            parser_error(parser, OR_ERROR(
+                .tag = ERROR_PARSER_EXPECTED_SEMICOLON,
+                .level = ERROR_SOURCE_PARSER,
+                .msg = lit2str("expected ';' after the first declaration in a for expression"),
+                .args = ORERR_ARGS(error_arg_token(parser->current)),
+                .show_code_lines = ORERR_LINES(0),
+            ));
         }
     } else {
         decl = &nil_node;
@@ -1268,7 +1367,13 @@ static ast_node_t *parse_for(parser_t *parser) {
     if (!match(parser, TOKEN_SEMICOLON)) {
         cond = parse_expression(parser);
         unless(consume(parser, TOKEN_SEMICOLON)) {
-            parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_SEMICOLON, parser->current, parser->previous));
+            parser_error(parser, OR_ERROR(
+                .tag = ERROR_PARSER_EXPECTED_SEMICOLON,
+                .level = ERROR_SOURCE_PARSER,
+                .msg = lit2str("expected ';' after the condition in a for expression"),
+                .args = ORERR_ARGS(error_arg_token(parser->current)),
+                .show_code_lines = ORERR_LINES(0),
+            ));
             end_of_check = start;
         } else {
             end_of_check = parser->previous;
@@ -1290,7 +1395,13 @@ static ast_node_t *parse_for(parser_t *parser) {
     } else if (match(parser, TOKEN_BRACE_OPEN)) {
         loop = parse_block(parser);
     } else {
-        parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_EXPRESSION, parser->previous, parser->current));
+        parser_error(parser, OR_ERROR(
+            .tag = ERROR_PARSER_EXPECTED_EXPRESSION,
+            .level = ERROR_SOURCE_PARSER,
+            .msg = lit2str("expected expression for the increment section of a for expression"),
+            .args = ORERR_ARGS(error_arg_token(parser->current)),
+            .show_code_lines = ORERR_LINES(0),
+        ));
     }
 
     ast_node_t *then;
@@ -1384,7 +1495,13 @@ static void parse_function_signature(parser_t *parser, ast_node_t *func_sig) {
     parse_parameters(parser, &func_sig->children);
 
     unless (consume(parser, TOKEN_PARENTHESIS_CLOSE)) {
-        parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_CLOSE_PARENTHESIS, parser->current, parser->previous));
+        parser_error(parser, OR_ERROR(
+            .tag = ERROR_PARSER_EXPECTED_CLOSE_PARENTHESIS,
+            .level = ERROR_SOURCE_PARSER,
+            .msg = lit2str("expected ')' after the function signature arguments"),
+            .args = ORERR_ARGS(error_arg_token(parser->current)),
+            .show_code_lines = ORERR_LINES(0),
+        ));
     }
 
     if (match(parser, TOKEN_ARROW_RIGHT)) {
@@ -1406,8 +1523,6 @@ static ast_node_t *parse_function_definition(parser_t *parser) {
 }
 
 static ast_node_t *parse_array_type(parser_t *parser) {
-    token_t start = parser->previous;
-
     ast_node_t *size_expr = &nil_node;
 
     if (true || !check(parser, TOKEN_BRACKET_CLOSE)) {
@@ -1415,7 +1530,13 @@ static ast_node_t *parse_array_type(parser_t *parser) {
     }
 
     unless (consume(parser, TOKEN_BRACKET_CLOSE)) {
-        parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_CLOSE_BRACKET_AFTER_SIZE_EXPRESSION, parser->previous, start));
+        parser_error(parser, OR_ERROR(
+            .tag = ERROR_PARSER_EXPECTED_CLOSE_BRACKET_AFTER_SIZE_EXPRESSION,
+            .level = ERROR_SOURCE_PARSER,
+            .msg = lit2str("expected ']' after the size expression"),
+            .args = ORERR_ARGS(error_arg_token(parser->current)),
+            .show_code_lines = ORERR_LINES(0),
+        ));
     }
 
     ast_node_t *type_expr = parse_precedence(parser, (prec_t)(PREC_CALL + 1));
@@ -1425,12 +1546,16 @@ static ast_node_t *parse_array_type(parser_t *parser) {
 }
 
 static ast_node_t *parse_item_access(parser_t *parser) {
-    token_t start = parser->previous;
-
     ast_node_t *access_expr = parse_expression(parser);
 
     unless (consume(parser, TOKEN_BRACKET_CLOSE)) {
-        parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_CLOSE_BRACKET_AFTER_SIZE_EXPRESSION, parser->previous, start));
+        parser_error(parser, OR_ERROR(
+            .tag = ERROR_PARSER_EXPECTED_CLOSE_BRACKET_AFTER_SIZE_EXPRESSION,
+            .level = ERROR_SOURCE_PARSER,
+            .msg = lit2str("expected ']' after the size expression"),
+            .args = ORERR_ARGS(error_arg_token(parser->current)),
+            .show_code_lines = ORERR_LINES(0),
+        ));
     }
 
     ast_node_t *item_access = ast_item_access(parser->ast, &nil_node, access_expr);
@@ -1445,6 +1570,7 @@ static ast_node_t *parse_grouping_or_function_signature_or_definition(parser_t *
         node_type = AST_NODE_TYPE_EXPRESSION_GROUPING;
     }
 
+    token_t start = parser->previous;
     ast_node_t *expr = ast_node_new(parser->ast, node_type, parser->previous);
 
     if (node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE) {
@@ -1461,7 +1587,13 @@ static ast_node_t *parse_grouping_or_function_signature_or_definition(parser_t *
         an_operand(expr) = parse_expression(parser);
 
         unless (consume(parser, TOKEN_PARENTHESIS_CLOSE)) {
-            parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_CLOSE_PARENTHESIS, parser->current, an_operand(expr)->end));
+            parser_error(parser, OR_ERROR(
+                .tag = ERROR_PARSER_EXPECTED_CLOSE_PARENTHESIS,
+                .level = ERROR_SOURCE_PARSER,
+                .msg = lit2str("expected ')'"),
+                .args = ORERR_ARGS(error_arg_token(parser->current), error_arg_token(start)),
+                .show_code_lines = ORERR_LINES(0, 1),
+            ));
         }
 
         expr->value_type = an_operand(expr)->value_type;
@@ -1510,7 +1642,13 @@ static ast_node_t *parse_inferred_type_decl(parser_t *parser) {
     token_t identifier = parser->current;
     unless (consume(parser, TOKEN_IDENTIFIER)) {
         identifier = nil_token;
-        parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_IDENTIFER_AFTER_INFERRED_TYPE_DECL_ANNOTATION, parser->previous, parser->current));
+        parser_error(parser, OR_ERROR(
+            .tag = ERROR_PARSER_EXPECTED_IDENTIFER_AFTER_INFERRED_TYPE_DECL_ANNOTATION,
+            .level = ERROR_SOURCE_PARSER,
+            .msg = lit2str("expected identifier after '!'"),
+            .args = ORERR_ARGS(error_arg_token(parser->current)),
+            .show_code_lines = ORERR_LINES(0),
+        ));
     }
 
     ast_node_t *inferred_type_decl = ast_inferred_type_decl(parser->ast, first_token, identifier);
@@ -1546,7 +1684,13 @@ static ast_node_t *parse_directive(parser_t *parser) {
 
     if (allow_multiple_args) {
         unless (consume(parser, TOKEN_PARENTHESIS_CLOSE)) {
-            parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_CLOSE_PARENTHESIS, parser->current, parser->previous));
+            parser_error(parser, OR_ERROR(
+                .tag = ERROR_PARSER_EXPECTED_CLOSE_PARENTHESIS,
+                .level = ERROR_SOURCE_PARSER,
+                .msg = lit2str("expected ')' after the directive call arguments"),
+                .args = ORERR_ARGS(error_arg_token(parser->current)),
+                .show_code_lines = ORERR_LINES(0),
+            ));
         }
     }
 
@@ -1578,28 +1722,9 @@ static ast_node_t *parse_cast(parser_t *parser) {
 }
 
 static ast_node_t *parse_struct_def(parser_t *parser) {
-    ast_node_t *struct_definition = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION, parser->previous);
-
-    unless (consume(parser, TOKEN_BRACE_OPEN)) {
-        parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_OPEN_BRACE_AFTER_STRUCT, parser->current, struct_definition->start));
-    }
-
-    while (!check(parser, TOKEN_BRACE_CLOSE) && !check(parser, TOKEN_EOF)) {
-        ast_node_t *declaration_node = parse_decl_def(parser);
-        array_push(&struct_definition->children, declaration_node);
-        
-        unless (consume(parser, TOKEN_SEMICOLON)) {
-            parser_error(parser, make_error_node(ERROR_PARSEREX_EXPECTED_SEMICOLON_AFTER_STRUCT_DECLARATION, declaration_node));
-        }
-    }
-
-    unless (consume(parser, TOKEN_BRACE_CLOSE)) {
-        parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_CLOSE_BRACE_AFTER_STRUCT_DECLARATIONS, parser->current, parser->previous));
-    }
-
-    struct_definition->end = parser->previous;
-
-    return struct_definition;
+    UNUSED(parser);
+    UNREACHABLE();
+    return NULL;
 }
 
 static ast_node_t *ast_begin_list_initializer(ast_t *ast, token_t open_bracket) {
@@ -1628,7 +1753,13 @@ static ast_node_t *parse_dot(parser_t *parser) {
             } while (match(parser, TOKEN_COMMA));
 
             unless (consume(parser, TOKEN_BRACE_CLOSE)) {
-                parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_CLOSE_BRACE_AFTER_STRUCT_INITIALIZER_ARGUMENTS, parser->current, parser->previous));
+                parser_error(parser, OR_ERROR(
+                    .tag = ERROR_PARSER_EXPECTED_CLOSE_BRACE_AFTER_INIT_LIST,
+                    .level = ERROR_SOURCE_PARSER,
+                    .msg = lit2str("expected '}' after an initialization list"),
+                    .args = ORERR_ARGS(error_arg_token(parser->current)),
+                    .show_code_lines = ORERR_LINES(0),
+                ));
             }
         }
 
@@ -1638,7 +1769,13 @@ static ast_node_t *parse_dot(parser_t *parser) {
     } else {
         ast_node_t *dot_expression = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_DOT, parser->previous);
         unless (consume(parser, TOKEN_IDENTIFIER)) {
-            parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_VALID_TOKEN_AFTER_DOT, parser->current, parser->previous));
+            parser_error(parser, OR_ERROR(
+                .tag = ERROR_PARSER_EXPECTED_VALID_TOKEN_AFTER_DOT,
+                .level = ERROR_SOURCE_PARSER,
+                .msg = lit2str("expected an identifier after '.'"),
+                .args = ORERR_ARGS(error_arg_token(parser->current)),
+                .show_code_lines = ORERR_LINES(0),
+            ));
         }
         dot_expression->identifier = parser->previous;
         dot_expression->end = parser->current;
@@ -1732,7 +1869,13 @@ static ast_node_t *parse_precedence(parser_t *parser, prec_t precedence) {
 
     if (prefix_rule == NULL) {
         left_operand = ast_node_new(parser->ast, AST_NODE_TYPE_NONE, parser->current);
-        parser_error(parser, make_error_node(ERROR_PARSEREX_EXPECTED_EXPRESSION, left_operand));
+        parser_error(parser, OR_ERROR(
+            .tag = ERROR_PARSEREX_EXPECTED_EXPRESSION,
+            .level = ERROR_SOURCE_PARSER,
+            .msg = lit2str("expected expression"),
+            .args = ORERR_ARGS(error_arg_token(parser->current)),
+            .show_code_lines = ORERR_LINES(0),
+        ));
     } else {
         advance(parser);
 
@@ -1817,7 +1960,13 @@ static ast_node_t *parse_precedence(parser_t *parser, prec_t precedence) {
         for (size_t i = an_func_def_arg_start(left_operand); i < an_func_def_arg_end(left_operand); ++i) {
             ast_node_t *parameter = left_operand->children.items[i];
             unless (ast_node_type_is_expression(parameter->node_type)) {
-                parser_error(parser, make_error_node(ERROR_PARSEREX_EXPECTED_TYPE, parameter));
+                parser_error(parser, OR_ERROR(
+                    .tag = ERROR_PARSEREX_EXPECTED_EXPRESSION,
+                    .level = ERROR_SOURCE_PARSER,
+                    .msg = lit2str("expected expression"),
+                    .args = ORERR_ARGS(error_arg_token(parser->current)),
+                    .show_code_lines = ORERR_LINES(0),
+                ));
                 break;
             }
         }
@@ -1853,7 +2002,13 @@ static ast_node_t *parse_decl_def(parser_t *parser) {
             if (sv_eq(parser->previous.view, lit2sv("@intrinsic"))) {
                 is_intrinsic = true;
             } else {
-                parser_error(parser, make_error_token(ERROR_PARSER_INVALID_DECLARATION_DIRECTIVE, parser->current, parser->current));
+                parser_error(parser, OR_ERROR(
+                    .tag = ERROR_PARSER_INVALID_DECLARATION_DIRECTIVE,
+                    .level = ERROR_SOURCE_PARSER,
+                    .msg = lit2str("unknown declaration directive"),
+                    .args = ORERR_ARGS(error_arg_token(parser->previous)),
+                    .show_code_lines = ORERR_LINES(0),
+                ));
                 parser->panic_mode = false;
             }
         }
@@ -1863,7 +2018,13 @@ static ast_node_t *parse_decl_def(parser_t *parser) {
     token_t identifier = parser->previous;
 
     unless (consume(parser, TOKEN_COLON)) {
-        parser_error(parser, make_error_token(ERROR_PARSER_EXPECTED_COLON_AFTER_DECLARATION_IDENTIFIER, parser->current, identifier));
+        parser_error(parser, OR_ERROR(
+            .tag = ERROR_PARSER_EXPECTED_COLON_AFTER_DECLARATION_IDENTIFIER,
+            .level = ERROR_SOURCE_PARSER,
+            .msg = lit2str("expected ':' after declaration identifier"),
+            .args = ORERR_ARGS(error_arg_token(parser->current)),
+            .show_code_lines = ORERR_LINES(0),
+        ));
     }
 
     ast_node_t *type_expr = NULL;
@@ -1916,7 +2077,13 @@ static ast_node_t *parse_decl(parser_t *parser, bool is_top_level) {
     } else {
         node = parse_statement(parser);
         if (is_top_level) {
-            parser_error(parser, make_error_node(ERROR_PARSEREX_EXPECTED_DECLARATION, node));
+            parser_error(parser, OR_ERROR(
+                .tag = ERROR_PARSEREX_EXPECTED_DECLARATION,
+                .level = ERROR_SOURCE_PARSER,
+                .msg = lit2str("only declarations are allowed at the file-scope"),
+                .args = ORERR_ARGS(error_arg_node(node)),
+                .show_code_lines = ORERR_LINES(0),
+            ));
             advance(parser);
         }
     }
@@ -1930,14 +2097,26 @@ static void parse_into_module(parser_t *parser, ast_node_t *module) {
         array_push(&module->children, decldef);
 
         unless (consume(parser, TOKEN_SEMICOLON)) {
-            parser_error(parser, make_error_node(ERROR_PARSEREX_EXPECTED_SEMICOLON_AFTER_DECLARATION, decldef));
+            parser_error(parser, OR_ERROR(
+                .tag = ERROR_PARSEREX_EXPECTED_SEMICOLON_AFTER_DECLARATION,
+                .level = ERROR_SOURCE_PARSER,
+                .msg = lit2str("expected ';' after declaration"),
+                .args = ORERR_ARGS(error_arg_node(decldef)),
+                .show_code_lines = ORERR_LINES(0),
+            ));
         }
 
         synchronize(parser);
     }
 
     unless (consume(parser, TOKEN_EOF)) {
-        parser_error(parser, make_error_node(ERROR_PARSEREX_EXPECTED_EOF_AFTER_MODULE, module));
+        parser_error(parser, OR_ERROR(
+            .tag = ERROR_PARSEREX_EXPECTED_EOF_AFTER_MODULE,
+            .level = ERROR_SOURCE_PARSER,
+            .msg = lit2str("expected end-of-file after module"),
+            .args = ORERR_ARGS(error_arg_node(module)),
+            .show_code_lines = ORERR_LINES(0),
+        ));
     }
 }
 

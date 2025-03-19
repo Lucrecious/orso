@@ -5,7 +5,7 @@
 
 X(ERROR_NONE, "none", PARSER)
 
-X(ERROR_PARSER_EXPECTED_JMP_LABEL, "expected a jump label", PARSER)
+X(ERROR_PARSER_EXPECTED_JMP_LABEL_AFTER_COLON, "expected a jump label", PARSER)
 X(ERROR_PARSER_EXPECTED_CLOSE_BRACE_FOR_BLOCK, "expected close brace for block", PARSER)
 X(ERROR_PARSER_EXPECTED_DO_OR_BRACE_AFTER_LOOP_CONDITION, "expected 'do' or '{' after while/until condition", PARSER)
 X(ERROR_PARSER_EXPECTED_EXPRESSION, "expected expression", PARSER)
@@ -15,13 +15,15 @@ X(ERROR_PARSER_EXPECTED_CLOSE_BRACKET_AFTER_SIZE_EXPRESSION, "expected ']' for t
 X(ERROR_PARSER_EXPECTED_OPEN_BRACE_AFTER_STRUCT, "expected '{' after 'struct' to specify its members", PARSER)
 X(ERROR_PARSER_EXPECTED_OPEN_PARENTHESIS_BUILTIN_FUNC, "expected '(' after builtin function keyword", PARSER)
 X(ERROR_PARSER_EXPECTED_CLOSE_BRACE_AFTER_STRUCT_DECLARATIONS, "expected '}' after then struct's declarations block", PARSER)
-X(ERROR_PARSER_EXPECTED_CLOSE_BRACE_AFTER_STRUCT_INITIALIZER_ARGUMENTS, "expected '}' after arguments within a struct initializer", PARSER)
+X(ERROR_PARSER_EXPECTED_CLOSE_BRACE_AFTER_INIT_LIST, "expected '}' after arguments within a struct initializer", PARSER)
 X(ERROR_PARSER_EXPECTED_VALID_TOKEN_AFTER_DOT, "expected an identifier (member access), '{' (struct initializer), or '[' (array initializer) after a '.'", PARSER)
 X(ERROR_PARSER_EXPECTED_COLON_AFTER_DECLARATION_IDENTIFIER, "expected ':' after declaration identifier", PARSER)
 X(ERROR_PARSER_EXPECTED_EOF_AFTER_EXPRESSION, "expected the end of the file after the expression", PARSER)
 X(ERROR_PARSER_INVALID_DECLARATION_DIRECTIVE, "invalid declaration directive", PARSER)
 X(ERROR_PARSER_EXPECTED_IDENTIFER_AFTER_INFERRED_TYPE_DECL_ANNOTATION, "expected identifer after an inferred type declaration annotation", PARSER)
 X(ERROR_PARSER_EXPECTED_SEMICOLON, "expected ';'", PARSER)
+
+X(WARNING_PARSER_NUMBER_OVERFLOW, "expected ';'", PARSER)
 
 X(ERROR_PARSEREX_EXPECTED_EOF_AFTER_MODULE, "expected the end of the file after the module", PARSEREX)
 X(ERROR_PARSEREX_EXPECTED_SEMICOLON_AFTER_STRUCT_DECLARATION, "expected ';' after a declaration inside a struct block", PARSEREX)

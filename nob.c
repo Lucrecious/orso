@@ -15,6 +15,7 @@ const char* SOURCES[] = {
     "./src/type.c",
     "./src/type_set.c",
     "./src/debugger.c",
+    "./src/error.c",
     "./lib/core.c",
 };
 
