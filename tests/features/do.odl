@@ -1,9 +1,10 @@
-{
+main :: () -> void {
     sum := 0;
 
     a := 0;
-
     do a = 1 then a = 2;
+    printint(a);
+    println();
 
     if a == 2 then 
         sum = sum + 1;
@@ -13,6 +14,9 @@
     } then {
         a = 2;
     };
+    
+    printint(a);
+    println();
 
     if a == 2 then
         sum = sum + 1;
@@ -23,6 +27,9 @@
     } then {
         a = 2;
     };
+    
+    printint(a);
+    println();
 
     if a == 1 then
         sum = sum + 1;
@@ -35,6 +42,9 @@
     } then {
         a = 3;
     };
+    
+    printint(a);
+    println();
 
     if a == 3 then
         sum = sum + 1;
@@ -49,6 +59,9 @@
     } then {
         a = 4;
     };
+    
+    printint(a);
+    println();
 
     if a == 4 then
         sum = sum + 1;
@@ -64,6 +77,9 @@
     } then {
         a = 4;
     };
+    
+    printint(a);
+    println();
 
     if a == 3 then
         sum = sum + 1;
@@ -73,6 +89,9 @@
 
         a = a - 1;
     } then a = 0;
+    
+    printint(a);
+    println();
 
     if a == 3 then
         sum = sum + 1;
@@ -87,6 +106,9 @@
     } then {
         a = 4;
     };
+    
+    printint(a);
+    println();
 
     if a == 4 then
         sum = sum + 1;
@@ -98,6 +120,9 @@
 
         10;
     };
+    
+    printint(answer);
+    println();
 
     if answer == 0 then
         sum = sum + 1;
@@ -107,6 +132,10 @@
             break:value sum + 1;
         };
     };
+    
+    printint(sum);
+    println();
 
-    sum;
-}
+    printint(sum);
+    println();
+};

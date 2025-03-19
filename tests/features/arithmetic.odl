@@ -1,0 +1,69 @@
+main :: () -> void {
+    a := 1 + 2;
+    printint(a);
+    println();
+
+    a = {1;} + {2;};
+    printint(a);
+    println();
+
+    a = {1;} + 2;
+    printint(a);
+    println();
+
+    a = 1 + {2;};
+    printint(a);
+    println();
+
+    a = 1 + 2 * 3;
+    printint(a);
+    println();
+    
+    a = (1+2)*3;
+    printint(a);
+    println();
+
+    a = 5 % 2;
+    printint(a);
+    println();
+
+    a = -5 % 2;
+    printint(a);
+    println();
+
+    a = -5 % -2;
+    printint(a);
+    println();
+
+    a = 10 %% 6;
+    printint(a);
+    println();
+
+    a = -10 %% 6;
+    printint(a);
+    println();
+
+    a = 10 %% -6;
+    printint(a);
+    println();
+
+    a = -10 %% -6;
+    printint(a);
+    println();
+
+    a = 5 + 6/4;
+    printint(a);
+    println();
+
+    a = a / {1;};
+    printint(a);
+    println();
+
+    a = a / 0;
+    printint(a);
+    println();
+
+    a = 0 / 0;
+    printint(a);
+    println();
+};

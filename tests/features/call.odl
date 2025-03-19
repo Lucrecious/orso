@@ -1,4 +1,4 @@
-{
+main :: () -> void {
     add :: (a: int, b: int) -> int {
         return a + b;
     };
@@ -7,31 +7,27 @@
         return a - b;
     };
 
-    sum := 0;
-
     a := add(1, 2);
-
-    if a == 3 then sum = sum + 1;
+    printint(a);
+    println();
 
     b := (if a == 3 then add else sub)(3, 4);
-
-    if b == 7 then sum = sum + 1;
+    printint(b);
+    println();
 
     c := add({5;}, 6);
-
-    if c == 11 then sum = sum + 1;
+    printint(c);
+    println();
 
     d := add(7, {8;});
-
-    if d == 15 then sum = sum + 1;
+    printint(d);
+    println();
 
     e := add({9;}, {10;});
-
-    if e == 19 then sum = sum + 1;
+    printint(e);
+    println();
 
     f := (if e == 19 then add else sub)({11;}, {12;});
-
-    if e == 23 then sum = sum + 1;
-
-    sum;
-}
+    printint(f);
+    println();
+};

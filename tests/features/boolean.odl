@@ -1,47 +1,45 @@
-{
+main :: () -> void {
     a := true;
     b := false;
 
-    sum := 0;
-
     ab := a and b;
-    if not ab then sum = sum + 1;
+    if not ab then printint(1);
 
     a = true;
     b = false;
 
     // short circuit
     ab = false and (b = true);
-    if not b then sum = sum + 1;
+    if not b then printint(1);
 
     a = true;
     b = false;
 
     ab = a or b;
-    if ab then sum = sum + 1;
+    if ab then printint(1);
 
     a = false;
     b = true;
     ab = a or b;
-    if ab then sum = sum + 1;
+    if ab then printint(1);
 
     a = false;
     b = false;
     ab = a or b;
-    if not ab then sum = sum + 1;
+    if not ab then printint(1);
 
     a = true;
     b = true;
     ab = a or b;
-    if ab then sum = sum + 1;
+    if ab then printint(1);
 
     b = false;
     ab = true or { (b = true); };
-    if not b then sum = sum + 1;
+    if not b then printint(1);
 
     b = false;
     ab = { x := false; y := true; x or y; } and (b = true);
-    if not b then sum = sum + 1;
+    if not b then printint(1);
 
-    sum;
-}
+    println();
+};
