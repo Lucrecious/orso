@@ -1153,10 +1153,10 @@ static ast_node_t *parse_block(parser_t *parser) {
 
         unless (consume(parser, TOKEN_SEMICOLON)) {
             parser_error(parser, OR_ERROR(
-                .tag = ERROR_PARSEREX_EXPECTED_SEMICOLON_AFTER_DECLARATION,
+                .tag = ERROR_PARSER_EXPECTED_SEMICOLON,
                 .level = ERROR_SOURCE_PARSER,
                 .msg = lit2str("expected ';' after declaration"),
-                .args = ORERR_ARGS(error_arg_token(decl_node->end)),
+                .args = ORERR_ARGS(error_arg_token(parser->current)),
                 .show_code_lines = ORERR_LINES(0),
             ));
         }
@@ -2097,7 +2097,7 @@ static void parse_into_module(parser_t *parser, ast_node_t *module) {
 
             unless (consume(parser, TOKEN_SEMICOLON)) {
                 parser_error(parser, OR_ERROR(
-                    .tag = ERROR_PARSEREX_EXPECTED_SEMICOLON_AFTER_DECLARATION,
+                    .tag = ERROR_PARSER_EXPECTED_SEMICOLON,
                     .level = ERROR_SOURCE_PARSER,
                     .msg = lit2str("expected ';' after declaration"),
                     .args = ORERR_ARGS(error_arg_token(parser->current)),
