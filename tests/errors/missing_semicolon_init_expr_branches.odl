@@ -1,0 +1,3 @@
+main :: () -> void {
+    if x := 0 a then return;
+};

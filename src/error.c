@@ -138,7 +138,8 @@ static string_t error_format(string_t message_format, error_arg_t *args, arena_t
 
             i = dot_index + 1;
 
-            size_t end_index = find_next_char_index(message_format, i, ' ');
+            size_t end_index = find_next_char_index(message_format, i, '$');
+            ASSERT(end_index < message_format.length, "must be surrounded by '$'s");
             string_view_t field_sv = {.data=message_format.cstr+i, .length=end_index-i};
 
             i = end_index;
