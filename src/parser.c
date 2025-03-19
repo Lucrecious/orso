@@ -1060,7 +1060,7 @@ static ast_node_t *parse_builtin_call(parser_t *parser) {
             .tag = ERROR_PARSER_EXPECTED_OPEN_PARENTHESIS_BUILTIN_FUNC,
             .level = ERROR_SOURCE_PARSER,
             .msg = lit2str("expected open parenthesis after builtin function name"),
-            .args = ORERR_ARGS(error_arg_token(parser->previous)),
+            .args = ORERR_ARGS(error_arg_token(parser->current)),
             .show_code_lines = ORERR_LINES(0),
         ));
     }
@@ -1101,7 +1101,7 @@ static ast_node_t *convert_function_definition(parser_t *parser, ast_node_t *lef
             parser_error(parser, OR_ERROR(
                 .tag = ERROR_PARSEREX_EXPECTED_DECLARATION,
                 .level = ERROR_SOURCE_PARSER,
-                .msg = lit2str("expected declaration"),
+                .msg = lit2str("only declarations are allowed as function parameters"),
                 .args = ORERR_ARGS(error_arg_node(parameter)),
                 .show_code_lines = ORERR_LINES(0),
             ));
