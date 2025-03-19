@@ -98,27 +98,12 @@ void myerror(ast_t *ast, error_t error) {
 
     error_source_t error_source = error_sources[error.type];
 
-    size_t line;
-    size_t column;
-    cstr_t file_path;
-    if (error_source == ERROR_SOURCE_ANALYSIS) {
-        line = error.node->start.loc.line + 1;
-        column = error.node->start.loc.column + 1;
-        file_path = error.node->start.loc.filepath.cstr;
-    } else {
-        line = error.after_token.loc.line + 1;
-        column = error.after_token.loc.column + 1;
-        file_path = error.after_token.loc.filepath.cstr;
-    }
-
-    fprintf(stderr, "%s:%lu:%lu: %s\n", file_path, line, column, error.message);
-
     switch (error_source) {
     case ERROR_SOURCE_PARSEREX:
     case ERROR_SOURCE_PARSER: {
         tmp_arena_t *tmp = allocator_borrow();
         string_t error_str = error2richstring(error, tmp->allocator);
-        fprintf(stderr, "%s\n", error_str.cstr);
+        fprintf(stderr, "%s", error_str.cstr);
         allocator_return(tmp);
         break;
     }

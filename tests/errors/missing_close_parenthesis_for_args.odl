@@ -1,0 +1,5 @@
+main :: () -> void {
+    add :: (a: int -> void {
+        return a;
+    };
+};

@@ -1,0 +1,5 @@
+main :: () -> void {
+    do:something {
+        break: 10;
+    };
+};
