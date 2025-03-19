@@ -1,9 +1,0 @@
-{
-    fib :: (n: uint) -> uint {
-        if n <= 1 then return 1u
-        else if n <= 2 then return 1u
-        else return fib(n - 1) + fib(n - 2);
-    };
-
-    fib(5u);
-}

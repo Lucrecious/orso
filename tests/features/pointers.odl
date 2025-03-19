@@ -1,0 +1,27 @@
+main :: () -> void {
+    sum := 0;
+
+    x := 42;
+
+    xp := &x;
+
+    if typeof(xp) == &int then ++sum;
+
+    xp1: &int = &x;
+
+    if typeof(xp1) == &int then ++sum;
+
+    dx := *xp;
+
+    if typeof(dx) == int then ++sum;
+    
+    if dx == 42 then ++sum;
+
+    *xp = 69;
+
+    if x == 69 then ++sum;
+    
+    if *xp == 69 then ++sum;
+    
+    printint(if sum == 6 then 1 else 0);
+};
