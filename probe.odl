@@ -1,4 +1,12 @@
 main :: () -> void {
-    a := true;
-    a and= true;
+    a := [2]u64.{0, 1};
+    b := [2]u64.{2, 3};
+
+    a_ptr := &a;
+    b_ptr := &b;
+
+    *b_ptr = *a_ptr;
+
+    for i := 0; i < len(b); ++i do printint(b[i] as int);
+    println();
 };

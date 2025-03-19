@@ -466,7 +466,13 @@ static void emit_unary(gen_t *gen, texloc_t loc, function_t *function, token_typ
             type_t t = type;
             ASSERT(td->kind == TYPE_POINTER, "only allowed on pointer types");
             t = td->as.ptr.type;
-            emit_addr_to_reg(gen, function, loc, type2movsize(gen, t), result, op1, 0);
+            typedata_t *inner_td = ast_type2td(gen->ast, t);
+            if (inner_td->size > WORD_SIZE) {
+                emit_push_reg(gen, loc, function, op1, REG_MOV_SIZE_MULTIWORD_ADDR, inner_td->size);
+                emit_reg_to_reg(function, loc, REG_RESULT, REG_STACK_BOTTOM);
+            } else {
+                emit_addr_to_reg(gen, function, loc, type2movsize(gen, t), result, op1, 0);
+            }
             break;
         }
 

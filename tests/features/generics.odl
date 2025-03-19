@@ -1,0 +1,49 @@
+main :: () -> void {
+    swap :: (a: &!u, b: &u) -> void {
+        tmp := *a;
+        *a = *b;
+        *b = tmp;
+    };
+
+    {
+        a := 1;
+        b := 0;
+        printint(a);
+        printint(b);
+
+        swap(&a, &b);
+
+        printint(a);
+        printint(b);
+        println();
+    };
+
+    {
+        a := [5]int.{0, 1, 2, 3, 4};
+        b := [5]int.{5, 6, 7, 8, 9};
+        for i := 0; i < len(a); ++i do printint(a[i]);
+        for i := 0; i < len(b); ++i do printint(b[i]);
+        println();
+
+        swap(&a, &b);
+
+        for i := 0; i < len(a); ++i do printint(a[i]);
+        for i := 0; i < len(b); ++i do printint(b[i]);
+        println();
+    };
+
+    {
+        a := 420.5;
+        b := 600.1;
+
+        printf64(a);
+        printf64(b);
+
+        swap(&a, &b);
+
+        printf64(a);
+        printf64(b);
+        println();
+    };
+};
+
