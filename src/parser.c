@@ -2008,11 +2008,12 @@ static ast_node_t *parse_decl_def(parser_t *parser) {
     advance(parser);
     token_t identifier = parser->previous;
 
+    // this may not be hit ever... not sure yet
     unless (consume(parser, TOKEN_COLON)) {
         parser_error(parser, OR_ERROR(
             .tag = ERROR_PARSER_EXPECTED_COLON_AFTER_DECLARATION_IDENTIFIER,
             .level = ERROR_SOURCE_PARSER,
-            .msg = lit2str("expected ':' after declaration identifier"),
+            .msg = lit2str("expected ':' after declaration identifier (may not be hit)"),
             .args = ORERR_ARGS(error_arg_token(identifier)),
             .show_code_lines = ORERR_LINES(0),
         ));
@@ -2068,6 +2069,7 @@ static ast_node_t *parse_decl(parser_t *parser, bool is_top_level) {
     } else if (check_expression(parser)) {
         node = parse_statement(parser);
         if (is_top_level) {
+            // may never be hit...
             parser_error(parser, OR_ERROR(
                 .tag = ERROR_PARSER_EXPECTED_DECLARATION,
                 .level = ERROR_SOURCE_PARSER,
@@ -2078,6 +2080,7 @@ static ast_node_t *parse_decl(parser_t *parser, bool is_top_level) {
         }
     } else {
         if (!is_top_level) {
+            // may never be hit...
             parser_error(parser, OR_ERROR(
                 .tag = ERROR_PARSER_EXPECTED_DECLARATION_OR_STATEMENT,
                 .level = ERROR_SOURCE_PARSER,
@@ -2109,7 +2112,7 @@ static void parse_into_module(parser_t *parser, ast_node_t *module) {
                 parser_error(parser, OR_ERROR(
                     .tag = ERROR_PARSER_EXPECTED_SEMICOLON,
                     .level = ERROR_SOURCE_PARSER,
-                    .msg = lit2str("expected ';' after declaration"),
+                    .msg = lit2str("expected ';' after declaration in module"),
                     .args = ORERR_ARGS(error_arg_token(parser->current)),
                     .show_code_lines = ORERR_LINES(0),
                 ));
@@ -2129,6 +2132,7 @@ static void parse_into_module(parser_t *parser, ast_node_t *module) {
     }
 
     unless (consume(parser, TOKEN_EOF)) {
+        // not sure when this is hit
         parser_error(parser, OR_ERROR(
             .tag = ERROR_PARSEREX_EXPECTED_EOF_AFTER_MODULE,
             .level = ERROR_SOURCE_PARSER,
