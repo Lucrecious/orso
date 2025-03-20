@@ -170,7 +170,6 @@ static bool check_call_on_func(analyzer_t *analyzer, ast_t *ast, ast_node_t *cal
                     error_arg_node(arg)),
                 .show_code_lines = ORERR_LINES(4),
             ));
-            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_ARG_VS_PARAM_FUNC_CALL_MISMATCH, arg));
         }
     }
 
@@ -189,7 +188,13 @@ static bool fold_funcsig_or_error(analyzer_t *analyzer, ast_t *ast, ast_node_t *
     ASSERT(expression->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE, "must be a function signature");
 
     unless (an_func_def_return(expression)->expr_val.is_concrete) {
-        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_EXPECTED_CONSTANT, an_func_def_return(expression)));
+        stan_error(analyzer, OR_ERROR(
+            .tag = ERROR_ANALYSIS_EXPECTED_CONSTANT,
+            .level = ERROR_SOURCE_ANALYSIS,
+            .msg = lit2str("return type for function signature must be a constant"),
+            .args = ORERR_ARGS(error_arg_node(an_func_def_return(expression))),
+            .show_code_lines = ORERR_LINES(0),
+        ));
         return false;
     }
 
@@ -204,7 +209,13 @@ static bool fold_funcsig_or_error(analyzer_t *analyzer, ast_t *ast, ast_node_t *
         ast_node_t *parameter = expression->children.items[i];
         unless (parameter->expr_val.is_concrete) {
             hit_error = true;
-            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_EXPECTED_CONSTANT, parameter));
+            stan_error(analyzer, OR_ERROR(
+                .tag = ERROR_ANALYSIS_EXPECTED_CONSTANT,
+                .level = ERROR_SOURCE_ANALYSIS,
+                .msg = lit2str("parameter type $1.$ for function signature must be a constant"),
+                .args = ORERR_ARGS(error_arg_node(parameter), error_arg_sz(i-an_func_def_arg_start(expression) + 1)),
+                .show_code_lines = ORERR_LINES(0),
+            ));
             break;
         }
 
@@ -215,7 +226,13 @@ static bool fold_funcsig_or_error(analyzer_t *analyzer, ast_t *ast, ast_node_t *
 
         unless (TYPE_IS_TYPE(parameter->value_type)) {
             hit_error = true;
-            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_EXPECTED_TYPE, parameter));
+            stan_error(analyzer, OR_ERROR(
+                .tag = ERROR_ANALYSIS_TYPE_MISMATCH,
+                .level = ERROR_SOURCE_ANALYSIS,
+                .msg = lit2str("parameter expression must be type 'type'"),
+                .args = ORERR_ARGS(error_arg_node(parameter), error_arg_sz(i-an_func_def_arg_start(expression) + 1)),
+                .show_code_lines = ORERR_LINES(0),
+            ));
             break;
         }
 
@@ -238,8 +255,14 @@ static bool fold_funcsig_or_error(analyzer_t *analyzer, ast_t *ast, ast_node_t *
     }
 
     ast_node_t *return_type_expression = an_func_def_return(expression);
-    if (return_type_expression && !TYPE_IS_TYPE(return_type_expression->value_type)) {
-        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_RETURN_TYPE, return_type_expression));
+    if (!TYPE_IS_TYPE(return_type_expression->value_type)) {
+        stan_error(analyzer, OR_ERROR(
+            .tag = ERROR_ANALYSIS_TYPE_MISMATCH,
+            .level = ERROR_SOURCE_ANALYSIS,
+            .msg = lit2str("return expression must be type 'type'"),
+            .args = ORERR_ARGS(error_arg_node(return_type_expression)),
+            .show_code_lines = ORERR_LINES(0),
+        ));
         result = false;
         goto defer;
     }
@@ -283,7 +306,13 @@ static bool get_nearest_scope_in_func_or_error(
         }
 
         if (scope->type == SCOPE_TYPE_CONDITION) {
-            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CANNOT_JMP_IN_CONDITION, jmp_node));
+            stan_error(analyzer, OR_ERROR(
+                .tag = ERROR_ANALYSIS_CANNOT_JMP_IN_CONDITION,
+                .level = ERROR_SOURCE_ANALYSIS,
+                .msg = lit2str("jmp expressions cannot leave their condition's scopes"),
+                .args = ORERR_ARGS(error_arg_node(jmp_node), error_arg_node(scope->creator)),
+                .show_code_lines = ORERR_LINES(0, 1),
+            ));
             return false;
         }
 

@@ -232,7 +232,7 @@ string_t error2richstring(ast_t *ast, error_t error, arena_t *arena) {
         if (i == 0) {
             sb_add_format(&sb, "%s error: %s:%llu:%llu: %s\n", error_level, loc.filepath.cstr, loc.line+1, loc.column+1, message.cstr);
         } else {
-            sb_add_format(&sb, "    %s:%llu:%llu:\n", loc.filepath.cstr, loc.line+1, loc.column+1);
+            sb_add_format(&sb, ">> %s:%llu:%llu:\n", loc.filepath.cstr, loc.line+1, loc.column+1);
         }
 
         sb_add_cstr(&sb, snippet.cstr);

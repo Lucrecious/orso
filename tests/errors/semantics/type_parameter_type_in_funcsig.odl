@@ -1,0 +1,4 @@
+main :: () -> void  {
+    myint :: 1;
+    add := (int, myint) -> int;
+};
