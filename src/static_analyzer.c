@@ -1646,7 +1646,6 @@ void resolve_expression(
                 }
 
                 if (left_td->kind == TYPE_POINTER && typeid_eq(ast->type_set.ptrdiff_t_, right->value_type)) {
-                    
                     if (expr->operator.type != TOKEN_PLUS && expr->operator.type != TOKEN_MINUS) {
                         stan_error(analyzer, OR_ERROR(
                             .tag = ERROR_ANALYSIS_ONLY_ADD_AND_SUB_ARE_VALID_IN_PTR_ARITHMEIC,
@@ -1655,12 +1654,10 @@ void resolve_expression(
                             .args = ORERR_ARGS(error_arg_token(expr->operator)),
                             .show_code_lines = ORERR_LINES(0),
                         ));
-                        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_ONLY_ADD_AND_SUB_ARE_VALID_IN_PTR_ARITHMEIC, expr));
                         INVALIDATE(expr);
                     } else {
                         if (expr->operator.type == TOKEN_PLUS && right_td->kind == TYPE_POINTER) {
-                            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CANNOT_ADD_POINTERS, expr));
-                            INVALIDATE(expr);
+                            UNREACHABLE();
                         } else {
                             // if right is pointer then its a difference, so type is ptrdiff
                             // if its not a pointer, then it must be a ptrdiff, and the produces a ptr type
@@ -1670,13 +1667,25 @@ void resolve_expression(
 
                 } else {
                     unless (typeid_eq(left->value_type, right->value_type)) {
-                        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_ARITHMETIC_OPERANDS_REQUIRES_EXPLICIT_CAST, expr));
+                        stan_error(analyzer, OR_ERROR(
+                            .tag = ERROR_ANALYSIS_TYPE_MISMATCH,
+                            .level = ERROR_SOURCE_ANALYSIS,
+                            .msg = lit2str("operation requires explicit cast for types '$1.$' and '$2.$'"),
+                            .args = ORERR_ARGS(error_arg_node(expr), error_arg_type(left->value_type), error_arg_type(right->value_type)),
+                            .show_code_lines = ORERR_LINES(0),
+                        ));
                         INVALIDATE(expr);
                         break;
                     }
 
                     if (right_td->kind == TYPE_POINTER && expr->operator.type != TOKEN_MINUS) {
-                        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CANNOT_ADD_POINTERS, expr));
+                        stan_error(analyzer, OR_ERROR(
+                            .tag = ERROR_ANALYSIS_CANNOT_ADD_POINTERS,
+                            .level = ERROR_SOURCE_ANALYSIS,
+                            .msg = lit2str("cannot add pointer types"),
+                            .args = ORERR_ARGS(error_arg_node(expr)),
+                            .show_code_lines = ORERR_LINES(0),
+                        ));
                         INVALIDATE(expr);
                     } else {
                         expr->value_type = left->value_type;
@@ -1690,7 +1699,13 @@ void resolve_expression(
             } else if (operator_is_equating(expr->operator.type)) {
                 // everything is equatable but they need to be the same type
                 unless (typeid_eq(left->value_type, right->value_type)) {
-                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_ARITHMETIC_OPERANDS_REQUIRES_EXPLICIT_CAST, expr));
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = ERROR_ANALYSIS_TYPE_MISMATCH,
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("operation requires explicit cast for types '$1.$' and '$2.$'"),
+                        .args = ORERR_ARGS(error_arg_node(expr), error_arg_type(left->value_type), error_arg_type(right->value_type)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
                     INVALIDATE(expr);
                     break;
                 }
@@ -1727,18 +1742,38 @@ void resolve_expression(
                 }
             } else if (operator_is_comparing(expr->operator.type)) {
                 unless (left_td->capabilities&TYPE_CAP_COMPARABLE) {
-                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_COMPARISON_OPERAND_TYPES, left));
+                    // may be impossible in the end
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = ERROR_ANALYSIS_INVALID_COMPARISON_OPERAND_TYPES,
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("'$1.$' is not a valid type for comparison"),
+                        .args = ORERR_ARGS(error_arg_node(left), error_arg_type(left->value_type)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
                     INVALIDATE(expr);
                 }
 
                 unless (right_td->capabilities&TYPE_CAP_COMPARABLE) {
-                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_COMPARISON_OPERAND_TYPES, right));
+                    // may be impossible in the end
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = ERROR_ANALYSIS_INVALID_COMPARISON_OPERAND_TYPES,
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("'$1.$' is not a valid type for comparison"),
+                        .args = ORERR_ARGS(error_arg_node(right), error_arg_type(right->value_type)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
                     INVALIDATE(expr);
                     break;
                 }
 
                 unless (typeid_eq(left->value_type, right->value_type)) {
-                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_ARITHMETIC_OPERANDS_REQUIRES_EXPLICIT_CAST, expr));
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = ERROR_ANALYSIS_TYPE_MISMATCH,
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("operation requires explicit cast for types '$1.$' and '$2.$'"),
+                        .args = ORERR_ARGS(error_arg_node(expr), error_arg_type(left->value_type), error_arg_type(right->value_type)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
                     INVALIDATE(expr);
                     break;
                 }
@@ -1751,13 +1786,25 @@ void resolve_expression(
                 }
             } else if (operator_is_logical(expr->operator.type)) {
                 unless (left_td->capabilities&TYPE_CAP_LOGICAL) {
-                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_LOGICAL_OPERAND_TYPES, right));
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = ERROR_ANALYSIS_INVALID_LOGICAL_OPERAND_TYPES,
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("'$1.$' is not a valid type for logical operations"),
+                        .args = ORERR_ARGS(error_arg_node(left), error_arg_type(left->value_type)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
                     INVALIDATE(expr);
                     break;
                 }
 
                 unless (right_td->capabilities&TYPE_CAP_LOGICAL) {
-                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_LOGICAL_OPERAND_TYPES, right));
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = ERROR_ANALYSIS_INVALID_LOGICAL_OPERAND_TYPES,
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("'$1.$' is not a valid type for logical operations"),
+                        .args = ORERR_ARGS(error_arg_node(right), error_arg_type(right->value_type)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
                     INVALIDATE(expr);
                     break;
                 }

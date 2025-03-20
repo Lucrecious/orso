@@ -1,0 +1,7 @@
+main :: () -> void  {
+    x := 0pd;
+    y := 0;
+    xp := &x;
+    yp := &y;
+    yp == xp;
+};
