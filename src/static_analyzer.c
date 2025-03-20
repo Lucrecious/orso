@@ -143,7 +143,7 @@ static bool check_call_on_func(analyzer_t *analyzer, ast_t *ast, ast_node_t *cal
         stan_error(analyzer, OR_ERROR(
             .tag = ERROR_ANALYSIS_NUMBER_ARGS_CALL_FUNC_MISTMATCH,
             .level = ERROR_SOURCE_ANALYSIS,
-            .msg = lit2str("call to $0.$ requires $1.$ arguments but got $2.$"),
+            .msg = lit2str("call to '$0.$' requires $1.$ arguments but got $2.$"),
             .args = ORERR_ARGS(error_arg_node(callee), error_arg_sz(func_type_arg_count), error_arg_sz(arg_count)),
             .show_code_lines = ORERR_LINES(0),
         ));
@@ -283,7 +283,7 @@ defer:
     return result;
 }
 
-static bool get_nearest_scope_in_func_or_error(
+static bool get_nearest_jmp_scope_in_func_or_error(
         analyzer_t *analyzer, ast_node_t *jmp_node, scope_t *scope,
         scope_type_t search_type, string_view_t label, scope_t **found_scope) {
     
@@ -320,12 +320,31 @@ static bool get_nearest_scope_in_func_or_error(
     }
 
     if (search_type == SCOPE_TYPE_FUNCDEF) {
-        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CANNOT_RETURN_OUTSIDE_FUNC_DEF, jmp_node));
+        // i think this is only for parsing expression files
+        stan_error(analyzer, OR_ERROR(
+            .tag = ERROR_ANALYSIS_CANNOT_FIND_FUNCTION_TO_RETURN_FROM,
+            .level = ERROR_SOURCE_ANALYSIS,
+            .msg = lit2str("cannot find function to return from"),
+            .args = ORERR_ARGS(error_arg_node(jmp_node)),
+            .show_code_lines = ORERR_LINES(0),
+        ));
     } else {
         if (label.length != 0) {
-            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CANNOT_FIND_JMP_LABEL, jmp_node));
+            stan_error(analyzer, OR_ERROR(
+                .tag = ERROR_ANALYSIS_CANNOT_FIND_JMP_LABEL,
+                .level = ERROR_SOURCE_ANALYSIS,
+                .msg = lit2str("cannot find jmp label '$0.$'"),
+                .args = ORERR_ARGS(error_arg_token(jmp_node->identifier)),
+                .show_code_lines = ORERR_LINES(0),
+            ));
         } else {
-            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_NO_VALID_JMP_BLOCK, jmp_node));
+            stan_error(analyzer, OR_ERROR(
+                .tag = ERROR_ANALYSIS_NO_VALID_JMP_BLOCK,
+                .level = ERROR_SOURCE_ANALYSIS,
+                .msg = lit2str("no valid scope to jmp out of"),
+                .args = ORERR_ARGS(error_arg_node(jmp_node)),
+                .show_code_lines = ORERR_LINES(0),
+            ));
         }
     }
     return false;
@@ -844,35 +863,59 @@ static bool stan_run(analyzer_t *analyzer, vm_t *vm, ast_node_t *expr, word_t *o
     return true;
 }
 
-static matched_value_t stan_pattern_match_or_error(analyzer_t *analyzer, ast_node_t *decl, type_path_t *expected, type_t actual) {
+static matched_value_t stan_pattern_match_or_error(analyzer_t *analyzer, ast_node_t *decl, type_path_t *expected, type_t actual, ast_node_t *arg) {
     typedata_t *td = ast_type2td(analyzer->ast, actual);
     switch (expected->kind) {
     case MATCH_TYPE_POINTER: {
         if (td->kind != TYPE_POINTER) {
-            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_COULD_NOT_PATTERN_MATCH_TYPE, decl));
+            stan_error(analyzer, OR_ERROR(
+                .tag = ERROR_ANALYSIS_COULD_NOT_PATTERN_MATCH_TYPE,
+                .level = ERROR_SOURCE_ANALYSIS,
+                .msg = lit2str("cannot match inferred declaration with argument type"),
+                .args = ORERR_ARGS(error_arg_node(arg), error_arg_node(an_decl_type(decl))),
+                .show_code_lines = ORERR_LINES(0, 1),
+            ));
             return (matched_value_t){.type=typeid(TYPE_INVALID)};
         }
 
-        return stan_pattern_match_or_error(analyzer, decl, expected->next, td->as.ptr.type);
+        return stan_pattern_match_or_error(analyzer, decl, expected->next, td->as.ptr.type, arg);
     }
 
     case MATCH_TYPE_ARRAY_TYPE: {
         if (td->kind != TYPE_ARRAY) {
-            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_COULD_NOT_PATTERN_MATCH_TYPE, decl));
+            stan_error(analyzer, OR_ERROR(
+                .tag = ERROR_ANALYSIS_COULD_NOT_PATTERN_MATCH_TYPE,
+                .level = ERROR_SOURCE_ANALYSIS,
+                .msg = lit2str("cannot match inferred declaration with argument type"),
+                .args = ORERR_ARGS(error_arg_node(arg), error_arg_node(an_decl_type(decl))),
+                .show_code_lines = ORERR_LINES(0, 1),
+            ));
             return (matched_value_t){.type=typeid(TYPE_INVALID)};
         }
 
-        return stan_pattern_match_or_error(analyzer, decl, expected->next, td->as.arr.type);
+        return stan_pattern_match_or_error(analyzer, decl, expected->next, td->as.arr.type, arg);
     }
 
     case MATCH_TYPE_ARRAY_SIZE: {
         if (td->kind != TYPE_ARRAY) {
-            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_COULD_NOT_PATTERN_MATCH_TYPE, decl));
+            stan_error(analyzer, OR_ERROR(
+                .tag = ERROR_ANALYSIS_COULD_NOT_PATTERN_MATCH_TYPE,
+                .level = ERROR_SOURCE_ANALYSIS,
+                .msg = lit2str("cannot match inferred declaration with argument type"),
+                .args = ORERR_ARGS(error_arg_node(arg), error_arg_node(an_decl_type(decl))),
+                .show_code_lines = ORERR_LINES(0, 1),
+            ));
             return (matched_value_t){.type=typeid(TYPE_INVALID)};
         }
 
         if (expected->next->kind != MATCH_TYPE_IDENTIFIER) {
-            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_COULD_NOT_PATTERN_MATCH_TYPE, decl));
+            stan_error(analyzer, OR_ERROR(
+                .tag = ERROR_ANALYSIS_COULD_NOT_PATTERN_MATCH_TYPE,
+                .level = ERROR_SOURCE_ANALYSIS,
+                .msg = lit2str("cannot match inferred declaration with argument type"),
+                .args = ORERR_ARGS(error_arg_node(arg), error_arg_node(an_decl_type(decl))),
+                .show_code_lines = ORERR_LINES(0, 1),
+            ));
             return (matched_value_t){.type=typeid(TYPE_INVALID)};
         }
 
@@ -950,7 +993,7 @@ static ast_node_t *stan_realize_inferred_funcdef_or_error_and_null(analyzer_t *a
 
             resolve_expression(analyzer, analyzer->ast, state, typeid(TYPE_UNRESOLVED), call_arg);
             
-            matched_value_t matched_value = stan_pattern_match_or_error(analyzer, decl, pattern.expected, call_arg->value_type);
+            matched_value_t matched_value = stan_pattern_match_or_error(analyzer, decl, pattern.expected, call_arg->value_type, call_arg);
             array_push(&matched_values, matched_value);
 
             if (TYPE_IS_INVALID(matched_value.type)) {
@@ -1163,7 +1206,13 @@ void resolve_expression(
             resolve_expression(analyzer, ast, state, typeid(TYPE_UNRESOLVED), type_expr);
 
             if (!TYPE_IS_TYPE(type_expr->value_type)) {
-                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_ARRAY_TYPE_IS_NOT_A_TYPE, type_expr));
+                stan_error(analyzer, OR_ERROR(
+                    .tag = ERROR_ANALYSIS_EXPECTED_TYPE,
+                    .level = ERROR_SOURCE_ANALYSIS,
+                    .msg = lit2str("expected 'type' for array but got '$1.$'"),
+                    .args = ORERR_ARGS(error_arg_node(type_expr), error_arg_type(type_expr->value_type)),
+                    .show_code_lines = ORERR_LINES(0),
+                ));
                 INVALIDATE(expr);
                 break;
             }
@@ -1986,7 +2035,7 @@ void resolve_expression(
             switch (expr->start.type) {
                 case TOKEN_RETURN: {
                     scope_t *func_def_scope = NULL;
-                    bool success = get_nearest_scope_in_func_or_error(analyzer, expr, state.scope, SCOPE_TYPE_FUNCDEF, lit2sv(""), &func_def_scope);
+                    bool success = get_nearest_jmp_scope_in_func_or_error(analyzer, expr, state.scope, SCOPE_TYPE_FUNCDEF, lit2sv(""), &func_def_scope);
 
                     type_t implicit_type = typeid(TYPE_UNRESOLVED);
                     unless (success) {
@@ -2008,7 +2057,7 @@ void resolve_expression(
                     resolve_expression(analyzer, ast, state, typeid(TYPE_UNRESOLVED), an_expression(expr));
 
                     scope_t *found_scope = NULL;
-                    bool success = get_nearest_scope_in_func_or_error(analyzer, expr, state.scope, SCOPE_TYPE_JMPABLE, expr->identifier.view, &found_scope);
+                    bool success = get_nearest_jmp_scope_in_func_or_error(analyzer, expr, state.scope, SCOPE_TYPE_JMPABLE, expr->identifier.view, &found_scope);
                     unless (success) {
                         INVALIDATE(expr);
                     } else {

@@ -1,0 +1,14 @@
+main :: () -> void  {
+    swap :: (a: &!u, b: &u) -> void {
+        tmp := *a;
+        *a = *b;
+        *b = tmp;
+    };
+
+    {
+        a := 0;
+        b := 0;
+
+        swap(a, b);
+    };
+};

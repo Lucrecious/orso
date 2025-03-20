@@ -1,3 +1,4 @@
 main :: () -> void  {
-    if {return;} then 1;
+    x := 10;
+    arr := [1]x;
 };

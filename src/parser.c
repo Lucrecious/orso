@@ -1877,6 +1877,17 @@ static ast_node_t *parse_precedence(parser_t *parser, prec_t precedence) {
         advance(parser);
 
         ParseFn infix_rule = parser_get_rule(parser->previous.type)->infix;
+        if (!infix_rule) {
+            parser_error(parser, OR_ERROR(
+                .tag = ERROR_PARSER_TOKEN_IS_NOT_INFIX_OPERATOR,
+                .level = ERROR_SOURCE_PARSER,
+                .msg = lit2str("token '$0.$' is not an infix operator"),
+                .args = ORERR_ARGS(error_arg_token(parser->previous)),
+                .show_code_lines = ORERR_LINES(0),
+            ));
+            break;
+        }
+
         ast_node_t *right_operand = infix_rule(parser);
 
         switch (right_operand->node_type) {
