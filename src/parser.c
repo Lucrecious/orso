@@ -1524,7 +1524,7 @@ static ast_node_t *parse_array_type(parser_t *parser) {
         parser_error(parser, OR_ERROR(
             .tag = ERROR_PARSER_EXPECTED_CLOSE_BRACKET_AFTER_SIZE_EXPRESSION,
             .level = ERROR_SOURCE_PARSER,
-            .msg = lit2str("expected ']' after the size expression"),
+            .msg = lit2str("expected ']' after the size expression in type"),
             .args = ORERR_ARGS(error_arg_token(parser->current)),
             .show_code_lines = ORERR_LINES(0),
         ));
@@ -1543,7 +1543,7 @@ static ast_node_t *parse_item_access(parser_t *parser) {
         parser_error(parser, OR_ERROR(
             .tag = ERROR_PARSER_EXPECTED_CLOSE_BRACKET_AFTER_SIZE_EXPRESSION,
             .level = ERROR_SOURCE_PARSER,
-            .msg = lit2str("expected ']' after the size expression"),
+            .msg = lit2str("expected ']' after the size expression in item access"),
             .args = ORERR_ARGS(error_arg_token(parser->current)),
             .show_code_lines = ORERR_LINES(0),
         ));
@@ -1955,7 +1955,7 @@ static ast_node_t *parse_precedence(parser_t *parser, prec_t precedence) {
                     .tag = ERROR_PARSEREX_EXPECTED_EXPRESSION,
                     .level = ERROR_SOURCE_PARSER,
                     .msg = lit2str("only type expressions are allowed in function signatures"),
-                    .args = ORERR_ARGS(error_arg_token(parser->current)),
+                    .args = ORERR_ARGS(error_arg_token(parameter->start)),
                     .show_code_lines = ORERR_LINES(0),
                 ));
                 break;

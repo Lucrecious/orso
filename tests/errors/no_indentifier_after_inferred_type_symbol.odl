@@ -1,0 +1,2 @@
+main :: () -> void {
+    add :: (a: !then, b: int) -> int {
