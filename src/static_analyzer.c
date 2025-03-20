@@ -138,11 +138,16 @@ static bool check_call_on_func(analyzer_t *analyzer, ast_t *ast, ast_node_t *cal
 
     bool errored = false;
     size_t func_type_arg_count = func_td->as.function.argument_types.count;
-    if (func_type_arg_count != (arg_end - arg_start)) {
+    if (func_type_arg_count != arg_count) {
         errored = true;
-        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_NUMBER_ARGS_CALL_FUNC_MISTMATCH, call));
+        stan_error(analyzer, OR_ERROR(
+            .tag = ERROR_ANALYSIS_NUMBER_ARGS_CALL_FUNC_MISTMATCH,
+            .level = ERROR_SOURCE_ANALYSIS,
+            .msg = lit2str("call to $0.$ requires $1.$ arguments but got $2.$"),
+            .args = ORERR_ARGS(error_arg_node(callee), error_arg_sz(func_type_arg_count), error_arg_sz(arg_count)),
+            .show_code_lines = ORERR_LINES(0),
+        ));
     }
-
 
     size_t min_args = func_type_arg_count < arg_count ? func_type_arg_count : arg_count;
 
@@ -151,8 +156,15 @@ static bool check_call_on_func(analyzer_t *analyzer, ast_t *ast, ast_node_t *cal
 
         ast_node_t *arg = call->children.items[arg_start + i];
         type_t argument_type = arg->value_type;
-        unless (typeid_eq(parameter_type, argument_type)) {
+        unless (typeid_eq(parameter_type, argument_type) && !TYPE_IS_INVALID(argument_type)) {
             errored = true;
+            // stan_error(analyzer, OR_ERROR(
+            //     .tag = ERROR_ANALYSIS_NUMBER_ARGS_CALL_FUNC_MISTMATCH,
+            //     .level = ERROR_SOURCE_ANALYSIS,
+            //     .msg = lit2str("call to $0.$ requires $1.$ arguments but got $2.$"),
+            //     .args = ORERR_ARGS(error_arg_node(callee), error_arg_sz(func_type_arg_count), error_arg_sz(arg_count)),
+            //     .show_code_lines = ORERR_LINES(0),
+            // ));
             stan_error(analyzer, make_error_node(ERROR_ANALYSIS_ARG_VS_PARAM_FUNC_CALL_MISMATCH, arg));
         }
     }
