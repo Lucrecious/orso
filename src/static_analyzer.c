@@ -1225,7 +1225,6 @@ void resolve_expression(
                     .args = ORERR_ARGS(error_arg_node(type_expr)),
                     .show_code_lines = ORERR_LINES(0),
                 ));
-                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_ARRAY_TYPE_MUST_BE_COMPILE_TIME_CONSTANT, type_expr));
                 INVALIDATE(expr);
                 break;
             }
@@ -1241,25 +1240,49 @@ void resolve_expression(
 
                 typedata_t *td = ast_type2td(ast, size_expr->value_type);
                 if (td->kind != TYPE_NUMBER) {
-                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_ARRAY_SIZE_MUST_BE_A_SIGNED_OR_UNSIGNED_INTEGER, size_expr));
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = ERROR_ANALYSIS_ARRAY_SIZE_MUST_BE_A_SIGNED_OR_UNSIGNED_INTEGER,
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("array size must be signed or unsigned integer but got '$1.$'"),
+                        .args = ORERR_ARGS(error_arg_node(size_expr), error_arg_type(size_expr->value_type)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
                     INVALIDATE(expr);
                     break;
                 }
                 
                 if (td->as.num == NUM_TYPE_FLOAT) {
-                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_ARRAY_SIZE_MUST_BE_A_SIGNED_OR_UNSIGNED_INTEGER, size_expr));
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = ERROR_ANALYSIS_ARRAY_SIZE_MUST_BE_A_SIGNED_OR_UNSIGNED_INTEGER,
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("array size must be signed or unsigned integer but got '$1.$'"),
+                        .args = ORERR_ARGS(error_arg_node(size_expr), error_arg_type(size_expr->value_type)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
                     INVALIDATE(expr);
                     break;
                 }
                 
                 if (!size_expr->expr_val.is_concrete) {
-                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_ARRAY_SIZE_MUST_BE_A_COMPILE_TIME_CONSTANT, size_expr));
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = ERROR_ANALYSIS_EXPECTED_CONSTANT,
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("array size must constant"),
+                        .args = ORERR_ARGS(error_arg_node(size_expr)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
                     INVALIDATE(expr);
                     break;
                 }
 
-                if (td->as.num == NUM_TYPE_SIGNED && size_expr->expr_val.word.as.s < 0) {
-                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_ARRAY_SIZE_MUST_BE_POSITIVE, size_expr));
+                if (td->as.num == NUM_TYPE_SIGNED && size_expr->expr_val.word.as.s <= 0) {
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = ERROR_ANALYSIS_ARRAY_SIZE_MUST_BE_POSITIVE,
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("array size must be a positve integer"),
+                        .args = ORERR_ARGS(error_arg_node(size_expr)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
                     INVALIDATE(expr);
                     break;
                 }
@@ -1307,7 +1330,13 @@ void resolve_expression(
             // accessee
             {
                 if (accessee_td->kind != TYPE_ARRAY && accessee_td->kind != TYPE_POINTER) {
-                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_ACCESSEE_TYPE, accessor));
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = ERROR_ANALYSIS_INVALID_ACCESSEE_TYPE,
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("invalid accessee type: '$1.$'"),
+                        .args = ORERR_ARGS(error_arg_node(accessee), error_arg_type(accessee->value_type)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
                     INVALIDATE(expr);
                     break;
                 }
@@ -1318,7 +1347,13 @@ void resolve_expression(
                     typedata_t *ptr_inner_td = ast_type2td(ast, ptr_inner);
 
                     if (ptr_inner_td->kind != TYPE_ARRAY) {
-                        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_ACCESSEE_TYPE, accessor));
+                        stan_error(analyzer, OR_ERROR(
+                            .tag = ERROR_ANALYSIS_INVALID_ACCESSEE_TYPE,
+                            .level = ERROR_SOURCE_ANALYSIS,
+                            .msg = lit2str("expected pointer to array type but got '$1.$'"),
+                            .args = ORERR_ARGS(error_arg_node(accessee), error_arg_type(accessee->value_type)),
+                            .show_code_lines = ORERR_LINES(0),
+                        ));
                         INVALIDATE(expr);
                         break;
                     }
@@ -1340,7 +1375,13 @@ void resolve_expression(
             {
                 typedata_t *td = ast_type2td(ast, accessor->value_type);
                 unless (td->kind == TYPE_NUMBER && td->as.num != NUM_TYPE_FLOAT) {
-                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_ACCESSOR_TYPE, accessor));
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = ERROR_ANALYSIS_INVALID_ACCESSOR_TYPE,
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("expected signed or unsigned integer but got '$1.$'"),
+                        .args = ORERR_ARGS(error_arg_node(accessor), error_arg_type(accessor->value_type)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
                     INVALIDATE(expr);
                     break;
                 }
@@ -1364,7 +1405,13 @@ void resolve_expression(
         case AST_NODE_TYPE_EXPR_INFERRED_TYPE_DECL: {
             // inferred type decls are forward scanned and converted to value_defs, and so if they are present anywhere
             // else they are an error
-            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INFERRED_TYPE_DECLS_ARE_ONLY_ALLOWED_FOR_FUNCTIONDEFS, expr));
+            stan_error(analyzer, OR_ERROR(
+                .tag = ERROR_ANALYSIS_INFERRED_TYPE_DECLS_ARE_ONLY_ALLOWED_FOR_FUNCTIONDEFS,
+                .level = ERROR_SOURCE_ANALYSIS,
+                .msg = lit2str("inferred type declarations are only allowed inside function definition parameters"),
+                .args = ORERR_ARGS(error_arg_node(expr)),
+                .show_code_lines = ORERR_LINES(0),
+            ));
             INVALIDATE(expr);
             break;
         }
@@ -1377,7 +1424,13 @@ void resolve_expression(
                     type_expr = ast_implicit_expr(ast, typeid(TYPE_TYPE), WORDT(implicit_type), token_implicit_at_start(expr->start));
                     an_list_lhs(expr) = type_expr;
                 } else {
-                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INITIALIZER_LIST_TYPE_CANNOT_BE_INFERRED, expr));
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = ERROR_ANALYSIS_INITIALIZER_LIST_TYPE_CANNOT_BE_INFERRED,
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("no implicit type can be inferred for initializer list"),
+                        .args = ORERR_ARGS(error_arg_node(expr)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
                     INVALIDATE(expr);
                     break;
                 }
@@ -1418,7 +1471,13 @@ void resolve_expression(
             switch (type_expr_td->kind) {
             case TYPE_TYPE: {
                 if (!type_expr->expr_val.is_concrete) {
-                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_EXPECTED_CONSTANT, type_expr));
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = ERROR_ANALYSIS_EXPECTED_CONSTANT,
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("expected constant for initializer list"),
+                        .args = ORERR_ARGS(error_arg_node(type_expr)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
                     break;
                 }
 
@@ -1447,7 +1506,15 @@ void resolve_expression(
                         }
 
                         if (!typeid_eq(arg->value_type, array_type)) {
-                            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_TYPE_MISMATCH, arg));
+                            size_t arg_index = i - an_list_start(expr);
+                            stan_error(analyzer, OR_ERROR(
+                                .tag = ERROR_ANALYSIS_TYPE_MISMATCH,
+                                .level = ERROR_SOURCE_ANALYSIS,
+                                .msg = lit2str("array expects '$1.$' type elements but item $3.$ is '$2.$'"),
+                                .args = ORERR_ARGS(error_arg_node(arg),
+                                    error_arg_type(array_type), error_arg_type(arg->value_type), error_arg_sz(arg_index+1)),
+                                .show_code_lines = ORERR_LINES(0),
+                            ));
                             invalid_arg = true;
                         }
                     }

@@ -1,0 +1,4 @@
+main :: () -> void  {
+    y :: -1;
+    arr := [y]int;
+};

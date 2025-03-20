@@ -1727,8 +1727,9 @@ static void ast_end_list_initializer(ast_node_t *initializer, token_t close_brac
 }
 
 static ast_node_t *parse_dot(parser_t *parser) {
+    token_t start_dot = parser->previous;
     if (match(parser, TOKEN_BRACE_OPEN)) {
-        ast_node_t *initiailizer = ast_begin_list_initializer(parser->ast, parser->previous);
+        ast_node_t *initiailizer = ast_begin_list_initializer(parser->ast, start_dot);
 
         unless (match(parser, TOKEN_BRACE_CLOSE)) {
             do {
