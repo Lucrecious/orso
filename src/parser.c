@@ -1247,7 +1247,6 @@ static ast_node_t *parse_branch(parser_t *parser) {
                     .args = ORERR_ARGS(error_arg_token(parser->current), error_arg_token(start_token)),
                     .show_code_lines = ORERR_LINES(0),
                 ));
-                break;
             }
 
             ast_block_decl(decl_block, last_decl);
@@ -1273,10 +1272,10 @@ static ast_node_t *parse_branch(parser_t *parser) {
             if (branch_type == BRANCH_TYPE_LOOPING) {
                 unless (consume(parser, TOKEN_DO)) {
                     parser_error(parser, OR_ERROR(
-                        .tag = ERROR_PARSER_EXPECTED_EXPRESSION,
+                        .tag = ERROR_PARSER_EXPECTED_THEN_OR_BRACE_AFTER_BRANCH_CONDITION,
                         .level = ERROR_SOURCE_PARSER,
-                        .msg = lit2str("expected expression as the condition for $0.kind$ branch"),
-                        .args = ORERR_ARGS(error_arg_token(start_token), error_arg_node(last_decl)),
+                        .msg = lit2str("expected 'do' or '{' after $0.kind$ condition"),
+                        .args = ORERR_ARGS(error_arg_token(start_token), error_arg_token(parser->current)),
                         .show_code_lines = ORERR_LINES(1),
                     ));
                 }
