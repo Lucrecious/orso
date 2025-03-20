@@ -18,8 +18,13 @@ error_arg_t error_arg_sz(size_t sz) {
     return (error_arg_t){.type=ERROR_ARG_TYPE_SIZE, .token=nil_token, .node_or_null=NULL, .size=sz};
 }
 
+error_arg_t error_arg_type(type_t type) {
+    return (error_arg_t){.type=ERROR_ARG_TYPE_TYPE, .token=nil_token, .node_or_null=NULL, .size=0, .type_type=type};
+}
+
 static texloc_t error_arg_loc(error_arg_t arg) {
     switch (arg.type) {
+    case ERROR_ARG_TYPE_TYPE:
     case ERROR_ARG_TYPE_SIZE:
     case ERROR_ARG_TYPE_NONE: return (texloc_t){.column=0, .filepath=lit2str("<none>"), .line=0};
     case ERROR_ARG_TYPE_NODE: {
@@ -59,6 +64,7 @@ static string_t get_source_snippet(error_arg_t arg, arena_t *arena) {
     switch (arg.type) {
     case ERROR_ARG_TYPE_SIZE: break;
     case ERROR_ARG_TYPE_NONE: break;
+    case ERROR_ARG_TYPE_TYPE: break;
     case ERROR_ARG_TYPE_TOKEN: {
         source = arg.token.source;
         view = arg.token.view;
@@ -124,7 +130,7 @@ static cstr_t tokentype2string(token_type_t token_type) {
 }
 
 
-static string_t error_format(string_t message_format, error_arg_t *args, arena_t *arena) {
+static string_t error_format(string_t message_format, typedatas_t *tds, error_arg_t *args, arena_t *arena) {
     tmp_arena_t *tmp = allocator_borrow();
     string_builder_t sb = {.allocator=tmp->allocator};
 
@@ -162,6 +168,7 @@ static string_t error_format(string_t message_format, error_arg_t *args, arena_t
                 case ERROR_ARG_TYPE_SIZE: break;
                 case ERROR_ARG_TYPE_NODE: break;
                 case ERROR_ARG_TYPE_NONE: break;
+                case ERROR_ARG_TYPE_TYPE: break;
                 }
             } else if (sv_eq(field_sv, lit2sv(""))) {
                 switch (arg.type) {
@@ -177,6 +184,15 @@ static string_t error_format(string_t message_format, error_arg_t *args, arena_t
                     break;
                 }
                 case ERROR_ARG_TYPE_NONE: break;
+                case ERROR_ARG_TYPE_TYPE: {
+                    tmp_arena_t *tmp = allocator_borrow();
+                    string_t s = type_to_string(*tds, arg.type_type, tmp->allocator);
+
+                    sb_add_format(&sb, "%s", s.cstr);
+
+                    allocator_return(tmp);
+                    break;
+                }
                 }
             } else {
                 UNREACHABLE();
@@ -191,12 +207,12 @@ static string_t error_format(string_t message_format, error_arg_t *args, arena_t
     return result;
 }
 
-string_t error2richstring(error_t error, arena_t *arena) {
+string_t error2richstring(ast_t *ast, error_t error, arena_t *arena) {
     tmp_arena_t *tmp = allocator_borrow();
 
     string_builder_t sb = {.allocator=tmp->allocator};
 
-    string_t message = error_format(error.msg, error.args, tmp->allocator);
+    string_t message = error_format(error.msg, &ast->type_set.types, error.args, tmp->allocator);
 
     for (size_t i = 0; i < error.show_line_count; ++i) {
         size_t arg_index = error.show_code_lines[i];

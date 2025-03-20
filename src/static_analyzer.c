@@ -158,13 +158,18 @@ static bool check_call_on_func(analyzer_t *analyzer, ast_t *ast, ast_node_t *cal
         type_t argument_type = arg->value_type;
         unless (typeid_eq(parameter_type, argument_type) && !TYPE_IS_INVALID(argument_type)) {
             errored = true;
-            // stan_error(analyzer, OR_ERROR(
-            //     .tag = ERROR_ANALYSIS_NUMBER_ARGS_CALL_FUNC_MISTMATCH,
-            //     .level = ERROR_SOURCE_ANALYSIS,
-            //     .msg = lit2str("call to $0.$ requires $1.$ arguments but got $2.$"),
-            //     .args = ORERR_ARGS(error_arg_node(callee), error_arg_sz(func_type_arg_count), error_arg_sz(arg_count)),
-            //     .show_code_lines = ORERR_LINES(0),
-            // ));
+            stan_error(analyzer, OR_ERROR(
+                .tag = ERROR_ANALYSIS_TYPE_MISMATCH,
+                .level = ERROR_SOURCE_ANALYSIS,
+                .msg = lit2str("argument $0.$ is type '$1.$' but '$2.$' requires type '$3.$'"),
+                .args = ORERR_ARGS(
+                    error_arg_sz(i+1),
+                    error_arg_type(arg->value_type),
+                    error_arg_node(callee),
+                    error_arg_type(parameter_type),
+                    error_arg_node(arg)),
+                .show_code_lines = ORERR_LINES(4),
+            ));
             stan_error(analyzer, make_error_node(ERROR_ANALYSIS_ARG_VS_PARAM_FUNC_CALL_MISMATCH, arg));
         }
     }

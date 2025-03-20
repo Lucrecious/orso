@@ -51,48 +51,6 @@
 #include "cc.h"
 
 
-string_view_t get_line(string_view_t source, string_view_t somewhere_in_source) {
-    if (somewhere_in_source.data >= source.data + source.length || somewhere_in_source.data < source.data) {
-        return lit2sv("");
-    }
-
-    char *s = (char*)somewhere_in_source.data;
-    until (*s == '\n' || s == source.data)  {
-        --s;
-    }
-
-    char *e = (char*)somewhere_in_source.data;
-    until (*e == '\n' || *e == '\0') {
-        ++e;
-    }
-
-    string_view_t view = {.length = e - s, .data = s};
-    return view;
-}
-
-static void print_error_location_hint(token_t line_token, size_t column_hint) {
-    string_view_t source_line = get_line(line_token.source, line_token.view);
-    fprintf(stderr, "%.*s\n", (int)source_line.length, source_line.data);
-    tmp_arena_t *tmp_arena = allocator_borrow();
-    string_builder_t sb = {.allocator=tmp_arena->allocator};
-
-    for (size_t i = 0; i < source_line.length; ++i) {
-        if (i == column_hint) {
-            sb_add_char(&sb, '^');
-        } else {
-            sb_add_char(&sb, ' ');
-        }
-    }
-
-    if (column_hint == source_line.length) {
-        sb_add_char(&sb, '^');
-    }
-
-    fprintf(stderr, "%.*s\n", (int)sb.count, sb.items);
-
-    allocator_return(tmp_arena);
-}
-
 void myerror(ast_t *ast, error_t error) {
     UNUSED(ast);
 
@@ -100,18 +58,15 @@ void myerror(ast_t *ast, error_t error) {
 
     switch (error_source) {
     case ERROR_SOURCE_PARSEREX:
+    case ERROR_SOURCE_ANALYSIS:
     case ERROR_SOURCE_PARSER: {
         tmp_arena_t *tmp = allocator_borrow();
-        string_t error_str = error2richstring(error, tmp->allocator);
+        string_t error_str = error2richstring(ast, error, tmp->allocator);
         fprintf(stderr, "%s", error_str.cstr);
         allocator_return(tmp);
         break;
     }
 
-    case ERROR_SOURCE_ANALYSIS: {
-        print_error_location_hint(error.node->start, error.node->start.loc.column);
-        break;
-    }
     case ERROR_SOURCE_CODEGEN: break;
     }
 }

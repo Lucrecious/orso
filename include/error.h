@@ -29,6 +29,7 @@ enum error_arg_type_t {
     ERROR_ARG_TYPE_NODE,
     ERROR_ARG_TYPE_TOKEN,
     ERROR_ARG_TYPE_SIZE,
+    ERROR_ARG_TYPE_TYPE,
 };
 
 typedef struct ast_node_t ast_node_t;
@@ -39,6 +40,7 @@ struct error_arg_t {
     ast_node_t *node_or_null;
     token_t token;
     size_t size;
+    type_t type_type;
 };
 
 #define MAX_ERROR_ARGS 8
@@ -77,11 +79,12 @@ typedef void (*error_function_t)(ast_t *ast, error_t error);
 #define ORERR_ARGS(...) {__VA_ARGS__}, .arg_count = (sizeof((error_arg_t[]){__VA_ARGS__})/sizeof(error_arg_t))
 #define ORERR_LINES(...) {__VA_ARGS__}, .show_line_count = (sizeof((s64[]){__VA_ARGS__})/sizeof(s64))
 
-string_t error2richstring(error_t error, arena_t *arena);
+string_t error2richstring(ast_t *ast, error_t error, arena_t *arena);
 
 error_arg_t error_arg_token(token_t token);
 error_arg_t error_arg_node(ast_node_t *node);
 error_arg_t error_arg_sz(size_t sz);
+error_arg_t error_arg_type(type_t type);
 
 
 #endif
