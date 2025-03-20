@@ -1,0 +1,3 @@
+main :: () -> void {
+    for x := 0; x < 10 ++i do 0;
+};

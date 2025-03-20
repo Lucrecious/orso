@@ -767,13 +767,6 @@ static void synchronize(parser_t* parser) {
             default: break;
         }
 
-        switch (parser->current.type) {
-            case TOKEN_BRACE_CLOSE:
-                return;
-            
-            default: break;
-        }
-
         advance(parser);
 
     }
@@ -1099,7 +1092,7 @@ static ast_node_t *convert_function_definition(parser_t *parser, ast_node_t *lef
         ast_node_t *parameter = left_operand->children.items[i];
         if (parameter->node_type != AST_NODE_TYPE_DECLARATION_DEFINITION) {
             parser_error(parser, OR_ERROR(
-                .tag = ERROR_PARSEREX_EXPECTED_DECLARATION,
+                .tag = ERROR_PARSER_EXPECTED_DECLARATION,
                 .level = ERROR_SOURCE_PARSER,
                 .msg = lit2str("only declarations are allowed as function parameters"),
                 .args = ORERR_ARGS(error_arg_node(parameter)),
@@ -1155,15 +1148,14 @@ static ast_node_t *parse_block(parser_t *parser) {
             parser_error(parser, OR_ERROR(
                 .tag = ERROR_PARSER_EXPECTED_SEMICOLON,
                 .level = ERROR_SOURCE_PARSER,
-                .msg = lit2str("expected ';' after declaration"),
+                .msg = lit2str("expected ';' after declaration or statement"),
                 .args = ORERR_ARGS(error_arg_token(parser->current)),
                 .show_code_lines = ORERR_LINES(0),
             ));
+            break;
         }
 
         ast_block_decl(block, decl_node);
-
-        synchronize(parser);
     }
 
     unless (consume(parser, TOKEN_BRACE_CLOSE)) {
@@ -1397,7 +1389,7 @@ static ast_node_t *parse_for(parser_t *parser) {
         parser_error(parser, OR_ERROR(
             .tag = ERROR_PARSER_EXPECTED_EXPRESSION,
             .level = ERROR_SOURCE_PARSER,
-            .msg = lit2str("expected expression for the increment section of a for expression"),
+            .msg = lit2str("expected 'do' or '{' to open 'for' expression"),
             .args = ORERR_ARGS(error_arg_token(parser->current)),
             .show_code_lines = ORERR_LINES(0),
         ));
@@ -1478,8 +1470,8 @@ static void parse_parameters(parser_t *parser, ast_nodes_t *children) {
             array_push(children, parse_expression(parser));
             parser->inside_type_context = inside_type_context;
         }
-        if (match(parser, TOKEN_COMMA)) {
-            continue;
+        if (!match(parser, TOKEN_COMMA)) {
+            break;
         }
     }
 }
@@ -1874,6 +1866,7 @@ static ast_node_t *parse_precedence(parser_t *parser, prec_t precedence) {
             .args = ORERR_ARGS(error_arg_token(parser->current)),
             .show_code_lines = ORERR_LINES(0),
         ));
+        advance(parser);
     } else {
         advance(parser);
 
@@ -1961,7 +1954,7 @@ static ast_node_t *parse_precedence(parser_t *parser, prec_t precedence) {
                 parser_error(parser, OR_ERROR(
                     .tag = ERROR_PARSEREX_EXPECTED_EXPRESSION,
                     .level = ERROR_SOURCE_PARSER,
-                    .msg = lit2str("expected expression"),
+                    .msg = lit2str("only type expressions are allowed in function signatures"),
                     .args = ORERR_ARGS(error_arg_token(parser->current)),
                     .show_code_lines = ORERR_LINES(0),
                 ));
@@ -2072,13 +2065,31 @@ static ast_node_t *parse_decl(parser_t *parser, bool is_top_level) {
 
     if (is_incoming_decl_def(parser)) {
         node = parse_decl_def(parser);
-    } else {
+    } else if (check_expression(parser)) {
         node = parse_statement(parser);
         if (is_top_level) {
             parser_error(parser, OR_ERROR(
-                .tag = ERROR_PARSEREX_EXPECTED_DECLARATION,
+                .tag = ERROR_PARSER_EXPECTED_DECLARATION,
                 .level = ERROR_SOURCE_PARSER,
                 .msg = lit2str("only declarations are allowed at the module scope"),
+                .args = ORERR_ARGS(error_arg_node(node)),
+                .show_code_lines = ORERR_LINES(0),
+            ));
+        }
+    } else {
+        if (!is_top_level) {
+            parser_error(parser, OR_ERROR(
+                .tag = ERROR_PARSER_EXPECTED_DECLARATION_OR_STATEMENT,
+                .level = ERROR_SOURCE_PARSER,
+                .msg = lit2str("expected declaration or statement"),
+                .args = ORERR_ARGS(error_arg_node(node)),
+                .show_code_lines = ORERR_LINES(0),
+            ));
+        } else {
+            parser_error(parser, OR_ERROR(
+                .tag = ERROR_PARSER_EXPECTED_DECLARATION,
+                .level = ERROR_SOURCE_PARSER,
+                .msg = lit2str("expected declaration"),
                 .args = ORERR_ARGS(error_arg_node(node)),
                 .show_code_lines = ORERR_LINES(0),
             ));
@@ -2105,7 +2116,7 @@ static void parse_into_module(parser_t *parser, ast_node_t *module) {
             }
         } else {
             parser_error(parser, OR_ERROR(
-                .tag = ERROR_PARSEREX_EXPECTED_DECLARATION,
+                .tag = ERROR_PARSER_EXPECTED_DECLARATION,
                 .level = ERROR_SOURCE_PARSER,
                 .msg = lit2str("expected a declaration in the module scope"),
                 .args = ORERR_ARGS(error_arg_token(parser->current)),
