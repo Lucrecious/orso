@@ -1,4 +1,4 @@
 main :: () -> void  {
-    x := int;
+    x := 10;
     arr := [1]x;
 };

@@ -1218,6 +1218,13 @@ void resolve_expression(
             }
 
             if (!type_expr->expr_val.is_concrete) {
+                stan_error(analyzer, OR_ERROR(
+                    .tag = ERROR_ANALYSIS_EXPECTED_CONSTANT,
+                    .level = ERROR_SOURCE_ANALYSIS,
+                    .msg = lit2str("expected array type to be a constant"),
+                    .args = ORERR_ARGS(error_arg_node(type_expr)),
+                    .show_code_lines = ORERR_LINES(0),
+                ));
                 stan_error(analyzer, make_error_node(ERROR_ANALYSIS_ARRAY_TYPE_MUST_BE_COMPILE_TIME_CONSTANT, type_expr));
                 INVALIDATE(expr);
                 break;
