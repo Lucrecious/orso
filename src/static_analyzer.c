@@ -1524,7 +1524,14 @@ void resolve_expression(
                     size_t arg_count = an_list_end(expr) - an_list_start(expr);
 
                     if (init_type_td->as.arr.count < arg_count) {
-                        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_TOO_MANY_ARGUMENTS_IN_LIST_INIT, expr->children.items[an_list_start(expr)]));
+                        stan_error(analyzer, OR_ERROR(
+                            .tag = ERROR_ANALYSIS_TOO_MANY_ARGUMENTS_IN_LIST_INIT,
+                            .level = ERROR_SOURCE_ANALYSIS,
+                            .msg = lit2str("array has length of $1.$ but is initialized with $2.$"),
+                            .args = ORERR_ARGS(error_arg_node(expr),
+                                error_arg_sz(init_type_td->as.arr.count), error_arg_sz(arg_count)),
+                            .show_code_lines = ORERR_LINES(0),
+                        ));
                         break;
                     }
 
@@ -1556,7 +1563,13 @@ void resolve_expression(
             }
 
             default: {
-                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_EXPRESSION_FOR_LIST_INIT, type_expr));
+                stan_error(analyzer, OR_ERROR(
+                    .tag = ERROR_ANALYSIS_INVALID_EXPRESSION_FOR_LIST_INIT,
+                    .level = ERROR_SOURCE_ANALYSIS,
+                    .msg = lit2str("invalid expression for initialization list"),
+                    .args = ORERR_ARGS(error_arg_node(type_expr)),
+                    .show_code_lines = ORERR_LINES(0),
+                ));
                 break;
             }
             
@@ -1592,7 +1605,13 @@ void resolve_expression(
             #define td_is_s_or_u_int(td) ((td)->as.num == NUM_TYPE_SIGNED || (td)->as.num == NUM_TYPE_UNSIGNED)
 
             if (right_td->kind == TYPE_POINTER && left_td->kind == TYPE_NUMBER && left->is_free_number && td_is_s_or_u_int(left_td)) {
-                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_NUMBER_MUST_BE_ON_RHS_FOR_POINTER_ARITHMETIC, expr));
+                stan_error(analyzer, OR_ERROR(
+                    .tag = ERROR_ANALYSIS_NUMBER_MUST_BE_ON_RHS_FOR_POINTER_ARITHMETIC,
+                    .level = ERROR_SOURCE_ANALYSIS,
+                    .msg = lit2str("number must be on right-hand-side for pointer arithmetic"),
+                    .args = ORERR_ARGS(error_arg_node(an_lhs(expr))),
+                    .show_code_lines = ORERR_LINES(0),
+                ));
                 INVALIDATE(expr);
             }
 
@@ -1604,12 +1623,24 @@ void resolve_expression(
 
             if (operator_is_arithmetic(expr->operator.type)) {
                 unless (left_td->capabilities&TYPE_CAP_ARITHMETIC) {
-                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_ARITHMETIC_OPERAND_TYPES, left));
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = ERROR_ANALYSIS_INVALID_ARITHMETIC_OPERAND_TYPES,
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("invalid arithmetic type: '$1.$'"),
+                        .args = ORERR_ARGS(error_arg_node(left), error_arg_type(left->value_type)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
                     INVALIDATE(expr);
                 }
 
                 unless (right_td->capabilities&TYPE_CAP_ARITHMETIC) {
-                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_ARITHMETIC_OPERAND_TYPES, right));
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = ERROR_ANALYSIS_INVALID_ARITHMETIC_OPERAND_TYPES,
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("invalid arithmetic type: '$1.$'"),
+                        .args = ORERR_ARGS(error_arg_node(right), error_arg_type(right->value_type)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
                     INVALIDATE(expr);
                     break;
                 }
@@ -1617,6 +1648,13 @@ void resolve_expression(
                 if (left_td->kind == TYPE_POINTER && typeid_eq(ast->type_set.ptrdiff_t_, right->value_type)) {
                     
                     if (expr->operator.type != TOKEN_PLUS && expr->operator.type != TOKEN_MINUS) {
+                        stan_error(analyzer, OR_ERROR(
+                            .tag = ERROR_ANALYSIS_ONLY_ADD_AND_SUB_ARE_VALID_IN_PTR_ARITHMEIC,
+                            .level = ERROR_SOURCE_ANALYSIS,
+                            .msg = lit2str("only '-' and '+' are allowed in pointer arithmetic but got '$0.kind$'"),
+                            .args = ORERR_ARGS(error_arg_token(expr->operator)),
+                            .show_code_lines = ORERR_LINES(0),
+                        ));
                         stan_error(analyzer, make_error_node(ERROR_ANALYSIS_ONLY_ADD_AND_SUB_ARE_VALID_IN_PTR_ARITHMEIC, expr));
                         INVALIDATE(expr);
                     } else {

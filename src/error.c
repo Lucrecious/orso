@@ -118,6 +118,71 @@ static size_t find_next_char_index(string_t s, size_t starting_index, char targe
 
 static cstr_t tokentype2string(token_type_t token_type) {
     switch (token_type) {
+        case TOKEN_AMPERSAND: return "&";
+        case TOKEN_AND: return "and";
+        case TOKEN_AND_EQUAL: return "and=";
+        case TOKEN_ANNOTATION: return "<annotation>";
+        case TOKEN_ARROW_RIGHT: return "->";
+        case TOKEN_AS: return "as";
+        case TOKEN_BANG: return "!";
+        case TOKEN_BANG_EQUAL: return "!=";
+        case TOKEN_BAR: return "|";
+        case TOKEN_BRACE_CLOSE: return "}";
+        case TOKEN_BRACE_OPEN: return "{";
+        case TOKEN_BRACKET_CLOSE: return "]";
+        case TOKEN_BRACKET_OPEN: return "[";
+        case TOKEN_BREAK: return "break";
+        case TOKEN_COLON: return ":";
+        case TOKEN_COMMA: return ",";
+        case TOKEN_CONTINUE: return "continue";
+        case TOKEN_DIRECTIVE: return "@<directive>";
+        case TOKEN_DOT: return ".";
+        case TOKEN_ELSE: return "else";
+        case TOKEN_EOF: return "<eof>";
+        case TOKEN_EQUAL: return "=";
+        case TOKEN_EQUAL_EQUAL: return "==";
+        case TOKEN_ERROR: return "<error>";
+        case TOKEN_FALSE: return "false";
+        case TOKEN_FLOAT: return "<float>";
+        case TOKEN_GREATER: return ">";
+        case TOKEN_GREATER_EQUAL: return ">=";
+        case TOKEN_IDENTIFIER: return "<identifier>";
+        case TOKEN_IMPLICIT: return "<implicit>";
+        case TOKEN_INFERRED_TYPE: return "<inferred type>";
+        case TOKEN_INTEGER: return "<integer>";
+        case TOKEN_LEN: return "len";
+        case TOKEN_LESS: return "<";
+        case TOKEN_LESS_EQUAL: return "<=";
+        case TOKEN_LESS_LESS: return "<<";
+        case TOKEN_MINUS: return "-";
+        case TOKEN_MINUS_EQUAL: return "-=";
+        case TOKEN_MINUS_MINUS: return "--";
+        case TOKEN_NOT: return "not";
+        case TOKEN_OR: return "or";
+        case TOKEN_OR_EQUAL: return "or=";
+        case TOKEN_PARENTHESIS_CLOSE: return ")";
+        case TOKEN_PARENTHESIS_OPEN: return "(";
+        case TOKEN_PERCENT: return "%";
+        case TOKEN_PERCENT_PERCENT: return "%%";
+        case TOKEN_PERCENT_EQUAL: return "%=";
+        case TOKEN_PERCENT_PERCENT_EQUAL: return "%%=";
+        case TOKEN_PLUS: return "+";
+        case TOKEN_PLUS_EQUAL: return "+=";
+        case TOKEN_PLUS_PLUS: return "++";
+        case TOKEN_RETURN: return "return";
+        case TOKEN_SEMICOLON: return ";";
+        case TOKEN_SIZEOF: return "sizeof";
+        case TOKEN_SLASH: return "/";
+        case TOKEN_SLASH_EQUAL: return "/=";
+        case TOKEN_SQUIGGLE: return "~";
+        case TOKEN_STAR: return "*";
+        case TOKEN_STAR_EQUAL: return "*=";
+        case TOKEN_STRING: return "<string>";
+        case TOKEN_STRUCT: return "struct";
+        case TOKEN_SYMBOL: return "<symbol>";
+        case TOKEN_THEN: return "then";
+        case TOKEN_TRUE: return "true";
+        case TOKEN_TYPEOF: return "typeof";
         case TOKEN_IF: return "if";
         case TOKEN_UNLESS: return "unless";
         case TOKEN_UNTIL: return "until";
@@ -125,7 +190,7 @@ static cstr_t tokentype2string(token_type_t token_type) {
         case TOKEN_DO: return "do";
         case TOKEN_FOR: return "for";
 
-        default: return "<todo>";
+        case TOKEN_SIZE: return "<size>";
     }
 }
 
