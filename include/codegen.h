@@ -242,7 +242,7 @@ static void emit_push_reg(gen_t *gen, texloc_t loc, function_t *function, reg_t 
         // move stack pointer down to leave enough space for data
         emit_binu_reg_im(function, loc, REG_STACK_BOTTOM, REG_STACK_BOTTOM, size_in_words, '-');
 
-        emit_multiword_addr_to_addr(gen, function, loc, REG_STACK_BOTTOM, reg_source, REG_TMP2, size_bytes);
+        emit_multiword_addr_to_addr(gen, function, loc, REG_STACK_BOTTOM, reg_source, REG_U, size_bytes);
     } else {
         emit_binu_reg_im(function, loc, REG_STACK_BOTTOM, REG_STACK_BOTTOM, (u32)WORD_SIZE, '-');
         emit_reg_to_addr(gen, function, loc, mov_size, REG_STACK_BOTTOM, reg_source, 0);
@@ -611,15 +611,15 @@ static void gen_binary(gen_t *gen, function_t *function, ast_node_t *binary) {
 
                 gen_constant(gen, loc, function, &factor_size, gen->ast->type_set.size_t_);
 
-                emit_pop_to_reg(gen, loc, function, REG_TMP, rhs->value_type);
+                emit_pop_to_reg(gen, loc, function, REG_T, rhs->value_type);
 
-                emit_bin_op(loc, function, TOKEN_STAR, rhstd, REG_TMP, REG_RESULT, REG_RESULT);
+                emit_bin_op(loc, function, TOKEN_STAR, rhstd, REG_T, REG_RESULT, REG_RESULT);
             }
         }
 
-        emit_pop_to_reg(gen, token_end_loc(&rhs->end), function, REG_TMP, lhs->value_type);
+        emit_pop_to_reg(gen, token_end_loc(&rhs->end), function, REG_T, lhs->value_type);
 
-        emit_bin_op(token_end_loc(&binary->end), function, binary->operator.type, optd, REG_TMP, REG_RESULT, REG_RESULT);
+        emit_bin_op(token_end_loc(&binary->end), function, binary->operator.type, optd, REG_T, REG_RESULT, REG_RESULT);
 
     } else if (operator_is_logical(op)) {
         ast_node_t *lhs = an_lhs(binary);
@@ -691,12 +691,12 @@ static void gen_item_access_array_addr(gen_t *gen, function_t *function, texloc_
 
         typedata_t *td = ast_type2td(gen->ast, gen->ast->type_set.u64_);
         // pop offset and multiply by td size
-        emit_pop_to_reg(gen, loc, function, REG_TMP, accessor_type);
-        emit_bin_op(loc, function, TOKEN_STAR, td, REG_TMP, REG_RESULT, REG_RESULT);
+        emit_pop_to_reg(gen, loc, function, REG_T, accessor_type);
+        emit_bin_op(loc, function, TOKEN_STAR, td, REG_T, REG_RESULT, REG_RESULT);
 
         // pop lvalue and add it with offset
-        emit_pop_to_reg(gen, loc, function, REG_TMP, gen->ast->type_set.u64_);
-        emit_bin_op(loc, function, TOKEN_PLUS, td, REG_TMP, REG_RESULT, reg_dst);
+        emit_pop_to_reg(gen, loc, function, REG_T, gen->ast->type_set.u64_);
+        emit_bin_op(loc, function, TOKEN_PLUS, td, REG_T, REG_RESULT, reg_dst);
     }
 }
 
@@ -1022,12 +1022,12 @@ static size_t gen_condition(gen_t *gen, ast_node_t *branch, function_t *function
     ast_node_t *condition = an_condition(branch);
     gen_expression(gen, function, condition);
 
-    emit_reg_to_reg(function, token_end_loc(&condition->end), REG_TMP, REG_RESULT);
+    emit_reg_to_reg(function, token_end_loc(&condition->end), REG_T, REG_RESULT);
 
     emit_pop_to_reg(gen, token_end_loc(&condition->end), function, REG_RESULT, gen->ast->type_set.u64_);
 
     // then index
-    return gen_jmp_if_reg(function, token_end_loc(&condition->end), REG_TMP, branch->condition_negated ? true : false);
+    return gen_jmp_if_reg(function, token_end_loc(&condition->end), REG_T, branch->condition_negated ? true : false);
 }
 
 static void gen_branching(gen_t *gen, function_t *function, ast_node_t *branch) {
@@ -1101,13 +1101,13 @@ static void gen_assignment(gen_t *gen, function_t *function, ast_node_t *assignm
         if (td->size > WORD_SIZE) {
             UNREACHABLE(); // todo
         } else {
-            emit_reg_to_reg(function, assignment->operator.loc, REG_TMP, REG_RESULT);
+            emit_reg_to_reg(function, assignment->operator.loc, REG_T, REG_RESULT);
 
             emit_addr_to_reg(gen, function, assignment->operator.loc, type2movsize(gen, assignment->value_type), REG_RESULT, REG_RESULT, 0);
 
             jmp_loc = gen_jmp_if_reg(function, assignment->operator.loc, REG_RESULT, assignment->operator.type == TOKEN_AND_EQUAL ? false : true);
 
-            emit_reg_to_reg(function, assignment->operator.loc, REG_RESULT, REG_TMP);
+            emit_reg_to_reg(function, assignment->operator.loc, REG_RESULT, REG_T);
         }
     }
 
@@ -1119,25 +1119,25 @@ static void gen_assignment(gen_t *gen, function_t *function, ast_node_t *assignm
 
     typedata_t *rhs_td = ast_type2td(gen->ast, rhs->value_type);
     if (rhs_td->size > WORD_SIZE) {
-        emit_reg_to_reg(function, token_end_loc(&rhs->end), REG_TMP, REG_STACK_FRAME);
-        emit_binu_reg_im(function, token_end_loc(&rhs->end), REG_TMP, REG_TMP, lvalue_stack_point, '-');
-        emit_addr_to_reg(gen, function, token_end_loc(&rhs->end), REG_MOV_SIZE_WORD, REG_TMP, REG_TMP, 0);
+        emit_reg_to_reg(function, token_end_loc(&rhs->end), REG_T, REG_STACK_FRAME);
+        emit_binu_reg_im(function, token_end_loc(&rhs->end), REG_T, REG_T, lvalue_stack_point, '-');
+        emit_addr_to_reg(gen, function, token_end_loc(&rhs->end), REG_MOV_SIZE_WORD, REG_T, REG_T, 0);
     } else {
-        emit_pop_to_reg(gen, token_end_loc(&rhs->end), function, REG_TMP, gen->ast->type_set.u64_);
+        emit_pop_to_reg(gen, token_end_loc(&rhs->end), function, REG_T, gen->ast->type_set.u64_);
     }
 
     if (td->size > WORD_SIZE) {
         ASSERT(assignment->operator.type == TOKEN_EQUAL, "only equals for biggers for now");
-        emit_multiword_addr_to_addr(gen, function, token_end_loc(&assignment->end), REG_TMP, REG_RESULT, REG_TMP2, td->size);
+        emit_multiword_addr_to_addr(gen, function, token_end_loc(&assignment->end), REG_T, REG_RESULT, REG_U, td->size);
 
-        emit_reg_to_reg(function, token_end_loc(&rhs->end), REG_TMP, REG_STACK_BOTTOM);
+        emit_reg_to_reg(function, token_end_loc(&rhs->end), REG_T, REG_STACK_BOTTOM);
 
         // i need to move up the elements backwards so it doesn't overwrite itself
         for (size_t i = 0; i < b2w(td->size); ++i) {
-            emit_binu_reg_im(function, token_end_loc(&rhs->end), REG_RESULT, REG_TMP, (b2w(td->size)-i)*WORD_SIZE, '+');
-            emit_binu_reg_im(function, token_end_loc(&rhs->end), REG_TMP2, REG_RESULT, WORD_SIZE, '-');
-            emit_addr_to_reg(gen, function, token_end_loc(&rhs->end), REG_MOV_SIZE_WORD, REG_TMP2, REG_TMP2, 0);
-            emit_reg_to_addr(gen, function, token_end_loc(&rhs->end), REG_MOV_SIZE_WORD, REG_RESULT, REG_TMP2, 0);
+            emit_binu_reg_im(function, token_end_loc(&rhs->end), REG_RESULT, REG_T, (b2w(td->size)-i)*WORD_SIZE, '+');
+            emit_binu_reg_im(function, token_end_loc(&rhs->end), REG_U, REG_RESULT, WORD_SIZE, '-');
+            emit_addr_to_reg(gen, function, token_end_loc(&rhs->end), REG_MOV_SIZE_WORD, REG_U, REG_U, 0);
+            emit_reg_to_addr(gen, function, token_end_loc(&rhs->end), REG_MOV_SIZE_WORD, REG_RESULT, REG_U, 0);
         }
 
         // manually pop off lvalue
@@ -1149,21 +1149,21 @@ static void gen_assignment(gen_t *gen, function_t *function, ast_node_t *assignm
         if (op.type == TOKEN_AND || op.type == TOKEN_OR) {
         } else if (op.type == TOKEN_NOT) {
             emit_addr_to_reg(gen, function, token_end_loc(&assignment->end),
-                    type2movsize(gen, assignment->value_type), REG_TMP2, REG_TMP, 0);
+                    type2movsize(gen, assignment->value_type), REG_U, REG_T, 0);
 
-            emit_unary(gen, token_end_loc(&assignment->end), function, TOKEN_NOT, assignment->value_type, REG_TMP2, REG_RESULT);
+            emit_unary(gen, token_end_loc(&assignment->end), function, TOKEN_NOT, assignment->value_type, REG_U, REG_RESULT);
         } else if (op.type != TOKEN_EQUAL) {
             emit_addr_to_reg(gen, function, token_end_loc(&assignment->end),
-                    type2movsize(gen, assignment->value_type), REG_TMP2, REG_TMP, 0);
+                    type2movsize(gen, assignment->value_type), REG_U, REG_T, 0);
 
-            emit_bin_op(token_end_loc(&assignment->end), function, op.type, td, REG_TMP2, REG_RESULT, REG_RESULT);
+            emit_bin_op(token_end_loc(&assignment->end), function, op.type, td, REG_U, REG_RESULT, REG_RESULT);
         }
 
         emit_reg_to_addr(gen, function, token_end_loc(&assignment->end),
-                type2movsize(gen, assignment->value_type), REG_TMP, REG_RESULT, 0);
+                type2movsize(gen, assignment->value_type), REG_T, REG_RESULT, 0);
 
         emit_addr_to_reg(gen, function, token_end_loc(&assignment->end),
-                type2movsize(gen, assignment->value_type), REG_RESULT, REG_TMP, 0);
+                type2movsize(gen, assignment->value_type), REG_RESULT, REG_T, 0);
     }
 
     if (assignment->operator.type == TOKEN_AND_EQUAL || assignment->operator.type == TOKEN_OR_EQUAL) {
@@ -1184,8 +1184,8 @@ static void gen_jmp_expr(gen_t *gen, function_t *function, ast_node_t *jmp_expr)
             if (td->size > WORD_SIZE) {
                 stack_point += b2w(td->size)*WORD_SIZE;
 
-                emit_binu_reg_im(function, token_end_loc(&jmp_expr->end), REG_TMP, REG_STACK_FRAME, stack_point, '-');
-                emit_multiword_addr_to_addr(gen, function, token_end_loc(&jmp_expr->end), REG_TMP, REG_RESULT, REG_TMP2, td->size);
+                emit_binu_reg_im(function, token_end_loc(&jmp_expr->end), REG_T, REG_STACK_FRAME, stack_point, '-');
+                emit_multiword_addr_to_addr(gen, function, token_end_loc(&jmp_expr->end), REG_T, REG_RESULT, REG_U, td->size);
             }
 
             gen_pop_until_stack_point(gen, function, token_end_loc(&jmp_expr->end), stack_point, false);
@@ -1195,9 +1195,9 @@ static void gen_jmp_expr(gen_t *gen, function_t *function, ast_node_t *jmp_expr)
 
         case TOKEN_RETURN: {
             if (td->size > WORD_SIZE) {
-                emit_binu_reg_im(function, token_end_loc(&jmp_expr->end), REG_TMP, REG_STACK_FRAME, WORD_SIZE, '+');
-                emit_multiword_addr_to_addr(gen, function, token_end_loc(&jmp_expr->end), REG_TMP, REG_RESULT, REG_TMP2, td->size);
-                emit_reg_to_reg(function, token_end_loc(&jmp_expr->end), REG_RESULT, REG_TMP);
+                emit_binu_reg_im(function, token_end_loc(&jmp_expr->end), REG_T, REG_STACK_FRAME, WORD_SIZE, '+');
+                emit_multiword_addr_to_addr(gen, function, token_end_loc(&jmp_expr->end), REG_T, REG_RESULT, REG_U, td->size);
+                emit_reg_to_reg(function, token_end_loc(&jmp_expr->end), REG_RESULT, REG_T);
             }
 
             gen_return(gen, token_end_loc(&jmp_expr->end), function);
@@ -1286,8 +1286,8 @@ static void gen_call(gen_t *gen, function_t *function, ast_node_t *call, bool is
     gen_expression(gen, function, an_callee(call));
 
     if (is_intrinsic) {
-        emit_pop_to_reg(gen, token_end_loc(&call->end), function, REG_TMP, gen->ast->type_set.size_t_);
-        emit_intrinsic_call(function, REG_RESULT, REG_STACK_BOTTOM, REG_TMP, token_end_loc(&call->end));
+        emit_pop_to_reg(gen, token_end_loc(&call->end), function, REG_T, gen->ast->type_set.size_t_);
+        emit_intrinsic_call(function, REG_RESULT, REG_STACK_BOTTOM, REG_T, token_end_loc(&call->end));
 
         gen_pop_until_stack_point(gen, function, token_end_loc(&call->end), stack_point, true);
 
@@ -1485,13 +1485,13 @@ static void gen_item_access(gen_t *gen, function_t *function, ast_node_t *item_a
         gen_item_access_array_addr(gen, function, token_end_loc(&accessor->start), REG_RESULT, REG_RESULT, accessor, accessee->value_type);
 
         texloc_t end = token_end_loc(&item_access->end);
-        emit_binu_reg_im(function, end, REG_TMP, REG_STACK_FRAME, result_stack_point, '-');
+        emit_binu_reg_im(function, end, REG_T, REG_STACK_FRAME, result_stack_point, '-');
 
         if (item_access_td->size > WORD_SIZE) {
-            emit_multiword_addr_to_addr(gen, function, end, REG_RESULT, REG_TMP, REG_TMP2, item_access_td->size);
+            emit_multiword_addr_to_addr(gen, function, end, REG_RESULT, REG_T, REG_U, item_access_td->size);
         } else {
             emit_addr_to_reg(gen, function, end, type2movsize(gen, item_access->value_type), REG_RESULT, REG_RESULT, 0);
-            emit_reg_to_addr(gen, function, end, type2movsize(gen, item_access->value_type), REG_TMP, REG_RESULT, 0);
+            emit_reg_to_addr(gen, function, end, type2movsize(gen, item_access->value_type), REG_T, REG_RESULT, 0);
         }
 
         gen_pop_until_stack_point(gen, function, end, result_stack_point, true);
@@ -1520,9 +1520,9 @@ static void gen_initializer_list(gen_t *gen, function_t *function, ast_node_t *l
                 if (arg_td->size > WORD_SIZE) {
                     emit_popn_bytes(gen, function, b2w(arg_td->size)*WORD_SIZE, token_end_loc(&arg->end), true);
 
-                    emit_binu_reg_im(function, token_end_loc(&arg->end), REG_TMP, REG_STACK_BOTTOM, list_type_td->as.arr.item_size*i_, '+');
+                    emit_binu_reg_im(function, token_end_loc(&arg->end), REG_T, REG_STACK_BOTTOM, list_type_td->as.arr.item_size*i_, '+');
 
-                    emit_multiword_addr_to_addr(gen, function, token_end_loc(&arg->end), REG_TMP, REG_RESULT, REG_TMP2, arg_td->size);
+                    emit_multiword_addr_to_addr(gen, function, token_end_loc(&arg->end), REG_T, REG_RESULT, REG_U, arg_td->size);
 
                 } else {
                     emit_reg_to_addr(gen, function, token_end_loc(&arg->end), type2movsize(gen, arg->value_type), REG_STACK_BOTTOM, REG_RESULT, i_*list_type_td->as.arr.item_size);
@@ -1668,9 +1668,9 @@ static void gen_module(gen_t *gen, ast_node_t *module, function_t *init_func) {
         ast_node_t *expr = an_decl_expr(decldef);
         gen_expression(gen, init_func, expr);
 
-        emit_pop_to_reg(gen, token_end_loc(&expr->end), init_func, REG_TMP, gen->ast->type_set.size_t_);
+        emit_pop_to_reg(gen, token_end_loc(&expr->end), init_func, REG_T, gen->ast->type_set.size_t_);
 
-        emit_reg_to_addr(gen, init_func, token_end_loc(&expr->end), type2movsize(gen, expr->value_type), REG_TMP, REG_RESULT, 0);
+        emit_reg_to_addr(gen, init_func, token_end_loc(&expr->end), type2movsize(gen, expr->value_type), REG_T, REG_RESULT, 0);
     }
 }
 

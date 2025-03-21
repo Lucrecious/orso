@@ -8,12 +8,11 @@
 typedef enum reg_t reg_t;
 enum reg_t {
     REG_NULL = 0,
-    REG_RESULT = 1, // 256 bytes for memory on stack
-
-    REG_TMP = 33,
-    REG_TMP2 = 34,
-    REG_STACK_BOTTOM = 35,
-    REG_STACK_FRAME = 36,
+    REG_RESULT = 'r',
+    REG_T = 't',
+    REG_U = 'u',
+    REG_STACK_BOTTOM = 's',
+    REG_STACK_FRAME = 'f',
 };
 
 typedef void (*write_function_t)(const char* chars);
