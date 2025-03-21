@@ -3168,8 +3168,22 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
     }
 
     ast_node_t *ret_expr = an_func_def_return(funcdef);
-    unless (TYPE_IS_TYPE(ret_expr->value_type)) {
-        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_RETURN_TYPE, an_func_def_return(funcdef)));
+    if (ret_expr->is_mutable) {
+        stan_error(analyzer, OR_ERROR(
+            .tag = ERROR_ANALYSIS_INVALID_RETURN_TYPE,
+            .level = ERROR_SOURCE_ANALYSIS,
+            .msg = lit2str("return expression must be a constant expression"),
+            .args = ORERR_ARGS(error_arg_node(ret_expr)),
+            .show_code_lines = ORERR_LINES(0),
+        ));
+    } else unless (TYPE_IS_TYPE(ret_expr->value_type)) {
+        stan_error(analyzer, OR_ERROR(
+            .tag = ERROR_ANALYSIS_INVALID_RETURN_TYPE,
+            .level = ERROR_SOURCE_ANALYSIS,
+            .msg = lit2str("return expression must be a type but got '$1.$' instead"),
+            .args = ORERR_ARGS(error_arg_node(ret_expr), error_arg_type(an_func_def_return(funcdef)->value_type)),
+            .show_code_lines = ORERR_LINES(0),
+        ));
     } else {
         return_type = an_func_def_return(funcdef)->expr_val.word.as.t;
     }
@@ -3207,7 +3221,13 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
 
     ast_node_t *funcblock = an_func_def_block(funcdef);
     unless (TYPE_IS_UNREACHABLE(funcblock->value_type) || TYPE_IS_VOID(return_type)) {
-        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_FUNCTION_MUST_RETURN_ON_ALL_BRANCHES, funcdef));
+        stan_error(analyzer, OR_ERROR(
+            .tag = ERROR_ANALYSIS_FUNCTION_MUST_RETURN_ON_ALL_BRANCHES,
+            .level = ERROR_SOURCE_ANALYSIS,
+            .msg = lit2str("function does not return on all branches"),
+            .args = ORERR_ARGS(error_arg_node(funcdef)),
+            .show_code_lines = ORERR_LINES(0),
+        ));
     }
 
     for (size_t i = 0; i < funcdef->jmp_nodes.count; ++i) {
@@ -3217,7 +3237,14 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
 
         type_t ret_expr_type = ret_expr->value_type;
         unless (TYPE_IS_INVALID(ret_expr_type) || typeid_eq(ret_expr_type, return_type)) {
-            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_JMP_RETURN_TYPE_DOES_NOT_MATCH_BLOCKS, funcdef));
+            stan_error(analyzer, OR_ERROR(
+                .tag = ERROR_ANALYSIS_FUNCTION_MUST_RETURN_ON_ALL_BRANCHES,
+                .level = ERROR_SOURCE_ANALYSIS,
+                .msg = lit2str("return value type '$1.$' does not match function return type '$2.$'"),
+                .args = ORERR_ARGS(error_arg_node(ret_expr),
+                    error_arg_type(ret_expr_type), error_arg_type(return_type)),
+                .show_code_lines = ORERR_LINES(0),
+            ));
         }
     }
 
