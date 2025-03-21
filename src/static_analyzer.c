@@ -1862,8 +1862,14 @@ void resolve_expression(
                             type_t ptr_type = type_set_fetch_pointer(&ast->type_set, op->lvalue_node->value_type);
                             expr->value_type = ptr_type;
                         } else {
+                            stan_error(analyzer, OR_ERROR(
+                                .tag = ERROR_ANALYSIS_CANNOT_TAKE_ADDRESS_OF_CONSTANT,
+                                .level = ERROR_SOURCE_ANALYSIS,
+                                .msg = lit2str("cannot take the address of constant"),
+                                .args = ORERR_ARGS(error_arg_node(expr)),
+                                .show_code_lines = ORERR_LINES(0),
+                            ));
                             INVALIDATE(expr);
-                            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CANNOT_TAKE_ADDRESS_OF_CONSTANT, expr));
                         }
                         break;
                     }
@@ -1875,8 +1881,14 @@ void resolve_expression(
                     }
 
                     default: {
+                        stan_error(analyzer, OR_ERROR(
+                            .tag = ERROR_ANALYSIS_INVALID_OPERAND_FOR_ADDRESS_OPERATOR,
+                            .level = ERROR_SOURCE_ANALYSIS,
+                            .msg = lit2str("only lvalues can have their address taken"),
+                            .args = ORERR_ARGS(error_arg_node(an_operand(expr))),
+                            .show_code_lines = ORERR_LINES(0),
+                        ));
                         INVALIDATE(expr);
-                        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_OPERAND_FOR_ADDRESS_OPERATOR, expr));
                         break;
                     }
                     }
@@ -1888,13 +1900,25 @@ void resolve_expression(
                 switch (expr->operator.type) {
                 case TOKEN_STAR: {
                     if (operand_td->kind != TYPE_POINTER) {
-                        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_DEREF_OPERAND, expr));
+                        stan_error(analyzer, OR_ERROR(
+                            .tag = ERROR_ANALYSIS_INVALID_DEREF_OPERAND,
+                            .level = ERROR_SOURCE_ANALYSIS,
+                            .msg = lit2str("expected pointer for dereference but got '$1.$'"),
+                            .args = ORERR_ARGS(error_arg_node(an_operand(expr)), error_arg_type(an_operand(expr)->value_type)),
+                            .show_code_lines = ORERR_LINES(0),
+                        ));
                         INVALIDATE(expr);
                         break;
                     }
 
                     if (TYPE_IS_VOID(operand_td->as.ptr.type)) {
-                        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CANNOT_DEREFERENCE_VOIDPTR, expr));
+                        stan_error(analyzer, OR_ERROR(
+                            .tag = ERROR_ANALYSIS_CANNOT_DEREFERENCE_VOIDPTR,
+                            .level = ERROR_SOURCE_ANALYSIS,
+                            .msg = lit2str("cannot dereference a void pointer"),
+                            .args = ORERR_ARGS(error_arg_node(an_operand(expr))),
+                            .show_code_lines = ORERR_LINES(0),
+                        ));
                         INVALIDATE(expr);
                         break;
                     }
@@ -1906,7 +1930,13 @@ void resolve_expression(
 
                 case TOKEN_NOT: {
                     if (operand_td->kind != TYPE_BOOL) {
-                        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_NOT_OPERAND, expr));
+                        stan_error(analyzer, OR_ERROR(
+                            .tag = ERROR_ANALYSIS_INVALID_NOT_OPERAND,
+                            .level = ERROR_SOURCE_ANALYSIS,
+                            .msg = lit2str("expected a 'bool' for 'not' unary but got '$1.$' instead"),
+                            .args = ORERR_ARGS(error_arg_node(an_operand(expr)), error_arg_type(an_operand(expr)->value_type)),
+                            .show_code_lines = ORERR_LINES(0),
+                        ));
                         INVALIDATE(expr);
                         break;
                     }
@@ -1922,16 +1952,26 @@ void resolve_expression(
                 }
 
                 case TOKEN_MINUS: {
-                    if (operand_td->kind != TYPE_NUMBER) {
-                        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_MINUS_OPERAND, expr));
+                    if ((operand_td->capabilities&TYPE_CAP_ARITHMETIC) == 0) {
+                        stan_error(analyzer, OR_ERROR(
+                            .tag = ERROR_ANALYSIS_INVALID_MINUS_OPERAND,
+                            .level = ERROR_SOURCE_ANALYSIS,
+                            .msg = lit2str("the '-' unary expects a type with arithmetic capabilities"),
+                            .args = ORERR_ARGS(error_arg_node(an_operand(expr))),
+                            .show_code_lines = ORERR_LINES(0),
+                        ));
                         INVALIDATE(expr);
                         break;
                     }
 
                     if (operand_td->as.num == NUM_TYPE_UNSIGNED) {
-                        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CANNOT_NEGATE_UNSIGNED_NUMBER, expr));
-                        INVALIDATE(expr);
-                        break;
+                        stan_error(analyzer, OR_ERROR(
+                            .tag = ERROR_ANALYSIS_CANNOT_NEGATE_UNSIGNED_NUMBER,
+                            .level = ERROR_SOURCE_ANALYSIS,
+                            .msg = lit2str("an unsigned number cannot be negated"),
+                            .args = ORERR_ARGS(error_arg_node(an_operand(expr))),
+                            .show_code_lines = ORERR_LINES(0),
+                        ));
                     }
 
                     ast_node_t *operand = an_operand(expr);
@@ -2001,7 +2041,13 @@ void resolve_expression(
             resolve_expression(analyzer, ast, state, implicit_type,lhs);
             ast_node_t *lvalue_node = lhs->lvalue_node;
             if (an_is_none(lvalue_node)) {
-                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_EXPECTED_LVALUE, lhs));
+                stan_error(analyzer, OR_ERROR(
+                    .tag = ERROR_ANALYSIS_EXPECTED_LVALUE,
+                    .level = ERROR_SOURCE_ANALYSIS,
+                    .msg = lit2str("an lvalue is expected for the left-hand-side of an assignment"),
+                    .args = ORERR_ARGS(error_arg_node(lhs)),
+                    .show_code_lines = ORERR_LINES(0),
+                ));
                 INVALIDATE(expr);
                 break;
             } 
@@ -2018,7 +2064,13 @@ void resolve_expression(
             case TOKEN_PERCENT_PERCENT_EQUAL: {
                 typedata_t *td = ast_type2td(ast, lhs->value_type);
                 if ((td->capabilities & TYPE_CAP_ARITHMETIC) == 0) {
-                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_ARITHMETIC_OPERAND_TYPES, lhs));
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = ERROR_ANALYSIS_EXPECTED_LVALUE,
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("type '$1.$' does not have arithmetic capabilities"),
+                        .args = ORERR_ARGS(error_arg_node(lhs), error_arg_type(lhs->value_type)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
                 }
                 break;
             }
@@ -2027,7 +2079,13 @@ void resolve_expression(
             case TOKEN_AND_EQUAL: {
                 typedata_t *td = ast_type2td(ast, lhs->value_type);
                 if ((td->capabilities & TYPE_CAP_LOGICAL) == 0) {
-                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_LOGICAL_OPERAND_TYPES, lhs));
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = ERROR_ANALYSIS_EXPECTED_LVALUE,
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("type '$1.$' does not have logical capabilities"),
+                        .args = ORERR_ARGS(error_arg_node(lhs), error_arg_type(lhs->value_type)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
                 }
                 break;
             }
@@ -2048,9 +2106,13 @@ void resolve_expression(
 
             type_t rhs_type = rhs->value_type;
             unless (TYPE_IS_INVALID(rhs_type) || typeid_eq(lvalue_node->value_type, rhs_type)) {
-                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_ASSIGNEE_TYPE_DOES_NOT_MATCH_DEF_TYPE, expr));
-                INVALIDATE(expr);
-                break;
+                stan_error(analyzer, OR_ERROR(
+                    .tag = ERROR_ANALYSIS_TYPE_MISMATCH,
+                    .level = ERROR_SOURCE_ANALYSIS,
+                    .msg = lit2str("value is of type '$1.$' while definition is of type '$2.$'"),
+                    .args = ORERR_ARGS(error_arg_node(expr), error_arg_type(rhs_type), error_arg_type(lvalue_node->value_type)),
+                    .show_code_lines = ORERR_LINES(0),
+                ));
             }
             break;
         }
@@ -2110,7 +2172,13 @@ void resolve_expression(
             } else if (last_decl_stmt < expr->children.count && (last_decl_def == expr->children.count || last_decl_def < last_decl_stmt)) {
                 expr->last_statement = expr->children.items[last_decl_stmt];
             } else {
-                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_BLOCKS_MUST_BE_EMPTY_OR_END_IN_STATEMENT, expr));
+                stan_error(analyzer, OR_ERROR(
+                    .tag = ERROR_ANALYSIS_BLOCKS_MUST_BE_EMPTY_OR_END_IN_STATEMENT,
+                    .level = ERROR_SOURCE_ANALYSIS,
+                    .msg = lit2str("block is expected to be empty or end in a statement"),
+                    .args = ORERR_ARGS(error_arg_token(expr->end), error_arg_node(expr->children.items[expr->children.count-1])),
+                    .show_code_lines = ORERR_LINES(0, 1),
+                ));
                 INVALIDATE(expr);
                 break;
             }
@@ -2174,7 +2242,13 @@ void resolve_expression(
             }
 
             if (TYPE_IS_INVALID(branch_type)) {
-                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_BLOCKS_TYPE_MISMATCH, expr));
+                stan_error(analyzer, OR_ERROR(
+                    .tag = ERROR_ANALYSIS_BLOCKS_TYPE_MISMATCH,
+                    .level = ERROR_SOURCE_ANALYSIS,
+                    .msg = lit2str("both '$0.kind$' branching blocks must match types but got '$1.$' and '$2.$'"),
+                    .args = ORERR_ARGS(error_arg_token(expr->start), error_arg_type(an_then(expr)->value_type), error_arg_type(an_else(expr)->value_type)),
+                    .show_code_lines = ORERR_LINES(0),
+                ));
                 INVALIDATE(expr);
             }
 
@@ -2183,8 +2257,13 @@ void resolve_expression(
             }
 
             if (!TYPE_IS_INVALID(an_condition(expr)->value_type) && !typeid_eq(an_condition(expr)->value_type, typeid(TYPE_BOOL))) {
-                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CONDITION_MUST_BE_BOOL, an_condition(expr)));
-                INVALIDATE(expr);
+                stan_error(analyzer, OR_ERROR(
+                    .tag = ERROR_ANALYSIS_BLOCKS_TYPE_MISMATCH,
+                    .level = ERROR_SOURCE_ANALYSIS,
+                    .msg = lit2str("'$0.kind$' condition must be a 'bool' but got '$1.$'"),
+                    .args = ORERR_ARGS(error_arg_token(expr->start), error_arg_type(an_condition(expr)->value_type)),
+                    .show_code_lines = ORERR_LINES(0),
+                ));
             }
 
             break;
@@ -2243,8 +2322,15 @@ void resolve_expression(
             typedata_t *callee_td = ast_type2td(ast, callee_type);
 
             if (callee_td->kind == TYPE_INFERRED_FUNCTION) {
+                // im not sure if this is possible
                 unless (callee->expr_val.is_concrete) {
-                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INFERRED_CALLEE_MUST_BE_CONSTANT, callee));
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = ERROR_ANALYSIS_EXPECTED_CONSTANT,
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("callee is an inferred function declaration and must be a constant"),
+                        .args = ORERR_ARGS(error_arg_node(callee)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
                     INVALIDATE(expr);
                     break;
                 }
@@ -2270,6 +2356,13 @@ void resolve_expression(
             }
 
             if ((!type_is_function(ast->type_set.types, callee_type) && !type_is_intrinsic_function(ast->type_set.types, callee_type))) {
+                stan_error(analyzer, OR_ERROR(
+                    .tag = ERROR_ANALYSIS_EXPECTED_CALLABLE,
+                    .level = ERROR_SOURCE_ANALYSIS,
+                    .msg = lit2str("expected a callable type but got '$0.type$' instead"),
+                    .args = ORERR_ARGS(error_arg_node(callee)),
+                    .show_code_lines = ORERR_LINES(0),
+                ));
                 stan_error(analyzer, make_error_node(ERROR_ANALYSIS_EXPECTED_CALLABLE, an_callee(expr)));
                 break;
             }

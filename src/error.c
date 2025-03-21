@@ -259,6 +259,34 @@ static string_t error_format(string_t message_format, typedatas_t *tds, error_ar
                     break;
                 }
                 }
+            } else if (sv_eq(field_sv, lit2sv("type"))) {
+                switch (arg.type) {
+                case ERROR_ARG_TYPE_NONE:
+                case ERROR_ARG_TYPE_TOKEN:
+                case ERROR_ARG_TYPE_SIZE: break;
+
+                case ERROR_ARG_TYPE_NODE: {
+                    if (arg.node_or_null) {
+                        tmp_arena_t *tmp = allocator_borrow();
+                        string_t s = type_to_string(*tds, arg.node_or_null->value_type, tmp->allocator);
+
+                        sb_add_format(&sb, "%s", s.cstr);
+
+                        allocator_return(tmp);
+                    }
+                    break;
+                }
+
+                case ERROR_ARG_TYPE_TYPE: {
+                    tmp_arena_t *tmp = allocator_borrow();
+                    string_t s = type_to_string(*tds, arg.type_type, tmp->allocator);
+
+                    sb_add_format(&sb, "%s", s.cstr);
+
+                    allocator_return(tmp);
+                    break;
+                }
+                }
             } else {
                 UNREACHABLE();
             }

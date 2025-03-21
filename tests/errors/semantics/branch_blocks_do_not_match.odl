@@ -1,0 +1,4 @@
+main :: () -> void  {
+    x := if true then 1 else false;
+    x;
+};
