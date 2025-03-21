@@ -2767,13 +2767,8 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
         return;
     }
 
-    // if (TYPE_IS_UNRESOLVED(decl->value_type) && state.scope->type == SCOPE_TYPE_FUNCDEF) {
-    //     declare_definition(analyzer, state.scope, decl);
-    //     return;
-    // }
-
     if (TYPE_IS_UNRESOLVED(init_expr->value_type) && TYPE_IS_UNRESOLVED(decl->value_type)) {
-        ASSERT(false, "don't thing this is possible??")
+        ASSERT(false, "don't thing this is possible??");
         stan_error(analyzer, OR_ERROR(
             .tag = ERROR_ANALYSIS_CANNOT_INFER_NIL_VALUE,
             .level = ERROR_SOURCE_ANALYSIS,
