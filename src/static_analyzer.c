@@ -2363,7 +2363,6 @@ void resolve_expression(
                     .args = ORERR_ARGS(error_arg_node(callee)),
                     .show_code_lines = ORERR_LINES(0),
                 ));
-                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_EXPECTED_CALLABLE, an_callee(expr)));
                 break;
             }
 
@@ -2448,9 +2447,16 @@ void resolve_expression(
             size_t count = arg_end - arg_start;
             switch (expr->identifier.type) {
             case TOKEN_TYPEOF: {
+                expr->value_type = typeid(TYPE_TYPE);
+
                 unless (count == 1) {
-                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_TYPEOF_REQUIRES_ONE_ARG, expr));
-                    INVALIDATE(expr);
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = ERROR_ANALYSIS_TYPEOF_REQUIRES_ONE_ARG,
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("'typeof' builtin requires exactly 1 argument but got $1.$ instead"),
+                        .args = ORERR_ARGS(error_arg_node(expr), error_arg_sz(count)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
                     break;
                 }
 
@@ -2458,11 +2464,9 @@ void resolve_expression(
                 resolve_expression(analyzer, ast, state, typeid(TYPE_UNRESOLVED), expr_arg);
 
                 if (TYPE_IS_INVALID(expr_arg->value_type)) {
-                    INVALIDATE(expr);
                     break;
                 }
 
-                expr->value_type = typeid(TYPE_TYPE);
                 expr->expr_val = ast_node_val_word(WORDT(expr_arg->value_type));
                 break;
             }
@@ -2471,7 +2475,13 @@ void resolve_expression(
                 expr->value_type = ast->type_set.size_t_;
 
                 unless (count == 1) {
-                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_SIZEOF_REQUIRES_ONE_ARG, expr));
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = ERROR_ANALYSIS_SIZEOF_REQUIRES_ONE_ARG,
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("'sizeof' builtin requires exactly 1 argument but got $1.$ instead"),
+                        .args = ORERR_ARGS(error_arg_node(expr), error_arg_sz(count)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
                     break;
                 }
 
@@ -2479,19 +2489,12 @@ void resolve_expression(
                 resolve_expression(analyzer, ast, state, typeid(TYPE_UNRESOLVED), expr_arg);
                 type_t expr_type = expr_arg->value_type;
 
-                if (TYPE_IS_TYPE(expr_type) && !expr_arg->expr_val.is_concrete) {
-                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_SIZEOF_BUILTIN_REQUIRES_A_CONSTANT_TYPE_OR_ANOTHER_EXPRESSION_TYPE, expr_arg));
-                    break;
-                }
-
-                if (!TYPE_IS_TYPE(expr_type)) {
-                    expr_arg->value_type = typeid(TYPE_TYPE);
-                    expr_arg->expr_val = ast_node_val_word(WORDT(expr_type));
-                }
-
-                {
+                if (TYPE_IS_TYPE(expr_type) && expr_arg->expr_val.is_concrete) {
                     expr_arg->value_type = typeid(TYPE_TYPE);
                     expr_arg->expr_val = ast_node_val_word(WORDT(expr_arg->expr_val.word.as.t));
+                } else {
+                    expr_arg->value_type = typeid(TYPE_TYPE);
+                    expr_arg->expr_val = ast_node_val_word(WORDT(expr_type));
                 }
                 break;
             }
@@ -2501,7 +2504,13 @@ void resolve_expression(
                 expr->is_free_number = true;
 
                 unless (count == 1) {
-                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_LEN_REQUIRES_ONE_ARRAY_ARG, expr));
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = ERROR_ANALYSIS_LEN_REQUIRES_ONE_ARRAY_ARG,
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("'len' builtin requires exactly 1 argument but got $1.$ instead"),
+                        .args = ORERR_ARGS(error_arg_node(expr), error_arg_sz(count)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
                     break;
                 }
 
@@ -2512,7 +2521,13 @@ void resolve_expression(
                 typedata_t *argtd = ast_type2td(ast, arg_type);
 
                 if (argtd->kind != TYPE_ARRAY) {
-                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_LEN_REQUIRES_ONE_ARRAY_ARG, expr));
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = ERROR_ANALYSIS_LEN_REQUIRES_ONE_ARRAY_ARG,
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("'len' builtin takes 1 array argument but got '$1.$' instead"),
+                        .args = ORERR_ARGS(error_arg_node(arg), error_arg_type(arg->value_type)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
                     break;
                 }
 
@@ -2552,12 +2567,23 @@ void resolve_expression(
                         expr->is_free_number = cast_expr->is_free_number;
                     }
                 } else {
-                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INVALID_CAST, expr));
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = ERROR_ANALYSIS_INVALID_CAST,
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("cannot cast type '$1.$' to type '$2.$'"),
+                        .args = ORERR_ARGS(error_arg_node(expr), error_arg_type(cast_expr->value_type), error_arg_type(type_expr->expr_val.word.as.t)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
                 }
 
             } else {
-                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_LHS_REQUIRES_TYPE_KNOWN_AT_COMPILE_TIME, type_expr));
-                INVALIDATE(expr);
+                stan_error(analyzer, OR_ERROR(
+                    .tag = ERROR_ANALYSIS_EXPECTED_CONSTANT,
+                    .level = ERROR_SOURCE_ANALYSIS,
+                    .msg = lit2str("type expression for cast must be a type constant"),
+                    .args = ORERR_ARGS(error_arg_node(type_expr)),
+                    .show_code_lines = ORERR_LINES(0),
+                ));
             }
             break;
         }
@@ -2579,9 +2605,14 @@ static void declare_definition(analyzer_t *analyzer, scope_t *scope, ast_node_t 
     string_t identifier = sv2string(definition->identifier.view, tmp->allocator);
 
     if (table_get(s2w, scope->definitions, identifier, &def_word)) {
-        const char message[126];
-        snprintf((char*)message, 126, "Duplicate definition definition of '%.*s'.", (int)definition->start.view.length, definition->start.view.data);
-        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CANNOT_OVERLOAD_DEFINITION, definition));
+        ast_node_t *previous_decl = (ast_node_t*)def_word.as.p;
+        stan_error(analyzer, OR_ERROR(
+            .tag = ERROR_ANALYSIS_CANNOT_OVERLOAD_DEFINITION,
+            .level = ERROR_SOURCE_ANALYSIS,
+            .msg = lit2str("cannot have declarations with the same identifier '$0.$'"),
+            .args = ORERR_ARGS(error_arg_token(definition->identifier), error_arg_node(previous_decl)),
+            .show_code_lines = ORERR_LINES(0, 1),
+        ));
         return;
     }
 
@@ -2713,7 +2744,13 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
             if (TYPE_IS_UNRESOLVED(decl_type->value_type)) {
                 decl->value_type = typeid(TYPE_UNRESOLVED);
             } else {
-                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_EXPECTED_TYPE, decl_type));
+                stan_error(analyzer, OR_ERROR(
+                    .tag = ERROR_ANALYSIS_EXPECTED_TYPE,
+                    .level = ERROR_SOURCE_ANALYSIS,
+                    .msg = lit2str("expected type expression for declaration"),
+                    .args = ORERR_ARGS(error_arg_node(decl_type)),
+                    .show_code_lines = ORERR_LINES(0),
+                ));
                 INVALIDATE(decl);
             }
         } else if (TYPE_IS_RESOLVED(decl_type->value_type)) {
@@ -2730,13 +2767,20 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
         return;
     }
 
-    if (TYPE_IS_UNRESOLVED(decl->value_type) && state.scope->type == SCOPE_TYPE_FUNCDEF) {
-        add_definition(state.scope, ast->arena, decl->identifier.view, decl);
-        return;
-    }
+    // if (TYPE_IS_UNRESOLVED(decl->value_type) && state.scope->type == SCOPE_TYPE_FUNCDEF) {
+    //     declare_definition(analyzer, state.scope, decl);
+    //     return;
+    // }
 
     if (TYPE_IS_UNRESOLVED(init_expr->value_type) && TYPE_IS_UNRESOLVED(decl->value_type)) {
-        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CANNOT_INFER_NIL_VALUE, decl));
+        ASSERT(false, "don't thing this is possible??")
+        stan_error(analyzer, OR_ERROR(
+            .tag = ERROR_ANALYSIS_CANNOT_INFER_NIL_VALUE,
+            .level = ERROR_SOURCE_ANALYSIS,
+            .msg = lit2str("cannot infer nil value"),
+            .args = ORERR_ARGS(error_arg_node(decl)),
+            .show_code_lines = ORERR_LINES(0),
+        ));
         INVALIDATE(decl);
         INVALIDATE(init_expr);
         INVALIDATE(decl_type);
@@ -2775,7 +2819,9 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
         decl->expr_val = an_decl_expr(decl)->expr_val;
     }
     
-    add_definition(state.scope, ast->arena, decl->identifier.view, decl);
+    if (decl->is_mutable) {
+        declare_definition(analyzer, state.scope, decl);
+    }
 
     // bind it to intrinsic if intrinsic
     {
