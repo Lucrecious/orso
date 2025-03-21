@@ -30,6 +30,7 @@ enum error_arg_type_t {
     ERROR_ARG_TYPE_TOKEN,
     ERROR_ARG_TYPE_SIZE,
     ERROR_ARG_TYPE_TYPE,
+    ERROR_ARG_TYPE_PTR,
 };
 
 typedef struct ast_node_t ast_node_t;
@@ -41,6 +42,7 @@ struct error_arg_t {
     token_t token;
     size_t size;
     type_t type_type;
+    void *ptr;
 };
 
 #define MAX_ERROR_ARGS 8
@@ -85,6 +87,7 @@ error_arg_t error_arg_token(token_t token);
 error_arg_t error_arg_node(ast_node_t *node);
 error_arg_t error_arg_sz(size_t sz);
 error_arg_t error_arg_type(type_t type);
+error_arg_t error_arg_ptr(void *ptr);
 
 
 #endif

@@ -2790,7 +2790,13 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
     }
 
     if (TYPE_IS_VOID(decl->value_type)) {
-        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CANNOT_STORE_VOID_EXPRESSIONS, decl));
+        stan_error(analyzer, OR_ERROR(
+            .tag = ERROR_ANALYSIS_CANNOT_STORE_VOID_EXPRESSIONS,
+            .level = ERROR_SOURCE_ANALYSIS,
+            .msg = lit2str("cannot store void expressions"),
+            .args = ORERR_ARGS(error_arg_node(decl_type)),
+            .show_code_lines = ORERR_LINES(0),
+        ));
         INVALIDATE(decl);
     }
 
@@ -2803,7 +2809,14 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
         ast_node_t *casted_expr = cast_implicitly_if_necessary(ast, declared_type, decl_expr);
         unless (typeid_eq(declared_type, casted_expr->value_type)) {
             unless (TYPE_IS_INVALID(decl_expr->value_type)) {
-                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INITIAL_EXPR_TYPE_MISMATCH, decl));
+                stan_error(analyzer, OR_ERROR(
+                    .tag = ERROR_ANALYSIS_TYPE_MISMATCH,
+                    .level = ERROR_SOURCE_ANALYSIS,
+                    .msg = lit2str("declaration '$1.$' is delcared as a '$2.$' but got '$3.$' as its initial expression type"),
+                    .args = ORERR_ARGS(error_arg_node(decl),
+                        error_arg_token(decl->identifier), error_arg_type(decl->value_type), error_arg_type(init_expr->value_type)),
+                    .show_code_lines = ORERR_LINES(0),
+                ));
             }
         }
 
@@ -2822,7 +2835,13 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
     {
         if (decl->is_intrinsic) {
             unless (an_is_constant(decl)) {
-                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INTRINSIC_MUST_BE_CONSTANT, decl));
+                stan_error(analyzer, OR_ERROR(
+                    .tag = ERROR_ANALYSIS_INTRINSIC_MUST_BE_CONSTANT,
+                    .level = ERROR_SOURCE_ANALYSIS,
+                    .msg = lit2str("intrinsics must be constant"),
+                    .args = ORERR_ARGS(error_arg_node(decl)),
+                    .show_code_lines = ORERR_LINES(0),
+                ));
                 INVALIDATE(decl);
                 return;
             }
@@ -2830,7 +2849,13 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
             ASSERT(decl->expr_val.is_concrete, "should be there if its a constant");
 
             unless (TYPE_IS_TYPE(decl->value_type)) {
-                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INTRINSIC_DECLARATIONS_CAN_ONLY_BE_TYPES, decl));
+                stan_error(analyzer, OR_ERROR(
+                    .tag = ERROR_ANALYSIS_INTRINSIC_DECLARATIONS_CAN_ONLY_BE_TYPES,
+                    .level = ERROR_SOURCE_ANALYSIS,
+                    .msg = lit2str("intrinsic declarations can only be types but got '$1.$'"),
+                    .args = ORERR_ARGS(error_arg_node(decl), error_arg_type(decl->value_type)),
+                    .show_code_lines = ORERR_LINES(0),
+                ));
                 INVALIDATE(decl);
                 return;
             }
@@ -2839,7 +2864,13 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
             typedata_t *td = ast_type2td(ast, type);
 
             if (td->kind != TYPE_FUNCTION) {
-                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_ONLY_INTRINSIC_FUNCTIONS_ARE_SUPPORTED, an_decl_expr(decl)));
+                stan_error(analyzer, OR_ERROR(
+                    .tag = ERROR_ANALYSIS_INTRINSIC_DECLARATIONS_CAN_ONLY_BE_TYPES,
+                    .level = ERROR_SOURCE_ANALYSIS,
+                    .msg = lit2str("only intrinsic functions are supported but got '$1.$'"),
+                    .args = ORERR_ARGS(error_arg_node(decl), error_arg_type(type)),
+                    .show_code_lines = ORERR_LINES(0),
+                ));
                 INVALIDATE(decl);
                 return;
             }
@@ -2851,14 +2882,26 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
                 decl->expr_val = ast_node_val_word(WORDP(func));
                 decl->value_type = type_set_fetch_intrinsic_function(&ast->type_set, type);
             } else {
-                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INTRINSIC_NAME_DOES_NOT_EXIST, decl));
+                stan_error(analyzer, OR_ERROR(
+                    .tag = ERROR_ANALYSIS_INTRINSIC_DECLARATIONS_CAN_ONLY_BE_TYPES,
+                    .level = ERROR_SOURCE_ANALYSIS,
+                    .msg = lit2str("intrinsic name '$1.$' does not exist"),
+                    .args = ORERR_ARGS(error_arg_node(decl), error_arg_token(decl->identifier)),
+                    .show_code_lines = ORERR_LINES(0),
+                ));
                 INVALIDATE(decl);
             }
 
             allocator_return(tmp);
         } else if (TYPE_IS_INFERRED_FUNCTION(decl->value_type)) {
             if (decl->is_mutable) {
-                stan_error(analyzer, make_error_node(ERROR_ANALYSIS_INFERRED_FUNCDEF_CANNOT_BE_SET_TO_MUTABLE_VAR, decl));
+                stan_error(analyzer, OR_ERROR(
+                    .tag = ERROR_ANALYSIS_INFERRED_FUNCDEF_CANNOT_BE_SET_TO_MUTABLE_VAR,
+                    .level = ERROR_SOURCE_ANALYSIS,
+                    .msg = lit2str("an inferred function definition cannot be set to an immutable variable"),
+                    .args = ORERR_ARGS(error_arg_node(decl)),
+                    .show_code_lines = ORERR_LINES(0),
+                ));
                 INVALIDATE(decl);
             }
         }
@@ -2954,12 +2997,26 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
         decl = (ast_node_t*)def_slot.as.p;
 
         if (passed_local_fold_scope && decl->is_mutable) {
-            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_DEFINITION_DOES_NOT_EXIST_IN_THE_SAME_RUN_SCOPE, def));
+            stan_error(analyzer, OR_ERROR(
+                .tag = ERROR_ANALYSIS_DEFINITION_DOES_NOT_EXIST_IN_THE_SAME_RUN_SCOPE,
+                .level = ERROR_SOURCE_ANALYSIS,
+                .msg = lit2str("declaration for '$2.$' does not exist in the same run scope it's being used in"),
+                .args = ORERR_ARGS(error_arg_node(def), error_arg_node(decl),
+                    error_arg_token(decl->identifier)),
+                .show_code_lines = ORERR_LINES(0, 1),
+            ));
             return NULL;
         }
 
         if (passed_local_mutable_access_barrier && (*search_scope)->creator != NULL && decl->is_mutable) {
-            stan_error(analyzer, make_error_node(ERROR_ANALYSIS_CAN_ONLY_ACCESS_CONSTANTS_AND_GLOBALS, def));
+            stan_error(analyzer, OR_ERROR(
+                .tag = ERROR_ANALYSIS_DEFINITION_DOES_NOT_EXIST_IN_THE_SAME_RUN_SCOPE,
+                .level = ERROR_SOURCE_ANALYSIS,
+                .msg = lit2str("declaration for '$2.$' does not exist in the same run scope it's being used in"),
+                .args = ORERR_ARGS(error_arg_node(def), error_arg_node(decl),
+                    error_arg_token(decl->identifier)),
+                .show_code_lines = ORERR_LINES(0, 1),
+            ));
             return NULL;
         }
         
@@ -2979,7 +3036,13 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
     }
 
     unless (decl) {
-        stan_error(analyzer, make_error_node(ERROR_ANALYSIS_DEFINITION_DOES_NOT_EXIST, def));
+        stan_error(analyzer, OR_ERROR(
+            .tag = ERROR_ANALYSIS_DEFINITION_DOES_NOT_EXIST,
+            .level = ERROR_SOURCE_ANALYSIS,
+            .msg = lit2str("reference to undefined declaration '$1.$'"),
+            .args = ORERR_ARGS(error_arg_node(def), error_arg_token(def->identifier)),
+            .show_code_lines = ORERR_LINES(0),
+        ));
         return NULL;
     }
 
@@ -3008,7 +3071,21 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
             case AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION: {
                 function_t *pending_function = (function_t*)dep->expr_val.word.as.p;
                 if (passed_through_fold && function == pending_function) {
-                    stan_error(analyzer, make_error_node(ERROR_ANALYSIS_FUNCTION_PART_OF_CYCLICAL_DEPENDENCY, def));
+                    ast_nodes_t *deps = arena_alloc(ast->arena, sizeof(ast_nodes_t));
+                    *deps = (ast_nodes_t){.allocator=ast->arena};
+
+                    for (size_t j = i-1; j < analyzer->pending_dependencies.count; ++j) {
+                        ast_node_t *dep = analyzer->pending_dependencies.items[j];
+                        array_push(deps, dep);
+                    }
+
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = ERROR_ANALYSIS_COMPILE_TIME_CIRCULAR_DEPENDENCIES,
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("attempting to retrieve a constant with recursive compile-time dependencies"),
+                        .args = ORERR_ARGS(error_arg_node(def), error_arg_ptr(deps)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
                     return decl;
                 }
                 break;

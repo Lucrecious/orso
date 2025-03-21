@@ -3,27 +3,32 @@
 #include "tmp.h"
 
 error_arg_t error_arg_none(void) {
-    return (error_arg_t){.type=ERROR_ARG_TYPE_NONE, .token=nil_token, .node_or_null=NULL};
+    return (error_arg_t){.type=ERROR_ARG_TYPE_NONE};
 }
 
 error_arg_t error_arg_token(token_t token) {
-    return (error_arg_t){.type=ERROR_ARG_TYPE_TOKEN, .token=token, .node_or_null=NULL};
+    return (error_arg_t){.type=ERROR_ARG_TYPE_TOKEN, .token=token};
 }
 
 error_arg_t error_arg_node(ast_node_t *node) {
-    return (error_arg_t){.type=ERROR_ARG_TYPE_NODE, .token=nil_token, .node_or_null=node};
+    return (error_arg_t){.type=ERROR_ARG_TYPE_NODE, .node_or_null=node};
 }
 
 error_arg_t error_arg_sz(size_t sz) {
-    return (error_arg_t){.type=ERROR_ARG_TYPE_SIZE, .token=nil_token, .node_or_null=NULL, .size=sz};
+    return (error_arg_t){.type=ERROR_ARG_TYPE_SIZE, .size=sz};
 }
 
 error_arg_t error_arg_type(type_t type) {
-    return (error_arg_t){.type=ERROR_ARG_TYPE_TYPE, .token=nil_token, .node_or_null=NULL, .size=0, .type_type=type};
+    return (error_arg_t){.type=ERROR_ARG_TYPE_TYPE, .type_type=type};
+}
+
+error_arg_t error_arg_ptr(void *ptr) {
+    return (error_arg_t){.type=ERROR_ARG_TYPE_PTR, .ptr=ptr};
 }
 
 static texloc_t error_arg_loc(error_arg_t arg) {
     switch (arg.type) {
+    case ERROR_ARG_TYPE_PTR:
     case ERROR_ARG_TYPE_TYPE:
     case ERROR_ARG_TYPE_SIZE:
     case ERROR_ARG_TYPE_NONE: return (texloc_t){.column=0, .filepath=lit2str("<none>"), .line=0};
@@ -62,9 +67,11 @@ static string_t get_source_snippet(error_arg_t arg, arena_t *arena) {
     string_view_t view = source;
     size_t column_hint = 0;
     switch (arg.type) {
+    case ERROR_ARG_TYPE_PTR: break;
     case ERROR_ARG_TYPE_SIZE: break;
     case ERROR_ARG_TYPE_NONE: break;
     case ERROR_ARG_TYPE_TYPE: break;
+
     case ERROR_ARG_TYPE_TOKEN: {
         source = arg.token.source;
         view = arg.token.view;
@@ -230,6 +237,7 @@ static string_t error_format(string_t message_format, typedatas_t *tds, error_ar
                     sb_add_cstr(&sb, token_type_str);
                     break;
                 }
+                case ERROR_ARG_TYPE_PTR:
                 case ERROR_ARG_TYPE_SIZE: break;
                 case ERROR_ARG_TYPE_NODE: break;
                 case ERROR_ARG_TYPE_NONE: break;
@@ -248,7 +256,6 @@ static string_t error_format(string_t message_format, typedatas_t *tds, error_ar
                     }
                     break;
                 }
-                case ERROR_ARG_TYPE_NONE: break;
                 case ERROR_ARG_TYPE_TYPE: {
                     tmp_arena_t *tmp = allocator_borrow();
                     string_t s = type_to_string(*tds, arg.type_type, tmp->allocator);
@@ -258,9 +265,13 @@ static string_t error_format(string_t message_format, typedatas_t *tds, error_ar
                     allocator_return(tmp);
                     break;
                 }
+
+                case ERROR_ARG_TYPE_PTR:
+                case ERROR_ARG_TYPE_NONE: break;
                 }
             } else if (sv_eq(field_sv, lit2sv("type"))) {
                 switch (arg.type) {
+                case ERROR_ARG_TYPE_PTR:
                 case ERROR_ARG_TYPE_NONE:
                 case ERROR_ARG_TYPE_TOKEN:
                 case ERROR_ARG_TYPE_SIZE: break;
@@ -325,12 +336,28 @@ string_t error2richstring(ast_t *ast, error_t error, arena_t *arena) {
         if (i == 0) {
             sb_add_format(&sb, "%s error: %s:%llu:%llu: %s\n", error_level, loc.filepath.cstr, loc.line+1, loc.column+1, message.cstr);
         } else {
-            sb_add_format(&sb, ">> %s:%llu:%llu:\n", loc.filepath.cstr, loc.line+1, loc.column+1);
+            sb_add_format(&sb, "cont: %s:%llu:%llu:\n", loc.filepath.cstr, loc.line+1, loc.column+1);
         }
 
         sb_add_cstr(&sb, snippet.cstr);
         sb_add_cstr(&sb, "\n");
     }
+
+    if (error.tag == ERROR_ANALYSIS_COMPILE_TIME_CIRCULAR_DEPENDENCIES) {
+        sb_add_cstr(&sb, "dependency list:\n");
+        ast_nodes_t *deps = error.args[1].ptr;
+        for (size_t i = deps->count; i > 0; --i) {
+            ast_node_t *dep = deps->items[i-1];
+
+            string_t snippet = get_source_snippet(error_arg_node(dep), tmp->allocator);
+            texloc_t loc = error_arg_loc(error_arg_node(dep));
+
+            sb_add_format(&sb, "  %s:%llu:%llu:\n", loc.filepath.cstr, loc.line+1, loc.column+1);
+            sb_add_format(&sb, "%s\n", snippet.cstr);
+        }
+    }
+
+    sb_add_cstr(&sb, "\n");
 
     string_t result = sb_render(&sb, arena);
 

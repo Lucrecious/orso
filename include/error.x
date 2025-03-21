@@ -92,7 +92,7 @@ X(ERROR_ANALYSIS_CANNOT_ACCESS_MUTABLE_ON_DIFFERENT_FOLD_LEVEL, "cannot access m
 X(ERROR_ANALYSIS_DEFINITION_DOES_NOT_EXIST, "definition does not exist", ANALYSIS)
 X(ERROR_ANALYSIS_DEFINITION_DOES_NOT_EXIST_IN_THE_SAME_RUN_SCOPE, "definition does not exist in the same run scope as where it's being evaluated", ANALYSIS)
 X(ERROR_ANALYSIS_CAN_ONLY_ACCESS_CONSTANTS_AND_GLOBALS, "only function locals, constants in higher scopes, and globals are accessible from within a function definition", ANALYSIS)
-X(ERROR_ANALYSIS_FUNCTION_PART_OF_CYCLICAL_DEPENDENCY, "function is defined circularly", ANALYSIS)
+X(ERROR_ANALYSIS_COMPILE_TIME_CIRCULAR_DEPENDENCIES, "function is defined circularly", ANALYSIS)
 X(ERROR_ANALYSIS_TYPE_INFERENCE_DECL_HAS_NOT_BEEN_RESOLVED, "type has not been inferred", ANALYSIS)
 X(ERROR_ANALYSIS_CANNOT_OVERLOAD_DEFINITION, "cannot overload definition", ANALYSIS)
 X(ERROR_ANALYSIS_CANNOT_FOLD_ON_ERRORED_FUNCTION_DEFINITION, "cannot fold on errored function definition", ANALYSIS)
