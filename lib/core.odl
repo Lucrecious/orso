@@ -1,21 +1,21 @@
 // core lib
 
-// @intrinsic mreserve :: (size_t) -> &void;
-// @intrinsic mmarkro :: (&void, size_t) -> bool;
-// @intrinsic mmarkrw :: (&void, size_t) -> bool;
-// @intrinsic mfree :: (&void, size_t) -> bool;
-// @intrinsic mpagesize :: () -> size_t;
+@intrinsic mreserve :: (size_t) -> &void;
+@intrinsic mmarkro :: (&void, size_t) -> bool;
+@intrinsic mmarkrw :: (&void, size_t) -> bool;
+@intrinsic mfree :: (&void, size_t) -> bool;
+@intrinsic mpagesize :: () -> size_t;
 
-// @intrinsic clock_ns :: () -> u64;
+@intrinsic clock_ns :: () -> u64;
 
-// @intrinsic readint :: () -> int;
+@intrinsic readint :: () -> int;
 
-// @intrinsic printint :: (int) -> void;
-// @intrinsic printf64 :: (f64) -> void;
-// @intrinsic printu64 :: (u64) -> void;
-// @intrinsic prints64 :: (s64) -> void;
-// @intrinsic println :: () -> void;
+@intrinsic printint :: (int) -> void;
+@intrinsic printf64 :: (f64) -> void;
+@intrinsic printu64 :: (u64) -> void;
+@intrinsic prints64 :: (s64) -> void;
+@intrinsic println :: () -> void;
 
-// ns2sec :: (ns: u64) -> f64 {
-//     return (ns as f64)*0.000_000_001;
-// };
+ns2sec :: (ns: u64) -> f64 {
+    return (ns as f64)*0.000_000_001;
+};
