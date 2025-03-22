@@ -94,7 +94,11 @@ static void emit_reg_to_reg(function_t *function, texloc_t loc, reg_t reg_dst, r
 
 static void emit_addr_to_reg(gen_t *gen, function_t *function, texloc_t loc, reg_mov_size_t mov_size, reg_t reg_dest, reg_t reg_src, size_t offset) {
     if (offset > ORIN_UINTARG_MAX) {
-        gen_error(gen, make_error_no_args(ERROR_CODEGEN_OFFSET_TOO_LARGE));
+        gen_error(gen, OR_ERROR(
+            .tag = ERROR_CODEGEN_OFFSET_TOO_LARGE,
+            .msg = lit2str("index $0.$ is too large for constant access"),
+            .args = ORERR_ARGS(error_arg_sz(offset))
+        ));
         return;
     }
 
@@ -126,7 +130,11 @@ static void emit_addr_to_reg(gen_t *gen, function_t *function, texloc_t loc, reg
 
 static void emit_reg_to_addr(gen_t *gen, function_t *function, texloc_t loc, reg_mov_size_t mov_size, reg_t reg_dest, reg_t reg_src, size_t offset) {
     if (offset > ORIN_UINTARG_MAX) {
-        gen_error(gen, make_error_no_args(ERROR_CODEGEN_OFFSET_TOO_LARGE));
+        gen_error(gen, OR_ERROR(
+            .tag = ERROR_CODEGEN_OFFSET_TOO_LARGE,
+            .msg = lit2str("index $0.$ is too large for constant access"),
+            .args = ORERR_ARGS(error_arg_sz(offset))
+        ));
         return;
     }
 
@@ -239,14 +247,23 @@ static void emit_push_reg(gen_t *gen, texloc_t loc, function_t *function, reg_t 
     size_t size_in_words = b2w(size_bytes)*WORD_SIZE;
     gen->stack_size += (mov_size == REG_MOV_SIZE_MULTIWORD_ADDR) ? size_in_words : WORD_SIZE;
 
-    if (size_bytes > UINT32_MAX) {
-        gen_error(gen, make_error_no_args(ERROR_CODEGEN_DATA_TOO_LARGE_TO_PUSH_TO_STACK));
+    if (size_bytes > ORIN_UINTARG_MAX) {
+        gen_error(gen, OR_ERROR(
+            .tag = ERROR_CODEGEN_OFFSET_TOO_LARGE,
+            .msg = lit2str("index $0.$ is too large for constant access"),
+            .args = ORERR_ARGS(error_arg_sz(size_bytes))
+        ));
         return;
     }
 
-    if (gen->stack_size > UINT32_MAX && !gen->breached_stack_limit) {
+    // todo: actually check the stack size by looking at the vm stack size
+    if (gen->stack_size > ORIN_UINTARG_MAX && !gen->breached_stack_limit) {
         gen->breached_stack_limit = true;
-        gen_error(gen, make_error_no_args(ERROR_CODEGEN_STACK_SIZE_GROWS_LARGER_THAN_UINT32_MAX));
+        gen_error(gen, OR_ERROR(
+            .tag = ERROR_CODEGEN_STACK_SIZE_GROWS_LARGER_THAN_UINT32_MAX,
+            .msg = lit2str("index $0.$ is too large for constant access"),
+            .args = ORERR_ARGS(error_arg_sz(size_bytes))
+        ));
         return;
     }
 
@@ -561,8 +578,12 @@ static size_t gen_jmp_if_reg(function_t *function, texloc_t location, reg_t cond
 
 static void gen_patch_jmp(gen_t *gen, function_t *function, size_t index) {
     size_t amount = function->code.count - index;
-    if (amount > UINT32_MAX) {
-        gen_error(gen, make_error_no_args(ERROR_CODEGEN_JMP_TOO_LARGE));
+    if (amount > ORIN_UINTARG_MAX) {
+        gen_error(gen, OR_ERROR(
+            .tag = ERROR_CODEGEN_JMP_TOO_LARGE,
+            .msg = lit2str("jmp amount $0.$ is too large"),
+            .args = ORERR_ARGS(error_arg_sz(amount))
+        ));
         return;
     }
 
@@ -804,11 +825,6 @@ static void gen_expr_val(gen_t *gen, function_t *function, ast_node_t *expressio
 
     typedata_t *type_info = type2typedata(&gen->ast->type_set.types, expression->value_type);
 
-    // this ensures the data is always indexable
-    if (function->memory->count+type_info->size >= function->memory->capacity) {
-        gen_error(gen, make_error_node(ERROR_CODEGEN_MEMORY_SIZE_TOO_BIG, expression));
-    }
-
     ast_node_val_t val_ = expression->expr_val;
     if (val_override.is_concrete) val_ = val_override;
 
@@ -1026,8 +1042,12 @@ static size_t gen_jmp(function_t *function, texloc_t location) {
 
 static void gen_loop(gen_t *gen, function_t *function, texloc_t location, size_t loop_index) {
     size_t amount = function->code.count - loop_index;
-    if (amount > UINT32_MAX) {
-        gen_error(gen, make_error_no_args(ERROR_CODEGEN_JMP_TOO_LARGE));
+    if (amount > ORIN_UINTARG_MAX) {
+        gen_error(gen, OR_ERROR(
+            .tag = ERROR_CODEGEN_JMP_TOO_LARGE,
+            .msg = lit2str("jmp amount $0.$ is too large"),
+            .args = ORERR_ARGS(error_arg_sz(amount))
+        ));
         return;
     }
     instruction_t in = {0};
