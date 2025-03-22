@@ -21,7 +21,7 @@ u64 clock(void) {
 u64 clock_ns(void) {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (u64)(ts.tv_sec * 1000000000ULL + ts.tv_nsec);
+    return (u64)((unsigned long long)ts.tv_sec * 1000000000ULL + (unsigned long long)ts.tv_nsec);
 }
 
 void *odlmreserve(size_t size) {

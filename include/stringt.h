@@ -50,8 +50,8 @@ string_t string_copy(string_t s, arena_t *allocator);
 
 size_t string2size(string_t s);
 
-s64 cstrn_to_u64(const char* text, s32 length);
-f64 cstrn_to_f64(const char* text, s32 length);
+u64 cstrn_to_u64(const char* text, size_t length);
+f64 cstrn_to_f64(const char* text, size_t length);
 
 #define cstr2sv(cstr) (string_view_t){.data=(cstr), .length=strlen(cstr)}
 string_view_t string2sv(string_t string);
@@ -100,7 +100,7 @@ string_t string_format(const cstr_t format, arena_t *allocator, ...) {
 
 	int size = vsnprintf(NULL, 0, format, args) + 1;
 
-	char *buffer = (char*)arena_alloc(allocator, size * sizeof(char));
+	char *buffer = (char*)arena_alloc(allocator, (size < 0 ? 0 : (size_t)size) * sizeof(char));
 
     va_end(args);
 
@@ -108,7 +108,7 @@ string_t string_format(const cstr_t format, arena_t *allocator, ...) {
 
 	va_end(args_copy);
 
-	return (string_t){ .cstr = buffer, .length = size - 1 };
+	return (string_t){ .cstr = buffer, .length = (size_t)(size < 0 ? 0 : size - 1) };
 }
 
 strings_t string_split(cstr_t cstr, cstr_t delimiters, arena_t *allocator) {
@@ -226,7 +226,7 @@ void sb_add_format(string_builder_t *sb, cstr_t format, ...) {
 
     tmp_arena_t *tmp = allocator_borrow();
 
-	char *buffer = arena_alloc(tmp->allocator, (size + 1));
+	char *buffer = arena_alloc(tmp->allocator, (size_t)(size + 1));
 
 	va_start(args, format);
 	vsnprintf(buffer, size + 1, format, args);
@@ -243,28 +243,28 @@ string_t sb_render(string_builder_t *builder, arena_t *allocator) {
     return cstrn2string(builder->items, builder->count, allocator);
 }
 
-s64 cstrn_to_u64(const char* text, s32 length) {
-    s64 integer = 0;
+u64 cstrn_to_u64(const char* text, size_t length) {
+    u64 integer = 0;
 
-    for (s32 i = 0; i < length; i++) {
+    for (size_t i = 0; i < length; i++) {
         char digit = text[i];
         if (digit == '_') {
             continue;
         }
 
-        s32 ones = text[i] - '0';
+        int ones = text[i] - '0';
         if (ones < 0 || ones > 9) {
             break;
         }
 
         integer *= 10;
-        integer += ones;
+        integer += (u64)ones;
     }
 
     return integer;
 }
 
-f64 cstrn_to_f64(const char* text, s32 length) {
+f64 cstrn_to_f64(const char* text, size_t length) {
     f64 value = 0;
     f64 fact = 1;
     bool point_seen = false;

@@ -17,7 +17,7 @@
 #define println(cstr) printf(cstr"\n");
 #define printfln(fmt, ...) printf(fmt"\n", __VA_ARGS__)
 
-#define megabytes(bytes) ((bytes)*1000*1000)
+#define megabytes(bytes) ((size_t)((bytes)*1000*1000))
 
 typedef u8 byte;
 typedef void* ptr;
@@ -38,11 +38,11 @@ FORCE_INLINE s32 maxs32(s32 a, s32 b) {
   return a > b ? a : b;
 }
 
-FORCE_INLINE u32 minu32(s32 a, s32 b) {
+FORCE_INLINE u32 minu32(u32 a, u32 b) {
   return a < b ? a : b;
 }
 
-FORCE_INLINE u32 maxu32(s32 a, s32 b) {
+FORCE_INLINE u32 maxu32(u32 a, u32 b) {
   return a > b ? a : b;
 }
 

@@ -151,7 +151,7 @@ int main(int argc, char **argv) {
 
     c_builder_t cb = {.allocator=&allocator};
     cb.std = cb_std_c99;
-    cb_flags(&cb, 3, "-Wall", "-Wextra", "-fsanitize=address");
+    cb_flags(&cb, 3, "-Wall", "-Wextra", "-Wconversion", "-fsanitize=address");
 
     cb_include(&cb, "./include");
     cb_include(&cb, "./lib");

@@ -21,11 +21,11 @@ struct local_t {
     ast_node_t *ref_decl;
 };
 
-static int ptr_hash__(void *id) {
+static khint_t ptr_hash__(void *id) {
     return kh_int64_hash_func((khint64_t)id);
 }
 
-static int ptr_eq__(void *a, void *b) {
+static khint_t ptr_eq__(void *a, void *b) {
     return a == b;
 }
 
@@ -86,17 +86,19 @@ enum reg_mov_size_t {
 static void emit_reg_to_reg(function_t *function, texloc_t loc, reg_t reg_dst, reg_t reg_src) {
     instruction_t in = {0};
     in.op = OP_MOV_REG_TO_REG;
-    in.as.mov_reg_to_reg.reg_destination = reg_dst;
-    in.as.mov_reg_to_reg.reg_source = reg_src;
+    in.as.mov_reg_to_reg.reg_destination = (byte)reg_dst;
+    in.as.mov_reg_to_reg.reg_source = (byte)reg_src;
 
     emit_instruction(function, loc, in);
 }
 
 static void emit_addr_to_reg(gen_t *gen, function_t *function, texloc_t loc, reg_mov_size_t mov_size, reg_t reg_dest, reg_t reg_src, size_t offset) {
-    if (offset > UINT32_MAX) {
+    if (offset > ORIN_UINTARG_MAX) {
         gen_error(gen, make_error_no_args(ERROR_CODEGEN_OFFSET_TOO_LARGE));
         return;
     }
+
+    u32 offst = (u32)offset;
 
     instruction_t in = {0};
     switch (mov_size) {
@@ -115,18 +117,20 @@ static void emit_addr_to_reg(gen_t *gen, function_t *function, texloc_t loc, reg
     case REG_MOV_SIZE_MULTIWORD_ADDR: in.op = OP_MOVWORD_ADDR_TO_REG; break;
     }
 
-    in.as.mov_reg_to_reg.reg_destination = reg_dest;
-    in.as.mov_reg_to_reg.reg_source = reg_src;
-    in.as.mov_reg_to_reg.byte_offset = (u32)offset;
+    in.as.mov_reg_to_reg.reg_destination = (byte)reg_dest;
+    in.as.mov_reg_to_reg.reg_source = (byte)reg_src;
+    in.as.mov_reg_to_reg.byte_offset = offst;
 
     emit_instruction(function, loc, in);
 }
 
 static void emit_reg_to_addr(gen_t *gen, function_t *function, texloc_t loc, reg_mov_size_t mov_size, reg_t reg_dest, reg_t reg_src, size_t offset) {
-    if (offset > UINT32_MAX) {
+    if (offset > ORIN_UINTARG_MAX) {
         gen_error(gen, make_error_no_args(ERROR_CODEGEN_OFFSET_TOO_LARGE));
         return;
     }
+
+    u32 offst = (u32)offset;
 
     instruction_t in = {0};
     switch (mov_size) {
@@ -146,22 +150,30 @@ static void emit_reg_to_addr(gen_t *gen, function_t *function, texloc_t loc, reg
     case REG_MOV_SIZE_MULTIWORD_ADDR: in.op = OP_MOVWORD_REG_TO_ADDR; break;
     }
 
-    in.as.mov_reg_to_reg.reg_destination = reg_dest;
-    in.as.mov_reg_to_reg.reg_source = reg_src;
-    in.as.mov_reg_to_reg.byte_offset = (u32)offset;
+    in.as.mov_reg_to_reg.reg_destination = (byte)reg_dest;
+    in.as.mov_reg_to_reg.reg_source = (byte)reg_src;
+    in.as.mov_reg_to_reg.byte_offset = offst;
 
     emit_instruction(function, loc, in);
 }
 
 
-static void emit_binu_reg_im(function_t *function, texloc_t loc, byte reg_dest, byte reg_op, u32 immediate, char plus_or_minus) {
-    instruction_t in = {0};
-    in.op = plus_or_minus == '-' ? OP_SUBU_IM : OP_ADDU_IM;
-    in.as.binu_reg_immediate.immediate = immediate;
-    in.as.binu_reg_immediate.reg_operand = reg_op;
-    in.as.binu_reg_immediate.reg_result = reg_dest;
+static void emit_binu_reg_im(function_t *function, texloc_t loc, reg_t reg_dest, reg_t reg_op, size_t immediate, char plus_or_minus) {
+    bool first_time = true;
+    while (immediate > 0) {
+        size_t op_amount = immediate < ORIN_UINTARG_MAX ? immediate : ORIN_UINTARG_MAX;
 
-    emit_instruction(function, loc, in);
+        instruction_t in = {0};
+        in.op = plus_or_minus == '-' ? OP_SUBU_IM : OP_ADDU_IM;
+        in.as.binu_reg_immediate.immediate = (u32)op_amount;
+        in.as.binu_reg_immediate.reg_operand = (byte)(first_time ? reg_op : reg_dest);
+        in.as.binu_reg_immediate.reg_result = (byte)reg_dest;
+
+        emit_instruction(function, loc, in);
+
+        immediate -= op_amount;
+        first_time = false;
+    }
 }
 
 static reg_mov_size_t type2movsize(gen_t *gen, type_t t) {
@@ -258,14 +270,16 @@ static void emit_pop_to_reg(gen_t *gen, texloc_t loc, function_t *function, reg_
     emit_binu_reg_im(function, loc, REG_STACK_BOTTOM, REG_STACK_BOTTOM, (u32)sizeof(word_t), '+');
 }
 
-static void emit_popn_bytes(gen_t *gen, function_t *function, u32 pop_size_bytes, texloc_t loc, bool decrement_stack) {
-    if (pop_size_bytes == 0) return; // noop
+static void emit_popn_bytes(gen_t *gen, function_t *function, size_t pop_size_bytes, texloc_t loc, bool decrement_stack) {
+    while (pop_size_bytes > 0) {
+        size_t pop_amount = pop_size_bytes < ORIN_UINTARG_MAX ? pop_size_bytes : ORIN_UINTARG_MAX;
+        if (decrement_stack) {
+            gen->stack_size -= pop_amount;
+        }
+        emit_binu_reg_im(function, loc, REG_STACK_BOTTOM, REG_STACK_BOTTOM, pop_amount, '+');
 
-    if (decrement_stack) {
-        gen->stack_size -= pop_size_bytes;
+        pop_size_bytes -= pop_amount;
     }
-
-    emit_binu_reg_im(function, loc, REG_STACK_BOTTOM, REG_STACK_BOTTOM, pop_size_bytes, '+');
 }
 
 static void emit_bin_op(texloc_t loc, function_t *function, token_type_t token_type, typedata_t *type_info, reg_t op1, reg_t op2, reg_t result) {
@@ -428,8 +442,8 @@ static void emit_unary(gen_t *gen, texloc_t loc, function_t *function, token_typ
     switch (token_type) {
         case TOKEN_NOT: {
             instruction_t in = {0};
-            in.as.unary_reg_to_reg.reg_op = op1;
-            in.as.unary_reg_to_reg.reg_result = result;
+            in.as.unary_reg_to_reg.reg_op = (byte)op1;
+            in.as.unary_reg_to_reg.reg_result = (byte)result;
 
             switch (td->kind) {
                 case TYPE_BOOL: in.op = OP_NOT; break;
@@ -442,8 +456,8 @@ static void emit_unary(gen_t *gen, texloc_t loc, function_t *function, token_typ
 
         case TOKEN_MINUS: {
             instruction_t in = {0};
-            in.as.unary_reg_to_reg.reg_op = op1;
-            in.as.unary_reg_to_reg.reg_result = result;
+            in.as.unary_reg_to_reg.reg_op = (byte)op1;
+            in.as.unary_reg_to_reg.reg_result = (byte)result;
 
             switch (td->kind) {
                 case TYPE_NUMBER: {
@@ -492,9 +506,9 @@ static void emit_intrinsic_call(function_t *function, reg_t callee, reg_t reg_ar
     instruction_t in = {0};
     in.op = OP_INTRINSIC_CALL;
     in.as.call.reg_op = (byte)callee;
-    in.as.call.reg_arg_bottom_memaddr = reg_arg_bottom_memaddr;
+    in.as.call.reg_arg_bottom_memaddr = (byte)reg_arg_bottom_memaddr;
     in.as.call.reg_result = REG_RESULT;
-    in.as.call.reg_result_size = reg_result_size;
+    in.as.call.reg_result_size = (byte)reg_result_size;
 
     emit_instruction(function, loc, in);
 }
@@ -537,7 +551,7 @@ static size_t gen_jmp_if_reg(function_t *function, texloc_t location, reg_t cond
     instruction_t instruction = {0};
     instruction.op = OP_JMP_IF_COND;
     instruction.as.jmp.amount = 0;
-    instruction.as.jmp.condition_reg = condition_reg;
+    instruction.as.jmp.condition_reg = (byte)condition_reg;
     instruction.as.jmp.check_for = jmp_condition;
 
     size_t index = function->code.count;
@@ -558,15 +572,19 @@ static void gen_patch_jmp(gen_t *gen, function_t *function, size_t index) {
 
 static void add_constant(gen_t *gen, function_t *function, texloc_t loc, void *data, size_t size, reg_t reg_destination_ptr) {
     size_t index = memarr_push(function->memory, data, size);
-    if (index > UINT_MAX) {
-        gen_error(gen, make_error_no_args(ERROR_CODEGEN_MEMORY_SIZE_TOO_BIG));
+    if (index > ORIN_UINTARG_MAX) {
+        gen_error(gen, OR_ERROR(
+            .tag = ERROR_CODEGEN_MEMORY_SIZE_TOO_BIG,
+            .msg = lit2str("index $0.$ is too large for constant access"),
+            .args = ORERR_ARGS(error_arg_sz(index))
+        ));
         return;
     }
 
     instruction_t in = {0};
     in.op = OP_LOAD_ADDR;
     in.as.load_addr.memaddr = (u32)index;
-    in.as.load_addr.reg_dest = reg_destination_ptr;
+    in.as.load_addr.reg_dest = (byte)reg_destination_ptr;
 
     emit_instruction(function, loc, in);
 }
@@ -954,18 +972,29 @@ static void gen_block_decls(gen_t *gen, function_t *function, ast_node_t *block)
     }
 }
 
-static void gen_global_addr(texloc_t loc, function_t *function, size_t index, reg_t reg_dest) {
+static void gen_global_addr(gen_t *gen, texloc_t loc, function_t *function, size_t index, reg_t reg_dest) {
+    if (index > ORIN_UINTARG_MAX) {
+        gen_error(gen, OR_ERROR(
+            .tag = ERROR_CODEGEN_OFFSET_TOO_LARGE,
+            .msg = lit2str("index $0.$ for global address is too large"),
+            .args = ORERR_ARGS(error_arg_sz(index))
+        ));
+        return;
+    }
+
+    u32 idx = (u32)index;
+
     instruction_t in = {0};
     in.op = OP_LOAD_ADDR;
-    in.as.load_addr.reg_dest = reg_dest;
-    in.as.load_addr.memaddr = index;
+    in.as.load_addr.reg_dest = (byte)reg_dest;
+    in.as.load_addr.memaddr = idx;
     emit_instruction(function, loc, in);
 }
 
 static void gen_def_value(gen_t *gen, function_t *function, ast_node_t *def) {
     size_t global_index;
     if (table_get(ptr2sz, gen->decl2index, def->ref_decl, &global_index)) {
-        gen_global_addr(token_end_loc(&def->end), function, global_index, REG_RESULT);
+        gen_global_addr(gen, token_end_loc(&def->end), function, global_index, REG_RESULT);
 
         emit_addr_to_reg(gen, function, token_end_loc(&def->end), type2movsize(gen, def->value_type), REG_RESULT, REG_RESULT, 0);
     } else {
@@ -995,7 +1024,7 @@ static size_t gen_jmp(function_t *function, texloc_t location) {
     return index;
 }
 
-static void gen_loop(gen_t *gen, function_t *function, texloc_t location, u32 loop_index) {
+static void gen_loop(gen_t *gen, function_t *function, texloc_t location, size_t loop_index) {
     size_t amount = function->code.count - loop_index;
     if (amount > UINT32_MAX) {
         gen_error(gen, make_error_no_args(ERROR_CODEGEN_JMP_TOO_LARGE));
@@ -1347,9 +1376,9 @@ static void emit_cast(gen_t *gen, function_t *function, type_t dest, type_t sour
             size_t amount = sizeof((op_code_t[]){__VA_ARGS__})/sizeof(op_code_t); \
             for (size_t i = 0; i < amount; ++i) { \
                 instruction_t in = {0}; \
-                in.op = ins[i]; \
-                in.as.casting.reg_op = REG_RESULT; \
-                in.as.casting.reg_result = REG_RESULT; \
+                in.op = (byte)ins[i]; \
+                in.as.casting.reg_op = (byte)REG_RESULT; \
+                in.as.casting.reg_result = (byte)REG_RESULT; \
                 emit_instruction(function, loc, in); \
             } \
         }} while(false)
@@ -1533,7 +1562,8 @@ static void gen_initializer_list(gen_t *gen, function_t *function, ast_node_t *l
                 emit_reg_to_reg(function, token_end_loc(&list->end), REG_RESULT, REG_STACK_BOTTOM);
             } else {
                 emit_addr_to_reg(gen, function, token_end_loc(&list->end), REG_MOV_SIZE_WORD, REG_RESULT, REG_STACK_BOTTOM, 0);
-                emit_popn_bytes(gen, function, b2w(list_type_td->size)*WORD_SIZE, list->start.loc, true);
+                size_t pop_amount = b2w(list_type_td->size)*WORD_SIZE;
+                emit_popn_bytes(gen, function, pop_amount, list->start.loc, true);
             }
             break;
         }
@@ -1662,7 +1692,7 @@ static void gen_module(gen_t *gen, ast_node_t *module, function_t *init_func) {
         size_t index = gen_global_decldef(gen, decldef);
 
         ast_node_t *type_expr = an_decl_type(decldef);
-        gen_global_addr(token_end_loc(&type_expr->end), init_func, index, REG_RESULT);
+        gen_global_addr(gen, token_end_loc(&type_expr->end), init_func, index, REG_RESULT);
         emit_push_reg(gen, token_end_loc(&type_expr->end), init_func, REG_RESULT, REG_MOV_SIZE_WORD, 0);
 
         ast_node_t *expr = an_decl_expr(decldef);

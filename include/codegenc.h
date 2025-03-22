@@ -13,8 +13,8 @@ void compile_ast_to_c(ast_t *ast, string_builder_t *sb);
 #ifdef CODEGENC_IMPLEMENTATION
 #include "memarr.h"
 
-khint64_t hashptr_(void *ptr) {
-    return (u64)ptr;
+khint_t hashptr_(void *ptr) {
+    return (khint_t)(u64)ptr;
 }
 
 bool hasheq_(void *a, void *b) {

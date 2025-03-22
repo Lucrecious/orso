@@ -62,7 +62,7 @@ error_source_t error_sources[] = {
 
 
 
-static int type_hash(type_t id) {
+static khint_t type_hash(type_t id) {
     return kh_int64_hash_func((khint64_t)id.i);
 }
 
@@ -91,8 +91,8 @@ uint32_t fnv1_hash__(string_t s) {
 implement_table(s2w, string_t, word_t, fnv1_hash__, streq___)
 implement_table(s2n, string_t, ast_node_t*, fnv1_hash__, streq___)
 
-static khint64_t hashptr_(void *ptr) {
-    return (u64)ptr;
+static khint_t hashptr_(void *ptr) {
+    return (khint_t)(u64)ptr;
 }
 
 static bool hasheq_(void *a, void *b) {
@@ -931,7 +931,7 @@ static ast_node_t *parse_number(parser_t *parser) {
 
             ast_node_t *primary;
             if (do_signed) {
-                primary = ast_primaryi(parser->ast, value, type, parser->previous);
+                primary = ast_primaryi(parser->ast, (s32)value, type, parser->previous);
             } else {
                 primary = ast_primaryu(parser->ast, value, type, parser->previous);
             }

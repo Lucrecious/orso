@@ -35,8 +35,8 @@ bool type_equal(typedata_t *a, typedata_t *b) {
             return true;
         }
         case TYPE_STRUCT: {
-            s32 a_name_length = a->as.struct_.name ? strlen(a->as.struct_.name) : 0;
-            s32 b_name_length = b->as.struct_.name ? strlen(b->as.struct_.name) : 0;
+            size_t a_name_length = a->as.struct_.name ? strlen(a->as.struct_.name) : 0;
+            size_t b_name_length = b->as.struct_.name ? strlen(b->as.struct_.name) : 0;
             if (a_name_length != b_name_length) {
                 return false;
             }
@@ -54,8 +54,8 @@ bool type_equal(typedata_t *a, typedata_t *b) {
                     return false;
                 }
 
-                s32 field_name_length_a = strlen(a->as.struct_.fields[i].name);
-                s32 field_name_length_b = strlen(b->as.struct_.fields[i].name);
+                size_t field_name_length_a = strlen(a->as.struct_.fields[i].name);
+                size_t field_name_length_b = strlen(b->as.struct_.fields[i].name);
                 if (field_name_length_a != field_name_length_b) {
                     return false;
                 }

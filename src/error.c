@@ -58,7 +58,7 @@ static string_view_t get_line(string_view_t source, string_view_t somewhere_in_s
         ++e;
     }
 
-    string_view_t view = {.length = e - s, .data = s};
+    string_view_t view = {.length = (size_t)(e - s), .data = s};
     return view;
 }
 
@@ -251,7 +251,7 @@ static string_t error_format(string_t message_format, typedatas_t *tds, error_ar
                     if (arg.node_or_null) {
                         string_view_t sv;
                         sv.data = arg.node_or_null->start.view.data;
-                        sv.length = arg.node_or_null->end.view.data + arg.node_or_null->end.view.length - sv.data;
+                        sv.length = (size_t)arg.node_or_null->end.view.data + arg.node_or_null->end.view.length - (size_t)sv.data;
                         sb_add_format(&sb, "%.*s", sv.length, sv.data);
                     }
                     break;
@@ -319,7 +319,7 @@ string_t error2richstring(ast_t *ast, error_t error, arena_t *arena) {
     string_t message = error_format(error.msg, &ast->type_set.types, error.args, tmp->allocator);
 
     for (size_t i = 0; i < error.show_line_count; ++i) {
-        size_t arg_index = error.show_code_lines[i];
+        s64 arg_index = error.show_code_lines[i];
         error_arg_t arg = error.args[arg_index];
         string_t snippet = get_source_snippet(arg, tmp->allocator);
 

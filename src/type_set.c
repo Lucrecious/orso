@@ -37,12 +37,12 @@ typedata_t *struct_type_new(type_table_t *set, struct_field_t *fields, s32 field
     struct_type->size = (size_t)total_size;
 
     if (field_count > 0) {
-        struct_type->as.struct_.fields = ALLOC_N(struct_field_t, field_count);
+        struct_type->as.struct_.fields = ALLOC_N(struct_field_t, (size_t)field_count);
 
         for (s32 i = 0; i < field_count; i++) {
             struct_type->as.struct_.fields[i] = fields[i];
 
-            s32 length = strlen(fields[i].name);
+            size_t length = strlen(fields[i].name);
             char* name = ALLOC_N(char, length + 1);
             memcpy(name, fields[i].name, length);
             name[length] = '\0';
@@ -52,12 +52,12 @@ typedata_t *struct_type_new(type_table_t *set, struct_field_t *fields, s32 field
     }
 
     if (constant_count > 0) {
-        struct_type->as.struct_.constants = ALLOC_N(struct_constant_t, constant_count);
+        struct_type->as.struct_.constants = ALLOC_N(struct_constant_t, (size_t)constant_count);
 
         for (s32 i = 0; i < constant_count; i++) {
             struct_type->as.struct_.constants[i] = constants[i];
 
-            s32 length = strlen(constants[i].name);
+            size_t length = strlen(constants[i].name);
             char* name = ALLOC_N(char, length + 1);
             memcpy(name, constants[i].name, length);
             name[length] = '\0';
@@ -116,7 +116,7 @@ typedata_t *type_copy_new(type_table_t *set, typedata_t *type) {
             type->as.struct_.field_count,
             type->as.struct_.constants,
             type->as.struct_.constant_count,
-            type->size);
+            (s32)type->size);
     }
 
     if (type->kind == TYPE_POINTER) {
@@ -274,7 +274,7 @@ bool type_is_pointer(typedatas_t types, type_t type) {
     return type2typedata(&types, type)->kind == TYPE_POINTER;
 }
 
-static u64 hash_type(typedata_t *type) {
+static khint_t hash_type(typedata_t *type) {
 #define ADD_HASH(HASH, APPEND) HASH ^= APPEND; HASH *= 16777619
 
     u32 hash = 2166136261u;
@@ -292,13 +292,13 @@ static u64 hash_type(typedata_t *type) {
         ASSERT(type->as.struct_.name == NULL, "only anonymous structs are hashed");
         ASSERT(type->as.struct_.constant_count == 0, "only anonymous structs without constants can be hashed");
 
-        ADD_HASH(hash, type->as.struct_.field_count);
+        ADD_HASH(hash, (u32)type->as.struct_.field_count);
 
         for (s32 i = 0; i < type->as.struct_.field_count; i++) {
             char* name = type->as.struct_.fields[i].name;
-            s32 length = strlen(name);
-            for (s32 i = 0; i < length; i++) {
-                ADD_HASH(hash, name[i]);
+            size_t length = strlen(name);
+            for (size_t i = 0; i < length; i++) {
+                ADD_HASH(hash, (u32)name[i]);
             }
             
             ADD_HASH(hash, (u64)(type->as.struct_.fields[i].type.i));
@@ -432,14 +432,14 @@ type_t type_set_fetch_anonymous_struct(type_table_t *set, s32 field_count, struc
             type_t previous_type = fields[i - 1].type;
             typedata_t *previous_type_info = type2typedata(&set->types, previous_type);
 
-            s32 bytes = b2w(previous_type_info->size) * WORD_SIZE;
-            type_info->as.struct_.fields[i].offset = previous_offset + bytes;
+            size_t bytes = b2w(previous_type_info->size) * WORD_SIZE;
+            type_info->as.struct_.fields[i].offset = (s32)((size_t)previous_offset + bytes);
         }
 
         type_t field_type= type_info->as.struct_.fields[field_count-1].type;
         typedata_t *field_type_info = type2typedata(&set->types, field_type);
-        s32 size_of_final = b2w(field_type_info->size) * WORD_SIZE;
-        s32 total_size = type_info->as.struct_.fields[field_count - 1].offset + size_of_final;
+        size_t size_of_final = b2w(field_type_info->size) * WORD_SIZE;
+        size_t total_size = (size_t)type_info->as.struct_.fields[field_count - 1].offset + size_of_final;
 
         type_info->size = total_size;
     }
@@ -452,7 +452,7 @@ type_t type_create_struct(type_table_t *set, cstr_t name, s32 name_length, typed
 
     if (anonymous_struct->as.struct_.constant_count == 0) {
         typedata_t *new_type_info = type_copy_new(set, anonymous_struct);
-        new_type_info->as.struct_.name = ALLOC_N(char, name_length + 1);
+        new_type_info->as.struct_.name = ALLOC_N(char, (size_t)(name_length + 1));
         memcpy(new_type_info->as.struct_.name, name, name_length);
         new_type_info->as.struct_.name[name_length] = '\0';
 

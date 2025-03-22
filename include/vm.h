@@ -135,6 +135,10 @@ enum op_code_t {
     OP_RETURN,
 };
 
+// ORIN = orso instruction
+#define ORIN_UINTARG_MAX UINT32_MAX
+static_assert(ORIN_UINTARG_MAX <= UINT32_MAX && ORIN_UINTARG_MAX < SIZE_T_MAX, "must be smaller than size_t_max and uint32_max");
+
 // todo: reduce from 12 to 8 bytes
 typedef struct instruction_t instruction_t;
 struct instruction_t {
@@ -443,11 +447,11 @@ void vm_step(vm_t *vm) {
 
         // conversion to unsigned for wrapped operation on overflow but converted back to integer after (c is ub for signed overflow)
         #define case_bini_reg_reg(name, op, type) case OP_##name: {\
-            s64 a = vm->registers[in.as.bin_reg_to_reg.reg_op1].as.type; \
-            s64 b = vm->registers[in.as.bin_reg_to_reg.reg_op2].as.type; \
+            type##64 a = vm->registers[in.as.bin_reg_to_reg.reg_op1].as.type; \
+            type##64 b = vm->registers[in.as.bin_reg_to_reg.reg_op2].as.type; \
             byte c = in.as.bin_reg_to_reg.reg_result; \
             num_size_t sz = in.as.bin_reg_to_reg.size; \
-            s64 result = 0; \
+            type##64 result = 0; \
             switch (sz) {\
             case NUM_SIZE_8: {\
                 result = op##type##8_(a, b);\

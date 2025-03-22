@@ -357,7 +357,7 @@ bool debugger_step(debugger_t *debugger, vm_t *vm) {
     } else if (cstr_eq(command.cstr, "mem")) {
         if (command_n_args.count == 2) {
             string_t arg = command_n_args.items[1];
-            u32 memaddr = string2size(arg);
+            size_t memaddr = string2size(arg);
 
             
             memarr_t *memarr = vm->call_frame.function->memory;

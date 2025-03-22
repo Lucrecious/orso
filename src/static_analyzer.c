@@ -1098,7 +1098,7 @@ static void ast_copy_expr_val_to_memory(ast_t *ast, ast_node_t *expr, void *dest
     }
 
     case TYPE_BOOL: {
-        u8 val = expr->expr_val.word.as.u;
+        u8 val = (u8)expr->expr_val.word.as.u;
         memcpy(dest, &val, sizeof(u8));
         break;
     }

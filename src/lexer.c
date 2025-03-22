@@ -32,8 +32,8 @@ static token_t create_token(lexer_t *lexer, token_type_t type) {
     token_t token = { 
         .source = lexer->source,
         .type = type,
-        .view = {.length=lexer->current - lexer->start, .data = lexer->start},
-        .loc = texloc(lexer->file_path, lexer->line, lexer->start - (lexer->line_start + 1)),
+        .view = {.length=(size_t)(lexer->current - lexer->start), .data = lexer->start},
+        .loc = texloc(lexer->file_path, (size_t)lexer->line, (size_t)(lexer->start - (lexer->line_start + 1))),
     };
 
     return token;
@@ -44,7 +44,7 @@ static token_t error_token(lexer_t *lexer, string_view_t message_view) {
         .source = lexer->source,
         .type = TOKEN_ERROR,
         .view = message_view,
-        .loc = texloc(lexer->file_path, lexer->line, lexer->current - lexer->line_start),
+        .loc = texloc(lexer->file_path, (size_t)lexer->line, (size_t)(lexer->current - lexer->line_start)),
     };
     
     return token;
@@ -259,7 +259,7 @@ static token_t number(lexer_t *lexer) {
 static token_type_t check_keyword(lexer_t *lexer, s32 start, s32 length,
         const char* rest, token_type_t type) {
     if (lexer->current - lexer->start == start + length &&
-        memcmp(lexer->start + start, rest, length)== 0) {
+        memcmp(lexer->start + start, rest, (size_t)length)== 0) {
         return type;
     }
 

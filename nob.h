@@ -633,7 +633,7 @@ void nob__go_rebuild_urself(const char *source_path, int argc, char **argv)
     }
 
     nob_cmd_append(&cmd, binary_path);
-    nob_da_append_many(&cmd, argv, argc);
+    nob_da_append_many(&cmd, argv, (size_t)argc);
     if (!nob_cmd_run_sync_and_reset(&cmd)) exit(1);
     exit(0);
 }
@@ -705,7 +705,7 @@ bool nob_copy_file(const char *src_path, const char *dst_path)
         }
         char *buf2 = buf;
         while (n > 0) {
-            ssize_t m = write(dst_fd, buf2, n);
+            ssize_t m = write(dst_fd, buf2, (size_t)n);
             if (m < 0) {
                 nob_log(NOB_ERROR, "Could not write to file %s: %s", dst_path, strerror(errno));
                 nob_return_defer(false);
@@ -1157,7 +1157,7 @@ Nob_File_Type nob_get_file_type(const char *path)
     struct stat statbuf;
     if (stat(path, &statbuf) < 0) {
         nob_log(NOB_ERROR, "Could not get stat of %s: %s", path, strerror(errno));
-        return -1;
+        return (Nob_File_Type)-1;
     }
 
     switch (statbuf.st_mode & S_IFMT) {
@@ -1259,7 +1259,7 @@ char *nob_temp_sprintf(const char *format, ...)
     va_end(args);
 
     NOB_ASSERT(n >= 0);
-    char *result = nob_temp_alloc(n + 1);
+    char *result = nob_temp_alloc((size_t)n + 1);
     NOB_ASSERT(result != NULL && "Extend the size of the temporary allocator");
     // TODO: use proper arenas for the temporary allocator;
     va_start(args, format);
@@ -1343,7 +1343,7 @@ int nob_needs_rebuild(const char *output_path, const char **input_paths, size_t 
         nob_log(NOB_ERROR, "could not stat %s: %s", output_path, strerror(errno));
         return -1;
     }
-    int output_path_time = statbuf.st_mtime;
+    long output_path_time = statbuf.st_mtime;
 
     for (size_t i = 0; i < input_paths_count; ++i) {
         const char *input_path = input_paths[i];
@@ -1352,7 +1352,7 @@ int nob_needs_rebuild(const char *output_path, const char **input_paths, size_t 
             nob_log(NOB_ERROR, "could not stat %s: %s", input_path, strerror(errno));
             return -1;
         }
-        int input_path_time = statbuf.st_mtime;
+        long input_path_time = statbuf.st_mtime;
         // NOTE: if even a single input_path is fresher than output_path that's 100% rebuild
         if (input_path_time > output_path_time) return 1;
     }
@@ -1407,14 +1407,14 @@ bool nob_read_entire_file(const char *path, Nob_String_Builder *sb)
     if (m < 0)                     nob_return_defer(false);
     if (fseek(f, 0, SEEK_SET) < 0) nob_return_defer(false);
 
-    size_t new_count = sb->count + m;
+    size_t new_count = sb->count + (size_t)m;
     if (new_count > sb->capacity) {
         sb->items = realloc(sb->items, new_count);
         NOB_ASSERT(sb->items != NULL && "Buy more RAM lool!!");
         sb->capacity = new_count;
     }
 
-    fread(sb->items + sb->count, m, 1, f);
+    fread(sb->items + sb->count, (unsigned long)m, 1, f);
     if (ferror(f)) {
         // TODO: Afaik, ferror does not set errno. So the error reporting in defer is not correct in this case.
         nob_return_defer(false);
