@@ -57,6 +57,7 @@ void myerror(ast_t *ast, error_t error) {
     error_source_t error_source = error_sources[error.type];
 
     switch (error_source) {
+    case ERROR_SOURCE_CODEGEN:
     case ERROR_SOURCE_PARSEREX:
     case ERROR_SOURCE_ANALYSIS:
     case ERROR_SOURCE_PARSER: {
@@ -66,8 +67,6 @@ void myerror(ast_t *ast, error_t error) {
         allocator_return(tmp);
         break;
     }
-
-    case ERROR_SOURCE_CODEGEN: break;
     }
 }
 

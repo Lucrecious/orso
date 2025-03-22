@@ -96,6 +96,7 @@ static void emit_addr_to_reg(gen_t *gen, function_t *function, texloc_t loc, reg
     if (offset > ORIN_UINTARG_MAX) {
         gen_error(gen, OR_ERROR(
             .tag = ERROR_CODEGEN_OFFSET_TOO_LARGE,
+            .level = ERROR_SOURCE_CODEGEN,
             .msg = lit2str("index $0.$ is too large for constant access"),
             .args = ORERR_ARGS(error_arg_sz(offset))
         ));
@@ -132,6 +133,7 @@ static void emit_reg_to_addr(gen_t *gen, function_t *function, texloc_t loc, reg
     if (offset > ORIN_UINTARG_MAX) {
         gen_error(gen, OR_ERROR(
             .tag = ERROR_CODEGEN_OFFSET_TOO_LARGE,
+            .level = ERROR_SOURCE_CODEGEN,
             .msg = lit2str("index $0.$ is too large for constant access"),
             .args = ORERR_ARGS(error_arg_sz(offset))
         ));
@@ -250,6 +252,7 @@ static void emit_push_reg(gen_t *gen, texloc_t loc, function_t *function, reg_t 
     if (size_bytes > ORIN_UINTARG_MAX) {
         gen_error(gen, OR_ERROR(
             .tag = ERROR_CODEGEN_OFFSET_TOO_LARGE,
+            .level = ERROR_SOURCE_CODEGEN,
             .msg = lit2str("index $0.$ is too large for constant access"),
             .args = ORERR_ARGS(error_arg_sz(size_bytes))
         ));
@@ -261,6 +264,7 @@ static void emit_push_reg(gen_t *gen, texloc_t loc, function_t *function, reg_t 
         gen->breached_stack_limit = true;
         gen_error(gen, OR_ERROR(
             .tag = ERROR_CODEGEN_STACK_SIZE_GROWS_LARGER_THAN_UINT32_MAX,
+            .level = ERROR_SOURCE_CODEGEN,
             .msg = lit2str("index $0.$ is too large for constant access"),
             .args = ORERR_ARGS(error_arg_sz(size_bytes))
         ));
@@ -581,6 +585,7 @@ static void gen_patch_jmp(gen_t *gen, function_t *function, size_t index) {
     if (amount > ORIN_UINTARG_MAX) {
         gen_error(gen, OR_ERROR(
             .tag = ERROR_CODEGEN_JMP_TOO_LARGE,
+            .level = ERROR_SOURCE_CODEGEN,
             .msg = lit2str("jmp amount $0.$ is too large"),
             .args = ORERR_ARGS(error_arg_sz(amount))
         ));
@@ -596,6 +601,7 @@ static void add_constant(gen_t *gen, function_t *function, texloc_t loc, void *d
     if (index > ORIN_UINTARG_MAX) {
         gen_error(gen, OR_ERROR(
             .tag = ERROR_CODEGEN_MEMORY_SIZE_TOO_BIG,
+            .level = ERROR_SOURCE_CODEGEN,
             .msg = lit2str("index $0.$ is too large for constant access"),
             .args = ORERR_ARGS(error_arg_sz(index))
         ));
@@ -992,6 +998,7 @@ static void gen_global_addr(gen_t *gen, texloc_t loc, function_t *function, size
     if (index > ORIN_UINTARG_MAX) {
         gen_error(gen, OR_ERROR(
             .tag = ERROR_CODEGEN_OFFSET_TOO_LARGE,
+            .level = ERROR_SOURCE_CODEGEN,
             .msg = lit2str("index $0.$ for global address is too large"),
             .args = ORERR_ARGS(error_arg_sz(index))
         ));
@@ -1045,6 +1052,7 @@ static void gen_loop(gen_t *gen, function_t *function, texloc_t location, size_t
     if (amount > ORIN_UINTARG_MAX) {
         gen_error(gen, OR_ERROR(
             .tag = ERROR_CODEGEN_JMP_TOO_LARGE,
+            .level = ERROR_SOURCE_CODEGEN,
             .msg = lit2str("jmp amount $0.$ is too large"),
             .args = ORERR_ARGS(error_arg_sz(amount))
         ));

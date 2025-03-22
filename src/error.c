@@ -318,20 +318,24 @@ string_t error2richstring(ast_t *ast, error_t error, arena_t *arena) {
 
     string_t message = error_format(error.msg, &ast->type_set.types, error.args, tmp->allocator);
 
+    cstr_t error_level = "";
+    switch (error.level) {
+    case ERROR_SOURCE_PARSEREX:
+    case ERROR_SOURCE_PARSER: error_level = "syntax"; break;
+    case ERROR_SOURCE_ANALYSIS: error_level = "semantic"; break;
+    case ERROR_SOURCE_CODEGEN: error_level = "codegen"; break;
+    }
+
+    if (error.show_line_count == 0) {
+        sb_add_format(&sb, "%s error: %s\n", error_level, message.cstr);
+    }
+
     for (size_t i = 0; i < error.show_line_count; ++i) {
         s64 arg_index = error.show_code_lines[i];
         error_arg_t arg = error.args[arg_index];
         string_t snippet = get_source_snippet(arg, tmp->allocator);
 
         texloc_t loc = error_arg_loc(arg);
-
-        cstr_t error_level = "";
-        switch (error.level) {
-        case ERROR_SOURCE_PARSEREX:
-        case ERROR_SOURCE_PARSER: error_level = "syntax"; break;
-        case ERROR_SOURCE_ANALYSIS: error_level = "semantic"; break;
-        case ERROR_SOURCE_CODEGEN: error_level = "codegen"; break;
-        }
 
         if (i == 0) {
             sb_add_format(&sb, "%s error: %s:%llu:%llu: %s\n", error_level, loc.filepath.cstr, loc.line+1, loc.column+1, message.cstr);
