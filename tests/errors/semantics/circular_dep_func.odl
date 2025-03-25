@@ -1,0 +1,13 @@
+main :: () -> void {
+    T :: () -> int;
+
+    A :: () -> T {
+        return B;
+    };
+
+    B :: () -> int {
+        return @run A()();
+    };
+
+    0;
+};

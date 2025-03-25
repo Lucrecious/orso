@@ -1601,11 +1601,11 @@ static void gen_initializer_list(gen_t *gen, function_t *function, ast_node_t *l
 }
 
 static void gen_block(gen_t *gen, function_t *function, ast_node_t *block) {
-    size_t stack_point = gen_stack_point(gen);
     typedata_t *td = ast_type2td(gen->ast, block->value_type);
     if (td->size > WORD_SIZE) {
-        stack_point += b2w(td->size)*WORD_SIZE;
+        emit_reserve_stack_space(gen, block->start.loc, function, b2w(td->size)*WORD_SIZE);
     }
+    size_t stack_point = gen_stack_point(gen);
     gen_block_decls(gen, function, block);
     gen_pop_until_stack_point(gen, function, token_end_loc(&block->end), stack_point, true);
 }

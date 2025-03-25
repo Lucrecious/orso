@@ -1,4 +1,11 @@
 main :: () -> void {
-    x := [10]int.{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-    x;
+    arr := [10]int.{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+    for i := 0; i < len(arr); ++i do printint(arr[i]);
+    println();
+
+    {
+        arr = [10]int.{1, 2};
+        for i := 0; i < len(arr); ++i do printint(arr[i]);
+        println();
+    };
 };

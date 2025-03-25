@@ -962,6 +962,56 @@ static ast_node_t *find_realized_funcdef_or_null_by_inferred_types(inferred_func
     return NULL;
 }
 
+static void stan_circular_dependency_error(analyzer_t *analyzer, ast_t *ast, ast_node_t *def, size_t dep_start_index) {
+    ast_nodes_t *deps = arena_alloc(ast->arena, sizeof(ast_nodes_t));
+    *deps = (ast_nodes_t){.allocator=ast->arena};
+
+    for (size_t j = dep_start_index; j < analyzer->pending_dependencies.count; ++j) {
+        ast_node_t *dep = analyzer->pending_dependencies.items[j];
+        array_push(deps, dep);
+    }
+
+    stan_error(analyzer, OR_ERROR(
+        .tag = ERROR_ANALYSIS_COMPILE_TIME_CIRCULAR_DEPENDENCIES,
+        .level = ERROR_SOURCE_ANALYSIS,
+        .msg = lit2str("attempting to retrieve a constant with recursive compile-time dependencies"),
+        .args = ORERR_ARGS(error_arg_node(def), error_arg_ptr(deps)),
+        .show_code_lines = ORERR_LINES(0),
+    ));
+}
+
+static size_t stan_function_is_building(analyzer_t *analyzer, function_t *function) {
+    bool passed_through_fold = false;
+    for (size_t i = analyzer->pending_dependencies.count; i > 0; --i) {
+        ast_node_t *dep = analyzer->pending_dependencies.items[i-1];
+
+        switch (dep->node_type) {
+        case AST_NODE_TYPE_EXPRESSION_DIRECTIVE: passed_through_fold = true; break;
+        case AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION: {
+            function_t *pending_function = (function_t*)dep->expr_val.word.as.p;
+            if (passed_through_fold && function == pending_function) {
+                return i-1;
+            }
+            break;
+        }
+
+        default: continue;
+        }
+    }
+
+    return analyzer->pending_dependencies.count;
+}
+
+static size_t stan_declaration_is_recursive(analyzer_t *analyzer, ast_node_t *decl) {
+    for (size_t i = analyzer->pending_dependencies.count; i > 0; --i) {
+        ast_node_t *dep = analyzer->pending_dependencies.items[i-1];
+        if (dep->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION) break;
+        if (dep == decl) return i-1;
+    }
+
+    return analyzer->pending_dependencies.count;
+}
+
 void resolve_expression(
         analyzer_t *analyzer,
         ast_t *ast,
@@ -1006,6 +1056,8 @@ static ast_node_t *stan_realize_inferred_funcdef_or_error_and_null(analyzer_t *a
             ast_node_t *implicit_constant_decl = ast_decldef(analyzer->ast, pattern.identifier, implicit_type_decl, implicit_init_expr);
             implicit_constant_decl->is_mutable = false;
 
+            declare_definition(analyzer, new_state.scope, implicit_constant_decl);
+
             resolve_declaration_definition(analyzer, analyzer->ast, new_state, implicit_constant_decl);
         }
     }
@@ -1015,22 +1067,20 @@ static ast_node_t *stan_realize_inferred_funcdef_or_error_and_null(analyzer_t *a
         result = find_realized_funcdef_or_null_by_inferred_types(inferred_funcdef->realized_funcdef_copies, matched_values);
         unless(result) {
             result = ast_node_copy(analyzer->ast, inferred_funcdef);
-            for (size_t i = an_func_def_arg_start(result); i < an_func_def_arg_end(result); ++i) {
-                ast_node_t *param = result->children.items[i];
-                param->value_type = typeid(TYPE_UNRESOLVED);
+
+            {
+                matched_values_t matched_values_ = {.allocator=analyzer->ast->arena};
+                for (size_t i = 0; i < matched_values.count; ++i) array_push(&matched_values_, matched_values.items[i]);
+
+                inferred_funcdef_copy_t copy = {
+                    .key = matched_values_,
+                    .funcdef = result,
+                };
+
+                array_push(&inferred_funcdef->realized_funcdef_copies, copy);
             }
 
             resolve_funcdef(analyzer, analyzer->ast, new_state, result);
-
-            matched_values_t matched_values_ = {.allocator=analyzer->ast->arena};
-            for (size_t i = 0; i < matched_values.count; ++i) array_push(&matched_values_, matched_values.items[i]);
-
-            inferred_funcdef_copy_t copy = {
-                .key = matched_values_,
-                .funcdef = result,
-            };
-
-            array_push(&inferred_funcdef->realized_funcdef_copies, copy);
         }
     }
 
@@ -2188,13 +2238,18 @@ void resolve_expression(
         }
 
         case AST_NODE_TYPE_EXPRESSION_BRANCHING: {
+            scope_t branch_scope = {0};
+            analysis_state_t branch_state = state;
+            scope_init(&branch_scope, analyzer->ast->arena, SCOPE_TYPE_JMPABLE, state.scope, expr);
+            branch_state.scope = &branch_scope;
+
             if (an_is_notnone(an_for_decl(expr))) {
-                resolve_declaration(analyzer, ast, state, an_for_decl(expr));
+                resolve_declaration(analyzer, ast, branch_state, an_for_decl(expr));
             }
 
             {
                 scope_t condition_scope = {0};
-                scope_init(&condition_scope, ast->arena, SCOPE_TYPE_CONDITION, state.scope, an_condition(expr));
+                scope_init(&condition_scope, ast->arena, SCOPE_TYPE_CONDITION, branch_state.scope, an_condition(expr));
 
                 analysis_state_t cond_state = state;
                 cond_state.scope = &condition_scope;
@@ -2202,31 +2257,13 @@ void resolve_expression(
                 resolve_expression(analyzer, ast, cond_state, typeid(TYPE_UNRESOLVED), an_condition(expr));
             }
 
-            scope_t return_scope = {0};
-            analysis_state_t return_state = state;
-
-            switch (expr->branch_type) {
-
-                case BRANCH_TYPE_FOR:
-                case BRANCH_TYPE_DO:
-                case BRANCH_TYPE_LOOPING: {
-                    scope_init(&return_scope, analyzer->ast->arena, SCOPE_TYPE_JMPABLE, state.scope, expr);
-
-                    return_state = state;
-                    return_state.scope = &return_scope;
-                    break;
-                }
-
-                case BRANCH_TYPE_IFTHEN: break;
-            }
-
             if (an_is_notnone(an_for_incr(expr))) {
-                resolve_expression(analyzer, ast, state, typeid(TYPE_UNRESOLVED), an_for_incr(expr));
+                resolve_expression(analyzer, ast, branch_state, typeid(TYPE_UNRESOLVED), an_for_incr(expr));
             }
 
-            resolve_expression(analyzer, ast, return_state, implicit_type, an_then(expr));
+            resolve_expression(analyzer, ast, branch_state, implicit_type, an_then(expr));
 
-            resolve_expression(analyzer, ast, state, implicit_type, an_else(expr));
+            resolve_expression(analyzer, ast, branch_state, implicit_type, an_else(expr));
 
             type_t branch_type = resolve_block_return_types(ast, expr);
             expr->value_type = branch_type;
@@ -2338,6 +2375,13 @@ void resolve_expression(
                 ast_node_t *inferred_funcdef = (ast_node_t*)callee->expr_val.word.as.p;
 
                 ast_node_t *realized_funcdef = stan_realize_inferred_funcdef_or_error_and_null(analyzer, state, expr, inferred_funcdef);
+                {
+                    function_t *function = (function_t*)realized_funcdef->expr_val.word.as.p;
+                    size_t dep_start = stan_function_is_building(analyzer, function);
+                    if (dep_start < analyzer->pending_dependencies.count) {
+                        stan_circular_dependency_error(analyzer, ast, callee, dep_start);
+                    }
+                }
 
                 unless (realized_funcdef) {
                     INVALIDATE(expr);
@@ -2731,6 +2775,8 @@ static void forward_scan_inferred_types(ast_node_t *decl, ast_node_t *decl_type,
 }
 
 static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, analysis_state_t state, ast_node_t *decl) {
+    array_push(&analyzer->pending_dependencies, decl);
+
     ast_node_t *decl_type = an_decl_type(decl);
     if (TYPE_IS_UNRESOLVED(decl->value_type)) {
         analysis_state_t new_state = state;
@@ -2762,6 +2808,8 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
     if (TYPE_IS_UNRESOLVED(an_decl_expr(decl)->value_type) && decl->type_decl_patterns.count == 0) {
         resolve_expression(analyzer, ast, state, decl->value_type, init_expr);
     }
+
+    --analyzer->pending_dependencies.count;
 
     if (TYPE_IS_INVALID(decl->value_type)) {
         return;
@@ -3008,7 +3056,7 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
             return NULL;
         }
 
-        if (passed_local_mutable_access_barrier && (*search_scope)->creator != NULL && decl->is_mutable) {
+        if (passed_local_mutable_access_barrier && decl->is_mutable) {
             stan_error(analyzer, OR_ERROR(
                 .tag = ERROR_ANALYSIS_DEFINITION_DOES_NOT_EXIST_IN_THE_SAME_RUN_SCOPE,
                 .level = ERROR_SOURCE_ANALYSIS,
@@ -3024,14 +3072,16 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
     }
     
     // check core module
-    ast_node_t *module = get_module_or_null(ast, str(CORE_MODULE_NAME));
-    ASSERT(module, "core should be there");
+    unless (decl) {
+        ast_node_t *module = get_module_or_null(ast, str(CORE_MODULE_NAME));
+        ASSERT(module, "core should be there");
 
-    for (size_t i = 0; i < module->children.count; ++i) {
-        ast_node_t *module_decl = module->children.items[i];
-        if (sv_eq(def->identifier.view, module_decl->identifier.view)) {
-            decl = module_decl;
-            break;
+        for (size_t i = 0; i < module->children.count; ++i) {
+            ast_node_t *module_decl = module->children.items[i];
+            if (sv_eq(def->identifier.view, module_decl->identifier.view)) {
+                decl = module_decl;
+                break;
+            }
         }
     }
 
@@ -3046,54 +3096,38 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
         return NULL;
     }
 
-    if (decl->node_type == AST_NODE_TYPE_DECLARATION_DEFINITION) {
-        if (TYPE_IS_UNRESOLVED(decl->value_type)) {
-            analysis_state_t new_state = state;
-            new_state.scope = *search_scope;
-            resolve_declaration_definition(analyzer, ast, new_state, decl);
+    MUST(decl->node_type == AST_NODE_TYPE_DECLARATION_DEFINITION);
+
+    if (TYPE_IS_UNRESOLVED(decl->value_type)) {
+        analysis_state_t new_state = state;
+        new_state.scope = *search_scope;
+        size_t dep_start = stan_declaration_is_recursive(analyzer, decl);
+        if (dep_start < analyzer->pending_dependencies.count) {
+            stan_circular_dependency_error(analyzer, ast, def, dep_start);
+            return NULL;
         }
-    } else {
-        return decl;
+
+        resolve_declaration_definition(analyzer, ast, new_state, decl);
     }
 
     #undef NEXT_SCOPE
 
     typedata_t *td = ast_type2td(ast, decl->value_type);
-    if (td->kind == TYPE_FUNCTION) {
+    switch (td->kind) {
+    case TYPE_FUNCTION: {
         ASSERT(decl->expr_val.is_concrete, "should be constant and thus should be concrete");
+
         function_t *function = (function_t*)decl->expr_val.word.as.p;
-        bool passed_through_fold = false;
-        for (size_t i = analyzer->pending_dependencies.count; i > 0; --i) {
-            ast_node_t *dep = analyzer->pending_dependencies.items[i-1];
-
-            switch (dep->node_type) {
-            case AST_NODE_TYPE_EXPRESSION_DIRECTIVE: passed_through_fold = true; break;
-            case AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION: {
-                function_t *pending_function = (function_t*)dep->expr_val.word.as.p;
-                if (passed_through_fold && function == pending_function) {
-                    ast_nodes_t *deps = arena_alloc(ast->arena, sizeof(ast_nodes_t));
-                    *deps = (ast_nodes_t){.allocator=ast->arena};
-
-                    for (size_t j = i-1; j < analyzer->pending_dependencies.count; ++j) {
-                        ast_node_t *dep = analyzer->pending_dependencies.items[j];
-                        array_push(deps, dep);
-                    }
-
-                    stan_error(analyzer, OR_ERROR(
-                        .tag = ERROR_ANALYSIS_COMPILE_TIME_CIRCULAR_DEPENDENCIES,
-                        .level = ERROR_SOURCE_ANALYSIS,
-                        .msg = lit2str("attempting to retrieve a constant with recursive compile-time dependencies"),
-                        .args = ORERR_ARGS(error_arg_node(def), error_arg_ptr(deps)),
-                        .show_code_lines = ORERR_LINES(0),
-                    ));
-                    return decl;
-                }
-                break;
-            }
-
-            default: UNREACHABLE(); break;
-            }
+        size_t dep_start = stan_function_is_building(analyzer, function);
+        if (dep_start < analyzer->pending_dependencies.count) {
+            stan_circular_dependency_error(analyzer, ast, def, dep_start);
         }
+        break;
+    }
+
+    default:  {
+        break;
+    }
     }
 
     return decl;
@@ -3202,7 +3236,7 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
         if (analyzer->run_vm) {
             function = new_function(analyzer->run_vm->program_mem, analyzer->run_vm->arena);
         } else {
-            function = &analyzer->placeholder;
+            UNREACHABLE();
         }
 
         funcdef->expr_val = ast_node_val_word(WORDP(function));

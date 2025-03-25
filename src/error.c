@@ -350,11 +350,16 @@ string_t error2richstring(ast_t *ast, error_t error, arena_t *arena) {
     if (error.tag == ERROR_ANALYSIS_COMPILE_TIME_CIRCULAR_DEPENDENCIES) {
         sb_add_cstr(&sb, "dependency list:\n");
         ast_nodes_t *deps = error.args[1].ptr;
-        for (size_t i = deps->count; i > 0; --i) {
-            ast_node_t *dep = deps->items[i-1];
+        for (size_t i = 0; i < deps->count; ++i) {
+            ast_node_t *dep = deps->items[i];
 
             string_t snippet = get_source_snippet(error_arg_node(dep), tmp->allocator);
             texloc_t loc = error_arg_loc(error_arg_node(dep));
+
+            typedata_t *td = ast_type2td(ast, dep->value_type);
+            if (td->kind == TYPE_FUNCTION) {
+                sb_add_format(&sb, "signature: %s\n", type_to_string(ast->type_set.types, dep->value_type, tmp->allocator).cstr);
+            }
 
             sb_add_format(&sb, "  %s:%llu:%llu:\n", loc.filepath.cstr, loc.line+1, loc.column+1);
             sb_add_format(&sb, "%s\n", snippet.cstr);
