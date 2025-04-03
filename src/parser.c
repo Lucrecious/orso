@@ -193,8 +193,6 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start) {
     node->ccode_continue_label = lit2str("");
     node->ccode_var_name = lit2str("");
 
-    node->foldable = false;
-    node->fold_level_resolved_at = -1;
     node->is_mutable = false;
     node->is_exported = false;
     node->is_intrinsic = false;
@@ -329,8 +327,6 @@ ast_node_t *ast_node_copy(ast_t *ast, ast_node_t *node) {
     copy->condition_negated = node->condition_negated;
     copy->end = node->end;
     copy->expr_val = node->expr_val;
-    copy->fold_level_resolved_at = node->fold_level_resolved_at;
-    copy->foldable = node->foldable;
     copy->identifier = node->identifier;
 
     copy->is_exported = node->is_exported;

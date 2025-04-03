@@ -273,7 +273,6 @@ static bool fold_funcsig_or_error(analyzer_t *analyzer, ast_t *ast, ast_node_t *
 
     word_t funcsig_word = WORDU(function_type.i);
 
-    expression->foldable = true;
     expression->expr_val = ast_node_val_word(funcsig_word);
 
     result = true;
@@ -2069,7 +2068,6 @@ void resolve_expression(
             expr->value_type = decl->value_type;
 
             if (!decl->is_mutable) {
-                expr->foldable = true;
                 expr->expr_val = decl->expr_val;
             }
             break;

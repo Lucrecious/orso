@@ -269,9 +269,6 @@ struct ast_node_t {
     ast_node_t *ref_decl;
     type_patterns_t type_decl_patterns;
 
-    bool foldable;
-    s32 fold_level_resolved_at;
-
     bool is_free_number;
     ast_node_val_t expr_val;
 
