@@ -349,7 +349,7 @@ static bool get_nearest_jmp_scope_in_func_or_error(
     }
     return false;
 }
-type_t resolve_block_return_types(ast_t *ast, ast_node_t *block) {
+type_t resolve_block_return_types_or_error(analyzer_t *analyzer, ast_node_t *block) {
     switch (block->node_type) {
         case AST_NODE_TYPE_EXPRESSION_BRANCHING: {
             ast_node_t *then = an_then(block);
@@ -357,13 +357,15 @@ type_t resolve_block_return_types(ast_t *ast, ast_node_t *block) {
 
             tmp_arena_t *tmp = allocator_borrow();
             types_t types = {.allocator=tmp->allocator};
-            ast_nodes_t void_jmp_xprs = {.allocator=tmp->allocator};
+            ast_nodes_t nodes = {.allocator=tmp->allocator};
 
             unless (TYPE_IS_UNREACHABLE(then->value_type)) {
+                array_push(&nodes, then);
                 array_push(&types, then->value_type);
             }
 
             unless (TYPE_IS_UNREACHABLE(else_->value_type)) {
+                array_push(&nodes, else_);
                 array_push(&types, else_->value_type);
             }
 
@@ -371,38 +373,30 @@ type_t resolve_block_return_types(ast_t *ast, ast_node_t *block) {
                 ast_node_t *jmp_node = block->jmp_nodes.items[i];
                 ast_node_t *jmp_node_expr = an_expression(jmp_node);
                 unless (TYPE_IS_UNREACHABLE(jmp_node_expr->value_type)) {
+                    array_push(&nodes, jmp_node_expr);
                     array_push(&types, jmp_node_expr->value_type);
                 }
-
-                if (TYPE_IS_VOID(jmp_node_expr->value_type)) {
-                    array_push(&void_jmp_xprs, jmp_node_expr);
-                }
             }
 
-            types_t sans_void = {.allocator=tmp->allocator};
-            for (size_t i = 0; i < types.count; ++i) {
-                type_t t = types.items[i];
-                unless (TYPE_IS_VOID(t)) array_push(&sans_void, t);
-            }
+            MUST(types.count > 0);
+            type_t type = types.items[0];
+            ast_node_t *node = nodes.items[0];
 
-            type_t type = (sans_void.count != types.count) ? typeid(TYPE_VOID) : typeid(TYPE_UNREACHABLE);
-            if (sans_void.count > 0) {
-                type = sans_void.items[0];
-            }
+            for (size_t i = 1; i < types.count; ++i) {
+                type_t other_type = types.items[i];
+                ast_node_t *other_node = nodes.items[i];
 
-            for (size_t i = 1; i < sans_void.count; ++i) {
-                unless (typeid_eq(sans_void.items[i], type)) {
+                unless (typeid_eq(other_type, type)) {
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = ERROR_ANALYSIS_BLOCKS_TYPE_MISMATCH,
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("all '$0.kind$' branches and jmps must match types when consumed but got '$3.$' and '$4.$'"),
+                        .args = ORERR_ARGS(error_arg_token(block->start), error_arg_node(node), error_arg_node(other_node), error_arg_type(type), error_arg_type(other_type)),
+                        .show_code_lines = ORERR_LINES(1, 2),
+                    ));
+
                     type = typeid(TYPE_INVALID);
                     break;
-                }
-            }
-
-            unless (TYPE_IS_INVALID(type)) {
-                for (size_t i = 0; i < void_jmp_xprs.count; ++i) {
-                    ast_node_t *expr = void_jmp_xprs.items[i];
-                    expr->node_type = AST_NODE_TYPE_EXPRESSION_PRIMARY;
-                    expr->value_type = type;
-                    expr->expr_val = zero_value(ast, type);
                 }
             }
 
@@ -2186,42 +2180,18 @@ void resolve_expression(
                 }
             }
 
+            bool is_unreachable = last_unreachable_index < expr->children.count;
             // discard everything past an unreachable type
-            if (last_unreachable_index < expr->children.count) {
+            if (is_unreachable) {
                 expr->children.count = last_unreachable_index+1;
 
                 // todo: add a warning for this
             }
 
-            size_t last_decl_def = expr->children.count;
-            size_t last_non_void_decl_stmt = expr->children.count;
-            size_t last_decl_stmt = expr->children.count;
+            ast_node_t *last_decl = expr->children.items[expr->children.count-1];
 
-            for (size_t i = 0; i < expr->children.count; ++i) {
-                ast_node_t *decl = expr->children.items[i];
-                switch (decl->node_type) {
-                    case AST_NODE_TYPE_DECLARATION_DEFINITION: {
-                        last_decl_def = i;
-                        break;
-                    }
 
-                    case AST_NODE_TYPE_DECLARATION_STATEMENT: {
-                        last_decl_stmt = i;
-                        unless (TYPE_IS_VOID(an_expression(decl)->value_type)) {
-                            last_non_void_decl_stmt = i;
-                        }
-                        break;
-                    }
-
-                    default: UNREACHABLE();
-                }
-            }
-
-            if (last_non_void_decl_stmt < expr->children.count && (last_decl_def == expr->children.count || last_decl_def < last_non_void_decl_stmt)) {
-                expr->last_statement = expr->children.items[last_non_void_decl_stmt];
-            } else if (last_decl_stmt < expr->children.count && (last_decl_def == expr->children.count || last_decl_def < last_decl_stmt)) {
-                expr->last_statement = expr->children.items[last_decl_stmt];
-            } else {
+            if (!is_unreachable && last_decl->node_type == AST_NODE_TYPE_DECLARATION_DEFINITION) {
                 stan_error(analyzer, OR_ERROR(
                     .tag = ERROR_ANALYSIS_BLOCKS_MUST_BE_EMPTY_OR_END_IN_STATEMENT,
                     .level = ERROR_SOURCE_ANALYSIS,
@@ -2233,6 +2203,7 @@ void resolve_expression(
                 break;
             }
 
+            expr->last_statement = last_decl;
             expr->value_type = expr->last_statement->value_type;
             break;
         }
@@ -2265,27 +2236,10 @@ void resolve_expression(
 
             resolve_expression(analyzer, ast, branch_state, implicit_type, an_else(expr));
 
-            type_t branch_type = resolve_block_return_types(ast, expr);
+            type_t branch_type = resolve_block_return_types_or_error(analyzer, expr);
             expr->value_type = branch_type;
 
-            unless (TYPE_IS_UNREACHABLE(branch_type)) {
-                if (TYPE_IS_VOID(an_then(expr)->value_type) && an_then(expr)->node_type == AST_NODE_TYPE_EXPRESSION_NIL) {
-                    an_then(expr) = ast_nil(ast, branch_type, token_implicit_at_end(an_then(expr)->start));
-                }
-
-                if (TYPE_IS_VOID(an_else(expr)->value_type) && an_else(expr)->node_type == AST_NODE_TYPE_EXPRESSION_NIL) {
-                    an_else(expr) = ast_nil(ast, branch_type, token_implicit_at_end(an_else(expr)->start));
-                }
-            }
-
             if (TYPE_IS_INVALID(branch_type)) {
-                stan_error(analyzer, OR_ERROR(
-                    .tag = ERROR_ANALYSIS_BLOCKS_TYPE_MISMATCH,
-                    .level = ERROR_SOURCE_ANALYSIS,
-                    .msg = lit2str("both '$0.kind$' branching blocks must match types but got '$1.$' and '$2.$'"),
-                    .args = ORERR_ARGS(error_arg_token(expr->start), error_arg_type(an_then(expr)->value_type), error_arg_type(an_else(expr)->value_type)),
-                    .show_code_lines = ORERR_LINES(0),
-                ));
                 INVALIDATE(expr);
             }
 
