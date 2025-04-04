@@ -1,8 +1,14 @@
+using memory :: @import "memory";
+
 main :: () -> void {
-    x := 0;
-    if true {
-        ++x;
+    using arena;
+
+    arena := arena_t.{};
+    @defer {
+        free(&arena);
     };
+
+    arr := alloc(&arena, sizeof([10]int)) as &[]int;
 };
 
 // main :: () -> void {

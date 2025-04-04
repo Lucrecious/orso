@@ -263,9 +263,11 @@ struct ast_node_t {
     ast_branch_type_t branch_type;
     bool condition_negated;
 
+    // todo: to optimize for space consider merging these into a flag enum
     bool is_mutable;
     bool is_intrinsic;
     bool is_exported;
+    bool is_consumed;
     ast_node_t *ref_decl;
     type_patterns_t type_decl_patterns;
 

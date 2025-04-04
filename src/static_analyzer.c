@@ -385,7 +385,7 @@ type_t resolve_block_return_types_or_error(analyzer_t *analyzer, ast_node_t *blo
                 type_t other_type = types.items[i];
                 ast_node_t *other_node = nodes.items[i];
 
-                unless (typeid_eq(other_type, type)) {
+                if (block->is_consumed && !typeid_eq(other_type, type)) {
                     stan_error(analyzer, OR_ERROR(
                         .tag = ERROR_ANALYSIS_BLOCKS_TYPE_MISMATCH,
                         .level = ERROR_SOURCE_ANALYSIS,
@@ -420,7 +420,8 @@ static void resolve_declarations(
         analyzer_t *analyzer,
         ast_t *ast,
         analysis_state_t state,
-        ast_nodes_t declarations);
+        ast_nodes_t declarations,
+        bool is_last_statement_consumed);
 
 static void resolve_declaration(
         analyzer_t *analyzer,
@@ -432,7 +433,8 @@ static void resolve_declaration_statement(
     analyzer_t *analyzer,
     ast_t *ast,
     analysis_state_t state,
-    ast_node_t *statement);
+    ast_node_t *statement,
+    bool is_consumed);
 
 static void resolve_funcdef(
         analyzer_t *analyzer,
@@ -1010,7 +1012,8 @@ void resolve_expression(
         ast_t *ast,
         analysis_state_t state,
         type_t implicit_type,
-        ast_node_t *expr);
+        ast_node_t *expr,
+        bool is_consumed);
 
 static ast_node_t *stan_realize_inferred_funcdef_or_error_and_null(analyzer_t *analyzer, analysis_state_t state, ast_node_t *call, ast_node_t *inferred_funcdef) {
     scope_t scope = {0};
@@ -1034,7 +1037,7 @@ static ast_node_t *stan_realize_inferred_funcdef_or_error_and_null(analyzer_t *a
         for (size_t t = 0; t < decl->type_decl_patterns.count; ++t)  {
             type_pattern_t pattern = decl->type_decl_patterns.items[t];
 
-            resolve_expression(analyzer, analyzer->ast, state, typeid(TYPE_UNRESOLVED), call_arg);
+            resolve_expression(analyzer, analyzer->ast, state, typeid(TYPE_UNRESOLVED), call_arg, true);
             
             matched_value_t matched_value = stan_pattern_match_or_error(analyzer, decl, pattern.expected, call_arg->value_type, call_arg);
             array_push(&matched_values, matched_value);
@@ -1182,9 +1185,12 @@ void resolve_expression(
         ast_t *ast,
         analysis_state_t state,
         type_t implicit_type,
-        ast_node_t *expr) {
+        ast_node_t *expr,
+        bool is_consumed) {
     
     ASSERT(ast_node_type_is_expression(expr->node_type), "should be only expressions");
+
+    expr->is_consumed = is_consumed;
 
     if (TYPE_IS_RESOLVED(expr->value_type)) {
         return;
@@ -1202,8 +1208,7 @@ void resolve_expression(
             array_push(&analyzer->pending_dependencies, expr);
 
             ast_node_t *child = expr->children.items[0];
-
-            resolve_expression(analyzer, ast, new_state, implicit_type, child);
+            resolve_expression(analyzer, ast, new_state, implicit_type, child, true);
 
             --analyzer->pending_dependencies.count;
 
@@ -1236,7 +1241,7 @@ void resolve_expression(
         }
 
         case AST_NODE_TYPE_EXPRESSION_GROUPING: {
-            resolve_expression(analyzer, ast, state, implicit_type, an_operand(expr));
+            resolve_expression(analyzer, ast, state, implicit_type, an_operand(expr), is_consumed);
             expr->lvalue_node = an_operand(expr)->lvalue_node;
             expr->value_type = an_operand(expr)->value_type;
             expr->expr_val = an_operand(expr)->expr_val;
@@ -1246,7 +1251,7 @@ void resolve_expression(
 
         case AST_NODE_TYPE_EXPRESSION_ARRAY_TYPE: {
             ast_node_t *type_expr = an_array_type_expr(expr);
-            resolve_expression(analyzer, ast, state, typeid(TYPE_UNRESOLVED), type_expr);
+            resolve_expression(analyzer, ast, state, typeid(TYPE_UNRESOLVED), type_expr, true);
 
             if (!TYPE_IS_TYPE(type_expr->value_type)) {
                 stan_error(analyzer, OR_ERROR(
@@ -1274,7 +1279,7 @@ void resolve_expression(
 
             ast_node_t *size_expr = an_array_size_expr(expr);
             if (an_is_notnone(size_expr)) {
-                resolve_expression(analyzer, ast, state, typeid(TYPE_UNRESOLVED), size_expr);
+                resolve_expression(analyzer, ast, state, typeid(TYPE_UNRESOLVED), size_expr, true);
 
                 if (TYPE_IS_INVALID(size_expr->value_type)) {
                     INVALIDATE(expr);
@@ -1349,10 +1354,10 @@ void resolve_expression(
 
         case AST_NODE_TYPE_EXPRESSION_ARRAY_ITEM_ACCESS: {
             ast_node_t *accessee = an_item_accessee(expr);
-            resolve_expression(analyzer, ast, state, typeid(TYPE_UNRESOLVED), accessee);
+            resolve_expression(analyzer, ast, state, typeid(TYPE_UNRESOLVED), accessee, true);
 
             ast_node_t *accessor = an_item_accessor(expr);
-            resolve_expression(analyzer, ast, state, typeid(TYPE_UNRESOLVED), accessor);
+            resolve_expression(analyzer, ast, state, typeid(TYPE_UNRESOLVED), accessor, true);
 
             if (TYPE_IS_INVALID(accessee->value_type)) {
                 INVALIDATE(expr);
@@ -1478,7 +1483,7 @@ void resolve_expression(
                     break;
                 }
             } else {
-                resolve_expression(analyzer, ast, state, typeid(TYPE_UNRESOLVED), type_expr);
+                resolve_expression(analyzer, ast, state, typeid(TYPE_UNRESOLVED), type_expr, true);
             }
 
             type_t arg_implicit_type = typeid(TYPE_UNRESOLVED);
@@ -1499,7 +1504,7 @@ void resolve_expression(
             for (size_t i = an_list_start(expr); i < an_list_end(expr); ++i) {
                 ast_node_t *arg = expr->children.items[i];
 
-                resolve_expression(analyzer, ast, state, arg_implicit_type, arg);
+                resolve_expression(analyzer, ast, state, arg_implicit_type, arg, true);
 
                 if (TYPE_IS_INVALID(arg->value_type)) {
                     invalid_arg = true;
@@ -1628,10 +1633,10 @@ void resolve_expression(
 
         case AST_NODE_TYPE_EXPRESSION_BINARY: {
             ast_node_t *left = an_lhs(expr);
-            resolve_expression(analyzer, ast, state, implicit_type, left);
+            resolve_expression(analyzer, ast, state, implicit_type, left, true);
 
             ast_node_t *right = an_rhs(expr);
-            resolve_expression(analyzer, ast, state, implicit_type, right);
+            resolve_expression(analyzer, ast, state, implicit_type, right, true);
 
             an_lhs(expr) = (left = cast_implicitly_if_necessary(ast, right->value_type, left));
             an_rhs(expr) = (right = cast_implicitly_if_necessary(ast, left->value_type, right));
@@ -1884,7 +1889,7 @@ void resolve_expression(
         }
 
         case AST_NODE_TYPE_EXPRESSION_UNARY: {
-            resolve_expression(analyzer, ast, state, implicit_type, an_operand(expr));
+            resolve_expression(analyzer, ast, state, implicit_type, an_operand(expr), true);
 
             if (TYPE_IS_INVALID(an_operand(expr)->value_type)) {
                 INVALIDATE(expr);
@@ -2080,7 +2085,7 @@ void resolve_expression(
 
         case AST_NODE_TYPE_EXPRESSION_ASSIGNMENT: {
             ast_node_t *lhs = an_lhs(expr);
-            resolve_expression(analyzer, ast, state, implicit_type,lhs);
+            resolve_expression(analyzer, ast, state, implicit_type,lhs, true);
             ast_node_t *lvalue_node = lhs->lvalue_node;
             if (an_is_none(lvalue_node)) {
                 stan_error(analyzer, OR_ERROR(
@@ -2095,7 +2100,7 @@ void resolve_expression(
             } 
 
             ast_node_t *rhs = an_rhs(expr);
-            resolve_expression(analyzer, ast, state, lvalue_node->value_type, rhs);
+            resolve_expression(analyzer, ast, state, lvalue_node->value_type, rhs, true);
 
             switch (expr->operator.type) {
             case TOKEN_PLUS_EQUAL:
@@ -2167,7 +2172,7 @@ void resolve_expression(
 
             analysis_state_t block_state = state;
             block_state.scope = &block_scope;
-            resolve_declarations(analyzer, ast, block_state, expr->children);
+            resolve_declarations(analyzer, ast, block_state, expr->children, is_consumed);
 
             size_t last_unreachable_index = expr->children.count;
             for (size_t i = 0; i < expr->children.count; ++i) {
@@ -2187,6 +2192,7 @@ void resolve_expression(
             }
 
             ast_node_t *last_decl = expr->children.items[expr->children.count-1];
+            last_decl->is_consumed = is_consumed;
 
 
             if (!is_unreachable && last_decl->node_type == AST_NODE_TYPE_DECLARATION_DEFINITION) {
@@ -2223,16 +2229,16 @@ void resolve_expression(
                 analysis_state_t cond_state = state;
                 cond_state.scope = &condition_scope;
 
-                resolve_expression(analyzer, ast, cond_state, typeid(TYPE_UNRESOLVED), an_condition(expr));
+                resolve_expression(analyzer, ast, cond_state, typeid(TYPE_UNRESOLVED), an_condition(expr), true);
             }
 
             if (an_is_notnone(an_for_incr(expr))) {
-                resolve_expression(analyzer, ast, branch_state, typeid(TYPE_UNRESOLVED), an_for_incr(expr));
+                resolve_expression(analyzer, ast, branch_state, typeid(TYPE_UNRESOLVED), an_for_incr(expr), false);
             }
 
-            resolve_expression(analyzer, ast, branch_state, implicit_type, an_then(expr));
+            resolve_expression(analyzer, ast, branch_state, implicit_type, an_then(expr), is_consumed);
 
-            resolve_expression(analyzer, ast, branch_state, implicit_type, an_else(expr));
+            resolve_expression(analyzer, ast, branch_state, implicit_type, an_else(expr), is_consumed);
 
             type_t branch_type = resolve_block_return_types_or_error(analyzer, expr);
             expr->value_type = branch_type;
@@ -2275,13 +2281,13 @@ void resolve_expression(
                         implicit_type = sig->as.function.return_type;
                     }
 
-                    resolve_expression(analyzer, ast, state, implicit_type, an_expression(expr));
+                    resolve_expression(analyzer, ast, state, implicit_type, an_expression(expr), true);
                     break;
                 }
 
                 case TOKEN_CONTINUE:
                 case TOKEN_BREAK: {
-                    resolve_expression(analyzer, ast, state, typeid(TYPE_UNRESOLVED), an_expression(expr));
+                    resolve_expression(analyzer, ast, state, typeid(TYPE_UNRESOLVED), an_expression(expr), true);
 
                     scope_t *found_scope = NULL;
                     bool success = get_nearest_jmp_scope_in_func_or_error(analyzer, expr, state.scope, SCOPE_TYPE_JMPABLE, expr->identifier.view, &found_scope);
@@ -2305,7 +2311,7 @@ void resolve_expression(
 
         case AST_NODE_TYPE_EXPRESSION_CALL: {
             ast_node_t *callee = an_callee(expr);
-            resolve_expression(analyzer, ast, state, implicit_type, callee);
+            resolve_expression(analyzer, ast, state, implicit_type, callee, true);
 
             type_t callee_type = callee->value_type;
             typedata_t *callee_td = ast_type2td(ast, callee_type);
@@ -2369,7 +2375,7 @@ void resolve_expression(
                 size_t argi = i - an_call_arg_start(expr);
                 type_t arg_implicit_type = callee_td->as.function.argument_types.items[argi];
 
-                resolve_expression(analyzer, ast, state, arg_implicit_type, argument);
+                resolve_expression(analyzer, ast, state, arg_implicit_type, argument, true);
                 if (TYPE_IS_INVALID(argument->value_type)) {
                     argument_invalid = true;
                 }
@@ -2413,14 +2419,14 @@ void resolve_expression(
             bool invalid_parameter = false;
             for (size_t i = an_func_def_arg_start(expr); i < an_func_def_arg_end(expr); ++i) {
                 ast_node_t *parameter = expr->children.items[i];
-                resolve_expression(analyzer, ast, state, typeid(TYPE_UNRESOLVED), parameter);
+                resolve_expression(analyzer, ast, state, typeid(TYPE_UNRESOLVED), parameter, true);
 
                 if (TYPE_IS_INVALID(parameter->value_type)) {
                     invalid_parameter = true;
                 }
             }
 
-            resolve_expression(analyzer, ast, state, typeid(TYPE_UNRESOLVED), an_func_def_return(expr));
+            resolve_expression(analyzer, ast, state, typeid(TYPE_UNRESOLVED), an_func_def_return(expr), true);
 
             if (invalid_parameter || TYPE_IS_INVALID(an_func_def_return(expr)->value_type)) {
                 INVALIDATE(expr);
@@ -2457,7 +2463,7 @@ void resolve_expression(
                 }
 
                 ast_node_t *expr_arg = expr->children.items[arg_start];
-                resolve_expression(analyzer, ast, state, typeid(TYPE_UNRESOLVED), expr_arg);
+                resolve_expression(analyzer, ast, state, typeid(TYPE_UNRESOLVED), expr_arg, true);
 
                 if (TYPE_IS_INVALID(expr_arg->value_type)) {
                     break;
@@ -2482,7 +2488,7 @@ void resolve_expression(
                 }
 
                 ast_node_t *expr_arg = expr->children.items[arg_start];
-                resolve_expression(analyzer, ast, state, typeid(TYPE_UNRESOLVED), expr_arg);
+                resolve_expression(analyzer, ast, state, typeid(TYPE_UNRESOLVED), expr_arg, true);
                 type_t expr_type = expr_arg->value_type;
 
                 if (TYPE_IS_TYPE(expr_type) && expr_arg->expr_val.is_concrete) {
@@ -2511,7 +2517,7 @@ void resolve_expression(
                 }
 
                 ast_node_t *arg = expr->children.items[arg_start];
-                resolve_expression(analyzer, ast, state, typeid(TYPE_UNRESOLVED), arg);
+                resolve_expression(analyzer, ast, state, typeid(TYPE_UNRESOLVED), arg, true);
 
                 type_t arg_type = arg->value_type;
                 typedata_t *argtd = ast_type2td(ast, arg_type);
@@ -2539,14 +2545,14 @@ void resolve_expression(
 
         case AST_NODE_TYPE_EXPRESSION_CAST: {
             ast_node_t *cast_expr = an_cast_expr(expr);
-            resolve_expression(analyzer, ast, state, implicit_type, cast_expr);
+            resolve_expression(analyzer, ast, state, implicit_type, cast_expr, true);
             if (TYPE_IS_INVALID(cast_expr->value_type)) {
                 INVALIDATE(expr);
                 break;
             }
 
             ast_node_t *type_expr = an_cast_type(expr);
-            resolve_expression(analyzer, ast, state, implicit_type, type_expr);
+            resolve_expression(analyzer, ast, state, implicit_type, type_expr, true);
             if (TYPE_IS_INVALID(type_expr->value_type)) {
                 INVALIDATE(expr);
                 break;
@@ -2736,7 +2742,7 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
         scope_init(&type_context, ast->arena, SCOPE_TYPE_TYPE_CONTEXT, state.scope, decl_type);
         new_state.scope = &type_context;
 
-        resolve_expression(analyzer, ast, new_state, typeid(TYPE_UNRESOLVED), decl_type);
+        resolve_expression(analyzer, ast, new_state, typeid(TYPE_UNRESOLVED), decl_type, true);
 
         unless (TYPE_IS_TYPE(decl_type->value_type)) {
             if (TYPE_IS_UNRESOLVED(decl_type->value_type)) {
@@ -2758,7 +2764,7 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
 
     ast_node_t *init_expr = an_decl_expr(decl);
     if (TYPE_IS_UNRESOLVED(an_decl_expr(decl)->value_type) && decl->type_decl_patterns.count == 0) {
-        resolve_expression(analyzer, ast, state, decl->value_type, init_expr);
+        resolve_expression(analyzer, ast, state, decl->value_type, init_expr, true);
     }
 
     --analyzer->pending_dependencies.count;
@@ -3150,7 +3156,7 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
 
     type_t return_type = typeid(TYPE_VOID);
     {
-        resolve_expression(analyzer, ast, state, typeid(TYPE_UNRESOLVED), an_func_def_return(funcdef));
+        resolve_expression(analyzer, ast, state, typeid(TYPE_UNRESOLVED), an_func_def_return(funcdef), true);
     }
 
     ast_node_t *ret_expr = an_func_def_return(funcdef);
@@ -3202,7 +3208,7 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
         scope_t function_scope;
         scope_init(&function_scope, ast->arena, SCOPE_TYPE_FUNC_DEF_BODY, &funcdef_scope, funcdef);
         new_state.scope = &function_scope;
-        resolve_expression(analyzer, ast, new_state, typeid(TYPE_UNRESOLVED), an_func_def_block(funcdef));
+        resolve_expression(analyzer, ast, new_state, typeid(TYPE_UNRESOLVED), an_func_def_block(funcdef), false);
     }
 
     ast_node_t *funcblock = an_func_def_block(funcdef);
@@ -3254,8 +3260,9 @@ static void resolve_declaration_statement(
         analyzer_t *analyzer,
         ast_t *ast,
         analysis_state_t state,
-        ast_node_t *statement) {
-    resolve_expression(analyzer, ast, state, typeid(TYPE_UNRESOLVED), an_expression(statement));
+        ast_node_t *statement,
+        bool is_consumed) {
+    resolve_expression(analyzer, ast, state, typeid(TYPE_UNRESOLVED), an_expression(statement), is_consumed);
     statement->value_type = an_expression(statement)->value_type;
 }
 
@@ -3272,7 +3279,7 @@ static void resolve_declaration(
         }
 
         case AST_NODE_TYPE_DECLARATION_STATEMENT: {
-            resolve_declaration_statement(analyzer, ast, state, declaration_node);
+            resolve_declaration_statement(analyzer, ast, state, declaration_node, false);
             break;
         }
 
@@ -3280,14 +3287,19 @@ static void resolve_declaration(
     }
 }
 
-void resolve_declarations(analyzer_t* analyzer, ast_t* ast, analysis_state_t state, ast_nodes_t declarations) {
+void resolve_declarations(analyzer_t *analyzer, ast_t *ast, analysis_state_t state, ast_nodes_t declarations, bool is_last_statement_consumed) {
     for (size_t i = 0; i < declarations.count; i++) {
-        ast_node_t* declaration = declarations.items[i];
+        ast_node_t *declaration = declarations.items[i];
         if (declaration->node_type == AST_NODE_TYPE_DECLARATION_DEFINITION && an_is_constant(declaration)) {
             continue;
         }
 
-        resolve_declaration(analyzer, ast, state, declarations.items[i]);
+        if (i == declarations.count-1 && declaration->node_type == AST_NODE_TYPE_DECLARATION_STATEMENT) {
+            resolve_expression(analyzer, ast, state, typeid(TYPE_UNRESOLVED), an_expression(declaration), is_last_statement_consumed);
+            resolve_declaration_statement(analyzer, ast, state, declaration, is_last_statement_consumed);
+        } else {
+            resolve_declaration(analyzer, ast, state, declarations.items[i]);
+        }
     }
 
     for (size_t i = 0; i < declarations.count; i++) {
@@ -3336,7 +3348,7 @@ bool resolve_ast(ast_t *ast) {
         };
 
         forward_scan_constant_names(&analyzer, &global_scope, module->children);
-        resolve_declarations(&analyzer, ast, state, module->children);
+        resolve_declarations(&analyzer, ast, state, module->children, false);
     });
 
     ast->resolved = !analyzer.had_error;
