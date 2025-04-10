@@ -616,13 +616,13 @@ static void add_constant(gen_t *gen, function_t *function, texloc_t loc, void *d
     emit_instruction(function, loc, in);
 }
 
-static void gen_constant(gen_t *gen, texloc_t location, function_t *function, void *data, type_t type) {
+static void gen_constant(gen_t *gen, texloc_t location, function_t *function, void *data, type_t type, reg_t reg_dst) {
     typedata_t *td = type2typedata(&gen->ast->type_set.types, type);
 
-    add_constant(gen, function, location, data, td->size, REG_RESULT);
+    add_constant(gen, function, location, data, td->size, reg_dst);
 
     if (td->size <= WORD_SIZE) {
-        emit_addr_to_reg(gen, function, location, type2movsize(gen, type), REG_RESULT, REG_RESULT, 0);
+        emit_addr_to_reg(gen, function, location, type2movsize(gen, type), reg_dst, reg_dst, 0);
     }
 }
 
@@ -654,7 +654,7 @@ static void gen_binary(gen_t *gen, function_t *function, ast_node_t *binary) {
 
                 size_t factor_size = lhsinnertd->size > 0 ? lhsinnertd->size : sizeof(u8);
 
-                gen_constant(gen, loc, function, &factor_size, gen->ast->type_set.size_t_);
+                gen_constant(gen, loc, function, &factor_size, gen->ast->type_set.size_t_, REG_RESULT);
 
                 emit_pop_to_reg(gen, loc, function, REG_T, rhs->value_type);
 
@@ -732,7 +732,7 @@ static void gen_item_access_array_addr(gen_t *gen, function_t *function, texloc_
     {
         size_t inner_data_size = get_inner_data_type(gen->ast, accessee_type);
         // size of td size in result reg
-        gen_constant(gen, loc, function, &inner_data_size, gen->ast->type_set.u64_);
+        gen_constant(gen, loc, function, &inner_data_size, gen->ast->type_set.u64_, REG_RESULT);
 
         typedata_t *td = ast_type2td(gen->ast, gen->ast->type_set.u64_);
         // pop offset and multiply by td size
@@ -836,13 +836,13 @@ static void gen_expr_val(gen_t *gen, function_t *function, ast_node_t *expressio
 
     word_t data = val_.word;
     if (type_info->size > WORD_SIZE) {
-        gen_constant(gen, expression->start.loc, function, data.as.p, expression->value_type);
+        gen_constant(gen, expression->start.loc, function, data.as.p, expression->value_type, REG_RESULT);
         emit_push_reg(gen, expression->start.loc, function, REG_RESULT, REG_MOV_SIZE_MULTIWORD_ADDR, type_info->size);
     } else {
         switch (type_info->kind) {
         case TYPE_BOOL: {
             u8 val = (u8)data.as.u;
-            gen_constant(gen, expression->start.loc, function, &val, expression->value_type);
+            gen_constant(gen, expression->start.loc, function, &val, expression->value_type, REG_RESULT);
         }
 
         case TYPE_NUMBER: {
@@ -854,13 +854,13 @@ static void gen_expr_val(gen_t *gen, function_t *function, ast_node_t *expressio
 
                 case NUM_SIZE_32: {
                     f32 val = (f32)data.as.d;
-                    gen_constant(gen, expression->start.loc, function, &val, expression->value_type);
+                    gen_constant(gen, expression->start.loc, function, &val, expression->value_type, REG_RESULT);
                     break;
                 }
 
                 case NUM_SIZE_64: {
                     f64 val = (f64)data.as.d;
-                    gen_constant(gen, expression->start.loc, function, &val, expression->value_type);
+                    gen_constant(gen, expression->start.loc, function, &val, expression->value_type, REG_RESULT);
                     break;
                 }
                 }
@@ -872,24 +872,24 @@ static void gen_expr_val(gen_t *gen, function_t *function, ast_node_t *expressio
                 switch ((num_size_t)type_info->size) {
                 case NUM_SIZE_8: {
                     u8 val = (u8)data.as.u;
-                    gen_constant(gen, expression->start.loc, function, &val, expression->value_type);
+                    gen_constant(gen, expression->start.loc, function, &val, expression->value_type, REG_RESULT);
                     break;
                 }
                 case NUM_SIZE_16: {
                     u16 val = (u16)data.as.u;
-                    gen_constant(gen, expression->start.loc, function, &val, expression->value_type);
+                    gen_constant(gen, expression->start.loc, function, &val, expression->value_type, REG_RESULT);
                     break;
                 }
 
                 case NUM_SIZE_32: {
                     u32 val = (u32)data.as.u;
-                    gen_constant(gen, expression->start.loc, function, &val, expression->value_type);
+                    gen_constant(gen, expression->start.loc, function, &val, expression->value_type, REG_RESULT);
                     break;
                 }
 
                 case NUM_SIZE_64: {
                     u64 val = (u64)data.as.u;
-                    gen_constant(gen, expression->start.loc, function, &val, expression->value_type);
+                    gen_constant(gen, expression->start.loc, function, &val, expression->value_type, REG_RESULT);
                     break;
                 }
                 }
@@ -905,7 +905,7 @@ static void gen_expr_val(gen_t *gen, function_t *function, ast_node_t *expressio
         case TYPE_INTRINSIC_FUNCTION:
         case TYPE_ARRAY:
         case TYPE_STRUCT: {
-            gen_constant(gen, expression->start.loc, function, &data, expression->value_type);
+            gen_constant(gen, expression->start.loc, function, &data, expression->value_type, REG_RESULT);
             break;
         }
 
@@ -1335,7 +1335,7 @@ static void gen_call(gen_t *gen, function_t *function, ast_node_t *call, bool is
     // puts size of result on stack if intrinsic
     if (is_intrinsic) {
         typedata_t *resulttd = type2typedata(&gen->ast->type_set.types, call->value_type);
-        gen_constant(gen, an_callee(call)->start.loc, function, &resulttd->size, gen->ast->type_set.size_t_);
+        gen_constant(gen, an_callee(call)->start.loc, function, &resulttd->size, gen->ast->type_set.size_t_, REG_RESULT);
         emit_push_reg(gen, an_callee(call)->start.loc, function, REG_RESULT, REG_MOV_SIZE_WORD, 0);
     }
 
