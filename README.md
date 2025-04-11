@@ -12,9 +12,11 @@ It maintains a simple and terse syntax making it easy to learn. The terseness of
 - Easy C interop
 
 ## Syntax
-Orso is expression-based which means almost all of its language constructs evaluate to some "value". In fact, the only language construct that is not an expression is
-a variable declaration or compile-time value declaration. As a result, this makes the language quite flexible in regards to where expressions can be placed in the code. As such,
-for now, semicolons are required to signal the end of an expression.
+Orso is expression-based which means almost all of its language constructs evaluate to some "value". In fact, the only language constructs that are not expressions are
+variable declarations or compile-time value declarations. As a result, this makes the language quite flexible in regards to where expressions can be placed in the syntax.
+Due to this, I've found that without an explicit way to separate expressions, the code is very hard to parse in a way that the user expects.
+To migitate this, semicolons are required to signal the end of all expressions and declarations - to be frank, they're everywhere! This is the trade-off
+that I think needs to be made to keep this language minimal and simple.
 
 ### Variable and Compile-Time Value Declarations
 These are the only non-expressions constructs in the entire language, although they technically evaluate to `void`. However, from a pragmatic sense, the syntax makes
@@ -127,7 +129,7 @@ add(1.5, 2.6);
 add(5, 10);
 ```
 
-#### Inferred Struct Definitions
+#### Inferred Struct Definition
 todo
 
 #### Arbitrary Expression Compile-Time Evaluation
@@ -151,6 +153,11 @@ real : @run get_real_type() = 10 .0;
 ```
 
 This will run the `get_real_type` at compile-time and provide a compile-time type value to the type annotation to use to define the variable.
+
+You can inline the actual expression too
+```python
+real : @run if HIGH_PRECISION then double else float = 10 .0; 
+```
 
 #### Macros
 todo
