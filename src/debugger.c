@@ -23,7 +23,7 @@ string_t disassemble_instruction(instruction_t in, arena_t *allocator) {
     switch (op) {
         case OP_NOP: return lit2str("OP_NOP");
 
-        #define OP_CAST(suffix) string_format("OP_CAST"#suffix"(reg_result: %lu, reg_op: %lu)", allocator, (u32)in.as.casting.reg_result, (u32)in.as.casting.reg_op);
+        #define OP_CAST(suffix) string_format("OP_CAST"#suffix"(reg_result: %c, reg_op: %c)", allocator, (u32)in.as.casting.reg_result, (u32)in.as.casting.reg_op);
 
         case OP_B2F: return OP_CAST(B2F);
         case OP_S2F: return OP_CAST(S2F);
@@ -58,21 +58,21 @@ string_t disassemble_instruction(instruction_t in, arena_t *allocator) {
         case OP_L2D: return OP_CAST(L2D);
 
         case OP_JMP_IF_COND:
-            return string_format("OP_JMP_IF_COND(condition_reg: %lu, check_for: %lu, amount: %lu)", allocator,
+            return string_format("OP_JMP_IF_COND(condition_reg: %c, check_for: %lu, amount: %lu)", allocator,
                     (u32)in.as.jmp.condition_reg, (u32)in.as.jmp.check_for, in.as.jmp.amount);
 
         case OP_LOAD_ADDR:
-            return string_format("OP_LOAD_ADDR(reg_rest: %d, index: %d)", allocator,
+            return string_format("OP_LOAD_ADDR(reg_dest: %c, index: %d)", allocator,
                     (u32)in.as.load_addr.reg_dest, (u32)in.as.load_addr.memaddr);
 
         case OP_LOAD_REG_ADDR:
-            return string_format("OP_LOAD_ADDR(reg_rest: %d, reg: %d)", allocator,
+            return string_format("OP_LOAD_ADDR(reg_dest: %c, reg: %d)", allocator,
                     (u32)in.as.load_addr.reg_dest, (u32)in.as.load_addr.memaddr);
 
         case OP_JMP: return string_format("OP_JMP(amount: %lu)", allocator, (u32)in.as.jmp.amount);
         case OP_LOOP: return string_format("OP_LOOP(amount: %lu)", allocator, (u32)in.as.jmp.amount);
 
-        #define OP_REG_TO_REG(SUFFIX) string_format("OP_MOV"#SUFFIX"(reg_src: %d, reg_dst: %d, offset: %d)", allocator, \
+        #define OP_REG_TO_REG(SUFFIX) string_format("OP_MOV"#SUFFIX"(reg_src: %c, reg_dst: %c, offset: %d)", allocator, \
                 (u32)in.as.mov_reg_to_reg.reg_source, \
                 (u32)in.as.mov_reg_to_reg.reg_destination, \
                 (u32)in.as.mov_reg_to_reg.byte_offset);
@@ -95,26 +95,26 @@ string_t disassemble_instruction(instruction_t in, arena_t *allocator) {
         case OP_MOVWORD_ADDR_TO_REG: return OP_REG_TO_REG(WORD_REGADDR_TO_REG);
 
         case OP_MOV_REG_TO_REG: {
-            return string_format("OP_MOV_REG_TO_REG(reg_source: %lu, reg_destination: %lu)", allocator,
+            return string_format("OP_MOV_REG_TO_REG(reg_source: %c, reg_destination: %c)", allocator,
                     (u32)in.as.mov_reg_to_reg.reg_source,
                     (u32)in.as.mov_reg_to_reg.reg_destination);
         }
 
         case OP_SUBU_IM: {
-            return string_format("OP_SUBU_IM(reg_operand: %lu, immediate: %lu, reg_result: %lu)", allocator,
+            return string_format("OP_SUBU_IM(reg_operand: %c, immediate: %lu, reg_result: %c)", allocator,
                     (u32)in.as.binu_reg_immediate.reg_operand,
                     (u32)in.as.binu_reg_immediate.immediate,
                     (u32)in.as.binu_reg_immediate.reg_result);
         }
 
         case OP_ADDU_IM: {
-            return string_format("OP_ADDU_IM(reg_operand: %lu, immediate: %lu, reg_result: %lu)", allocator,
+            return string_format("OP_ADDU_IM(reg_operand: %c, immediate: %lu, reg_result: %c)", allocator,
                     (u32)in.as.binu_reg_immediate.reg_operand,
                     (u32)in.as.binu_reg_immediate.immediate,
                     (u32)in.as.binu_reg_immediate.reg_result);
         }
 
-        #define OP_BIN_REG_REG(type) string_format("OP_"#type"_REG_REG(reg_op1: %lu, reg_op2: %lu, reg_result: %lu)", allocator,\
+        #define OP_BIN_REG_REG(type) string_format("OP_"#type"_REG_REG(reg_op1: %c, reg_op2: %c, reg_result: %c)", allocator,\
                 (u32)in.as.bin_reg_to_reg.reg_op1,\
                 (u32)in.as.bin_reg_to_reg.reg_op2,\
                 (u32)in.as.bin_reg_to_reg.reg_result)
@@ -163,7 +163,7 @@ string_t disassemble_instruction(instruction_t in, arena_t *allocator) {
 
         #undef OP_BIN_REG_REG
 
-        #define OP_UNARY_REG_REG(type) string_format("OP_"#type"(reg_op: %lu, reg_result: %lu)", allocator,\
+        #define OP_UNARY_REG_REG(type) string_format("OP_"#type"(reg_op: %c, reg_result: %c)", allocator,\
                 (u32)in.as.unary_reg_to_reg.reg_op,\
                 (u32)in.as.unary_reg_to_reg.reg_result)
         
@@ -175,11 +175,11 @@ string_t disassemble_instruction(instruction_t in, arena_t *allocator) {
         #undef OP_UNARY_REG_REG
 
         case OP_CALL: return lit2str("OP_CALL");
-        case OP_INTRINSIC_CALL: return string_format("OP_INTRINSIC(reg_arg_bot: %d, reg_op: %d, reg_result: %d, reg_result_size: %d)", allocator,
+        case OP_INTRINSIC_CALL: return string_format("OP_INTRINSIC(reg_arg_bot: %c, reg_op: %c, reg_result: %c, reg_result_addr: %c)", allocator,
                 (u32)in.as.call.reg_arg_bottom_memaddr,
                 (u32)in.as.call.reg_op,
                 (u32)in.as.call.reg_result,
-                (u32)in.as.call.reg_result_size);
+                (u32)in.as.call.reg_result_addr);
         case OP_RETURN: return lit2str("OP_RETURN");
     }
 }
@@ -340,7 +340,7 @@ bool debugger_step(debugger_t *debugger, vm_t *vm) {
         size_t number = REGISTER_COUNT;
         if (command_n_args.count > 1) {
             string_t arg = command_n_args.items[1];
-            number = string2size(arg);
+            number = (size_t)arg.cstr[0];
             number = number < REGISTER_COUNT ? number : REGISTER_COUNT-1;
         }
 

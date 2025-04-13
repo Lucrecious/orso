@@ -341,7 +341,7 @@ static void emit_pop_to_reg(gen_t *gen, texloc_t loc, function_t *function, reg_
     emit_addr_to_reg(gen, function, loc, type2movsize(gen, type), reg_destination, REG_STACK_BOTTOM, 0);
     emit_binu_reg_im(function, loc, REG_STACK_BOTTOM, REG_STACK_BOTTOM, (u32)sizeof(word_t), '+');
 }
-
+ // todo: remoe
 static void emit_popn_bytes(gen_t *gen, function_t *function, size_t pop_size_bytes, texloc_t loc, bool decrement_stack) {
     while (pop_size_bytes > 0) {
         size_t pop_amount = pop_size_bytes < ORIN_UINTARG_MAX ? pop_size_bytes : ORIN_UINTARG_MAX;
@@ -580,7 +580,7 @@ static void emit_intrinsic_call(function_t *function, reg_t callee, reg_t reg_ar
     in.as.call.reg_op = (byte)callee;
     in.as.call.reg_arg_bottom_memaddr = (byte)reg_arg_bottom_memaddr;
     in.as.call.reg_result = REG_RESULT;
-    in.as.call.reg_result_size = (byte)reg_result_size;
+    in.as.call.reg_result_addr = (byte)reg_result_size;
 
     emit_instruction(function, loc, in);
 }
@@ -667,20 +667,20 @@ static void add_constant(gen_t *gen, function_t *function, texloc_t loc, void *d
     emit_instruction(function, loc, in);
 }
 
-static void gen_constant(gen_t *gen, texloc_t location, function_t *function, void *data, type_t type, val_dst_t val_dst) {
+static void gen_constant(gen_t *gen, texloc_t loc, function_t *function, void *data, type_t type, val_dst_t val_dst) {
     typedata_t *td = type2typedata(&gen->ast->type_set.types, type);
 
-    add_constant(gen, function, location, data, td->size, REG_RESULT);
+    add_constant(gen, function, loc, data, td->size, REG_RESULT);
 
     switch (val_dst.type) {
     case VAL_DST_REG: {
         if (td->size > WORD_SIZE) {
-            emit_push_reg(gen, location, function, REG_RESULT, type2movsize(gen, type), td->size);
+            emit_push_reg(gen, loc, function, REG_RESULT, type2movsize(gen, type), td->size);
             if (val_dst.reg != REG_RESULT) {
-                emit_reg_to_reg(function, location, val_dst.reg, REG_RESULT);
+                emit_reg_to_reg(function, loc, val_dst.reg, REG_RESULT);
             }
         } else {
-            emit_addr_to_reg(gen, function, location, type2movsize(gen, type), val_dst.reg, REG_RESULT, 0);
+            emit_addr_to_reg(gen, function, loc, type2movsize(gen, type), val_dst.reg, REG_RESULT, 0);
         }
         break;
     }
@@ -691,16 +691,20 @@ static void gen_constant(gen_t *gen, texloc_t location, function_t *function, vo
     }
 
     case VAL_DST_STACK: {
-        emit_push_reg(gen, location, function, REG_RESULT, type2movsize(gen, type), td->size);
+        if (td->size <= WORD_SIZE) {
+            emit_addr_to_reg(gen, function, loc, type2movsize(gen, type), REG_RESULT, REG_RESULT, 0);
+        }
+
+        emit_push_reg(gen, loc, function, REG_RESULT, type2movsize(gen, type), td->size);
         break;
     }
 
     case VAL_DST_STACK_POINT: {
-        emit_stack_point_to_reg(gen, function, location, REG_T, val_dst.stack_point);
+        emit_stack_point_to_reg(gen, function, loc, REG_T, val_dst.stack_point);
         if (td->size > WORD_SIZE) {
-            emit_multiword_addr_to_addr(gen, function, location, REG_T, REG_RESULT, REG_U, td->size);
+            emit_multiword_addr_to_addr(gen, function, loc, REG_T, REG_RESULT, REG_U, td->size);
         } else {
-            emit_reg_to_addr(gen, function, location, type2movsize(gen, type), REG_T, REG_RESULT, 0);
+            emit_reg_to_addr(gen, function, loc, type2movsize(gen, type), REG_T, REG_RESULT, 0);
         }
         break;
     }
@@ -1228,7 +1232,11 @@ static void gen_def_value(gen_t *gen, function_t *function, ast_node_t *def, val
         }
 
         case VAL_DST_STACK: {
-            emit_push_reg(gen, loc, function, REG_RESULT, REG_MOV_SIZE_MULTIWORD_ADDR, td->size);
+            if (td->size <= WORD_SIZE) {
+                emit_addr_to_reg(gen, function, loc, type2movsize(gen, def->value_type), REG_RESULT, REG_RESULT, 0);
+            }
+
+            emit_push_reg(gen, loc, function, REG_RESULT, type2movsize(gen, def->value_type), td->size);
             break;
         }
 
@@ -1535,19 +1543,75 @@ void gen_funcdef(ast_t *ast, vm_t *vm, ast_node_t *funcdef) {
     allocator_return(tmp);
 }
 
-static void gen_call(gen_t *gen, function_t *function, ast_node_t *call, bool is_intrinsic, val_dst_t val_dst) {
-    UNUSED(val_dst);
-    MUST(false); // todo
+static void gen_intrinsic_call(gen_t *gen, function_t *function, ast_node_t *call, val_dst_t val_dst) {
+    typedata_t *td = ast_type2td(gen->ast,  call->value_type);
 
-    typedata_t *call_td = ast_type2td(gen->ast,  call->value_type);
-    if (call_td->size > WORD_SIZE) {
-        emit_reserve_stack_space(gen, call->start.loc, function,  call_td->size);
+    texloc_t loc = call->start.loc;
+
+    size_t result_stack_point = 0;
+    switch (val_dst.type) {
+    case VAL_DST_STACK:
+    case VAL_DST_REG: {
+        emit_reserve_stack_space(gen, loc, function, b2w(td->size)*WORD_SIZE);
+        result_stack_point = gen_stack_point(gen);
+        break;
+    }
+
+    case VAL_DST_STACK_POINT: {
+        result_stack_point = val_dst.stack_point;
+        break;
+    }
+
+    case VAL_DST_RETURN: {
+        MUST(false); // todo
+        break;
+    }
     }
 
     size_t stack_point = gen_stack_point(gen);
 
+    // place arguments on stack for call
+    unless (TYPE_IS_VOID(call->children.items[an_call_arg_start(call)]->value_type)) {
+        for (size_t i = an_call_arg_start(call); i < an_call_arg_end(call); ++i) {
+            ast_node_t *arg = call->children.items[i];
+            gen_expression(gen, function, arg, val_dst_stack());
+        }
+    }
+
+    // prepare callee for call by putting it in the result register
+    gen_expression(gen, function, an_callee(call), val_dst_reg(REG_RESULT));
+
+    emit_stack_point_to_reg(gen, function, loc, REG_T, result_stack_point);
+
+    emit_intrinsic_call(function, REG_RESULT, REG_STACK_BOTTOM, REG_T, loc);
+
+    gen_pop_until_stack_point(gen, function, loc, stack_point, true);
+
+    switch (val_dst.type) {
+    case VAL_DST_REG: {
+        emit_stack_point_to_reg(gen, function, loc, val_dst.reg, result_stack_point);
+        break;
+    }
+
+    case VAL_DST_RETURN:
+    case VAL_DST_STACK:
+    case VAL_DST_STACK_POINT: break;
+    }
+}
+
+static void gen_call(gen_t *gen, function_t *function, ast_node_t *call, val_dst_t val_dst) {
+    UNUSED(val_dst);
+    MUST(false); // todo
+
+    texloc_t loc = call->start.loc;
+
+    typedata_t *call_td = ast_type2td(gen->ast,  call->value_type);
+    if (call_td->size > WORD_SIZE) {
+        emit_reserve_stack_space(gen, loc, function,  call_td->size);
+    }
+
     // store stack frame
-    emit_push_reg(gen, call->start.loc, function, REG_STACK_FRAME, REG_MOV_SIZE_WORD, 0);
+    emit_push_reg(gen, loc, function, REG_STACK_FRAME, REG_MOV_SIZE_WORD, 0);
 
     // place arguments on stack for call
     size_t argument_size_words = 0;
@@ -1555,39 +1619,24 @@ static void gen_call(gen_t *gen, function_t *function, ast_node_t *call, bool is
         for (size_t i = an_call_arg_start(call); i < an_call_arg_end(call); ++i) {
             ast_node_t *arg = call->children.items[i];
             typedata_t *td = type2typedata(&gen->ast->type_set.types, arg->value_type);
-            val_dst_t arg_dst = val_dst_stack();
-            gen_expression(gen, function, arg, arg_dst);
+            gen_expression(gen, function, arg, val_dst_stack());
             argument_size_words += b2w(td->size);
         }
-    }
-
-    // puts size of result on stack if intrinsic
-    if (is_intrinsic) {
-        typedata_t *resulttd = type2typedata(&gen->ast->type_set.types, call->value_type);
-        gen_constant(gen, an_callee(call)->start.loc, function, &resulttd->size, gen->ast->type_set.size_t_, val_dst_stack());
     }
 
     // prepare callee for call by putting it in the result register
     gen_expression(gen, function, an_callee(call), val_dst_reg(REG_RESULT));
 
-    if (is_intrinsic) {
-        emit_pop_to_reg(gen, token_end_loc(&call->end), function, REG_T, gen->ast->type_set.size_t_);
-        emit_intrinsic_call(function, REG_RESULT, REG_STACK_BOTTOM, REG_T, token_end_loc(&call->end));
+    // replace stack frame
+    emit_binu_reg_im(function, loc, REG_STACK_FRAME, REG_STACK_BOTTOM, argument_size_words*WORD_SIZE, '+');
 
-        gen_pop_until_stack_point(gen, function, token_end_loc(&call->end), stack_point, true);
+    emit_call(function, REG_RESULT, token_end_loc(&call->end));
 
-    } else {
-        // replace stack frame
-        emit_binu_reg_im(function, call->start.loc, REG_STACK_FRAME, REG_STACK_BOTTOM, argument_size_words*WORD_SIZE, '+');
+    // call consumes arguments
+    gen->stack_size -= argument_size_words*WORD_SIZE;
 
-        emit_call(function, REG_RESULT, token_end_loc(&call->end));
-
-        // call consumes arguments
-        gen->stack_size -= argument_size_words*WORD_SIZE;
-
-        // restore stack frame
-        emit_pop_to_reg(gen, token_end_loc(&call->end), function, REG_STACK_FRAME, gen->ast->type_set.u64_);
-    }
+    // restore stack frame
+    emit_pop_to_reg(gen, token_end_loc(&call->end), function, REG_STACK_FRAME, gen->ast->type_set.u64_);
 }
 
 static void gen_bcall(gen_t *gen, function_t *function, ast_node_t *call, val_dst_t val_dst) {
@@ -2032,7 +2081,11 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
         case AST_NODE_TYPE_EXPRESSION_CALL: {
             typedata_t *calleetd = type2typedata(&gen->ast->type_set.types, an_callee(expression)->value_type);
             bool is_intrinsic = (calleetd->kind == TYPE_INTRINSIC_FUNCTION);
-            gen_call(gen, function, expression, is_intrinsic, val_dst);
+            if (is_intrinsic) {
+                gen_intrinsic_call(gen, function, expression, val_dst);
+            } else {
+                gen_call(gen, function, expression, val_dst);
+            }
             break;
         }
 

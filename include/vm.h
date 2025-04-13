@@ -183,7 +183,7 @@ struct instruction_t {
 
         struct {
             byte reg_op;
-            byte reg_result_size;
+            byte reg_result_addr;
             byte reg_arg_bottom_memaddr;
             byte reg_result;
         } call;
@@ -637,21 +637,12 @@ void vm_step(vm_t *vm) {
 
         case OP_INTRINSIC_CALL: {
             void *ptr = vm->registers[in.as.call.reg_op].as.p;
-            u64 result_size = vm->registers[in.as.call.reg_result_size].as.u;
+            void *result_addr = vm->registers[in.as.call.reg_result_addr].as.p;
             void* args_address_bottom = vm->registers[in.as.call.reg_arg_bottom_memaddr].as.p;
 
-            size_t size = b2w(result_size)*WORD_SIZE;
-            if (size < WORD_SIZE) size = WORD_SIZE;
-
-            u8 result[size];
-            memset(result, 0, size);
-
             intrinsic_fn_t fn = (intrinsic_fn_t)ptr;
-            if (result_size > WORD_SIZE) TODO("not implemented yet");
 
-            fn(args_address_bottom, result);
-
-            vm->registers[in.as.call.reg_result] = *(word_t*)result;
+            fn(args_address_bottom, result_addr);
 
             IP_ADV(1);
             break;
