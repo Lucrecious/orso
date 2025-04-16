@@ -289,7 +289,7 @@ static void emit_multiword_addr_to_addr(gen_t *gen, function_t *function, texloc
 }
 
 // assumes that if type is too large for a register, then reg source pointers to a generic address
-static void emit_push_reg(gen_t *gen, texloc_t loc, function_t *function, reg_t reg_source, reg_mov_size_t mov_size, size_t size_bytes) {
+static void emit_push_reg(gen_t *gen, texloc_t loc, function_t *function, reg_t reg_src, reg_t tmp, reg_mov_size_t mov_size, size_t size_bytes) {
     if (mov_size == REG_MOV_SIZE_0) return;
 
     size_t size_in_words = b2w(size_bytes)*WORD_SIZE;
@@ -321,10 +321,10 @@ static void emit_push_reg(gen_t *gen, texloc_t loc, function_t *function, reg_t 
         // move stack pointer down to leave enough space for data
         emit_binu_reg_im(function, loc, REG_STACK_BOTTOM, REG_STACK_BOTTOM, size_in_words, '-');
 
-        emit_multiword_addr_to_addr(gen, function, loc, REG_STACK_BOTTOM, reg_source, REG_U, size_bytes);
+        emit_multiword_addr_to_addr(gen, function, loc, REG_STACK_BOTTOM, reg_src, tmp, size_bytes);
     } else {
         emit_binu_reg_im(function, loc, REG_STACK_BOTTOM, REG_STACK_BOTTOM, (u32)WORD_SIZE, '-');
-        emit_reg_to_addr(gen, function, loc, mov_size, REG_STACK_BOTTOM, reg_source, 0);
+        emit_reg_to_addr(gen, function, loc, mov_size, REG_STACK_BOTTOM, reg_src, 0);
     }
 }
 
@@ -554,7 +554,7 @@ static void emit_unary(gen_t *gen, texloc_t loc, function_t *function, token_typ
             t = td->as.ptr.type;
             typedata_t *inner_td = ast_type2td(gen->ast, t);
             if (inner_td->size > WORD_SIZE) {
-                emit_push_reg(gen, loc, function, op1, REG_MOV_SIZE_MULTIWORD_ADDR, inner_td->size);
+                emit_push_reg(gen, loc, function, op1, REG_T, REG_MOV_SIZE_MULTIWORD_ADDR, inner_td->size);
                 emit_reg_to_reg(function, loc, REG_RESULT, REG_STACK_BOTTOM);
             } else {
                 emit_addr_to_reg(gen, function, loc, type2movsize(gen, t), result, op1, 0);
@@ -671,7 +671,7 @@ static void emit_return_addr_to_reg(function_t *function, texloc_t loc, reg_t ds
     emit_binu_reg_im(function, loc, dst, REG_STACK_FRAME, WORD_SIZE, '+');
 }
 
-static void emit_val_dst_reg_or_stack(gen_t *gen, texloc_t loc, function_t *function, type_t type, reg_t reg, reg_t reg_src, bool is_addr_override) {
+static void emit_val_dst_reg_or_stack(gen_t *gen, texloc_t loc, function_t *function, type_t type, reg_t reg, reg_t reg_src, reg_t tmp, bool is_addr_override) {
     typedata_t *td = ast_type2td(gen->ast, type);
 
     bool is_addr;
@@ -683,7 +683,7 @@ static void emit_val_dst_reg_or_stack(gen_t *gen, texloc_t loc, function_t *func
 
     if (is_addr) {
         if (td->size > WORD_SIZE) {
-            emit_push_reg(gen, loc, function, reg_src, type2movsize(gen, type), td->size);
+            emit_push_reg(gen, loc, function, reg_src, tmp, type2movsize(gen, type), td->size);
             if (reg != reg_src) {
                 emit_reg_to_reg(function, loc, reg, reg_src);
             }
@@ -697,7 +697,7 @@ static void emit_val_dst_reg_or_stack(gen_t *gen, texloc_t loc, function_t *func
     }
 }
 
-static void emit_val_dst_stack(gen_t *gen, texloc_t loc, function_t *function, type_t type, reg_t reg_src, reg_t reg_tmp, bool is_addr_override) {
+static void emit_val_dst_stack(gen_t *gen, texloc_t loc, function_t *function, type_t type, reg_t reg_src, reg_t tmp1, reg_t tmp2, bool is_addr_override) {
     typedata_t *td = ast_type2td(gen->ast, type);
     bool is_addr = true;
     unless (is_addr_override) {
@@ -706,13 +706,13 @@ static void emit_val_dst_stack(gen_t *gen, texloc_t loc, function_t *function, t
 
     if (is_addr) {
         if (td->size > WORD_SIZE) {
-            emit_push_reg(gen, loc, function, reg_src, type2movsize(gen, type), td->size);
+            emit_push_reg(gen, loc, function, reg_src, tmp1, type2movsize(gen, type), td->size);
         } else {
-            emit_addr_to_reg(gen, function, loc, type2movsize(gen, type), reg_tmp, reg_src, 0);
-            emit_push_reg(gen, loc, function, reg_tmp, type2movsize(gen, type), td->size);
+            emit_addr_to_reg(gen, function, loc, type2movsize(gen, type), tmp1, reg_src, 0);
+            emit_push_reg(gen, loc, function, tmp1, tmp2, type2movsize(gen, type), td->size);
         }
     } else {
-        emit_push_reg(gen, loc, function, reg_src, type2movsize(gen, type), td->size);
+        emit_push_reg(gen, loc, function, reg_src, tmp1, type2movsize(gen, type), td->size);
     }
 }
 
@@ -736,38 +736,60 @@ static void emit_val_dst_stack_point(gen_t *gen, texloc_t loc, function_t *funct
     }
 }
 
+static void emit_val_dst_return(gen_t *gen, texloc_t loc, function_t *function, type_t type, reg_t reg_src, reg_t tmp1, reg_t tmp2, bool is_addr_override) {
+    typedata_t *td = ast_type2td(gen->ast, type);
+    bool is_addr = true;
+    unless (is_addr_override) {
+        is_addr = td->size > WORD_SIZE;
+    }
+
+    if (is_addr) {
+        if (td->size > WORD_SIZE) {
+            emit_return_addr_to_reg(function, loc, tmp1);
+            emit_multiword_addr_to_addr(gen, function, loc, tmp1, reg_src, tmp2, td->size);
+            emit_return_addr_to_reg(function, loc, REG_RESULT);
+        } else {
+            if (reg_src != REG_RESULT) {
+                emit_addr_to_reg(gen, function, loc, type2movsize(gen, type), REG_RESULT, reg_src, 0);
+            }
+        }
+    } else {
+        if (reg_src != REG_RESULT) {
+            emit_reg_to_reg(function, loc, REG_RESULT, reg_src);
+        }
+    }
+}
+
+static void emit_reg_to_val_dst(gen_t *gen, texloc_t loc, function_t *function, type_t type, val_dst_t val_dst, reg_t src, reg_t tmp1, reg_t tmp2, bool is_addr_override) {
+    switch (val_dst.type) {
+    case VAL_DST_REG_OR_STACK: {
+        emit_val_dst_reg_or_stack(gen, loc, function, type, val_dst.reg, src, tmp1, is_addr_override);
+        break;
+    }
+
+    case VAL_DST_RETURN: {
+        emit_val_dst_return(gen, loc, function, type, src, tmp1, tmp2, is_addr_override);
+        break;
+    }
+
+    case VAL_DST_STACK: {
+        emit_val_dst_stack(gen, loc, function, type, src, tmp1, tmp2, is_addr_override);
+        break;
+    }
+
+    case VAL_DST_STACK_POINT: {
+        emit_val_dst_stack_point(gen, loc, function, type, src, tmp1, tmp2, val_dst.stack_point, is_addr_override);
+        break;
+    }
+    }
+}
+
 static void gen_constant(gen_t *gen, texloc_t loc, function_t *function, void *data, type_t type, val_dst_t val_dst) {
     typedata_t *td = type2typedata(&gen->ast->type_set.types, type);
 
     add_constant(gen, function, loc, data, td->size, REG_RESULT);
 
-    switch (val_dst.type) {
-    case VAL_DST_REG_OR_STACK: {
-        emit_val_dst_reg_or_stack(gen, loc, function, type, val_dst.reg, REG_RESULT, true);
-        break;
-    }
-
-    case VAL_DST_RETURN: {
-        if (td->size > WORD_SIZE) {
-            emit_return_addr_to_reg(function, loc, REG_T);
-            emit_multiword_addr_to_addr(gen, function, loc, REG_T, REG_RESULT, REG_U, td->size);
-            emit_reg_to_reg(function, loc, REG_RESULT, REG_T);
-        } else {
-            emit_addr_to_reg(gen, function, loc, type2movsize(gen, type), val_dst.reg, REG_RESULT, 0);
-        }
-        break;
-    }
-
-    case VAL_DST_STACK: {
-        emit_val_dst_stack(gen, loc, function, type, REG_RESULT, REG_T, true);
-        break;
-    }
-
-    case VAL_DST_STACK_POINT: {
-        emit_val_dst_stack_point(gen, loc, function, type, REG_RESULT, REG_T, REG_U, val_dst.stack_point, true);
-        break;
-    }
-    }
+    emit_reg_to_val_dst(gen, loc, function, type, val_dst, REG_RESULT, REG_T, REG_U, true);
 }
 
 static void gen_binary(gen_t *gen, function_t *function, ast_node_t *binary, val_dst_t val_dst) {
@@ -788,7 +810,7 @@ static void gen_binary(gen_t *gen, function_t *function, ast_node_t *binary, val
         {
             // do the implicit multiplication required for ptr arithmetic
             if (lhstd->kind == TYPE_POINTER && typeid_eq(rhs->value_type, gen->ast->type_set.ptrdiff_t_)) {
-                emit_push_reg(gen, loc, function, REG_RESULT, type2movsize(gen, rhs->value_type), 0);
+                emit_push_reg(gen, loc, function, REG_RESULT, REG_T, type2movsize(gen, rhs->value_type), 0);
 
                 typedata_t *lhsinnertd = type2typedata(&gen->ast->type_set.types, lhstd->as.ptr.type);
 
@@ -806,25 +828,7 @@ static void gen_binary(gen_t *gen, function_t *function, ast_node_t *binary, val
 
         emit_bin_op(loc, function, binary->operator.type, optd, REG_T, REG_RESULT, REG_RESULT);
 
-        switch (val_dst.type) {
-        case VAL_DST_REG_OR_STACK: {
-            emit_val_dst_reg_or_stack(gen, loc, function, binary->value_type, val_dst.reg, REG_RESULT, false);
-            break;
-        }
-        case VAL_DST_RETURN: {
-            ASSERT(optd->size <= WORD_SIZE, "this is not implemented for bigger sizes yet");
-            break;
-        }
-        case VAL_DST_STACK: {
-            emit_val_dst_stack(gen, loc, function, binary->value_type, REG_RESULT, REG_T, false);
-            break;
-        }
-
-        case VAL_DST_STACK_POINT: {
-            emit_val_dst_stack_point(gen, loc, function, binary->value_type, REG_RESULT, REG_T, REG_U, val_dst.stack_point, false);
-            break;
-        }
-        }
+        emit_reg_to_val_dst(gen, loc, function, binary->value_type, val_dst, REG_RESULT, REG_T, REG_U, false);
 
     } else if (operator_is_logical(op)) {
         ast_node_t *lhs = an_lhs(binary);
@@ -856,7 +860,7 @@ static void gen_local_addr(gen_t *gen, texloc_t loc, function_t *function, local
 
     case VAL_DST_STACK: {
         emit_stack_point_to_reg(gen, function, loc, REG_U, local->stack_location);
-        emit_push_reg(gen, loc, function, REG_U, REG_MOV_SIZE_WORD, WORD_SIZE);
+        emit_push_reg(gen, loc, function, REG_U, REG_T, REG_MOV_SIZE_WORD, WORD_SIZE);
         break;
     }
     
@@ -900,7 +904,7 @@ size_t get_inner_data_type(ast_t *ast, type_t type) {
 
 static void gen_item_access_array_addr(gen_t *gen, function_t *function, texloc_t loc, val_dst_t val_dst, reg_t reg_lvalue, ast_node_t *accessor, type_t accessee_type) {
     // push lvalue
-    emit_push_reg(gen, loc, function, reg_lvalue, REG_MOV_SIZE_WORD, 0);
+    emit_push_reg(gen, loc, function, reg_lvalue, REG_T, REG_MOV_SIZE_WORD, 0);
 
     gen_expression(gen, function, accessor, val_dst_stack());
 
@@ -921,21 +925,7 @@ static void gen_item_access_array_addr(gen_t *gen, function_t *function, texloc_
         emit_bin_op(loc, function, TOKEN_PLUS, td, REG_T, REG_RESULT, REG_RESULT);
     }
 
-    switch (val_dst.type) {
-    case VAL_DST_REG_OR_STACK: {
-        emit_val_dst_reg_or_stack(gen, loc, function, gen->ast->type_set.u64_, val_dst.reg, REG_RESULT, false);
-        break;
-    }
-    case VAL_DST_RETURN: break; // return values go into reg result
-    case VAL_DST_STACK: {
-        emit_push_reg(gen, loc, function, REG_RESULT, REG_MOV_SIZE_WORD, WORD_SIZE);
-        break;
-    }
-    case VAL_DST_STACK_POINT: {
-        emit_val_dst_stack_point(gen, loc, function, gen->ast->type_set.u64_, REG_RESULT, REG_T, REG_U, val_dst.stack_point, false);
-        break;
-    }
-    }
+    emit_reg_to_val_dst(gen, loc, function, gen->ast->type_set.u64_, val_dst, REG_RESULT, REG_T, REG_U, false);
 }
 
 static void gen_lvalue(gen_t *gen, function_t *function, ast_node_t *lvalue, val_dst_t val_dst) {
@@ -1013,23 +1003,7 @@ static void gen_unary(gen_t *gen, function_t *function, ast_node_t *unary, val_d
         gen_expression(gen, function, expr, val_dst_reg_or_stack(REG_RESULT));
         emit_unary(gen, token_end_loc(&unary->end), function, unary->operator.type, expr->value_type, REG_RESULT, REG_RESULT);
 
-        switch (val_dst.type) {
-        case VAL_DST_REG_OR_STACK: {
-            emit_val_dst_reg_or_stack(gen, loc, function, unary->value_type, val_dst.reg, REG_RESULT, false);
-            break;
-        }
-
-        case VAL_DST_RETURN: break; // returns go to result reg
-        case VAL_DST_STACK: {
-            emit_val_dst_stack(gen, loc, function, unary->value_type, REG_RESULT, REG_T, false);
-            break;
-        }
-
-        case VAL_DST_STACK_POINT: {
-            emit_val_dst_stack_point(gen, loc, function, unary->value_type, REG_RESULT, REG_T, REG_U, val_dst.stack_point, false);
-            break;
-        }
-        }
+        emit_reg_to_val_dst(gen, loc, function, unary->value_type, val_dst, REG_RESULT, REG_T, REG_U, false);
     }
 }
 
@@ -1231,59 +1205,11 @@ static void gen_def_value(gen_t *gen, function_t *function, ast_node_t *def, val
     size_t global_index;
     if (table_get(ptr2sz, gen->decl2index, def->ref_decl, &global_index)) {
         gen_global_addr(gen, loc, function, global_index, REG_RESULT);
-
-        switch (val_dst.type) {
-        case VAL_DST_REG_OR_STACK: {
-            emit_val_dst_reg_or_stack(gen, loc, function, def->value_type, val_dst.reg, REG_RESULT, true);
-            break;
-        }
-
-        case VAL_DST_RETURN: {
-            emit_addr_to_reg(gen, function, loc, type2movsize(gen, def->value_type), REG_RESULT, REG_RESULT, 0);
-            break;
-        }
-
-        case VAL_DST_STACK: {
-            emit_val_dst_stack(gen, loc, function, def->value_type, REG_RESULT, REG_T, true);
-        }
-
-        case VAL_DST_STACK_POINT: {
-            emit_val_dst_stack_point(gen, loc, function, def->value_type, REG_RESULT, REG_T, REG_U, val_dst.stack_point, true);
-            break;
-        }
-        }
+        emit_reg_to_val_dst(gen, loc, function, def->value_type, val_dst, REG_RESULT, REG_T, REG_U, true);
     } else {
         local_t *local = find_local(gen, def->ref_decl);
-
         gen_local_addr(gen, loc, function, local, val_dst_reg_or_stack(REG_RESULT));
-
-        typedata_t *td = ast_type2td(gen->ast, def->value_type);
-
-        switch (val_dst.type) {
-        case VAL_DST_REG_OR_STACK: {
-            emit_val_dst_reg_or_stack(gen, loc, function, def->value_type, val_dst.reg, REG_RESULT, true);
-            break;
-        }
-
-        case VAL_DST_RETURN: {
-            if (td->size > WORD_SIZE) {
-                MUST(false);
-            } else {
-                emit_addr_to_reg(gen, function, loc, type2movsize(gen, def->value_type), REG_RESULT, REG_RESULT, 0);
-            }
-            break;
-        }
-
-        case VAL_DST_STACK: {
-            emit_val_dst_stack(gen, loc, function, def->value_type, REG_RESULT, REG_T, true);
-            break;
-        }
-
-        case VAL_DST_STACK_POINT: {
-            emit_val_dst_stack_point(gen, loc, function, def->value_type, REG_RESULT, REG_T, REG_U, val_dst.stack_point, true);
-            break;
-        }
-        }
+        emit_reg_to_val_dst(gen, loc, function, def->value_type, val_dst, REG_RESULT, REG_T, REG_U, true);
     }
 }
 
@@ -1327,7 +1253,7 @@ static size_t gen_condition(gen_t *gen, ast_node_t *branch, function_t *function
     ast_node_t *condition = an_condition(branch);
     texloc_t loc = condition->start.loc;
 
-    emit_push_reg(gen, loc, function, REG_RESULT, REG_MOV_SIZE_WORD, 0);
+    emit_push_reg(gen, loc, function, REG_RESULT, REG_T, REG_MOV_SIZE_WORD, 0);
 
     gen_expression(gen, function, condition, val_dst_reg_or_stack(REG_RESULT));
 
@@ -1462,14 +1388,14 @@ static void gen_assignment(gen_t *gen, function_t *function, ast_node_t *assignm
 
     case VAL_DST_STACK: {
         if (td->size <= WORD_SIZE) {
-            emit_push_reg(gen, loc, function, REG_RESULT, type2movsize(gen, assignment->value_type), td->size);
+            emit_push_reg(gen, loc, function, REG_RESULT, REG_T, type2movsize(gen, assignment->value_type), td->size);
         }
         break;
     }
 
     case VAL_DST_RETURN: {
+        emit_val_dst_stack(gen, loc, function, assignment->value_type, REG_RESULT, REG_T, REG_U, false);
         gen_pop_until_stack_point(gen, function, loc, clean_stack_point, true);
-        MUST(false); // todo
         break;
     }
 
@@ -1579,11 +1505,24 @@ static void gen_intrinsic_call(gen_t *gen, function_t *function, ast_node_t *cal
 
     size_t result_stack_point = 0;
     switch (val_dst.type) {
-    case VAL_DST_RETURN:
     case VAL_DST_STACK:
     case VAL_DST_REG_OR_STACK: {
         emit_reserve_stack_space(gen, loc, function, b2w2b(td->size));
         result_stack_point = gen_stack_point(gen);
+        break;
+    }
+
+    /* rational: since we cannot get the address of a register and because returns go in the result register,
+     * if the value is small then i must reserve space for it on the stack for the intrinsic call to set the value on.
+     * but if it's big, then its address is on the stack (albiet in a different stack frame).
+     * so the idea is to provide the intrinsic call instruction the return address on the stack
+     * if it's a big value, otherwise, i simply pop the final result onto the result register
+    */
+    case VAL_DST_RETURN: {
+        if (td->size <= WORD_SIZE) {
+            emit_reserve_stack_space(gen, loc, function, b2w2b(td->size));
+            result_stack_point = gen_stack_point(gen);
+        }
         break;
     }
 
@@ -1607,9 +1546,15 @@ static void gen_intrinsic_call(gen_t *gen, function_t *function, ast_node_t *cal
     gen_expression(gen, function, an_callee(call), val_dst_reg_or_stack(REG_RESULT));
 
     // prepare addr where return value goes
-    emit_stack_point_to_reg(gen, function, loc, REG_T, result_stack_point);
+    if (val_dst.type == VAL_DST_RETURN && td->size > WORD_SIZE) {
+        emit_return_addr_to_reg(function, loc, REG_T);
+    } else {
+        emit_stack_point_to_reg(gen, function, loc, REG_T, result_stack_point);
+    }
 
     emit_intrinsic_call(function, REG_RESULT, REG_STACK_BOTTOM, REG_T, loc);
+
+    gen_pop_until_stack_point(gen, function, loc, stack_point, true);
 
     switch (val_dst.type) {
     case VAL_DST_REG_OR_STACK: {
@@ -1621,13 +1566,18 @@ static void gen_intrinsic_call(gen_t *gen, function_t *function, ast_node_t *cal
         break;
     }
 
-    case VAL_DST_RETURN: MUST(false); break; //todo
+    case VAL_DST_RETURN: {
+        if (td->size > WORD_SIZE) {
+            emit_return_addr_to_reg(function, loc, REG_RESULT);
+        } else {
+            emit_pop_to_reg(gen, loc, function, val_dst.reg, call->value_type);
+        }
+        break;
+    }
 
     case VAL_DST_STACK:
     case VAL_DST_STACK_POINT: break;
     }
-
-    gen_pop_until_stack_point(gen, function, loc, stack_point, true);
 }
 
 static void gen_call(gen_t *gen, function_t *function, ast_node_t *call, val_dst_t val_dst) {
@@ -1642,7 +1592,7 @@ static void gen_call(gen_t *gen, function_t *function, ast_node_t *call, val_dst
     }
 
     // store stack frame
-    emit_push_reg(gen, loc, function, REG_STACK_FRAME, REG_MOV_SIZE_WORD, 0);
+    emit_push_reg(gen, loc, function, REG_STACK_FRAME, REG_T, REG_MOV_SIZE_WORD, 0);
 
     // place arguments on stack for call
     size_t argument_size_words = 0;
@@ -1813,38 +1763,17 @@ static void emit_cast(gen_t *gen, function_t *function, type_t dest, type_t sour
 
 static void gen_cast(gen_t *gen, function_t *function, ast_node_t *cast, val_dst_t val_dst) {
     texloc_t loc = cast->start.loc;
-    typedata_t *td = ast_type2td(gen->ast, cast->value_type);
 
     ast_node_t *expr = an_cast_expr(cast);
     gen_expression(gen, function, expr, val_dst_reg_or_stack(REG_RESULT));
 
     emit_cast(gen, function, cast->value_type, expr->value_type, loc);
 
-    switch (val_dst.type) {
-    case VAL_DST_REG_OR_STACK: {
-        emit_val_dst_reg_or_stack(gen, loc, function, cast->value_type, val_dst.reg, REG_RESULT, false);
-        break;
-    }
-
-    case VAL_DST_RETURN: {
-        MUST(false); // todo
-    }
-
-    case VAL_DST_STACK: {
-        emit_val_dst_stack(gen, loc, function, cast->value_type, REG_RESULT, REG_T, false);
-        break;
-    }
-
-    case VAL_DST_STACK_POINT: {
-        emit_val_dst_stack_point(gen, loc, function, cast->value_type, REG_RESULT, REG_T, REG_U, val_dst.stack_point, false);
-        break;
-    }
-    }
+    emit_reg_to_val_dst(gen, loc, function, cast->value_type, val_dst, REG_RESULT, REG_T, REG_U, true);
 }
 
 static void gen_item_access(gen_t *gen, function_t *function, ast_node_t *item_access, val_dst_t val_dst) {
     texloc_t loc = item_access->start.loc;
-    typedata_t *td = ast_type2td(gen->ast, item_access->value_type);
 
     ast_node_t *accessee = an_item_accessee(item_access);
     typedata_t *accessee_td = ast_type2td(gen->ast, accessee->value_type);
@@ -1866,7 +1795,7 @@ static void gen_item_access(gen_t *gen, function_t *function, ast_node_t *item_a
         gen_expression(gen, function, accessee, val_dst_reg_or_stack(REG_RESULT));
 
         if (accessee_td->size <= WORD_SIZE) {
-            emit_push_reg(gen, loc, function, REG_RESULT, type2movsize(gen, accessee->value_type), 0);
+            emit_push_reg(gen, loc, function, REG_RESULT, REG_T, type2movsize(gen, accessee->value_type), 0);
             emit_reg_to_reg(function, loc, REG_RESULT, REG_STACK_BOTTOM);
         }
 
@@ -1893,26 +1822,7 @@ static void gen_item_access(gen_t *gen, function_t *function, ast_node_t *item_a
         }
     }
 
-    switch (val_dst.type) {
-    case VAL_DST_REG_OR_STACK: {
-        emit_val_dst_reg_or_stack(gen, loc, function, item_access->value_type, val_dst.reg, REG_RESULT, false);
-        break;
-    }
-
-    case VAL_DST_RETURN: {
-        MUST(false); // todo
-    }
-
-    case VAL_DST_STACK: {
-        emit_val_dst_stack(gen, loc, function, item_access->value_type, REG_RESULT, REG_T, false);
-        break;
-    }
-
-    case VAL_DST_STACK_POINT: {
-        emit_val_dst_stack_point(gen, loc, function, item_access->value_type, REG_RESULT, REG_T, REG_U, val_dst.stack_point, false);
-        break;
-    }
-    }
+    emit_reg_to_val_dst(gen, loc, function, item_access->value_type, val_dst, REG_RESULT, REG_T, REG_U, true);
 }
 
 static void gen_initializer_list(gen_t *gen, function_t *function, ast_node_t *list, val_dst_t val_dst) {
@@ -1954,26 +1864,7 @@ static void gen_initializer_list(gen_t *gen, function_t *function, ast_node_t *l
         default: UNREACHABLE(); break;
     }
 
-    switch (val_dst.type) {
-    case VAL_DST_REG_OR_STACK: {
-        emit_val_dst_reg_or_stack(gen, loc, function, list->value_type, val_dst.reg, REG_RESULT, false);
-        break;
-    }
-
-    case VAL_DST_RETURN: {
-        MUST(false); // todo
-    }
-
-    case VAL_DST_STACK: {
-        emit_val_dst_stack(gen, loc, function, list->value_type, REG_RESULT, REG_T, false);
-        break;
-    }
-
-    case VAL_DST_STACK_POINT: {
-        emit_val_dst_stack_point(gen, loc, function, list->value_type, REG_RESULT, REG_T, REG_U, val_dst.stack_point, false);
-        break;
-    }
-    }
+    emit_reg_to_val_dst(gen, loc, function, list->value_type, val_dst, REG_RESULT, REG_T, REG_U, true);
 }
 
 static void gen_block(gen_t *gen, function_t *function, ast_node_t *block, val_dst_t val_dst) {
@@ -2146,7 +2037,7 @@ static void gen_module(gen_t *gen, ast_node_t *module, function_t *init_func) {
             emit_reserve_stack_space(gen, loc, init_func, b2w(td->size)*WORD_SIZE);
             result_stack_point = gen_stack_point(gen);
         }
-        emit_push_reg(gen, loc, init_func, REG_RESULT, REG_MOV_SIZE_WORD, 0);
+        emit_push_reg(gen, loc, init_func, REG_RESULT, REG_T, REG_MOV_SIZE_WORD, 0);
 
         ast_node_t *expr = an_decl_expr(decldef);
         val_dst_t dst = val_dst_reg_or_stack(REG_RESULT);
