@@ -1,7 +1,14 @@
+add :: @macro (a: !u, b: u) -> u {
+    return a + b + ^v;
+};
 main :: () -> void {
     x := 2;
     y := 5;
-    printint(x + y);
+    z := {
+        z := 13;
+        x + y + z;
+    };
+    printint(z);
     println();
 };
 // main :: () -> void {
