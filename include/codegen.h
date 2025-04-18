@@ -749,9 +749,7 @@ static void emit_val_dst_return(gen_t *gen, texloc_t loc, function_t *function, 
             emit_multiword_addr_to_addr(gen, function, loc, tmp1, reg_src, tmp2, td->size);
             emit_return_addr_to_reg(function, loc, REG_RESULT);
         } else {
-            if (reg_src != REG_RESULT) {
-                emit_addr_to_reg(gen, function, loc, type2movsize(gen, type), REG_RESULT, reg_src, 0);
-            }
+            emit_addr_to_reg(gen, function, loc, type2movsize(gen, type), REG_RESULT, reg_src, 0);
         }
     } else {
         if (reg_src != REG_RESULT) {

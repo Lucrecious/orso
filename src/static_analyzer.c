@@ -377,7 +377,10 @@ type_t resolve_block_return_types_or_error(analyzer_t *analyzer, ast_node_t *blo
                 }
             }
 
-            MUST(types.count > 0);
+            if (types.count == 0) {
+                return typeid(TYPE_UNREACHABLE);
+            }
+
             type_t type = types.items[0];
             ast_node_t *node = nodes.items[0];
 
