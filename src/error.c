@@ -127,7 +127,6 @@ static cstr_t tokentype2string(token_type_t token_type) {
     switch (token_type) {
         case TOKEN_AMPERSAND: return "&";
         case TOKEN_AND: return "and";
-        case TOKEN_AND_EQUAL: return "and=";
         case TOKEN_ANNOTATION: return "<annotation>";
         case TOKEN_ARROW_RIGHT: return "->";
         case TOKEN_AS: return "as";
@@ -166,7 +165,6 @@ static cstr_t tokentype2string(token_type_t token_type) {
         case TOKEN_MINUS_MINUS: return "--";
         case TOKEN_NOT: return "not";
         case TOKEN_OR: return "or";
-        case TOKEN_OR_EQUAL: return "or=";
         case TOKEN_PARENTHESIS_CLOSE: return ")";
         case TOKEN_PARENTHESIS_OPEN: return "(";
         case TOKEN_PERCENT: return "%";

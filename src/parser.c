@@ -1795,8 +1795,6 @@ parse_rule_t rules[] = {
     [TOKEN_STAR_EQUAL]              = { NULL,               parse_assignment,   PREC_ASSIGNMENT},
     [TOKEN_PERCENT_EQUAL]           = { NULL,               parse_assignment,   PREC_ASSIGNMENT},
     [TOKEN_PERCENT_PERCENT_EQUAL]   = { NULL,               parse_assignment,   PREC_ASSIGNMENT},
-    [TOKEN_AND_EQUAL]               = { NULL,               parse_assignment,   PREC_ASSIGNMENT},
-    [TOKEN_OR_EQUAL]                = { NULL,               parse_assignment,   PREC_ASSIGNMENT},
 
     [TOKEN_BANG]                    = { parse_inferred_type_decl, NULL,         PREC_UNARY },
     [TOKEN_LESS]                    = { NULL,               parse_binary,       PREC_COMPARISON },
@@ -2199,10 +2197,8 @@ token_type_t parser_opeq2op(token_type_t type) {
     case TOKEN_SLASH_EQUAL: return TOKEN_SLASH;
     case TOKEN_PERCENT_EQUAL: return TOKEN_PERCENT;
     case TOKEN_PERCENT_PERCENT_EQUAL: return TOKEN_PERCENT_PERCENT;
-    case TOKEN_OR_EQUAL: return TOKEN_OR;
-    case TOKEN_AND_EQUAL: return TOKEN_AND;
-
-    default: return TOKEN_EQUAL;
+    case TOKEN_EQUAL: return TOKEN_EQUAL;
+    default: return TOKEN_ERROR;
     }
 }
 

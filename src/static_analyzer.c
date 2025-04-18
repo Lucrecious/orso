@@ -2125,21 +2125,6 @@ void resolve_expression(
                 break;
             }
 
-            case TOKEN_OR_EQUAL:
-            case TOKEN_AND_EQUAL: {
-                typedata_t *td = ast_type2td(ast, lhs->value_type);
-                if ((td->capabilities & TYPE_CAP_LOGICAL) == 0) {
-                    stan_error(analyzer, OR_ERROR(
-                        .tag = ERROR_ANALYSIS_EXPECTED_LVALUE,
-                        .level = ERROR_SOURCE_ANALYSIS,
-                        .msg = lit2str("type '$1.$' does not have logical capabilities"),
-                        .args = ORERR_ARGS(error_arg_node(lhs), error_arg_type(lhs->value_type)),
-                        .show_code_lines = ORERR_LINES(0),
-                    ));
-                }
-                break;
-            }
-
             case TOKEN_EQUAL: break;
 
             default: UNREACHABLE(); break;

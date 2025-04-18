@@ -393,17 +393,6 @@ token_t _lexer_next_token(lexer_t *lexer) {
 
     if (is_alpha(c)) {
         token_t t = identifier(lexer);
-
-        // special case if certain keyword and =s after
-        if ((t.type == TOKEN_AND || t.type == TOKEN_OR) && match(lexer, '=')) {
-            t.type = t.type == TOKEN_AND
-                    ? TOKEN_AND_EQUAL : TOKEN_OR_EQUAL;
-            
-            t.view.length += 1;
-            t.loc.column += 1;
-            return t;
-        }
-
         return t;
     }
 
