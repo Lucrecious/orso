@@ -5,16 +5,6 @@
 #include "parser.h"
 #include "intrinsics.h"
 
-typedef enum reg_t reg_t;
-enum reg_t {
-    REG_NULL = 0,
-    REG_RESULT = 'r',
-    REG_T = 't',
-    REG_U = 'u',
-    REG_STACK_BOTTOM = 's',
-    REG_STACK_FRAME = 'f',
-};
-
 typedef void (*write_function_t)(const char* chars);
 
 typedef enum op_code_t op_code_t;

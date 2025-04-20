@@ -248,6 +248,31 @@ struct type_patterns_t {
     arena_t *allocator;
 };
 
+typedef enum reg_t reg_t;
+enum reg_t {
+    REG_NULL = 0,
+    REG_RESULT = 'r',
+    REG_T = 't',
+    REG_U = 'u',
+    REG_STACK_BOTTOM = 's',
+    REG_STACK_FRAME = 'f',
+};
+
+typedef enum val_dst_type_t val_dst_type_t;
+enum val_dst_type_t {
+    VAL_DST_VOID,
+    VAL_DST_REG,
+    VAL_DST_STACK_POINT,
+    VAL_DST_RETURN,
+};
+
+typedef struct val_dst_t val_dst_t;
+struct val_dst_t {
+    val_dst_type_t type;
+    size_t stack_point;
+    reg_t reg;
+};
+
 // the ast node is pretty large and redundant right now on purpose
 // once the ast node is stable, it'll be compressed since many of these
 // fields are mutally exclusive
@@ -288,7 +313,7 @@ struct ast_node_t {
     inferred_funcdef_copies_t realized_funcdef_copies;
 
     size_t vm_jmp_index;
-    size_t vm_stack_point;
+    val_dst_t vm_val_dst;
     string_t ccode_break_label;
     string_t ccode_continue_label;
     string_t ccode_var_name;

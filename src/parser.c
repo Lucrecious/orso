@@ -356,7 +356,7 @@ ast_node_t *ast_node_copy(ast_t *ast, ast_node_t *node) {
 
     copy->value_type = node->value_type;
     copy->vm_jmp_index = node->vm_jmp_index;
-    copy->vm_stack_point = node->vm_stack_point;
+    copy->vm_val_dst = node->vm_val_dst;
 
     return copy;
 }
@@ -573,24 +573,24 @@ static ast_node_t *ast_statement(ast_t *ast, ast_node_t *expr) {
     return statement_node;
 }
 
-static ast_node_t *ast_break(ast_t *ast, ast_node_t *expr, token_t label, token_t start) {
-    ast_node_t *break_ = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_JMP, start);
+static ast_node_t *ast_break(ast_t *ast, ast_node_t *expr, token_t label, token_t jmp_token) {
+    ast_node_t *break_ = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_JMP, jmp_token);
     an_expression(break_) = expr;
     break_->identifier = label;
     break_->end = expr->end;
     return break_;
 }
 
-static ast_node_t *ast_continue(ast_t *ast, token_t label, token_t start) {
-    ast_node_t *continue_ = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_JMP, start);
+static ast_node_t *ast_continue(ast_t *ast, token_t label, token_t jmp_token) {
+    ast_node_t *continue_ = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_JMP, jmp_token);
     an_expression(continue_) = ast_nil(ast, typeid(TYPE_VOID), token_implicit_at_end(label));
     continue_->identifier = label;
     continue_->end = label;
     return continue_;
 }
 
-static ast_node_t *ast_return(ast_t *ast, ast_node_t *expr, token_t start) {
-    ast_node_t *return_ = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_JMP, start);
+static ast_node_t *ast_return(ast_t *ast, ast_node_t *expr, token_t jmp_token) {
+    ast_node_t *return_ = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_JMP, jmp_token);
     an_expression(return_) = expr;
     return_->end = expr->end;
     return return_;
@@ -959,10 +959,10 @@ static ast_node_t *parse_number(parser_t *parser) {
 }
 
 static ast_node_t *parse_jmp(parser_t *parser) {
-    token_t start_token = parser->previous;
+    token_t jmp_token = parser->previous;
     token_type_t jmp_type = parser->previous.type;
 
-    token_t label = token_implicit_at_end(start_token);
+    token_t label = token_implicit_at_end(jmp_token);
     if (jmp_type == TOKEN_BREAK || jmp_type == TOKEN_CONTINUE) {
         if (match(parser, TOKEN_COLON)) {
             unless (consume(parser, TOKEN_IDENTIFIER)) {
@@ -989,9 +989,9 @@ static ast_node_t *parse_jmp(parser_t *parser) {
 
 
     switch (jmp_type) {
-        case TOKEN_BREAK: return ast_break(parser->ast, expr, label, start_token);
-        case TOKEN_CONTINUE: return ast_continue(parser->ast, label, start_token);
-        case TOKEN_RETURN: return ast_return(parser->ast, expr, start_token);
+        case TOKEN_BREAK: return ast_break(parser->ast, expr, label, jmp_token);
+        case TOKEN_CONTINUE: return ast_continue(parser->ast, label, jmp_token);
+        case TOKEN_RETURN: return ast_return(parser->ast, expr, jmp_token);
         default: UNREACHABLE();
     }
 }

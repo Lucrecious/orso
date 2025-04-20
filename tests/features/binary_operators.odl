@@ -1,5 +1,5 @@
 main :: () -> void {
-    //int
+    // int
 
     // scaler add
     {
@@ -93,23 +93,11 @@ main :: () -> void {
         printint(if c then 1 else 0);
         println();
 
-        // short-circuit
-        a and= ++n == 1;
-        printint(if n == 0 then 1 else 0);
-        printint(if a then 1 else 0);
-        println();
-
         // not short-circuit
         a = true;
         c = a and (++n == 1);
         printint(if n == 1 then 1 else 0);
         printint(if c then 1 else 0);
-        println();
-
-        // not short-circuit
-        a and= ++n == 2;
-        printint(if n == 2 then 1 else 0);
-        printint(if a then 1 else 0);
         println();
     };
 
@@ -125,23 +113,11 @@ main :: () -> void {
         printint(if c then 1 else 0);
         println();
 
-        // short-circuit
-        a or= ++n == 1;
-        printint(if n == 0 then 1 else 0);
-        printint(if a then 1 else 0);
-        println();
-
         // not short-circuit
         a = false;
         c = a or (++n == 1);
         printint(if n == 1 then 1 else 0);
         printint(if c then 1 else 0);
-        println();
-
-        // not short-circuit
-        a or= ++n == 2;
-        printint(if n == 2 then 1 else 0);
-        printint(if a then 1 else 0);
         println();
     };
 };

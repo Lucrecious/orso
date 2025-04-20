@@ -26,11 +26,12 @@ main :: () -> void {
     println();
     
     {
+        // not allowed: by default without 'break' or 'then', 'for' evaluates to void, which is
+        // an invalid storage type
         s := 0;
-        // since there is no then clause, it's implicitly an 'then .nil'
-        sum = for i := 0; i < 10; ++i do s *= i;
-        printint(if sum == 0 then 1 else 0);
-        println();
+        // sum = for i := 0; i < 10; ++i do s *= i;
+        // printint(if sum == 0 then 1 else 0);
+        // println();
         
         // for now, a then clause is a must if you want the expression to evaluate to anything other than nil
         s = 1;
@@ -46,7 +47,7 @@ main :: () -> void {
         // no break value
         a := while true {
             x = 5;
-            break;
+            break 0;
         } then x;
         printint(x);
         printint(a);
@@ -55,13 +56,12 @@ main :: () -> void {
         // no break value
         a = until false {
             x = 10;
-            break;
+            break 0;
         } then x;
         printint(x);
         printint(a);
         println();
         
-        // no break value
         a = while true {
             x = 5;
             break 20;
@@ -70,7 +70,6 @@ main :: () -> void {
         printint(a);
         println();
 
-        // no break value
         a = until false {
             x = 10;
             break 60;

@@ -357,10 +357,12 @@ type_t resolve_block_return_types_or_error(analyzer_t *analyzer, ast_node_t *blo
             tmp_arena_t *tmp = allocator_borrow();
             types_t types = {.allocator=tmp->allocator};
             ast_nodes_t nodes = {.allocator=tmp->allocator};
-
-            unless (TYPE_IS_UNREACHABLE(then->value_type)) {
-                array_push(&nodes, then);
-                array_push(&types, then->value_type);
+            
+            if (block->branch_type == BRANCH_TYPE_IFTHEN) {
+                unless (TYPE_IS_UNREACHABLE(then->value_type)) {
+                    array_push(&nodes, then);
+                    array_push(&types, then->value_type);
+                }
             }
 
             unless (TYPE_IS_UNREACHABLE(else_->value_type)) {
@@ -370,6 +372,8 @@ type_t resolve_block_return_types_or_error(analyzer_t *analyzer, ast_node_t *blo
 
             for (size_t i = 0; i < block->jmp_nodes.count; ++i) {
                 ast_node_t *jmp_node = block->jmp_nodes.items[i];
+                if (jmp_node->start.type == TOKEN_CONTINUE) continue;
+
                 ast_node_t *jmp_node_expr = an_expression(jmp_node);
                 unless (TYPE_IS_UNREACHABLE(jmp_node_expr->value_type)) {
                     array_push(&nodes, jmp_node_expr);
@@ -2203,8 +2207,10 @@ void resolve_expression(
         case AST_NODE_TYPE_EXPRESSION_BRANCHING: {
             scope_t branch_scope = {0};
             analysis_state_t branch_state = state;
-            scope_init(&branch_scope, analyzer->ast->arena, SCOPE_TYPE_JMPABLE, state.scope, expr);
-            branch_state.scope = &branch_scope;
+            if (expr->branch_type != BRANCH_TYPE_IFTHEN) {
+                scope_init(&branch_scope, analyzer->ast->arena, SCOPE_TYPE_JMPABLE, state.scope, expr);
+                branch_state.scope = &branch_scope;
+            }
 
             if (an_is_notnone(an_for_decl(expr))) {
                 resolve_declaration(analyzer, ast, branch_state, an_for_decl(expr));
