@@ -997,7 +997,7 @@ static void cgen_end_branch(cgen_t *cgen) {
 
 static void cgen_condition_and_open_block(cgen_t *cgen, ast_node_t *branch, cstr_t branch_cstr) {
     if (an_condition(branch)->requires_tmp_for_cgen) {
-        if (branch->branch_type == BRANCH_TYPE_LOOPING) {
+        if (branch->branch_type == BRANCH_TYPE_WHILE) {
             cgen_add_indent(cgen);
             sb_add_format(&cgen->sb, "while (true) {\n");
 
@@ -1137,20 +1137,24 @@ static void cgen_do(cgen_t *cgen, ast_node_t *branch, cgen_var_t var) {
 
     cgen_indent(cgen);
 
-    cgen_then(cgen, branch, var);
+    if (an_expression(branch)->requires_tmp_for_cgen) {
+        cgen_statement(cgen, an_expression(branch), cgen_var_used(var), true);
+    } else {
+        cgen_add_indent(cgen);
+
+        if (has_var(var)) {
+            sb_add_format(&cgen->sb, "%s = ", cgen_var_name(cgen, var));
+        }
+
+        cgen_expression(cgen, an_expression(branch), nil_cvar);
+
+        cgen_semicolon_nl(cgen);
+    }
 
     cgen_unindent(cgen);
 
     cgen_add_indent(cgen);
-    cgen_jmp_label(cgen, branch->ccode_continue_label);
-    cgen_semicolon_nl(cgen);
-
-    cgen_add_indent(cgen);
     sb_add_cstr(&cgen->sb, "} while(false); \n");
-
-    ast_node_t *elze = an_else(branch);
-    if (elze->node_type != AST_NODE_TYPE_EXPRESSION_NIL || has_var(var))
-        cgen_statement(cgen, an_else(branch), cgen_var_used(var), true);
 
     cgen_end_branch(cgen);
 
@@ -1160,7 +1164,7 @@ static void cgen_do(cgen_t *cgen, ast_node_t *branch, cgen_var_t var) {
 
 static void cgen_branching(cgen_t *cgen, ast_node_t *branch, cgen_var_t var) {
     switch (branch->branch_type) {
-        case BRANCH_TYPE_LOOPING:
+        case BRANCH_TYPE_WHILE:
         case BRANCH_TYPE_FOR:
         case BRANCH_TYPE_DO: {
             if (has_var(var)) {
@@ -1168,7 +1172,7 @@ static void cgen_branching(cgen_t *cgen, ast_node_t *branch, cgen_var_t var) {
             }
             branch->ccode_break_label = string_copy(cgen_next_label(cgen, "break"), cgen->ast->arena);
             branch->ccode_continue_label = string_copy(cgen_next_label(cgen, "continue"), cgen->ast->arena);
-            if (branch->branch_type == BRANCH_TYPE_LOOPING || branch->branch_type == BRANCH_TYPE_FOR) {
+            if (branch->branch_type == BRANCH_TYPE_WHILE || branch->branch_type == BRANCH_TYPE_FOR) {
                 cgen_while_or_for(cgen, branch, var);
             } else {
                 cgen_do(cgen, branch, var);
@@ -1176,7 +1180,7 @@ static void cgen_branching(cgen_t *cgen, ast_node_t *branch, cgen_var_t var) {
             break;
         }
 
-        case BRANCH_TYPE_IFTHEN: {
+        case BRANCH_TYPE_IF: {
             cgen_if(cgen, branch, var);
             break;
         }

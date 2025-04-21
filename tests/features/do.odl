@@ -1,141 +1,63 @@
 main :: () -> void {
-    sum := 0;
-
-    a := 0;
-    do a = 1 then a = 2;
-    printint(a);
-    println();
-
-    if a == 2 then 
-        sum = sum + 1;
-
-    do {
-        a = 1;
-    } then {
-        a = 2;
-    };
-    
-    printint(a);
-    println();
-
-    if a == 2 then
-        sum = sum + 1;
-
-    do {
-        a = 1;
-        break;
-    } then {
-        a = 2;
-    };
-    
-    printint(a);
-    println();
-
-    if a == 1 then
-        sum = sum + 1;
-
-    do {
-        a = 1;
-        continue;
-
-        a = 2;
-    } then {
-        a = 3;
-    };
-    
-    printint(a);
-    println();
-
-    if a == 3 then
-        sum = sum + 1;
-
-    do {
-        a = 2;
-        continue;
-
-        a = 2;
-    } then do {
-        a = 3;
-    } then {
-        a = 4;
-    };
-    
-    printint(a);
-    println();
-
-    if a == 4 then
-        sum = sum + 1;
-
-    do {
-        a = 2;
-        continue;
-
-        a = 2;
-    } then do {
-        a = 3;
-        break;
-    } then {
-        a = 4;
-    };
-    
-    printint(a);
-    println();
-
-    if a == 3 then
-        sum = sum + 1;
-
-    do:outer while a > 0 {
-        if a == 3 then break:outer;
-
-        a = a - 1;
-    } then a = 0;
-    
-    printint(a);
-    println();
-
-    if a == 3 then
-        sum = sum + 1;
-
-    do:outer if a == 3 {
-        while a > 0 {
-            if a == 3 then continue:outer;
-            a = a - 1;
-        } then {
-            a = 10;
-        };
-    } then {
-        a = 4;
-    };
-    
-    printint(a);
-    println();
-
-    if a == 4 then
-        sum = sum + 1;
-
-    answer := do:outer {
-        do:outer {
-            break:outer 5;
-        };
-
+    x := do {
         10;
     };
-    
-    printint(answer);
+
+    printint(x);
     println();
 
-    if answer == 0 then
-        sum = sum + 1;
+    do {
+        x = 1;
+        break;
 
-    sum = do:value {
-        if a == 4 {
-            break:value sum + 1;
+        x = 2;
+    };
+
+    printint(x);
+    println();
+
+    x = do {
+        break 11;
+        break 12;
+    };
+
+    printint(x);
+    println();
+
+    x = do {
+        y := false;
+        if y then break 20;
+        30;
+    };
+
+    printint(x);
+    println();
+
+    x = do {
+        y := false;
+        if y then break 40
+        else 50;
+    };
+
+    printint(x);
+    println();
+
+    do:outer while true {
+        while true {
+            x = 60;
+            break:outer;
         };
     };
-    
-    printint(sum);
+
+    printint(x);
     println();
 
-    printint(sum);
+    x = do:outer while true {
+        while true {
+            break:outer 70;
+        };
+    } then 80;
+
+    printint(x);
     println();
 };

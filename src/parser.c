@@ -168,7 +168,7 @@ ast_node_t nil_node = {
     .lvalue_node = &nil_node,
     .ref_decl = &nil_node,
     .jmp_out_scope_node = &nil_node,
-    .branch_type = BRANCH_TYPE_IFTHEN,
+    .branch_type = BRANCH_TYPE_IF,
     .ccode_break_label = lit2str(""),
     .ccode_continue_label = lit2str(""),
     .ccode_var_name = lit2str(""),
@@ -186,7 +186,7 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start) {
     node->operator = start;
     node->value_type.i = TYPE_UNRESOLVED;
     node->condition_negated = false;
-    node->branch_type = BRANCH_TYPE_IFTHEN;
+    node->branch_type = BRANCH_TYPE_IF;
     node->requires_tmp_for_cgen = true;
     node->vm_jmp_index = 0;
     node->ccode_break_label = lit2str("");
@@ -614,9 +614,9 @@ static void ast_block_end(ast_node_t *block, token_t end) {
     }
 }
 
-static ast_node_t *ast_while(ast_t *ast, ast_node_t *cond, bool cond_negated, ast_node_t *then, ast_node_t *else_, token_t start) {
-    ast_node_t *while_ = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_BRANCHING, start);
-    while_->branch_type = BRANCH_TYPE_LOOPING;
+static ast_node_t *ast_while(ast_t *ast, ast_node_t *cond, bool cond_negated, ast_node_t *then, ast_node_t *else_, token_t while_token) {
+    ast_node_t *while_ = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_BRANCHING, while_token);
+    while_->branch_type = BRANCH_TYPE_WHILE;
     while_->condition_negated = cond_negated;
     an_condition(while_) = cond;
     an_then(while_) = then;
@@ -627,9 +627,9 @@ static ast_node_t *ast_while(ast_t *ast, ast_node_t *cond, bool cond_negated, as
     return while_;
 }
 
-static ast_node_t *ast_ifthen(ast_t *ast, ast_node_t *cond, bool cond_negated, ast_node_t *then, ast_node_t *else_, token_t start) {
-    ast_node_t *ifthen = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_BRANCHING, start);
-    ifthen->branch_type = BRANCH_TYPE_IFTHEN;
+static ast_node_t *ast_ifthen(ast_t *ast, ast_node_t *cond, bool cond_negated, ast_node_t *then, ast_node_t *else_, token_t if_token) {
+    ast_node_t *ifthen = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_BRANCHING, if_token);
+    ifthen->branch_type = BRANCH_TYPE_IF;
     ifthen->condition_negated = cond_negated;
     an_condition(ifthen) = cond;
     an_then(ifthen) = then;
@@ -640,14 +640,12 @@ static ast_node_t *ast_ifthen(ast_t *ast, ast_node_t *cond, bool cond_negated, a
     return ifthen;
 }
 
-static ast_node_t *ast_do(ast_t *ast, token_t label, ast_node_t *then, ast_node_t *else_, token_t start) {
-    ast_node_t *do_ = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_BRANCHING, start);
+static ast_node_t *ast_do(ast_t *ast, token_t label, ast_node_t *expr, token_t do_token) {
+    ast_node_t *do_ = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_BRANCHING, do_token);
     do_->branch_type = BRANCH_TYPE_DO;
     do_->identifier = label;
-    an_condition(do_) = ast_nil(ast, typeid(TYPE_BOOL), token_implicit_at_end(start));
-    an_then(do_) = then;
-    an_else(do_) = else_;
-    do_->end = else_->end;
+    an_expression(do_) = expr;
+    do_->end = expr->end;
     return do_;
 }
 
@@ -1169,11 +1167,36 @@ static ast_node_t *parse_block(parser_t *parser) {
     return block;
 }
 
+static ast_node_t *parse_do(parser_t *parser) {
+    token_t do_token = parser->previous;
+
+    token_t label = nil_token;
+
+    if (match(parser, TOKEN_COLON)) {
+        unless (consume(parser, TOKEN_IDENTIFIER)) {
+            parser_error(parser, OR_ERROR(
+                .tag = ERROR_PARSER_EXPECTED_JMP_LABEL_AFTER_COLON,
+                .level = ERROR_SOURCE_PARSER,
+                .msg = lit2str("expected identifier after ':' on a do expression"),
+                .args = ORERR_ARGS(error_arg_token(parser->current)),
+                .show_code_lines = ORERR_LINES(0),
+            ));
+        }
+        label = parser->previous;
+    }
+
+    ast_node_t *expr = parse_expression(parser);
+
+    ast_node_t *do_ = ast_do(parser->ast, label, expr, do_token);
+
+    return do_;
+}
+
 static ast_node_t *parse_branch(parser_t *parser) {
     token_t start_token = parser->previous;
     token_type_t branch_token_type = parser->previous.type;
     bool condition_negated = false;
-    ast_branch_type_t branch_type = BRANCH_TYPE_IFTHEN;
+    ast_branch_type_t branch_type = BRANCH_TYPE_IF;
 
     ast_node_t *condition = NULL;
     ast_node_t *then_branch = NULL;
@@ -1181,123 +1204,95 @@ static ast_node_t *parse_branch(parser_t *parser) {
 
     ast_node_t *decl_block = NULL;
 
-    token_t label = nil_token;
+    if (branch_token_type == TOKEN_UNLESS || branch_token_type == TOKEN_UNTIL) {
+        condition_negated = true;
+    }
 
+    if (branch_token_type == TOKEN_WHILE || branch_token_type == TOKEN_UNTIL) {
+        branch_type = BRANCH_TYPE_WHILE;
+    } else {
+        branch_type = BRANCH_TYPE_IF;
+    }
 
-    if (branch_token_type == TOKEN_DO) {
-        branch_type = BRANCH_TYPE_DO;
+    decl_block = ast_block_begin(parser->ast, start_token);
 
-        if (match(parser, TOKEN_COLON)) {
-            unless (consume(parser, TOKEN_IDENTIFIER)) {
+    // declares before condition for blocks 
+    ast_node_t *last_decl;
+    while (true) {
+        last_decl = parse_decl(parser, false);
+
+        if (check(parser, TOKEN_BRACE_OPEN) || (check(parser, TOKEN_DO) || check(parser, TOKEN_THEN))) break;
+
+        unless (consume(parser, TOKEN_SEMICOLON)) {
+            parser_error(parser, OR_ERROR(
+                .tag = ERROR_PARSER_EXPECTED_SEMICOLON,
+                .level = ERROR_SOURCE_PARSER,
+                .msg = lit2str("expected ';' after initial '$1.kind$' expressions"),
+                .args = ORERR_ARGS(error_arg_token(parser->current), error_arg_token(start_token)),
+                .show_code_lines = ORERR_LINES(0),
+            ));
+        }
+
+        ast_block_decl(decl_block, last_decl);
+    }
+
+    condition = last_decl;
+    if (last_decl->node_type != AST_NODE_TYPE_DECLARATION_STATEMENT) {
+        parser_error(parser, OR_ERROR(
+            .tag = ERROR_PARSER_EXPECTED_EXPRESSION,
+            .level = ERROR_SOURCE_PARSER,
+            .msg = lit2str("expected expression as the condition for '$0.kind$' branch"),
+            .args = ORERR_ARGS(error_arg_token(start_token), error_arg_node(last_decl)),
+            .show_code_lines = ORERR_LINES(1),
+        ));
+    } else {
+        condition = an_expression(last_decl);
+    }
+
+    // condition = parse_expression(parser);
+    if (match(parser, TOKEN_BRACE_OPEN)) {
+        then_branch = parse_block(parser);
+    } else {
+        if (branch_type == BRANCH_TYPE_WHILE) {
+            unless (consume(parser, TOKEN_DO)) {
                 parser_error(parser, OR_ERROR(
-                    .tag = ERROR_PARSER_EXPECTED_JMP_LABEL_AFTER_COLON,
+                    .tag = ERROR_PARSER_EXPECTED_THEN_OR_BRACE_AFTER_BRANCH_CONDITION,
                     .level = ERROR_SOURCE_PARSER,
-                    .msg = lit2str("expected identifier after ':' on a do expression"),
-                    .args = ORERR_ARGS(error_arg_token(parser->current)),
-                    .show_code_lines = ORERR_LINES(0),
+                    .msg = lit2str("expected 'do' or '{' after $0.kind$ condition"),
+                    .args = ORERR_ARGS(error_arg_token(start_token), error_arg_token(parser->current)),
+                    .show_code_lines = ORERR_LINES(1),
                 ));
             }
-            label = parser->previous;
+        } else {
+            unless (consume(parser, TOKEN_THEN)) {
+                parser_error(parser, OR_ERROR(
+                    .tag = ERROR_PARSER_EXPECTED_THEN_OR_BRACE_AFTER_BRANCH_CONDITION,
+                    .level = ERROR_SOURCE_PARSER,
+                    .msg = lit2str("expected 'then' or '{' after $0.kind$ condition"),
+                    .args = ORERR_ARGS(error_arg_token(start_token), error_arg_token(parser->current)),
+                    .show_code_lines = ORERR_LINES(1),
+                ));
+            }
         }
 
         then_branch = parse_expression(parser);
+    }
 
-        unless (match(parser, TOKEN_THEN)) {
-            else_branch = ast_nil(parser->ast, typeid(TYPE_VOID), token_implicit_at_end(then_branch->end));
-        } else {
-            else_branch = parse_expression(parser);
-        }
+    token_type_t next_token_check = TOKEN_ERROR;
+    switch (branch_type) {
+        case BRANCH_TYPE_WHILE: next_token_check = TOKEN_THEN; break;
+        case BRANCH_TYPE_IF: next_token_check = TOKEN_ELSE; break;
+        default: UNREACHABLE();
+    }
+
+    unless (match(parser, next_token_check)) {
+        else_branch = ast_nil(parser->ast, typeid(TYPE_VOID), token_implicit_at_end(then_branch->end));
     } else {
-        if (branch_token_type == TOKEN_UNLESS || branch_token_type == TOKEN_UNTIL) {
-            condition_negated = true;
-        }
-
-        if (branch_token_type == TOKEN_WHILE || branch_token_type == TOKEN_UNTIL) {
-            branch_type = BRANCH_TYPE_LOOPING;
-        } else {
-            branch_type = BRANCH_TYPE_IFTHEN;
-        }
-
-        decl_block = ast_block_begin(parser->ast, start_token);
-
-        // declares before condition for blocks 
-        ast_node_t *last_decl;
-        while (true) {
-            last_decl = parse_decl(parser, false);
-
-            if (check(parser, TOKEN_BRACE_OPEN) || (check(parser, TOKEN_DO) || check(parser, TOKEN_THEN))) break;
-
-            unless (consume(parser, TOKEN_SEMICOLON)) {
-                parser_error(parser, OR_ERROR(
-                    .tag = ERROR_PARSER_EXPECTED_SEMICOLON,
-                    .level = ERROR_SOURCE_PARSER,
-                    .msg = lit2str("expected ';' after initial '$1.kind$' expressions"),
-                    .args = ORERR_ARGS(error_arg_token(parser->current), error_arg_token(start_token)),
-                    .show_code_lines = ORERR_LINES(0),
-                ));
-            }
-
-            ast_block_decl(decl_block, last_decl);
-        }
-
-        condition = last_decl;
-        if (last_decl->node_type != AST_NODE_TYPE_DECLARATION_STATEMENT) {
-            parser_error(parser, OR_ERROR(
-                .tag = ERROR_PARSER_EXPECTED_EXPRESSION,
-                .level = ERROR_SOURCE_PARSER,
-                .msg = lit2str("expected expression as the condition for '$0.kind$' branch"),
-                .args = ORERR_ARGS(error_arg_token(start_token), error_arg_node(last_decl)),
-                .show_code_lines = ORERR_LINES(1),
-            ));
-        } else {
-            condition = an_expression(last_decl);
-        }
-
-        // condition = parse_expression(parser);
-        if (match(parser, TOKEN_BRACE_OPEN)) {
-            then_branch = parse_block(parser);
-        } else {
-            if (branch_type == BRANCH_TYPE_LOOPING) {
-                unless (consume(parser, TOKEN_DO)) {
-                    parser_error(parser, OR_ERROR(
-                        .tag = ERROR_PARSER_EXPECTED_THEN_OR_BRACE_AFTER_BRANCH_CONDITION,
-                        .level = ERROR_SOURCE_PARSER,
-                        .msg = lit2str("expected 'do' or '{' after $0.kind$ condition"),
-                        .args = ORERR_ARGS(error_arg_token(start_token), error_arg_token(parser->current)),
-                        .show_code_lines = ORERR_LINES(1),
-                    ));
-                }
-            } else {
-                unless (consume(parser, TOKEN_THEN)) {
-                    parser_error(parser, OR_ERROR(
-                        .tag = ERROR_PARSER_EXPECTED_THEN_OR_BRACE_AFTER_BRANCH_CONDITION,
-                        .level = ERROR_SOURCE_PARSER,
-                        .msg = lit2str("expected 'then' or '{' after $0.kind$ condition"),
-                        .args = ORERR_ARGS(error_arg_token(start_token), error_arg_token(parser->current)),
-                        .show_code_lines = ORERR_LINES(1),
-                    ));
-                }
-            }
-
-            then_branch = parse_expression(parser);
-        }
-
-        token_type_t next_token_check = TOKEN_ERROR;
-        switch (branch_type) {
-            case BRANCH_TYPE_LOOPING: next_token_check = TOKEN_THEN; break;
-            case BRANCH_TYPE_IFTHEN: next_token_check = TOKEN_ELSE; break;
-            default: UNREACHABLE();
-        }
-
-        unless (match(parser, next_token_check)) {
-            else_branch = ast_nil(parser->ast, typeid(TYPE_VOID), token_implicit_at_end(then_branch->end));
-        } else {
-            else_branch = parse_expression(parser);
-        }
+        else_branch = parse_expression(parser);
     }
 
     switch (branch_type) {
-        case BRANCH_TYPE_LOOPING: {
+        case BRANCH_TYPE_WHILE: {
             ast_node_t *while_ = ast_while(parser->ast, condition, condition_negated, then_branch, else_branch, start_token);
             ASSERT(decl_block, "must");
 
@@ -1309,7 +1304,7 @@ static ast_node_t *parse_branch(parser_t *parser) {
 
             return while_;
         }
-        case BRANCH_TYPE_IFTHEN: {
+        case BRANCH_TYPE_IF: {
             ast_node_t *ifthen = ast_ifthen(parser->ast, condition, condition_negated, then_branch, else_branch, start_token);
             ASSERT(decl_block, "must");
 
@@ -1320,12 +1315,8 @@ static ast_node_t *parse_branch(parser_t *parser) {
             }
             return ifthen;
         }
-
-        case BRANCH_TYPE_DO: {
-            ast_node_t *do_ = ast_do(parser->ast, label, then_branch, else_branch, start_token);
-            return do_;
-        }
         
+        case BRANCH_TYPE_DO:
         case BRANCH_TYPE_FOR: UNREACHABLE(); break; // handled separately
     }
 }
@@ -1829,7 +1820,7 @@ parse_rule_t rules[] = {
     [TOKEN_WHILE]                   = { parse_branch,       NULL,               PREC_BLOCK },
     [TOKEN_UNTIL]                   = { parse_branch,       NULL,               PREC_BLOCK },
     [TOKEN_FOR]                     = { parse_for,          NULL,               PREC_BLOCK },
-    [TOKEN_DO]                      = { parse_branch,       NULL,               PREC_NONE },
+    [TOKEN_DO]                      = { parse_do,           NULL,               PREC_NONE },
     [TOKEN_ELSE]                    = { NULL,               NULL,               PREC_NONE },
     [TOKEN_TRUE]                    = { parse_literal,      NULL,               PREC_NONE },
     [TOKEN_FALSE]                   = { parse_literal,      NULL,               PREC_NONE },
@@ -2485,10 +2476,10 @@ static void ast_print_ast_node(typedatas_t types, ast_node_t *node, u32 level) {
                     break;
                 }
 
-                case BRANCH_TYPE_IFTHEN:
-                case BRANCH_TYPE_LOOPING: {
+                case BRANCH_TYPE_IF:
+                case BRANCH_TYPE_WHILE: {
                     cstr_t branch = NULL;
-                    if (node->branch_type == BRANCH_TYPE_IFTHEN) {
+                    if (node->branch_type == BRANCH_TYPE_IF) {
                         if (node->condition_negated) {
                             branch = "unless";
                         } else {

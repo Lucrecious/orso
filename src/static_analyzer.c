@@ -358,7 +358,7 @@ type_t resolve_block_return_types_or_error(analyzer_t *analyzer, ast_node_t *blo
             types_t types = {.allocator=tmp->allocator};
             ast_nodes_t nodes = {.allocator=tmp->allocator};
             
-            if (block->branch_type == BRANCH_TYPE_IFTHEN) {
+            if (block->branch_type == BRANCH_TYPE_IF) {
                 unless (TYPE_IS_UNREACHABLE(then->value_type)) {
                     array_push(&nodes, then);
                     array_push(&types, then->value_type);
@@ -423,7 +423,7 @@ static void resolve_declaration_definition(
     analysis_state_t state,
     ast_node_t *decl);
 
-static void resolve_declarations(
+static size_t resolve_declarations_until_unreachable(
         analyzer_t *analyzer,
         ast_t *ast,
         analysis_state_t state,
@@ -2164,16 +2164,7 @@ void resolve_expression(
 
             analysis_state_t block_state = state;
             block_state.scope = &block_scope;
-            resolve_declarations(analyzer, ast, block_state, expr->children, is_consumed);
-
-            size_t last_unreachable_index = expr->children.count;
-            for (size_t i = 0; i < expr->children.count; ++i) {
-                ast_node_t *decl = expr->children.items[i];
-                if (TYPE_IS_UNREACHABLE(decl->value_type)) {
-                    last_unreachable_index = i;
-                    break;
-                }
-            }
+            size_t last_unreachable_index = resolve_declarations_until_unreachable(analyzer, ast, block_state, expr->children, is_consumed);
 
             bool is_unreachable = last_unreachable_index < expr->children.count;
             // discard everything past an unreachable type
@@ -2205,56 +2196,117 @@ void resolve_expression(
         }
 
         case AST_NODE_TYPE_EXPRESSION_BRANCHING: {
-            scope_t branch_scope = {0};
-            analysis_state_t branch_state = state;
-            if (expr->branch_type != BRANCH_TYPE_IFTHEN) {
+            switch (expr->branch_type) {
+            case BRANCH_TYPE_FOR:
+            case BRANCH_TYPE_IF:
+            case BRANCH_TYPE_WHILE: {
+                scope_t branch_scope = {0};
+                analysis_state_t branch_state = state;
+                if (expr->branch_type != BRANCH_TYPE_IF) {
+                    scope_init(&branch_scope, analyzer->ast->arena, SCOPE_TYPE_JMPABLE, state.scope, expr);
+                    branch_state.scope = &branch_scope;
+                }
+
+                if (an_is_notnone(an_for_decl(expr))) {
+                    resolve_declaration(analyzer, ast, branch_state, an_for_decl(expr));
+                }
+
+                {
+                    scope_t condition_scope = {0};
+                    scope_init(&condition_scope, ast->arena, SCOPE_TYPE_CONDITION, branch_state.scope, an_condition(expr));
+
+                    analysis_state_t cond_state = state;
+                    cond_state.scope = &condition_scope;
+
+                    resolve_expression(analyzer, ast, cond_state, typeid(TYPE_UNRESOLVED), an_condition(expr), true);
+                }
+
+                if (an_is_notnone(an_for_incr(expr))) {
+                    resolve_expression(analyzer, ast, branch_state, typeid(TYPE_UNRESOLVED), an_for_incr(expr), false);
+                }
+
+                resolve_expression(analyzer, ast, branch_state, implicit_type, an_then(expr), is_consumed);
+
+                resolve_expression(analyzer, ast, branch_state, implicit_type, an_else(expr), is_consumed);
+
+                type_t branch_type = resolve_block_return_types_or_error(analyzer, expr);
+                expr->value_type = branch_type;
+
+                if (TYPE_IS_INVALID(branch_type)) {
+                    INVALIDATE(expr);
+                }
+
+                if (TYPE_IS_INVALID(an_then(expr)->value_type) || TYPE_IS_INVALID(an_else(expr)->value_type)) {
+                    INVALIDATE(expr);
+                }
+
+                if (!TYPE_IS_INVALID(an_condition(expr)->value_type) && !typeid_eq(an_condition(expr)->value_type, typeid(TYPE_BOOL))) {
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = ERROR_ANALYSIS_BLOCKS_TYPE_MISMATCH,
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("'$0.kind$' condition must be a 'bool' but got '$1.$'"),
+                        .args = ORERR_ARGS(error_arg_token(expr->start), error_arg_type(an_condition(expr)->value_type)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
+                }
+                break;
+            }
+
+            case BRANCH_TYPE_DO: {
+                scope_t branch_scope = {0};
+                analysis_state_t branch_state = state;
                 scope_init(&branch_scope, analyzer->ast->arena, SCOPE_TYPE_JMPABLE, state.scope, expr);
                 branch_state.scope = &branch_scope;
+
+                ast_node_t *do_block = an_expression(expr);
+                resolve_expression(analyzer, ast, branch_state, implicit_type, do_block, is_consumed);
+
+                tmp_arena_t *tmp = allocator_borrow();
+                ast_nodes_t nodes = {.allocator=tmp->allocator};
+                types_t types = {.allocator=tmp->allocator};
+
+                unless (TYPE_IS_UNREACHABLE(do_block->value_type)) {
+                    array_push(&nodes, do_block);
+                    array_push(&types, do_block->value_type);
+                }
+
+                for (size_t i = 0; i < expr->jmp_nodes.count; ++i) {
+                    ast_node_t *jmp = expr->jmp_nodes.items[i];
+
+                    ast_node_t *e = an_expression(jmp);
+                    unless (TYPE_IS_UNREACHABLE(e->value_type)) {
+                        array_push(&nodes, e);
+                        array_push(&types, e->value_type);
+                    }
+                }
+
+                if (types.count > 0) {
+                    type_t check_type = types.items[0];
+                        ast_node_t *check_node = nodes.items[0];
+                    for (size_t i = 1; i < types.count; ++i) {
+                        type_t other_type = types.items[i];
+                        unless (typeid_eq(check_type, other_type)) {
+                            ast_node_t *other_node = nodes.items[i];
+                            stan_error(analyzer, OR_ERROR(
+                                .tag = ERROR_ANALYSIS_TYPE_MISMATCH,
+                                .level = ERROR_SOURCE_ANALYSIS,
+                                .msg = lit2str("all 'break' and `do` expression types must match but got '$0.$' and '$1.$"),
+                                .args = ORERR_ARGS(error_arg_type(check_type), error_arg_type(other_type),
+                                                   error_arg_node(check_node), error_arg_node(other_node)),
+                                .show_code_lines = ORERR_LINES(2, 3),
+                            ));
+                        }
+                    }
+
+                    expr->value_type = check_type;
+                } else {
+                    expr->value_type = typeid(TYPE_UNREACHABLE);
+                }
+
+                allocator_return(tmp);
+                break;
             }
-
-            if (an_is_notnone(an_for_decl(expr))) {
-                resolve_declaration(analyzer, ast, branch_state, an_for_decl(expr));
             }
-
-            {
-                scope_t condition_scope = {0};
-                scope_init(&condition_scope, ast->arena, SCOPE_TYPE_CONDITION, branch_state.scope, an_condition(expr));
-
-                analysis_state_t cond_state = state;
-                cond_state.scope = &condition_scope;
-
-                resolve_expression(analyzer, ast, cond_state, typeid(TYPE_UNRESOLVED), an_condition(expr), true);
-            }
-
-            if (an_is_notnone(an_for_incr(expr))) {
-                resolve_expression(analyzer, ast, branch_state, typeid(TYPE_UNRESOLVED), an_for_incr(expr), false);
-            }
-
-            resolve_expression(analyzer, ast, branch_state, implicit_type, an_then(expr), is_consumed);
-
-            resolve_expression(analyzer, ast, branch_state, implicit_type, an_else(expr), is_consumed);
-
-            type_t branch_type = resolve_block_return_types_or_error(analyzer, expr);
-            expr->value_type = branch_type;
-
-            if (TYPE_IS_INVALID(branch_type)) {
-                INVALIDATE(expr);
-            }
-
-            if (TYPE_IS_INVALID(an_then(expr)->value_type) || TYPE_IS_INVALID(an_else(expr)->value_type)) {
-                INVALIDATE(expr);
-            }
-
-            if (!TYPE_IS_INVALID(an_condition(expr)->value_type) && !typeid_eq(an_condition(expr)->value_type, typeid(TYPE_BOOL))) {
-                stan_error(analyzer, OR_ERROR(
-                    .tag = ERROR_ANALYSIS_BLOCKS_TYPE_MISMATCH,
-                    .level = ERROR_SOURCE_ANALYSIS,
-                    .msg = lit2str("'$0.kind$' condition must be a 'bool' but got '$1.$'"),
-                    .args = ORERR_ARGS(error_arg_token(expr->start), error_arg_type(an_condition(expr)->value_type)),
-                    .show_code_lines = ORERR_LINES(0),
-                ));
-            }
-
             break;
         }
 
@@ -2285,9 +2337,18 @@ void resolve_expression(
 
                     scope_t *found_scope = NULL;
                     bool success = get_nearest_jmp_scope_in_func_or_error(analyzer, expr, state.scope, SCOPE_TYPE_JMPABLE, expr->identifier.view, &found_scope);
-                    unless (success) {
-                        INVALIDATE(expr);
-                    } else {
+                    if (success) {
+                        if (found_scope->creator->branch_type == BRANCH_TYPE_DO && expr->start.type == TOKEN_CONTINUE) {
+                            stan_error(analyzer, OR_ERROR(
+                                .tag = ERROR_ANALYSIS_TYPE_MISMATCH,
+                                .level = ERROR_SOURCE_ANALYSIS,
+                                .msg = lit2str("'continue' expression is only valid in 'for' or 'while/until' expressions"),
+                                .args = ORERR_ARGS(error_arg_node(expr), error_arg_node(found_scope->creator)),
+                                .show_code_lines = ORERR_LINES(0, 1),
+                            ));
+                            break;
+                        }
+
                         expr->jmp_out_scope_node = found_scope->creator;
                         array_push(&found_scope->creator->jmp_nodes, expr);
                         ASSERT(found_scope->creator->node_type == AST_NODE_TYPE_EXPRESSION_BRANCHING, "only supports branches rn");
@@ -3281,7 +3342,8 @@ static void resolve_declaration(
     }
 }
 
-void resolve_declarations(analyzer_t *analyzer, ast_t *ast, analysis_state_t state, ast_nodes_t declarations, bool is_last_statement_consumed) {
+size_t resolve_declarations_until_unreachable(analyzer_t *analyzer, ast_t *ast, analysis_state_t state, ast_nodes_t declarations, bool is_last_statement_consumed) {
+    size_t last_decl = declarations.count;
     for (size_t i = 0; i < declarations.count; i++) {
         ast_node_t *declaration = declarations.items[i];
         if (declaration->node_type == AST_NODE_TYPE_DECLARATION_DEFINITION && an_is_constant(declaration)) {
@@ -3294,8 +3356,14 @@ void resolve_declarations(analyzer_t *analyzer, ast_t *ast, analysis_state_t sta
         } else {
             resolve_declaration(analyzer, ast, state, declarations.items[i]);
         }
+
+        if (TYPE_IS_UNREACHABLE(declarations.items[i]->value_type)) {
+            last_decl = i;
+            break;
+        }
     }
 
+    // finds unused constants
     for (size_t i = 0; i < declarations.count; i++) {
         ast_node_t *declaration = declarations.items[i];
         if (declaration->node_type != AST_NODE_TYPE_DECLARATION_DEFINITION) {
@@ -3312,6 +3380,8 @@ void resolve_declarations(analyzer_t *analyzer, ast_t *ast, analysis_state_t sta
 
         resolve_declaration(analyzer, ast, state, declaration);
     }
+
+    return last_decl;
 }
 
 static void analyzer_init(analyzer_t *analyzer, ast_t *ast, arena_t *arena) {
@@ -3342,7 +3412,10 @@ bool resolve_ast(ast_t *ast) {
         };
 
         forward_scan_constant_names(&analyzer, &global_scope, module->children);
-        resolve_declarations(&analyzer, ast, state, module->children, false);
+        size_t last_decl = resolve_declarations_until_unreachable(&analyzer, ast, state, module->children, false);
+        if (last_decl < module->children.count) {
+            module->children.count = last_decl+1;
+        }
     });
 
     ast->resolved = !analyzer.had_error;

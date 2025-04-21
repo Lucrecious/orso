@@ -175,8 +175,8 @@ ast_node_t nil_node;
 
 typedef enum ast_branch_type_t ast_branch_type_t;
 enum ast_branch_type_t {
-    BRANCH_TYPE_LOOPING,
-    BRANCH_TYPE_IFTHEN,
+    BRANCH_TYPE_WHILE,
+    BRANCH_TYPE_IF,
     BRANCH_TYPE_DO,
     BRANCH_TYPE_FOR,
 };

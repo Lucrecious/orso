@@ -1,15 +1,9 @@
 main :: () -> void {
-    {
-        sum := 0;
-        s := 0;
-        s = 1;
-        sum = for i := 0; i < 4; ++i do
-            if i == 0 then
-                continue
-            else s *= i
-            then s;
-        printint(if sum == 6 then 1 else 0);
-        println();
+    x := do {
+        y := false;
+        if y then break 32 else 42;
     };
 
+    printint(x);
+    println();
 };

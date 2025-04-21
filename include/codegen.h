@@ -1281,14 +1281,11 @@ static void gen_branching(gen_t *gen, function_t *function, ast_node_t *branch, 
 
     switch (branch->branch_type) {
         case BRANCH_TYPE_DO: {
-            gen_expression(gen, function, an_then(branch), val_dst);
-            gen_patch_jmps(gen, function, branch, TOKEN_CONTINUE);
-
-            gen_expression(gen, function, an_else(branch), val_dst);
+            gen_expression(gen, function, an_expression(branch), val_dst);
             gen_patch_jmps(gen, function, branch, TOKEN_BREAK);
             break;
         }
-        case BRANCH_TYPE_IFTHEN: {
+        case BRANCH_TYPE_IF: {
             size_t then_index = gen_condition(gen, branch, function);
             gen_expression(gen, function, an_then(branch), val_dst);
 
@@ -1303,7 +1300,7 @@ static void gen_branching(gen_t *gen, function_t *function, ast_node_t *branch, 
         }
 
         case BRANCH_TYPE_FOR:
-        case BRANCH_TYPE_LOOPING: {
+        case BRANCH_TYPE_WHILE: {
             size_t loop_index = function->code.count;
             size_t then_index = gen_condition(gen, branch, function);
             gen_expression(gen, function, an_then(branch), val_dst_void());
