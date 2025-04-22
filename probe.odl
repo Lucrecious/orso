@@ -1,9 +1,13 @@
 main :: () -> void {
-    x := do {
-        y := false;
-        if y then break 32 else 42;
-    };
+    a := [4]int.{0, 1, 2, 3};
+    b := [4]int.{4, 5, 6, 7};
 
-    printint(x);
-    println();
+    ap := &a;
+    bp := &b;
+
+    *
+    ap
+    =
+    *
+    bp;
 };

@@ -519,14 +519,113 @@ static void emit_bin_op(texloc_t loc, function_t *function, token_type_t token_t
     emit_instruction(function, loc, instruction);
 }
 
-static void emit_unary(gen_t *gen, texloc_t loc, function_t *function, token_type_t token_type, type_t type, reg_t op1, reg_t result) {
+static void emit_val_dst_reg(gen_t *gen, texloc_t loc, function_t *function, type_t type, reg_t dst, reg_t src, bool is_addr) {
+    if (is_addr) {
+        emit_addr_to_reg(gen, function, loc, type2movsize(gen, type), dst, src, 0);
+    } else {
+        if (dst != src) {
+            emit_reg_to_reg(function, loc, dst, src);
+        }
+    }
+}
+
+static void emit_val_dst_stack_point(gen_t *gen, texloc_t loc, function_t *function, type_t type, reg_t src, reg_t tmp, reg_t tmp2, val_dst_t val_dst, bool is_addr_override) {
+    typedata_t *td = ast_type2td(gen->ast, type);
+
+    emit_stack_point_to_reg(gen, function, loc, tmp, val_dst.stack_point);
+
+    bool is_addr = true;
+    unless (is_addr_override) {
+        is_addr = td->size > WORD_SIZE;
+    }
+
+    if (is_addr) {
+        if (td->size > WORD_SIZE) {
+            emit_multiword_addr_to_addr(gen, function, loc, tmp, src, tmp2, td->size);
+        } else {
+            emit_addr_to_reg(gen, function, loc, type2movsize(gen, type), tmp2, src, 0);
+            emit_reg_to_addr(gen, function, loc, type2movsize(gen, type), tmp, tmp2, 0);
+        }
+    } else {
+        emit_reg_to_addr(gen, function, loc, type2movsize(gen, type), tmp, src, 0);
+    }
+
+    if (val_dst.reg != REG_NULL) {
+        if (is_addr) {
+            if (td->size > WORD_SIZE) {
+                if (val_dst.reg != src) {
+                    emit_reg_to_reg(function, loc, val_dst.reg, src);
+                }
+            } else {
+                emit_addr_to_reg(gen, function, loc, type2movsize(gen, type), val_dst.reg, src, 0);
+            }
+        } else {
+            if (val_dst.reg != src) {
+                emit_reg_to_reg(function, loc, val_dst.reg, src);
+            }
+        }
+    }
+}
+
+static void emit_return_addr_to_reg(function_t *function, texloc_t loc, reg_t dst) {
+    emit_binu_reg_im(function, loc, dst, REG_STACK_FRAME, WORD_SIZE, '+');
+}
+
+static void emit_val_dst_return(gen_t *gen, texloc_t loc, function_t *function, type_t type, reg_t reg_src, reg_t tmp1, reg_t tmp2, bool is_addr_override) {
+    typedata_t *td = ast_type2td(gen->ast, type);
+    bool is_addr = true;
+    unless (is_addr_override) {
+        is_addr = td->size > WORD_SIZE;
+    }
+
+    if (is_addr) {
+        if (td->size > WORD_SIZE) {
+            emit_return_addr_to_reg(function, loc, tmp1);
+            emit_multiword_addr_to_addr(gen, function, loc, tmp1, reg_src, tmp2, td->size);
+            emit_return_addr_to_reg(function, loc, REG_RESULT);
+        } else {
+            emit_addr_to_reg(gen, function, loc, type2movsize(gen, type), REG_RESULT, reg_src, 0);
+        }
+    } else {
+        if (reg_src != REG_RESULT) {
+            emit_reg_to_reg(function, loc, REG_RESULT, reg_src);
+        }
+    }
+}
+
+static void emit_reg_to_val_dst(gen_t *gen, texloc_t loc, function_t *function, type_t type, val_dst_t val_dst, reg_t src, reg_t tmp1, reg_t tmp2, bool is_addr_override) {
+    switch (val_dst.type) {
+    case VAL_DST_REG: {
+        emit_val_dst_reg(gen, loc, function, type, val_dst.reg, src, is_addr_override);
+        break;
+    }
+
+    case VAL_DST_RETURN: {
+        emit_val_dst_return(gen, loc, function, type, src, tmp1, tmp2, is_addr_override);
+        break;
+    }
+
+    case VAL_DST_STACK_POINT: {
+        emit_val_dst_stack_point(gen, loc, function, type, src, tmp1, tmp2, val_dst, is_addr_override);
+        break;
+    }
+
+    case VAL_DST_VOID: break;
+    }
+}
+
+// rename to emit_unary_on_result_reg
+// assumes operand is in result reg
+static void emit_unary_on_result_reg(gen_t *gen, texloc_t loc, function_t *function, token_type_t token_type, type_t type, val_dst_t val_dst) {
     typedata_t *td = type2typedata(&gen->ast->type_set.types, type);
 
     switch (token_type) {
         case TOKEN_NOT: {
+            ASSERT(td->size <= WORD_SIZE, "bigger values not allowed for now");
+
             instruction_t in = {0};
-            in.as.unary_reg_to_reg.reg_op = (byte)op1;
-            in.as.unary_reg_to_reg.reg_result = (byte)result;
+            in.as.unary_reg_to_reg.reg_op = (byte)REG_RESULT;
+            in.as.unary_reg_to_reg.reg_result = (byte)REG_RESULT;
 
             switch (td->kind) {
                 case TYPE_BOOL: in.op = OP_NOT; break;
@@ -534,13 +633,15 @@ static void emit_unary(gen_t *gen, texloc_t loc, function_t *function, token_typ
             }
 
             emit_instruction(function, loc, in);
+
+            emit_reg_to_val_dst(gen, loc, function, type, val_dst, REG_RESULT, REG_T, REG_U, false);
             break;
         }
 
         case TOKEN_MINUS: {
             instruction_t in = {0};
-            in.as.unary_reg_to_reg.reg_op = (byte)op1;
-            in.as.unary_reg_to_reg.reg_result = (byte)result;
+            in.as.unary_reg_to_reg.reg_op = (byte)REG_RESULT;
+            in.as.unary_reg_to_reg.reg_result = (byte)REG_RESULT;
 
             switch (td->kind) {
                 case TYPE_NUMBER: {
@@ -556,20 +657,14 @@ static void emit_unary(gen_t *gen, texloc_t loc, function_t *function, token_typ
             }
 
             emit_instruction(function, loc, in);
+
+            emit_reg_to_val_dst(gen, loc, function, type, val_dst, REG_RESULT, REG_T, REG_U, false);
             break;
         }
 
         case TOKEN_STAR: {
-            type_t t = type;
             ASSERT(td->kind == TYPE_POINTER, "only allowed on pointer types");
-            t = td->as.ptr.type;
-            typedata_t *inner_td = ast_type2td(gen->ast, t);
-            if (inner_td->size > WORD_SIZE) {
-                emit_push_reg(gen, loc, function, op1, REG_T, REG_MOV_SIZE_MULTIWORD_ADDR, inner_td->size);
-                emit_reg_to_reg(function, loc, REG_RESULT, REG_STACK_BOTTOM);
-            } else {
-                emit_addr_to_reg(gen, function, loc, type2movsize(gen, t), result, op1, 0);
-            }
+            emit_reg_to_val_dst(gen, loc, function, td->as.ptr.type, val_dst, REG_RESULT, REG_T, REG_U, true);
             break;
         }
 
@@ -676,101 +771,6 @@ static void add_constant(gen_t *gen, function_t *function, texloc_t loc, void *d
     in.as.load_addr.reg_dest = (byte)reg_destination_ptr;
 
     emit_instruction(function, loc, in);
-}
-
-static void emit_return_addr_to_reg(function_t *function, texloc_t loc, reg_t dst) {
-    emit_binu_reg_im(function, loc, dst, REG_STACK_FRAME, WORD_SIZE, '+');
-}
-
-static void emit_val_dst_reg(gen_t *gen, texloc_t loc, function_t *function, type_t type, reg_t dst, reg_t src, bool is_addr) {
-    if (is_addr) {
-        emit_addr_to_reg(gen, function, loc, type2movsize(gen, type), dst, src, 0);
-    } else {
-        if (dst != src) {
-            emit_reg_to_reg(function, loc, dst, src);
-        }
-    }
-}
-
-static void emit_val_dst_stack_point(gen_t *gen, texloc_t loc, function_t *function, type_t type, reg_t src, reg_t tmp, reg_t tmp2, val_dst_t val_dst, bool is_addr_override) {
-    typedata_t *td = ast_type2td(gen->ast, type);
-
-    emit_stack_point_to_reg(gen, function, loc, tmp, val_dst.stack_point);
-
-    bool is_addr = true;
-    unless (is_addr_override) {
-        is_addr = td->size > WORD_SIZE;
-    }
-
-    if (is_addr) {
-        if (td->size > WORD_SIZE) {
-            emit_multiword_addr_to_addr(gen, function, loc, tmp, src, tmp2, td->size);
-        } else {
-            emit_addr_to_reg(gen, function, loc, type2movsize(gen, type), tmp2, src, 0);
-            emit_reg_to_addr(gen, function, loc, type2movsize(gen, type), tmp, tmp2, 0);
-        }
-    } else {
-        emit_reg_to_addr(gen, function, loc, type2movsize(gen, type), tmp, src, 0);
-    }
-
-    if (val_dst.reg != REG_NULL) {
-        if (is_addr) {
-            if (td->size > WORD_SIZE) {
-                if (val_dst.reg != src) {
-                    emit_reg_to_reg(function, loc, val_dst.reg, src);
-                }
-            } else {
-                emit_addr_to_reg(gen, function, loc, type2movsize(gen, type), val_dst.reg, src, 0);
-            }
-        } else {
-            if (val_dst.reg != src) {
-                emit_reg_to_reg(function, loc, val_dst.reg, src);
-            }
-        }
-    }
-}
-
-static void emit_val_dst_return(gen_t *gen, texloc_t loc, function_t *function, type_t type, reg_t reg_src, reg_t tmp1, reg_t tmp2, bool is_addr_override) {
-    typedata_t *td = ast_type2td(gen->ast, type);
-    bool is_addr = true;
-    unless (is_addr_override) {
-        is_addr = td->size > WORD_SIZE;
-    }
-
-    if (is_addr) {
-        if (td->size > WORD_SIZE) {
-            emit_return_addr_to_reg(function, loc, tmp1);
-            emit_multiword_addr_to_addr(gen, function, loc, tmp1, reg_src, tmp2, td->size);
-            emit_return_addr_to_reg(function, loc, REG_RESULT);
-        } else {
-            emit_addr_to_reg(gen, function, loc, type2movsize(gen, type), REG_RESULT, reg_src, 0);
-        }
-    } else {
-        if (reg_src != REG_RESULT) {
-            emit_reg_to_reg(function, loc, REG_RESULT, reg_src);
-        }
-    }
-}
-
-static void emit_reg_to_val_dst(gen_t *gen, texloc_t loc, function_t *function, type_t type, val_dst_t val_dst, reg_t src, reg_t tmp1, reg_t tmp2, bool is_addr_override) {
-    switch (val_dst.type) {
-    case VAL_DST_REG: {
-        emit_val_dst_reg(gen, loc, function, type, val_dst.reg, src, is_addr_override);
-        break;
-    }
-
-    case VAL_DST_RETURN: {
-        emit_val_dst_return(gen, loc, function, type, src, tmp1, tmp2, is_addr_override);
-        break;
-    }
-
-    case VAL_DST_STACK_POINT: {
-        emit_val_dst_stack_point(gen, loc, function, type, src, tmp1, tmp2, val_dst, is_addr_override);
-        break;
-    }
-
-    case VAL_DST_VOID: break;
-    }
 }
 
 static void gen_constant(gen_t *gen, texloc_t loc, function_t *function, void *data, type_t type, val_dst_t val_dst) {
@@ -1006,9 +1006,7 @@ static void gen_unary(gen_t *gen, function_t *function, ast_node_t *unary, val_d
             val_dst_t dst = emit_val_dst_reg_or_stack_point_reserve(gen, loc, function, expr->value_type, REG_RESULT);
             gen_expression(gen, function, expr, dst);
         }
-        emit_unary(gen, token_end_loc(&unary->end), function, unary->operator.type, expr->value_type, REG_RESULT, REG_RESULT);
-
-        emit_reg_to_val_dst(gen, loc, function, unary->value_type, val_dst, REG_RESULT, REG_T, REG_U, false);
+        emit_unary_on_result_reg(gen, loc, function, unary->operator.type, expr->value_type, val_dst);
     }
 }
 
