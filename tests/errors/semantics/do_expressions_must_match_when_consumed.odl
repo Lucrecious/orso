@@ -1,0 +1,11 @@
+main :: () -> void {
+    y := do {
+        x := false;
+        if x then break;
+        printint(1);
+        println();
+        true;
+    };
+
+    y;
+};

@@ -1,0 +1,51 @@
+#!/bin/bash
+
+# note(llm): Gemini 2.0 Flash
+
+source_file="$1"
+keyword="$2"
+new_name="$3"
+extension=".odl"
+
+if [ -z "$source_file" ] || [ -z "$keyword" ] || [ -z "$new_name" ]; then
+  echo "Usage: $0 <source_file> <keyword> <new_name>"
+  exit 1
+fi
+
+if [ ! -f "$source_file" ]; then
+  echo "Error: Source file '$source_file' not found."
+  exit 1
+fi
+
+case "$keyword" in
+  error-syntax)
+    dest_dir="tests/errors/syntax"
+    ;;
+  error-semantics)
+    dest_dir="tests/errors/semantics"
+    ;;
+  feature)
+    dest_dir="tests/features"
+    ;;
+  *)
+    echo "Error: Invalid keyword '$keyword'."
+    exit 1
+    ;;
+esac
+
+if [ ! -d "$dest_dir" ]; then
+  mkdir -p "$dest_dir"
+fi
+
+dest_file="$dest_dir/$new_name$extension"
+
+cp "$source_file" "$dest_file"
+
+if [ $? -eq 0 ]; then
+  echo "File '$source_file' copied to '$dest_file' successfully."
+else
+  echo "Error: Failed to copy file '$source_file' to '$dest_file'."
+  exit 1
+fi
+
+exit 0

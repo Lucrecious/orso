@@ -1,13 +1,4 @@
 main :: () -> void {
-    a := [4]int.{0, 1, 2, 3};
-    b := [4]int.{4, 5, 6, 7};
-
-    ap := &a;
-    bp := &b;
-
-    *
-    ap
-    =
-    *
-    bp;
+    printint(10);
+    println(100);
 };

@@ -2283,25 +2283,29 @@ void resolve_expression(
                     }
                 }
 
-                if (types.count > 0) {
-                    type_t check_type = types.items[0];
-                        ast_node_t *check_node = nodes.items[0];
-                    for (size_t i = 1; i < types.count; ++i) {
-                        type_t other_type = types.items[i];
-                        unless (typeid_eq(check_type, other_type)) {
-                            ast_node_t *other_node = nodes.items[i];
-                            stan_error(analyzer, OR_ERROR(
-                                .tag = ERROR_ANALYSIS_TYPE_MISMATCH,
-                                .level = ERROR_SOURCE_ANALYSIS,
-                                .msg = lit2str("all 'break' and `do` expression types must match but got '$0.$' and '$1.$"),
-                                .args = ORERR_ARGS(error_arg_type(check_type), error_arg_type(other_type),
-                                                   error_arg_node(check_node), error_arg_node(other_node)),
-                                .show_code_lines = ORERR_LINES(2, 3),
-                            ));
+                if (expr->is_consumed) {
+                    if (types.count > 0) {
+                        type_t check_type = types.items[0];
+                            ast_node_t *check_node = nodes.items[0];
+                        for (size_t i = 1; i < types.count; ++i) {
+                            type_t other_type = types.items[i];
+                            unless (typeid_eq(check_type, other_type)) {
+                                ast_node_t *other_node = nodes.items[i];
+                                stan_error(analyzer, OR_ERROR(
+                                    .tag = ERROR_ANALYSIS_TYPE_MISMATCH,
+                                    .level = ERROR_SOURCE_ANALYSIS,
+                                    .msg = lit2str("all 'break' and `do` expression types must match when consumed but got '$0.$' and '$1.$'"),
+                                    .args = ORERR_ARGS(error_arg_type(check_type), error_arg_type(other_type),
+                                                    error_arg_node(check_node), error_arg_node(other_node)),
+                                    .show_code_lines = ORERR_LINES(2, 3),
+                                ));
+                            }
                         }
-                    }
 
-                    expr->value_type = check_type;
+                        expr->value_type = check_type;
+                    } else {
+                        expr->value_type = typeid(TYPE_UNREACHABLE);
+                    }
                 } else {
                     expr->value_type = typeid(TYPE_UNREACHABLE);
                 }
@@ -2431,7 +2435,11 @@ void resolve_expression(
                 ast_node_t *argument = expr->children.items[i];
 
                 size_t argi = i - an_call_arg_start(expr);
-                type_t arg_implicit_type = callee_td->as.function.argument_types.items[argi];
+                
+                type_t arg_implicit_type = typeid(TYPE_UNRESOLVED);
+                if (argi < callee_td->as.function.argument_types.count) {
+                    arg_implicit_type = callee_td->as.function.argument_types.items[argi];
+                }
 
                 resolve_expression(analyzer, ast, state, arg_implicit_type, argument, true);
                 if (TYPE_IS_INVALID(argument->value_type)) {
@@ -2449,8 +2457,10 @@ void resolve_expression(
                 if (TYPE_IS_INVALID(arg->value_type)) continue;
                 size_t i_= i - an_call_arg_start(expr);
 
-                arg = cast_implicitly_if_necessary(ast, callee_td->as.function.argument_types.items[i_], arg);
-                expr->children.items[i] = arg;
+                if (i_ < callee_td->as.function.argument_types.count) {
+                    arg = cast_implicitly_if_necessary(ast, callee_td->as.function.argument_types.items[i_], arg);
+                    expr->children.items[i] = arg;
+                }
             }
 
             bool success = check_call_on_func(analyzer, ast, expr);
