@@ -14,7 +14,7 @@ main :: () -> void {
     count = while count > 0 {
         count = count - 1;
         if count == 3 then break 100;
-    };
+    } then 0;
 
     if count == 100 then
         sum = sum + 1;
