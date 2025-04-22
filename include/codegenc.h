@@ -347,7 +347,9 @@ static string_t cgen_get_instrinsic_fn_name(ast_t *ast, intrinsic_fn_t fn) {
     return name;
 }
 
-static void cgen_constant(cgen_t *cgen, word_t word, typedata_t *typedata) {
+static void cgen_constant(cgen_t *cgen, word_t word, type_t type) {
+    typedata_t *typedata = ast_type2td(cgen->ast, type);
+
     switch (typedata->kind) {
         case TYPE_NUMBER: {
             cstr_t numtype = cgen_typedata_name(typedata);
@@ -446,12 +448,13 @@ static void cgen_constant(cgen_t *cgen, word_t word, typedata_t *typedata) {
                 if (i != 0) {
                     sb_add_cstr(&cgen->sb, ", ");
                 }
-                void *item_data_addr = data_addr + i*typedata->as.arr.item_size;
+                size_t inner_item_size = get_inner_item_size(cgen->ast, type);
+                void *item_data_addr = data_addr + i*inner_item_size;
                 if (innertd->size > WORD_SIZE) {
-                    cgen_constant(cgen, WORDP(item_data_addr), innertd);
+                    cgen_constant(cgen, WORDP(item_data_addr), inner_type);
                 } else {
                     word_t val = ast_mem2word(cgen->ast, item_data_addr, inner_type);
-                    cgen_constant(cgen, val, innertd);
+                    cgen_constant(cgen, val, inner_type);
                 }
             }
                 
@@ -907,8 +910,6 @@ static void cgen_assignment(cgen_t *cgen, ast_node_t *assignment, cgen_var_t var
 static void cgen_constant_or_nil(cgen_t *cgen, ast_node_t *constant_or_nil, cgen_var_t var) {
     ASSERT(!constant_or_nil->requires_tmp_for_cgen, "primaries should never require tmps");
 
-    typedata_t *type_info = type2typedata(&cgen->ast->type_set.types, constant_or_nil->value_type);
-
     if (TYPE_IS_VOID(constant_or_nil->value_type)) {
         // ASSERT(!has_var(var), "shouldnt have a var since its void");
         // if (has_var(var)) sb_add_cstr(&cgen->sb, "");
@@ -918,7 +919,7 @@ static void cgen_constant_or_nil(cgen_t *cgen, ast_node_t *constant_or_nil, cgen
             sb_add_format(&cgen->sb, "%s = ", cgen_var(cgen, var));
         }
 
-        cgen_constant(cgen, constant_or_nil->expr_val.word, type_info);
+        cgen_constant(cgen, constant_or_nil->expr_val.word, constant_or_nil->value_type);
     }
 }
 

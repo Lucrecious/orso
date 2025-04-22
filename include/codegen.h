@@ -876,17 +876,18 @@ static local_t *find_local(gen_t *gen, ast_node_t *ref_decl) {
     return NULL;
 }
 
-size_t get_inner_data_type(ast_t *ast, type_t type) {
+size_t get_inner_item_size(ast_t *ast, type_t type) {
     typedata_t *td = ast_type2td(ast, type);
 
     switch (td->kind) {
     case TYPE_ARRAY: {
-        return td->as.arr.item_size;
+        typedata_t *inner = ast_type2td(ast, td->as.arr.type);
+        return td_align(inner->size, inner->alignment);
     }
 
     case TYPE_POINTER: {
         typedata_t *inner = ast_type2td(ast, td->as.ptr.type);
-        return inner->size;
+        return td_align(inner->size, inner->alignment);
     }
 
     default: UNREACHABLE();
@@ -905,11 +906,11 @@ static void gen_item_access_array_addr(gen_t *gen, function_t *function, texloc_
     type_t accessor_type = accessor->value_type;
 
     {
-        size_t inner_data_size = get_inner_data_type(gen->ast, accessee_type);
+        size_t item_size = get_inner_item_size(gen->ast, accessee_type);
         // size of td size in result reg
         {
             val_dst_t dst = emit_val_dst_reg_or_stack_point_reserve(gen, loc, function, gen->ast->type_set.u64_, REG_RESULT);
-            gen_constant(gen, loc, function, &inner_data_size, gen->ast->type_set.u64_, dst);
+            gen_constant(gen, loc, function, &item_size, gen->ast->type_set.u64_, dst);
         }
 
         typedata_t *td = ast_type2td(gen->ast, gen->ast->type_set.u64_);
@@ -1827,15 +1828,16 @@ static void gen_initializer_list(gen_t *gen, function_t *function, ast_node_t *l
                 }
 
                 typedata_t *arg_td = ast_type2td(gen->ast, arg->value_type);
+                size_t inner_item_size = get_inner_item_size(gen->ast, list->value_type);
                 if (arg_td->size > WORD_SIZE) {
                     emit_popn_bytes(gen, function, b2w(arg_td->size)*WORD_SIZE, loc, true);
 
-                    emit_binu_reg_im(function, loc, REG_T, REG_STACK_BOTTOM, td->as.arr.item_size*i_, '+');
+                    emit_binu_reg_im(function, loc, REG_T, REG_STACK_BOTTOM, inner_item_size*i_, '+');
 
                     emit_multiword_addr_to_addr(gen, function, loc, REG_T, REG_RESULT, REG_U, arg_td->size);
 
                 } else {
-                    emit_reg_to_addr(gen, function, loc, type2movsize(gen, arg->value_type), REG_STACK_BOTTOM, REG_RESULT, i_*td->as.arr.item_size);
+                    emit_reg_to_addr(gen, function, loc, type2movsize(gen, arg->value_type), REG_STACK_BOTTOM, REG_RESULT, i_*inner_item_size);
                 }
             }
 

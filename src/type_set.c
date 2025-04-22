@@ -19,12 +19,15 @@ typedata_t *function_type_new(type_table_t *set, types_t arguments, type_t retur
     function_type->as.function.return_type = return_type;
 
     function_type->size = sizeof(void*);
+    function_type->alignment = sizeof(void*);
 
     return function_type;
 }
 
 // only anonymous structs can be looked up in the type set
 typedata_t *struct_type_new(type_table_t *set, struct_field_t *fields, s32 field_count, struct_constant_t *constants, s32 constant_count, s32 total_size) {
+    MUST(false); // todo
+
     typedata_t* struct_type = ALLOC(typedata_t);
     struct_type->kind = TYPE_STRUCT;
 
@@ -74,29 +77,20 @@ typedata_t *pointer_type_new(type_table_t *set, type_t type) {
     pointer->kind = TYPE_POINTER;
     pointer->as.ptr.type = type;
     pointer->size = sizeof(void*);
+    pointer->alignment = sizeof(void*);
     pointer->capabilities = TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE;
 
     return pointer;
 }
 
-// bytes to array item size (word aligned)
-static size_t b2ais(size_t s) {
-    if (s == 1 || s == 2 || s == 4) return s;
-    if (s == 3) return 4;
-    return b2w(s)*WORD_SIZE;
-}
-
-typedata_t *array_type_new(type_table_t *set, size_t size, type_t type) {
-    size_t type_size = set->types.items[type.i]->size;
-    typedata_t *array_type = ALLOC(typedata_t);
-    array_type->kind = TYPE_ARRAY;
-    array_type->as.arr.type = type;
-    array_type->as.arr.count = size;
-    array_type->as.arr.item_size = b2ais(type_size);
-    array_type->size = b2ais(type_size)*size;
-    array_type->capabilities = TYPE_CAP_NONE;
-
-    return array_type;
+void array_type_new(type_table_t *set, size_t size, type_t type, typedata_t *result) {
+    typedata_t *itemtd = set->types.items[type.i];
+    result->kind = TYPE_ARRAY;
+    result->as.arr.type = type;
+    result->as.arr.count = size;
+    result->alignment = itemtd->alignment;
+    result->size = td_align(itemtd->size, itemtd->alignment)*size;
+    result->capabilities = TYPE_CAP_NONE;
 }
 
 typedata_t *type_copy_new(type_table_t *set, typedata_t *type) {
@@ -126,7 +120,9 @@ typedata_t *type_copy_new(type_table_t *set, typedata_t *type) {
     }
 
     if (type->kind == TYPE_ARRAY) {
-        return array_type_new(set, type->as.arr.count, type->as.arr.type);
+        typedata_t *td = ALLOC(typedata_t);
+        array_type_new(set, type->as.arr.count, type->as.arr.type, td);
+        return td;
     }
 
     UNREACHABLE();
@@ -144,36 +140,36 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
     set->types2index = table_new(type2u64, allocator);
     set->types = (typedatas_t){.allocator=allocator};
 
-    static typedata_t type_invalid = {.name=lit2str("<invalid>"), .kind=TYPE_INVALID, .size=0};
-    static typedata_t type_unresolved = {.name=lit2str("<unresolved>"), .kind=TYPE_UNRESOLVED, .size=0};
-    static typedata_t type_inferred_funcdef = {.name=lit2str("<inferred funcdef>"), .kind=TYPE_INFERRED_FUNCTION, .size=0};
-    static typedata_t type_unreachable = {.name=lit2str("<unreachable>"), .kind=TYPE_UNREACHABLE, .size=0};
+    static typedata_t type_invalid = {.name=lit2str("<invalid>"), .kind=TYPE_INVALID, .size=0, .alignment=0};
+    static typedata_t type_unresolved = {.name=lit2str("<unresolved>"), .kind=TYPE_UNRESOLVED, .size=0, .alignment=0};
+    static typedata_t type_inferred_funcdef = {.name=lit2str("<inferred funcdef>"), .kind=TYPE_INFERRED_FUNCTION, .size=0, .alignment=0};
+    static typedata_t type_unreachable = {.name=lit2str("<unreachable>"), .kind=TYPE_UNREACHABLE, .size=0, .alignment=0};
 
-    static typedata_t type_void = {.name=lit2str("void"), .kind=TYPE_VOID, .size=0, .capabilities=TYPE_CAP_NONE};
-    static typedata_t type_bool = {.name=lit2str("bool"), .kind=TYPE_BOOL, .size=NUM_SIZE_8, .capabilities=TYPE_CAP_LOGICAL};
-    static typedata_t type_f32 = {.name=lit2str("f32"), .kind=TYPE_NUMBER, .size=NUM_SIZE_32, .as.num = NUM_TYPE_FLOAT, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
-    static typedata_t type_f64 = {.name=lit2str("f64"), .kind=TYPE_NUMBER, .size=NUM_SIZE_64, .as.num = NUM_TYPE_FLOAT, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
+    static typedata_t type_void = {.name=lit2str("void"), .kind=TYPE_VOID, .size=0, .alignment=0, .capabilities=TYPE_CAP_NONE};
+    static typedata_t type_bool = {.name=lit2str("bool"), .kind=TYPE_BOOL, .size=NUM_SIZE_8, .alignment=NUM_SIZE_8, .capabilities=TYPE_CAP_LOGICAL};
+    static typedata_t type_f32 = {.name=lit2str("f32"), .kind=TYPE_NUMBER, .size=NUM_SIZE_32, .alignment=NUM_SIZE_32, .as.num = NUM_TYPE_FLOAT, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
+    static typedata_t type_f64 = {.name=lit2str("f64"), .kind=TYPE_NUMBER, .size=NUM_SIZE_64, .alignment=NUM_SIZE_64, .as.num = NUM_TYPE_FLOAT, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
 
-    static typedata_t type_s8 = {.name=lit2str("s8"), .kind=TYPE_NUMBER, .size=NUM_SIZE_8, .as.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
-    static typedata_t type_u8 = {.name=lit2str("u8"), .kind=TYPE_NUMBER, .size=NUM_SIZE_8, .as.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
+    static typedata_t type_s8 = {.name=lit2str("s8"), .kind=TYPE_NUMBER, .size=NUM_SIZE_8, .alignment=NUM_SIZE_8, .as.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
+    static typedata_t type_u8 = {.name=lit2str("u8"), .kind=TYPE_NUMBER, .size=NUM_SIZE_8, .alignment=NUM_SIZE_8, .as.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
 
-    static typedata_t type_s16 = {.name=lit2str("s16"), .kind=TYPE_NUMBER, .size=NUM_SIZE_16, .as.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
-    static typedata_t type_u16 = {.name=lit2str("u16"), .kind=TYPE_NUMBER, .size=NUM_SIZE_16, .as.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
+    static typedata_t type_s16 = {.name=lit2str("s16"), .kind=TYPE_NUMBER, .size=NUM_SIZE_16, .alignment=NUM_SIZE_16, .as.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
+    static typedata_t type_u16 = {.name=lit2str("u16"), .kind=TYPE_NUMBER, .size=NUM_SIZE_16, .alignment=NUM_SIZE_16, .as.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
 
-    static typedata_t type_s32 = {.name=lit2str("s32"), .kind=TYPE_NUMBER, .size=NUM_SIZE_32, .as.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
-    static typedata_t type_u32 = {.name=lit2str("u32"), .kind=TYPE_NUMBER, .size=NUM_SIZE_32, .as.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
+    static typedata_t type_s32 = {.name=lit2str("s32"), .kind=TYPE_NUMBER, .size=NUM_SIZE_32, .alignment=NUM_SIZE_32, .as.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
+    static typedata_t type_u32 = {.name=lit2str("u32"), .kind=TYPE_NUMBER, .size=NUM_SIZE_32, .alignment=NUM_SIZE_32, .as.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
 
-    static typedata_t type_s64 = {.name=lit2str("s64"), .kind=TYPE_NUMBER, .size=NUM_SIZE_64, .as.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
-    static typedata_t type_u64 = {.name=lit2str("u64"), .kind=TYPE_NUMBER, .size=NUM_SIZE_64, .as.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
+    static typedata_t type_s64 = {.name=lit2str("s64"), .kind=TYPE_NUMBER, .size=NUM_SIZE_64, .alignment=NUM_SIZE_64, .as.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
+    static typedata_t type_u64 = {.name=lit2str("u64"), .kind=TYPE_NUMBER, .size=NUM_SIZE_64, .alignment=NUM_SIZE_64, .as.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
 
-    static typedata_t type_int = {.name=lit2str("int"), .kind=TYPE_NUMBER, .size=sizeof(int), .as.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
-    static typedata_t type_uint = {.name=lit2str("uint"), .kind=TYPE_NUMBER, .size=sizeof(unsigned int), .as.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
-    static typedata_t type_size_t = {.name=lit2str("size_t"), .kind=TYPE_NUMBER, .size=sizeof(size_t), .as.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
-    static typedata_t type_ptrdiff_t = {.name=lit2str("s64"), .kind=TYPE_NUMBER, .size=sizeof(s64), .as.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
+    static typedata_t type_int = {.name=lit2str("int"), .kind=TYPE_NUMBER, .size=sizeof(int), .alignment=sizeof(int), .as.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
+    static typedata_t type_uint = {.name=lit2str("uint"), .kind=TYPE_NUMBER, .size=sizeof(unsigned int), .alignment=sizeof(unsigned int), .as.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
+    static typedata_t type_size_t = {.name=lit2str("size_t"), .kind=TYPE_NUMBER, .size=sizeof(size_t), .alignment=sizeof(size_t), .as.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
+    static typedata_t type_ptrdiff_t = {.name=lit2str("s64"), .kind=TYPE_NUMBER, .size=sizeof(s64), .alignment=sizeof(s64), .as.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_ARITHMETIC|TYPE_CAP_COMPARABLE)};
 
-    static typedata_t type_string = {.name=lit2str("string"), .kind=TYPE_STRING, .size=sizeof(void*), .capabilities=(TYPE_CAP_COMPARABLE)};
-    static typedata_t type_type = {.name=lit2str("type"), .kind=TYPE_TYPE, .size=sizeof(type_t), .capabilities=(TYPE_CAP_NONE)};
-    static typedata_t empty_function = {.name=lit2str(""), .kind = TYPE_FUNCTION, .size = sizeof(void*), .as.function.return_type = typeid(TYPE_VOID), .capabilities=(TYPE_CAP_NONE)};
+    static typedata_t type_string = {.name=lit2str("string"), .kind=TYPE_STRING, .size=sizeof(void*), .alignment=sizeof(void*), .capabilities=(TYPE_CAP_COMPARABLE)};
+    static typedata_t type_type = {.name=lit2str("type"), .kind=TYPE_TYPE, .size=sizeof(type_t), .alignment=sizeof(type_t), .capabilities=(TYPE_CAP_NONE)};
+    static typedata_t empty_function = {.name=lit2str(""), .kind = TYPE_FUNCTION, .size = sizeof(void*), .alignment=sizeof(void*), .as.function.return_type = typeid(TYPE_VOID), .capabilities=(TYPE_CAP_NONE)};
 
     type_t invalid = typeid(set->types.count);
     array_push(&set->types, &type_invalid);
@@ -308,7 +304,6 @@ static khint_t hash_type(typedata_t *type) {
     } else if (type->kind == TYPE_ARRAY) {
         ADD_HASH(hash, (u64)(type->as.arr.type.i));
         ADD_HASH(hash, (u64)(type->as.arr.count));
-        ADD_HASH(hash, (u64)(type->as.arr.item_size));
     }
 
     return hash;
@@ -338,15 +333,8 @@ type_t type_set_fetch_pointer(type_table_t* set, type_t inner_type) {
 }
 
 type_t type_set_fetch_array(type_table_t *set, type_t value_type, size_t size) {
-    size_t value_type_size = set->types.items[value_type.i]->size;
-    typedata_t array_type = {
-        .kind = TYPE_ARRAY,
-        .as.arr.count = size,
-        .as.arr.item_size = b2ais(value_type_size),
-        .as.arr.type = value_type,
-        .size = b2ais(value_type_size)*size,
-        .capabilities = TYPE_CAP_NONE,
-    };
+    typedata_t array_type;
+    array_type_new(set, size, value_type, &array_type);
 
     type_t type;
     if (table_get(type2u64, set->types2index, &array_type, &type)) {

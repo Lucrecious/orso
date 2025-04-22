@@ -8,6 +8,10 @@ bool struct_type_is_incomplete(typedata_t *type) {
     return type->kind == TYPE_STRUCT && type->as.struct_.field_count < 0;
 }
 
+size_t td_align(size_t b, size_t alignment) {
+    return ((b + alignment-1) / alignment) * alignment;
+}
+
 bool type_equal(typedata_t *a, typedata_t *b) {
     if (a->kind != b->kind) return false;
 
@@ -75,8 +79,6 @@ bool type_equal(typedata_t *a, typedata_t *b) {
         case TYPE_ARRAY: {
             if (!typeid_eq(a->as.arr.type, b->as.arr.type)) return false;
             if (a->as.arr.count != b->as.arr.count) return false;
-
-            if (a->as.arr.item_size != b->as.arr.item_size) return false;
             return true;
         }
 

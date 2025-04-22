@@ -17,6 +17,8 @@ struct types_t {
 typedef struct typedatas_t typedatas_t;
 typedef struct typedata_t typedata_t;
 
+size_t td_align(size_t b, size_t alignment);
+
 typedef enum type_kind_t {
     // analysis types
     TYPE_INVALID = 0,      // error type
@@ -89,6 +91,7 @@ struct typedata_t {
     type_kind_t kind;
     type_caps_t capabilities;
     size_t size; // not serialized
+    size_t alignment; // not serialized
     union {
         num_type_t num;
 
@@ -114,7 +117,6 @@ struct typedata_t {
 
         struct {
             size_t count;
-            size_t item_size; // word-aligned
             type_t type;
         } arr;
     } as;

@@ -1604,7 +1604,10 @@ void resolve_expression(
                         for (size_t i = an_list_start(expr); i < an_list_end(expr); ++i) {
                             size_t offset = i - an_list_start(expr);
                             ast_node_t *arg = expr->children.items[i];
-                            ast_copy_expr_val_to_memory(ast, arg, ((void*)start)+(offset*init_type_td->as.arr.item_size));
+                            
+                            typedata_t *itemtd = ast_type2td(ast, init_type_td->as.arr.type);
+                            size_t size_aligned = td_align(itemtd->size, itemtd->alignment);
+                            ast_copy_expr_val_to_memory(ast, arg, ((void*)start)+(offset*size_aligned));
                         }
                     }
 
