@@ -90,7 +90,7 @@ void array_type_new(type_table_t *set, size_t size, type_t type, typedata_t *res
     result->as.arr.count = size;
     result->alignment = itemtd->alignment;
     result->size = td_align(itemtd->size, itemtd->alignment)*size;
-    result->capabilities = TYPE_CAP_NONE;
+    result->capabilities = itemtd->capabilities;
 }
 
 typedata_t *type_copy_new(type_table_t *set, typedata_t *type) {

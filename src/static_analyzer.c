@@ -460,64 +460,307 @@ static void forward_scan_constant_names(analyzer_t *analyzer, scope_t *scope, as
     }
 }
 
-word_t constant_fold_bin_arithmetic(ast_t *ast, token_type_t operator, type_t type, word_t l, word_t r) {
-    typedata_t *numtype = ast_type2td(ast, type);
+word_t ast_item_get(ast_t *ast, bool is_addr, word_t aggregate, type_t item_type, size_t byte_offset) {
+    typedata_t *td = ast_type2td(ast, item_type);
+    
+    void *addr;
+    {
+        if (is_addr) {
+            addr = aggregate.as.p + byte_offset;
+        } else {
+            addr = ((void*)(&aggregate)) + byte_offset;
+        }
+    }
 
-    #define case_block(type, l, r) do { switch (operator) { \
-        case TOKEN_PLUS: result = add##type##_(l, r); break; \
-        case TOKEN_MINUS: result = sub##type##_(l, r); break; \
-        case TOKEN_SLASH: result = div##type##_(l, r); break; \
-        case TOKEN_STAR: result = mul##type##_(l, r); break; \
-        case TOKEN_PERCENT: result = mod##type##_(l, r); break; \
-        case TOKEN_PERCENT_PERCENT: result = rem##type##_(l, r); break; \
+
+    switch (td->kind) {
+    case TYPE_VOID: return WORDU(0);
+    case TYPE_BOOL: {
+        u8 res = *((u8*)addr);
+        return WORDU(res);
+    }
+
+    case TYPE_TYPE: {
+        type_t res = *((type_t*)addr);
+        return WORDT(res);
+    }
+
+    case TYPE_POINTER:
+    case TYPE_INTRINSIC_FUNCTION:
+    case TYPE_FUNCTION: {
+        void *res = *((void**)addr);
+        return WORDP(res);
+    }
+
+    case TYPE_ARRAY: {
+        if (td->size > WORD_SIZE) {
+            return WORDP(addr);
+        } else {
+            word_t arr = *((word_t*)addr);
+            return arr;
+        }
+    }
+
+    case TYPE_NUMBER: {
+        switch (td->as.num) {
+        case NUM_TYPE_UNSIGNED: {
+            switch ((num_size_t)td->size) {
+            case NUM_SIZE_8: {
+                u8 res = *((u8*)addr);
+                return WORDU(res);
+            }
+            case NUM_SIZE_16: {
+                u16 res = *((u16*)addr);
+                return WORDU(res);
+            }
+            case NUM_SIZE_32: {
+                u32 res = *((u32*)addr);
+                return WORDU(res);
+            }
+            case NUM_SIZE_64: {
+                u64 res = *((u64*)addr);
+                return WORDU(res);
+            }
+            }
+        }
+
+        case NUM_TYPE_SIGNED: {
+            switch ((num_size_t)td->size) {
+            case NUM_SIZE_8: {
+                s8 res = *((s8*)addr);
+                return WORDI(res);
+            }
+            case NUM_SIZE_16: {
+                s16 res = *((s16*)addr);
+                return WORDI(res);
+            }
+            case NUM_SIZE_32: {
+                s32 res = *((s32*)addr);
+                return WORDI(res);
+            }
+            case NUM_SIZE_64: {
+                s64 res = *((s64*)addr);
+                return WORDI(res);
+            }
+            }
+        }
+        case NUM_TYPE_FLOAT: {
+            switch ((num_size_t)td->size) {
+            case NUM_SIZE_8: UNREACHABLE(); break;
+            case NUM_SIZE_16: UNREACHABLE(); break;
+
+            case NUM_SIZE_32: {
+                f32 res = *((f32*)addr);
+                return WORDD(res);
+            }
+            case NUM_SIZE_64: {
+                f64 res = *((f64*)addr);
+                return WORDD(res);
+            }
+            }
+        }
+        }
+    }
+
+    case TYPE_STRUCT: UNREACHABLE(); break; // todo
+    case TYPE_STRING: UNREACHABLE(); break; // todo
+
+    case TYPE_INVALID:
+    case TYPE_UNRESOLVED:
+    case TYPE_INFERRED_FUNCTION:
+    case TYPE_UNREACHABLE:
+    case TYPE_COUNT: UNREACHABLE(); break;
+    }
+}
+
+void ast_item_set(ast_t *ast, type_t type, void *addr, word_t value, size_t byte_offset) {
+    typedata_t *td = ast_type2td(ast, type);
+
+    addr += byte_offset;
+
+    switch (td->kind) {
+    case TYPE_VOID: return;
+    case TYPE_BOOL: {
+        *((u8*)addr) = cast(u8, value.as.u);
+        return;
+    }
+
+    case TYPE_TYPE: {
+        *((type_t*)addr) = value.as.t;
+        break;
+    }
+
+    case TYPE_POINTER:
+    case TYPE_INTRINSIC_FUNCTION:
+    case TYPE_FUNCTION: {
+        *((void**)addr) = value.as.p;
+        break;
+    }
+
+    case TYPE_ARRAY: {
+        void *src;
+        if (td->size > WORD_SIZE) {
+            src = value.as.p;
+        } else {
+            src = &value;
+        }
+
+        memcpy(addr, src, td->size);
+        break;
+    }
+
+    case TYPE_NUMBER: {
+        switch (td->as.num) {
+        case NUM_TYPE_UNSIGNED: {
+            switch ((num_size_t)td->size) {
+            case NUM_SIZE_8: {
+                *((u8*)addr) = cast(u8, value.as.u);
+                return;
+            }
+            case NUM_SIZE_16: {
+                *((u16*)addr) = cast(u16, value.as.u);
+                return;
+            }
+            case NUM_SIZE_32: {
+                *((u32*)addr) = cast(u32, value.as.u);
+                return;
+            }
+            case NUM_SIZE_64: {
+                *((u64*)addr) = cast(u64, value.as.u);
+                return;
+            }
+            }
+        }
+
+        case NUM_TYPE_SIGNED: {
+            switch ((num_size_t)td->size) {
+            case NUM_SIZE_8: {
+                *((s8*)addr) = cast(s8, value.as.s);
+                return;
+            }
+            case NUM_SIZE_16: {
+                *((s16*)addr) = cast(s16, value.as.s);
+                return;
+            }
+            case NUM_SIZE_32: {
+                *((s32*)addr) = cast(s32, value.as.s);
+                return;
+            }
+            case NUM_SIZE_64: {
+                *((s64*)addr) = cast(s64, value.as.s);
+                return;
+            }
+            }
+        }
+
+        case NUM_TYPE_FLOAT: {
+            switch ((num_size_t)td->size) {
+            case NUM_SIZE_8: UNREACHABLE(); break;
+            case NUM_SIZE_16: UNREACHABLE(); break;
+
+            case NUM_SIZE_32: {
+                *((f32*)addr) = cast(f32, value.as.d);
+                return;
+            }
+            case NUM_SIZE_64: {
+                *((f64*)addr) = cast(f64, value.as.d);
+                return;
+            }
+            }
+        }
+        }
+    }
+
+    case TYPE_STRUCT: UNREACHABLE(); break; // todo
+    case TYPE_STRING: UNREACHABLE(); break; // todo
+
+    case TYPE_INVALID:
+    case TYPE_UNRESOLVED:
+    case TYPE_INFERRED_FUNCTION:
+    case TYPE_UNREACHABLE:
+    case TYPE_COUNT: UNREACHABLE(); break;
+    }
+}
+
+void constant_fold_bin_arithmetic(ast_t *ast, token_type_t operator, type_t type, word_t l, word_t r, void *result) {
+    typedata_t *td = ast_type2td(ast, type);
+
+    #define case_block(type, l, r, v) do { switch (operator) { \
+        case TOKEN_PLUS: res = add##type##_(l, r); break; \
+        case TOKEN_MINUS: res = sub##type##_(l, r); break; \
+        case TOKEN_SLASH: res = div##type##_(l, r); break; \
+        case TOKEN_STAR: res = mul##type##_(l, r); break; \
+        case TOKEN_PERCENT: res = mod##type##_(l, r); break; \
+        case TOKEN_PERCENT_PERCENT: res = rem##type##_(l, r); break; \
         default: UNREACHABLE(); \
         }} while (false)
 
-    switch (numtype->kind) {
+    switch (td->kind) {
     case TYPE_NUMBER: {
-        switch (numtype->as.num) {
+        switch (td->as.num) {
         case NUM_TYPE_SIGNED: {
             s64 lhsi = l.as.s;
             s64 rhsi = r.as.s;
-            s64 result = 0;
+            s64 res;
 
-            switch((num_size_t)numtype->size) {
-            case NUM_SIZE_8: case_block(s8, lhsi, rhsi); break;
-            case NUM_SIZE_16: case_block(s16, lhsi, rhsi); break;
-            case NUM_SIZE_32: case_block(s32, lhsi, rhsi); break;
-            case NUM_SIZE_64: case_block(s64, lhsi, rhsi); break;
+            switch((num_size_t)td->size) {
+            case NUM_SIZE_8: case_block(s8, lhsi, rhsi, s); break;
+            case NUM_SIZE_16: case_block(s16, lhsi, rhsi, s); break;
+            case NUM_SIZE_32: case_block(s32, lhsi, rhsi, s); break;
+            case NUM_SIZE_64: case_block(s64, lhsi, rhsi, s); break;
             }
 
-            return WORDI(result);
+            ast_item_set(ast, type, result, WORDI(res), 0);
+            break;
         }
         
         case NUM_TYPE_UNSIGNED: {
             u64 lhsu = l.as.u;
             u64 rhsu = l.as.u;
-            u64 result = 0;
+            u64 res;
 
-            switch((num_size_t)numtype->size) {
-            case NUM_SIZE_8: case_block(u8, lhsu, rhsu); break;
-            case NUM_SIZE_16: case_block(u16, lhsu, rhsu); break;
-            case NUM_SIZE_32: case_block(u32, lhsu, rhsu); break;
-            case NUM_SIZE_64: case_block(u64, lhsu, rhsu); break;
+            switch((num_size_t)td->size) {
+            case NUM_SIZE_8: case_block(u8, lhsu, rhsu, u); break;
+            case NUM_SIZE_16: case_block(u16, lhsu, rhsu, u); break;
+            case NUM_SIZE_32: case_block(u32, lhsu, rhsu, u); break;
+            case NUM_SIZE_64: case_block(u64, lhsu, rhsu, u); break;
             }
 
-            return WORDU(result);
+            ast_item_set(ast, type, result, WORDU(res), 0);
+            break;
         }
 
         case NUM_TYPE_FLOAT: {
             f64 lhsf = l.as.d;
             f64 rhsf = r.as.d;
-            f64 result = 0;
-            switch((num_size_t)numtype->size) {
-            case NUM_SIZE_32: case_block(f, lhsf, rhsf); break;
-            case NUM_SIZE_64: case_block(d, lhsf, rhsf); break;
+            f64 res;
+
+            switch((num_size_t)td->size) {
+            case NUM_SIZE_32: case_block(f, lhsf, rhsf, d); break;
+            case NUM_SIZE_64: case_block(d, lhsf, rhsf, d); break;
             default: UNREACHABLE(); break;
             }
 
-            return WORDD(result);
+            ast_item_set(ast, type, result, WORDD(res), 0);
+            break;
         }
+        }
+        break;
+    }
+
+    case TYPE_ARRAY: {
+        void *array_addr = result;
+
+        typedata_t *inner_td = ast_type2td(ast, td->as.arr.type);
+
+        size_t aligned_size = td_align(inner_td->size, inner_td->alignment);
+        for (size_t i = 0; i < td->as.arr.count; ++i) {
+            word_t item_l = ast_item_get(ast, td->size > WORD_SIZE, l, td->as.arr.type, i*aligned_size);
+            word_t item_r = ast_item_get(ast, td->size > WORD_SIZE, r, td->as.arr.type, i*aligned_size);
+
+            void *addr = array_addr + (i*aligned_size);
+
+            constant_fold_bin_arithmetic(ast, operator, td->as.arr.type, item_l, item_r, addr);
         }
         break;
     }
@@ -1748,9 +1991,25 @@ void resolve_expression(
                     } else {
                         expr->value_type = left->value_type;
                         if (left->expr_val.is_concrete && right->expr_val.is_concrete) {
-                            word_t word = constant_fold_bin_arithmetic(ast, expr->operator.type, left->value_type, left->expr_val.word, right->expr_val.word);
-                            expr->expr_val = ast_node_val_word(word);
+                            typedata_t *exprtd = ast_type2td(ast, expr->value_type);
+                            word_t result;
+                            void *result_addr;
+                            if (exprtd->size > WORD_SIZE) {
+                                result_addr = ast_multiword_value(ast, exprtd->size);
+                            } else {
+                                result_addr = &result;
+                            }
+
+                            constant_fold_bin_arithmetic(ast, expr->operator.type, left->value_type, left->expr_val.word, right->expr_val.word, result_addr);
+
                             expr->is_free_number = left->is_free_number && right->is_free_number;
+
+                            if (exprtd->size > WORD_SIZE) {
+                                expr->expr_val = ast_node_val_word(WORDP(result_addr));
+                            } else {
+                                word_t val = ast_item_get(ast, true, WORDP(result_addr), expr->value_type, 0);
+                                expr->expr_val = ast_node_val_word(val);
+                            }
                         }
                     }
                 }
