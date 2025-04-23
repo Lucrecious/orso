@@ -1,4 +1,9 @@
 main :: () -> void {
-    printint(10);
-    println(100);
+    a := [4]int.{0, 1, 2, 3};
+    b := [4]int.{4, 5, 6, 7};
+
+    c := a + b;
+
+    for i := 0; i < len(c); ++i do printint(c[i]);
+    println();
 };

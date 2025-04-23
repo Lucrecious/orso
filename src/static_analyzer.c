@@ -2572,6 +2572,7 @@ void resolve_expression(
             case TOKEN_LEN: {
                 expr->value_type = ast->type_set.size_t_;
                 expr->is_free_number = true;
+                expr->expr_val = ast_node_val_word(WORDU(0)); // default for error case
 
                 unless (count == 1) {
                     stan_error(analyzer, OR_ERROR(
@@ -2591,13 +2592,15 @@ void resolve_expression(
                 typedata_t *argtd = ast_type2td(ast, arg_type);
 
                 if (argtd->kind != TYPE_ARRAY) {
-                    stan_error(analyzer, OR_ERROR(
-                        .tag = ERROR_ANALYSIS_LEN_REQUIRES_ONE_ARRAY_ARG,
-                        .level = ERROR_SOURCE_ANALYSIS,
-                        .msg = lit2str("'len' builtin takes 1 array argument but got '$1.$' instead"),
-                        .args = ORERR_ARGS(error_arg_node(arg), error_arg_type(arg->value_type)),
-                        .show_code_lines = ORERR_LINES(0),
-                    ));
+                    unless (TYPE_IS_INVALID(arg_type)) {
+                        stan_error(analyzer, OR_ERROR(
+                            .tag = ERROR_ANALYSIS_LEN_REQUIRES_ONE_ARRAY_ARG,
+                            .level = ERROR_SOURCE_ANALYSIS,
+                            .msg = lit2str("'len' builtin takes 1 array argument but got '$1.$' instead"),
+                            .args = ORERR_ARGS(error_arg_node(arg), error_arg_type(arg->value_type)),
+                            .show_code_lines = ORERR_LINES(0),
+                        ));
+                    }
                     break;
                 }
 
