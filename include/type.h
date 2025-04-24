@@ -135,6 +135,8 @@ struct type_table_t;
 
 bool struct_type_is_incomplete(typedata_t *type);
 
+bool is_type_kind_aggregate(type_kind_t kind);
+
 bool type_equal(typedata_t *a, typedata_t *b);
 
 struct_field_t *type_struct_find_field(typedata_t *struct_, const char *name, size_t name_length);

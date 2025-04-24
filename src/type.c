@@ -8,6 +8,10 @@ bool struct_type_is_incomplete(typedata_t *type) {
     return type->kind == TYPE_STRUCT && type->as.struct_.field_count < 0;
 }
 
+bool is_type_kind_aggregate(type_kind_t kind) {
+    return ((kind) == TYPE_ARRAY || (kind) == TYPE_STRUCT);
+}
+
 size_t td_align(size_t b, size_t alignment) {
     return ((b + alignment-1) / alignment) * alignment;
 }

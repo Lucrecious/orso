@@ -1,9 +1,53 @@
+addint :: (a: [4]int, b: [4]int) -> [4]int {
+    return a + b;
+};
+
+addu8 :: (a: [4]u8, b: [4]u8) -> [4]u8 {
+    return a + b;
+};
+
 main :: () -> void {
-    a := [4]int.{0, 1, 2, 3};
-    b := [4]int.{4, 5, 6, 7};
+    // big
+    {
+        a := [4]int.{0, 1, 2, 3};
+        b := [4]int.{4, 5, 6, 7};
 
-    c := a + b;
+        c := a + b;
 
-    for i := 0; i < len(c); ++i do printint(c[i]);
+        for i := 0; i < len(c); ++i do printint(c[i]);
+        println();
+
+        c = addint(c, c);
+
+        for i := 0; i < len(c); ++i do printint(c[i]);
+        println();
+
+        c = a + b + c;
+
+        for i := 0; i < len(c); ++i do printint(c[i]);
+        println();
+    };
+
     println();
+
+    // small
+    {
+        a := [4]u8.{0, 1, 2, 3};
+        b := [4]u8.{4, 5, 6, 7};
+
+        c := a + b;
+
+        for i := 0; i < len(c); ++i do printint(c[i] as int);
+        println();
+
+        c = addu8(c, c);
+
+        for i := 0; i < len(c); ++i do printint(c[i] as int);
+        println();
+
+        c = a + b + c;
+
+        for i := 0; i < len(c); ++i do printint(c[i] as int);
+        println();
+    };
 };
