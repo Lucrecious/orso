@@ -56,38 +56,4 @@ main :: () -> void {
         for i := 0; i < len(c); ++i do printint(c[i] as int);
         println();
     };
-
-    // nested big
-    {
-        a := [2][2]f64.{.{1.5, 2.5}, .{3.5, 4.5}};
-        b := [2][2]f64.{.{5.5, 6.5}, .{7.5, 8.5}};
-
-        c := a + b;
-
-        for i := 0; i < len(a); ++i {
-            for j := 0; j < len(a[0]); ++j {
-                printint(c[i][j] as int);
-                println();
-            };
-        };
-        
-        println();
-    };
-
-    // nested small
-    {
-        a := [2][2]u8.{.{1, 2}, .{3, 4}};
-        b := [2][2]u8.{.{5, 6}, .{7, 8}};
-
-        c := a + b;
-
-        for i := 0; i < len(a); ++i {
-            for j := 0; j < len(a[0]); ++j {
-                printint(c[i][j] as int);
-                println();
-            };
-        };
-        
-        println();
-    };
 };

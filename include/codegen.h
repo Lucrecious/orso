@@ -206,7 +206,7 @@ static void emit_addr_to_reg(gen_t *gen, function_t *function, texloc_t loc, reg
 }
 
 static void emit_reg_to_addr(gen_t *gen, function_t *function, texloc_t loc, reg_mov_size_t mov_size, reg_t reg_dest, reg_t reg_src, size_t offset) {
-    printf("todo: make this work for sizes asap\n");
+    // todo: make this work for sizes asap
     if (offset > ORIN_UINTARG_MAX) {
         gen_error(gen, OR_ERROR(
             .tag = ERROR_CODEGEN_OFFSET_TOO_LARGE,
@@ -537,7 +537,7 @@ static void emit_bin_op_aggregates(gen_t *gen, texloc_t loc, function_t *functio
         size_t aligned_size = td_align(innertd->size, innertd->alignment);
         for (size_t i = 0; i < count; ++i) {
             size_t d = i*aligned_size;
-            emit_bin_op_aggregates(gen, loc, function, token_type, td->as.arr.type, op1_stack_point-d, op2_stack_point-d, val_dst, d);
+            emit_bin_op_aggregates(gen, loc, function, token_type, td->as.arr.type, op1_stack_point-d, op2_stack_point-d, val_dst, d+byte_offset);
         }
         break;
     }
@@ -853,7 +853,7 @@ static void gen_binary(gen_t *gen, function_t *function, ast_node_t *binary, val
     typedata_t *bintd = ast_type2td(gen->ast, binary->value_type);
 
     token_type_t op = binary->operator.type;
-    if (operator_is_arithmetic(op) || operator_is_comparing(op) || operator_is_equating(op)) {
+    if (operator_is_arithmetic(op) || operator_is_ordering(op) || operator_is_comparing(op)) {
         size_t clean_stack_point = gen_stack_point(gen);
 
         ast_node_t *lhs = an_lhs(binary);

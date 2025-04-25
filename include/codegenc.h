@@ -165,6 +165,10 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t tmp
 static bool cgen_binary_is_macro(token_type_t type, typedata_t *optd, cstr_t *operator_or_func_name) {
     #define set_op(lit, is_func) { if (operator_or_func_name) *operator_or_func_name = (lit); return (is_func); } break
 
+    if (is_type_kind_aggregate(optd->kind)) {
+        return false;
+    }
+
     #define case_block(numtype) do { switch (type) {\
         case TOKEN_PLUS: set_op("add"#numtype"_", true); break; \
         case TOKEN_MINUS: set_op("sub"#numtype"_", true); \
@@ -298,15 +302,20 @@ static void cgen_cache_requires_tmp(typedatas_t *types, ast_node_t *expression) 
 
         case AST_NODE_TYPE_EXPRESSION_BINARY: {
             typedata_t *operandtd = type2typedata(types, an_lhs(expression)->value_type);
-            if (cgen_binary_is_macro(expression->operator.type, operandtd, NULL)) {
-                if (an_lhs(expression)->node_type == AST_NODE_TYPE_EXPRESSION_PRIMARY && an_rhs(expression)->node_type == AST_NODE_TYPE_EXPRESSION_PRIMARY) {
-                    expression->requires_tmp_for_cgen = false;
-                } else {
-                    expression->requires_tmp_for_cgen = true;
-                }
+            if (is_type_kind_aggregate(operandtd->kind)) {
+                expression->requires_tmp_for_cgen = true;
             } else {
-                expression->requires_tmp_for_cgen = false;
+                if (cgen_binary_is_macro(expression->operator.type, operandtd, NULL)) {
+                    if (an_lhs(expression)->node_type == AST_NODE_TYPE_EXPRESSION_PRIMARY && an_rhs(expression)->node_type == AST_NODE_TYPE_EXPRESSION_PRIMARY) {
+                        expression->requires_tmp_for_cgen = false;
+                    } else {
+                        expression->requires_tmp_for_cgen = true;
+                    }
+                } else {
+                    expression->requires_tmp_for_cgen = false;
+                }
             }
+            break;
         }
 
         default:  {
@@ -508,6 +517,84 @@ static void cgen_declaration(cgen_t *cgen, ast_node_t *declaration) {
     }
 }
 
+static void cgen_array_start(cgen_t *cgen, type_t type) {
+    sb_add_format(&cgen->sb, "(%s){ .arr={", ast_type2td(cgen->ast, type)->name);
+}
+
+static void cgen_array_end(cgen_t *cgen) {
+    sb_add_cstr(&cgen->sb, "}}");
+}
+
+static void cgen_scaler_aggregate_binary(cgen_t *cgen, type_t type, token_type_t op, string_view_t lhs, string_view_t rhs) {
+    typedata_t *td = ast_type2td(cgen->ast, type);
+    cstr_t name_or_op;
+    bool is_macro = cgen_binary_is_macro(op, td, &name_or_op);
+    if (is_macro) {
+        // pointer arithmetic is always a macro
+        if (td->kind == TYPE_POINTER) {
+            sb_add_format(&cgen->sb, "%s((%s)%.*s, %.*s)", name_or_op, td->name, lhs.length, lhs.data, rhs.length, rhs.data);
+        } else {
+            sb_add_format(&cgen->sb, "%s(%.*s, %.*s)", name_or_op, lhs.length, lhs.data, rhs.length, rhs.data);
+        }
+    } else {
+        sb_add_format(&cgen->sb, "%.*s %s %.*s", lhs.length, lhs.data, name_or_op, rhs.length, rhs.data);
+    }
+}
+
+static void cgen_aggregate_binary(cgen_t *cgen, token_type_t op, type_t type, string_builder_t *lhs_lvalue, string_builder_t *rhs_lvalue) {
+    typedata_t *td = ast_type2td(cgen->ast, type);
+
+    switch (td->kind) {
+    case TYPE_ARRAY: {
+        cgen_array_start(cgen, type);
+
+        size_t reset_length_lhs = lhs_lvalue->count;
+        size_t reset_length_rhs = rhs_lvalue->count;
+
+        for (size_t i = 0; i < td->as.arr.count; ++i) {
+            if (i > 0) {
+                sb_add_cstr(&cgen->sb, ", ");
+            }
+
+            lhs_lvalue->count = reset_length_lhs;
+            rhs_lvalue->count = reset_length_rhs;
+            sb_add_format(lhs_lvalue, ".arr[%zu]", i);
+            sb_add_format(rhs_lvalue, ".arr[%zu]", i);
+            cgen_aggregate_binary(cgen, op, td->as.arr.type, lhs_lvalue, rhs_lvalue);
+        }
+
+        cgen_array_end(cgen);
+        break;
+    }
+
+    case TYPE_STRUCT: {
+        UNREACHABLE();
+        // todo
+        break;
+    }
+
+    case TYPE_NUMBER: {
+        string_view_t lhs = {.length=lhs_lvalue->count, .data=lhs_lvalue->items};
+        string_view_t rhs = {.length=rhs_lvalue->count, .data=rhs_lvalue->items};
+        cgen_scaler_aggregate_binary(cgen, type, op, lhs, rhs);
+        break;
+    }
+
+    case TYPE_VOID:
+    case TYPE_BOOL:
+    case TYPE_STRING:
+    case TYPE_TYPE:
+    case TYPE_FUNCTION:
+    case TYPE_INTRINSIC_FUNCTION:
+    case TYPE_INVALID:
+    case TYPE_UNRESOLVED:
+    case TYPE_INFERRED_FUNCTION:
+    case TYPE_UNREACHABLE:
+    case TYPE_POINTER:
+    case TYPE_COUNT: UNREACHABLE(); break;
+    }
+}
+
 static void cgen_binary(cgen_t *cgen, ast_node_t *binary, cgen_var_t var) {
     cstr_t operator_or_function_name = NULL;
 
@@ -614,15 +701,20 @@ static void cgen_binary(cgen_t *cgen, ast_node_t *binary, cgen_var_t var) {
             sb_add_format(&cgen->sb, "%s = ", cgen_var(cgen, var));
         }
 
-        if (is_macro) {
-            // pointer arithmetic is always a macro
-            if (lhstd->kind == TYPE_POINTER) {
-                sb_add_format(&cgen->sb, "%s((%s)%s, %s)", operator_or_function_name, lhstd->name, cgen_var_name(cgen, lhs_var), cgen_var_name(cgen, rhs_var));
-            } else {
-                sb_add_format(&cgen->sb, "%s(%s, %s)", operator_or_function_name, cgen_var_name(cgen, lhs_var), cgen_var_name(cgen, rhs_var));
-            }
+        if (is_type_kind_aggregate(lhstd->kind)) {
+            tmp_arena_t *tmp = allocator_borrow();
+            string_builder_t lhs_lvalue = {.allocator=tmp->allocator};
+            string_builder_t rhs_lvalue = {.allocator=tmp->allocator};
+
+            sb_add_format(&lhs_lvalue, "%s", cgen_var_name(cgen, lhs_var));
+            sb_add_format(&rhs_lvalue, "%s", cgen_var_name(cgen, rhs_var));
+            cgen_aggregate_binary(cgen, binary->operator.type, lhs->value_type, &lhs_lvalue, &rhs_lvalue);
+
+            allocator_return(tmp);
         } else {
-            sb_add_format(&cgen->sb, "%s %s %s", cgen_var_name(cgen, lhs_var), operator_or_function_name, cgen_var_name(cgen, rhs_var));
+            string_view_t lhsv = cstr2sv(cgen_var_name(cgen, lhs_var));
+            string_view_t rhsv = cstr2sv(cgen_var_name(cgen, rhs_var));
+            cgen_scaler_aggregate_binary(cgen, lhs->value_type, binary->operator.type, lhsv, rhsv);
         }
     }
 }
@@ -780,7 +872,8 @@ static void cgen_lvalue(cgen_t *cgen, ast_node_t *lvalue, cgen_var_t var) {
         cgen_var_t lvalue_var = cgen_user_var(cgen, lvalue->identifier.view, lvalue->value_type);
         typedata_t *td = ast_type2td(cgen->ast, lvalue->value_type);
         if (td->kind == TYPE_ARRAY) {
-            sb_add_format(&cgen->sb, "(%s.arr)", cgen_var_name(cgen, lvalue_var));
+            // sb_add_format(&cgen->sb, "(%s.arr)", cgen_var_name(cgen, lvalue_var));
+            sb_add_format(&cgen->sb, "(&%s)", cgen_var_name(cgen, lvalue_var));
         } else {
             sb_add_format(&cgen->sb, "(&%s)", cgen_var_name(cgen, lvalue_var));
         }
@@ -1482,7 +1575,7 @@ static void cgen_initializer_list(cgen_t *cgen, ast_node_t *list, cgen_var_t var
             sb_add_format(&cgen->sb, "%s = (", cgen_var(cgen, var));
         }
 
-        sb_add_format(&cgen->sb, "(%s){ .arr={", ast_type2td(cgen->ast, list->value_type)->name);
+        cgen_array_start(cgen, list->value_type);
 
         for (size_t i = list_start; i < list_end; ++i) {
             if (i != list_start) {
@@ -1497,7 +1590,8 @@ static void cgen_initializer_list(cgen_t *cgen, ast_node_t *list, cgen_var_t var
             }
         }
 
-        sb_add_cstr(&cgen->sb, "}}");
+        cgen_array_end(cgen);
+
         if (has_var(var)) {
             sb_add_cstr(&cgen->sb, ")");
         }

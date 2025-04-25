@@ -82,9 +82,11 @@ typedef enum type_caps_t type_caps_t;
 enum type_caps_t {
     TYPE_CAP_NONE           = 0,
     TYPE_CAP_ARITHMETIC     = 1,
-    TYPE_CAP_COMPARABLE     = 1 << 2,
-    TYPE_CAP_LOGICAL        = 1 << 3,
+    TYPE_CAP_LOGICAL        = 1 << 2,
+    TYPE_CAP_ORDERABLE      = 1 << 3,
 };
+
+#define TYPE_CAP_NUMBER (TYPE_CAP_ARITHMETIC|TYPE_CAP_ORDERABLE)
 
 struct typedata_t {
     string_t name;
