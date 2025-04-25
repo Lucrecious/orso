@@ -64,7 +64,7 @@ FORCE_INLINE u32 maxu32(u32 a, u32 b) {
   
   #define NOT_NULL(condition) ASSERT(condition, "cannot be null")
 
-  #define MUST(condition) ASSERT(condition, "must")
+  #define MUST(condition) ASSERT(condition, #condition " failed")
 
   // Indicates that we know execution should never reach this point in the
   // program. In debug mode, we assert this fact because it's a bug to get here.

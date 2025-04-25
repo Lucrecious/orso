@@ -537,7 +537,7 @@ static void emit_bin_op_aggregates(gen_t *gen, texloc_t loc, function_t *functio
         size_t aligned_size = td_align(innertd->size, innertd->alignment);
         for (size_t i = 0; i < count; ++i) {
             size_t d = i*aligned_size;
-            emit_bin_op_aggregates(gen, loc, function, token_type, td->as.arr.type, op1_stack_point-d, op2_stack_point-d, val_dst, d+byte_offset);
+            emit_bin_op_aggregates(gen, loc, function, token_type, td->as.arr.type, op1_stack_point-d, op2_stack_point-d, val_dst, d);
         }
         break;
     }
@@ -552,6 +552,7 @@ static void emit_bin_op_aggregates(gen_t *gen, texloc_t loc, function_t *functio
     case TYPE_FUNCTION:
     case TYPE_INTRINSIC_FUNCTION:
     case TYPE_POINTER: {
+        MUST(operator_is_arithmetic(token_type));
         // todo: add optimization here to not do any of this at all if the val dst is void
         emit_stack_point_to_reg(gen, function, loc, REG_T, op1_stack_point);
         emit_addr_to_reg(gen, function, loc, type2movsize(gen, type), REG_T, REG_T, 0);

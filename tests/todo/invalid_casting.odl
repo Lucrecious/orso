@@ -1,0 +1,5 @@
+main :: () -> void {
+    c := [2][2]int.{.{0, 1}, .{2, 3}};
+    printint(c[0] as int);
+    println();
+};
