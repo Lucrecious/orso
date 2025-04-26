@@ -1499,7 +1499,7 @@ static void gen_assignment(gen_t *gen, function_t *function, ast_node_t *assignm
     size_t clean_stack_point = gen_stack_point(gen);
 
     ast_node_t *rhs = an_rhs(assignment);
-    val_dst_t value_dst = emit_val_dst_reg_or_stack_point_reserve(gen, loc, function, rhs->value_type, REG_RESULT);
+    val_dst_t value_dst = emit_val_dst_stack_reserve(gen, loc, function, rhs->value_type);
 
     {
         val_dst_t lvalue_dst = emit_val_dst_stack_reserve(gen, loc, function, gen->ast->type_set.u64_);
@@ -1510,23 +1510,52 @@ static void gen_assignment(gen_t *gen, function_t *function, ast_node_t *assignm
         gen_expression(gen, function, rhs, value_dst);
     }
 
-    emit_pop_to_reg(gen, loc, function, REG_T, gen->ast->type_set.u64_);
+    if (assignment->operator.type != TOKEN_EQUAL) {
+        size_t lvalue_stack_point = gen_stack_point(gen);
 
-    if (td->size > WORD_SIZE) {
-        ASSERT(assignment->operator.type == TOKEN_EQUAL, "only equals for bigger values for now");
+        if (is_type_kind_aggregate(td->kind)) {
+            emit_stack_point_to_reg(gen, function, loc, REG_RESULT, lvalue_stack_point);
+            emit_addr_to_reg(gen, function, loc, REG_MOV_SIZE_WORD, REG_RESULT, REG_RESULT, 0);
 
-        emit_multiword_addr_to_addr(gen, function, loc, REG_T, REG_RESULT, REG_U, td->size);
-    } else {
-        token_t op = assignment->operator;
-        op.type = parser_opeq2op(op.type);
+            size_t stack_point = gen_stack_point(gen);
+            emit_push_reg(gen, loc, function, REG_RESULT, REG_T, type2movsize(gen, assignment->value_type), td->size);
+            size_t operand_stack_point = gen_stack_point(gen);
 
-        if (op.type != TOKEN_EQUAL) {
+            token_t op = assignment->operator;
+            op.type = parser_opeq2op(op.type);
+            MUST(operator_is_arithmetic(op.type));
+
+            emit_bin_op_aggregates(gen, loc, function, op.type, assignment->value_type, value_dst.stack_point, operand_stack_point, value_dst, 0);
+
+            gen_pop_until_stack_point(gen, function, loc, stack_point, true);
+        } else {
+            MUST(td->size <= WORD_SIZE);
+            token_t op = assignment->operator;
+            op.type = parser_opeq2op(op.type);
+
+            emit_stack_point_to_reg(gen, function, loc, REG_T, lvalue_stack_point);
+            emit_addr_to_reg(gen, function, loc, REG_MOV_SIZE_WORD, REG_T, REG_T, 0);
+
+            emit_stack_point_to_reg(gen, function, loc, REG_RESULT, value_dst.stack_point);
+            emit_addr_to_reg(gen, function, loc, type2movsize(gen, assignment->value_type), REG_RESULT, REG_RESULT, 0);
+
             emit_addr_to_reg(gen, function, loc,
                     type2movsize(gen, assignment->value_type), REG_U, REG_T, 0);
 
             emit_bin_op(loc, function, op.type, td, REG_U, REG_RESULT, REG_RESULT);
-        }
 
+            emit_stack_point_to_reg(gen, function, loc, REG_T, value_dst.stack_point);
+            emit_reg_to_addr(gen, function, loc, type2movsize(gen, assignment->value_type), REG_T, REG_RESULT, 0);
+        }
+    }
+
+    emit_pop_to_reg(gen, loc, function, REG_T, gen->ast->type_set.u64_);
+
+    if (td->size > WORD_SIZE) {
+        emit_reg_to_reg(function, loc, REG_RESULT, REG_STACK_BOTTOM);
+        emit_multiword_addr_to_addr(gen, function, loc, REG_T, REG_RESULT, REG_U, td->size);
+    } else {
+        emit_pop_to_reg(gen, loc, function, REG_RESULT, assignment->value_type);
         emit_reg_to_addr(gen, function, loc,
                 type2movsize(gen, assignment->value_type), REG_T, REG_RESULT, 0);
     }
