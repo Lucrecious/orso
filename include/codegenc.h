@@ -541,7 +541,7 @@ static void cgen_scaler_aggregate_binary(cgen_t *cgen, type_t type, token_type_t
     }
 }
 
-static void cgen_aggregate_binary(cgen_t *cgen, token_type_t op, type_t type, string_builder_t *lhs_lvalue, string_builder_t *rhs_lvalue) {
+static void cgen_aggregate_arith_binary(cgen_t *cgen, token_type_t op, type_t type, string_builder_t *lhs_lvalue, string_builder_t *rhs_lvalue) {
     typedata_t *td = ast_type2td(cgen->ast, type);
 
     switch (td->kind) {
@@ -560,7 +560,7 @@ static void cgen_aggregate_binary(cgen_t *cgen, token_type_t op, type_t type, st
             rhs_lvalue->count = reset_length_rhs;
             sb_add_format(lhs_lvalue, ".arr[%zu]", i);
             sb_add_format(rhs_lvalue, ".arr[%zu]", i);
-            cgen_aggregate_binary(cgen, op, td->as.arr.type, lhs_lvalue, rhs_lvalue);
+            cgen_aggregate_arith_binary(cgen, op, td->as.arr.type, lhs_lvalue, rhs_lvalue);
         }
 
         cgen_array_end(cgen);
@@ -702,15 +702,34 @@ static void cgen_binary(cgen_t *cgen, ast_node_t *binary, cgen_var_t var) {
         }
 
         if (is_type_kind_aggregate(lhstd->kind)) {
-            tmp_arena_t *tmp = allocator_borrow();
-            string_builder_t lhs_lvalue = {.allocator=tmp->allocator};
-            string_builder_t rhs_lvalue = {.allocator=tmp->allocator};
+            MUST(operator_is_arithmetic(binary->operator.type) || operator_is_comparing(binary->operator.type));
 
-            sb_add_format(&lhs_lvalue, "%s", cgen_var_name(cgen, lhs_var));
-            sb_add_format(&rhs_lvalue, "%s", cgen_var_name(cgen, rhs_var));
-            cgen_aggregate_binary(cgen, binary->operator.type, lhs->value_type, &lhs_lvalue, &rhs_lvalue);
+            if (operator_is_comparing(binary->operator.type)) {
+                cstr_t memcmp = "__ormemcmp";
+                string_view_t lhs = cstr2sv(cgen_var_name(cgen, lhs_var));
+                string_view_t rhs = cstr2sv(cgen_var_name(cgen, rhs_var));
 
-            allocator_return(tmp);
+                switch (binary->operator.type) {
+                case TOKEN_EQUAL_EQUAL: break;
+                case TOKEN_BANG_EQUAL: {
+                    sb_add_cstr(&cgen->sb, "!");
+                    break;
+                }
+
+                default: UNREACHABLE(); break;
+                }
+                sb_add_format(&cgen->sb, "%s(&%.*s, &%.*s, sizeof(%.*s))", memcmp, lhs.length, lhs.data, rhs.length, rhs.data, lhs.length, lhs.data);
+            } else {
+                tmp_arena_t *tmp = allocator_borrow();
+                string_builder_t lhs_lvalue = {.allocator=tmp->allocator};
+                string_builder_t rhs_lvalue = {.allocator=tmp->allocator};
+
+                sb_add_format(&lhs_lvalue, "%s", cgen_var_name(cgen, lhs_var));
+                sb_add_format(&rhs_lvalue, "%s", cgen_var_name(cgen, rhs_var));
+                cgen_aggregate_arith_binary(cgen, binary->operator.type, lhs->value_type, &lhs_lvalue, &rhs_lvalue);
+
+                allocator_return(tmp);
+            }
         } else {
             string_view_t lhsv = cstr2sv(cgen_var_name(cgen, lhs_var));
             string_view_t rhsv = cstr2sv(cgen_var_name(cgen, rhs_var));

@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <math.h>
+#include <string.h>
 
 #define CORE_MODULE_NAME "core"
 
@@ -171,6 +172,8 @@ struct word_t {
 #define max_(a, b) ((a) > (b) ? (a) : (b))
 
 #define cast(type, value) ((type)value)
+
+#define __ormemcmp(a, b, size) (memcmp(a, b, size) == 0)
 
 f64 modd(f64 a, f64 b);
 f64 remd(f64 a, f64 b);

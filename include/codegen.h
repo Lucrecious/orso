@@ -847,6 +847,36 @@ static void gen_constant(gen_t *gen, texloc_t loc, function_t *function, void *d
 
     emit_reg_to_val_dst(gen, loc, function, type, val_dst, REG_RESULT, REG_T, REG_U, true);
 }
+void emit_trivial_compare(gen_t *gen, function_t *function, texloc_t loc, size_t op1_stack_point, size_t op2_stack_point, size_t size_bytes, token_type_t op) {
+    emit_stack_point_to_reg(gen, function, loc, REG_RESULT, op1_stack_point);
+    emit_stack_point_to_reg(gen, function, loc, REG_T, op1_stack_point-size_bytes);
+    emit_stack_point_to_reg(gen, function, loc, REG_U, op2_stack_point);
+
+    instruction_t in = {0};
+    in.op = OP_MEMCMP;
+    in.as.memcmp.op1_start = REG_RESULT;
+    in.as.memcmp.op1_end = REG_T;
+    in.as.memcmp.op2_start = REG_U;
+    in.as.memcmp.reg_result = REG_RESULT;
+    emit_instruction(function, loc, in);
+
+    MUST(operator_is_comparing(op));
+
+    switch (op) {
+    case TOKEN_BANG_EQUAL: {
+        instruction_t in = {0};
+        in.op = OP_NOT;
+        in.as.unary_reg_to_reg.reg_op = REG_RESULT;
+        in.as.unary_reg_to_reg.reg_result = REG_RESULT;
+
+        emit_instruction(function, loc, in);
+        break;
+    }
+
+    case TOKEN_EQUAL_EQUAL: break;
+    default: UNREACHABLE(); break;
+    }
+}
 
 static void gen_binary(gen_t *gen, function_t *function, ast_node_t *binary, val_dst_t val_dst) {
     texloc_t loc = binary->start.loc;
@@ -887,58 +917,65 @@ static void gen_binary(gen_t *gen, function_t *function, ast_node_t *binary, val
         }
 
         if (is_type_kind_aggregate(lhstd->kind)) {
+            MUST(operator_is_arithmetic(binary->operator.type) || operator_is_comparing(binary->operator.type));
             if (lhstd->size <= WORD_SIZE) {
                 emit_push_reg(gen, loc, function, REG_RESULT, REG_T, type2movsize(gen, lhs->value_type), lhstd->size);
             }
 
             size_t rhs_stack_point = gen_stack_point(gen);
 
-            val_dst_t dst = val_dst;
-            switch (val_dst.type) {
-            case VAL_DST_REG: {
-                emit_reserve_stack_space(gen, loc, function, b2w2b(lhstd->size));
-                dst = val_dst_stack_point(gen_stack_point(gen));
-                break;
-            }
-
-            case VAL_DST_RETURN: {
-                if (bintd->size <= WORD_SIZE) {
+            if (operator_is_comparing(binary->operator.type)) {
+                emit_trivial_compare(gen, function, loc, lhs_stack_point, rhs_stack_point, lhstd->size, binary->operator.type);
+                emit_reg_to_val_dst(gen, loc, function, binary->value_type, val_dst, REG_RESULT, REG_T, REG_U, false);
+            } else {
+                val_dst_t dst = val_dst;
+                switch (val_dst.type) {
+                case VAL_DST_REG: {
                     emit_reserve_stack_space(gen, loc, function, b2w2b(lhstd->size));
                     dst = val_dst_stack_point(gen_stack_point(gen));
+                    break;
                 }
-                break;
-            }
 
-            case VAL_DST_VOID: break;
-            case VAL_DST_STACK_POINT: break;
-            }
-
-            emit_bin_op_aggregates(gen, loc, function, binary->operator.type, lhs->value_type, lhs_stack_point, rhs_stack_point, dst, 0);
-
-            switch (val_dst.type) {
-            case VAL_DST_REG: {
-                emit_pop_to_reg(gen, loc, function, val_dst.reg, binary->value_type);
-                break;
-            }
-
-            case VAL_DST_RETURN: {
-                if (bintd->size <= WORD_SIZE) {
-                    emit_pop_to_reg(gen, loc, function, REG_RESULT, binary->value_type);
-                } else {
-                    emit_return_addr_to_reg(function, loc, REG_RESULT);
+                case VAL_DST_RETURN: {
+                    if (bintd->size <= WORD_SIZE) {
+                        emit_reserve_stack_space(gen, loc, function, b2w2b(lhstd->size));
+                        dst = val_dst_stack_point(gen_stack_point(gen));
+                    }
+                    break;
                 }
-                break;
-            }
-            case VAL_DST_VOID: break;
-            case VAL_DST_STACK_POINT: {
-                if (val_dst.reg != REG_NULL) {
-                    emit_stack_point_to_reg(gen, function, loc, val_dst.reg, val_dst.stack_point);
+
+                case VAL_DST_VOID: break;
+                case VAL_DST_STACK_POINT: break;
                 }
-                break;
-            }
+
+                emit_bin_op_aggregates(gen, loc, function, binary->operator.type, lhs->value_type, lhs_stack_point, rhs_stack_point, dst, 0);
+
+                switch (val_dst.type) {
+                case VAL_DST_REG: {
+                    emit_pop_to_reg(gen, loc, function, val_dst.reg, binary->value_type);
+                    break;
+                }
+
+                case VAL_DST_RETURN: {
+                    if (bintd->size <= WORD_SIZE) {
+                        emit_pop_to_reg(gen, loc, function, REG_RESULT, binary->value_type);
+                    } else {
+                        emit_return_addr_to_reg(function, loc, REG_RESULT);
+                    }
+                    break;
+                }
+                case VAL_DST_VOID: break;
+                case VAL_DST_STACK_POINT: {
+                    if (val_dst.reg != REG_NULL) {
+                        emit_stack_point_to_reg(gen, function, loc, val_dst.reg, val_dst.stack_point);
+                    }
+                    break;
+                }
+                }
             }
 
             gen_pop_until_stack_point(gen, function, loc, clean_stack_point, true);
+
         } else {
             emit_pop_to_reg(gen, loc, function, REG_T, lhs->value_type);
 

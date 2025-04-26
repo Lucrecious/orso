@@ -100,6 +100,15 @@ string_t disassemble_instruction(instruction_t in, arena_t *allocator) {
                     (u32)in.as.mov_reg_to_reg.reg_destination);
         }
 
+        case OP_MEMCMP: {
+            return string_format("MEMCMP(op1s: %c, op1e: %c, op2s: %c, r: %c)", allocator,
+                    (u32)in.as.memcmp.op1_start,
+                    (u32)in.as.memcmp.op1_end,
+                    (u32)in.as.memcmp.op2_start,
+                    (u32)in.as.memcmp.reg_result);
+            break;
+        }
+
         case OP_SUBU_IM: {
             return string_format("OP_SUBU_IM(reg_operand: %c, immediate: %lu, reg_result: %c)", allocator,
                     (u32)in.as.binu_reg_immediate.reg_operand,

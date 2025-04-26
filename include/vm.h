@@ -120,6 +120,8 @@ enum op_code_t {
     OP_LOAD_ADDR,
     OP_LOAD_REG_ADDR,
 
+    OP_MEMCMP,
+
     OP_INTRINSIC_CALL,
     OP_CALL,
     OP_RETURN,
@@ -136,6 +138,12 @@ struct instruction_t {
     union {
         byte _padding[7];
 
+        struct {
+            byte op1_start;
+            byte op1_end;
+            byte op2_start;
+            byte reg_result;
+        } memcmp;
         struct {
             u32 amount;
             byte condition_reg;
@@ -317,6 +325,18 @@ void vm_step(vm_t *vm) {
     op_code_t op = (op_code_t)in.op;
     switch(op) {
         case OP_NOP: IP_ADV(1); break;
+
+        case OP_MEMCMP: {
+            void *start = vm->registers[in.as.memcmp.op1_start].as.p;
+            void *end = vm->registers[in.as.memcmp.op1_end].as.p;
+            void *start2 = vm->registers[in.as.memcmp.op2_start].as.p;
+            size_t size = (size_t)(end-start);
+            bool is_equal = (memcmp(start, start2, size) == 0);
+            vm->registers[in.as.memcmp.reg_result].as.u = is_equal;
+
+            IP_ADV(1);
+            break;
+        }
 
         case OP_JMP: {
             u32 jmp_amount = in.as.jmp.amount;
