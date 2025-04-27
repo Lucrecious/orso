@@ -19,7 +19,8 @@ typedef struct typedata_t typedata_t;
 
 size_t td_align(size_t b, size_t alignment);
 
-typedef enum type_kind_t {
+typedef enum type_kind_t type_kind_t;
+enum type_kind_t {
     // analysis types
     TYPE_INVALID = 0,      // error type
     TYPE_UNRESOLVED,       // unresolved (not undefined, not error, not defined)
@@ -41,20 +42,25 @@ typedef enum type_kind_t {
     TYPE_STRUCT,           // used for both anonymous and named
 
     TYPE_COUNT,
-} type_kind_t;
+};
 
-typedef struct struct_field_t {
-    char* name;
+typedef struct struct_field_t struct_field_t;
+struct struct_field_t {
+    string_t name;
     type_t type;
+    word_t default_value;
 
     // not relevant for hashing
-    s32 offset;
-} struct_field_t;
+    size_t offset;
+};
 
-typedef struct struct_constant_t {
-    char *name;
-    type_t type;
-} struct_constant_t;
+typedef struct struct_fields_t struct_fields_t;
+struct struct_fields_t {
+    struct_field_t *items;
+    size_t count;
+    size_t capacity;
+    arena_t *allocator;
+};
 
 struct typedatas_t {
     typedata_t **items;
@@ -103,14 +109,10 @@ struct typedata_t {
         } function;
 
         struct {
-            // null if anonymous
-            char *name;
+            cstr_t name_or_null;
 
-            s32 field_count;
-            struct_field_t *fields;
-
-            s32 constant_count;
-            struct_constant_t *constants;
+            struct_fields_t fields;
+            struct_fields_t constants;
         } struct_;
 
         struct {
@@ -135,13 +137,9 @@ struct typedata_t {
 
 struct type_table_t;
 
-bool struct_type_is_incomplete(typedata_t *type);
-
 bool is_type_kind_aggregate(type_kind_t kind);
 
 bool type_equal(typedata_t *a, typedata_t *b);
-
-struct_field_t *type_struct_find_field(typedata_t *struct_, const char *name, size_t name_length);
 
 string_t type_to_string(typedatas_t types, type_t type, arena_t *allocator);
 

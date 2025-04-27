@@ -3,11 +3,6 @@
 #include "type_set.h"
 #include "tmp.h"
 
-
-bool struct_type_is_incomplete(typedata_t *type) {
-    return type->kind == TYPE_STRUCT && type->as.struct_.field_count < 0;
-}
-
 bool is_type_kind_aggregate(type_kind_t kind) {
     return ((kind) == TYPE_ARRAY || (kind) == TYPE_STRUCT);
 }
@@ -43,32 +38,27 @@ bool type_equal(typedata_t *a, typedata_t *b) {
             return true;
         }
         case TYPE_STRUCT: {
-            size_t a_name_length = a->as.struct_.name ? strlen(a->as.struct_.name) : 0;
-            size_t b_name_length = b->as.struct_.name ? strlen(b->as.struct_.name) : 0;
+            MUST(a->as.struct_.name_or_null == NULL);
+            size_t a_name_length = a->as.struct_.name_or_null ? strlen(a->as.struct_.name_or_null) : 0;
+            size_t b_name_length = b->as.struct_.name_or_null ? strlen(b->as.struct_.name_or_null) : 0;
             if (a_name_length != b_name_length) {
                 return false;
             }
 
-            if (memcmp(a->as.struct_.name, b->as.struct_.name, a_name_length) != 0) {
+            if (memcmp(a->as.struct_.name_or_null, b->as.struct_.name_or_null, a_name_length) != 0) {
                 return false;
             }
 
-            if (a->as.struct_.field_count != b->as.struct_.field_count) {
+            if (a->as.struct_.fields.count != b->as.struct_.fields.count) {
                 return false;
             }
 
-            for (s32 i = 0; i < a->as.struct_.field_count; i++) {
-                unless (typeid_eq(a->as.struct_.fields[i].type, b->as.struct_.fields[i].type)) {
+            for (size_t i = 0; i < a->as.struct_.fields.count; i++) {
+                unless (typeid_eq(a->as.struct_.fields.items[i].type, b->as.struct_.fields.items[i].type)) {
                     return false;
                 }
 
-                size_t field_name_length_a = strlen(a->as.struct_.fields[i].name);
-                size_t field_name_length_b = strlen(b->as.struct_.fields[i].name);
-                if (field_name_length_a != field_name_length_b) {
-                    return false;
-                }
-
-                if (memcmp(a->as.struct_.fields[i].name, b->as.struct_.fields[i].name, field_name_length_a) != 0) {
+                if (string_eq(a->as.struct_.fields.items[i].name, b->as.struct_.fields.items[i].name)) {
                     return false;
                 }
             }
@@ -112,22 +102,6 @@ bool type_in_list(types_t list, type_t find) {
     return false;
 }
 
-struct_field_t *type_struct_find_field(typedata_t *struct_, const char *name, size_t name_length) {
-    for (s32 i = 0; i < struct_->as.struct_.field_count; i++) {
-        if (strlen(struct_->as.struct_.fields[i].name) != name_length) {
-            continue;
-        }
-
-        if (strncmp(struct_->as.struct_.fields[i].name, name, name_length) != 0) {
-            continue;
-        }
-
-        return struct_->as.struct_.fields + i;
-    }
-
-    return NULL;
-}
-
 string_t type_to_string_toplevel(typedatas_t types, type_t type, arena_t *allocator, bool is_toplevel) {
     tmp_arena_t *tmp_arena = allocator_borrow();
 
@@ -152,8 +126,8 @@ string_t type_to_string_toplevel(typedatas_t types, type_t type, arena_t *alloca
         string_t return_type = type_to_string_toplevel(types, type_info->as.function.return_type, allocator, false);
         sb_add_cstr(&sb, return_type.cstr);
     } else if (type_is_struct(types, type)) {
-        if (type_info->as.struct_.name) {
-            sb_add_cstr(&sb, type_info->as.struct_.name);
+        if (type_info->as.struct_.name_or_null) {
+            sb_add_cstr(&sb, type_info->as.struct_.name_or_null);
         } else {
             sb_add_cstr(&sb, "struct");
         }
@@ -161,13 +135,13 @@ string_t type_to_string_toplevel(typedatas_t types, type_t type, arena_t *alloca
         if (is_toplevel) {
             sb_add_cstr(&sb, " { ");
 
-            for (s32 i = 0; i < type_info->as.struct_.field_count; i++) {
-                char *name = type_info->as.struct_.fields[i].name;
+            for (size_t i = 0; i < type_info->as.struct_.fields.count; i++) {
+                string_t name = type_info->as.struct_.fields.items[i].name;
 
-                sb_add_cstr(&sb, name);
+                sb_add_cstr(&sb, name.cstr);
                 sb_add_cstr(&sb, ": ");
 
-                type_t field_type = type_info->as.struct_.fields[i].type;
+                type_t field_type = type_info->as.struct_.fields.items[i].type;
                 string_t type_string = type_to_string_toplevel(types, field_type, allocator, false);
                 sb_add_cstr(&sb, type_string.cstr);
 

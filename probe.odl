@@ -1,25 +1,25 @@
-// printfoo :: (foo: foo_t) -> void {
-//     printint(foo.x);
-//     printint(foo.y);
-//     println();
-// };
-
-// printpfoo :: (foo: &foo_t) -> void {
-//     printint(foo.x);
-//     printint(foo.y);
-//     println();
-// };
-
 main :: () -> void {
     {
-        // foo_t :: struct {
-        //     a := 5;
-        //     b := 50;
-        //     c := 500;
+        // printpfoo :: (foo: &foo_t) -> void {
+        //     printint(foo.x);
+        //     printint(foo.y);
+        //     println();
         // };
 
-        // foo := foo_t.{};
-        // printfoo(foo);
+        printfoo :: (foo: foo_t) -> void {
+            printint(foo.a);
+            printint(foo.b);
+            println();
+        };
+
+        foo_t :: struct {
+            a := 1;
+            b := 2;
+            c := 3;
+        };
+
+        foo := foo_t.{};
+        printfoo(foo);
 
         // foo2: foo_t = .{};
         // printfoo(foo2);

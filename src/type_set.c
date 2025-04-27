@@ -24,54 +24,6 @@ typedata_t *function_type_new(type_table_t *set, types_t arguments, type_t retur
     return function_type;
 }
 
-// only anonymous structs can be looked up in the type set
-typedata_t *struct_type_new(type_table_t *set, struct_field_t *fields, s32 field_count, struct_constant_t *constants, s32 constant_count, s32 total_size) {
-    MUST(false); // todo
-
-    typedata_t* struct_type = ALLOC(typedata_t);
-    struct_type->kind = TYPE_STRUCT;
-
-    struct_type->as.struct_.name = NULL;
-
-    struct_type->as.struct_.field_count = field_count;
-    struct_type->as.struct_.fields = NULL;
-    struct_type->as.struct_.constant_count = constant_count;
-    struct_type->as.struct_.constants = NULL;
-    struct_type->size = (size_t)total_size;
-
-    if (field_count > 0) {
-        struct_type->as.struct_.fields = ALLOC_N(struct_field_t, (size_t)field_count);
-
-        for (s32 i = 0; i < field_count; i++) {
-            struct_type->as.struct_.fields[i] = fields[i];
-
-            size_t length = strlen(fields[i].name);
-            char* name = ALLOC_N(char, length + 1);
-            memcpy(name, fields[i].name, length);
-            name[length] = '\0';
-
-            struct_type->as.struct_.fields[i].name = name;
-        }
-    }
-
-    if (constant_count > 0) {
-        struct_type->as.struct_.constants = ALLOC_N(struct_constant_t, (size_t)constant_count);
-
-        for (s32 i = 0; i < constant_count; i++) {
-            struct_type->as.struct_.constants[i] = constants[i];
-
-            size_t length = strlen(constants[i].name);
-            char* name = ALLOC_N(char, length + 1);
-            memcpy(name, constants[i].name, length);
-            name[length] = '\0';
-
-            struct_type->as.struct_.constants[i].name = name;
-        }
-    }
-
-    return struct_type;
-}
-
 typedata_t *pointer_type_new(type_table_t *set, type_t type) {
     typedata_t *pointer = ALLOC(typedata_t);
     pointer->kind = TYPE_POINTER;
@@ -93,6 +45,49 @@ void array_type_new(type_table_t *set, size_t size, type_t type, typedata_t *res
     result->capabilities = (itemtd->capabilities & TYPE_CAP_ARITHMETIC);
 }
 
+void struct_type_init(type_table_t *set, struct_fields_t fields, struct_fields_t constants, typedata_t *result) {
+    result->kind = TYPE_STRUCT;
+    result->as.struct_.constants = constants;
+
+    size_t current_alignment = 0;
+    size_t current_size = 0;
+    bool all_arithmetic = true;
+    for (size_t i = 0; i < fields.count; ++i) {
+        struct_field_t field = fields.items[i];
+        typedata_t *fieldtd = type2typedata(&set->types, field.type);
+        size_t offset = td_align(current_size, fieldtd->alignment);
+
+        fields.items[i].offset = offset;
+
+        current_size = offset + fieldtd->size;
+        current_alignment = current_alignment < fieldtd->alignment ? fieldtd->alignment : current_alignment;
+
+        if ((fieldtd->capabilities&TYPE_CAP_ARITHMETIC) == 0) {
+            all_arithmetic = false;
+        }
+    }
+
+    if (fields.count == 0) all_arithmetic = false;
+
+    result->as.struct_.fields = fields;
+
+    result->size = (size_t)current_size;
+    result->alignment = current_alignment;
+    result->capabilities = all_arithmetic ? TYPE_CAP_ARITHMETIC : TYPE_CAP_NONE;
+}
+
+struct_fields_t fields_copy(struct_fields_t fields, arena_t *arena) {
+    struct_fields_t copy = {.allocator=arena};
+    
+    for (size_t i = 0; i < fields.count; ++i) {
+        struct_field_t field = fields.items[i];
+        field.name = string_copy(field.name, arena);
+        array_push(&copy, field);
+    }
+
+    return copy;
+}
+
 typedata_t *type_copy_new(type_table_t *set, typedata_t *type) {
     if (type->kind == TYPE_FUNCTION || type->kind == TYPE_INTRINSIC_FUNCTION) {
         return (typedata_t*)function_type_new(
@@ -101,16 +96,14 @@ typedata_t *type_copy_new(type_table_t *set, typedata_t *type) {
             type->as.function.return_type,
             type->kind == TYPE_INTRINSIC_FUNCTION
         );
-    }
+}
 
     if (type->kind == TYPE_STRUCT) {
-        return struct_type_new(
-            set,
-            type->as.struct_.fields,
-            type->as.struct_.field_count,
-            type->as.struct_.constants,
-            type->as.struct_.constant_count,
-            (s32)type->size);
+        typedata_t *td = ALLOC(typedata_t);
+        struct_fields_t fields = fields_copy(type->as.struct_.fields, set->allocator);
+        struct_fields_t constants = fields_copy(type->as.struct_.constants, set->allocator);
+        struct_type_init(set, fields, constants, td);
+        return td;
     }
 
     if (type->kind == TYPE_POINTER) {
@@ -285,19 +278,17 @@ static khint_t hash_type(typedata_t *type) {
 
         ADD_HASH(hash, (u64)(type->as.function.return_type.i));
     } else if (type->kind == TYPE_STRUCT) {
-        ASSERT(type->as.struct_.name == NULL, "only anonymous structs are hashed");
-        ASSERT(type->as.struct_.constant_count == 0, "only anonymous structs without constants can be hashed");
+        ASSERT(type->as.struct_.name_or_null == NULL, "only anonymous structs are hashed");
 
-        ADD_HASH(hash, (u32)type->as.struct_.field_count);
+        ADD_HASH(hash, (u32)type->as.struct_.fields.count);
 
-        for (s32 i = 0; i < type->as.struct_.field_count; i++) {
-            char* name = type->as.struct_.fields[i].name;
-            size_t length = strlen(name);
-            for (size_t i = 0; i < length; i++) {
-                ADD_HASH(hash, (u32)name[i]);
+        for (size_t i = 0; i < type->as.struct_.fields.count; i++) {
+            string_t name = type->as.struct_.fields.items[i].name;
+            for (size_t i = 0; i < name.length; i++) {
+                ADD_HASH(hash, (u32)name.cstr[i]);
             }
             
-            ADD_HASH(hash, (u64)(type->as.struct_.fields[i].type.i));
+            ADD_HASH(hash, (u64)(type->as.struct_.fields.items[i].type.i));
         }
     } else if (type->kind == TYPE_POINTER) {
         ADD_HASH(hash, (u64)(type->as.ptr.type.i));
@@ -347,6 +338,20 @@ type_t type_set_fetch_array(type_table_t *set, type_t value_type, size_t size) {
     return type;
 }
 
+type_t type_set_fetch_anonymous_struct(type_table_t *set, struct_fields_t fields) {
+    typedata_t struct_type = {0};
+    struct_type_init(set, fields, (struct_fields_t){0}, &struct_type);
+
+    type_t type;
+    if (table_get(type2u64, set->types2index, &struct_type, &type)) {
+        return type;
+    }
+
+    typedata_t *type_info = type_copy_new(set, &struct_type);
+    type = track_type(set, type_info);
+    return type;
+}
+
 type_t type_set_fetch_function(type_table_t *set, type_t return_type, types_t arguments) {
     typedata_t function_type = {
         .kind = TYPE_FUNCTION,
@@ -382,106 +387,3 @@ type_t type_set_fetch_intrinsic_function(type_table_t *set, type_t function_type
     return type;
 }
 
-type_t type_set_fetch_anonymous_struct(type_table_t *set, s32 field_count, struct_field_t *fields, s32 constant_count, struct_constant_t* constants) {
-    typedata_t struct_type = {
-        .kind = TYPE_STRUCT,
-        .as.struct_.field_count = field_count,
-        .as.struct_.fields = fields,
-
-        .as.struct_.constant_count = constant_count,
-        .as.struct_.constants = constants,
-
-        .size = 0,
-    };
-
-    typedata_t *type_info;
-    type_t type;
-    if (constant_count == 0) {
-        if (table_get(type2u64, set->types2index, &struct_type, &type)) {
-            return type;
-        }
-
-        type_info = type_copy_new(set, &struct_type);
-        type = track_type(set, type_info);
-    } else {
-        // anonymous structs with constants must be unique
-        type_info = type_copy_new(set, &struct_type);
-        array_push(&set->types, &struct_type);
-        type = typeid(set->types.count-1);
-    }
-
-    // put the layout in a hash table separate from type
-    // it should be impossible for sizing to be infinitely recursive because the types should have resolved
-    // properly for this struct type to be created
-    if (field_count > 0) {
-        type_info->as.struct_.fields[0].offset = 0;
-        for (s32 i = 1; i < field_count; ++i) {
-            s32 previous_offset = type_info->as.struct_.fields[i - 1].offset;
-            type_t previous_type = fields[i - 1].type;
-            typedata_t *previous_type_info = type2typedata(&set->types, previous_type);
-
-            size_t bytes = b2w(previous_type_info->size) * WORD_SIZE;
-            type_info->as.struct_.fields[i].offset = (s32)((size_t)previous_offset + bytes);
-        }
-
-        type_t field_type= type_info->as.struct_.fields[field_count-1].type;
-        typedata_t *field_type_info = type2typedata(&set->types, field_type);
-        size_t size_of_final = b2w(field_type_info->size) * WORD_SIZE;
-        size_t total_size = (size_t)type_info->as.struct_.fields[field_count - 1].offset + size_of_final;
-
-        type_info->size = total_size;
-    }
-
-    return type; 
-}
-
-type_t type_create_struct(type_table_t *set, cstr_t name, s32 name_length, typedata_t *anonymous_struct) {
-    ASSERT(anonymous_struct->kind == TYPE_STRUCT && anonymous_struct->as.struct_.name == NULL, "can only create struct from anonymous struct");
-
-    if (anonymous_struct->as.struct_.constant_count == 0) {
-        typedata_t *new_type_info = type_copy_new(set, anonymous_struct);
-        new_type_info->as.struct_.name = ALLOC_N(char, (size_t)(name_length + 1));
-        memcpy(new_type_info->as.struct_.name, name, name_length);
-        new_type_info->as.struct_.name[name_length] = '\0';
-
-        array_push(&set->types, new_type_info);
-        type_t new_type = typeid(set->types.count-1);
-
-        return new_type;
-    } else {
-        // here we know that the anonymous struct is unique because it has constants, and those are never shared
-        typedata_t *new_type_info = type_copy_new(set, anonymous_struct);
-
-        // anonymous_struct->data.struct_ = new_type->data.struct_;
-
-        // anonymous_struct->data.struct_.name = ALLOC_N(char, name_length + 1);
-        // memcpy(anonymous_struct->data.struct_.name, name, name_length);
-        // anonymous_struct->data.struct_.name[name_length] = '\0';
-
-        array_push(&set->types, new_type_info);
-        type_t new_type = typeid(set->types.count-1);
-
-        return new_type;
-    }
-}
-
-type_t type_unique_incomplete_struct_type(type_table_t *set) {
-    typedata_t *new_type = struct_type_new(set, NULL, -1, NULL, -1, 0);
-    array_push(&set->types, new_type);
-    return typeid(set->types.count-1);
-}
-
-void named_struct_copy_data_from_completed_struct_type(type_table_t *set, type_t incomplete_named_struct_id, type_t complete_anonymous_struct_id) {
-    typedata_t *incomplete_named_struct = set->types.items[incomplete_named_struct_id.i];
-    typedata_t *complete_anonymous_struct = set->types.items[complete_anonymous_struct_id.i];
-
-    typedata_t *copied_type = type_copy_new(NULL, complete_anonymous_struct);
-
-    incomplete_named_struct->as.struct_.field_count = copied_type->as.struct_.field_count;
-    incomplete_named_struct->as.struct_.fields = copied_type->as.struct_.fields;
-
-    incomplete_named_struct->as.struct_.constant_count = copied_type->as.struct_.constant_count;
-    incomplete_named_struct->as.struct_.constants = copied_type->as.struct_.constants;
-
-    incomplete_named_struct->size = copied_type->size;
-}

@@ -1335,8 +1335,8 @@ static ast_node_t *stan_realize_inferred_funcdef_or_error_and_null(analyzer_t *a
     return result;
 }
 
-static void ast_copy_expr_val_to_memory(ast_t *ast, ast_node_t *expr, void *dest) {
-    typedata_t *td = ast_type2td(ast, expr->value_type);
+static void ast_copy_expr_val_to_memory(ast_t *ast, type_t type, word_t src, void *dest) {
+    typedata_t *td = ast_type2td(ast, type);
 
     switch (td->kind) {
     case TYPE_NUMBER: {
@@ -1346,13 +1346,13 @@ static void ast_copy_expr_val_to_memory(ast_t *ast, ast_node_t *expr, void *dest
             case NUM_SIZE_8: UNREACHABLE(); break;
             case NUM_SIZE_16: UNREACHABLE(); break;
             case NUM_SIZE_32: {
-                f32 val = (f32)expr->expr_val.word.as.d;
+                f32 val = (f32)src.as.d;
                 memcpy(dest, &val, sizeof(f32));
                 break;
             }
 
             case NUM_SIZE_64: {
-                f64 val = (f64)expr->expr_val.word.as.d;
+                f64 val = (f64)src.as.d;
                 memcpy(dest, &val, sizeof(f64));
                 break;
             }
@@ -1364,25 +1364,25 @@ static void ast_copy_expr_val_to_memory(ast_t *ast, ast_node_t *expr, void *dest
         case NUM_TYPE_UNSIGNED: {
             switch ((num_size_t)td->size) {
             case NUM_SIZE_8: {
-                u8 val = (u8)expr->expr_val.word.as.u;
+                u8 val = (u8)src.as.u;
                 memcpy(dest, &val, sizeof(u8));
                 break;
             }
 
             case NUM_SIZE_16: {
-                u16 val = (u16)expr->expr_val.word.as.u;
+                u16 val = (u16)src.as.u;
                 memcpy(dest, &val, sizeof(u16));
                 break;
             }
 
             case NUM_SIZE_32: {
-                u32 val = (u32)expr->expr_val.word.as.u;
+                u32 val = (u32)src.as.u;
                 memcpy(dest, &val, sizeof(u32));
                 break;
             }
 
             case NUM_SIZE_64: {
-                u64 val = (u64)expr->expr_val.word.as.u;
+                u64 val = (u64)src.as.u;
                 memcpy(dest, &val, sizeof(u64));
                 break;
             }
@@ -1394,7 +1394,7 @@ static void ast_copy_expr_val_to_memory(ast_t *ast, ast_node_t *expr, void *dest
     }
 
     case TYPE_BOOL: {
-        u8 val = (u8)expr->expr_val.word.as.u;
+        u8 val = (u8)src.as.u;
         memcpy(dest, &val, sizeof(u8));
         break;
     }
@@ -1404,10 +1404,10 @@ static void ast_copy_expr_val_to_memory(ast_t *ast, ast_node_t *expr, void *dest
     case TYPE_ARRAY:
     case TYPE_STRUCT: {
         if (td->size > WORD_SIZE) {
-            void *source = expr->expr_val.word.as.p;
+            void *source = src.as.p;
             memcpy(dest, source, td->size);
         } else {
-            memcpy(dest, &expr->expr_val.word.as.u, td->size);
+            memcpy(dest, &src.as.u, td->size);
         }
         break;
     }
@@ -1417,7 +1417,7 @@ static void ast_copy_expr_val_to_memory(ast_t *ast, ast_node_t *expr, void *dest
     case TYPE_FUNCTION:
     case TYPE_TYPE:
     case TYPE_INFERRED_FUNCTION: {
-        memcpy(dest, &expr->expr_val.word.as.u, WORD_SIZE);
+        memcpy(dest, &src.as.u, WORD_SIZE);
         break;
     }
 
@@ -1428,6 +1428,77 @@ static void ast_copy_expr_val_to_memory(ast_t *ast, ast_node_t *expr, void *dest
     case TYPE_UNRESOLVED:
     case TYPE_INVALID: UNREACHABLE(); break;
     }
+}
+
+static struct_field_t ast_struct_field_from_decl(ast_node_t *decl, arena_t *arena) {
+    struct_field_t field = {0};
+    field.name = sv2string(decl->identifier.view, arena);
+    field.type = decl->value_type;
+    field.default_value = an_decl_expr(decl)->expr_val.word;
+    return field;
+}
+
+static void resolve_struct(analyzer_t *analyzer, ast_t *ast, analysis_state_t state, ast_node_t *struct_) {
+    analysis_state_t new_state = state;
+    scope_t struct_scope = {0};
+    scope_init(&struct_scope, analyzer->ast->arena, SCOPE_TYPE_STRUCT, state.scope, struct_);
+    new_state.scope = &struct_scope;
+
+    tmp_arena_t *tmp = allocator_borrow();
+    struct_fields_t fields = {.allocator=tmp->allocator};
+
+    bool invalid_type = false;
+
+    for (size_t i = an_struct_start(struct_); i < an_struct_end(struct_); ++i) {
+        ast_node_t *decl = struct_->children.items[i];
+        resolve_declaration_definition(analyzer, ast, new_state, decl);
+
+        ast_node_t *init_expr = an_decl_expr(decl);
+        unless (init_expr->expr_val.is_concrete) {
+            stan_error(analyzer, OR_ERROR(
+                .tag = ERROR_ANALYSIS_INITIAL_EXPR_MUST_BE_CONSTANT_IN_STRUCT,
+                .level = ERROR_SOURCE_ANALYSIS,
+                .msg = lit2str("initial expression for fields must be compile-time constants"),
+                .args = ORERR_ARGS(error_arg_node(init_expr)),
+                .show_code_lines = ORERR_LINES(0),
+            ));
+            continue;
+        }
+
+        if (TYPE_IS_INVALID(decl->value_type)) {
+            invalid_type = true;
+            continue;
+        }
+        
+        struct_field_t field = ast_struct_field_from_decl(decl, ast->arena);
+
+        array_push(&fields, field);
+    }
+
+    if (invalid_type) {
+        INVALIDATE(struct_);
+    } else {
+        type_t struct_type = type_set_fetch_anonymous_struct(&ast->type_set, fields);
+        struct_->value_type = typeid(TYPE_TYPE);
+        struct_->expr_val = ast_node_val_word(WORDT(struct_type));
+    }
+
+    allocator_return(tmp);
+}
+
+bool ast_find_struct_field_by_name(ast_t *ast, type_t struct_type, string_view_t name, struct_field_t *field) {
+    typedata_t *td = ast_type2td(ast, struct_type);
+    MUST(td->kind == TYPE_STRUCT);
+
+    for (size_t i = 0; i < td->as.struct_.fields.count; ++i) {
+        struct_field_t field_ = td->as.struct_.fields.items[i];
+        if (sv_eq(string2sv(field_.name), name)) {
+            *field = field_;
+            return true;
+        }
+    }
+
+    return false;
 }
 
 void resolve_expression(
@@ -1850,10 +1921,47 @@ void resolve_expression(
                             
                             typedata_t *itemtd = ast_type2td(ast, init_type_td->as.arr.type);
                             size_t size_aligned = td_align(itemtd->size, itemtd->alignment);
-                            ast_copy_expr_val_to_memory(ast, arg, ((void*)start)+(offset*size_aligned));
+                            ast_copy_expr_val_to_memory(ast, arg->value_type, arg->expr_val.word, ((void*)start)+(offset*size_aligned));
                         }
                     }
 
+                    expr->value_type = init_type;
+                    break;
+                }
+
+                case TYPE_STRUCT: {
+                    bool count = 0;
+                    bool is_constant = true;
+                    for (size_t i = an_list_start(expr); i < an_list_end(expr); ++i) {
+                        ++count;
+                    }
+                    MUST(count == 0);
+
+                    if (is_constant) {
+                        word_t *start;
+                        if (init_type_td->size > WORD_SIZE) {
+                            start = ast_multiword_value(ast, b2w(init_type_td->size));
+                            expr->expr_val = ast_node_val_word(WORDP(start));
+                        } else {
+                            expr->expr_val.is_concrete = true;
+                            start = &expr->expr_val.word;
+                        }
+
+                        size_t num_args = an_list_end(expr) - an_list_start(expr);
+                        size_t next_index = 0;
+                        while (next_index < init_type_td->as.struct_.fields.count) {
+                            struct_field_t field = init_type_td->as.struct_.fields.items[next_index];
+                            size_t offset = field.offset;
+                            if (next_index < num_args) {
+                                ast_node_t *arg = expr->children.items[next_index];
+                                ast_copy_expr_val_to_memory(ast, arg->value_type, arg->expr_val.word, ((void*)start) + offset);
+                            } else {
+                                ast_copy_expr_val_to_memory(ast, field.type, field.default_value, ((void*)start) + offset);
+                            }
+
+                            ++next_index;
+                        }
+                    }
                     expr->value_type = init_type;
                     break;
                 }
@@ -2324,8 +2432,80 @@ void resolve_expression(
             break;
         }
 
-        case AST_NODE_TYPE_EXPRESSION_DOT: {
-            UNREACHABLE();
+        case AST_NODE_TYPE_EXPRESSION_DOT_ACCESS: {
+            type_t lhs_type = implicit_type;
+            ast_node_t *lhs = an_dot_lhs(expr);
+            if (an_is_notnone(lhs)) {
+                resolve_expression(analyzer, ast, state, implicit_type, lhs, true);
+                lhs_type = lhs->value_type;
+            }
+
+            if (TYPE_IS_INVALID(lhs_type)) {
+                INVALIDATE(expr);
+                break;
+            }
+
+            if (TYPE_IS_UNRESOLVED(lhs_type)) {
+                stan_error(analyzer, OR_ERROR(
+                    .tag = ERROR_ANALYSIS_DOT_ACCESS_TYPE_CANNOT_BE_INFERRED,
+                    .level = ERROR_SOURCE_ANALYSIS,
+                    .msg = lit2str("no implicit type can be inferred for '.' access"),
+                    .args = ORERR_ARGS(error_arg_node(expr)),
+                    .show_code_lines = ORERR_LINES(0),
+                ));
+                INVALIDATE(expr);
+                break;
+            }
+
+            typedata_t *lhstd = ast_type2td(ast, lhs_type);
+            switch (lhstd->kind){
+            case TYPE_STRUCT: {
+                struct_field_t field = {0};
+                bool success = ast_find_struct_field_by_name(ast, lhs_type, expr->identifier.view, &field);
+
+                unless (success) {
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = ERROR_ANALYSIS_NO_ACCESS_MEMBER,
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("cannot find '$0.$' in '$1.$'"),
+                        .args = ORERR_ARGS(error_arg_token(expr->identifier), error_arg_type(field.type)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
+                    INVALIDATE(expr);
+                    break;
+                }
+
+                expr->value_type = field.type;
+
+                if (lhs->expr_val.is_concrete) {
+                    void *start;
+                    if (lhstd->size > WORD_SIZE) {
+                        start = lhs->expr_val.word.as.p;
+                    } else {
+                        start = &lhs->expr_val.word;
+                    }
+
+                    typedata_t *fieldtd = ast_type2td(ast, field.type);
+                    start += fieldtd->size;
+
+                    word_t result = ast_mem2word(ast, start, field.type);
+                    expr->expr_val = ast_node_val_word(result);
+                }
+                break;
+            }
+
+            default: {
+                stan_error(analyzer, OR_ERROR(
+                    .tag = ERROR_ANALYSIS_INVALID_ACCESSEE_TYPE,
+                    .level = ERROR_SOURCE_ANALYSIS,
+                    .msg = lit2str("invalid '.' access expression, only structs or modules"),
+                    .args = ORERR_ARGS(error_arg_node(expr)),
+                    .show_code_lines = ORERR_LINES(0),
+                ));
+                INVALIDATE(expr);
+                break;
+            }
+            }
             break;
         }
 
@@ -2714,8 +2894,8 @@ void resolve_expression(
             break;
         }
 
-        case AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION: {
-            UNREACHABLE();
+        case AST_NODE_TYPE_EXPRESSION_STRUCT: {
+            resolve_struct(analyzer, ast, state, expr);
             break;
         }
         
@@ -2949,7 +3129,7 @@ static void forward_scan_inferred_types(ast_node_t *decl, ast_node_t *decl_type,
         case AST_NODE_TYPE_EXPRESSION_ARRAY_ITEM_ACCESS:
         case AST_NODE_TYPE_EXPRESSION_CAST:
         case AST_NODE_TYPE_EXPRESSION_BINARY:
-        case AST_NODE_TYPE_EXPRESSION_DOT:
+        case AST_NODE_TYPE_EXPRESSION_DOT_ACCESS:
         case AST_NODE_TYPE_EXPRESSION_BUILTIN_CALL:
         case AST_NODE_TYPE_EXPRESSION_CALL:
         case AST_NODE_TYPE_EXPRESSION_PRIMARY:
@@ -2958,7 +3138,7 @@ static void forward_scan_inferred_types(ast_node_t *decl, ast_node_t *decl_type,
         case AST_NODE_TYPE_EXPRESSION_BRANCHING:
         case AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION:
         case AST_NODE_TYPE_EXPRESSION_NIL:
-        case AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION:
+        case AST_NODE_TYPE_EXPRESSION_STRUCT:
         case AST_NODE_TYPE_EXPRESSION_INITIALIZER_LIST:
         case AST_NODE_TYPE_EXPRESSION_DIRECTIVE:
         case AST_NODE_TYPE_EXPRESSION_JMP: break;
@@ -3081,7 +3261,7 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
     }
 
     if (TYPE_IS_UNRESOLVED(init_expr->value_type) && TYPE_IS_UNRESOLVED(decl->value_type)) {
-        ASSERT(false, "don't thing this is possible??");
+        // ASSERT(false, "don't thing this is possible??");
         stan_error(analyzer, OR_ERROR(
             .tag = ERROR_ANALYSIS_CANNOT_INFER_NIL_VALUE,
             .level = ERROR_SOURCE_ANALYSIS,
@@ -3217,7 +3397,7 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
                 ));
                 INVALIDATE(decl);
             }
-        }
+        } 
     }
 }
 

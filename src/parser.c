@@ -269,8 +269,7 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start) {
             break;
         }
 
-        case AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION: {
-            UNREACHABLE();
+        case AST_NODE_TYPE_EXPRESSION_STRUCT: {
             break;
         }
 
@@ -283,7 +282,7 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start) {
         }
         
         case AST_NODE_TYPE_EXPRESSION_DEF_VALUE:
-        case AST_NODE_TYPE_EXPRESSION_DOT: {
+        case AST_NODE_TYPE_EXPRESSION_DOT_ACCESS: {
             array_push(&node->children, &nil_node);
             node->identifier = nil_token;
             break;
@@ -430,6 +429,19 @@ ast_node_t *ast_cast(ast_t *ast, ast_node_t *type_expr, ast_node_t *expr) {
     an_cast_type(cast_) = type_expr;
     an_cast_expr(cast_) = expr;
     return cast_;
+}
+ast_node_t *ast_struct_begin(ast_t *ast, token_t start) {
+    ast_node_t *struct_ = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_STRUCT, start);
+    struct_->start = start;
+
+    return struct_;
+}
+void ast_struct_add_decl(ast_node_t *struct_, ast_node_t *decl) {
+    array_push(&struct_->children, decl);
+}
+
+void ast_struct_end(ast_node_t *struct_, token_t end) {
+    struct_->end = end;
 }
 
 static ast_node_t *ast_primaryu(ast_t *ast, u64 value, type_t type, token_t token) {
@@ -1698,9 +1710,48 @@ static ast_node_t *parse_cast(parser_t *parser) {
 }
 
 static ast_node_t *parse_struct_def(parser_t *parser) {
-    UNUSED(parser);
-    UNREACHABLE();
-    return NULL;
+    token_t struct_keyword = parser->previous;
+
+    unless (consume(parser, TOKEN_BRACE_OPEN)) {
+        parser_error(parser, OR_ERROR(
+            .tag = ERROR_PARSER_EXPECTED_OPEN_BRACE_AFTER_STRUCT,
+            .level = ERROR_SOURCE_PARSER,
+            .msg = lit2str("expected '{' after struct keyword"),
+            .args = ORERR_ARGS(error_arg_token(parser->current)),
+            .show_code_lines = ORERR_LINES(0),
+        ));
+    }
+
+    ast_node_t *struct_ = ast_struct_begin(parser->ast, struct_keyword);
+
+    while (is_incoming_decl_def(parser)) {
+        ast_node_t *decl = parse_decl_def(parser);
+        ast_struct_add_decl(struct_, decl);
+
+        unless(consume(parser, TOKEN_SEMICOLON)) {
+            parser_error(parser, OR_ERROR(
+                .tag = ERROR_PARSER_EXPECTED_SEMICOLON,
+                .level = ERROR_SOURCE_PARSER,
+                .msg = lit2str("expected ';' after struct field" ),
+                .args = ORERR_ARGS(error_arg_token(parser->current)),
+                .show_code_lines = ORERR_LINES(0),
+            ));
+        }
+    }
+
+    unless(consume(parser, TOKEN_BRACE_CLOSE)) {
+        parser_error(parser, OR_ERROR(
+            .tag = ERROR_PARSER_EXPECTED_OPEN_BRACE_AFTER_STRUCT,
+            .level = ERROR_SOURCE_PARSER,
+            .msg = lit2str("expected '}' to close struct"),
+            .args = ORERR_ARGS(error_arg_token(parser->current)),
+            .show_code_lines = ORERR_LINES(0),
+        ));
+    }
+
+    ast_struct_end(struct_, parser->previous);
+
+    return struct_;
 }
 
 static ast_node_t *ast_begin_list_initializer(ast_t *ast, token_t open_bracket) {
@@ -1710,6 +1761,14 @@ static ast_node_t *ast_begin_list_initializer(ast_t *ast, token_t open_bracket) 
 
 static void ast_end_list_initializer(ast_node_t *initializer, token_t close_bracket) {
     initializer->end = close_bracket;
+}
+ast_node_t *ast_dot_access(ast_t *ast, ast_node_t *lhs, token_t identifier, token_t start) {
+    ast_node_t *dot_access = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_DOT_ACCESS, start);
+    dot_access->identifier = identifier;
+    dot_access->end = identifier;
+    an_dot_lhs(dot_access) = lhs;
+
+    return dot_access;
 }
 
 static ast_node_t *parse_dot(parser_t *parser) {
@@ -1744,7 +1803,7 @@ static ast_node_t *parse_dot(parser_t *parser) {
 
         return initiailizer;
     } else {
-        ast_node_t *dot_expression = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_DOT, parser->previous);
+        token_t start = parser->previous;
         unless (consume(parser, TOKEN_IDENTIFIER)) {
             parser_error(parser, OR_ERROR(
                 .tag = ERROR_PARSER_EXPECTED_VALID_TOKEN_AFTER_DOT,
@@ -1754,7 +1813,9 @@ static ast_node_t *parse_dot(parser_t *parser) {
                 .show_code_lines = ORERR_LINES(0),
             ));
         }
-        dot_expression->identifier = parser->previous;
+        token_t identifier = parser->previous;
+
+        ast_node_t *dot_expression = ast_dot_access(parser->ast, &nil_node, identifier, start);
         dot_expression->end = parser->current;
 
         return dot_expression;
@@ -1907,7 +1968,7 @@ static ast_node_t *parse_precedence(parser_t *parser, prec_t precedence) {
                 break;
             }
 
-            case AST_NODE_TYPE_EXPRESSION_DOT: {
+            case AST_NODE_TYPE_EXPRESSION_DOT_ACCESS: {
                 an_lhs(right_operand) = left_operand;
                 right_operand->start = left_operand->start;
                 left_operand = right_operand;
@@ -2548,17 +2609,16 @@ static void ast_print_ast_node(typedatas_t types, ast_node_t *node, u32 level) {
             ast_print_ast_node(types, an_func_def_block(node), level + 2);
             break;
         }
-        case AST_NODE_TYPE_EXPRESSION_STRUCT_DEFINITION: {
-            UNREACHABLE();
-            // print_indent(level);
-            // print_line("struct: %s", type2cstr(node));
+        case AST_NODE_TYPE_EXPRESSION_STRUCT: {
+            print_indent(level);
+            print_line("struct: %s", type2cstr(node));
 
-            // print_indent(level + 1);
-            // print_line("members");
-            // for (size_t i = 0; i < node->as.struct_.declarations.count; ++i) {
-            //     ast_node_t *declaration = node->as.struct_.declarations.items[i];
-            //     ast_print_ast_node(types, declaration, level + 2);
-            // }
+            print_indent(level + 1);
+            print_line("members");
+            for (size_t i = an_struct_start(node); i < an_struct_end(node); ++i) {
+                ast_node_t *declaration = node->children.items[i];
+                ast_print_ast_node(types, declaration, level + 2);
+            }
             break;
         }
         case AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE: {
@@ -2586,7 +2646,7 @@ static void ast_print_ast_node(typedatas_t types, ast_node_t *node, u32 level) {
             break;
         }
 
-        case AST_NODE_TYPE_EXPRESSION_DOT: {
+        case AST_NODE_TYPE_EXPRESSION_DOT_ACCESS: {
             print_indent(level);
             print_line(".: %s", type2cstr(node));
 
