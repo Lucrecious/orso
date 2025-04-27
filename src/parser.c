@@ -1146,7 +1146,6 @@ static ast_node_t *parse_block(parser_t *parser) {
                 .args = ORERR_ARGS(error_arg_token(parser->current)),
                 .show_code_lines = ORERR_LINES(0),
             ));
-            break;
         }
 
         ast_block_decl(block, decl_node);
@@ -1852,7 +1851,6 @@ static ast_node_t *parse_precedence(parser_t *parser, prec_t precedence) {
             .args = ORERR_ARGS(error_arg_token(parser->current)),
             .show_code_lines = ORERR_LINES(0),
         ));
-        advance(parser);
     } else {
         advance(parser);
 
@@ -2122,7 +2120,6 @@ static void parse_into_module(parser_t *parser, ast_node_t *module) {
                 .args = ORERR_ARGS(error_arg_token(parser->current)),
                 .show_code_lines = ORERR_LINES(0),
             ));
-            advance(parser);
         }
 
         synchronize(parser);

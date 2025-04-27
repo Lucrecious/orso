@@ -1,22 +1,13 @@
 main :: () -> void {
-    {
-        a := [4]int.{0, 1, 2, 3};
-        b := [4]int.{0, 1, 2, 3};
+    x := 10;
+    y := 0;
 
-        for i := 0; i < len(a); ++i {
-            printint(a[i]);
-            println();
+    z := {
+        {
+            x + y;
         };
-        
-        println();
-
-        a += b;
-
-        for i := 0; i < len(a); ++i {
-            printint(a[i]);
-            println();
-        };
-        
-        println();
     };
+
+    printint(z);
+    println();
 };
