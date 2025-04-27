@@ -1,13 +1,65 @@
-main :: () -> void {
-    x := 10;
-    y := 0;
+// printfoo :: (foo: foo_t) -> void {
+//     printint(foo.x);
+//     printint(foo.y);
+//     println();
+// };
 
-    z := {
-        {
-            x + y;
-        };
+// printpfoo :: (foo: &foo_t) -> void {
+//     printint(foo.x);
+//     printint(foo.y);
+//     println();
+// };
+
+main :: () -> void {
+    {
+        // foo_t :: struct {
+        //     a := 5;
+        //     b := 50;
+        //     c := 500;
+        // };
+
+        // foo := foo_t.{};
+        // printfoo(foo);
+
+        // foo2: foo_t = .{};
+        // printfoo(foo2);
+
+        // foo3 := foo_t.{3, 30, 300};
+        // printpfoo(&foo3);
+
+        // foo4 := foo_t.{, 40, 400};
+        // printpfoo(&foo4);
+
+        // foo5 := foo_t.{20,, 200};
+        // printfoo(foo5);
+
+        // foo6 := foo_t.{, 60,};
+        // printfoo(foo6);
+
+        // foo7 := foo_t.{a: 8, c: 800}
+        // printfoo(foo7);
+
+        // foo8 := foo_t.{9, c: 900};
+        // printfoo(foo8);
+
+        // foo9 := foo_t.{, 1000, c: 10000};
+        // printfoo(foo9);
     };
 
-    printint(z);
-    println();
+    // {
+    //     bar_t :: struct {
+    //         a := 0;
+    //         b := 0;
+    //         c := 0;
+    //         d := 0;
+    //     };
+
+    //     bar := bar_t.{1, c: 4, 9};
+    //     printint(bar.a);
+    //     printint(bar.b);
+    //     printint(bar.c);
+    //     printint(bar.d);
+    //     println();
+    // };
+
 };

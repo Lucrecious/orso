@@ -93,7 +93,7 @@ static void print_usage() {
     println("  orso run <filepath>          - runs the interpreter on given <filepath>");
     println("  orso debug <filepath>        - runs the given <filepath> in the orso interpreter debugger");
     println("  orso build <in> <out>        - creates a native build of the given <in> into an exe <out>");
-    println("  orso cgen <in> <out>         - generates c version of input file");
+    println("  orso ast <in>                - outputs ast for orso file for debugging");
     println("");
 }
 
@@ -155,7 +155,7 @@ bool generate_exe(ast_t *ast, string_t output_path) {
     return success;
 }
 
-bool cgen(string_t input_file_path, string_t output_file_path) {
+void print_ast(string_t input_file_path) {
     arena_t arena = {0};
 
     string_t source;
@@ -164,26 +164,11 @@ bool cgen(string_t input_file_path, string_t output_file_path) {
 
     ast_t *ast = build_ast(source, &arena, input_file_path);
 
-    bool result = false;
-
     if (!ast->resolved) {
         print_errors(ast);
-        return_defer(false);
     }
-
-    tmp_arena_t *tmp = allocator_borrow();
-    string_builder_t sb = {.allocator=tmp->allocator};
-    compile_ast_to_c(ast, &sb);
-
-    write_entire_file(output_file_path.cstr, sb.items, sb.count);
-
-    allocator_return(tmp);
-
-    return_defer(true);
-
-defer:
+    ast_print(ast, "program");
     arena_free(&arena);
-    return result;
 }
 
 bool compile(string_t input_file_path, string_t output_file_path) {
@@ -333,27 +318,17 @@ int main(int argc, char **argv) {
             cstr_t filename = shift(argv, argc);
             string_t file = {.cstr=filename, .length=strlen(filename)};
             debug(file);
-        } else if (strncmp(option, "cgen", 4) == 0) {
-            cstr_t output = "a.out";
+        } else if (strncmp(option, "ast", 4) == 0) {
             if (argc > 2) {
-                fprintf(stderr, "build option requires at least an input and optional output odl file\n");
+                fprintf(stderr, "requires file to resolve");
                 exit(1);
             }
 
             cstr_t input = shift(argv, argc);
-            if (argc) {
-                output = shift(argv, argc);
-            }
 
             string_t sinput = cstr2string(input, &arena);
-            string_t soutput = cstr2string(output, &arena);
 
-            bool success = cgen(sinput, soutput);
-            if (success) {
-                printf("successfully output: %s\n", soutput.cstr);
-            } else {
-                printf("faild to output: %s\n", soutput.cstr);
-            }
+            print_ast(sinput);
         }
     } else {
         print_usage();
