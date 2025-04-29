@@ -2592,6 +2592,10 @@ void resolve_expression(
                 expr->value_offset = field.offset;
                 expr->value_type = field.type;
 
+                if (an_is_notnone(lhs->lvalue_node)) {
+                    expr->lvalue_node = expr;
+                }
+
                 if (lhs->expr_val.is_concrete) {
                     void *start;
                     if (lhstd->size > WORD_SIZE) {

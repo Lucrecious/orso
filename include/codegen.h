@@ -1154,6 +1154,30 @@ static void gen_lvalue(gen_t *gen, function_t *function, ast_node_t *lvalue, val
         break;
     }
 
+    case AST_NODE_TYPE_EXPRESSION_DOT_ACCESS: {
+        ast_node_t *lhs = an_dot_lhs(lvalue);
+        typedata_t *lhstd = ast_type2td(gen->ast, lhs->value_type);
+        switch (lhstd->kind) {
+        case TYPE_POINTER: {
+            UNREACHABLE();
+            // todo
+            break;
+        }
+
+        case TYPE_STRUCT: {
+            val_dst_t lvalue_stack_point = emit_val_dst_reg_or_stack_point_reserve(gen, loc, function, gen->ast->type_set.u64_, REG_RESULT);
+            gen_lvalue(gen, function, lhs, lvalue_stack_point);
+            emit_binu_reg_im(function, loc, REG_RESULT, REG_RESULT, lvalue->value_offset, '+');
+
+            emit_reg_to_val_dst(gen, loc, function, gen->ast->type_set.u64_, val_dst, REG_RESULT, REG_T, REG_U, false);
+            break;
+        }
+
+        default: UNREACHABLE(); break;
+        }
+        break;
+    }
+
     default: UNREACHABLE(); break;
     }
 
@@ -2064,7 +2088,18 @@ static void gen_dot_access(gen_t *gen, function_t *function, ast_node_t *dot_acc
     size_t clean_stack_point = gen_stack_point(gen);
 
     if (an_is_notnone(dot_access->lvalue_node)) {
-        // gen_lvalue(gen, function, dot_access->lvalue_node, )
+        switch (lhstd->kind) {
+        case TYPE_STRUCT: {
+            val_dst_t lvalue_dst = emit_val_dst_reg_or_stack_point_reserve(gen, loc, function, gen->ast->type_set.u64_, REG_RESULT);
+            gen_lvalue(gen, function, dot_access->lvalue_node, lvalue_dst);
+            if (td->size <= WORD_SIZE) {
+                emit_addr_to_reg(gen, function, loc, type2movsize(gen, dot_access->value_type), REG_RESULT, REG_RESULT, 0);
+            }
+            break;
+        }
+
+        default: UNREACHABLE(); break;
+        }
     } else {
         switch (lhstd->kind) {
         case TYPE_STRUCT: {
