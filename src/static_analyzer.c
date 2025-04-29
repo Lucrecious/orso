@@ -2395,6 +2395,12 @@ void resolve_expression(
                         break;
                     }
 
+                    case AST_NODE_TYPE_EXPRESSION_DOT_ACCESS: {
+                        type_t type = type_set_fetch_pointer(&ast->type_set, op->lvalue_node->value_type);
+                        expr->value_type = type;
+                        break;
+                    }
+
                     default: {
                         stan_error(analyzer, OR_ERROR(
                             .tag = ERROR_ANALYSIS_INVALID_OPERAND_FOR_ADDRESS_OPERATOR,
@@ -2572,7 +2578,16 @@ void resolve_expression(
 
             typedata_t *lhstd = ast_type2td(ast, lhs_type);
             switch (lhstd->kind){
+            case TYPE_POINTER:
             case TYPE_STRUCT: {
+                {
+                    typedata_t *innertd = ast_type2td(ast, lhstd->as.ptr.type);
+                    if (innertd->kind == TYPE_STRUCT) {
+                        lhs_type = lhstd->as.ptr.type;
+                        lhstd = innertd;
+                    }
+                }
+
                 struct_field_t field = {0};
                 size_t _field_index;
                 bool success = ast_find_struct_field_by_name(ast, lhs_type, expr->identifier.view, &field, &_field_index);
@@ -2592,7 +2607,7 @@ void resolve_expression(
                 expr->value_offset = field.offset;
                 expr->value_type = field.type;
 
-                if (an_is_notnone(lhs->lvalue_node)) {
+                if (lhstd->kind != TYPE_POINTER && an_is_notnone(lhs->lvalue_node)) {
                     expr->lvalue_node = expr;
                 }
 

@@ -1159,14 +1159,16 @@ static void gen_lvalue(gen_t *gen, function_t *function, ast_node_t *lvalue, val
         typedata_t *lhstd = ast_type2td(gen->ast, lhs->value_type);
         switch (lhstd->kind) {
         case TYPE_POINTER: {
-            UNREACHABLE();
-            // todo
+            val_dst_t lvalue_dst = emit_val_dst_reg_or_stack_point_reserve(gen, loc, function, gen->ast->type_set.u64_, REG_RESULT);
+            gen_expression(gen, function, lhs, lvalue_dst);
+            emit_binu_reg_im(function, loc, REG_RESULT, REG_RESULT, lvalue->value_offset, '+');
+            emit_reg_to_val_dst(gen, loc, function, gen->ast->type_set.u64_, val_dst, REG_RESULT, REG_T, REG_U, false);
             break;
         }
 
         case TYPE_STRUCT: {
-            val_dst_t lvalue_stack_point = emit_val_dst_reg_or_stack_point_reserve(gen, loc, function, gen->ast->type_set.u64_, REG_RESULT);
-            gen_lvalue(gen, function, lhs, lvalue_stack_point);
+            val_dst_t lvalue_dst = emit_val_dst_reg_or_stack_point_reserve(gen, loc, function, gen->ast->type_set.u64_, REG_RESULT);
+            gen_lvalue(gen, function, lhs, lvalue_dst);
             emit_binu_reg_im(function, loc, REG_RESULT, REG_RESULT, lvalue->value_offset, '+');
 
             emit_reg_to_val_dst(gen, loc, function, gen->ast->type_set.u64_, val_dst, REG_RESULT, REG_T, REG_U, false);
@@ -2087,7 +2089,7 @@ static void gen_dot_access(gen_t *gen, function_t *function, ast_node_t *dot_acc
 
     size_t clean_stack_point = gen_stack_point(gen);
 
-    if (an_is_notnone(dot_access->lvalue_node)) {
+    if (lhstd->kind != TYPE_POINTER && an_is_notnone(dot_access->lvalue_node)) {
         switch (lhstd->kind) {
         case TYPE_STRUCT: {
             val_dst_t lvalue_dst = emit_val_dst_reg_or_stack_point_reserve(gen, loc, function, gen->ast->type_set.u64_, REG_RESULT);
@@ -2102,6 +2104,19 @@ static void gen_dot_access(gen_t *gen, function_t *function, ast_node_t *dot_acc
         }
     } else {
         switch (lhstd->kind) {
+        case TYPE_POINTER: {
+            MUST(ast_type2td(gen->ast, lhstd->as.ptr.type)->kind == TYPE_STRUCT);
+
+            val_dst_t ptr_dst = emit_val_dst_reg_or_stack_point_reserve(gen, loc, function, lhs->value_type, REG_RESULT);
+            gen_expression(gen, function, lhs, ptr_dst);
+            emit_binu_reg_im(function, loc, REG_RESULT, REG_RESULT, dot_access->value_offset, '+');
+
+            if (td->size <= WORD_SIZE) {
+                emit_addr_to_reg(gen, function, loc, type2movsize(gen, dot_access->value_type), REG_RESULT, REG_RESULT, 0);
+            }
+            break;
+        }
+
         case TYPE_STRUCT: {
             val_dst_t value_dst;
             if (td->size > WORD_SIZE) {
