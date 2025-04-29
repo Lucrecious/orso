@@ -5,7 +5,7 @@ main :: () -> void {
         c: f64 = 32.5;
     };
 
-    foo := foo_t.{a: false};
+    foo := foo_t.{b: true, a:1};
 
     printint(foo.a);
     println();

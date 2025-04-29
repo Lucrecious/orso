@@ -36,6 +36,14 @@ typedef struct analysis_state_t {
     scope_t *scope;
 } analysis_state_t;
 
+typedef struct sizes_t sizes_t;
+struct sizes_t {
+    size_t *items;
+    size_t count;
+    size_t capacity;
+    arena_t *allocator;
+};
+
 static void scope_init(scope_t *scope, arena_t *allocator, scope_type_t type, scope_t *outer, ast_node_t *creator_expression) {
     scope->outer = outer;
     scope->creator = creator_expression;
@@ -1486,7 +1494,7 @@ static void resolve_struct(analyzer_t *analyzer, ast_t *ast, analysis_state_t st
     allocator_return(tmp);
 }
 
-bool ast_find_struct_field_by_name(ast_t *ast, type_t struct_type, string_view_t name, struct_field_t *field) {
+bool ast_find_struct_field_by_name(ast_t *ast, type_t struct_type, string_view_t name, struct_field_t *field, size_t *index) {
     typedata_t *td = ast_type2td(ast, struct_type);
     MUST(td->kind == TYPE_STRUCT);
 
@@ -1494,6 +1502,7 @@ bool ast_find_struct_field_by_name(ast_t *ast, type_t struct_type, string_view_t
         struct_field_t field_ = td->as.struct_.fields.items[i];
         if (sv_eq(string2sv(field_.name), name)) {
             *field = field_;
+            *index = i;
             return true;
         }
     }
@@ -1807,35 +1816,6 @@ void resolve_expression(
                 resolve_expression(analyzer, ast, state, typeid(TYPE_UNRESOLVED), type_expr, true);
             }
 
-            type_t arg_implicit_type = typeid(TYPE_UNRESOLVED);
-            if (TYPE_IS_TYPE(type_expr->value_type) && type_expr->expr_val.is_concrete) {
-                type_t t = type_expr->expr_val.word.as.t;
-                typedata_t *td = ast_type2td(ast, t);
-                switch (td->kind) {
-                case TYPE_ARRAY: {
-                    arg_implicit_type = td->as.arr.type;
-                    break;
-                }
-
-                default: break;
-                }
-            }
-
-            bool invalid_arg = false;
-            for (size_t i = an_list_start(expr); i < an_list_end(expr); ++i) {
-                ast_node_t *arg = expr->children.items[i];
-
-                resolve_expression(analyzer, ast, state, arg_implicit_type, arg, true);
-
-                if (TYPE_IS_INVALID(arg->value_type)) {
-                    invalid_arg = true;
-                }
-            }
-
-            if (invalid_arg) {
-                break;
-            }
-
             typedata_t *type_expr_td = ast_type2td(ast, type_expr->value_type);
             switch (type_expr_td->kind) {
             case TYPE_TYPE: {
@@ -1855,6 +1835,29 @@ void resolve_expression(
 
                 switch (init_type_td->kind) {
                 case TYPE_ARRAY: {
+
+                    type_t arg_implicit_type;
+                    {
+                        type_t t = type_expr->expr_val.word.as.t;
+                        typedata_t *td = ast_type2td(ast, t);
+                        arg_implicit_type = td->as.arr.type;
+                    }
+
+                    bool invalid_arg = false;
+                    for (size_t i = an_list_start(expr); i < an_list_end(expr); ++i) {
+                        ast_node_t *arg = expr->children.items[i];
+
+                        resolve_expression(analyzer, ast, state, arg_implicit_type, arg, true);
+
+                        if (TYPE_IS_INVALID(arg->value_type)) {
+                            invalid_arg = true;
+                        }
+                    }
+
+                    if (invalid_arg) {
+                        break;
+                    }
+
                     type_t array_type = init_type_td->as.arr.type;
 
                     bool is_constant = true;
@@ -1930,12 +1933,120 @@ void resolve_expression(
                 }
 
                 case TYPE_STRUCT: {
-                    bool count = 0;
-                    bool is_constant = true;
-                    for (size_t i = an_list_start(expr); i < an_list_end(expr); ++i) {
-                        ++count;
+                    expr->value_type = init_type;
+
+                    tmp_arena_t *tmp = allocator_borrow();
+
+                    bool is_invalid = false;
+
+                    sizes_t used_field_indices = {.allocator=tmp->allocator};
+                    sizes_t arg_indices = {.allocator=tmp->allocator};
+                    {
+                        size_t current_field_index = 0;
+                        for (size_t i = an_list_start(expr); i < an_list_end(expr); ++i) {
+                            ast_node_t *arg = expr->children.items[i];
+
+                            if (current_field_index >= init_type_td->as.struct_.fields.count) {
+                                is_invalid = true;
+                                stan_error(analyzer, OR_ERROR(
+                                    .tag = ERROR_ANALYSIS_TOO_MANY_ARGUMENTS_IN_LIST_INIT,
+                                    .level = ERROR_SOURCE_ANALYSIS,
+                                    .msg = lit2str("too many arguments; expected no more than '$1.$' but initializer is` at argument '$2.$'"),
+                                    .args = ORERR_ARGS(error_arg_node(arg),
+                                                    error_arg_sz(init_type_td->as.struct_.fields.count),
+                                                    error_arg_sz(current_field_index+1)),
+                                    .show_code_lines = ORERR_LINES(0),
+                                ));
+                                break;
+                            }
+
+                            if (an_is_notnone(arg)) {
+                                array_push(&arg_indices, i);
+                                if (arg->label.view.length > 0) {
+                                    struct_field_t field;
+                                    size_t field_index;
+                                    bool success = ast_find_struct_field_by_name(ast, init_type, arg->label.view, &field, &field_index);
+                                    if (!success) {
+                                        is_invalid = true;
+                                        stan_error(analyzer, OR_ERROR(
+                                            .tag = ERROR_ANALYSIS_MEMBER_DOES_NOT_EXIST,
+                                            .level = ERROR_SOURCE_ANALYSIS,
+                                            .msg = lit2str("cannot find field '$0.$' in struct"),
+                                            .args = ORERR_ARGS(error_arg_token(arg->label)),
+                                            .show_code_lines = ORERR_LINES(0),
+                                        ));
+                                        break;
+                                    }
+
+                                    if (field_index < current_field_index) {
+                                        is_invalid = true;
+                                        stan_error(analyzer, OR_ERROR(
+                                            .tag = ERROR_ANALYSIS_ARGUMENT_OUT_OF_ORDER,
+                                            .level = ERROR_SOURCE_ANALYSIS,
+                                            .msg = lit2str("field '$0.$' is argument '$1.$' but is placed after argument '$2.$'"),
+                                            .args = ORERR_ARGS(error_arg_token(arg->label), error_arg_sz(field_index), error_arg_sz(current_field_index-1)),
+                                            .show_code_lines = ORERR_LINES(0),
+                                        ));
+                                        break;
+                                    }
+
+                                    array_push(&used_field_indices, field_index);
+                                    current_field_index = field_index+1;
+
+                                } else {
+                                    array_push(&used_field_indices, current_field_index);
+                                    ++current_field_index;
+                                }
+                            } else {
+                                ++current_field_index;
+                            }
+                        }
                     }
-                    MUST(count == 0);
+
+                    if (is_invalid) {
+                        allocator_return(tmp);
+                        break;
+                    }
+
+                    bool is_constant = true;
+                    size_t used_field_index = 0;
+                    for (size_t i = 0; i < init_type_td->as.struct_.fields.count; ++i) {
+                        struct_field_t field = init_type_td->as.struct_.fields.items[i];
+                        if (used_field_index < used_field_indices.count && i == used_field_indices.items[used_field_index]) {
+                            size_t arg_index = arg_indices.items[used_field_index];
+                            ++used_field_index;
+
+                            ast_node_t *arg = expr->children.items[arg_index];
+                            resolve_expression(analyzer, ast, state, field.type, arg, true);
+
+                            arg = cast_implicitly_if_necessary(ast, field.type, arg);
+                            expr->children.items[arg_index] = arg;
+
+                            if (!typeid_eq(arg->value_type, field.type)) {
+                                is_invalid = true;
+                                stan_error(analyzer, OR_ERROR(
+                                    .tag = ERROR_ANALYSIS_TYPE_MISMATCH,
+                                    .level = ERROR_SOURCE_ANALYSIS,
+                                    .msg = lit2str("setting struct field requires explicit cast from '$1.$' to '$2.$'"),
+                                    .args = ORERR_ARGS(error_arg_node(arg),
+                                        error_arg_type(arg->value_type), error_arg_type(field.type)),
+                                    .show_code_lines = ORERR_LINES(0),
+                                ));
+                                break;
+                            }
+
+                            unless (arg->expr_val.is_concrete) {
+                                is_constant = false;
+                            }
+                        }
+                    }
+
+                    if (is_invalid) {
+                        allocator_return(tmp);
+                        break;
+                    }
+
+                    MUST(is_constant);
 
                     if (is_constant) {
                         word_t *start;
@@ -1947,22 +2058,24 @@ void resolve_expression(
                             start = &expr->expr_val.word;
                         }
 
-                        size_t num_args = an_list_end(expr) - an_list_start(expr);
-                        size_t next_index = 0;
-                        while (next_index < init_type_td->as.struct_.fields.count) {
-                            struct_field_t field = init_type_td->as.struct_.fields.items[next_index];
+                        used_field_index = 0;
+                        for (size_t i = 0; i < init_type_td->as.struct_.fields.count; ++i) {
+                            struct_field_t field = init_type_td->as.struct_.fields.items[i];
                             size_t offset = field.offset;
-                            if (next_index < num_args) {
-                                ast_node_t *arg = expr->children.items[next_index];
+                            if (used_field_index < used_field_indices.count && i == used_field_indices.items[used_field_index]) {
+                                size_t arg_index = arg_indices.items[used_field_index];
+                                ++used_field_index;
+
+                                ast_node_t *arg = expr->children.items[arg_index];
                                 ast_copy_expr_val_to_memory(ast, arg->value_type, arg->expr_val.word, ((void*)start) + offset);
                             } else {
                                 ast_copy_expr_val_to_memory(ast, field.type, field.default_value, ((void*)start) + offset);
                             }
 
-                            ++next_index;
                         }
                     }
-                    expr->value_type = init_type;
+
+                    allocator_return(tmp);
                     break;
                 }
 
@@ -2461,7 +2574,8 @@ void resolve_expression(
             switch (lhstd->kind){
             case TYPE_STRUCT: {
                 struct_field_t field = {0};
-                bool success = ast_find_struct_field_by_name(ast, lhs_type, expr->identifier.view, &field);
+                size_t _field_index;
+                bool success = ast_find_struct_field_by_name(ast, lhs_type, expr->identifier.view, &field, &_field_index);
 
                 unless (success) {
                     stan_error(analyzer, OR_ERROR(
@@ -2475,6 +2589,7 @@ void resolve_expression(
                     break;
                 }
 
+                expr->value_offset = field.offset;
                 expr->value_type = field.type;
 
                 if (lhs->expr_val.is_concrete) {

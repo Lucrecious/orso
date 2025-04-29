@@ -299,6 +299,8 @@ struct ast_node_t {
     ast_node_t *ref_decl;
     type_patterns_t type_decl_patterns;
 
+    size_t value_offset;
+
     bool is_free_number;
     ast_node_val_t expr_val;
 
@@ -309,6 +311,7 @@ struct ast_node_t {
     ast_nodes_t children;
 
     token_t identifier;
+    token_t label;
 
     ast_node_t *jmp_out_scope_node;
     ast_nodes_t jmp_nodes;

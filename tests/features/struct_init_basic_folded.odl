@@ -1,0 +1,48 @@
+main :: () -> void {
+    {
+        printfoo :: (foo: foo_t) -> void {
+            printint(foo.a);
+            println();
+            printint(foo.b);
+            println();
+            printint(foo.c);
+            println();
+        };
+
+        foo_t :: struct {
+            a := 1;
+            b := 2;
+            c := 3;
+        };
+
+        foo := foo_t.{};
+        printfoo(foo);
+
+        foo2: foo_t = .{};
+        printfoo(foo2);
+
+        foo3 := foo_t.{4, 5, 6};
+        printfoo(foo3);
+
+        foo4 := foo_t.{, 7, 8};
+        printfoo(foo4);
+
+        foo5 := foo_t.{9,, 10};
+        printfoo(foo5);
+
+        foo6 := foo_t.{, 11,};
+        printfoo(foo6);
+
+        foo7 := foo_t.{a: 12, c: 13};
+        printfoo(foo7);
+
+        foo8 := foo_t.{14, c: 15};
+        printfoo(foo8);
+
+        foo9 := foo_t.{, 16, c: 17};
+        printfoo(foo9);
+
+        foo10 := foo_t.{b:18, 19};
+        printfoo(foo10);
+    };
+};

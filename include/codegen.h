@@ -2055,6 +2055,49 @@ static void gen_initializer_list(gen_t *gen, function_t *function, ast_node_t *l
     emit_reg_to_val_dst(gen, loc, function, list->value_type, val_dst, REG_RESULT, REG_T, REG_U, true);
 }
 
+static void gen_dot_access(gen_t *gen, function_t *function, ast_node_t *dot_access, val_dst_t val_dst) {
+    texloc_t loc = dot_access->start.loc;
+    typedata_t *td = ast_type2td(gen->ast, dot_access->value_type);
+    ast_node_t *lhs = an_dot_lhs(dot_access);
+    typedata_t *lhstd = ast_type2td(gen->ast, lhs->value_type);
+
+    size_t clean_stack_point = gen_stack_point(gen);
+
+    if (an_is_notnone(dot_access->lvalue_node)) {
+        // gen_lvalue(gen, function, dot_access->lvalue_node, )
+    } else {
+        switch (lhstd->kind) {
+        case TYPE_STRUCT: {
+            val_dst_t value_dst;
+            if (td->size > WORD_SIZE) {
+                value_dst = emit_val_dst_stack_reserve(gen, loc, function, dot_access->value_type);
+            }
+
+            val_dst_t struct_dst = emit_val_dst_stack_reserve(gen, loc, function, lhs->value_type);
+            gen_expression(gen, function, lhs, struct_dst);
+
+            size_t offset = dot_access->value_offset;
+            size_t src_value_stack_point = struct_dst.stack_point - offset;
+            emit_stack_point_to_reg(gen, function, loc, REG_RESULT, src_value_stack_point);
+            if (td->size > WORD_SIZE) {
+                emit_stack_point_to_reg(gen, function, loc, REG_RESULT, value_dst.stack_point);
+                emit_multiword_addr_to_addr(gen, function, loc, REG_RESULT, REG_T, REG_U, td->size);
+            } else {
+                emit_addr_to_reg(gen, function, loc, type2movsize(gen, dot_access->value_type), REG_RESULT, REG_RESULT, 0);
+            }
+            break;
+        }
+
+        default: UNREACHABLE(); break;
+        }
+    }
+
+    emit_reg_to_val_dst(gen, loc, function, dot_access->value_type, val_dst, REG_RESULT, REG_T, REG_U, false);
+
+    gen_pop_until_stack_point(gen, function, loc, clean_stack_point, true);
+
+}
+
 static void gen_block(gen_t *gen, function_t *function, ast_node_t *block, val_dst_t val_dst) {
     texloc_t loc = block->start.loc;
 
@@ -2161,7 +2204,10 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
             break;
         }
 
-        case AST_NODE_TYPE_EXPRESSION_DOT_ACCESS: break;
+        case AST_NODE_TYPE_EXPRESSION_DOT_ACCESS: {
+            gen_dot_access(gen, function, expression, val_dst);
+            break;
+        }
 
 
         // should be resolved at compile time

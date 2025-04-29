@@ -197,7 +197,9 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start) {
     node->is_exported = false;
     node->is_intrinsic = false;
     node->identifier = nil_token;
+    node->label = nil_token;
     node->ref_decl = &nil_node;
+    node->value_offset = 0;
 
     node->jmp_nodes.allocator = ast->arena;
     node->jmp_out_scope_node = &nil_node;
@@ -1783,7 +1785,22 @@ static ast_node_t *parse_dot(parser_t *parser) {
                     ast_node_t *none = &nil_node;
                     array_push(&initiailizer->children, none);
                 } else {
+                    token_t label = nil_token;
+                    if (check(parser, TOKEN_IDENTIFIER)) {
+                        lexer_t lookahead = parser->lexer;
+                        token_t maybe_colon = lexer_next_token(&lookahead);
+                        if (maybe_colon.type == TOKEN_COLON) {
+                            bool success = consume(parser, TOKEN_IDENTIFIER);
+
+                            label = parser->previous;
+
+                            success &= consume(parser, TOKEN_COLON);
+                            MUST(success);
+                        }
+                    }
                     ast_node_t *argument = parse_expression(parser);
+                    argument->label = label;
+
                     array_push(&initiailizer->children, argument);
                 }
             } while (match(parser, TOKEN_COMMA));
