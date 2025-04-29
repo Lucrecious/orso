@@ -199,6 +199,7 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start) {
     node->identifier = nil_token;
     node->label = nil_token;
     node->ref_decl = &nil_node;
+    node->arg_index = 0;
     node->value_offset = 0;
 
     node->jmp_nodes.allocator = ast->arena;

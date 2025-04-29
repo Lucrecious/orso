@@ -2022,6 +2022,9 @@ void resolve_expression(
                             arg = cast_implicitly_if_necessary(ast, field.type, arg);
                             expr->children.items[arg_index] = arg;
 
+                            arg->arg_index = i;
+                            arg->value_offset = field.offset;
+
                             if (!typeid_eq(arg->value_type, field.type)) {
                                 is_invalid = true;
                                 stan_error(analyzer, OR_ERROR(
@@ -2045,8 +2048,6 @@ void resolve_expression(
                         allocator_return(tmp);
                         break;
                     }
-
-                    MUST(is_constant);
 
                     if (is_constant) {
                         word_t *start;
@@ -2589,8 +2590,8 @@ void resolve_expression(
                 }
 
                 struct_field_t field = {0};
-                size_t _field_index;
-                bool success = ast_find_struct_field_by_name(ast, lhs_type, expr->identifier.view, &field, &_field_index);
+                size_t field_index;
+                bool success = ast_find_struct_field_by_name(ast, lhs_type, expr->identifier.view, &field, &field_index);
 
                 unless (success) {
                     stan_error(analyzer, OR_ERROR(
@@ -2605,6 +2606,7 @@ void resolve_expression(
                 }
 
                 expr->value_offset = field.offset;
+                expr->arg_index = field_index;
                 expr->value_type = field.type;
 
                 if (lhstd->kind != TYPE_POINTER && an_is_notnone(lhs->lvalue_node)) {

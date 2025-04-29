@@ -299,6 +299,7 @@ struct ast_node_t {
     ast_node_t *ref_decl;
     type_patterns_t type_decl_patterns;
 
+    size_t arg_index;
     size_t value_offset;
 
     bool is_free_number;

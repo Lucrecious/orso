@@ -1201,45 +1201,33 @@ static void gen_unary(gen_t *gen, function_t *function, ast_node_t *unary, val_d
     }
 }
 
-static void gen_expr_val(gen_t *gen, function_t *function, ast_node_t *expression, ast_node_val_t val_override, val_dst_t val_dst) {
-    if (TYPE_IS_VOID(expression->value_type)) {
-        // nop
-        return;
-    }
-
-    ASSERT(expression->expr_val.is_concrete || val_override.is_concrete, "must contain concrete value");
-
-    typedata_t *type_info = type2typedata(&gen->ast->type_set.types, expression->value_type);
-
-    ast_node_val_t val_ = expression->expr_val;
-    if (val_override.is_concrete) val_ = val_override;
-
-    word_t data = val_.word;
-    if (type_info->size > WORD_SIZE) {
-        gen_constant(gen, expression->start.loc, function, data.as.p, expression->value_type, val_dst);
+static void gen_expr_val(gen_t *gen, texloc_t loc, function_t *function, type_t type, word_t word, val_dst_t val_dst) {
+    typedata_t *td = ast_type2td(gen->ast, type);
+    if (td->size > WORD_SIZE) {
+        gen_constant(gen, loc, function, word.as.p, type, val_dst);
     } else {
-        switch (type_info->kind) {
+        switch (td->kind) {
         case TYPE_BOOL: {
-            u8 val = (u8)data.as.u;
-            gen_constant(gen, expression->start.loc, function, &val, expression->value_type, val_dst);
+            u8 val = (u8)word.as.u;
+            gen_constant(gen, loc, function, &val, type, val_dst);
         }
 
         case TYPE_NUMBER: {
-            switch (type_info->as.num) {
+            switch (td->as.num) {
             case NUM_TYPE_FLOAT: {
-                switch ((num_size_t)type_info->size) {
+                switch ((num_size_t)td->size) {
                 case NUM_SIZE_8:
                 case NUM_SIZE_16: UNREACHABLE(); break;
 
                 case NUM_SIZE_32: {
-                    f32 val = (f32)data.as.d;
-                    gen_constant(gen, expression->start.loc, function, &val, expression->value_type, val_dst);
+                    f32 val = (f32)word.as.d;
+                    gen_constant(gen, loc, function, &val, type, val_dst);
                     break;
                 }
 
                 case NUM_SIZE_64: {
-                    f64 val = (f64)data.as.d;
-                    gen_constant(gen, expression->start.loc, function, &val, expression->value_type, val_dst);
+                    f64 val = (f64)word.as.d;
+                    gen_constant(gen, loc, function, &val, type, val_dst);
                     break;
                 }
                 }
@@ -1248,27 +1236,27 @@ static void gen_expr_val(gen_t *gen, function_t *function, ast_node_t *expressio
 
             case NUM_TYPE_SIGNED:
             case NUM_TYPE_UNSIGNED: {
-                switch ((num_size_t)type_info->size) {
+                switch ((num_size_t)td->size) {
                 case NUM_SIZE_8: {
-                    u8 val = (u8)data.as.u;
-                    gen_constant(gen, expression->start.loc, function, &val, expression->value_type, val_dst);
+                    u8 val = (u8)word.as.u;
+                    gen_constant(gen, loc, function, &val, type, val_dst);
                     break;
                 }
                 case NUM_SIZE_16: {
-                    u16 val = (u16)data.as.u;
-                    gen_constant(gen, expression->start.loc, function, &val, expression->value_type, val_dst);
+                    u16 val = (u16)word.as.u;
+                    gen_constant(gen, loc, function, &val, type, val_dst);
                     break;
                 }
 
                 case NUM_SIZE_32: {
-                    u32 val = (u32)data.as.u;
-                    gen_constant(gen, expression->start.loc, function, &val, expression->value_type, val_dst);
+                    u32 val = (u32)word.as.u;
+                    gen_constant(gen, loc, function, &val, type, val_dst);
                     break;
                 }
 
                 case NUM_SIZE_64: {
-                    u64 val = (u64)data.as.u;
-                    gen_constant(gen, expression->start.loc, function, &val, expression->value_type, val_dst);
+                    u64 val = (u64)word.as.u;
+                    gen_constant(gen, loc, function, &val, type, val_dst);
                     break;
                 }
                 }
@@ -1284,7 +1272,7 @@ static void gen_expr_val(gen_t *gen, function_t *function, ast_node_t *expressio
         case TYPE_INTRINSIC_FUNCTION:
         case TYPE_ARRAY:
         case TYPE_STRUCT: {
-            gen_constant(gen, expression->start.loc, function, &data, expression->value_type, val_dst);
+            gen_constant(gen, loc, function, &word, type, val_dst);
             break;
         }
 
@@ -1298,6 +1286,20 @@ static void gen_expr_val(gen_t *gen, function_t *function, ast_node_t *expressio
         case TYPE_COUNT: UNREACHABLE(); break;
         }
     }
+}
+
+static void gen_expr_val_node(gen_t *gen, function_t *function, ast_node_t *expression, ast_node_val_t val_override, val_dst_t val_dst) {
+    if (TYPE_IS_VOID(expression->value_type)) {
+        // nop
+        return;
+    }
+
+    ASSERT(expression->expr_val.is_concrete || val_override.is_concrete, "must contain concrete value");
+
+    ast_node_val_t val_ = expression->expr_val;
+    if (val_override.is_concrete) val_ = val_override;
+
+    gen_expr_val(gen, expression->start.loc, function, expression->value_type, val_.word, val_dst);
 }
 
 static void gen_add_local(gen_t *gen, ast_node_t *declaration, size_t stack_location) {
@@ -1832,14 +1834,14 @@ static void gen_bcall(gen_t *gen, function_t *function, ast_node_t *call, val_ds
     switch (call->identifier.type) {
     case TOKEN_TYPEOF: {
         ast_node_val_t val = call->children.items[arg1_index]->expr_val;
-        gen_expr_val(gen, function, call, val, val_dst);
+        gen_expr_val_node(gen, function, call, val, val_dst);
         break;
     }
 
     case TOKEN_SIZEOF: {
         typedata_t *td = type2typedata(&gen->ast->type_set.types, call->children.items[arg1_index]->expr_val.word.as.t);
         ast_node_val_t val = ast_node_val_word(WORDU(td->size));
-        gen_expr_val(gen, function, call, val, val_dst);
+        gen_expr_val_node(gen, function, call, val, val_dst);
         break;
     }
 
@@ -2038,10 +2040,12 @@ static void gen_initializer_list(gen_t *gen, function_t *function, ast_node_t *l
     typedata_t *td = ast_type2td(gen->ast, list->value_type);
     texloc_t loc = list->start.loc;
 
+    size_t clean_stack_point = gen_stack_point(gen);
+    emit_reserve_stack_space(gen, loc, function, b2w(td->size)*WORD_SIZE);
+    size_t value_stack_point = gen_stack_point(gen);
+
     switch (td->kind) {
         case TYPE_ARRAY: {
-            emit_reserve_stack_space(gen, loc, function, b2w(td->size)*WORD_SIZE);
-
             for (size_t i = an_list_start(list); i < an_list_end(list); ++i) {
                 size_t i_ = i - an_list_start(list);
                 ast_node_t *arg = list->children.items[i];
@@ -2064,13 +2068,22 @@ static void gen_initializer_list(gen_t *gen, function_t *function, ast_node_t *l
                     emit_reg_to_addr(gen, function, loc, type2movsize(gen, arg->value_type), REG_STACK_BOTTOM, REG_RESULT, i_*inner_item_size);
                 }
             }
+            break;
+        }
 
-            if (td->size > WORD_SIZE) {
-                emit_reg_to_reg(function, loc, REG_RESULT, REG_STACK_BOTTOM);
-            } else {
-                emit_addr_to_reg(gen, function, loc, REG_MOV_SIZE_WORD, REG_RESULT, REG_STACK_BOTTOM, 0);
-                size_t pop_amount = b2w(td->size)*WORD_SIZE;
-                emit_popn_bytes(gen, function, pop_amount, list->start.loc, true);
+        case TYPE_STRUCT: {
+            size_t arg_pos_index = 0;
+            size_t args_count = an_list_end(list) - an_list_start(list);
+            for (size_t i = 0; i < td->as.struct_.fields.count; ++i) {
+                struct_field_t field = td->as.struct_.fields.items[i];
+                ast_node_t *arg = NULL;
+                val_dst_t dst = val_dst_stack_point(value_stack_point - field.offset);
+                if (arg_pos_index < args_count && (arg = list->children.items[an_list_start(list) + arg_pos_index])->arg_index == i) {
+                    ++arg_pos_index;
+                    gen_expression(gen, function, arg, dst);
+                } else {
+                    gen_expr_val(gen, loc, function, field.type, field.default_value, dst);
+                }
             }
             break;
         }
@@ -2078,7 +2091,14 @@ static void gen_initializer_list(gen_t *gen, function_t *function, ast_node_t *l
         default: UNREACHABLE(); break;
     }
 
+    if (td->size > WORD_SIZE) {
+        emit_reg_to_reg(function, loc, REG_RESULT, REG_STACK_BOTTOM);
+    } else {
+        emit_addr_to_reg(gen, function, loc, REG_MOV_SIZE_WORD, REG_RESULT, REG_STACK_BOTTOM, 0);
+    }
+
     emit_reg_to_val_dst(gen, loc, function, list->value_type, val_dst, REG_RESULT, REG_T, REG_U, true);
+    gen_pop_until_stack_point(gen, function, loc, clean_stack_point, true);
 }
 
 static void gen_dot_access(gen_t *gen, function_t *function, ast_node_t *dot_access, val_dst_t val_dst) {
@@ -2165,7 +2185,7 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
     ASSERT(ast_node_type_is_expression(expression->node_type), "must be expression");
 
     if (expression->expr_val.is_concrete) {
-        gen_expr_val(gen, function, expression, ast_node_val_nil(), val_dst);
+        gen_expr_val_node(gen, function, expression, ast_node_val_nil(), val_dst);
         return;
     }
 
