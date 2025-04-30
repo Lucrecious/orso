@@ -1552,6 +1552,10 @@ static void gen_assignment(gen_t *gen, function_t *function, ast_node_t *assignm
             emit_stack_point_to_reg(gen, function, loc, REG_RESULT, lvalue_stack_point);
             emit_addr_to_reg(gen, function, loc, REG_MOV_SIZE_WORD, REG_RESULT, REG_RESULT, 0);
 
+            if (td->size <= WORD_SIZE) {
+                emit_addr_to_reg(gen, function, loc, type2movsize(gen, assignment->value_type), REG_RESULT, REG_RESULT, 0);
+            }
+
             size_t stack_point = gen_stack_point(gen);
             emit_push_reg(gen, loc, function, REG_RESULT, REG_T, type2movsize(gen, assignment->value_type), td->size);
             size_t operand_stack_point = gen_stack_point(gen);

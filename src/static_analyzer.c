@@ -2691,13 +2691,15 @@ void resolve_expression(
             case TOKEN_PERCENT_PERCENT_EQUAL: {
                 typedata_t *td = ast_type2td(ast, lhs->value_type);
                 if ((td->capabilities & TYPE_CAP_ARITHMETIC) == 0) {
-                    stan_error(analyzer, OR_ERROR(
-                        .tag = ERROR_ANALYSIS_EXPECTED_LVALUE,
-                        .level = ERROR_SOURCE_ANALYSIS,
-                        .msg = lit2str("type '$1.$' does not have arithmetic capabilities"),
-                        .args = ORERR_ARGS(error_arg_node(lhs), error_arg_type(lhs->value_type)),
-                        .show_code_lines = ORERR_LINES(0),
-                    ));
+                    unless (TYPE_IS_INVALID(lhs->value_type)) {
+                        stan_error(analyzer, OR_ERROR(
+                            .tag = ERROR_ANALYSIS_EXPECTED_LVALUE,
+                            .level = ERROR_SOURCE_ANALYSIS,
+                            .msg = lit2str("type '$1.$' does not have arithmetic capabilities"),
+                            .args = ORERR_ARGS(error_arg_node(lhs), error_arg_type(lhs->value_type)),
+                            .show_code_lines = ORERR_LINES(0),
+                        ));
+                    }
                 }
                 break;
             }
@@ -2991,13 +2993,15 @@ void resolve_expression(
             }
 
             if ((!type_is_function(ast->type_set.types, callee_type) && !type_is_intrinsic_function(ast->type_set.types, callee_type))) {
-                stan_error(analyzer, OR_ERROR(
-                    .tag = ERROR_ANALYSIS_EXPECTED_CALLABLE,
-                    .level = ERROR_SOURCE_ANALYSIS,
-                    .msg = lit2str("expected a callable type but got '$0.type$' instead"),
-                    .args = ORERR_ARGS(error_arg_node(callee)),
-                    .show_code_lines = ORERR_LINES(0),
-                ));
+                unless (TYPE_IS_INVALID(callee_type)) {
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = ERROR_ANALYSIS_EXPECTED_CALLABLE,
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("expected a callable type but got '$0.type$' instead"),
+                        .args = ORERR_ARGS(error_arg_node(callee)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
+                }
                 break;
             }
 
