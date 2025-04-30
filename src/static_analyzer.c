@@ -2104,13 +2104,15 @@ void resolve_expression(
             }
 
             default: {
-                stan_error(analyzer, OR_ERROR(
-                    .tag = ERROR_ANALYSIS_INVALID_EXPRESSION_FOR_LIST_INIT,
-                    .level = ERROR_SOURCE_ANALYSIS,
-                    .msg = lit2str("invalid expression for initialization list"),
-                    .args = ORERR_ARGS(error_arg_node(type_expr)),
-                    .show_code_lines = ORERR_LINES(0),
-                ));
+                unless (TYPE_IS_INVALID(type_expr->value_type)) {
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = ERROR_ANALYSIS_INVALID_EXPRESSION_FOR_LIST_INIT,
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("invalid expression for initialization list"),
+                        .args = ORERR_ARGS(error_arg_node(type_expr)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
+                }
                 break;
             }
             
@@ -3394,13 +3396,15 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
             if (TYPE_IS_UNRESOLVED(decl_type->value_type)) {
                 decl->value_type = typeid(TYPE_UNRESOLVED);
             } else {
-                stan_error(analyzer, OR_ERROR(
-                    .tag = ERROR_ANALYSIS_EXPECTED_TYPE,
-                    .level = ERROR_SOURCE_ANALYSIS,
-                    .msg = lit2str("expected type expression for declaration"),
-                    .args = ORERR_ARGS(error_arg_node(decl_type)),
-                    .show_code_lines = ORERR_LINES(0),
-                ));
+                unless (TYPE_IS_INVALID(decl_type->value_type)) {
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = ERROR_ANALYSIS_EXPECTED_TYPE,
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("expected type expression for declaration"),
+                        .args = ORERR_ARGS(error_arg_node(decl_type)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
+                }
                 INVALIDATE(decl);
             }
         } else if (TYPE_IS_RESOLVED(decl_type->value_type)) {

@@ -1,54 +1,8 @@
 main :: () -> void {
-    {
-        pair_t :: struct {
-            a := 0;
-            b := 0;
-        };
-
-        print :: (pair: pair_t) -> void {
-            printint(pair.a);
-            println();
-            printint(pair.b);
-            println();
-        };
-
-        c :=  pair_t.{23, 3} + pair_t.{46, 39};
-        print(c);
-
-        a := pair_t.{1,2};
-        b := pair_t.{3,4};
-
-        print(a);
-        print(b);
-
-        c = a + b;
-
-        print(c);
-
-        c += a;
-        print(c);
-
-        {
-            pairs_t :: struct {
-                a := pair_t.{};
-                b := pair_t.{};
-                c := pair_t.{};
-            };
-
-            pairs := pairs_t.{.{1, 2}, .{3, 4}, .{5, 6}};
-            print(pairs.a);
-            print(pairs.b);
-            print(pairs.c);
-
-            pairs = pairs + pairs;
-            print(pairs.a);
-            print(pairs.b);
-            print(pairs.c);
-
-            pairs += pairs;
-            print(pairs.a);
-            print(pairs.b);
-            print(pairs.c);
-        };
+    foo_t :: struct {
+        inner_foo: &foo_t;
     };
+
+    foo := foo_t.{};
+    foo;
 };
