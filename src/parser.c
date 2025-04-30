@@ -222,22 +222,28 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start) {
             break;
         }
 
-        case AST_NODE_TYPE_EXPR_INFERRED_TYPE_DECL: {
+        case AST_NODE_TYPE_EXPR_INFERRED_TYPE_DECL: break;
+
+        case AST_NODE_TYPE_EXPRESSION_ARRAY_ITEM_ACCESS: {
+            array_push(&node->children, &nil_node);
+            array_push(&node->children, &nil_node);
             break;
         }
 
-        case AST_NODE_TYPE_EXPRESSION_ARRAY_ITEM_ACCESS:
-        case AST_NODE_TYPE_EXPRESSION_ASSIGNMENT:
+        case AST_NODE_TYPE_EXPRESSION_ASSIGNMENT: {
+            array_push(&node->children, &nil_node);
+            array_push(&node->children, &nil_node);
+            break;
+        }
+
         case AST_NODE_TYPE_EXPRESSION_BINARY: {
             array_push(&node->children, &nil_node);
             array_push(&node->children, &nil_node);
             break;
         }
         
-        case AST_NODE_TYPE_MODULE:
-        case AST_NODE_TYPE_EXPRESSION_BLOCK: {
-            break;
-        }
+        case AST_NODE_TYPE_MODULE: break;
+        case AST_NODE_TYPE_EXPRESSION_BLOCK: break;
         
         case AST_NODE_TYPE_EXPRESSION_BRANCHING: {
             array_push(&node->children, &nil_node);
@@ -248,20 +254,47 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start) {
             break;
         }
 
-        case AST_NODE_TYPE_EXPRESSION_BUILTIN_CALL: {
+        case AST_NODE_TYPE_EXPRESSION_BUILTIN_CALL: break;
+
+        case AST_NODE_TYPE_EXPRESSION_CALL: {
             array_push(&node->children, &nil_node);
             break;
         }
-        
-        case AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE:
+
+        case AST_NODE_TYPE_DECLARATION_STATEMENT: {
+            array_push(&node->children, &nil_node);
+            break;
+        }
+
+        case AST_NODE_TYPE_EXPRESSION_UNARY: {
+            array_push(&node->children, &nil_node);
+            break;
+        }
+
+        case AST_NODE_TYPE_EXPRESSION_CAST: {
+            array_push(&node->children, &nil_node);
+            array_push(&node->children, &nil_node);
+            break;
+        }
+
+        case AST_NODE_TYPE_EXPRESSION_JMP: {
+            array_push(&node->children, &nil_node);
+            break;
+        }
+
+        case AST_NODE_TYPE_EXPRESSION_GROUPING: {
+            array_push(&node->children, &nil_node);
+            break;
+        }
+    
         case AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION:
-        case AST_NODE_TYPE_EXPRESSION_UNARY:
-        case AST_NODE_TYPE_EXPRESSION_CAST:
-        case AST_NODE_TYPE_DECLARATION_STATEMENT:
-        case AST_NODE_TYPE_EXPRESSION_JMP:
-        case AST_NODE_TYPE_EXPRESSION_GROUPING:
-        case AST_NODE_TYPE_EXPRESSION_ARRAY_TYPE:
-        case AST_NODE_TYPE_EXPRESSION_CALL: {
+        case AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE: {
+            array_push(&node->children, &nil_node);
+            array_push(&node->children, &nil_node);
+            break;
+        }
+
+        case AST_NODE_TYPE_EXPRESSION_ARRAY_TYPE: {
             array_push(&node->children, &nil_node);
             array_push(&node->children, &nil_node);
             break;
@@ -272,22 +305,16 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start) {
             break;
         }
 
-        case AST_NODE_TYPE_EXPRESSION_STRUCT: {
-            break;
-        }
+        case AST_NODE_TYPE_EXPRESSION_STRUCT: break;
 
-        case AST_NODE_TYPE_EXPRESSION_DIRECTIVE:
-        case AST_NODE_TYPE_EXPRESSION_PRIMARY:
-            break;
+        case AST_NODE_TYPE_EXPRESSION_DIRECTIVE: break;
+        case AST_NODE_TYPE_EXPRESSION_PRIMARY: break;
         
-        case AST_NODE_TYPE_EXPRESSION_NIL: {
-            break;
-        }
+        case AST_NODE_TYPE_EXPRESSION_DEF_VALUE: break;
+        case AST_NODE_TYPE_EXPRESSION_NIL: break;
         
-        case AST_NODE_TYPE_EXPRESSION_DEF_VALUE:
         case AST_NODE_TYPE_EXPRESSION_DOT_ACCESS: {
             array_push(&node->children, &nil_node);
-            node->identifier = nil_token;
             break;
         }
 
@@ -720,6 +747,15 @@ static ast_node_t *ast_for(ast_t *ast, ast_node_t *decl, ast_node_t *cond, ast_n
     return n;
 }
 
+static ast_node_t *ast_call_begin(ast_t *ast, ast_node_type_t type, token_t start) {
+    ast_node_t *call = ast_node_new(ast, type, start);
+    return call;
+}
+
+static void ast_call_end(ast_node_t *call, token_t end) {
+    call->end = end;
+}
+
 static void parser_init(parser_t *parser, ast_t *ast, string_t file_path, string_view_t source) {
     lexer_init(&parser->lexer, file_path, source);
     parser->ast = ast;
@@ -1067,11 +1103,10 @@ static ast_node_t *parse_builtin_call(parser_t *parser) {
         ));
     }
 
-    ast_node_t *n = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_BUILTIN_CALL, identifier);
-    n->children.count = 0;
+    ast_node_t *n = ast_call_begin(parser->ast, AST_NODE_TYPE_EXPRESSION_BUILTIN_CALL, identifier);
     n->identifier = identifier;
     parse_arguments(parser, n);
-    n->end = parser->previous;
+    ast_call_end(n, parser->previous);
 
     return n;
 }
@@ -1596,12 +1631,12 @@ static ast_node_t *parse_grouping_or_function_signature_or_definition(parser_t *
 }
 
 static ast_node_t *parse_call(parser_t *parser) {
-    ast_node_t *call = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_CALL, parser->previous);
-
+    ast_node_t *call = ast_call_begin(parser->ast, AST_NODE_TYPE_EXPRESSION_CALL, parser->previous);
     an_callee(call) = ast_nil(parser->ast, typeid(TYPE_VOID), token_implicit_at_end(parser->previous));
-    call->children.count = an_call_arg_start(call);
+    MUST(call->children.count == 1);
     parse_arguments(parser, call);
-    call->end = parser->previous;
+
+    ast_call_end(call, parser->previous);
 
     return call;
 }
@@ -1644,15 +1679,6 @@ static ast_node_t *parse_inferred_type_decl(parser_t *parser) {
 
     ast_node_t *inferred_type_decl = ast_inferred_type_decl(parser->ast, first_token, identifier);
     return inferred_type_decl;
-}
-
-static ast_node_t *ast_call_begin(ast_t *ast, ast_node_type_t type, token_t start) {
-    ast_node_t *call = ast_node_new(ast, type, start);
-    return call;
-}
-
-static void ast_call_end(ast_node_t *call, token_t end) {
-    call->end = end;
 }
 
 static ast_node_t *parse_directive(parser_t *parser) {

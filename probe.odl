@@ -1,31 +1,50 @@
 main :: () -> void {
-    foo_t :: struct {
-        a := 5;
-        b := false;
-        c: f64 = 32.5;
+    {
+        print :: (arr: [2][2]!u) -> void {
+            for i := 0; i < len(arr); ++i do
+                for j := 0; j < len(arr[0]); ++j {
+                    printint(arr[i][j] as int);
+                    println();
+                };
+            println();
+        };
+
+        a := [2][2]s64.{.{1, 2}, .{3, 4}};
+        b := [2][2]s64.{.{10, 20}, .{30, 40}};
+        print(a);
+        print(b);
+        c = a + b;
+        print(c);
+        println();
     };
 
-    printfoo :: (foo: &foo_t) -> void {
-        printint(foo.a);
-        println();
-        printint(if foo.b then 1 else 0);
-        println();
-        printf64(foo.c);
-        println();
-    };
+    // {
+    //     pair_t :: struct {
+    //         a := 0;
+    //         b := 0;
+    //     };
 
-    a := 20;
-    b := true;
-    c := 42.5;
-    foo := foo_t.{a, b};
+    //     print :: (pair: pair_t) -> void {
+    //         printint(pair.a);
+    //         println();
+    //         printint(pair.b);
+    //         println();
+    //     };
 
-    printfoo(&foo);
+    //     c :=  pair_t.{23, 3} + pair_t.{46, 39};
+    //     print(c);
 
-    foo = foo_t.{c: c};
+    //     a := pair_t.{1,2};
+    //     b := pair_t.{3,4};
 
-    printfoo(&foo);
+    //     print(a);
+    //     print(b);
 
-    foo = foo_t.{b: b, 50};
+    //     c = a + b;
 
-    printfoo(&foo);
+    //     print(c);
+
+    //     c += a;
+    //     print(c);
+    // };
 };

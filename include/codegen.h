@@ -537,12 +537,19 @@ static void emit_bin_op_aggregates(gen_t *gen, texloc_t loc, function_t *functio
         size_t aligned_size = td_align(innertd->size, innertd->alignment);
         for (size_t i = 0; i < count; ++i) {
             size_t d = i*aligned_size;
-            emit_bin_op_aggregates(gen, loc, function, token_type, td->as.arr.type, op1_stack_point-d, op2_stack_point-d, val_dst, d);
+            emit_bin_op_aggregates(gen, loc, function, token_type, td->as.arr.type, op1_stack_point-d, op2_stack_point-d, val_dst, d+byte_offset);
         }
         break;
     }
 
-    case TYPE_STRUCT: UNREACHABLE(); break; // todo
+    case TYPE_STRUCT: {
+        for (size_t i = 0; i < td->as.struct_.fields.count; ++i) {
+            struct_field_t field = td->as.struct_.fields.items[i];
+            emit_bin_op_aggregates(gen, loc, function, token_type, field.type, op1_stack_point-field.offset, op2_stack_point-field.offset, val_dst, field.offset+byte_offset);
+        }
+        break;
+    }
+
     case TYPE_STRING: UNREACHABLE(); break; // todo
 
     case TYPE_NUMBER:
@@ -1724,14 +1731,11 @@ static void gen_intrinsic_call(gen_t *gen, function_t *function, ast_node_t *cal
 
     size_t stack_point = gen_stack_point(gen);
 
-    // place arguments on stack for call
-    unless (TYPE_IS_VOID(call->children.items[an_call_arg_start(call)]->value_type)) {
-        for (size_t i = an_call_arg_start(call); i < an_call_arg_end(call); ++i) {
-            ast_node_t *arg = call->children.items[i];
-            {
-                val_dst_t dst = emit_val_dst_stack_reserve(gen, loc, function, arg->value_type);
-                gen_expression(gen, function, arg, dst);
-            }
+    for (size_t i = an_call_arg_start(call); i < an_call_arg_end(call); ++i) {
+        ast_node_t *arg = call->children.items[i];
+        {
+            val_dst_t dst = emit_val_dst_stack_reserve(gen, loc, function, arg->value_type);
+            gen_expression(gen, function, arg, dst);
         }
     }
 

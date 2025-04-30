@@ -500,6 +500,7 @@ word_t ast_item_get(ast_t *ast, bool is_addr, word_t aggregate, type_t item_type
         return WORDP(res);
     }
 
+    case TYPE_STRUCT:
     case TYPE_ARRAY: {
         if (td->size > WORD_SIZE) {
             return WORDP(addr);
@@ -570,7 +571,6 @@ word_t ast_item_get(ast_t *ast, bool is_addr, word_t aggregate, type_t item_type
         }
     }
 
-    case TYPE_STRUCT: UNREACHABLE(); break; // todo
     case TYPE_STRING: UNREACHABLE(); break; // todo
 
     case TYPE_INVALID:
@@ -773,7 +773,19 @@ void constant_fold_bin_arithmetic(ast_t *ast, token_type_t operator, type_t type
         break;
     }
 
-    case TYPE_STRUCT: UNREACHABLE(); /*todo*/ break;
+    case TYPE_STRUCT: {
+        void *struct_addr = result;
+
+        for (size_t i = 0; i < td->as.struct_.fields.count; ++i) {
+            struct_field_t field = td->as.struct_.fields.items[i];
+            word_t item_l = ast_item_get(ast, td->size > WORD_SIZE, l, field.type, field.offset);
+            word_t item_r = ast_item_get(ast, td->size > WORD_SIZE, r, field.type, field.offset);
+
+            void *addr = struct_addr + field.offset;
+            constant_fold_bin_arithmetic(ast, operator, field.type, item_l, item_r, addr);
+        }
+        break;
+    }
 
     default: UNREACHABLE(); break;
     }
@@ -1121,13 +1133,15 @@ static matched_value_t stan_pattern_match_or_error(analyzer_t *analyzer, ast_nod
     switch (expected->kind) {
     case MATCH_TYPE_POINTER: {
         if (td->kind != TYPE_POINTER) {
-            stan_error(analyzer, OR_ERROR(
-                .tag = ERROR_ANALYSIS_COULD_NOT_PATTERN_MATCH_TYPE,
-                .level = ERROR_SOURCE_ANALYSIS,
-                .msg = lit2str("cannot match inferred declaration with argument type"),
-                .args = ORERR_ARGS(error_arg_node(arg), error_arg_node(an_decl_type(decl))),
-                .show_code_lines = ORERR_LINES(0, 1),
-            ));
+            unless (TYPE_IS_INVALID(actual)) {
+                stan_error(analyzer, OR_ERROR(
+                    .tag = ERROR_ANALYSIS_COULD_NOT_PATTERN_MATCH_TYPE,
+                    .level = ERROR_SOURCE_ANALYSIS,
+                    .msg = lit2str("cannot match inferred declaration with argument type"),
+                    .args = ORERR_ARGS(error_arg_node(arg), error_arg_node(an_decl_type(decl))),
+                    .show_code_lines = ORERR_LINES(0, 1),
+                ));
+            }
             return (matched_value_t){.type=typeid(TYPE_INVALID)};
         }
 
@@ -1136,13 +1150,15 @@ static matched_value_t stan_pattern_match_or_error(analyzer_t *analyzer, ast_nod
 
     case MATCH_TYPE_ARRAY_TYPE: {
         if (td->kind != TYPE_ARRAY) {
-            stan_error(analyzer, OR_ERROR(
-                .tag = ERROR_ANALYSIS_COULD_NOT_PATTERN_MATCH_TYPE,
-                .level = ERROR_SOURCE_ANALYSIS,
-                .msg = lit2str("cannot match inferred declaration with argument type"),
-                .args = ORERR_ARGS(error_arg_node(arg), error_arg_node(an_decl_type(decl))),
-                .show_code_lines = ORERR_LINES(0, 1),
-            ));
+            unless (TYPE_IS_INVALID(actual)) {
+                stan_error(analyzer, OR_ERROR(
+                    .tag = ERROR_ANALYSIS_COULD_NOT_PATTERN_MATCH_TYPE,
+                    .level = ERROR_SOURCE_ANALYSIS,
+                    .msg = lit2str("cannot match inferred declaration with argument type"),
+                    .args = ORERR_ARGS(error_arg_node(arg), error_arg_node(an_decl_type(decl))),
+                    .show_code_lines = ORERR_LINES(0, 1),
+                ));
+            }
             return (matched_value_t){.type=typeid(TYPE_INVALID)};
         }
 
@@ -1151,13 +1167,15 @@ static matched_value_t stan_pattern_match_or_error(analyzer_t *analyzer, ast_nod
 
     case MATCH_TYPE_ARRAY_SIZE: {
         if (td->kind != TYPE_ARRAY) {
-            stan_error(analyzer, OR_ERROR(
-                .tag = ERROR_ANALYSIS_COULD_NOT_PATTERN_MATCH_TYPE,
-                .level = ERROR_SOURCE_ANALYSIS,
-                .msg = lit2str("cannot match inferred declaration with argument type"),
-                .args = ORERR_ARGS(error_arg_node(arg), error_arg_node(an_decl_type(decl))),
-                .show_code_lines = ORERR_LINES(0, 1),
-            ));
+            unless (TYPE_IS_INVALID(actual)) {
+                stan_error(analyzer, OR_ERROR(
+                    .tag = ERROR_ANALYSIS_COULD_NOT_PATTERN_MATCH_TYPE,
+                    .level = ERROR_SOURCE_ANALYSIS,
+                    .msg = lit2str("cannot match inferred declaration with argument type"),
+                    .args = ORERR_ARGS(error_arg_node(arg), error_arg_node(an_decl_type(decl))),
+                    .show_code_lines = ORERR_LINES(0, 1),
+                ));
+            }
             return (matched_value_t){.type=typeid(TYPE_INVALID)};
         }
 
@@ -2699,7 +2717,7 @@ void resolve_expression(
             expr->value_type = lvalue_node->value_type;
 
             type_t rhs_type = rhs->value_type;
-            unless (TYPE_IS_INVALID(rhs_type) || typeid_eq(lvalue_node->value_type, rhs_type)) {
+            unless (TYPE_IS_INVALID(rhs_type) || TYPE_IS_INVALID(lhs->value_type) || typeid_eq(lvalue_node->value_type, rhs_type)) {
                 stan_error(analyzer, OR_ERROR(
                     .tag = ERROR_ANALYSIS_TYPE_MISMATCH,
                     .level = ERROR_SOURCE_ANALYSIS,
@@ -2947,13 +2965,6 @@ void resolve_expression(
                 ast_node_t *inferred_funcdef = (ast_node_t*)callee->expr_val.word.as.p;
 
                 ast_node_t *realized_funcdef = stan_realize_inferred_funcdef_or_error_and_null(analyzer, state, expr, inferred_funcdef);
-                {
-                    function_t *function = (function_t*)realized_funcdef->expr_val.word.as.p;
-                    size_t dep_start = stan_function_is_building(analyzer, function);
-                    if (dep_start < analyzer->pending_dependencies.count) {
-                        stan_circular_dependency_error(analyzer, ast, callee, dep_start);
-                    }
-                }
 
                 unless (realized_funcdef) {
                     INVALIDATE(expr);
@@ -2963,6 +2974,14 @@ void resolve_expression(
                 if (TYPE_IS_INVALID(realized_funcdef->value_type)) {
                     INVALIDATE(expr);
                     break;
+                }
+
+                {
+                    function_t *function = (function_t*)realized_funcdef->expr_val.word.as.p;
+                    size_t dep_start = stan_function_is_building(analyzer, function);
+                    if (dep_start < analyzer->pending_dependencies.count) {
+                        stan_circular_dependency_error(analyzer, ast, callee, dep_start);
+                    }
                 }
 
                 callee = ast_implicit_expr(ast, realized_funcdef->value_type, realized_funcdef->expr_val.word, callee->start);
