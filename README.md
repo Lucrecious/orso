@@ -94,9 +94,28 @@ add :: (a: sint, b: sint) -> void => a + b;
 
 #### Struct Definition Expressions
 ```python
-# (not implemented yet)
 bar_t :: struct {
   drink_count: sint;
+};
+```
+
+Instantiating and accessing fields like this
+```python
+omallys := bar_t.{ drink_count: 10_000 };
+jims := bar_t.{ 100 };
+
+if omallys.drink_count > jims.drink_count then
+  printint(1)
+else
+  printint(0);
+```
+
+The dot operator works on pointers to structs as well
+```python
+buy_drink :: (bar: &bar_t, amount: sint) -> void {
+  if bar.drink_count > amount then
+    amount = bar.drink_count;
+  bar.drink_count -= amount;
 };
 ```
 
@@ -112,6 +131,34 @@ alias_for_sint != var_for_sint and var_for_sint == int;
 ```
 
 There are many more expressions, but these examples should highlight the idea.
+
+### Flexible Arithmetic
+All types that are capable of arithmetic operations are flagged as such. For primitives, this just means the number types.
+However, arithmetic operations are common between aggregate types as well. It's not uncommon to create an aggregate type
+to model a positon (vector) or rotation (quarternion).
+
+In orso, aggregates types that are made up of types capable of arithmetic, can also be used for arithmetics.
+```python
+vec3_t :: struct {
+  x := 0.0;
+  y := 0.0;
+  z := 0.0;
+};
+
+a := vec3_t.{1, 2, 3};
+b := vec3_t.{4, 5, 6};
+
+# adding structs composed of arithmetic types is fine
+c := a + b;
+
+matrix_t :: [3][3]f64;
+
+mat1 := matrix_t.{.{1, 0, 0}, .{0, 1, 0}, .{0, 0, 1}};
+mat2 := matrix_t.{.{0, 0, 1}, .{0, 1, 0}, .{1, 0, 0}};
+
+# adding arrays composed of arithmetic types is fine
+mat3 := mat1 + mat2;
+```
 
 ### Metaprogramming
 While the metaprogramming features are minimal, they are quite powerful.
