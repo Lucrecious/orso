@@ -1233,6 +1233,19 @@ static ast_node_t *find_realized_funcdef_or_null_by_inferred_types(inferred_func
     return NULL;
 }
 
+static size_t stan_is_struct_circular(analyzer_t *analyzer, ast_node_t *expr) {
+    size_t index;
+    for (size_t i = analyzer->pending_dependencies.count; i > 0; --i) {
+        index = i-1;
+        ast_node_t *dep = analyzer->pending_dependencies.items[index];
+        if (dep == expr) {
+            return index;
+        }
+    }
+
+    return analyzer->pending_dependencies.count;
+}
+
 static void stan_circular_dependency_error(analyzer_t *analyzer, ast_t *ast, ast_node_t *def, size_t dep_start_index) {
     ast_nodes_t *deps = arena_alloc(ast->arena, sizeof(ast_nodes_t));
     *deps = (ast_nodes_t){.allocator=ast->arena};
@@ -1249,6 +1262,65 @@ static void stan_circular_dependency_error(analyzer_t *analyzer, ast_t *ast, ast
         .args = ORERR_ARGS(error_arg_node(def), error_arg_ptr(deps)),
         .show_code_lines = ORERR_LINES(0),
     ));
+}
+
+static void resolve_struct(analyzer_t *analyzer, ast_t *ast, analysis_state_t state, ast_node_t *struct_def);
+
+static void retry_struct_resolve(analyzer_t *analyzer, ast_node_t *dep_expr, type_t struct_type) {
+    ast_node_t *struct_decl = NULL;
+    for (size_t i = analyzer->pending_dependencies.count; i > 0; --i) {
+        ast_node_t *dep = analyzer->pending_dependencies.items[i-1];
+        if (dep->node_type != AST_NODE_TYPE_EXPRESSION_STRUCT) continue;
+        if (TYPE_IS_UNRESOLVED(dep->value_type)) continue;
+        unless (dep->expr_val.is_concrete) continue;
+
+        unless (TYPE_IS_TYPE(dep->value_type)) continue;
+
+        if (typeid_eq(dep->expr_val.word.as.t, struct_type)) {
+            struct_decl = dep;
+            break;
+        }
+    }
+
+    MUST(struct_decl);
+
+    {
+        array_push(&analyzer->pending_dependencies, dep_expr);
+
+        scope_t *scope = &struct_decl->child_scope;
+        analysis_state_t state = {0};
+        state.scope = scope;
+        resolve_struct(analyzer, analyzer->ast, state, struct_decl);
+
+        --analyzer->pending_dependencies.count;
+    }
+}
+
+static bool retry_resolve_possible_struct_or_error(analyzer_t *analyzer, ast_node_t *dep_expr, type_t struct_type) {
+    typedata_t *td = ast_type2td(analyzer->ast, struct_type);
+    if (td->kind != TYPE_STRUCT || td->as.struct_.status == STRUCT_STATUS_COMPLETE) {
+        return true;
+    }
+
+    if (td->as.struct_.status == STRUCT_STATUS_INVALID) {
+        return false;
+    }
+
+    size_t dep_index  = stan_is_struct_circular(analyzer, dep_expr);
+
+    if (dep_index < analyzer->pending_dependencies.count) {
+        stan_circular_dependency_error(analyzer, analyzer->ast, dep_expr, dep_index);
+        return false;
+    }
+
+    array_push(&analyzer->pending_dependencies, dep_expr);
+
+    retry_struct_resolve(analyzer, dep_expr, struct_type);
+
+    --analyzer->pending_dependencies.count;
+
+    bool is_invalid = td->as.struct_.status == STRUCT_STATUS_INVALID;
+    return !is_invalid;
 }
 
 static size_t stan_function_is_building(analyzer_t *analyzer, function_t *function) {
@@ -1276,7 +1348,8 @@ static size_t stan_function_is_building(analyzer_t *analyzer, function_t *functi
 static size_t stan_declaration_is_recursive(analyzer_t *analyzer, ast_node_t *decl) {
     for (size_t i = analyzer->pending_dependencies.count; i > 0; --i) {
         ast_node_t *dep = analyzer->pending_dependencies.items[i-1];
-        if (dep->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION) break;
+        if (dep->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION) break; break;
+        if (dep->node_type == AST_NODE_TYPE_EXPRESSION_STRUCT) break;
         if (dep == decl) return i-1;
     }
 
@@ -1464,50 +1537,130 @@ static struct_field_t ast_struct_field_from_decl(ast_node_t *decl, arena_t *aren
     return field;
 }
 
-static void resolve_struct(analyzer_t *analyzer, ast_t *ast, analysis_state_t state, ast_node_t *struct_) {
+static bool struct_type_has_circular_size(ast_t *ast, type_t type, types_t *types) {
+    if (types->count > 0) {
+        type_t other_type = types->items[0];
+        if (typeid_eq(other_type, type)) {
+            return true;
+        }
+    }
+
+    array_push(types, type);
+
+    typedata_t *td = ast_type2td(ast, type);
+    switch (td->kind) {
+    case TYPE_STRUCT: {
+        break;
+    }
+
+    case TYPE_ARRAY: {
+        break;
+    }
+
+    default: UNREACHABLE(); break;
+    }
+
+    return false;
+}
+
+static void stan_circular_size_error(analyzer_t *analyzer, types_t *types) {
+    UNUSED(analyzer);
+    UNUSED(types);
+}
+
+static void resolve_struct(analyzer_t *analyzer, ast_t *ast, analysis_state_t state, ast_node_t *struct_def) {
     analysis_state_t new_state = state;
     scope_t struct_scope = {0};
-    scope_init(&struct_scope, analyzer->ast->arena, SCOPE_TYPE_STRUCT, state.scope, struct_);
+    scope_init(&struct_scope, analyzer->ast->arena, SCOPE_TYPE_STRUCT, state.scope, struct_def);
     new_state.scope = &struct_scope;
 
-    tmp_arena_t *tmp = allocator_borrow();
-    struct_fields_t fields = {.allocator=tmp->allocator};
+    type_t struct_type;
+    if (TYPE_IS_UNRESOLVED(struct_def->value_type)) {
+        struct_type = type_set_fetch_anonymous_incomplete_struct(&ast->type_set);
+        struct_def->value_type = typeid(TYPE_TYPE);
+        struct_def->expr_val = ast_node_val_word(WORDT(struct_type));
+    } else {
+        struct_type = struct_def->expr_val.word.as.t;
+    }
+    typedata_t *td = ast_type2td(ast, struct_type);
+    MUST(td->kind == TYPE_STRUCT && td->as.struct_.status == STRUCT_STATUS_INCOMPLETE);
 
     bool invalid_type = false;
 
-    for (size_t i = an_struct_start(struct_); i < an_struct_end(struct_); ++i) {
-        ast_node_t *decl = struct_->children.items[i];
-        resolve_declaration_definition(analyzer, ast, new_state, decl);
+    array_push(&analyzer->pending_dependencies, struct_def);
 
-        ast_node_t *init_expr = an_decl_expr(decl);
-        unless (init_expr->expr_val.is_concrete) {
-            stan_error(analyzer, OR_ERROR(
-                .tag = ERROR_ANALYSIS_INITIAL_EXPR_MUST_BE_CONSTANT_IN_STRUCT,
-                .level = ERROR_SOURCE_ANALYSIS,
-                .msg = lit2str("initial expression for fields must be compile-time constants"),
-                .args = ORERR_ARGS(error_arg_node(init_expr)),
-                .show_code_lines = ORERR_LINES(0),
-            ));
-            continue;
-        }
+    for (size_t i = an_struct_start(struct_def); i < an_struct_end(struct_def); ++i) {
+        ast_node_t *decl = struct_def->children.items[i];
+        if (TYPE_IS_UNRESOLVED(decl->value_type)) {
+            resolve_declaration_definition(analyzer, ast, new_state, decl);
 
-        if (TYPE_IS_INVALID(decl->value_type)) {
+            ast_node_t *init_expr = an_decl_expr(decl);
+            unless (init_expr->expr_val.is_concrete) {
+                stan_error(analyzer, OR_ERROR(
+                    .tag = ERROR_ANALYSIS_INITIAL_EXPR_MUST_BE_CONSTANT_IN_STRUCT,
+                    .level = ERROR_SOURCE_ANALYSIS,
+                    .msg = lit2str("initial expression for fields must be compile-time constants"),
+                    .args = ORERR_ARGS(error_arg_node(init_expr)),
+                    .show_code_lines = ORERR_LINES(0),
+                ));
+                continue;
+            }
+
+            unless (TYPE_IS_INVALID(decl->value_type)) {
+                continue;
+            }
+
             invalid_type = true;
-            continue;
         }
-        
-        struct_field_t field = ast_struct_field_from_decl(decl, ast->arena);
+    }
 
-        array_push(&fields, field);
+    --analyzer->pending_dependencies.count;
+
+    if (td->as.struct_.status != STRUCT_STATUS_INCOMPLETE) {
+        return;
     }
 
     if (invalid_type) {
-        INVALIDATE(struct_);
-    } else {
-        type_t struct_type = type_set_fetch_anonymous_struct(&ast->type_set, fields);
-        struct_->value_type = typeid(TYPE_TYPE);
-        struct_->expr_val = ast_node_val_word(WORDT(struct_type));
+        type_set_invalid_struct(&ast->type_set, struct_type);
+        INVALIDATE(struct_def);
+        return;
     }
+
+    tmp_arena_t *tmp = allocator_borrow();
+
+    // types_t circular_types = {.allocator=tmp->allocator};
+    // if (struct_type_has_circular_size(ast, struct_type, &circular_types)) {
+    //     stan_circular_size_error(analyzer, &circular_types);
+
+    //     INVALIDATE(struct_def);
+    // } else {
+        struct_fields_t fields = {.allocator=tmp->allocator};
+
+        bool has_error = false;
+        for (size_t i = an_struct_start(struct_def); i < an_struct_end(struct_def); ++i) {
+            ast_node_t *decl = struct_def->children.items[i];
+            struct_field_t field = ast_struct_field_from_decl(decl, ast->arena);
+
+            if (TYPE_IS_INVALID(decl->value_type)) {
+                has_error = true;
+                break;
+            }
+
+            if (!retry_resolve_possible_struct_or_error(analyzer, decl, field.type)) {
+                has_error = true;
+                break;
+            }
+
+            array_push(&fields, field);
+        }
+
+        if (has_error) {
+            type_set_invalid_struct(&ast->type_set, struct_type);
+            INVALIDATE(struct_def);
+        }  else {
+            type_set_complete_struct(&ast->type_set, struct_type, fields);
+        }
+    // }
 
     allocator_return(tmp);
 }
@@ -1682,21 +1835,20 @@ void resolve_expression(
                     INVALIDATE(expr);
                     break;
                 }
-
-                type_t array_value_type = type_expr->expr_val.word.as.t;
-                size_t array_size = size_expr->expr_val.word.as.u;
-
-                type_t array_type = type_set_fetch_array(&ast->type_set, array_value_type, array_size);
-
-                expr->value_type = typeid(TYPE_TYPE);
-                expr->expr_val = ast_node_val_word(WORDT(array_type));
             } else {
-                type_t array_value_type = type_expr->expr_val.word.as.t;
-                type_t array_type = type_set_fetch_array(&ast->type_set, array_value_type, 0);
-
-                expr->value_type = typeid(TYPE_TYPE);
-                expr->expr_val = ast_node_val_word(WORDT(array_type));
+                MUST(false); // todo: error maybe or inferred idk
             }
+
+            type_t array_value_type = type_expr->expr_val.word.as.t;
+            if (!retry_resolve_possible_struct_or_error(analyzer, type_expr, array_value_type)) {
+                INVALIDATE(expr);
+                break;
+            }
+
+            type_t array_type = type_set_fetch_array(&ast->type_set, array_value_type, size_expr->expr_val.word.as.u);
+
+            expr->value_type = typeid(TYPE_TYPE);
+            expr->expr_val = ast_node_val_word(WORDT(array_type));
             break;
         }
 
@@ -1837,6 +1989,7 @@ void resolve_expression(
             typedata_t *type_expr_td = ast_type2td(ast, type_expr->value_type);
             switch (type_expr_td->kind) {
             case TYPE_TYPE: {
+
                 if (!type_expr->expr_val.is_concrete) {
                     stan_error(analyzer, OR_ERROR(
                         .tag = ERROR_ANALYSIS_EXPECTED_CONSTANT,
@@ -1850,6 +2003,8 @@ void resolve_expression(
 
                 type_t init_type = type_expr->expr_val.word.as.t;
                 typedata_t *init_type_td = ast_type2td(ast, init_type);
+
+                expr->value_type = init_type;
 
                 switch (init_type_td->kind) {
                 case TYPE_ARRAY: {
@@ -1945,14 +2100,10 @@ void resolve_expression(
                             ast_copy_expr_val_to_memory(ast, arg->value_type, arg->expr_val.word, ((void*)start)+(offset*size_aligned));
                         }
                     }
-
-                    expr->value_type = init_type;
                     break;
                 }
 
                 case TYPE_STRUCT: {
-                    expr->value_type = init_type;
-
                     tmp_arena_t *tmp = allocator_borrow();
 
                     bool is_invalid = false;
@@ -2098,7 +2249,52 @@ void resolve_expression(
                     break;
                 }
 
-                default: UNREACHABLE(); // todo
+                case TYPE_BOOL:
+                case TYPE_TYPE: 
+                case TYPE_NUMBER:
+                case TYPE_FUNCTION:
+                case TYPE_INTRINSIC_FUNCTION:
+                case TYPE_POINTER: {
+                    size_t arg_count = an_list_end(expr) - an_list_start(expr);
+                    if (arg_count == 0) {
+                        expr->expr_val = zero_value(ast, type_expr->value_type);
+                    } else if (arg_count == 1) {
+                        ast_node_t *arg = expr->children.items[an_list_start(expr)];
+                        resolve_expression(analyzer, ast, state, typeid(TYPE_UNRESOLVED), arg, true);
+                        *expr = *cast_implicitly_if_necessary(ast, init_type, arg);
+                        if (!TYPE_IS_INVALID(expr->value_type) && !typeid_eq(arg->value_type, expr->value_type)) {
+                            stan_error(analyzer, OR_ERROR(
+                                .tag = ERROR_ANALYSIS_TYPE_MISMATCH,
+                                .level = ERROR_SOURCE_ANALYSIS,
+                                .msg = lit2str("initialization list item requires explicit cast from '$1.$' to '$2.$'"),
+                                .args = ORERR_ARGS(error_arg_node(arg),
+                                    error_arg_type(arg->value_type), error_arg_type(expr->value_type)),
+                                .show_code_lines = ORERR_LINES(0),
+                            ));
+                        }
+                    } else {
+                        stan_error(analyzer, OR_ERROR(
+                            .tag = ERROR_ANALYSIS_TOO_MANY_ARGUMENTS_IN_LIST_INIT,
+                            .level = ERROR_SOURCE_ANALYSIS,
+                            .msg = lit2str("initialization list for '$1.$' can only have up to 1 item"),
+                            .args = ORERR_ARGS(error_arg_node(expr),
+                                error_arg_type(init_type)),
+                            .show_code_lines = ORERR_LINES(0),
+                        ));
+                    }
+                    break;
+                }
+
+                case TYPE_VOID: break;
+
+
+                case TYPE_STRING: UNREACHABLE(); break; // todo
+
+                case TYPE_COUNT:
+                case TYPE_INVALID:
+                case TYPE_UNRESOLVED:
+                case TYPE_INFERRED_FUNCTION:
+                case TYPE_UNREACHABLE: UNREACHABLE(); break;
                 }
                 break;
             }
@@ -2601,12 +2797,17 @@ void resolve_expression(
             switch (lhstd->kind){
             case TYPE_POINTER:
             case TYPE_STRUCT: {
-                {
+                if (lhstd->kind == TYPE_POINTER) {
                     typedata_t *innertd = ast_type2td(ast, lhstd->as.ptr.type);
                     if (innertd->kind == TYPE_STRUCT) {
                         lhs_type = lhstd->as.ptr.type;
                         lhstd = innertd;
                     }
+                }
+
+                if (!retry_resolve_possible_struct_or_error(analyzer, lhs, lhs_type)) {
+                    INVALIDATE(expr);
+                    break;
                 }
 
                 struct_field_t field = {0};
@@ -2618,7 +2819,7 @@ void resolve_expression(
                         .tag = ERROR_ANALYSIS_NO_ACCESS_MEMBER,
                         .level = ERROR_SOURCE_ANALYSIS,
                         .msg = lit2str("cannot find '$0.$' in '$1.$'"),
-                        .args = ORERR_ARGS(error_arg_token(expr->identifier), error_arg_type(field.type)),
+                        .args = ORERR_ARGS(error_arg_token(expr->identifier), error_arg_type(lhs_type)),
                         .show_code_lines = ORERR_LINES(0),
                     ));
                     INVALIDATE(expr);

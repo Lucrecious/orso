@@ -291,6 +291,8 @@ struct ast_node_t {
     ast_branch_type_t branch_type;
     bool condition_negated;
 
+    scope_t child_scope;
+
     // todo: to optimize for space consider merging these into a flag enum
     bool is_mutable;
     bool is_intrinsic;

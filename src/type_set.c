@@ -45,7 +45,7 @@ void array_type_new(type_table_t *set, size_t size, type_t type, typedata_t *res
     result->capabilities = (itemtd->capabilities & TYPE_CAP_ARITHMETIC);
 }
 
-void struct_type_init(type_table_t *set, struct_fields_t fields, struct_fields_t constants, typedata_t *result) {
+void incomplete_struct_type_init(type_table_t *set, struct_fields_t fields, struct_fields_t constants, typedata_t *result) {
     result->kind = TYPE_STRUCT;
     result->as.struct_.constants = constants;
 
@@ -74,6 +74,7 @@ void struct_type_init(type_table_t *set, struct_fields_t fields, struct_fields_t
     result->size = (size_t)current_size;
     result->alignment = current_alignment;
     result->capabilities = all_arithmetic ? TYPE_CAP_ARITHMETIC : TYPE_CAP_NONE;
+    result->as.struct_.status = STRUCT_STATUS_INCOMPLETE;
 }
 
 struct_fields_t fields_copy(struct_fields_t fields, arena_t *arena) {
@@ -102,7 +103,7 @@ typedata_t *type_copy_new(type_table_t *set, typedata_t *type) {
         typedata_t *td = ALLOC(typedata_t);
         struct_fields_t fields = fields_copy(type->as.struct_.fields, set->allocator);
         struct_fields_t constants = fields_copy(type->as.struct_.constants, set->allocator);
-        struct_type_init(set, fields, constants, td);
+        incomplete_struct_type_init(set, fields, constants, td);
         return td;
     }
 
@@ -125,6 +126,11 @@ typedata_t *type_copy_new(type_table_t *set, typedata_t *type) {
 static type_t track_type(type_table_t *set, typedata_t *type) {
     array_push(&set->types, type);
     table_put(type2u64, set->types2index, type, typeid(set->types.count-1));
+    return typeid(set->types.count-1);
+}
+
+static type_t add_type_no_track(type_table_t *set, typedata_t *type) {
+    array_push(&set->types, type);
     return typeid(set->types.count-1);
 }
 
@@ -338,18 +344,30 @@ type_t type_set_fetch_array(type_table_t *set, type_t value_type, size_t size) {
     return type;
 }
 
-type_t type_set_fetch_anonymous_struct(type_table_t *set, struct_fields_t fields) {
+type_t type_set_fetch_anonymous_incomplete_struct(type_table_t *set) {
     typedata_t struct_type = {0};
-    struct_type_init(set, fields, (struct_fields_t){0}, &struct_type);
+    incomplete_struct_type_init(set, (struct_fields_t){0}, (struct_fields_t){0}, &struct_type);
 
-    type_t type;
-    if (table_get(type2u64, set->types2index, &struct_type, &type)) {
-        return type;
-    }
-
-    typedata_t *type_info = type_copy_new(set, &struct_type);
-    type = track_type(set, type_info);
+    typedata_t *typeinfo = type_copy_new(set, &struct_type);
+    typeinfo->as.struct_.status = STRUCT_STATUS_INCOMPLETE;
+    type_t type = add_type_no_track(set, typeinfo);
     return type;
+}
+
+void type_set_invalid_struct(type_table_t *set, type_t incomplete_type) {
+    typedata_t *td = type2typedata(&set->types, incomplete_type);
+    MUST(td->kind == TYPE_STRUCT);
+    td->as.struct_.status = STRUCT_STATUS_INVALID;
+}
+
+void type_set_complete_struct(type_table_t *set, type_t incomplete_type, struct_fields_t fields) {
+    typedata_t *td = type2typedata(&set->types, incomplete_type);
+    MUST(td->kind == TYPE_STRUCT && td->as.struct_.status == STRUCT_STATUS_INCOMPLETE);
+
+    fields = fields_copy(fields, set->allocator);
+
+    incomplete_struct_type_init(set, fields, (struct_fields_t){0}, td);
+    td->as.struct_.status = STRUCT_STATUS_COMPLETE;
 }
 
 type_t type_set_fetch_function(type_table_t *set, type_t return_type, types_t arguments) {

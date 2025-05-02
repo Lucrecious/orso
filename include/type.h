@@ -94,6 +94,13 @@ enum type_caps_t {
 
 #define TYPE_CAP_NUMBER (TYPE_CAP_ARITHMETIC|TYPE_CAP_ORDERABLE)
 
+typedef enum struct_status_t struct_status_t;
+enum struct_status_t {
+    STRUCT_STATUS_INVALID = 0,
+    STRUCT_STATUS_INCOMPLETE,
+    STRUCT_STATUS_COMPLETE
+};
+
 struct typedata_t {
     string_t name;
     type_kind_t kind;
@@ -113,6 +120,8 @@ struct typedata_t {
 
             struct_fields_t fields;
             struct_fields_t constants;
+
+            struct_status_t status;
         } struct_;
 
         struct {

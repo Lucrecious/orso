@@ -65,6 +65,8 @@ type_t type_set_fetch_pointer(type_table_t *set, type_t type);
 
 type_t type_set_fetch_array(type_table_t *set, type_t value_type, size_t size);
 
-type_t type_set_fetch_anonymous_struct(type_table_t *set, struct_fields_t fields);
+type_t type_set_fetch_anonymous_incomplete_struct(type_table_t *set);
+void type_set_invalid_struct(type_table_t *set, type_t incomplete_type);
+void type_set_complete_struct(type_table_t *set, type_t incomplete_struct, struct_fields_t fields);
 
 #endif
