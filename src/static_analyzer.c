@@ -1570,9 +1570,12 @@ static void stan_circular_size_error(analyzer_t *analyzer, types_t *types) {
 
 static void resolve_struct(analyzer_t *analyzer, ast_t *ast, analysis_state_t state, ast_node_t *struct_def) {
     analysis_state_t new_state = state;
-    scope_t struct_scope = {0};
-    scope_init(&struct_scope, analyzer->ast->arena, SCOPE_TYPE_STRUCT, state.scope, struct_def);
-    new_state.scope = &struct_scope;
+    if (struct_def->child_scope.creator == struct_def) {
+        new_state.scope = &struct_def->child_scope;
+    } else {
+        scope_init(&struct_def->child_scope, analyzer->ast->arena, SCOPE_TYPE_STRUCT, state.scope, struct_def);
+        new_state.scope = &struct_def->child_scope;
+    }
 
     type_t struct_type;
     if (TYPE_IS_UNRESOLVED(struct_def->value_type)) {
@@ -1646,10 +1649,14 @@ static void resolve_struct(analyzer_t *analyzer, ast_t *ast, analysis_state_t st
                 break;
             }
 
+            array_push(&analyzer->pending_dependencies, struct_def);
+
             if (!retry_resolve_possible_struct_or_error(analyzer, decl, field.type)) {
                 has_error = true;
                 break;
             }
+
+            --analyzer->pending_dependencies.count;
 
             array_push(&fields, field);
         }
@@ -3455,19 +3462,34 @@ static void declare_definition(analyzer_t *analyzer, scope_t *scope, ast_node_t 
     tmp_arena_t *tmp = allocator_borrow();
     string_t identifier = sv2string(definition->identifier.view, tmp->allocator);
 
+    bool defined_through_some_recursive_definition = false;
     if (table_get(s2w, scope->definitions, identifier, &def_word)) {
         ast_node_t *previous_decl = (ast_node_t*)def_word.as.p;
-        stan_error(analyzer, OR_ERROR(
-            .tag = ERROR_ANALYSIS_CANNOT_OVERLOAD_DEFINITION,
-            .level = ERROR_SOURCE_ANALYSIS,
-            .msg = lit2str("cannot have declarations with the same identifier '$0.$'"),
-            .args = ORERR_ARGS(error_arg_token(definition->identifier), error_arg_node(previous_decl)),
-            .show_code_lines = ORERR_LINES(0, 1),
-        ));
-        return;
+        if (previous_decl != definition) {
+            stan_error(analyzer, OR_ERROR(
+                .tag = ERROR_ANALYSIS_CANNOT_OVERLOAD_DEFINITION,
+                .level = ERROR_SOURCE_ANALYSIS,
+                .msg = lit2str("cannot have declarations with the same identifier '$0.$'"),
+                .args = ORERR_ARGS(error_arg_token(definition->identifier), error_arg_node(previous_decl)),
+                .show_code_lines = ORERR_LINES(0, 1),
+            ));
+
+            allocator_return(tmp);
+            return;
+        }
+
+        // i feel so fucking smart for thinking of this
+        // it's possible for the same definition to be defined
+        // through recursive calls (when structs try to resolve themselves)
+        // it's easy to just check if this is the exact same definition 
+        // or it's a different one defined somewhere else just by checking
+        // if the definitions ast nodes are the same
+        defined_through_some_recursive_definition = true;
     }
 
-    add_definition(scope, analyzer->ast->arena, string2sv(identifier), definition);
+    if (!defined_through_some_recursive_definition) {
+        add_definition(scope, analyzer->ast->arena, string2sv(identifier), definition);
+    }
 
     allocator_return(tmp);
 }

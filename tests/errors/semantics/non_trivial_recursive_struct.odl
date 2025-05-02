@@ -1,0 +1,19 @@
+main :: () -> void {
+    baz_t :: struct {
+        foo: foo_t;
+    };
+
+    biz_t :: struct {
+        baz: baz_t;
+    };
+
+    bar_t :: struct {
+        biz: biz_t;
+    };
+
+    foo_t :: struct {
+        bar: bar_t;
+    };
+
+    foo_t.{};
+};
