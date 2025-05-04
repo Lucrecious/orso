@@ -399,6 +399,11 @@ static void emit_bin_op(texloc_t loc, function_t *function, token_type_t token_t
         }
     }
 
+    case TYPE_POINTER: {
+        instruction.op = OP_ADDU; break;
+        break;
+    }
+
     case TYPE_NUMBER: {
         switch (token_type) {
             case TOKEN_PLUS: {

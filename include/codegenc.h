@@ -244,6 +244,7 @@ static bool cgen_binary_is_macro(token_type_t type, typedata_t *optd, cstr_t *op
         case TOKEN_LESS_EQUAL: set_op("<=", false);
         case TOKEN_EQUAL_EQUAL: {
             switch (optd->kind) {
+            case TYPE_POINTER:
             case TYPE_BOOL:
             case TYPE_NUMBER: {
                 set_op("==", false);
@@ -261,6 +262,7 @@ static bool cgen_binary_is_macro(token_type_t type, typedata_t *optd, cstr_t *op
         }
         case TOKEN_BANG_EQUAL: {
             switch (optd->kind) {
+            case TYPE_POINTER:
             case TYPE_BOOL:
             case TYPE_NUMBER: {
                 set_op("!=", false);
@@ -580,7 +582,7 @@ static void cgen_scaler_aggregate_binary(cgen_t *cgen, type_t type, token_type_t
     if (is_macro) {
         // pointer arithmetic is always a macro
         if (td->kind == TYPE_POINTER) {
-            sb_add_format(&cgen->sb, "%s((%s)%.*s, %.*s)", name_or_op, td->name, lhs.length, lhs.data, rhs.length, rhs.data);
+            sb_add_format(&cgen->sb, "%s((%s)%.*s, %.*s)", name_or_op, td->name.cstr, lhs.length, lhs.data, rhs.length, rhs.data);
         } else {
             sb_add_format(&cgen->sb, "%s(%.*s, %.*s)", name_or_op, lhs.length, lhs.data, rhs.length, rhs.data);
         }
@@ -681,7 +683,7 @@ static void cgen_binary(cgen_t *cgen, ast_node_t *binary, cgen_var_t var) {
         sb_add_cstr(&cgen->sb, "(");
         
         if (lhstd->kind == TYPE_POINTER) {
-            sb_add_format(&cgen->sb, "(%s)", lhstd->name);
+            sb_add_format(&cgen->sb, "(%s)", lhstd->name.cstr);
         }
 
         cgen_expression(cgen, lhs, nil_cvar);
@@ -1030,7 +1032,7 @@ static void cgen_lvalue(cgen_t *cgen, ast_node_t *lvalue, cgen_var_t var) {
 
         unless (lvalue->requires_tmp_for_cgen) {
             if (has_var(var)) {
-                sb_add_format(&cgen->sb, "%s = ", cgen_var(cgen, var));
+                sb_add_format(&cgen->sb, "%s = ", cgen_lvar(cgen, var));
             }
 
             sb_add_cstr(&cgen->sb, "&(");
@@ -1118,7 +1120,6 @@ static void cgen_assignment(cgen_t *cgen, ast_node_t *assignment, cgen_var_t var
         cgen_var_t rhs_var = cgen_next_tmpid(cgen, rhs->value_type);
 
         cgen_statement(cgen, rhs, rhs_var, true);
-
 
         if (equals_tok != TOKEN_EQUAL) {
             typedata_t *td = ast_type2td(cgen->ast, assignment->value_type);
@@ -1529,11 +1530,26 @@ static void cgen_return(cgen_t *cgen, ast_node_t *ret) {
 }
 
 static void cgen_builtin_call(cgen_t *cgen, ast_node_t *bcall, cgen_var_t var) {
-    // since typeof is the only builtin call (might change to directive later)
-    UNUSED(cgen);
-    UNUSED(bcall);
-    UNUSED(var);
-    UNREACHABLE();
+    if (sv_eq(bcall->identifier.view, cstr2sv("sizeof"))) {
+        MUST(!bcall->requires_tmp_for_cgen);
+
+        if (has_var(var)) {
+            sb_add_format(&cgen->sb, "%s = ", cgen_var(cgen, var));
+        }
+
+        typedata_t *td = ast_type2td(cgen->ast, bcall->value_type);
+
+        ast_node_t *op = bcall->children.items[an_bcall_arg_start(bcall)];
+        typedata_t *optd = ast_type2td(cgen->ast, op->value_type);
+        if (optd->kind == TYPE_TYPE) {
+            MUST(op->expr_val.is_concrete);
+            optd = ast_type2td(cgen->ast, op->expr_val.word.as.t);
+        }
+        sb_add_format(&cgen->sb, "(%s)sizeof(%s)", td->name.cstr, optd->name.cstr);
+
+    } else {
+        UNREACHABLE();
+    }
 }
 
 static void cgen_call(cgen_t *cgen, ast_node_t *call, cgen_var_t var) {
