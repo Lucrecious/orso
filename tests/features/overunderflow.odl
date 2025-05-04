@@ -1,7 +1,7 @@
 main :: () -> void {
     sum := 0;
 
-    min8 := -128s8;
+    min8 := -127s8 - 1s8;
 	max8 := 127s8;
 
     printint(min8 as int);
@@ -47,7 +47,7 @@ main :: () -> void {
     };
     println();
 
-	min16 := -32768s16;
+	min16 := -32767s16 - 1s16;
 	max16 := 32767s16;
     printint(min16 as int);
     printint(max16 as int);
@@ -91,7 +91,7 @@ main :: () -> void {
     };
     println();
 
-	min32 := -2147483648s32;
+	min32 := -2147483647s32 - 1s32;
 	max32 := 2147483647s32;
     prints64(min32);
     prints64(max32);
