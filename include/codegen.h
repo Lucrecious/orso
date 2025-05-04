@@ -2105,7 +2105,7 @@ static void gen_initializer_list(gen_t *gen, function_t *function, ast_node_t *l
         emit_addr_to_reg(gen, function, loc, REG_MOV_SIZE_WORD, REG_RESULT, REG_STACK_BOTTOM, 0);
     }
 
-    emit_reg_to_val_dst(gen, loc, function, list->value_type, val_dst, REG_RESULT, REG_T, REG_U, true);
+    emit_reg_to_val_dst(gen, loc, function, list->value_type, val_dst, REG_RESULT, REG_T, REG_U, false);
     gen_pop_until_stack_point(gen, function, loc, clean_stack_point, true);
 }
 

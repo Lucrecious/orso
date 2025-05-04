@@ -1537,37 +1537,6 @@ static struct_field_t ast_struct_field_from_decl(ast_node_t *decl, arena_t *aren
     return field;
 }
 
-static bool struct_type_has_circular_size(ast_t *ast, type_t type, types_t *types) {
-    if (types->count > 0) {
-        type_t other_type = types->items[0];
-        if (typeid_eq(other_type, type)) {
-            return true;
-        }
-    }
-
-    array_push(types, type);
-
-    typedata_t *td = ast_type2td(ast, type);
-    switch (td->kind) {
-    case TYPE_STRUCT: {
-        break;
-    }
-
-    case TYPE_ARRAY: {
-        break;
-    }
-
-    default: UNREACHABLE(); break;
-    }
-
-    return false;
-}
-
-static void stan_circular_size_error(analyzer_t *analyzer, types_t *types) {
-    UNUSED(analyzer);
-    UNUSED(types);
-}
-
 static void resolve_struct(analyzer_t *analyzer, ast_t *ast, analysis_state_t state, ast_node_t *struct_def) {
     analysis_state_t new_state = state;
     if (struct_def->child_scope.creator == struct_def) {
@@ -1631,43 +1600,36 @@ static void resolve_struct(analyzer_t *analyzer, ast_t *ast, analysis_state_t st
 
     tmp_arena_t *tmp = allocator_borrow();
 
-    // types_t circular_types = {.allocator=tmp->allocator};
-    // if (struct_type_has_circular_size(ast, struct_type, &circular_types)) {
-    //     stan_circular_size_error(analyzer, &circular_types);
+    struct_fields_t fields = {.allocator=tmp->allocator};
 
-    //     INVALIDATE(struct_def);
-    // } else {
-        struct_fields_t fields = {.allocator=tmp->allocator};
+    bool has_error = false;
+    for (size_t i = an_struct_start(struct_def); i < an_struct_end(struct_def); ++i) {
+        ast_node_t *decl = struct_def->children.items[i];
+        struct_field_t field = ast_struct_field_from_decl(decl, ast->arena);
 
-        bool has_error = false;
-        for (size_t i = an_struct_start(struct_def); i < an_struct_end(struct_def); ++i) {
-            ast_node_t *decl = struct_def->children.items[i];
-            struct_field_t field = ast_struct_field_from_decl(decl, ast->arena);
-
-            if (TYPE_IS_INVALID(decl->value_type)) {
-                has_error = true;
-                break;
-            }
-
-            array_push(&analyzer->pending_dependencies, struct_def);
-
-            if (!retry_resolve_possible_struct_or_error(analyzer, decl, field.type)) {
-                has_error = true;
-                break;
-            }
-
-            --analyzer->pending_dependencies.count;
-
-            array_push(&fields, field);
+        if (TYPE_IS_INVALID(decl->value_type)) {
+            has_error = true;
+            break;
         }
 
-        if (has_error) {
-            type_set_invalid_struct(&ast->type_set, struct_type);
-            INVALIDATE(struct_def);
-        }  else {
-            type_set_complete_struct(&ast->type_set, struct_type, fields);
+        array_push(&analyzer->pending_dependencies, struct_def);
+
+        if (!retry_resolve_possible_struct_or_error(analyzer, decl, field.type)) {
+            has_error = true;
+            break;
         }
-    // }
+
+        --analyzer->pending_dependencies.count;
+
+        array_push(&fields, field);
+    }
+
+    if (has_error) {
+        type_set_invalid_struct(&ast->type_set, struct_type);
+        INVALIDATE(struct_def);
+    }  else {
+        type_set_complete_struct(&ast->type_set, struct_type, fields);
+    }
 
     allocator_return(tmp);
 }
