@@ -1,13 +1,13 @@
 Roadmap to 0.5v
 - Fix parsing recursive issue (error for parsing is bad right now)
 - structs
-    - anonymous and named
+    - anonymous and named --
     - works with @run
-    - allow structs with default values
+    - allow structs with default values --
     - allow structs with compile-time parameters
-    - allow structs for compound arithmetic if elligible
-    - allow struct initialization with names or with order
-        - add errors for names: that go backwards in the field list
+    - allow structs for compound arithmetic if elligible --
+    - allow struct initialization with names or with order --
+        - add errors for names: that go backwards in the field list --
 - strings
     - implemented in core, with regular string syntactic sugar
     - warning that only memory is compared

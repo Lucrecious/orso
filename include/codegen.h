@@ -370,22 +370,32 @@ static void emit_return_addr_to_reg(function_t *function, texloc_t loc, reg_t ds
     emit_binu_reg_im(function, loc, dst, REG_STACK_FRAME, WORD_SIZE, '+');
 }
 
-static void emit_bin_op(texloc_t loc, function_t *function, token_type_t token_type, typedata_t *type_info, reg_t op1, reg_t op2, reg_t result) {
-    MUST(type_info->size <= WORD_SIZE);
+static void emit_bin_op(texloc_t loc, function_t *function, token_type_t token_type, typedata_t *td, reg_t op1, reg_t op2, reg_t result) {
+    MUST(td->size <= WORD_SIZE);
 
     instruction_t instruction = {0};
 
-    switch (type_info->kind) {
+    switch (td->kind) {
     case TYPE_TYPE:
     case TYPE_BOOL:
+    case TYPE_POINTER:
     case TYPE_FUNCTION: {
         switch (token_type) {
-            case TOKEN_PLUS:
-            case TOKEN_MINUS: 
             case TOKEN_SLASH:
             case TOKEN_STAR:
             case TOKEN_PERCENT:
             case TOKEN_PERCENT_PERCENT: UNREACHABLE(); break;
+
+            case TOKEN_PLUS: {
+                MUST(td->kind == TYPE_POINTER);
+                instruction.op = OP_ADDI;
+                break;
+            }
+            case TOKEN_MINUS: {
+                MUST(td->kind == TYPE_POINTER);
+                instruction.op = OP_SUBI;
+                break;
+            } 
 
             case TOKEN_GREATER:
             case TOKEN_GREATER_EQUAL:
@@ -399,15 +409,10 @@ static void emit_bin_op(texloc_t loc, function_t *function, token_type_t token_t
         }
     }
 
-    case TYPE_POINTER: {
-        instruction.op = OP_ADDU; break;
-        break;
-    }
-
     case TYPE_NUMBER: {
         switch (token_type) {
             case TOKEN_PLUS: {
-                switch (type_info->as.num) {
+                switch (td->as.num) {
                     case NUM_TYPE_FLOAT: instruction.op = OP_ADDD; break;
                     case NUM_TYPE_SIGNED: instruction.op = OP_ADDI; break;
                     case NUM_TYPE_UNSIGNED: instruction.op = OP_ADDU; break;
@@ -416,7 +421,7 @@ static void emit_bin_op(texloc_t loc, function_t *function, token_type_t token_t
             }
 
             case TOKEN_MINUS: {
-                switch (type_info->as.num) {
+                switch (td->as.num) {
                     case NUM_TYPE_FLOAT: instruction.op = OP_SUBD; break;
                     case NUM_TYPE_SIGNED: instruction.op = OP_SUBI; break;
                     case NUM_TYPE_UNSIGNED: instruction.op = OP_SUBU; break;
@@ -425,7 +430,7 @@ static void emit_bin_op(texloc_t loc, function_t *function, token_type_t token_t
             }
 
             case TOKEN_STAR: {
-                switch (type_info->as.num) {
+                switch (td->as.num) {
                     case NUM_TYPE_FLOAT: instruction.op = OP_MULD; break;
                     case NUM_TYPE_SIGNED: instruction.op = OP_MULI; break;
                     case NUM_TYPE_UNSIGNED: instruction.op = OP_MULU; break;
@@ -434,7 +439,7 @@ static void emit_bin_op(texloc_t loc, function_t *function, token_type_t token_t
             }
             
             case TOKEN_SLASH: {
-                switch (type_info->as.num) {
+                switch (td->as.num) {
                     case NUM_TYPE_FLOAT: instruction.op = OP_DIVD; break;
                     case NUM_TYPE_SIGNED: instruction.op = OP_DIVI; break;
                     case NUM_TYPE_UNSIGNED: instruction.op = OP_DIVU; break;
@@ -443,7 +448,7 @@ static void emit_bin_op(texloc_t loc, function_t *function, token_type_t token_t
             }
 
             case TOKEN_PERCENT: {
-                switch (type_info->as.num) {
+                switch (td->as.num) {
                     case NUM_TYPE_FLOAT: instruction.op = OP_MODD; break;
                     case NUM_TYPE_SIGNED: instruction.op = OP_MODI; break;
                     case NUM_TYPE_UNSIGNED: instruction.op = OP_MODU; break;
@@ -452,7 +457,7 @@ static void emit_bin_op(texloc_t loc, function_t *function, token_type_t token_t
             }
 
             case TOKEN_PERCENT_PERCENT: {
-                switch (type_info->as.num) {
+                switch (td->as.num) {
                     case NUM_TYPE_FLOAT: instruction.op = OP_REMD; break;
                     case NUM_TYPE_SIGNED: instruction.op = OP_REMI; break;
                     case NUM_TYPE_UNSIGNED: instruction.op = OP_REMU; break;
@@ -461,7 +466,7 @@ static void emit_bin_op(texloc_t loc, function_t *function, token_type_t token_t
             }
 
             case TOKEN_GREATER: {
-                switch (type_info->as.num) {
+                switch (td->as.num) {
                     case NUM_TYPE_FLOAT: instruction.op = OP_GTD; break;
                     case NUM_TYPE_SIGNED: instruction.op = OP_GTI; break;
                     case NUM_TYPE_UNSIGNED: instruction.op = OP_GTU; break;
@@ -470,7 +475,7 @@ static void emit_bin_op(texloc_t loc, function_t *function, token_type_t token_t
             }
 
             case TOKEN_GREATER_EQUAL: {
-                switch (type_info->as.num) {
+                switch (td->as.num) {
                     case NUM_TYPE_FLOAT: instruction.op = OP_GED; break;
                     case NUM_TYPE_SIGNED: instruction.op = OP_GEI; break;
                     case NUM_TYPE_UNSIGNED: instruction.op = OP_GEU; break;
@@ -479,7 +484,7 @@ static void emit_bin_op(texloc_t loc, function_t *function, token_type_t token_t
             }
 
             case TOKEN_LESS:{
-                switch (type_info->as.num) {
+                switch (td->as.num) {
                     case NUM_TYPE_FLOAT: instruction.op = OP_LTD; break;
                     case NUM_TYPE_SIGNED: instruction.op = OP_LTI; break;
                     case NUM_TYPE_UNSIGNED: instruction.op = OP_LTU; break;
@@ -488,7 +493,7 @@ static void emit_bin_op(texloc_t loc, function_t *function, token_type_t token_t
             }
 
             case TOKEN_LESS_EQUAL: {
-                switch (type_info->as.num) {
+                switch (td->as.num) {
                     case NUM_TYPE_FLOAT: instruction.op = OP_LED; break;
                     case NUM_TYPE_SIGNED: instruction.op = OP_LEI; break;
                     case NUM_TYPE_UNSIGNED: instruction.op = OP_LEU; break;
@@ -497,7 +502,7 @@ static void emit_bin_op(texloc_t loc, function_t *function, token_type_t token_t
             }
 
             case TOKEN_EQUAL_EQUAL: {
-                switch (type_info->as.num) {
+                switch (td->as.num) {
                     case NUM_TYPE_FLOAT: instruction.op = OP_EQD; break;
                     case NUM_TYPE_SIGNED: instruction.op = OP_EQI; break;
                     case NUM_TYPE_UNSIGNED: instruction.op = OP_EQU; break;
@@ -506,7 +511,7 @@ static void emit_bin_op(texloc_t loc, function_t *function, token_type_t token_t
             }
 
             case TOKEN_BANG_EQUAL: {
-                switch (type_info->as.num) {
+                switch (td->as.num) {
                     case NUM_TYPE_FLOAT: instruction.op = OP_NQD; break;
                     case NUM_TYPE_SIGNED: instruction.op = OP_NQI; break;
                     case NUM_TYPE_UNSIGNED: instruction.op = OP_NQU; break;
@@ -526,7 +531,7 @@ static void emit_bin_op(texloc_t loc, function_t *function, token_type_t token_t
     instruction.as.bin_reg_to_reg.reg_op1 = (byte)op1;
     instruction.as.bin_reg_to_reg.reg_op2 = (byte)op2;
     instruction.as.bin_reg_to_reg.reg_result = (byte)result;
-    instruction.as.bin_reg_to_reg.size = (byte)type_info->size;
+    instruction.as.bin_reg_to_reg.size = (byte)td->size;
 
     emit_instruction(function, loc, instruction);
 }
