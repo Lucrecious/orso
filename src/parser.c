@@ -1071,11 +1071,38 @@ static ast_node_t *parse_literal(parser_t *parser) {
     }
 }
 
-static void parse_arguments(parser_t* parser, ast_node_t *parent) {
+static token_t parse_label_or_nil(parser_t *parser) {
+    token_t label = nil_token;
+    if (check(parser, TOKEN_IDENTIFIER)) {
+        lexer_t lookahead = parser->lexer;
+        token_t maybe_colon = lexer_next_token(&lookahead);
+        if (maybe_colon.type == TOKEN_COLON) {
+            bool success = consume(parser, TOKEN_IDENTIFIER);
+
+            label = parser->previous;
+
+            success &= consume(parser, TOKEN_COLON);
+            MUST(success);
+        }
+    }
+
+    return label;
+}
+
+static void parse_arguments(parser_t *parser, ast_node_t *parent) {
     unless (check(parser, TOKEN_PARENTHESIS_CLOSE)) {
         do {
-            ast_node_t *argument = parse_expression(parser);
-            array_push(&parent->children, argument);
+            token_t label = parse_label_or_nil(parser);
+            if (check_expression(parser)) {
+                ast_node_t *argument = parse_expression(parser);
+                argument->label = label;
+                array_push(&parent->children, argument);
+            } else {
+                ast_node_t *unique_nil_node = ast_node_new(parser->ast, AST_NODE_TYPE_NONE, parser->previous);
+                *unique_nil_node = nil_node;
+                unique_nil_node->label = label;
+                array_push(&parent->children, unique_nil_node);
+            }
         } while (match(parser, TOKEN_COMMA));
     }
 
@@ -1498,14 +1525,9 @@ static ast_node_t *parse_decl_def(parser_t *parser);
 
 static void parse_parameters(parser_t *parser, ast_nodes_t *children) {
     until (check(parser, TOKEN_PARENTHESIS_CLOSE)) {
-        if (is_incoming_decl_def(parser)) {
-            array_push(children, parse_decl_def(parser));
-        } else {
-            bool inside_type_context = parser->inside_type_context;
-            parser->inside_type_context = true;
-            array_push(children, parse_expression(parser));
-            parser->inside_type_context = inside_type_context;
-        }
+        ast_node_t *decl = parse_decl(parser, false);
+        array_push(children, decl);
+
         if (!match(parser, TOKEN_COMMA)) {
             break;
         }
@@ -1608,6 +1630,19 @@ static ast_node_t *parse_grouping_or_function_signature_or_definition(parser_t *
         if (match(parser, TOKEN_BRACE_OPEN)) {
             ast_node_t *definition = parse_function_definition(parser);
             expr = convert_function_definition(parser, expr, definition);
+        } else {
+            for (size_t i = an_func_def_arg_start(expr); i < an_func_def_arg_end(expr); ++i) {
+                ast_node_t *parameter = expr->children.items[i];
+                if (parameter->node_type != AST_NODE_TYPE_DECLARATION_STATEMENT) {
+                    parser_error(parser, OR_ERROR(
+                        .tag = ERROR_PARSER_EXPECTED_EXPRESSION,
+                        .level = ERROR_SOURCE_PARSER,
+                        .msg = lit2str("only expressions are allowed in function signature"),
+                        .args = ORERR_ARGS(error_arg_node(parameter)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
+                }
+            }
         }
     } else {
         an_operand(expr) = parse_expression(parser);
@@ -1812,19 +1847,7 @@ static ast_node_t *parse_dot(parser_t *parser) {
                     ast_node_t *none = &nil_node;
                     array_push(&initiailizer->children, none);
                 } else {
-                    token_t label = nil_token;
-                    if (check(parser, TOKEN_IDENTIFIER)) {
-                        lexer_t lookahead = parser->lexer;
-                        token_t maybe_colon = lexer_next_token(&lookahead);
-                        if (maybe_colon.type == TOKEN_COLON) {
-                            bool success = consume(parser, TOKEN_IDENTIFIER);
-
-                            label = parser->previous;
-
-                            success &= consume(parser, TOKEN_COLON);
-                            MUST(success);
-                        }
-                    }
+                    token_t label = parse_label_or_nil(parser);
                     ast_node_t *argument = parse_expression(parser);
                     argument->label = label;
 
@@ -2030,36 +2053,6 @@ static ast_node_t *parse_precedence(parser_t *parser, prec_t precedence) {
             }
 
             default: UNREACHABLE();
-        }
-    }
-
-    /*
-     * I was a little liberal with the parsing of the function signature because I wanted it 
-     * to capture both definitions and expressions for the parameters. This allows me
-     * to combine a block and a signature to make a definition and then check if all the
-     * parameters and definitions. That case is handled already.
-     * 
-     * Now here, I need to verify that all the parameters are expressions because
-     * this is the signature case. I only want the parameters to be expressions of types.
-     * 
-     * On a special note, this is a good example on why implementing your own parser is
-     * good. It allows you to easily make special cases for your grammar. Unless you're,
-     * for some reason, focused on making an LL1 parser, don't worry about writing a
-     * restrictive grammar.
-     */
-    if (left_operand->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE) {
-        for (size_t i = an_func_def_arg_start(left_operand); i < an_func_def_arg_end(left_operand); ++i) {
-            ast_node_t *parameter = left_operand->children.items[i];
-            unless (ast_node_type_is_expression(parameter->node_type)) {
-                parser_error(parser, OR_ERROR(
-                    .tag = ERROR_PARSEREX_EXPECTED_EXPRESSION,
-                    .level = ERROR_SOURCE_PARSER,
-                    .msg = lit2str("only type expressions are allowed in function signatures"),
-                    .args = ORERR_ARGS(error_arg_token(parameter->start)),
-                    .show_code_lines = ORERR_LINES(0),
-                ));
-                break;
-            }
         }
     }
 

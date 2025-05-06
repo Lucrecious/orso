@@ -2158,14 +2158,6 @@ static void cgen_function_definitions(cgen_t *cgen, ast_node_t *node) {
     }
 }
 
-typedef struct bools_t bools_t;
-struct bools_t {
-    bool *items;
-    size_t capacity;
-    size_t count;
-    arena_t *allocator;
-};
-
 static void cgen_struct(cgen_t *cgen, type_t type, bools_t *bools) {
     if (bools->items[type.i]) return;
     bools->items[type.i] = true;

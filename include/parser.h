@@ -12,6 +12,14 @@
 
 typedef void (*intrinsic_fn_t)(void *args_reverse_order, void *result);
 
+typedef struct bools_t bools_t;
+struct bools_t {
+    bool *items;
+    size_t capacity;
+    size_t count;
+    arena_t *allocator;
+};
+
 struct ast_node_t;
 typedef struct ast_node_t ast_node_t;
 

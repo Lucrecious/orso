@@ -218,6 +218,9 @@ struct function_t {
         size_t capacity;
         arena_t *allocator;
     } code;
+
+    struct_fields_t arg_defaults;
+    bools_t has_defaults;
 };
 
 function_t *new_function(memarr_t *memory, arena_t *arena);
@@ -269,6 +272,8 @@ void function_init(function_t *function, memarr_t *memory, arena_t *arena) {
     function->memory = memory;
     function->locations.allocator = arena;
     function->code.allocator = arena;
+    function->arg_defaults = (struct_fields_t){.allocator=arena};
+    function->has_defaults = (bools_t){.allocator=arena};
 }
 
 bool function_is_compiled(function_t *function) {
