@@ -1838,11 +1838,7 @@ static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
     type_t callee_type = callee->value_type;
     typedata_t *callee_td = ast_type2td(ast, callee_type);
 
-    if (callee_td->kind == TYPE_FUNCTION || callee_td->kind == TYPE_INTRINSIC_FUNCTION) {
-        call->value_type = callee_td->as.function.return_type;
-    } else {
-        call->value_type = typeid(TYPE_INVALID);
-    }
+    call->value_type = typeid(TYPE_INVALID);
 
     size_t arg_start = an_call_arg_start(call);
     size_t arg_end = an_call_arg_end(call);
@@ -1940,6 +1936,9 @@ static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
         an_callee(call) = callee;
     }
 
+    if (callee_td->kind == TYPE_FUNCTION || callee_td->kind == TYPE_INTRINSIC_FUNCTION) {
+        call->value_type = callee_td->as.function.return_type;
+    }
 
     if (callee->expr_val.is_concrete) {
         function_t *function = (function_t*)callee->expr_val.word.as.p;

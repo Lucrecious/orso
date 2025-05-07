@@ -1,10 +1,17 @@
 main :: () -> void {
-    add :: (a: int, b := 0, c := 0) -> int {
+    add :: (a: !u, b: u = 0, c: u = 0) -> u {
         return a + b + c;
     };
 
-    myadd := add;
-    s := myadd(1,, 4);
+    s := add(1, 2, 3);
+    printint(s);
+    println();
+
+    s = add(1);
+    printint(s);
+    println();
+
+    s = add(1, c: 2);
     printint(s);
     println();
 };
