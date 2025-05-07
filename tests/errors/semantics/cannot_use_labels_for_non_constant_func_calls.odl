@@ -4,7 +4,7 @@ main :: () -> void {
     };
 
     myadd := add;
-    s := myadd(1,, 4);
+    s := myadd(a: 1, b: 1, c: 4);
     printint(s);
     println();
 };

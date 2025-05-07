@@ -302,6 +302,7 @@ struct ast_node_t {
     scope_t child_scope;
 
     // todo: to optimize for space consider merging these into a flag enum
+    bool has_default_value;
     bool is_mutable;
     bool is_intrinsic;
     bool is_exported;

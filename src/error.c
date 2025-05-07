@@ -14,6 +14,11 @@ error_arg_t error_arg_node(ast_node_t *node) {
     return (error_arg_t){.type=ERROR_ARG_TYPE_NODE, .node_or_null=node};
 }
 
+error_arg_t error_arg_str(ast_t *ast, string_t str) {
+    str = string_copy(str, ast->arena);
+    return (error_arg_t){.type=ERROR_ARG_TYPE_STRING, .str=str};
+}
+
 error_arg_t error_arg_sz(size_t sz) {
     return (error_arg_t){.type=ERROR_ARG_TYPE_SIZE, .size=sz};
 }
@@ -28,6 +33,7 @@ error_arg_t error_arg_ptr(void *ptr) {
 
 static texloc_t error_arg_loc(error_arg_t arg) {
     switch (arg.type) {
+    case ERROR_ARG_TYPE_STRING:
     case ERROR_ARG_TYPE_PTR:
     case ERROR_ARG_TYPE_TYPE:
     case ERROR_ARG_TYPE_SIZE:
@@ -67,6 +73,7 @@ static string_t get_source_snippet(error_arg_t arg, arena_t *arena) {
     string_view_t view = source;
     size_t column_hint = 0;
     switch (arg.type) {
+    case ERROR_ARG_TYPE_STRING: break;
     case ERROR_ARG_TYPE_PTR: break;
     case ERROR_ARG_TYPE_SIZE: break;
     case ERROR_ARG_TYPE_NONE: break;
@@ -235,16 +242,18 @@ static string_t error_format(string_t message_format, typedatas_t *tds, error_ar
                     sb_add_cstr(&sb, token_type_str);
                     break;
                 }
+                case ERROR_ARG_TYPE_STRING:
                 case ERROR_ARG_TYPE_PTR:
-                case ERROR_ARG_TYPE_SIZE: break;
-                case ERROR_ARG_TYPE_NODE: break;
-                case ERROR_ARG_TYPE_NONE: break;
+                case ERROR_ARG_TYPE_SIZE:
+                case ERROR_ARG_TYPE_NODE:
+                case ERROR_ARG_TYPE_NONE:
                 case ERROR_ARG_TYPE_TYPE: break;
                 }
             } else if (sv_eq(field_sv, lit2sv(""))) {
                 switch (arg.type) {
                 case ERROR_ARG_TYPE_TOKEN: sb_add_format(&sb, "%.*s", arg.token.view.length, arg.token.view.data); break;
                 case ERROR_ARG_TYPE_SIZE: sb_add_format(&sb,"%llu", arg.size); break;
+                case ERROR_ARG_TYPE_STRING: sb_add_format(&sb, "%s", arg.str.cstr);
                 case ERROR_ARG_TYPE_NODE: {
                     if (arg.node_or_null) {
                         string_view_t sv;
@@ -272,6 +281,7 @@ static string_t error_format(string_t message_format, typedatas_t *tds, error_ar
                 case ERROR_ARG_TYPE_PTR:
                 case ERROR_ARG_TYPE_NONE:
                 case ERROR_ARG_TYPE_TOKEN:
+                case ERROR_ARG_TYPE_STRING:
                 case ERROR_ARG_TYPE_SIZE: break;
 
                 case ERROR_ARG_TYPE_NODE: {

@@ -148,13 +148,14 @@ static bool check_call_on_func(analyzer_t *analyzer, ast_t *ast, ast_node_t *cal
     size_t func_type_arg_count = func_td->as.function.argument_types.count;
     if (func_type_arg_count != arg_count) {
         errored = true;
-        stan_error(analyzer, OR_ERROR(
-            .tag = ERROR_ANALYSIS_NUMBER_ARGS_CALL_FUNC_MISTMATCH,
-            .level = ERROR_SOURCE_ANALYSIS,
-            .msg = lit2str("call to '$0.$' requires $1.$ arguments but got $2.$"),
-            .args = ORERR_ARGS(error_arg_node(callee), error_arg_sz(func_type_arg_count), error_arg_sz(arg_count)),
-            .show_code_lines = ORERR_LINES(0),
-        ));
+        // don't thjink this is needed anymore since these errors are omitted when trying to generate the missing args
+        // stan_error(analyzer, OR_ERROR(
+        //     .tag = ERROR_ANALYSIS_NUMBER_ARGS_CALL_FUNC_MISTMATCH,
+        //     .level = ERROR_SOURCE_ANALYSIS,
+        //     .msg = lit2str("call to '$0.$' requires $1.$ arguments but got $2.$"),
+        //     .args = ORERR_ARGS(error_arg_node(callee), error_arg_sz(func_type_arg_count), error_arg_sz(arg_count)),
+        //     .show_code_lines = ORERR_LINES(0),
+        // ));
     }
 
     size_t min_args = func_type_arg_count < arg_count ? func_type_arg_count : arg_count;
@@ -1677,7 +1678,7 @@ bool ast_find_struct_field_by_name(ast_t *ast, type_t struct_type, string_view_t
     return ast_find_field_by_name(td->as.struct_.fields, name, field, index);
 }
 
-static void regenerate_arguments(analyzer_t *analyzer, ast_t *ast, ast_node_t *call, function_t *function) {
+static void patch_call_argument_gaps(analyzer_t *analyzer, ast_t *ast, ast_node_t *call, struct_fields_t arg_defaults, bools_t has_defaults) {
     ast_node_t *callee = an_callee(call);
     tmp_arena_t *tmp = allocator_borrow();
     ast_nodes_t new_args = {.allocator=tmp->allocator};
@@ -1692,36 +1693,24 @@ static void regenerate_arguments(analyzer_t *analyzer, ast_t *ast, ast_node_t *c
     bool is_invalid = false;
 
     token_t arg_where = callee->end;
-    for (size_t i = 0; i < function->arg_defaults.count; ++i) {
-        bool has_default = function->has_defaults.items[i];
-        ast_node_t *arg = NULL;
-        if (arg_index < arg_count && (arg = call->children.items[arg_start + arg_index])) {
+    for (size_t i = 0; i < arg_defaults.count; ++i) {
+        bool has_default = has_defaults.items[i];
+        ast_node_t *arg_or_null = NULL;
+        if (arg_index < arg_count && (arg_or_null = call->children.items[arg_start + arg_index])) {
             ++arg_index;
-            arg_where = arg->start;
+            arg_where = arg_or_null->start;
 
-            if (an_is_none(arg) && !has_default) {
-                is_invalid = true;
-                stan_error(analyzer, OR_ERROR(
-                    .tag = ERROR_ANALYSIS_ARG_REQUIRED,
-                    .level = ERROR_SOURCE_ANALYSIS,
-                    .msg = lit2str("function argument '$1.$' has no default value and must be provided"),
-                    .args = ORERR_ARGS(error_arg_node(arg), error_arg_sz(i)),
-                    .show_code_lines = ORERR_LINES(0),
-                ));
-                break;
-            }
-
-            if (arg->label.view.length > 0) {
+            if (arg_or_null->label.view.length > 0) {
                 size_t next_param_index;
                 struct_field_t field;
-                bool found_param = ast_find_field_by_name(function->arg_defaults, arg->label.view, &field, &next_param_index);
+                bool found_param = ast_find_field_by_name(arg_defaults, arg_or_null->label.view, &field, &next_param_index);
                 if (!found_param) {
                     is_invalid = true;
                     stan_error(analyzer, OR_ERROR(
                         .tag = ERROR_ANALYSIS_INVALID_LABEL,
                         .level = ERROR_SOURCE_ANALYSIS,
                         .msg = lit2str("cannot find argument '$0.$' for function"),
-                        .args = ORERR_ARGS(error_arg_token(arg->label)),
+                        .args = ORERR_ARGS(error_arg_token(arg_or_null->label)),
                         .show_code_lines = ORERR_LINES(0),
                     ));
                     break;
@@ -1729,50 +1718,64 @@ static void regenerate_arguments(analyzer_t *analyzer, ast_t *ast, ast_node_t *c
 
                 if (next_param_index < param_index) {
                     is_invalid = true;
+                    struct_field_t next_field = arg_defaults.items[next_param_index];
+                    struct_field_t field = arg_defaults.items[param_index];
                     stan_error(analyzer, OR_ERROR(
                         .tag = ERROR_ANALYSIS_ARGUMENT_OUT_OF_ORDER,
                         .level = ERROR_SOURCE_ANALYSIS,
                         .msg = lit2str("arguments must be in function parameter order but got argument '$1.$' after argument '$2.$'"),
-                        .args = ORERR_ARGS(error_arg_node(arg), error_arg_sz(next_param_index), error_arg_sz(param_index)),
+                        .args = ORERR_ARGS(error_arg_node(arg_or_null), error_arg_str(ast, next_field.name), error_arg_str(ast, field.name)),
                         .show_code_lines = ORERR_LINES(0),
                     ));
                     break;
                 }
 
-                if (next_param_index != param_index && arg->start.view.length == 0) {
-                    is_invalid = true;
-                    stan_error(analyzer, OR_ERROR(
-                        .tag = ERROR_ANALYSIS_ARG_REQUIRED,
-                        .level = ERROR_SOURCE_ANALYSIS,
-                        .msg = lit2str("function argument '$1.$' has no default value and must be provided"),
-                        .args = ORERR_ARGS(error_arg_node(arg), error_arg_sz(param_index)),
-                        .show_code_lines = ORERR_LINES(0),
-                    ));
-                    break;
-                }
                 param_index = next_param_index;
             } else {
                 param_index = i;
             }
 
-            arg = an_is_none(arg) ? NULL : arg;
+            arg_or_null = an_is_none(arg_or_null) ? NULL : arg_or_null;
         }
 
-        if (param_index > i) {
-            for (size_t j = i; j < param_index; ++j) {
+        #define error_arg_must_be_provided(index) do {\
+            struct_field_t param_field = arg_defaults.items[index]; \
+            stan_error(analyzer, OR_ERROR(\
+                .tag = ERROR_ANALYSIS_ARG_REQUIRED,\
+                .level = ERROR_SOURCE_ANALYSIS,\
+                .msg = lit2str("function argument '$1.$' has no default value and must be provided"),\
+                .args = ORERR_ARGS(error_arg_node(call), error_arg_str(ast, param_field.name)),\
+                .show_code_lines = ORERR_LINES(0),\
+            ));\
+        } while(false)
+
+        if (arg_or_null == NULL && !has_default) {
+            is_invalid = true;
+            error_arg_must_be_provided(i);
+        } else {
+            if (param_index > i) {
+                for (size_t j = i; j < param_index; ++j) {
+                    if (!has_defaults.items[j]) {
+                        is_invalid = true;
+                        error_arg_must_be_provided(j);
+                    }
+
+                    ast_node_t *unique_nil = ast_node_new(ast, AST_NODE_TYPE_NONE, arg_where);
+                    array_push(&new_args, unique_nil);
+                }
+
+                i = param_index;
+            }
+
+            if (arg_or_null) {
+                array_push(&new_args, arg_or_null);
+            } else {
                 ast_node_t *unique_nil = ast_node_new(ast, AST_NODE_TYPE_NONE, arg_where);
                 array_push(&new_args, unique_nil);
             }
-
-            i = param_index;
         }
 
-        if (arg) {
-            array_push(&new_args, arg);
-        } else {
-            ast_node_t *unique_nil = ast_node_new(ast, AST_NODE_TYPE_NONE, arg_where);
-            array_push(&new_args, unique_nil);
-        }
+        #undef error_arg_must_be_provided
     }
 
 
@@ -1780,17 +1783,52 @@ static void regenerate_arguments(analyzer_t *analyzer, ast_t *ast, ast_node_t *c
 
     if (is_invalid) return;
 
-    size_t arg_diff = function->arg_defaults.count - arg_count;
+    if (arg_index < arg_count) {
+        struct_field_t field = arg_defaults.items[param_index];
+        stan_error(analyzer, OR_ERROR(
+            .tag = ERROR_ANALYSIS_NUMBER_ARGS_CALL_FUNC_MISTMATCH,
+            .level = ERROR_SOURCE_ANALYSIS,
+            .msg = lit2str("there are extra arguments after '$1.$'"),
+            .args = ORERR_ARGS(error_arg_node(call->children.items[arg_start+arg_index]), error_arg_str(ast, field.name)),
+            .show_code_lines = ORERR_LINES(0),
+        ));
+        return;
+    }
+
+    size_t arg_diff = arg_defaults.count - arg_count;
     for (size_t i = 0; i < arg_diff; ++i) {
         array_push(&call->children, &nil_node);
     }
 
     arg_end = an_call_arg_end(call);
-    MUST(arg_end - arg_start == function->arg_defaults.count);
+    MUST(arg_end - arg_start == arg_defaults.count);
 
     for (size_t i = arg_start; i < arg_end; ++i) {
         call->children.items[i] = new_args.items[i-arg_start];
     }
+}
+
+typedef struct ast_inferred_function_t ast_inferred_function_t;
+struct ast_inferred_function_t {
+    struct_fields_t arg_defaults;
+    bools_t has_defaults;
+    ast_node_t *funcdef;
+};
+
+ast_inferred_function_t *ast_inferred_function_from_funcdef(ast_t *ast, ast_node_t *funcdef, arena_t *arena) {
+    ast_inferred_function_t *func = arena_alloc(arena, sizeof(ast_inferred_function_t));
+    func->funcdef = funcdef;
+    func->arg_defaults = (struct_fields_t){.allocator=arena};
+    func->has_defaults = (bools_t){.allocator=arena};
+
+    for (size_t i = an_func_def_arg_start(funcdef); i < an_func_def_arg_end(funcdef); ++i) {
+        ast_node_t *decl = funcdef->children.items[i];
+        struct_field_t field = ast_struct_field_from_decl(ast, decl, arena);
+        array_push(&func->arg_defaults, field);
+        array_push(&func->has_defaults, decl->has_default_value);
+    }
+
+    return func;
 }
 
 static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t state, ast_node_t *call, type_t implicit_type) {
@@ -1799,6 +1837,12 @@ static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
 
     type_t callee_type = callee->value_type;
     typedata_t *callee_td = ast_type2td(ast, callee_type);
+
+    if (callee_td->kind == TYPE_FUNCTION || callee_td->kind == TYPE_INTRINSIC_FUNCTION) {
+        call->value_type = callee_td->as.function.return_type;
+    } else {
+        call->value_type = typeid(TYPE_INVALID);
+    }
 
     size_t arg_start = an_call_arg_start(call);
     size_t arg_end = an_call_arg_end(call);
@@ -1809,7 +1853,7 @@ static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
             stan_error(analyzer, OR_ERROR(
                 .tag = ERROR_ANALYSIS_NUMBER_ARGS_CALL_FUNC_MISTMATCH,
                 .level = ERROR_SOURCE_ANALYSIS,
-                .msg = lit2str("for calls on non-constant functions, all arguments are required; got '$0.$' arguments instead of '$1.$'"),
+                .msg = lit2str("for calls on non-constant functions, all arguments are required; got '$1.$' arguments instead of '$2.$'"),
                 .args = ORERR_ARGS(error_arg_node(call), error_arg_sz(arg_count), error_arg_sz(callee_td->as.function.argument_types.count)),
                 .show_code_lines = ORERR_LINES(0),
             ));
@@ -1843,8 +1887,13 @@ static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
         }
     // reconstruct/fill arguments
     } else if (callee_td->kind != TYPE_INTRINSIC_FUNCTION) {
-        function_t *function = (function_t*)callee->expr_val.word.as.p;
-        regenerate_arguments(analyzer, ast, call, function);
+        if (callee_td->kind == TYPE_INFERRED_FUNCTION) {
+            ast_inferred_function_t *inferred_decl = callee->expr_val.word.as.p;
+            patch_call_argument_gaps(analyzer, ast, call, inferred_decl->arg_defaults, inferred_decl->has_defaults);
+        } else {
+            function_t *function = (function_t*)callee->expr_val.word.as.p;
+            patch_call_argument_gaps(analyzer, ast, call, function->arg_defaults, function->has_defaults);
+        }
         arg_end = an_call_arg_end(call);
         arg_count = arg_end-arg_start;
     }
@@ -1863,9 +1912,9 @@ static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
             return;
         }
 
-        ast_node_t *inferred_funcdef = (ast_node_t*)callee->expr_val.word.as.p;
+        ast_inferred_function_t *inferred_funcdef = (ast_inferred_function_t*)callee->expr_val.word.as.p;
 
-        ast_node_t *realized_funcdef = stan_realize_inferred_funcdef_or_error_and_null(analyzer, state, call, inferred_funcdef);
+        ast_node_t *realized_funcdef = stan_realize_inferred_funcdef_or_error_and_null(analyzer, state, call, inferred_funcdef->funcdef);
 
         unless (realized_funcdef) {
             INVALIDATE(call);
@@ -1935,7 +1984,6 @@ static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
     }
 
     if (argument_invalid || TYPE_IS_INVALID(callee->value_type)) {
-        INVALIDATE(call);
         return;
     }
 
@@ -1952,11 +2000,8 @@ static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
 
     bool success = check_call_on_func(analyzer, ast, call);
     if (!success) {
-        INVALIDATE(call);
         return;
     }
-
-    call->value_type = callee_td->as.function.return_type;
 }
 
 void resolve_expression(
@@ -4179,7 +4224,8 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
     if (is_inferred_function) {
         type_t function_type = typeid(TYPE_INFERRED_FUNCTION);
         funcdef->value_type = function_type;
-        funcdef->expr_val = ast_node_val_word(WORDP(funcdef));
+        ast_inferred_function_t *inferred_func = ast_inferred_function_from_funcdef(ast, funcdef, ast->arena);
+        funcdef->expr_val = ast_node_val_word(WORDP(inferred_func));
         goto defer;
     }
 
@@ -4241,7 +4287,7 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
                 ast_node_t *param = funcdef->children.items[i];
 
                 struct_field_t field = ast_struct_field_from_decl(ast, param, function->arg_defaults.allocator);
-                bool has_default = an_decl_expr(param)->start.view.length > 0;
+                bool has_default = param->has_default_value;
                 array_push(&function->arg_defaults, field);
                 array_push(&function->has_defaults, has_default);
             }

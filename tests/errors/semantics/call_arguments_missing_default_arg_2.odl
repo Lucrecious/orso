@@ -3,8 +3,7 @@ main :: () -> void {
         return a + b + c;
     };
 
-    myadd := add;
-    s := myadd(1,, 4);
+    s := add(, 1, 2);
     printint(s);
     println();
 };

@@ -1099,7 +1099,6 @@ static void parse_arguments(parser_t *parser, ast_node_t *parent) {
                 array_push(&parent->children, argument);
             } else {
                 ast_node_t *unique_nil_node = ast_node_new(parser->ast, AST_NODE_TYPE_NONE, parser->previous);
-                *unique_nil_node = nil_node;
                 unique_nil_node->label = label;
                 array_push(&parent->children, unique_nil_node);
             }
@@ -2116,10 +2115,12 @@ static ast_node_t *parse_decl_def(parser_t *parser) {
 
     ast_node_t *type_expr = NULL;
     if (!check(parser, TOKEN_EQUAL) && !check(parser, TOKEN_COLON)) {
+
         bool inside_type_context = parser->inside_type_context;
         parser->inside_type_context = true;
         type_expr = parse_expression(parser);
         parser->inside_type_context = inside_type_context;
+
     } else {
         type_expr = ast_implicit_expr(parser->ast, typeid(TYPE_TYPE), WORDT(typeid(TYPE_UNRESOLVED)), token_implicit_at_end(parser->previous));
     }
@@ -2138,13 +2139,16 @@ static ast_node_t *parse_decl_def(parser_t *parser) {
         is_mutable = true;
     }
 
+    bool has_default_value;
     ast_node_t *init_expr = NULL;
     if (requires_expression) {
+        has_default_value = true;
         bool inside_type_context = parser->inside_type_context;
         parser->inside_type_context = false;
         init_expr = parse_expression(parser);
         parser->inside_type_context = inside_type_context;
     } else {
+        has_default_value = false;
         init_expr = ast_nil(parser->ast, typeid(TYPE_UNRESOLVED), token_implicit_at_end(parser->previous));
     }
 
@@ -2153,6 +2157,7 @@ static ast_node_t *parse_decl_def(parser_t *parser) {
     ast_node_t *decldef = ast_decldef(parser->ast, identifier, type_expr, init_expr);
     decldef->is_mutable = is_mutable;
     decldef->is_intrinsic = is_intrinsic;
+    decldef->has_default_value = has_default_value;
     return decldef;
 }
 

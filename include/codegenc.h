@@ -308,11 +308,14 @@ static void cgen_cache_requires_tmp(typedatas_t *types, ast_node_t *expression) 
                 expression->requires_tmp_for_cgen = true;
             } else {
                 if (cgen_binary_is_macro(expression->operator.type, operandtd, NULL)) {
-                    if (an_lhs(expression)->node_type == AST_NODE_TYPE_EXPRESSION_PRIMARY && an_rhs(expression)->node_type == AST_NODE_TYPE_EXPRESSION_PRIMARY) {
+                    // ast_node_t *lhs = an_lhs(expression);
+                    // ast_node_t *rhs = an_rhs(expression);
+                    // if ((lhs->node_type == AST_NODE_TYPE_EXPRESSION_PRIMARY || lhs->node_type == AST_NODE_TYPE_DECL)
+                    // && (rhs->node_type == AT)) {
                         expression->requires_tmp_for_cgen = false;
-                    } else {
-                        expression->requires_tmp_for_cgen = true;
-                    }
+                    // } else {
+                    //     expression->requires_tmp_for_cgen = true;
+                    // }
                 } else {
                     expression->requires_tmp_for_cgen = false;
                 }
