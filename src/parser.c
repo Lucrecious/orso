@@ -1971,7 +1971,6 @@ static ast_node_t *parse_precedence(parser_t *parser, prec_t precedence) {
     ast_node_t *left_operand;
 
     if (prefix_rule == NULL) {
-        left_operand = ast_node_new(parser->ast, AST_NODE_TYPE_NONE, parser->current);
         parser_error(parser, OR_ERROR(
             .tag = ERROR_PARSEREX_EXPECTED_EXPRESSION,
             .level = ERROR_SOURCE_PARSER,
@@ -1979,10 +1978,13 @@ static ast_node_t *parse_precedence(parser_t *parser, prec_t precedence) {
             .args = ORERR_ARGS(error_arg_token(parser->current)),
             .show_code_lines = ORERR_LINES(0),
         ));
-    } else {
-        advance(parser);
+    }
+    advance(parser);
 
+    if (prefix_rule) {
         left_operand = prefix_rule(parser);
+    } else {
+        left_operand = ast_node_new(parser->ast, AST_NODE_TYPE_NONE, parser->current);
     }
 
     while (precedence <= parser_get_rule(parser->current.type)->precedence) {
@@ -2159,7 +2161,7 @@ static ast_node_t *parse_decl(parser_t *parser, bool is_top_level) {
 
     if (is_incoming_decl_def(parser)) {
         node = parse_decl_def(parser);
-    } else if (check_expression(parser)) {
+    } else {
         node = parse_statement(parser);
         if (is_top_level) {
             // may never be hit...
@@ -2167,25 +2169,6 @@ static ast_node_t *parse_decl(parser_t *parser, bool is_top_level) {
                 .tag = ERROR_PARSER_EXPECTED_DECLARATION,
                 .level = ERROR_SOURCE_PARSER,
                 .msg = lit2str("only declarations are allowed at the module scope"),
-                .args = ORERR_ARGS(error_arg_node(node)),
-                .show_code_lines = ORERR_LINES(0),
-            ));
-        }
-    } else {
-        if (!is_top_level) {
-            // may never be hit...
-            parser_error(parser, OR_ERROR(
-                .tag = ERROR_PARSER_EXPECTED_DECLARATION_OR_STATEMENT,
-                .level = ERROR_SOURCE_PARSER,
-                .msg = lit2str("expected declaration or statement"),
-                .args = ORERR_ARGS(error_arg_node(node)),
-                .show_code_lines = ORERR_LINES(0),
-            ));
-        } else {
-            parser_error(parser, OR_ERROR(
-                .tag = ERROR_PARSER_EXPECTED_DECLARATION,
-                .level = ERROR_SOURCE_PARSER,
-                .msg = lit2str("expected declaration"),
                 .args = ORERR_ARGS(error_arg_node(node)),
                 .show_code_lines = ORERR_LINES(0),
             ));
