@@ -1383,10 +1383,25 @@ static ast_node_t *stan_realize_inferred_funcdef_or_error_and_null(analyzer_t *a
         
         size_t arg_call_start = an_call_arg_start(call);
         ast_node_t *call_arg = call->children.items[i-inferred_arg_start+arg_call_start];
-        for (size_t t = 0; t < decl->type_decl_patterns.count; ++t)  {
-            type_pattern_t pattern = decl->type_decl_patterns.items[t];
+
+        if (decl->type_decl_patterns.count > 0) {
+            if (an_is_none(call_arg)) {
+                had_error = true;
+                stan_error(analyzer, OR_ERROR(
+                    .tag = ERROR_ANALYSIS_INFERRED_CALL_REQUIRES_NONEMPTY_ARGUMENT,
+                    .level = ERROR_SOURCE_ANALYSIS,
+                    .msg = lit2str("inferred call argument must not be omitted"),
+                    .args = ORERR_ARGS(error_arg_node(call_arg)),
+                    .show_code_lines = ORERR_LINES(0),
+                ));
+                continue;
+            }
 
             resolve_expression(analyzer, analyzer->ast, state, typeid(TYPE_UNRESOLVED), call_arg, true);
+        }
+
+        for (size_t t = 0; t < decl->type_decl_patterns.count; ++t)  {
+            type_pattern_t pattern = decl->type_decl_patterns.items[t];
             
             matched_value_t matched_value = stan_pattern_match_or_error(analyzer, decl, pattern.expected, call_arg->value_type, call_arg);
             array_push(&matched_values, matched_value);
@@ -1699,7 +1714,7 @@ static void regenerate_arguments(analyzer_t *analyzer, ast_t *ast, ast_node_t *c
             if (arg->label.view.length > 0) {
                 size_t next_param_index;
                 struct_field_t field;
-                bool found_param = ast_find_field_by_name(function->arg_defaults,arg->label.view, &field, &next_param_index);
+                bool found_param = ast_find_field_by_name(function->arg_defaults, arg->label.view, &field, &next_param_index);
                 if (!found_param) {
                     is_invalid = true;
                     stan_error(analyzer, OR_ERROR(
@@ -1785,6 +1800,55 @@ static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
     type_t callee_type = callee->value_type;
     typedata_t *callee_td = ast_type2td(ast, callee_type);
 
+    size_t arg_start = an_call_arg_start(call);
+    size_t arg_end = an_call_arg_end(call);
+    size_t arg_count = arg_end - arg_start;
+    // cannot use labelled arguments on variables
+    if (!callee->expr_val.is_concrete) {
+        if (arg_count != callee_td->as.function.argument_types.count) {
+            stan_error(analyzer, OR_ERROR(
+                .tag = ERROR_ANALYSIS_NUMBER_ARGS_CALL_FUNC_MISTMATCH,
+                .level = ERROR_SOURCE_ANALYSIS,
+                .msg = lit2str("for calls on non-constant functions, all arguments are required; got '$0.$' arguments instead of '$1.$'"),
+                .args = ORERR_ARGS(error_arg_node(call), error_arg_sz(arg_count), error_arg_sz(callee_td->as.function.argument_types.count)),
+                .show_code_lines = ORERR_LINES(0),
+            ));
+            return;
+        }
+
+        for (size_t i = 0; i < arg_count; ++i) {
+            size_t argi = arg_start + i;
+            ast_node_t *arg = call->children.items[argi];
+            if (arg->label.view.length > 0) {
+                stan_error(analyzer, OR_ERROR(
+                    .tag = ERROR_ANALYSIS_INVALID_LABEL,
+                    .level = ERROR_SOURCE_ANALYSIS,
+                    .msg = lit2str("cannot use labels on arguments for calls on non-constant functions"),
+                    .args = ORERR_ARGS(error_arg_token(arg->label)),
+                    .show_code_lines = ORERR_LINES(0),
+                ));
+                return;
+            }
+
+            if (an_is_none(arg)) {
+                stan_error(analyzer, OR_ERROR(
+                    .tag = ERROR_ANALYSIS_NUMBER_ARGS_CALL_FUNC_MISTMATCH,
+                    .level = ERROR_SOURCE_ANALYSIS,
+                    .msg = lit2str("cannot omit arguments for a call on a non-constant function"),
+                    .args = ORERR_ARGS(error_arg_node(arg)),
+                    .show_code_lines = ORERR_LINES(0),
+                ));
+                return;
+            }
+        }
+    // reconstruct/fill arguments
+    } else if (callee_td->kind != TYPE_INTRINSIC_FUNCTION) {
+        function_t *function = (function_t*)callee->expr_val.word.as.p;
+        regenerate_arguments(analyzer, ast, call, function);
+        arg_end = an_call_arg_end(call);
+        arg_count = arg_end-arg_start;
+    }
+
     if (callee_td->kind == TYPE_INFERRED_FUNCTION) {
         // im not sure if this is possible
         unless (callee->expr_val.is_concrete) {
@@ -1827,6 +1891,19 @@ static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
         an_callee(call) = callee;
     }
 
+
+    if (callee->expr_val.is_concrete) {
+        function_t *function = (function_t*)callee->expr_val.word.as.p;
+        for (size_t i = arg_start; i < arg_end; ++i) {
+            ast_node_t *arg = call->children.items[i];
+            if (an_is_none(arg)) {
+                struct_field_t field = function->arg_defaults.items[i - arg_start];
+                arg = ast_implicit_expr(ast, field.type, field.default_value, arg->start);
+                call->children.items[i] = arg;
+            }
+        }
+    }
+
     if ((!type_is_function(ast->type_set.types, callee_type) && !type_is_intrinsic_function(ast->type_set.types, callee_type))) {
         unless (TYPE_IS_INVALID(callee_type)) {
             stan_error(analyzer, OR_ERROR(
@@ -1838,63 +1915,6 @@ static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
             ));
         }
         return;
-    }
-
-    size_t arg_start = an_call_arg_start(call);
-    size_t arg_end = an_call_arg_end(call);
-    size_t arg_count = arg_end - arg_start;
-    // reconstruct/fill arguments
-    if (!callee->expr_val.is_concrete) {
-        if (arg_count != callee_td->as.function.argument_types.count) {
-            stan_error(analyzer, OR_ERROR(
-                .tag = ERROR_ANALYSIS_NUMBER_ARGS_CALL_FUNC_MISTMATCH,
-                .level = ERROR_SOURCE_ANALYSIS,
-                .msg = lit2str("for calls on non-constant functions, all arguments are required; got '$0.$' arguments instead of '$1.$'"),
-                .args = ORERR_ARGS(error_arg_node(call), error_arg_sz(arg_count), error_arg_sz(callee_td->as.function.argument_types.count)),
-                .show_code_lines = ORERR_LINES(0),
-            ));
-            return;
-        }
-
-        for (size_t i = 0; i < arg_count; ++i) {
-            size_t argi = arg_start + i;
-            ast_node_t *arg = call->children.items[argi];
-            if (arg->label.view.length > 0) {
-                stan_error(analyzer, OR_ERROR(
-                    .tag = ERROR_ANALYSIS_INVALID_LABEL,
-                    .level = ERROR_SOURCE_ANALYSIS,
-                    .msg = lit2str("cannot use labels on arguments for calls on non-constant functions"),
-                    .args = ORERR_ARGS(error_arg_token(arg->label)),
-                    .show_code_lines = ORERR_LINES(0),
-                ));
-                return;
-            }
-
-            if (an_is_none(arg)) {
-                stan_error(analyzer, OR_ERROR(
-                    .tag = ERROR_ANALYSIS_NUMBER_ARGS_CALL_FUNC_MISTMATCH,
-                    .level = ERROR_SOURCE_ANALYSIS,
-                    .msg = lit2str("cannot omit arguments for a call on a non-constant function"),
-                    .args = ORERR_ARGS(error_arg_node(arg)),
-                    .show_code_lines = ORERR_LINES(0),
-                ));
-                return;
-            }
-        }
-    } else if (callee_td->kind != TYPE_INTRINSIC_FUNCTION) {
-        function_t *function = (function_t*)callee->expr_val.word.as.p;
-        regenerate_arguments(analyzer, ast, call, function);
-        arg_end = an_call_arg_end(call);
-        arg_count = arg_end-arg_start;
-
-        for (size_t i = arg_start; i < arg_end; ++i) {
-            ast_node_t *arg = call->children.items[i];
-            if (an_is_none(arg)) {
-                struct_field_t field = function->arg_defaults.items[i - arg_start];
-                arg = ast_implicit_expr(ast, field.type, field.default_value, arg->start);
-                call->children.items[i] = arg;
-            }
-        }
     }
 
     bool argument_invalid = false;

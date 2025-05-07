@@ -1,0 +1,40 @@
+main :: () -> void {
+    printintln :: (i: int) -> void {
+        printint(i);
+        println();
+    };
+
+    add :: (a := 0, b := 1) -> int {
+        return a + b;
+    };
+
+    result := add();
+    printintln(result);
+
+    result = add(2);
+    printintln(result);
+
+    result = add(3,);
+    printintln(result);
+
+    result = add(, 4);
+    printintln(result);
+
+    result = add(,);
+    printintln(result);
+
+    result = add(b: 5);
+    printintln(result);
+
+    result = add(a: 6, 7);
+    printintln(result);
+
+    result = add(8, b: 9);
+    printintln(result);
+
+    result = add(a: 10, b: 11);
+    printintln(result);
+
+    result = add(12, 13);
+    printintln(result);
+};
