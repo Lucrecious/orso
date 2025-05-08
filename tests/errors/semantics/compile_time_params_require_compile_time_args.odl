@@ -1,0 +1,10 @@
+main :: () -> void {
+    add :: (!a: int) -> int {
+        return a;
+    };
+
+    y := 1;
+    x := add(y);
+    printint(x);
+    println();
+};

@@ -299,7 +299,7 @@ struct ast_node_t {
     ast_branch_type_t branch_type;
     bool condition_negated;
 
-    scope_t child_scope;
+    scope_t defined_scope;
 
     // todo: to optimize for space consider merging these into a flag enum
     bool has_default_value;
@@ -307,6 +307,7 @@ struct ast_node_t {
     bool is_intrinsic;
     bool is_exported;
     bool is_consumed;
+    bool is_compile_time_param;
     ast_node_t *ref_decl;
     type_patterns_t type_decl_patterns;
 
@@ -398,8 +399,10 @@ void ast_init(ast_t *ast, arena_t *arena);
 
 #define ast_type2td(ast, type) type2typedata(&((ast)->type_set.types), (type))
 
-ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start);
-ast_node_t *ast_node_copy(ast_t *ast, ast_node_t *node);
+void scope_init(scope_t *scope, arena_t *allocator, scope_type_t type, scope_t *outer, ast_node_t *creator_expression);
+
+ast_node_t *ast_node_new(arena_t *arena, ast_node_type_t node_type, token_t start);
+ast_node_t *ast_node_copy(arena_t *arena, ast_node_t *node);
 ast_node_t *ast_nil(ast_t *ast, type_t value_type, token_t token_location);
 ast_node_t *ast_decldef(ast_t *ast, token_t identifier, ast_node_t *type_expr, ast_node_t *init_expr);
 ast_node_t *ast_def_value(ast_t *ast, token_t identifer);

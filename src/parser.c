@@ -176,8 +176,8 @@ ast_node_t nil_node = {
     .last_statement = &nil_node,
 };
 
-ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start) {
-    ast_node_t *node = (ast_node_t*)arena_alloc(ast->arena, sizeof(ast_node_t));
+ast_node_t *ast_node_new(arena_t *arena, ast_node_type_t node_type, token_t start) {
+    ast_node_t *node = (ast_node_t*)arena_alloc(arena, sizeof(ast_node_t));
     *node = (ast_node_t){0};
     
     node->node_type = node_type;
@@ -201,8 +201,9 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start) {
     node->ref_decl = &nil_node;
     node->arg_index = 0;
     node->value_offset = 0;
+    node->is_compile_time_param = false;
 
-    node->jmp_nodes.allocator = ast->arena;
+    node->jmp_nodes.allocator = arena;
     node->jmp_out_scope_node = &nil_node;
 
     node->lvalue_node = &nil_node;
@@ -211,9 +212,9 @@ ast_node_t *ast_node_new(ast_t *ast, ast_node_type_t node_type, token_t start) {
 
     node->last_statement = &nil_node;
 
-    node->children = (ast_nodes_t){.allocator=ast->arena};
-    node->realized_funcdef_copies = (inferred_funcdef_copies_t){.allocator=ast->arena};
-    node->type_decl_patterns = (type_patterns_t){.allocator=ast->arena};
+    node->children = (ast_nodes_t){.allocator=arena};
+    node->realized_funcdef_copies = (inferred_funcdef_copies_t){.allocator=arena};
+    node->type_decl_patterns = (type_patterns_t){.allocator=arena};
 
     switch (node_type) {
         case AST_NODE_TYPE_DECLARATION_DEFINITION: {
@@ -334,14 +335,29 @@ type_path_t *type_path_copy(type_path_t *path, arena_t *arena) {
     return new_path;
 }
 
-ast_node_t *ast_node_copy(ast_t *ast, ast_node_t *node) {
-    ast_node_t *copy = ast_node_new(ast, node->node_type, node->start);
+ast_node_t *ast_node_copy(arena_t *arena, ast_node_t *node) {
+    ast_node_t *copy = ast_node_new(arena, node->node_type, node->start);
+    // todo: i wanna do this instead somehow and copy the rest
+    // *copy = *node;
 
+    copy->arg_index = node->arg_index;
     copy->branch_type = node->branch_type;
     copy->ccode_break_label = node->ccode_break_label;
     copy->ccode_continue_label = node->ccode_continue_label;
     copy->ccode_init_func_name = node->ccode_init_func_name;
     copy->ccode_var_name = node->ccode_var_name;
+    
+    if (node->defined_scope.creator) {
+        scope_init(&copy->defined_scope, arena, node->defined_scope.type, node->defined_scope.outer, copy);
+
+        string_t name;
+        word_t word;
+        int _a;
+        kh_foreach(node->defined_scope.definitions, name, word, {
+            khint_t index = kh_put(s2w, copy->defined_scope.definitions, name, &_a);
+            kh_val(copy->defined_scope.definitions, index) = word;
+        });
+    }
 
     for (size_t i = copy->children.count; i < node->children.count; ++i) {
         array_push(&copy->children, &nil_node);
@@ -349,15 +365,17 @@ ast_node_t *ast_node_copy(ast_t *ast, ast_node_t *node) {
 
     for (size_t i = 0; i < node->children.count; ++i) {
         ast_node_t *child_copy = node->children.items[i];
-        child_copy = ast_node_copy(ast, child_copy);
+        child_copy = ast_node_copy(arena, child_copy);
         copy->children.items[i] = child_copy;
     }
 
     copy->condition_negated = node->condition_negated;
     copy->end = node->end;
     copy->expr_val = node->expr_val;
+    copy->has_default_value = node->has_default_value;
     copy->identifier = node->identifier;
-
+    copy->is_compile_time_param = node->is_compile_time_param;
+    copy->is_consumed = node->is_consumed;
     copy->is_exported = node->is_exported;
     copy->is_free_number = node->is_free_number;
     copy->is_intrinsic = node->is_intrinsic;
@@ -365,24 +383,30 @@ ast_node_t *ast_node_copy(ast_t *ast, ast_node_t *node) {
 
     ASSERT(copy->jmp_nodes.count == 0, "need to convert references to other nodes to relative ones");
     ASSERT(copy->jmp_out_scope_node == &nil_node, "need to convert references to other nodes to relative ones");
-    ASSERT(copy->ref_decl == &nil_node, "need to convert references to other nodes to relative ones");
-    ASSERT(copy->lvalue_node== &nil_node, "need to convert references to other nodes to relative ones");
+
+    copy->label = node->label;
+
     ASSERT(copy->last_statement= &nil_node, "need to convert references to other nodes to relative ones");
+    ASSERT(copy->lvalue_node== &nil_node, "need to convert references to other nodes to relative ones");
+
+    copy->node_type = node->node_type;
 
     copy->operator = node->operator;
 
     copy->realized_funcdef_copies = node->realized_funcdef_copies;
+    ASSERT(copy->ref_decl == &nil_node, "need to convert references to other nodes to relative ones");
     copy->requires_tmp_for_cgen = node->requires_tmp_for_cgen;
     copy->start = node->start;
 
     for (size_t i = 0; i < node->type_decl_patterns.count; ++i) {
         type_pattern_t pattern = node->type_decl_patterns.items[i];
 
-        pattern.expected = type_path_copy(pattern.expected, ast->arena);
+        pattern.expected = type_path_copy(pattern.expected, arena);
 
         array_push(&copy->type_decl_patterns, pattern);
     }
 
+    copy->value_offset = node->value_offset;
     copy->value_type = node->value_type;
     copy->vm_jmp_index = node->vm_jmp_index;
     copy->vm_val_dst = node->vm_val_dst;
@@ -391,7 +415,7 @@ ast_node_t *ast_node_copy(ast_t *ast, ast_node_t *node) {
 }
 
 ast_node_t *ast_begin_module(ast_t *ast) {
-    ast_node_t *module = ast_node_new(ast, AST_NODE_TYPE_MODULE, nil_token);
+    ast_node_t *module = ast_node_new(ast->arena, AST_NODE_TYPE_MODULE, nil_token);
     return module;
 }
 
@@ -421,14 +445,14 @@ void ast_add_module(ast_t *ast, ast_node_t *module, string_t moduleid) {
 }
 
 ast_node_t *ast_implicit_expr(ast_t *ast, type_t type, word_t value, token_t where) {
-    ast_node_t *expr = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_PRIMARY, where);
+    ast_node_t *expr = ast_node_new(ast->arena, AST_NODE_TYPE_EXPRESSION_PRIMARY, where);
     expr->value_type = type;
     expr->expr_val = ast_node_val_word(value);
     return expr;
 }
 
 ast_node_t *ast_decldef(ast_t *ast, token_t identifier, ast_node_t *type_expr, ast_node_t *init_expr) {
-    ast_node_t *definition_node = ast_node_new(ast, AST_NODE_TYPE_DECLARATION_DEFINITION, identifier);
+    ast_node_t *definition_node = ast_node_new(ast->arena, AST_NODE_TYPE_DECLARATION_DEFINITION, identifier);
     definition_node->identifier = identifier;
     an_decl_type(definition_node) = type_expr;
     an_decl_expr(definition_node) = init_expr;
@@ -440,20 +464,20 @@ ast_node_t *ast_decldef(ast_t *ast, token_t identifier, ast_node_t *type_expr, a
 }
 
 ast_node_t *ast_nil(ast_t *ast, type_t value_type, token_t token_location) {
-    ast_node_t *nil_node = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_NIL, token_location);
+    ast_node_t *nil_node = ast_node_new(ast->arena, AST_NODE_TYPE_EXPRESSION_NIL, token_location);
     nil_node->value_type = value_type;
     nil_node->expr_val = zero_value(ast, value_type);
     return nil_node;
 }
 
 ast_node_t *ast_def_value(ast_t *ast, token_t identifier) {
-    ast_node_t *def_value = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_DEF_VALUE, identifier);
+    ast_node_t *def_value = ast_node_new(ast->arena, AST_NODE_TYPE_EXPRESSION_DEF_VALUE, identifier);
     def_value->identifier = identifier;
     return def_value;
 }
 
 ast_node_t *ast_cast(ast_t *ast, ast_node_t *type_expr, ast_node_t *expr) {
-    ast_node_t *cast_ = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_CAST, type_expr->start);
+    ast_node_t *cast_ = ast_node_new(ast->arena, AST_NODE_TYPE_EXPRESSION_CAST, type_expr->start);
     cast_->end = expr->end;
 
     an_cast_type(cast_) = type_expr;
@@ -461,7 +485,7 @@ ast_node_t *ast_cast(ast_t *ast, ast_node_t *type_expr, ast_node_t *expr) {
     return cast_;
 }
 ast_node_t *ast_struct_begin(ast_t *ast, token_t start) {
-    ast_node_t *struct_ = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_STRUCT, start);
+    ast_node_t *struct_ = ast_node_new(ast->arena, AST_NODE_TYPE_EXPRESSION_STRUCT, start);
     struct_->start = start;
 
     return struct_;
@@ -513,7 +537,7 @@ static ast_node_t *ast_primaryu(ast_t *ast, u64 value, type_t type, token_t toke
     default: UNREACHABLE();
     }
 
-    ast_node_t *primary = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_PRIMARY, token);
+    ast_node_t *primary = ast_node_new(ast->arena, AST_NODE_TYPE_EXPRESSION_PRIMARY, token);
     primary->value_type = type;
     primary->expr_val = ast_node_val_word(word);
 
@@ -559,7 +583,7 @@ static ast_node_t *ast_primaryi(ast_t *ast, s64 value, type_t type, token_t toke
     default: UNREACHABLE();
     }
 
-    ast_node_t *primary = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_PRIMARY, token);
+    ast_node_t *primary = ast_node_new(ast->arena, AST_NODE_TYPE_EXPRESSION_PRIMARY, token);
     primary->expr_val = ast_node_val_word(word);
     primary->value_type = type;
 
@@ -589,7 +613,7 @@ static ast_node_t *ast_primaryf(ast_t *ast, f64 value, type_t type, token_t toke
     }
     }
 
-    ast_node_t *primary = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_PRIMARY, token);
+    ast_node_t *primary = ast_node_new(ast->arena, AST_NODE_TYPE_EXPRESSION_PRIMARY, token);
     primary->expr_val = ast_node_val_word(word);
     primary->value_type = type;
 
@@ -597,7 +621,7 @@ static ast_node_t *ast_primaryf(ast_t *ast, f64 value, type_t type, token_t toke
 }
 
 static ast_node_t *ast_primaryb(ast_t *ast, bool value, ast_node_t extra_params) {
-    ast_node_t *primary = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_PRIMARY, extra_params.start);
+    ast_node_t *primary = ast_node_new(ast->arena, AST_NODE_TYPE_EXPRESSION_PRIMARY, extra_params.start);
 
     u8 byte_value = (u8)value;
     word_t word = {.as.u=byte_value};
@@ -609,14 +633,14 @@ static ast_node_t *ast_primaryb(ast_t *ast, bool value, ast_node_t extra_params)
 }
 
 static ast_node_t *ast_statement(ast_t *ast, ast_node_t *expr) {
-    ast_node_t *statement_node = ast_node_new(ast, AST_NODE_TYPE_DECLARATION_STATEMENT, expr->start);
+    ast_node_t *statement_node = ast_node_new(ast->arena, AST_NODE_TYPE_DECLARATION_STATEMENT, expr->start);
     an_expression(statement_node) = expr;
     statement_node->end = expr->end;
     return statement_node;
 }
 
 static ast_node_t *ast_break(ast_t *ast, ast_node_t *expr, token_t label, token_t jmp_token) {
-    ast_node_t *break_ = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_JMP, jmp_token);
+    ast_node_t *break_ = ast_node_new(ast->arena, AST_NODE_TYPE_EXPRESSION_JMP, jmp_token);
     an_expression(break_) = expr;
     break_->identifier = label;
     break_->end = expr->end;
@@ -624,7 +648,7 @@ static ast_node_t *ast_break(ast_t *ast, ast_node_t *expr, token_t label, token_
 }
 
 static ast_node_t *ast_continue(ast_t *ast, token_t label, token_t jmp_token) {
-    ast_node_t *continue_ = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_JMP, jmp_token);
+    ast_node_t *continue_ = ast_node_new(ast->arena, AST_NODE_TYPE_EXPRESSION_JMP, jmp_token);
     an_expression(continue_) = ast_nil(ast, typeid(TYPE_VOID), token_implicit_at_end(label));
     continue_->identifier = label;
     continue_->end = label;
@@ -632,14 +656,14 @@ static ast_node_t *ast_continue(ast_t *ast, token_t label, token_t jmp_token) {
 }
 
 static ast_node_t *ast_return(ast_t *ast, ast_node_t *expr, token_t jmp_token) {
-    ast_node_t *return_ = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_JMP, jmp_token);
+    ast_node_t *return_ = ast_node_new(ast->arena, AST_NODE_TYPE_EXPRESSION_JMP, jmp_token);
     an_expression(return_) = expr;
     return_->end = expr->end;
     return return_;
 }
 
 static ast_node_t *ast_block_begin(ast_t *ast, token_t start) {
-    ast_node_t *block = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_BLOCK, start);
+    ast_node_t *block = ast_node_new(ast->arena, AST_NODE_TYPE_EXPRESSION_BLOCK, start);
     return block;
 }
 
@@ -657,7 +681,7 @@ static void ast_block_end(ast_node_t *block, token_t end) {
 }
 
 static ast_node_t *ast_while(ast_t *ast, ast_node_t *cond, bool cond_negated, ast_node_t *then, ast_node_t *else_, token_t while_token) {
-    ast_node_t *while_ = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_BRANCHING, while_token);
+    ast_node_t *while_ = ast_node_new(ast->arena, AST_NODE_TYPE_EXPRESSION_BRANCHING, while_token);
     while_->branch_type = BRANCH_TYPE_WHILE;
     while_->condition_negated = cond_negated;
     an_condition(while_) = cond;
@@ -670,7 +694,7 @@ static ast_node_t *ast_while(ast_t *ast, ast_node_t *cond, bool cond_negated, as
 }
 
 static ast_node_t *ast_ifthen(ast_t *ast, ast_node_t *cond, bool cond_negated, ast_node_t *then, ast_node_t *else_, token_t if_token) {
-    ast_node_t *ifthen = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_BRANCHING, if_token);
+    ast_node_t *ifthen = ast_node_new(ast->arena, AST_NODE_TYPE_EXPRESSION_BRANCHING, if_token);
     ifthen->branch_type = BRANCH_TYPE_IF;
     ifthen->condition_negated = cond_negated;
     an_condition(ifthen) = cond;
@@ -683,7 +707,7 @@ static ast_node_t *ast_ifthen(ast_t *ast, ast_node_t *cond, bool cond_negated, a
 }
 
 static ast_node_t *ast_do(ast_t *ast, token_t label, ast_node_t *expr, token_t do_token) {
-    ast_node_t *do_ = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_BRANCHING, do_token);
+    ast_node_t *do_ = ast_node_new(ast->arena, AST_NODE_TYPE_EXPRESSION_BRANCHING, do_token);
     do_->branch_type = BRANCH_TYPE_DO;
     do_->identifier = label;
     an_expression(do_) = expr;
@@ -692,7 +716,7 @@ static ast_node_t *ast_do(ast_t *ast, token_t label, ast_node_t *expr, token_t d
 }
 
 ast_node_t *ast_inferred_type_decl(ast_t *ast, token_t squiggle_token, token_t identifer) {
-    ast_node_t *inferred_type_decl = ast_node_new(ast, AST_NODE_TYPE_EXPR_INFERRED_TYPE_DECL, squiggle_token);
+    ast_node_t *inferred_type_decl = ast_node_new(ast->arena, AST_NODE_TYPE_EXPR_INFERRED_TYPE_DECL, squiggle_token);
     inferred_type_decl->end = identifer;
     inferred_type_decl->identifier = identifer;
     inferred_type_decl->is_mutable = false;
@@ -702,7 +726,7 @@ ast_node_t *ast_inferred_type_decl(ast_t *ast, token_t squiggle_token, token_t i
 }
 
 static ast_node_t *ast_binary(ast_t *ast, token_t operator, ast_node_t *left, ast_node_t *right) {
-    ast_node_t *binary = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_BINARY, left->start);
+    ast_node_t *binary = ast_node_new(ast->arena, AST_NODE_TYPE_EXPRESSION_BINARY, left->start);
     binary->operator = operator;
     binary->end = right->end;
     an_lhs(binary) = left;
@@ -712,7 +736,7 @@ static ast_node_t *ast_binary(ast_t *ast, token_t operator, ast_node_t *left, as
 }
 
 static ast_node_t *ast_array_type(ast_t *ast, ast_node_t *size_expr, ast_node_t *type_expr) {
-    ast_node_t *array_size = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_ARRAY_TYPE, size_expr->start);
+    ast_node_t *array_size = ast_node_new(ast->arena, AST_NODE_TYPE_EXPRESSION_ARRAY_TYPE, size_expr->start);
     an_array_size_expr(array_size) = size_expr;
     an_array_type_expr(array_size) = type_expr;
     array_size->end = type_expr->end;
@@ -720,7 +744,7 @@ static ast_node_t *ast_array_type(ast_t *ast, ast_node_t *size_expr, ast_node_t 
 }
 
 static ast_node_t *ast_item_access(ast_t *ast, ast_node_t *accessee, ast_node_t *accessor) {
-    ast_node_t *item_access = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_ARRAY_ITEM_ACCESS, accessee->start);
+    ast_node_t *item_access = ast_node_new(ast->arena, AST_NODE_TYPE_EXPRESSION_ARRAY_ITEM_ACCESS, accessee->start);
     an_item_accessee(item_access) = accessee;
     an_item_accessor(item_access) = accessor;
     item_access->end = accessor->end;
@@ -728,7 +752,7 @@ static ast_node_t *ast_item_access(ast_t *ast, ast_node_t *accessee, ast_node_t 
 }
 
 static ast_node_t *ast_unary(ast_t *ast, token_t operator, ast_node_t *operand) {
-    ast_node_t *unary = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_UNARY, operator);
+    ast_node_t *unary = ast_node_new(ast->arena, AST_NODE_TYPE_EXPRESSION_UNARY, operator);
     unary->operator = operator;
     unary->end = operand->end;
     an_operand(unary) = operand;
@@ -736,7 +760,7 @@ static ast_node_t *ast_unary(ast_t *ast, token_t operator, ast_node_t *operand) 
 }
 
 static ast_node_t *ast_for(ast_t *ast, ast_node_t *decl, ast_node_t *cond, ast_node_t *incr, ast_node_t *loop, ast_node_t *then, token_t start) {
-    ast_node_t *n = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_BRANCHING, start);
+    ast_node_t *n = ast_node_new(ast->arena, AST_NODE_TYPE_EXPRESSION_BRANCHING, start);
     n->branch_type = BRANCH_TYPE_FOR;
     an_for_decl(n) = decl;
     an_condition(n) = cond;
@@ -748,7 +772,7 @@ static ast_node_t *ast_for(ast_t *ast, ast_node_t *decl, ast_node_t *cond, ast_n
 }
 
 static ast_node_t *ast_call_begin(ast_t *ast, ast_node_type_t type, token_t start) {
-    ast_node_t *call = ast_node_new(ast, type, start);
+    ast_node_t *call = ast_node_new(ast->arena, type, start);
     return call;
 }
 
@@ -1098,7 +1122,7 @@ static void parse_arguments(parser_t *parser, ast_node_t *parent) {
                 argument->label = label;
                 array_push(&parent->children, argument);
             } else {
-                ast_node_t *unique_nil_node = ast_node_new(parser->ast, AST_NODE_TYPE_NONE, parser->previous);
+                ast_node_t *unique_nil_node = ast_node_new(parser->ast->arena, AST_NODE_TYPE_NONE, parser->previous);
                 unique_nil_node->label = label;
                 array_push(&parent->children, unique_nil_node);
             }
@@ -1524,7 +1548,21 @@ static ast_node_t *parse_decl_def(parser_t *parser);
 
 static void parse_parameters(parser_t *parser, ast_nodes_t *children) {
     until (check(parser, TOKEN_PARENTHESIS_CLOSE)) {
+        bool is_compile_time_param = match(parser, TOKEN_BANG);
+
         ast_node_t *decl = parse_decl(parser, false);
+        decl->is_compile_time_param = is_compile_time_param;
+
+        if (decl->has_default_value && is_compile_time_param) {
+            parser_error(parser, OR_ERROR(
+                .tag = ERROR_PARSER_COMPILE_TIME_PARAM_CANNOT_HAVE_DEFAULT_VALUE,
+                .level = ERROR_SOURCE_PARSER,
+                .msg = lit2str("compile time param '$1.$' cannot have a default value"),
+                .args = ORERR_ARGS(error_arg_node(an_decl_expr(decl)), error_arg_token(decl->identifier)),
+                .show_code_lines = ORERR_LINES(0),
+            ));
+        }
+
         array_push(children, decl);
 
         if (!match(parser, TOKEN_COMMA)) {
@@ -1563,7 +1601,7 @@ static void parse_function_signature(parser_t *parser, ast_node_t *func_sig) {
 }
 
 static ast_node_t *parse_function_definition(parser_t *parser) {
-    ast_node_t *func_def = ast_node_new(parser->ast, AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION, parser->previous);
+    ast_node_t *func_def = ast_node_new(parser->ast->arena, AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION, parser->previous);
     an_func_def_block(func_def) = parse_block(parser);
     func_def->end = parser->previous;
 
@@ -1618,7 +1656,7 @@ static ast_node_t *parse_grouping_or_function_signature_or_definition(parser_t *
         node_type = AST_NODE_TYPE_EXPRESSION_GROUPING;
     }
 
-    ast_node_t *expr = ast_node_new(parser->ast, node_type, parser->previous);
+    ast_node_t *expr = ast_node_new(parser->ast->arena, node_type, parser->previous);
 
     if (node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE) {
         parse_function_signature(parser, expr);
@@ -1818,7 +1856,7 @@ static ast_node_t *parse_struct_def(parser_t *parser) {
 }
 
 static ast_node_t *ast_begin_list_initializer(ast_t *ast, token_t open_bracket) {
-    ast_node_t *initializer = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_INITIALIZER_LIST, open_bracket);
+    ast_node_t *initializer = ast_node_new(ast->arena, AST_NODE_TYPE_EXPRESSION_INITIALIZER_LIST, open_bracket);
     return initializer;
 }
 
@@ -1826,7 +1864,7 @@ static void ast_end_list_initializer(ast_node_t *initializer, token_t close_brac
     initializer->end = close_bracket;
 }
 ast_node_t *ast_dot_access(ast_t *ast, ast_node_t *lhs, token_t identifier, token_t start) {
-    ast_node_t *dot_access = ast_node_new(ast, AST_NODE_TYPE_EXPRESSION_DOT_ACCESS, start);
+    ast_node_t *dot_access = ast_node_new(ast->arena, AST_NODE_TYPE_EXPRESSION_DOT_ACCESS, start);
     dot_access->identifier = identifier;
     dot_access->end = identifier;
     an_dot_lhs(dot_access) = lhs;
@@ -1983,7 +2021,7 @@ static ast_node_t *parse_precedence(parser_t *parser, prec_t precedence) {
     if (prefix_rule) {
         left_operand = prefix_rule(parser);
     } else {
-        left_operand = ast_node_new(parser->ast, AST_NODE_TYPE_NONE, parser->current);
+        left_operand = ast_node_new(parser->ast->arena, AST_NODE_TYPE_NONE, parser->current);
     }
 
     while (precedence <= parser_get_rule(parser->current.type)->precedence) {

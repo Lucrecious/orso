@@ -36,5 +36,13 @@
 	(array)->count++; \
 } while (0)
 
+#define array_remove(array, index) do { \
+	memmove( \
+		&(array)->items[index], \
+		&(array)->items[(index) + 1], \
+		((array)->count - (index) - 1) * sizeof(*(array)->items)); \
+	(array)->count--; \
+} while (0)
+
 
 #endif
