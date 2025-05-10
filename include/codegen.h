@@ -1805,16 +1805,14 @@ static void gen_call(gen_t *gen, function_t *function, ast_node_t *call, val_dst
 
     // place arguments on stack for call
     size_t argument_size_words = 0;
-    unless (TYPE_IS_VOID(call->children.items[an_call_arg_start(call)]->value_type)) {
-        for (size_t i = an_call_arg_start(call); i < an_call_arg_end(call); ++i) {
-            ast_node_t *arg = call->children.items[i];
-            typedata_t *td = type2typedata(&gen->ast->type_set.types, arg->value_type);
-            {
-                val_dst_t dst = emit_val_dst_stack_reserve(gen, loc, function, arg->value_type);
-                gen_expression(gen, function, arg, dst);
-            }
-            argument_size_words += b2w(td->size);
+    for (size_t i = an_call_arg_start(call); i < an_call_arg_end(call); ++i) {
+        ast_node_t *arg = call->children.items[i];
+        typedata_t *td = type2typedata(&gen->ast->type_set.types, arg->value_type);
+        {
+            val_dst_t dst = emit_val_dst_stack_reserve(gen, loc, function, arg->value_type);
+            gen_expression(gen, function, arg, dst);
         }
+        argument_size_words += b2w(td->size);
     }
 
     // prepare callee for call by putting it in the result register

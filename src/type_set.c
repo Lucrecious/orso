@@ -360,13 +360,14 @@ void type_set_invalid_struct(type_table_t *set, type_t incomplete_type) {
     td->as.struct_.status = STRUCT_STATUS_INVALID;
 }
 
-void type_set_complete_struct(type_table_t *set, type_t incomplete_type, struct_fields_t fields) {
+void type_set_complete_struct(type_table_t *set, type_t incomplete_type, struct_fields_t fields, struct_fields_t consts) {
     typedata_t *td = type2typedata(&set->types, incomplete_type);
     MUST(td->kind == TYPE_STRUCT && td->as.struct_.status == STRUCT_STATUS_INCOMPLETE);
 
     fields = fields_copy(fields, set->allocator);
+    consts = fields_copy(consts, set->allocator);
 
-    incomplete_struct_type_init(set, fields, (struct_fields_t){0}, td);
+    incomplete_struct_type_init(set, fields, consts, td);
     td->as.struct_.status = STRUCT_STATUS_COMPLETE;
 }
 

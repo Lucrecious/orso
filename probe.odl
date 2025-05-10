@@ -1,7 +1,2 @@
 main :: () -> void {
-    add :: (!u: type) -> [10]u {
-        return .{};
-    };
-
-    add(int);
 };

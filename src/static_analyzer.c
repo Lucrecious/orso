@@ -185,15 +185,15 @@ static bool is_declaration_resolved(ast_node_t *definition) {
     return (definition->expr_val.is_concrete || (an_decl_expr(definition)->node_type != AST_NODE_TYPE_NONE && TYPE_IS_RESOLVED(an_decl_expr(definition)->value_type))) && TYPE_IS_RESOLVED(definition->value_type);
 }
 
-static bool fold_funcsig_or_error(analyzer_t *analyzer, ast_t *ast, ast_node_t *expression) {
-    ASSERT(expression->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE, "must be a function signature");
+static bool fold_funcsig_or_error(analyzer_t *analyzer, ast_t *ast, ast_node_t *sig) {
+    ASSERT(sig->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE, "must be a function signature");
 
-    unless (an_func_def_return(expression)->expr_val.is_concrete) {
+    unless (an_func_def_return(sig)->expr_val.is_concrete) {
         stan_error(analyzer, OR_ERROR(
             .tag = ERROR_ANALYSIS_EXPECTED_CONSTANT,
             .level = ERROR_SOURCE_ANALYSIS,
             .msg = lit2str("return type for function signature must be a constant"),
-            .args = ORERR_ARGS(error_arg_node(an_func_def_return(expression))),
+            .args = ORERR_ARGS(error_arg_node(an_func_def_return(sig))),
             .show_code_lines = ORERR_LINES(0),
         ));
         return false;
@@ -206,15 +206,15 @@ static bool fold_funcsig_or_error(analyzer_t *analyzer, ast_t *ast, ast_node_t *
 
     bool type_is_inferred = false;
 
-    for (size_t i = an_func_def_arg_start(expression); i < an_func_def_arg_end(expression); ++i) {
-        ast_node_t *parameter = expression->children.items[i];
+    for (size_t i = an_func_def_arg_start(sig); i < an_func_def_arg_end(sig); ++i) {
+        ast_node_t *parameter = sig->children.items[i];
         unless (parameter->expr_val.is_concrete) {
             hit_error = true;
             stan_error(analyzer, OR_ERROR(
                 .tag = ERROR_ANALYSIS_EXPECTED_CONSTANT,
                 .level = ERROR_SOURCE_ANALYSIS,
                 .msg = lit2str("parameter type $1.$ for function signature must be a constant"),
-                .args = ORERR_ARGS(error_arg_node(parameter), error_arg_sz(i-an_func_def_arg_start(expression) + 1)),
+                .args = ORERR_ARGS(error_arg_node(parameter), error_arg_sz(i-an_func_def_arg_start(sig) + 1)),
                 .show_code_lines = ORERR_LINES(0),
             ));
             break;
@@ -231,7 +231,7 @@ static bool fold_funcsig_or_error(analyzer_t *analyzer, ast_t *ast, ast_node_t *
                 .tag = ERROR_ANALYSIS_TYPE_MISMATCH,
                 .level = ERROR_SOURCE_ANALYSIS,
                 .msg = lit2str("parameter expression must be type 'type'"),
-                .args = ORERR_ARGS(error_arg_node(parameter), error_arg_sz(i-an_func_def_arg_start(expression) + 1)),
+                .args = ORERR_ARGS(error_arg_node(parameter), error_arg_sz(i-an_func_def_arg_start(sig) + 1)),
                 .show_code_lines = ORERR_LINES(0),
             ));
             break;
@@ -244,7 +244,7 @@ static bool fold_funcsig_or_error(analyzer_t *analyzer, ast_t *ast, ast_node_t *
     bool result = false;
 
     if (type_is_inferred) {
-        expression->expr_val = ast_node_val_word(WORDT(typeid(TYPE_UNRESOLVED)));
+        sig->expr_val = ast_node_val_word(WORDT(typeid(TYPE_UNRESOLVED)));
 
         result = true;
         goto defer;
@@ -255,7 +255,7 @@ static bool fold_funcsig_or_error(analyzer_t *analyzer, ast_t *ast, ast_node_t *
         goto defer;
     }
 
-    ast_node_t *return_type_expression = an_func_def_return(expression);
+    ast_node_t *return_type_expression = an_func_def_return(sig);
     if (!TYPE_IS_TYPE(return_type_expression->value_type)) {
         stan_error(analyzer, OR_ERROR(
             .tag = ERROR_ANALYSIS_TYPE_MISMATCH,
@@ -274,7 +274,7 @@ static bool fold_funcsig_or_error(analyzer_t *analyzer, ast_t *ast, ast_node_t *
 
     word_t funcsig_word = WORDU(function_type.i);
 
-    expression->expr_val = ast_node_val_word(funcsig_word);
+    sig->expr_val = ast_node_val_word(funcsig_word);
 
     result = true;
 
@@ -1122,19 +1122,21 @@ static bool stan_run(analyzer_t *analyzer, vm_t *vm, ast_node_t *expr, word_t *o
 }
 
 static matched_value_t stan_pattern_match_or_error(analyzer_t *analyzer, ast_node_t *decl, type_path_t *expected, type_t actual, ast_node_t *arg) {
+    if (TYPE_IS_INVALID(actual)) {
+        return (matched_value_t){.type=typeid(TYPE_INVALID)};
+    }
+
     typedata_t *td = ast_type2td(analyzer->ast, actual);
     switch (expected->kind) {
     case MATCH_TYPE_POINTER: {
         if (td->kind != TYPE_POINTER) {
-            unless (TYPE_IS_INVALID(actual)) {
-                stan_error(analyzer, OR_ERROR(
-                    .tag = ERROR_ANALYSIS_COULD_NOT_PATTERN_MATCH_TYPE,
-                    .level = ERROR_SOURCE_ANALYSIS,
-                    .msg = lit2str("cannot match inferred declaration with argument type"),
-                    .args = ORERR_ARGS(error_arg_node(arg), error_arg_node(an_decl_type(decl))),
-                    .show_code_lines = ORERR_LINES(0, 1),
-                ));
-            }
+            stan_error(analyzer, OR_ERROR(
+                .tag = ERROR_ANALYSIS_COULD_NOT_PATTERN_MATCH_TYPE,
+                .level = ERROR_SOURCE_ANALYSIS,
+                .msg = lit2str("cannot match to pointer type"),
+                .args = ORERR_ARGS(error_arg_node(arg), error_arg_node(an_decl_type(decl))),
+                .show_code_lines = ORERR_LINES(0, 1),
+            ));
             return (matched_value_t){.type=typeid(TYPE_INVALID)};
         }
 
@@ -1143,15 +1145,13 @@ static matched_value_t stan_pattern_match_or_error(analyzer_t *analyzer, ast_nod
 
     case MATCH_TYPE_ARRAY_TYPE: {
         if (td->kind != TYPE_ARRAY) {
-            unless (TYPE_IS_INVALID(actual)) {
-                stan_error(analyzer, OR_ERROR(
-                    .tag = ERROR_ANALYSIS_COULD_NOT_PATTERN_MATCH_TYPE,
-                    .level = ERROR_SOURCE_ANALYSIS,
-                    .msg = lit2str("cannot match inferred declaration with argument type"),
-                    .args = ORERR_ARGS(error_arg_node(arg), error_arg_node(an_decl_type(decl))),
-                    .show_code_lines = ORERR_LINES(0, 1),
-                ));
-            }
+            stan_error(analyzer, OR_ERROR(
+                .tag = ERROR_ANALYSIS_COULD_NOT_PATTERN_MATCH_TYPE,
+                .level = ERROR_SOURCE_ANALYSIS,
+                .msg = lit2str("cannot match to array type"),
+                .args = ORERR_ARGS(error_arg_node(arg), error_arg_node(an_decl_type(decl))),
+                .show_code_lines = ORERR_LINES(0, 1),
+            ));
             return (matched_value_t){.type=typeid(TYPE_INVALID)};
         }
 
@@ -1160,15 +1160,13 @@ static matched_value_t stan_pattern_match_or_error(analyzer_t *analyzer, ast_nod
 
     case MATCH_TYPE_ARRAY_SIZE: {
         if (td->kind != TYPE_ARRAY) {
-            unless (TYPE_IS_INVALID(actual)) {
-                stan_error(analyzer, OR_ERROR(
-                    .tag = ERROR_ANALYSIS_COULD_NOT_PATTERN_MATCH_TYPE,
-                    .level = ERROR_SOURCE_ANALYSIS,
-                    .msg = lit2str("cannot match inferred declaration with argument type"),
-                    .args = ORERR_ARGS(error_arg_node(arg), error_arg_node(an_decl_type(decl))),
-                    .show_code_lines = ORERR_LINES(0, 1),
-                ));
-            }
+            stan_error(analyzer, OR_ERROR(
+                .tag = ERROR_ANALYSIS_COULD_NOT_PATTERN_MATCH_TYPE,
+                .level = ERROR_SOURCE_ANALYSIS,
+                .msg = lit2str("cannot match to array size"),
+                .args = ORERR_ARGS(error_arg_node(arg), error_arg_node(an_decl_type(decl))),
+                .show_code_lines = ORERR_LINES(0, 1),
+            ));
             return (matched_value_t){.type=typeid(TYPE_INVALID)};
         }
 
@@ -1176,7 +1174,7 @@ static matched_value_t stan_pattern_match_or_error(analyzer_t *analyzer, ast_nod
             stan_error(analyzer, OR_ERROR(
                 .tag = ERROR_ANALYSIS_COULD_NOT_PATTERN_MATCH_TYPE,
                 .level = ERROR_SOURCE_ANALYSIS,
-                .msg = lit2str("cannot match inferred declaration with argument type"),
+                .msg = lit2str("cannot match to array size"),
                 .args = ORERR_ARGS(error_arg_node(arg), error_arg_node(an_decl_type(decl))),
                 .show_code_lines = ORERR_LINES(0, 1),
             ));
@@ -1196,7 +1194,51 @@ static matched_value_t stan_pattern_match_or_error(analyzer_t *analyzer, ast_nod
         };
     }
 
-    default: UNREACHABLE();
+    case MATCH_TYPE_SIG_ARG: {
+        if (td->kind != TYPE_FUNCTION) {
+            stan_error(analyzer, OR_ERROR(
+                .tag = ERROR_ANALYSIS_COULD_NOT_PATTERN_MATCH_TYPE,
+                .level = ERROR_SOURCE_ANALYSIS,
+                .msg = lit2str("cannot match to argument in signature"),
+                .args = ORERR_ARGS(error_arg_node(arg), error_arg_node(an_decl_type(decl))),
+                .show_code_lines = ORERR_LINES(0, 1),
+            ));
+            return (matched_value_t){.type=typeid(TYPE_INVALID)};
+        }
+
+        size_t arg_index = expected->index;
+        if (arg_index >= td->as.function.argument_types.count) {
+            stan_error(analyzer, OR_ERROR(
+                .tag = ERROR_ANALYSIS_COULD_NOT_PATTERN_MATCH_TYPE,
+                .level = ERROR_SOURCE_ANALYSIS,
+                .msg = lit2str("cannot match to argument in signature"),
+                .args = ORERR_ARGS(error_arg_node(arg), error_arg_node(an_decl_type(decl))),
+                .show_code_lines = ORERR_LINES(0, 1),
+            ));
+            return (matched_value_t){.type=typeid(TYPE_INVALID)};
+        }
+
+        type_t arg_type = td->as.function.argument_types.items[arg_index];
+
+        return stan_pattern_match_or_error(analyzer, decl, expected->next, arg_type, arg);
+    }
+
+    case MATCH_TYPE_SIG_RET: {
+        if (td->kind != TYPE_FUNCTION) {
+            stan_error(analyzer, OR_ERROR(
+                .tag = ERROR_ANALYSIS_COULD_NOT_PATTERN_MATCH_TYPE,
+                .level = ERROR_SOURCE_ANALYSIS,
+                .msg = lit2str("cannot match to return in signature"),
+                .args = ORERR_ARGS(error_arg_node(arg), error_arg_node(an_decl_type(decl))),
+                .show_code_lines = ORERR_LINES(0, 1),
+            ));
+            return (matched_value_t){.type=typeid(TYPE_INVALID)};
+        }
+
+        type_t ret_type = td->as.function.return_type;
+
+        return stan_pattern_match_or_error(analyzer, decl, expected->next, ret_type, arg);
+    }
     }
 }
 
@@ -1331,6 +1373,28 @@ static size_t stan_function_is_building(analyzer_t *analyzer, function_t *functi
         case AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION: {
             function_t *pending_function = (function_t*)dep->expr_val.word.as.p;
             if (passed_through_fold && function == pending_function) {
+                return i-1;
+            }
+            break;
+        }
+
+        default: continue;
+        }
+    }
+
+    return analyzer->pending_dependencies.count;
+}
+
+size_t stan_struct_is_building(analyzer_t *analyzer, type_t struct_type) {
+    bool passed_through_fold = false;
+    for (size_t i = analyzer->pending_dependencies.count; i > 0; --i) {
+        ast_node_t *dep = analyzer->pending_dependencies.items[i-1];
+
+        switch (dep->node_type) {
+        case AST_NODE_TYPE_EXPRESSION_DIRECTIVE: passed_through_fold = true; break;
+        case AST_NODE_TYPE_EXPRESSION_STRUCT: {
+            type_t t = dep->expr_val.word.as.t;
+            if (passed_through_fold && typeid_eq(t, struct_type)) {
                 return i-1;
             }
             break;
@@ -1632,6 +1696,14 @@ static void resolve_struct(analyzer_t *analyzer, ast_t *ast, analysis_state_t st
         new_state.scope = &struct_def->defined_scope;
     }
 
+    // forward declare struct constants
+    for (size_t i = an_struct_start(struct_def); i < an_struct_end(struct_def); ++i) {
+        ast_node_t *decl = struct_def->children.items[i];
+        if (decl->is_mutable) continue;
+
+        declare_definition(analyzer, new_state.scope, decl);
+    }
+
     type_t struct_type;
     if (TYPE_IS_UNRESOLVED(struct_def->value_type)) {
         struct_type = type_set_fetch_anonymous_incomplete_struct(&ast->type_set);
@@ -1649,6 +1721,8 @@ static void resolve_struct(analyzer_t *analyzer, ast_t *ast, analysis_state_t st
 
     for (size_t i = an_struct_start(struct_def); i < an_struct_end(struct_def); ++i) {
         ast_node_t *decl = struct_def->children.items[i];
+        if (decl->is_mutable) continue;
+
         if (TYPE_IS_UNRESOLVED(decl->value_type)) {
             resolve_declaration_definition(analyzer, ast, new_state, decl);
 
@@ -1664,11 +1738,22 @@ static void resolve_struct(analyzer_t *analyzer, ast_t *ast, analysis_state_t st
                 continue;
             }
 
-            unless (TYPE_IS_INVALID(decl->value_type)) {
-                continue;
+            if (TYPE_IS_INVALID(decl->value_type)) {
+                invalid_type = true;
             }
+        }
+    }
 
-            invalid_type = true;
+    for (size_t i = an_struct_start(struct_def); i < an_struct_end(struct_def); ++i) {
+        ast_node_t *decl = struct_def->children.items[i];
+        if (decl->is_mutable) continue;
+
+        if (TYPE_IS_UNRESOLVED(decl->value_type)) {
+            resolve_declaration_definition(analyzer, ast, new_state, decl);
+
+            if (TYPE_IS_INVALID(decl->value_type)) {
+                invalid_type = true;
+            }
         }
     }
 
@@ -1687,6 +1772,7 @@ static void resolve_struct(analyzer_t *analyzer, ast_t *ast, analysis_state_t st
     tmp_arena_t *tmp = allocator_borrow();
 
     struct_fields_t fields = {.allocator=tmp->allocator};
+    struct_fields_t consts = {.allocator=tmp->allocator};
 
     bool has_error = false;
     for (size_t i = an_struct_start(struct_def); i < an_struct_end(struct_def); ++i) {
@@ -1702,19 +1788,22 @@ static void resolve_struct(analyzer_t *analyzer, ast_t *ast, analysis_state_t st
 
         if (!retry_resolve_possible_struct_or_error(analyzer, decl, field.type)) {
             has_error = true;
-            break;
         }
 
         --analyzer->pending_dependencies.count;
 
-        array_push(&fields, field);
+        if (decl->is_mutable) {
+            array_push(&fields, field);
+        } else {
+            array_push(&consts, field);
+        }
     }
 
     if (has_error) {
         type_set_invalid_struct(&ast->type_set, struct_type);
         INVALIDATE(struct_def);
     }  else {
-        type_set_complete_struct(&ast->type_set, struct_type, fields);
+        type_set_complete_struct(&ast->type_set, struct_type, fields, consts);
     }
 
     allocator_return(tmp);
@@ -2102,13 +2191,17 @@ void resolve_expression(
             if (!analyzer->had_error && analyzer->run_vm) {
                 unless (TYPE_IS_INVALID(child->value_type)) {
                     typedata_t *td = ast_type2td(ast, child->value_type);
-                    size_t size = b2w(td->size);
-                    ASSERT(size == 1, "for now types can only be as large as a word");
 
-                    word_t result[size];
-                    bool success = stan_run(analyzer, analyzer->run_vm, child, result);
+                    word_t result;
+                    bool success = stan_run(analyzer, analyzer->run_vm, child, &result);
+                    if (td->size > WORD_SIZE) {
+                        void *word = ast_multiword_value(ast, b2w2b(td->size));
+                        ast_copy_expr_val_to_memory(ast, child->value_type, result, word);
+                        result.as.p = word;
+                    }
+
                     if (success) {
-                        expr->expr_val = ast_node_val_word(result[0]);
+                        expr->expr_val = ast_node_val_word(result);
                         expr->value_type = child->value_type;
                     } else {
                         INVALIDATE(expr);
@@ -3237,11 +3330,64 @@ void resolve_expression(
                 break;
             }
 
+            case TYPE_TYPE: {
+                if (!lhs->expr_val.is_concrete) {
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = ERROR_ANALYSIS_EXPECTED_CONSTANT,
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("'.' access on types requires a compile-time value"),
+                        .args = ORERR_ARGS(error_arg_node(expr)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
+                    INVALIDATE(expr);
+                    break;
+                }
+
+                type_t struct_type = lhs->expr_val.word.as.t;
+                typedata_t *td = ast_type2td(ast, struct_type);
+                if (td->kind != TYPE_STRUCT) {
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = ERROR_ANALYSIS_EXPECTED_TYPE,
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("'.' access on types requires a struct definition type"),
+                        .args = ORERR_ARGS(error_arg_node(expr)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
+                    INVALIDATE(expr);
+                    break;
+                }
+
+                if (!retry_resolve_possible_struct_or_error(analyzer, lhs, struct_type)) {
+                    INVALIDATE(expr);
+                    break;
+                }
+
+                struct_field_t field = {0};
+                size_t field_index;
+                bool success = ast_find_field_by_name(td->as.struct_.constants, expr->identifier.view, &field, &field_index);
+
+                unless (success) {
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = ERROR_ANALYSIS_NO_ACCESS_MEMBER,
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("cannot find '$0.$' in '$1.$'"),
+                        .args = ORERR_ARGS(error_arg_token(expr->identifier), error_arg_type(lhs_type)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
+                    INVALIDATE(expr);
+                    break;
+                }
+
+                expr->value_type = field.type;
+                expr->expr_val = ast_node_val_word(field.default_value);
+                break;
+            }
+
             default: {
                 stan_error(analyzer, OR_ERROR(
                     .tag = ERROR_ANALYSIS_INVALID_ACCESSEE_TYPE,
                     .level = ERROR_SOURCE_ANALYSIS,
-                    .msg = lit2str("invalid '.' access expression, only structs or modules"),
+                    .msg = lit2str("invalid '.' access expression, only structs, struct types, or modules"),
                     .args = ORERR_ARGS(error_arg_node(expr)),
                     .show_code_lines = ORERR_LINES(0),
                 ));
@@ -3551,7 +3697,7 @@ void resolve_expression(
             bool invalid_parameter = false;
             for (size_t i = an_func_def_arg_start(expr); i < an_func_def_arg_end(expr); ++i) {
                 ast_node_t *parameter = expr->children.items[i];
-                resolve_declaration_statement(analyzer, ast, state, parameter, true);
+                resolve_expression(analyzer, ast, state, typeid(TYPE_TYPE), parameter, true);
 
                 if (TYPE_IS_INVALID(parameter->value_type)) {
                     invalid_parameter = true;
@@ -3870,7 +4016,38 @@ static void forward_scan_inferred_types(ast_node_t *decl, ast_node_t *decl_type,
         }
 
         case AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE: {
-            UNREACHABLE(); // todo
+            tmp_arena_t *tmp = allocator_borrow();
+
+            for (size_t i = an_func_def_arg_start(decl_type); i < an_func_def_arg_end(decl_type); ++i) {
+                ast_node_t *type_expr = decl_type->children.items[i];
+                type_patterns_t pats = {.allocator=tmp->allocator};
+                forward_scan_inferred_types(decl, type_expr, arena, &pats);
+
+                for (size_t j = 0; j < pats.count; ++j) {
+                    type_path_t *current = pats.items[j].expected;
+                    type_path_t *path = new_type_path(MATCH_TYPE_SIG_ARG, current, arena);
+                    path->index = i-an_func_def_arg_start(decl_type);
+                    pats.items[j].expected = path;
+
+                    array_push(patterns, pats.items[j]);
+                }
+            }
+
+            {
+                ast_node_t *ret = an_func_def_return(decl_type);
+                type_patterns_t pats = {.allocator=tmp->allocator};
+                forward_scan_inferred_types(decl, ret, arena, &pats);
+
+                for (size_t i = 0; i < pats.count; ++i) {
+                    type_path_t *current = pats.items[i].expected;
+                    type_path_t *path = new_type_path(MATCH_TYPE_SIG_RET, current, arena);
+                    pats.items[i].expected = path;
+
+                    array_push(patterns, pats.items[i]);
+                }
+            }
+
+            allocator_return(tmp);
             break;
         }
 
@@ -3893,25 +4070,37 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
         new_state.scope = &type_context;
 
         resolve_expression(analyzer, ast, new_state, typeid(TYPE_UNRESOLVED), decl_type, true);
-
-        unless (TYPE_IS_TYPE(decl_type->value_type)) {
-            if (TYPE_IS_UNRESOLVED(decl_type->value_type)) {
-                decl->value_type = typeid(TYPE_UNRESOLVED);
-            } else {
-                unless (TYPE_IS_INVALID(decl_type->value_type)) {
-                    stan_error(analyzer, OR_ERROR(
-                        .tag = ERROR_ANALYSIS_EXPECTED_TYPE,
-                        .level = ERROR_SOURCE_ANALYSIS,
-                        .msg = lit2str("expected type expression for declaration"),
-                        .args = ORERR_ARGS(error_arg_node(decl_type)),
-                        .show_code_lines = ORERR_LINES(0),
-                    ));
-                }
-                INVALIDATE(decl);
+        if (!decl_type->expr_val.is_concrete) {
+            unless (TYPE_IS_INVALID(decl_type->value_type)) {
+                stan_error(analyzer, OR_ERROR(
+                    .tag = ERROR_ANALYSIS_EXPECTED_CONSTANT,
+                    .level = ERROR_SOURCE_ANALYSIS,
+                    .msg = lit2str("expected type expression to be a constant"),
+                    .args = ORERR_ARGS(error_arg_node(decl_type)),
+                    .show_code_lines = ORERR_LINES(0),
+                ));
             }
-        } else if (TYPE_IS_RESOLVED(decl_type->value_type)) {
-            decl->value_type = decl_type->expr_val.word.as.t;
-        } 
+            INVALIDATE(decl);
+        } else {
+            unless (TYPE_IS_TYPE(decl_type->value_type)) {
+                if (TYPE_IS_UNRESOLVED(decl_type->value_type)) {
+                    decl->value_type = typeid(TYPE_UNRESOLVED);
+                } else {
+                    unless (TYPE_IS_INVALID(decl_type->value_type)) {
+                        stan_error(analyzer, OR_ERROR(
+                            .tag = ERROR_ANALYSIS_EXPECTED_TYPE,
+                            .level = ERROR_SOURCE_ANALYSIS,
+                            .msg = lit2str("expected type expression for declaration"),
+                            .args = ORERR_ARGS(error_arg_node(decl_type)),
+                            .show_code_lines = ORERR_LINES(0),
+                        ));
+                    }
+                    INVALIDATE(decl);
+                }
+            } else if (TYPE_IS_RESOLVED(decl_type->value_type)) {
+                decl->value_type = decl_type->expr_val.word.as.t;
+            } 
+        }
     }
 
     ast_node_t *init_expr = an_decl_expr(decl);
@@ -3920,6 +4109,10 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
     }
 
     --analyzer->pending_dependencies.count;
+    
+    if (decl->is_mutable) {
+        declare_definition(analyzer, state.scope, decl);
+    }
 
     if (TYPE_IS_INVALID(decl->value_type)) {
         return;
@@ -3981,12 +4174,17 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
         an_decl_expr(decl) = casted_expr;
     }
 
-    if (an_decl_expr(decl)->expr_val.is_concrete) {
-        decl->expr_val = an_decl_expr(decl)->expr_val;
-    }
-    
-    if (decl->is_mutable) {
-        declare_definition(analyzer, state.scope, decl);
+    if (!decl->is_mutable) {
+        decl->expr_val = init_expr->expr_val;
+        if (!decl->expr_val.is_concrete) {
+            stan_error(analyzer, OR_ERROR(
+                .tag = ERROR_ANALYSIS_EXPECTED_CONSTANT,
+                .level = ERROR_SOURCE_ANALYSIS,
+                .msg = lit2str("expected constant expression for compile-time value declaration"),
+                .args = ORERR_ARGS(error_arg_node(init_expr)),
+                .show_code_lines = ORERR_LINES(0),
+            ));
+        }
     }
 
     // bind it to intrinsic if intrinsic
@@ -4225,19 +4423,30 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
     typedata_t *td = ast_type2td(ast, decl->value_type);
     switch (td->kind) {
     case TYPE_FUNCTION: {
-        ASSERT(decl->expr_val.is_concrete, "should be constant and thus should be concrete");
-
-        function_t *function = (function_t*)decl->expr_val.word.as.p;
-        size_t dep_start = stan_function_is_building(analyzer, function);
-        if (dep_start < analyzer->pending_dependencies.count) {
-            stan_circular_dependency_error(analyzer, ast, def, dep_start);
+        if (!decl->is_mutable) {
+            function_t *function = (function_t*)decl->expr_val.word.as.p;
+            size_t dep_start = stan_function_is_building(analyzer, function);
+            if (dep_start < analyzer->pending_dependencies.count) {
+                stan_circular_dependency_error(analyzer, ast, def, dep_start);
+            }
         }
         break;
     }
 
-    default:  {
-        break;
+    default: break;
     }
+
+    if (!decl->is_mutable && TYPE_IS_TYPE(decl->value_type)) {
+        MUST(decl->expr_val.is_concrete);
+        type_t type = decl->expr_val.word.as.t;
+        typedata_t *td = ast_type2td(ast, type);
+        if (td->kind == TYPE_STRUCT) {
+            size_t dep_start = stan_struct_is_building(analyzer, type);
+            if (dep_start < analyzer->pending_dependencies.count) {
+                stan_circular_dependency_error(analyzer, ast, def, dep_start);
+            }
+        }
+
     }
 
     return decl;

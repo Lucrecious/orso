@@ -1,0 +1,15 @@
+main :: () -> void {
+    t := int;
+    a: t =  10;
+
+    a;
+};
+// foo_t :: struct {
+//     T :: 10;
+// };
+
+// main :: () -> void {
+//     t := foo_t.T;
+//     printint(t);
+//     println();
+// };

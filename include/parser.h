@@ -209,6 +209,8 @@ enum match_type_t {
     MATCH_TYPE_POINTER,
     MATCH_TYPE_ARRAY_TYPE,
     MATCH_TYPE_ARRAY_SIZE,
+    MATCH_TYPE_SIG_ARG,
+    MATCH_TYPE_SIG_RET,
 };
 
 typedef struct matched_value_t matched_value_t;
@@ -229,6 +231,7 @@ typedef struct type_path_t type_path_t;
 struct type_path_t {
     match_type_t kind;
     type_path_t *next;
+    size_t index;
 };
 
 typedef struct type_pattern_t type_pattern_t;

@@ -1549,11 +1549,12 @@ static ast_node_t *parse_decl_def(parser_t *parser);
 static void parse_parameters(parser_t *parser, ast_nodes_t *children) {
     until (check(parser, TOKEN_PARENTHESIS_CLOSE)) {
         bool is_compile_time_param = match(parser, TOKEN_BANG);
+        token_t bang = parser->previous;
 
         ast_node_t *decl = parse_decl(parser, false);
         decl->is_compile_time_param = is_compile_time_param;
 
-        if (decl->has_default_value && is_compile_time_param) {
+        if (decl->node_type == AST_NODE_TYPE_DECLARATION_DEFINITION && decl->has_default_value && is_compile_time_param) {
             parser_error(parser, OR_ERROR(
                 .tag = ERROR_PARSER_COMPILE_TIME_PARAM_CANNOT_HAVE_DEFAULT_VALUE,
                 .level = ERROR_SOURCE_PARSER,
@@ -1561,6 +1562,22 @@ static void parse_parameters(parser_t *parser, ast_nodes_t *children) {
                 .args = ORERR_ARGS(error_arg_node(an_decl_expr(decl)), error_arg_token(decl->identifier)),
                 .show_code_lines = ORERR_LINES(0),
             ));
+        }
+
+        if (decl->node_type == AST_NODE_TYPE_DECLARATION_STATEMENT && is_compile_time_param) {
+            ast_node_t *expr = an_expression(decl);
+            if (expr->node_type != AST_NODE_TYPE_EXPRESSION_DEF_VALUE) {
+                parser_error(parser, OR_ERROR(
+                    .tag = ERROR_PARSER_EXPECTED_IDENTIFER_AFTER_INFERRED_TYPE_DECL_ANNOTATION,
+                    .level = ERROR_SOURCE_PARSER,
+                    .msg = lit2str("expected identifier after '!'"),
+                    .args = ORERR_ARGS(error_arg_node(decl)), 
+                    .show_code_lines = ORERR_LINES(0),
+                )); 
+            } else {
+                expr->start = bang;
+                expr->node_type = AST_NODE_TYPE_EXPR_INFERRED_TYPE_DECL;
+            }
         }
 
         array_push(children, decl);
@@ -1678,6 +1695,9 @@ static ast_node_t *parse_grouping_or_function_signature_or_definition(parser_t *
                         .args = ORERR_ARGS(error_arg_node(parameter)),
                         .show_code_lines = ORERR_LINES(0),
                     ));
+                } else {
+                    parameter = an_expression(parameter);
+                    expr->children.items[i] = parameter;
                 }
             }
         }

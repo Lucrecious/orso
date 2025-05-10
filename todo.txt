@@ -1,7 +1,7 @@
 Roadmap to 0.5v
 - structs
-    - works with @run
     - allow structs with compile-time parameters
+- custom modules (multifile programs)
 - strings
     - implemented in core, with regular string syntactic sugar
     - warning that only memory is compared
@@ -9,12 +9,10 @@ Roadmap to 0.5v
     - main function is not properly type checked
     - main is always () -> void. by default programs ends in 0 error code, unless 'exit(n: num)' is used with another code
     - add globals for program arguments
-- allow for compile-time call arguments
 - Make better errors for static analyzer
     - basically, do not output errors that only result from a propogating error (like if a type is invalid don't error just keep going)
     - cover all errors
 - type list exposed as a module
-- custom modules (multifile programs)
 - ffi but only for native and scripts
 - compiler as module
 - switch expression
@@ -22,6 +20,7 @@ Roadmap to 0.5v
 - cmd with proper commands
 - update tests to use a custom assert instead or printing
 - enums
+- single line short hand function body with =>
 
 #Roadmap to 1.0v:
 - fuzz testing

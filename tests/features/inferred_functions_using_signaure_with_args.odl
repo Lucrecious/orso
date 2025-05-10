@@ -1,0 +1,21 @@
+fn :: (a: u, b: u, f: (!u, u) -> u) -> u {
+    return f(a, b);
+};
+
+main :: () -> void {
+    foo :: (a: int, b: int) -> int {
+        return a + b;
+    };
+
+    bar :: (a: bool, b: bool) -> bool {
+        return a and b;
+    };
+
+    a := fn(2, 3, foo);
+    printint(a);
+    println();
+
+    b := fn(true, true, bar);
+    printint(if b then 1 else 0);
+    println();
+};
