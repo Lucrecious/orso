@@ -23,6 +23,9 @@ Roadmap to 0.5v
 - single line short hand function body with =>
 
 #Roadmap to 1.0v:
+- syntax highlighter for vscode vim
+- debug compile-time functions and native code
+- finalize spec, and make consistent (arguments and params in particular could be unified)
 - fuzz testing
 - all error tested
 - switch expression

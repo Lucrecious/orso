@@ -1,2 +1,10 @@
+foo_t :: struct(t: type) {
+    p: &t;
+};
+
 main :: () -> void {
+    x := 10;
+    foo := foo_t(int).{&x};
+    printint(*foo.p);
+    println();
 };

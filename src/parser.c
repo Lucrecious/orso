@@ -193,6 +193,8 @@ ast_node_t *ast_node_new(arena_t *arena, ast_node_type_t node_type, token_t star
     node->ccode_continue_label = lit2str("");
     node->ccode_var_name = lit2str("");
 
+    node->param_end = 0;
+
     node->is_mutable = false;
     node->is_exported = false;
     node->is_intrinsic = false;
@@ -213,7 +215,7 @@ ast_node_t *ast_node_new(arena_t *arena, ast_node_type_t node_type, token_t star
     node->last_statement = &nil_node;
 
     node->children = (ast_nodes_t){.allocator=arena};
-    node->realized_funcdef_copies = (inferred_funcdef_copies_t){.allocator=arena};
+    node->realized_copies = (inferred_copies_t){.allocator=arena};
     node->type_decl_patterns = (type_patterns_t){.allocator=arena};
 
     switch (node_type) {
@@ -393,7 +395,9 @@ ast_node_t *ast_node_copy(arena_t *arena, ast_node_t *node) {
 
     copy->operator = node->operator;
 
-    copy->realized_funcdef_copies = node->realized_funcdef_copies;
+    copy->param_end = node->param_end;
+
+    copy->realized_copies = node->realized_copies;
     ASSERT(copy->ref_decl == &nil_node, "need to convert references to other nodes to relative ones");
     copy->requires_tmp_for_cgen = node->requires_tmp_for_cgen;
     copy->start = node->start;
@@ -490,6 +494,12 @@ ast_node_t *ast_struct_begin(ast_t *ast, token_t start) {
 
     return struct_;
 }
+
+void ast_struct_add_param(ast_node_t *struct_, ast_node_t *decl) {
+    array_insert(&struct_->children, struct_->param_end, decl);
+    ++struct_->param_end;
+}
+
 void ast_struct_add_decl(ast_node_t *struct_, ast_node_t *decl) {
     array_push(&struct_->children, decl);
 }
@@ -1833,6 +1843,41 @@ static ast_node_t *parse_cast(parser_t *parser) {
 static ast_node_t *parse_struct_def(parser_t *parser) {
     token_t struct_keyword = parser->previous;
 
+    ast_node_t *struct_ = ast_struct_begin(parser->ast, struct_keyword);
+
+    if (match(parser, TOKEN_PARENTHESIS_OPEN)) {
+        while (true) {
+            if (match(parser, TOKEN_PARENTHESIS_CLOSE)) break;
+
+            if (struct_->param_end > 0) {
+                if (!consume(parser, TOKEN_COMMA)) {
+                    parser_error(parser, OR_ERROR(
+                        .tag = ERROR_PARSER_EXPECTED_COMMA,
+                        .level = ERROR_SOURCE_PARSER,
+                        .msg = lit2str("expected ',' after param"),
+                        .args = ORERR_ARGS(error_arg_token(parser->current)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
+                    break;
+                }
+            }
+
+            ast_node_t *decl = parse_decl_def(parser);
+
+            ast_struct_add_param(struct_, decl);
+
+            if (decl->has_default_value) {
+                parser_error(parser, OR_ERROR(
+                    .tag = ERROR_PARSER_EXPECTED_NO_DEFAULT_VALUE,
+                    .level = ERROR_SOURCE_PARSER,
+                    .msg = lit2str("struct parameters cannot use default values"),
+                    .args = ORERR_ARGS(error_arg_node(an_decl_expr(decl))),
+                    .show_code_lines = ORERR_LINES(0),
+                ));
+            }
+        }
+    }
+
     unless (consume(parser, TOKEN_BRACE_OPEN)) {
         parser_error(parser, OR_ERROR(
             .tag = ERROR_PARSER_EXPECTED_OPEN_BRACE_AFTER_STRUCT,
@@ -1843,7 +1888,6 @@ static ast_node_t *parse_struct_def(parser_t *parser) {
         ));
     }
 
-    ast_node_t *struct_ = ast_struct_begin(parser->ast, struct_keyword);
 
     while (is_incoming_decl_def(parser)) {
         ast_node_t *decl = parse_decl_def(parser);
@@ -2350,6 +2394,7 @@ word_t ast_mem2word(ast_t *ast, void *data, type_t type) {
 
     switch (td->kind) {
     case TYPE_UNREACHABLE:
+    case TYPE_PARAM_STRUCT:
     case TYPE_INFERRED_FUNCTION:
     case TYPE_UNRESOLVED:
     case TYPE_INVALID: return (word_t){0};

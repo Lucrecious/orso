@@ -175,7 +175,9 @@ ast_node_t nil_node;
 #define an_array_type_expr(n) ((n)->children.items[1])
 #define an_item_accessee(n) ((n)->children.items[0])
 #define an_item_accessor(n) ((n)->children.items[1])
-#define an_struct_start(n) (0)
+#define an_struct_param_start(n) (0)
+#define an_struct_param_end(n) ((n)->param_end)
+#define an_struct_start(n) ((n)->param_end)
 #define an_struct_end(n) ((n)->children.count)
 #define an_dot_lhs(n) ((n)->children.items[0])
 
@@ -240,15 +242,15 @@ struct type_pattern_t {
     token_t identifier;
 };
 
-typedef struct inferred_funcdef_copy_t inferred_funcdef_copy_t;
-struct inferred_funcdef_copy_t {
+typedef struct inferred_copy_t inferred_copy_t;
+struct inferred_copy_t {
     matched_values_t key;
-    ast_node_t *funcdef;
+    ast_node_t *copy;
 };
 
-typedef struct inferred_funcdef_copies_t inferred_funcdef_copies_t;
-struct inferred_funcdef_copies_t {
-    inferred_funcdef_copy_t *items;
+typedef struct inferred_copies_t inferred_copies_t;
+struct inferred_copies_t {
+    inferred_copy_t *items;
     size_t count;
     size_t capacity;
     arena_t *allocator;
@@ -314,6 +316,7 @@ struct ast_node_t {
     ast_node_t *ref_decl;
     type_patterns_t type_decl_patterns;
 
+    size_t param_end;
     size_t arg_index;
     size_t value_offset;
 
@@ -332,7 +335,7 @@ struct ast_node_t {
     ast_node_t *jmp_out_scope_node;
     ast_nodes_t jmp_nodes;
 
-    inferred_funcdef_copies_t realized_funcdef_copies;
+    inferred_copies_t realized_copies;
 
     size_t vm_jmp_index;
     val_dst_t vm_val_dst;

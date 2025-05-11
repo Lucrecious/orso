@@ -25,6 +25,7 @@ enum type_kind_t {
     TYPE_INVALID = 0,      // error type
     TYPE_UNRESOLVED,       // unresolved (not undefined, not error, not defined)
     TYPE_INFERRED_FUNCTION,// inferred function definition, copies created at compile-time when called
+    TYPE_PARAM_STRUCT,     // parameterized struct definition, copies created at compile-time when "called"
     TYPE_UNREACHABLE,      // for jmp expressions (return, break, continue)
 
     // simple types (types that do not require type info)

@@ -286,6 +286,7 @@ static reg_mov_size_t type2movsize(gen_t *gen, type_t t) {
 
     case TYPE_COUNT:
     case TYPE_UNREACHABLE:
+    case TYPE_PARAM_STRUCT:
     case TYPE_INFERRED_FUNCTION:
     case TYPE_UNRESOLVED:
     case TYPE_INVALID: UNREACHABLE(); return REG_MOV_SIZE_WORD;
@@ -601,6 +602,7 @@ static void emit_bin_op_aggregates(gen_t *gen, texloc_t loc, function_t *functio
 
     case TYPE_INVALID:
     case TYPE_UNRESOLVED:
+    case TYPE_PARAM_STRUCT:
     case TYPE_INFERRED_FUNCTION:
     case TYPE_UNREACHABLE:
     case TYPE_COUNT: UNREACHABLE(); break;
@@ -1299,6 +1301,7 @@ static void gen_expr_val(gen_t *gen, texloc_t loc, function_t *function, type_t 
         case TYPE_UNREACHABLE:
         case TYPE_INVALID:
         case TYPE_UNRESOLVED:
+        case TYPE_PARAM_STRUCT:
         case TYPE_INFERRED_FUNCTION:
         case TYPE_COUNT: UNREACHABLE(); break;
         }
@@ -2311,6 +2314,9 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
 static void gen_module(gen_t *gen, ast_node_t *module, function_t *init_func) {
     for (size_t i = 0; i < module->children.count; ++i) {
         ast_node_t *decldef = module->children.items[i];
+
+        if (!decldef->is_mutable) continue;
+
         texloc_t loc = decldef->start.loc;
 
         size_t index = gen_global_decldef(gen, decldef);

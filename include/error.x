@@ -16,6 +16,8 @@ X(ERROR_PARSER_EXPECTED_OPEN_BRACE_AFTER_STRUCT, "expected '{' after 'struct' to
 X(ERROR_PARSER_EXPECTED_OPEN_PARENTHESIS_BUILTIN_FUNC, "expected '(' after builtin function keyword", PARSER)
 X(ERROR_PARSER_EXPECTED_VALID_TOKEN_AFTER_DOT, "expected an identifier (member access), '{' (struct initializer), or '[' (array initializer) after a '.'", PARSER)
 X(ERROR_PARSER_EXPECTED_COLON_AFTER_DECLARATION_IDENTIFIER, "expected ':' after declaration identifier", PARSER)
+X(ERROR_PARSER_EXPECTED_COMMA, "expected ':' after declaration identifier", PARSER)
+X(ERROR_PARSER_EXPECTED_NO_DEFAULT_VALUE, "expected ':' after declaration identifier", PARSER)
 X(ERROR_PARSER_EXPECTED_EOF_AFTER_EXPRESSION, "expected the end of the file after the expression", PARSER)
 X(ERROR_PARSER_INVALID_DECLARATION_DIRECTIVE, "invalid declaration directive", PARSER)
 X(ERROR_PARSER_EXPECTED_IDENTIFER_AFTER_INFERRED_TYPE_DECL_ANNOTATION, "expected identifer after an inferred type declaration annotation", PARSER)

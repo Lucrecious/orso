@@ -134,7 +134,7 @@ if (sv_eq(identifier, lit2sv(#TYPE_STRING))){\
 #undef RETURN_IF_TYPE
 }
 
-static bool check_call_on_func(analyzer_t *analyzer, ast_t *ast, ast_node_t *call) {
+static bool check_call_on_func_or_error(analyzer_t *analyzer, ast_t *ast, ast_node_t *call) {
     ast_node_t *callee = an_callee(call);
     typedata_t *func_td = ast_type2td(ast, callee->value_type);
 
@@ -568,6 +568,7 @@ word_t ast_item_get(ast_t *ast, bool is_addr, word_t aggregate, type_t item_type
 
     case TYPE_INVALID:
     case TYPE_UNRESOLVED:
+    case TYPE_PARAM_STRUCT:
     case TYPE_INFERRED_FUNCTION:
     case TYPE_UNREACHABLE:
     case TYPE_COUNT: UNREACHABLE(); break;
@@ -677,6 +678,7 @@ void ast_item_set(ast_t *ast, type_t type, void *addr, word_t value, size_t byte
 
     case TYPE_INVALID:
     case TYPE_UNRESOLVED:
+    case TYPE_PARAM_STRUCT:
     case TYPE_INFERRED_FUNCTION:
     case TYPE_UNREACHABLE:
     case TYPE_COUNT: UNREACHABLE(); break;
@@ -1260,14 +1262,14 @@ static bool matched_values_eq(ast_t *ast, matched_values_t a, matched_values_t b
     return true;
 }
 
-static ast_node_t *find_realized_funcdef_or_null_by_inferred_types(ast_t *ast, inferred_funcdef_copies_t copies, matched_values_t key) {
+static ast_node_t *find_realized_node_or_null_by_inferred_values(ast_t *ast, inferred_copies_t copies, matched_values_t key) {
     for (size_t i = 0; i < copies.count; ++i) {
-        inferred_funcdef_copy_t copy = copies.items[i];
+        inferred_copy_t copy = copies.items[i];
         ASSERT(copy.key.count == key.count, "the keys should be the same size at this point");
 
         bool found = matched_values_eq(ast, key, copy.key);
 
-        if (found) return copy.funcdef;
+        if (found) return copy.copy;
     }
 
     return NULL;
@@ -1532,7 +1534,7 @@ static ast_node_t *stan_realize_inferred_funcdefcall_or_errornull(analyzer_t *an
             }
         }
 
-        result = find_realized_funcdef_or_null_by_inferred_types(analyzer->ast, inferred_funcdef->realized_funcdef_copies, matched_values);
+        result = find_realized_node_or_null_by_inferred_values(analyzer->ast, inferred_funcdef->realized_copies, matched_values);
         unless(result) {
             // todo: instead of copying the the definition wholesale,
             // i remove the parameters i've already copied, copy the function
@@ -1553,12 +1555,12 @@ static ast_node_t *stan_realize_inferred_funcdefcall_or_errornull(analyzer_t *an
             matched_values_t matched_values_ = {.allocator=analyzer->ast->arena};
             for (size_t i = 0; i < matched_values.count; ++i) array_push(&matched_values_, matched_values.items[i]);
 
-            inferred_funcdef_copy_t copy = {
+            inferred_copy_t copy = {
                 .key = matched_values_,
-                .funcdef = result,
+                .copy = result,
             };
 
-            array_push(&inferred_funcdef->realized_funcdef_copies, copy);
+            array_push(&inferred_funcdef->realized_copies, copy);
 
             resolve_funcdef(analyzer, analyzer->ast, inferred_state, result);
 
@@ -1652,6 +1654,7 @@ static void ast_copy_expr_val_to_memory(ast_t *ast, type_t type, word_t src, voi
         break;
     }
 
+    case TYPE_PARAM_STRUCT:
     case TYPE_POINTER:
     case TYPE_INTRINSIC_FUNCTION:
     case TYPE_FUNCTION:
@@ -1696,6 +1699,21 @@ static void resolve_struct(analyzer_t *analyzer, ast_t *ast, analysis_state_t st
         new_state.scope = &struct_def->defined_scope;
     }
 
+    if (struct_def->param_end > 0) {
+        scope_init(&struct_def->defined_scope, analyzer->ast->arena, SCOPE_TYPE_INFERRED_PARAMS, state.scope, struct_def);
+        new_state.scope = &struct_def->defined_scope;
+
+        for (size_t i = an_struct_param_start(struct_def); i < an_struct_param_end(struct_def); ++i) {
+            ast_node_t *param = struct_def->children.items[i];
+            resolve_declaration_definition(analyzer, ast, new_state, param);
+            param->is_mutable = false;
+        }
+
+        struct_def->value_type = typeid(TYPE_PARAM_STRUCT);
+        struct_def->expr_val = ast_node_val_word(WORDP(struct_def));
+        return;
+    }
+
     // forward declare struct constants
     for (size_t i = an_struct_start(struct_def); i < an_struct_end(struct_def); ++i) {
         ast_node_t *decl = struct_def->children.items[i];
@@ -1721,7 +1739,7 @@ static void resolve_struct(analyzer_t *analyzer, ast_t *ast, analysis_state_t st
 
     for (size_t i = an_struct_start(struct_def); i < an_struct_end(struct_def); ++i) {
         ast_node_t *decl = struct_def->children.items[i];
-        if (decl->is_mutable) continue;
+        if (!decl->is_mutable) continue;
 
         if (TYPE_IS_UNRESOLVED(decl->value_type)) {
             resolve_declaration_definition(analyzer, ast, new_state, decl);
@@ -1981,6 +1999,154 @@ ast_inferred_function_t *ast_inferred_function_from_funcdef(ast_t *ast, ast_node
     return func;
 }
 
+static void stan_realize_parameterized_struct(analyzer_t *analyzer, analysis_state_t state, ast_node_t *param_struct_call) {
+    ast_node_t *param_struct_callee = an_callee(param_struct_call);
+    typedata_t *td = ast_type2td(analyzer->ast, param_struct_callee->value_type);
+    MUST(td->kind == TYPE_PARAM_STRUCT);
+
+    ast_node_t *param_struct = (ast_node_t*)param_struct_callee->expr_val.word.as.p;
+    size_t param_count = an_struct_param_end(param_struct) - an_struct_param_start(param_struct);
+
+    size_t arg_start = an_call_arg_start(param_struct_call);
+    size_t arg_end = an_call_arg_end(param_struct_call);
+    size_t arg_count = arg_end - arg_start;
+
+    if (param_count != arg_count) {
+        stan_error(analyzer, OR_ERROR(
+            .tag = ERROR_ANALYSIS_NUMBER_ARGS_CALL_FUNC_MISTMATCH,
+            .level = ERROR_SOURCE_ANALYSIS,
+            .msg = lit2str("parameterized struct requires '$1.$' argument(s) but got '$2.$'"),
+            .args = ORERR_ARGS(error_arg_node(param_struct_call), error_arg_sz(arg_count), error_arg_sz(param_count)),
+            .show_code_lines = ORERR_LINES(0),
+        ));
+        INVALIDATE(param_struct_call);
+        return;
+    }
+
+
+    tmp_arena_t *tmp = allocator_borrow();
+    matched_values_t values = {.allocator=tmp->allocator};
+
+    bool is_invalid = false;
+    for (size_t i = an_call_arg_start(param_struct_call); i < an_call_arg_end(param_struct_call); ++i) {
+        ast_node_t *arg = param_struct_call->children.items[i];
+        size_t param_index = i-an_call_arg_start(param_struct_call)+an_struct_param_start(param_struct);
+        ast_node_t *param = param_struct->children.items[param_index];
+        resolve_expression(analyzer, analyzer->ast, state, param->value_type, arg, true);
+
+        if (!typeid_eq(param->value_type, arg->value_type)) {
+            is_invalid = true;
+            if (!TYPE_IS_INVALID(param->value_type) && !TYPE_IS_INVALID(arg->value_type)) {
+                stan_error(analyzer, OR_ERROR(
+                    .tag = ERROR_ANALYSIS_TYPE_MISMATCH,
+                    .level = ERROR_SOURCE_ANALYSIS,
+                    .msg = lit2str("parameterized struct arguments require exact type matches; struct parameter '$1.$' is type '$2.$' but argument is '$3.$'"),
+                    .args = ORERR_ARGS(error_arg_node(arg),
+                            error_arg_token(param->identifier),
+                            error_arg_type(param->value_type), error_arg_type(arg->value_type)),
+                    .show_code_lines = ORERR_LINES(0),
+                ));
+            }
+
+            INVALIDATE(param_struct_call);
+            break;
+        }
+
+        if (!arg->expr_val.is_concrete) {
+            is_invalid = true;
+            stan_error(analyzer, OR_ERROR(
+                .tag = ERROR_ANALYSIS_EXPECTED_CONSTANT,
+                .level = ERROR_SOURCE_ANALYSIS,
+                .msg = lit2str("parameterized struct arugments must be compile-time constants"),
+                .args = ORERR_ARGS(error_arg_node(arg)),
+                .show_code_lines = ORERR_LINES(0),
+            ));
+            INVALIDATE(param_struct_call);
+            break;
+        }
+
+        matched_value_t val = {
+            .type = arg->value_type,
+            .word = arg->expr_val.word,
+        };
+
+        array_push(&values, val);
+    }
+
+    if (is_invalid) goto defer;
+
+    ast_node_t *realized_struct = find_realized_node_or_null_by_inferred_values(analyzer->ast, param_struct->realized_copies, values);
+    if (!realized_struct) {
+        // copy param struct without params...
+        {
+            ast_node_t **children = param_struct->children.items;
+            param_struct->children.items += an_struct_start(param_struct);
+
+            size_t child_count = param_struct->children.count;
+            param_struct->children.count = an_struct_end(param_struct) - an_struct_start(param_struct);
+
+            realized_struct = ast_node_copy(analyzer->ast->arena, param_struct);
+            realized_struct->defined_scope.creator = NULL;
+            realized_struct->value_type = typeid(TYPE_UNRESOLVED);
+            realized_struct->expr_val = ast_node_val_nil();
+            realized_struct->param_end = 0;
+
+            param_struct->children.items = children;
+            param_struct->children.count = child_count;
+        }
+
+        matched_values_t key = {.allocator=analyzer->ast->arena};
+        for (size_t i = 0; i < values.count; ++i) {
+            array_push(&key, values.items[i]);
+        }
+
+        inferred_copy_t copy = {
+            .key = key,
+            .copy = realized_struct,
+        };
+
+        array_push(&param_struct->realized_copies, copy);
+
+        {
+            scope_t inferred_scope = {0};
+            scope_init(&inferred_scope, analyzer->ast->arena, SCOPE_TYPE_INFERRED_PARAMS, param_struct->defined_scope.outer, param_struct_call);
+            analysis_state_t new_state = {.scope=&inferred_scope};
+
+            // create implicit constant decls for new struct definition
+            for (size_t i = an_struct_param_end(param_struct); i > an_struct_param_start(param_struct); --i) {
+                ast_node_t *decl = param_struct->children.items[i-1];
+                size_t arg_index = (i-1) - an_struct_param_start(param_struct) + an_call_arg_start(param_struct);
+                ast_node_t *call_arg = param_struct_call->children.items[arg_index];
+
+                ast_node_t *implicit_decl;
+                {
+                    ast_node_t *type_expr = ast_implicit_expr(analyzer->ast, typeid(TYPE_TYPE), WORDT(decl->value_type), an_decl_type(decl)->start);
+                    ast_node_t *init_expr = ast_implicit_expr(analyzer->ast, decl->value_type, call_arg->expr_val.word, call_arg->start);
+                    implicit_decl = ast_decldef(analyzer->ast, decl->identifier, type_expr, init_expr);
+                    implicit_decl->is_mutable = false;
+                }
+
+                declare_definition(analyzer, new_state.scope, implicit_decl);
+            }
+
+            resolve_expression(analyzer, analyzer->ast, new_state, typeid(TYPE_UNRESOLVED), realized_struct, true);
+        }
+    }
+
+    if (realized_struct == NULL || TYPE_IS_INVALID(realized_struct->value_type)) {
+        INVALIDATE(param_struct_call);
+        goto defer;
+    }
+
+    MUST(TYPE_IS_TYPE(realized_struct->value_type));
+    MUST(realized_struct->expr_val.is_concrete);
+    param_struct_call->value_type = typeid(TYPE_TYPE);
+    param_struct_call->expr_val = realized_struct->expr_val;
+
+defer: 
+    allocator_return(tmp);
+}
+
 static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t state, ast_node_t *call, type_t implicit_type) {
     ast_node_t *callee = an_callee(call);
     resolve_expression(analyzer, ast, state, implicit_type, callee, true);
@@ -1990,168 +2156,169 @@ static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
 
     call->value_type = typeid(TYPE_INVALID);
 
-    size_t arg_start = an_call_arg_start(call);
-    size_t arg_end = an_call_arg_end(call);
-    size_t arg_count = arg_end - arg_start;
-    // cannot use labelled arguments on variables
-    if (!callee->expr_val.is_concrete) {
-        if (arg_count != callee_td->as.function.argument_types.count) {
-            stan_error(analyzer, OR_ERROR(
-                .tag = ERROR_ANALYSIS_NUMBER_ARGS_CALL_FUNC_MISTMATCH,
-                .level = ERROR_SOURCE_ANALYSIS,
-                .msg = lit2str("for calls on non-constant functions, all arguments are required; got '$1.$' arguments instead of '$2.$'"),
-                .args = ORERR_ARGS(error_arg_node(call), error_arg_sz(arg_count), error_arg_sz(callee_td->as.function.argument_types.count)),
-                .show_code_lines = ORERR_LINES(0),
-            ));
-            return;
-        }
-
-        for (size_t i = 0; i < arg_count; ++i) {
-            size_t argi = arg_start + i;
-            ast_node_t *arg = call->children.items[argi];
-            if (arg->label.view.length > 0) {
-                stan_error(analyzer, OR_ERROR(
-                    .tag = ERROR_ANALYSIS_INVALID_LABEL,
-                    .level = ERROR_SOURCE_ANALYSIS,
-                    .msg = lit2str("cannot use labels on arguments for calls on non-constant functions"),
-                    .args = ORERR_ARGS(error_arg_token(arg->label)),
-                    .show_code_lines = ORERR_LINES(0),
-                ));
-                return;
-            }
-
-            if (an_is_none(arg)) {
+    if (callee_td->kind == TYPE_FUNCTION || callee_td->kind == TYPE_INTRINSIC_FUNCTION || callee_td->kind == TYPE_INFERRED_FUNCTION) {
+        size_t arg_start = an_call_arg_start(call);
+        size_t arg_end = an_call_arg_end(call);
+        size_t arg_count = arg_end - arg_start;
+        // cannot use labelled arguments on variables
+        if (!callee->expr_val.is_concrete) {
+            if (arg_count != callee_td->as.function.argument_types.count) {
                 stan_error(analyzer, OR_ERROR(
                     .tag = ERROR_ANALYSIS_NUMBER_ARGS_CALL_FUNC_MISTMATCH,
                     .level = ERROR_SOURCE_ANALYSIS,
-                    .msg = lit2str("cannot omit arguments for a call on a non-constant function"),
-                    .args = ORERR_ARGS(error_arg_node(arg)),
+                    .msg = lit2str("for calls on non-constant functions, all arguments are required; got '$1.$' arguments instead of '$2.$'"),
+                    .args = ORERR_ARGS(error_arg_node(call), error_arg_sz(arg_count), error_arg_sz(callee_td->as.function.argument_types.count)),
                     .show_code_lines = ORERR_LINES(0),
                 ));
                 return;
             }
+
+            for (size_t i = 0; i < arg_count; ++i) {
+                size_t argi = arg_start + i;
+                ast_node_t *arg = call->children.items[argi];
+                if (arg->label.view.length > 0) {
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = ERROR_ANALYSIS_INVALID_LABEL,
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("cannot use labels on arguments for calls on non-constant functions"),
+                        .args = ORERR_ARGS(error_arg_token(arg->label)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
+                    return;
+                }
+
+                if (an_is_none(arg)) {
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = ERROR_ANALYSIS_NUMBER_ARGS_CALL_FUNC_MISTMATCH,
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("cannot omit arguments for a call on a non-constant function"),
+                        .args = ORERR_ARGS(error_arg_node(arg)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
+                    return;
+                }
+            }
+        // reconstruct/fill arguments for constant calls 
+        } else if (callee_td->kind != TYPE_INTRINSIC_FUNCTION) {
+            if (callee_td->kind == TYPE_INFERRED_FUNCTION) {
+                ast_inferred_function_t *inferred_decl = callee->expr_val.word.as.p;
+                patch_call_argument_gaps(analyzer, ast, call, inferred_decl->arg_defaults, inferred_decl->has_defaults);
+            } else {
+                function_t *function = (function_t*)callee->expr_val.word.as.p;
+                patch_call_argument_gaps(analyzer, ast, call, function->arg_defaults, function->has_defaults);
+            }
+            arg_end = an_call_arg_end(call);
+            arg_count = arg_end-arg_start;
         }
-    // reconstruct/fill arguments for constant calls 
-    } else if (callee_td->kind != TYPE_INTRINSIC_FUNCTION) {
+
         if (callee_td->kind == TYPE_INFERRED_FUNCTION) {
-            ast_inferred_function_t *inferred_decl = callee->expr_val.word.as.p;
-            patch_call_argument_gaps(analyzer, ast, call, inferred_decl->arg_defaults, inferred_decl->has_defaults);
-        } else {
+            // im not sure if this is possible
+            unless (callee->expr_val.is_concrete) {
+                stan_error(analyzer, OR_ERROR(
+                    .tag = ERROR_ANALYSIS_EXPECTED_CONSTANT,
+                    .level = ERROR_SOURCE_ANALYSIS,
+                    .msg = lit2str("callee is an inferred function declaration and must be a constant"),
+                    .args = ORERR_ARGS(error_arg_node(callee)),
+                    .show_code_lines = ORERR_LINES(0),
+                ));
+                INVALIDATE(call);
+                return;
+            }
+
+            ast_inferred_function_t *inferred_funcdef = (ast_inferred_function_t*)callee->expr_val.word.as.p;
+
+            ast_node_t *realized_funcdef = stan_realize_inferred_funcdefcall_or_errornull(analyzer, state, call, inferred_funcdef->funcdef);
+
+            unless (realized_funcdef) {
+                INVALIDATE(call);
+                return;
+            }
+
+            if (TYPE_IS_INVALID(realized_funcdef->value_type)) {
+                INVALIDATE(call);
+                return;
+            }
+
+            {
+                function_t *function = (function_t*)realized_funcdef->expr_val.word.as.p;
+                size_t dep_start = stan_function_is_building(analyzer, function);
+                if (dep_start < analyzer->pending_dependencies.count) {
+                    stan_circular_dependency_error(analyzer, ast, callee, dep_start);
+                }
+            }
+
+            callee = ast_implicit_expr(ast, realized_funcdef->value_type, realized_funcdef->expr_val.word, callee->start);
+            callee_type = callee->value_type;
+            callee_td = ast_type2td(ast, callee_type);
+            an_callee(call) = callee;
+
+            arg_end = an_call_arg_end(call);
+            arg_count = arg_end-arg_start;
+        }
+
+        if (!TYPE_IS_INVALID(callee_type)) {
+            call->value_type = callee_td->as.function.return_type;
+        }
+
+        if (callee->expr_val.is_concrete) {
             function_t *function = (function_t*)callee->expr_val.word.as.p;
-            patch_call_argument_gaps(analyzer, ast, call, function->arg_defaults, function->has_defaults);
-        }
-        arg_end = an_call_arg_end(call);
-        arg_count = arg_end-arg_start;
-    }
-
-    if (callee_td->kind == TYPE_INFERRED_FUNCTION) {
-        // im not sure if this is possible
-        unless (callee->expr_val.is_concrete) {
-            stan_error(analyzer, OR_ERROR(
-                .tag = ERROR_ANALYSIS_EXPECTED_CONSTANT,
-                .level = ERROR_SOURCE_ANALYSIS,
-                .msg = lit2str("callee is an inferred function declaration and must be a constant"),
-                .args = ORERR_ARGS(error_arg_node(callee)),
-                .show_code_lines = ORERR_LINES(0),
-            ));
-            INVALIDATE(call);
-            return;
-        }
-
-        ast_inferred_function_t *inferred_funcdef = (ast_inferred_function_t*)callee->expr_val.word.as.p;
-
-        ast_node_t *realized_funcdef = stan_realize_inferred_funcdefcall_or_errornull(analyzer, state, call, inferred_funcdef->funcdef);
-
-        unless (realized_funcdef) {
-            INVALIDATE(call);
-            return;
-        }
-
-        if (TYPE_IS_INVALID(realized_funcdef->value_type)) {
-            INVALIDATE(call);
-            return;
-        }
-
-        {
-            function_t *function = (function_t*)realized_funcdef->expr_val.word.as.p;
-            size_t dep_start = stan_function_is_building(analyzer, function);
-            if (dep_start < analyzer->pending_dependencies.count) {
-                stan_circular_dependency_error(analyzer, ast, callee, dep_start);
+            for (size_t i = arg_start; i < arg_end; ++i) {
+                ast_node_t *arg = call->children.items[i];
+                if (an_is_none(arg)) {
+                    struct_field_t field = function->arg_defaults.items[i - arg_start];
+                    arg = ast_implicit_expr(ast, field.type, field.default_value, arg->start);
+                    call->children.items[i] = arg;
+                }
             }
         }
 
-        callee = ast_implicit_expr(ast, realized_funcdef->value_type, realized_funcdef->expr_val.word, callee->start);
-        callee_type = callee->value_type;
-        callee_td = ast_type2td(ast, callee_type);
-        an_callee(call) = callee;
+        bool argument_invalid = false;
+        for (size_t i = an_call_arg_start(call); i < an_call_arg_end(call); ++i) {
+            ast_node_t *argument = call->children.items[i];
 
-        arg_end = an_call_arg_end(call);
-        arg_count = arg_end-arg_start;
-    }
+            size_t argi = i - an_call_arg_start(expr);
+            
+            type_t arg_implicit_type = typeid(TYPE_UNRESOLVED);
+            if (argi < callee_td->as.function.argument_types.count) {
+                arg_implicit_type = callee_td->as.function.argument_types.items[argi];
+            }
 
-    if (callee_td->kind == TYPE_FUNCTION || callee_td->kind == TYPE_INTRINSIC_FUNCTION) {
-        call->value_type = callee_td->as.function.return_type;
-    }
+            resolve_expression(analyzer, ast, state, arg_implicit_type, argument, true);
+            if (TYPE_IS_INVALID(argument->value_type)) {
+                argument_invalid = true;
+            }
+        }
 
-    if (callee->expr_val.is_concrete) {
-        function_t *function = (function_t*)callee->expr_val.word.as.p;
-        for (size_t i = arg_start; i < arg_end; ++i) {
+        if (argument_invalid || TYPE_IS_INVALID(callee->value_type)) {
+            return;
+        }
+
+        for (size_t i = an_call_arg_start(call); i < an_call_arg_end(call); ++i) {
             ast_node_t *arg = call->children.items[i];
-            if (an_is_none(arg)) {
-                struct_field_t field = function->arg_defaults.items[i - arg_start];
-                arg = ast_implicit_expr(ast, field.type, field.default_value, arg->start);
+            if (TYPE_IS_INVALID(arg->value_type)) continue;
+            size_t i_= i - an_call_arg_start(expr);
+
+            if (i_ < callee_td->as.function.argument_types.count) {
+                arg = cast_implicitly_if_necessary(ast, callee_td->as.function.argument_types.items[i_], arg);
                 call->children.items[i] = arg;
             }
         }
-    }
 
-    if ((!type_is_function(ast->type_set.types, callee_type) && !type_is_intrinsic_function(ast->type_set.types, callee_type))) {
+        check_call_on_func_or_error(analyzer, ast, call);
+    } else if (callee_td->kind == TYPE_PARAM_STRUCT) {
+        MUST(callee->expr_val.is_concrete);
+        stan_realize_parameterized_struct(analyzer, state, call);
+
+    } else {
         unless (TYPE_IS_INVALID(callee_type)) {
             stan_error(analyzer, OR_ERROR(
                 .tag = ERROR_ANALYSIS_EXPECTED_CALLABLE,
                 .level = ERROR_SOURCE_ANALYSIS,
-                .msg = lit2str("expected a callable type but got '$0.type$' instead"),
+                .msg = lit2str("expected a function or parameterized struct but got '$0.type$' instead"),
                 .args = ORERR_ARGS(error_arg_node(callee)),
                 .show_code_lines = ORERR_LINES(0),
             ));
         }
-        return;
-    }
-
-    bool argument_invalid = false;
-    for (size_t i = an_call_arg_start(call); i < an_call_arg_end(call); ++i) {
-        ast_node_t *argument = call->children.items[i];
-
-        size_t argi = i - an_call_arg_start(expr);
-        
-        type_t arg_implicit_type = typeid(TYPE_UNRESOLVED);
-        if (argi < callee_td->as.function.argument_types.count) {
-            arg_implicit_type = callee_td->as.function.argument_types.items[argi];
-        }
-
-        resolve_expression(analyzer, ast, state, arg_implicit_type, argument, true);
-        if (TYPE_IS_INVALID(argument->value_type)) {
-            argument_invalid = true;
-        }
-    }
-
-    if (argument_invalid || TYPE_IS_INVALID(callee->value_type)) {
-        return;
-    }
-
-    for (size_t i = an_call_arg_start(call); i < an_call_arg_end(call); ++i) {
-        ast_node_t *arg = call->children.items[i];
-        if (TYPE_IS_INVALID(arg->value_type)) continue;
-        size_t i_= i - an_call_arg_start(expr);
-
-        if (i_ < callee_td->as.function.argument_types.count) {
-            arg = cast_implicitly_if_necessary(ast, callee_td->as.function.argument_types.items[i_], arg);
-            call->children.items[i] = arg;
-        }
-    }
-
-    bool success = check_call_on_func(analyzer, ast, call);
-    if (!success) {
         return;
     }
 }
@@ -2772,6 +2939,7 @@ void resolve_expression(
                 case TYPE_COUNT:
                 case TYPE_INVALID:
                 case TYPE_UNRESOLVED:
+                case TYPE_PARAM_STRUCT:
                 case TYPE_INFERRED_FUNCTION:
                 case TYPE_UNREACHABLE: UNREACHABLE(); break;
                 }
