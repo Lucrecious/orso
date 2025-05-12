@@ -2016,7 +2016,7 @@ static void stan_realize_parameterized_struct(analyzer_t *analyzer, analysis_sta
             .tag = ERROR_ANALYSIS_NUMBER_ARGS_CALL_FUNC_MISTMATCH,
             .level = ERROR_SOURCE_ANALYSIS,
             .msg = lit2str("parameterized struct requires '$1.$' argument(s) but got '$2.$'"),
-            .args = ORERR_ARGS(error_arg_node(param_struct_call), error_arg_sz(arg_count), error_arg_sz(param_count)),
+            .args = ORERR_ARGS(error_arg_node(param_struct_call), error_arg_sz(param_count), error_arg_sz(arg_count)),
             .show_code_lines = ORERR_LINES(0),
         ));
         INVALIDATE(param_struct_call);

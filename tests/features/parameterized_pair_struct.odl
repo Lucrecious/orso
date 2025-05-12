@@ -1,0 +1,16 @@
+pair_t :: struct(key_t: type, value_t: type) {
+    key := key_t.{};
+    value := value_t.{};
+};
+
+main :: () -> void {
+    a := pair_t(int, int).{1, 1};
+    b := pair_t(bool, pair_t(int, int)).{false, .{2, 3}};
+    c := a + b.value;
+
+    printint(c.key);
+    println();
+
+    printint(c.value);
+    println();
+};
