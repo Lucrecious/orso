@@ -1703,12 +1703,6 @@ static void resolve_struct(analyzer_t *analyzer, ast_t *ast, analysis_state_t st
         scope_init(&struct_def->defined_scope, analyzer->ast->arena, SCOPE_TYPE_INFERRED_PARAMS, state.scope, struct_def);
         new_state.scope = &struct_def->defined_scope;
 
-        for (size_t i = an_struct_param_start(struct_def); i < an_struct_param_end(struct_def); ++i) {
-            ast_node_t *param = struct_def->children.items[i];
-            resolve_declaration_definition(analyzer, ast, new_state, param);
-            param->is_mutable = false;
-        }
-
         struct_def->value_type = typeid(TYPE_PARAM_STRUCT);
         struct_def->expr_val = ast_node_val_word(WORDP(struct_def));
         return;
@@ -2027,12 +2021,32 @@ static void stan_realize_parameterized_struct(analyzer_t *analyzer, analysis_sta
     tmp_arena_t *tmp = allocator_borrow();
     matched_values_t values = {.allocator=tmp->allocator};
 
+    scope_t inferred_scope = {0};
+    scope_init(&inferred_scope, analyzer->ast->arena, SCOPE_TYPE_INFERRED_PARAMS, param_struct->defined_scope.outer, param_struct_call);
+
+    ast_nodes_t params = {.allocator=tmp->allocator};
+    for (size_t i = an_struct_param_start(param_struct); i < an_struct_param_end(param_struct); ++i) {
+        ast_node_t *p = ast_node_copy(analyzer->ast->arena, param_struct->children.items[i]);
+
+        array_push(&params, p);
+
+        declare_definition(analyzer, &inferred_scope, p);
+    }
+
     bool is_invalid = false;
-    for (size_t i = an_call_arg_start(param_struct_call); i < an_call_arg_end(param_struct_call); ++i) {
-        ast_node_t *arg = param_struct_call->children.items[i];
-        size_t param_index = i-an_call_arg_start(param_struct_call)+an_struct_param_start(param_struct);
-        ast_node_t *param = param_struct->children.items[param_index];
-        resolve_expression(analyzer, analyzer->ast, state, param->value_type, arg, true);
+    for (size_t i = 0; i < params.count; ++i) {
+        ast_node_t *param = params.items[i];
+
+        resolve_declaration_definition(analyzer, analyzer->ast, (analysis_state_t){.scope=&inferred_scope}, param);
+        param->is_mutable = false;
+
+        type_t implicit_type = TYPE_IS_INVALID(param->value_type) ? typeid(TYPE_UNRESOLVED) : param->value_type;
+
+        size_t arg_index = i+an_call_arg_start(param_struct_call);
+        ast_node_t *arg = param_struct_call->children.items[arg_index];
+        resolve_expression(analyzer, analyzer->ast, state, implicit_type, arg, true);
+
+        param->expr_val = arg->expr_val;
 
         if (!typeid_eq(param->value_type, arg->value_type)) {
             is_invalid = true;
@@ -2081,7 +2095,6 @@ static void stan_realize_parameterized_struct(analyzer_t *analyzer, analysis_sta
         {
             ast_node_t **children = param_struct->children.items;
             param_struct->children.items += an_struct_start(param_struct);
-
             size_t child_count = param_struct->children.count;
             param_struct->children.count = an_struct_end(param_struct) - an_struct_start(param_struct);
 
@@ -2108,26 +2121,7 @@ static void stan_realize_parameterized_struct(analyzer_t *analyzer, analysis_sta
         array_push(&param_struct->realized_copies, copy);
 
         {
-            scope_t inferred_scope = {0};
-            scope_init(&inferred_scope, analyzer->ast->arena, SCOPE_TYPE_INFERRED_PARAMS, param_struct->defined_scope.outer, param_struct_call);
             analysis_state_t new_state = {.scope=&inferred_scope};
-
-            // create implicit constant decls for new struct definition
-            for (size_t i = an_struct_param_end(param_struct); i > an_struct_param_start(param_struct); --i) {
-                ast_node_t *decl = param_struct->children.items[i-1];
-                size_t arg_index = (i-1) - an_struct_param_start(param_struct) + an_call_arg_start(param_struct);
-                ast_node_t *call_arg = param_struct_call->children.items[arg_index];
-
-                ast_node_t *implicit_decl;
-                {
-                    ast_node_t *type_expr = ast_implicit_expr(analyzer->ast, typeid(TYPE_TYPE), WORDT(decl->value_type), an_decl_type(decl)->start);
-                    ast_node_t *init_expr = ast_implicit_expr(analyzer->ast, decl->value_type, call_arg->expr_val.word, call_arg->start);
-                    implicit_decl = ast_decldef(analyzer->ast, decl->identifier, type_expr, init_expr);
-                    implicit_decl->is_mutable = false;
-                }
-
-                declare_definition(analyzer, new_state.scope, implicit_decl);
-            }
 
             resolve_expression(analyzer, analyzer->ast, new_state, typeid(TYPE_UNRESOLVED), realized_struct, true);
         }

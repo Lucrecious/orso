@@ -1,9 +1,18 @@
-pair_t :: struct(key_t: type, value_t: type) {
+nest_t :: struct(key_t: type, fn: (key_t) -> key_t) {
     key := key_t.{};
-    value := value_t.{};
+    value :: fn;
 };
 
 main :: () -> void {
-    a := pair_t(10, int).{1, 1};
-    a;
+    add1 :: (n: int) -> int {
+        return n + 1;
+    };
+
+    nest := nest_t(int, add1).{};
+    printint(nest.key);
+    println();
+
+    x := nest_t(int, add1).value(10);
+    printint(x);
+    println();
 };
