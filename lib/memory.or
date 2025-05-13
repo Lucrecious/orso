@@ -1,0 +1,3 @@
+arena_t :: struct {
+    a := 10;
+};

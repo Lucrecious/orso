@@ -1,6 +1,4 @@
 Roadmap to 0.5v
-- structs
-    - allow structs with compile-time parameters
 - custom modules (multifile programs)
 - strings
     - implemented in core, with regular string syntactic sugar
@@ -23,8 +21,8 @@ Roadmap to 0.5v
 - single line short hand function body with =>
 
 #Roadmap to 1.0v:
+- strings - better encoding
 - parameterized structs can be inferred
-    - arguments, possible to be declared in any order
 - syntax highlighter for vscode vim
 - debug compile-time functions and native code
 - finalize spec, and make consistent (arguments and params in particular could be unified)

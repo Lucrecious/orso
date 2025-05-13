@@ -19,3 +19,8 @@
 ns2sec :: (ns: u64) -> f64 {
     return (ns as f64)*0.000_000_001;
 };
+
+str8_t :: struct {
+    cstr := (&u8).{};
+    length := 0;
+};

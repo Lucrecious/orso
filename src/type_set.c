@@ -147,6 +147,7 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
 
     static typedata_t type_void = {.name=lit2str("void"), .kind=TYPE_VOID, .size=0, .alignment=0, .capabilities=TYPE_CAP_NONE};
     static typedata_t type_bool = {.name=lit2str("bool"), .kind=TYPE_BOOL, .size=NUM_SIZE_8, .alignment=NUM_SIZE_8, .capabilities=TYPE_CAP_LOGICAL};
+    static typedata_t type_str8 = {.name=lit2str("str8_t"), .kind=TYPE_STRING, .size=0, .alignment=0, .capabilities=TYPE_CAP_NONE};
     static typedata_t type_f32 = {.name=lit2str("f32"), .kind=TYPE_NUMBER, .size=NUM_SIZE_32, .alignment=NUM_SIZE_32, .as.num = NUM_TYPE_FLOAT, .capabilities=TYPE_CAP_NUMBER};
     static typedata_t type_f64 = {.name=lit2str("f64"), .kind=TYPE_NUMBER, .size=NUM_SIZE_64, .alignment=NUM_SIZE_64, .as.num = NUM_TYPE_FLOAT, .capabilities=TYPE_CAP_NUMBER};
 
@@ -167,7 +168,6 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
     static typedata_t type_size_t = {.name=lit2str("size_t"), .kind=TYPE_NUMBER, .size=sizeof(size_t), .alignment=sizeof(size_t), .as.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_NUMBER)};
     static typedata_t type_ptrdiff_t = {.name=lit2str("s64"), .kind=TYPE_NUMBER, .size=sizeof(s64), .alignment=sizeof(s64), .as.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_NUMBER)};
 
-    static typedata_t type_string = {.name=lit2str("string"), .kind=TYPE_STRING, .size=sizeof(void*), .alignment=sizeof(void*), .capabilities=(TYPE_CAP_NONE)};
     static typedata_t type_type = {.name=lit2str("type"), .kind=TYPE_TYPE, .size=sizeof(type_t), .alignment=sizeof(type_t), .capabilities=(TYPE_CAP_NONE)};
     static typedata_t empty_function = {.name=lit2str(""), .kind = TYPE_FUNCTION, .size = sizeof(void*), .alignment=sizeof(void*), .as.function.return_type = typeid(TYPE_VOID), .capabilities=(TYPE_CAP_NONE)};
 
@@ -192,8 +192,8 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
     set->bool_ = typeid(set->types.count);
     array_push(&set->types, &type_bool);
 
-    type_t string_ = typeid(set->types.count);
-    array_push(&set->types, &type_string);
+    set->str8_t_ = typeid(set->types.count);
+    array_push(&set->types, &type_str8);
 
     type_t type_ = typeid(set->types.count);
     array_push(&set->types, &type_type);
@@ -250,7 +250,7 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
     ASSERT(unreachable.i == TYPE_UNREACHABLE, "must be same as type unreachable");
     ASSERT(set->void_.i == TYPE_VOID, "must be same as type void");
     ASSERT(set->bool_.i == TYPE_BOOL, "must be same as type bool");
-    ASSERT(string_.i == TYPE_STRING, "must be same as type string");
+    ASSERT(set->str8_t_.i == TYPE_STRING, "must be same as type string");
     ASSERT(type_.i == TYPE_TYPE, "must be same as type type");
 }
 

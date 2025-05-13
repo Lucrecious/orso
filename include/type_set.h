@@ -38,7 +38,7 @@ struct type_table_t {
 
     type_t ptrdiff_t_;
 
-    type_t string_;
+    type_t str8_t_;
     type_t symbol_;
     type_t type_;
     type_t empty_function_;

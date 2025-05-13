@@ -497,6 +497,7 @@ static void cgen_constant(cgen_t *cgen, word_t word, type_t type) {
             break;
         }
 
+        case TYPE_STRING:
         case TYPE_STRUCT: {
             cgen_struct_start(cgen, type);
 
@@ -535,7 +536,6 @@ static void cgen_constant(cgen_t *cgen, word_t word, type_t type) {
         }
 
         case TYPE_VOID:
-        case TYPE_STRING:
 
         case TYPE_PARAM_STRUCT:
         case TYPE_INFERRED_FUNCTION:
@@ -2238,6 +2238,7 @@ static void cgen_generate_cnames_for_types(ast_t *ast) {
         typedata_t *td = tds->items[i];
         switch(td->kind) {
         case TYPE_BOOL: td->name = lit2str("bool_"); break;
+        case TYPE_STRING:
         case TYPE_NUMBER: ASSERT(td->name.length != 0, "should be already set"); break;
         case TYPE_TYPE: td->name = lit2str("type_t"); break;
         case TYPE_VOID: td->name = lit2str("void"); break;
@@ -2301,8 +2302,6 @@ static void cgen_generate_cnames_for_types(ast_t *ast) {
             allocator_return(tmp);
             break;
         }
-
-        case TYPE_STRING: break;
 
         case TYPE_PARAM_STRUCT:
         case TYPE_INFERRED_FUNCTION:

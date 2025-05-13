@@ -642,6 +642,13 @@ static ast_node_t *ast_primaryb(ast_t *ast, bool value, ast_node_t extra_params)
     return primary;
 }
 
+static ast_node_t *ast_primary_str(ast_t *ast, token_t where) {
+    ast_node_t *primary = ast_node_new(ast->arena, AST_NODE_TYPE_EXPRESSION_PRIMARY, where);
+    primary->value_type = typeid(TYPE_UNRESOLVED);
+
+    return primary;
+}
+
 static ast_node_t *ast_statement(ast_t *ast, ast_node_t *expr) {
     ast_node_t *statement_node = ast_node_new(ast->arena, AST_NODE_TYPE_DECLARATION_STATEMENT, expr->start);
     an_expression(statement_node) = expr;
@@ -1091,9 +1098,8 @@ static ast_node_t *parse_literal(parser_t *parser) {
         }
 
         case TOKEN_STRING: {
-            UNREACHABLE();
-            break;
-        };
+            return ast_primary_str(parser->ast, parser->previous);
+        }
 
         case TOKEN_SYMBOL: {
             // todo
@@ -2352,7 +2358,8 @@ bool parse(ast_t *ast, string_t file_path, string_view_t source) {
         parse_string_to_module(ast, core_mod, file_path, string2sv(core_source));
         ast_end_module(core_mod);
 
-        ast_add_module(ast, core_mod, lit2str(CORE_MODULE_NAME));
+        ast->core_module_or_null = core_mod;
+        // ast_add_module(ast, core_mod, lit2str(CORE_MODULE_NAME));
     }
 
 
@@ -2403,8 +2410,6 @@ word_t ast_mem2word(ast_t *ast, void *data, type_t type) {
 
     case TYPE_BOOL: return (word_t){ .as.u = (*((u8*)data)) };
 
-    case TYPE_STRING: UNREACHABLE(); return (word_t){0}; //todo
-
     case TYPE_POINTER:
     case TYPE_INTRINSIC_FUNCTION:
     case TYPE_FUNCTION:
@@ -2425,6 +2430,7 @@ word_t ast_mem2word(ast_t *ast, void *data, type_t type) {
         }
     }
 
+    case TYPE_STRING:
     case TYPE_STRUCT:
     case TYPE_ARRAY: {
         if (td->size > WORD_SIZE) {

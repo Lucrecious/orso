@@ -561,8 +561,6 @@ static void emit_bin_op_aggregates(gen_t *gen, texloc_t loc, function_t *functio
         break;
     }
 
-    case TYPE_STRING: UNREACHABLE(); break; // todo
-
     case TYPE_NUMBER:
     case TYPE_BOOL:
     case TYPE_TYPE:
@@ -599,6 +597,8 @@ static void emit_bin_op_aggregates(gen_t *gen, texloc_t loc, function_t *functio
         }
         break;
     }
+
+    case TYPE_STRING: UNREACHABLE(); break;
 
     case TYPE_INVALID:
     case TYPE_UNRESOLVED:
@@ -1185,6 +1185,7 @@ static void gen_lvalue(gen_t *gen, function_t *function, ast_node_t *lvalue, val
             break;
         }
 
+        case TYPE_STRING:
         case TYPE_STRUCT: {
             val_dst_t lvalue_dst = emit_val_dst_reg_or_stack_point_reserve(gen, loc, function, gen->ast->type_set.u64_, REG_RESULT);
             gen_lvalue(gen, function, lhs, lvalue_dst);
@@ -1223,6 +1224,18 @@ static void gen_unary(gen_t *gen, function_t *function, ast_node_t *unary, val_d
 static void gen_expr_val(gen_t *gen, texloc_t loc, function_t *function, type_t type, word_t word, val_dst_t val_dst) {
     typedata_t *td = ast_type2td(gen->ast, type);
     if (td->size > WORD_SIZE) {
+        if (td->kind == TYPE_STRING) {
+            word_t val = ast_struct_item_get(gen->ast, type, lit2sv("cstr"), word);
+            word_t l = ast_struct_item_get(gen->ast, type, lit2sv("length"), word);
+
+            size_t val_bytes = sizeof(u8)*(l.as.u + 1);
+            size_t mem_index = memarr_push(function->memory, val.as.p, val_bytes);
+            void *data = function->memory->data + mem_index;
+            memcpy(data, val.as.p, val_bytes);
+
+            ast_struct_item_set(gen->ast, type, lit2sv("cstr"), &word, WORDP(data));
+        }
+
         gen_constant(gen, loc, function, word.as.p, type, val_dst);
     } else {
         switch (td->kind) {
@@ -1285,6 +1298,9 @@ static void gen_expr_val(gen_t *gen, texloc_t loc, function_t *function, type_t 
             break;
         }
 
+
+        case TYPE_STRING: UNREACHABLE(); break;
+
         case TYPE_POINTER:
         case TYPE_TYPE:
         case TYPE_FUNCTION:
@@ -1294,8 +1310,6 @@ static void gen_expr_val(gen_t *gen, texloc_t loc, function_t *function, type_t 
             gen_constant(gen, loc, function, &word, type, val_dst);
             break;
         }
-
-        case TYPE_STRING: UNREACHABLE(); break;
         
         case TYPE_VOID:
         case TYPE_UNREACHABLE:
@@ -2130,6 +2144,7 @@ static void gen_dot_access(gen_t *gen, function_t *function, ast_node_t *dot_acc
 
     if (lhstd->kind != TYPE_POINTER && an_is_notnone(dot_access->lvalue_node)) {
         switch (lhstd->kind) {
+        case TYPE_STRING:
         case TYPE_STRUCT: {
             val_dst_t lvalue_dst = emit_val_dst_reg_or_stack_point_reserve(gen, loc, function, gen->ast->type_set.u64_, REG_RESULT);
             gen_lvalue(gen, function, dot_access->lvalue_node, lvalue_dst);

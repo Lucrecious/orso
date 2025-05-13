@@ -388,6 +388,7 @@ typedef struct ast_t {
     table_t(s2w) *intrinsic_fns;
     table_t(p2s) *intrinsicfn2cname;
 
+    ast_node_t *core_module_or_null;
     table_t(s2n) *moduleid2node;
 
     table_t(t2w) *type_to_zero_word;

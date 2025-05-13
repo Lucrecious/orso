@@ -88,9 +88,9 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
         scope_t **found_scope);
 
 static bool is_builtin_type(type_table_t *t, string_view_t identifier, type_t *type) {
-#define RETURN_IF_TYPE(TYPE_STRING, TYPE) \
-if (sv_eq(identifier, lit2sv(#TYPE_STRING))) {\
-    *type = (TYPE); \
+#define RETURN_IF_TYPE(name, t) \
+if (sv_eq(identifier, lit2sv(#name))) {\
+    *type = (t); \
     return true; \
 }
 
@@ -115,6 +115,8 @@ if (sv_eq(identifier, lit2sv(#TYPE_STRING))) {\
     RETURN_IF_TYPE(uint, t->uint_)
     RETURN_IF_TYPE(size_t, t->size_t_)
     RETURN_IF_TYPE(ptrdiff_t, t->ptrdiff_t_)
+
+    RETURN_IF_TYPE(str8_t, t->str8_t_)
 
 #undef RETURN_IF_TYPE
 
@@ -493,6 +495,7 @@ word_t ast_item_get(ast_t *ast, bool is_addr, word_t aggregate, type_t item_type
         return WORDP(res);
     }
 
+    case TYPE_STRING:
     case TYPE_STRUCT:
     case TYPE_ARRAY: {
         if (td->size > WORD_SIZE) {
@@ -564,8 +567,6 @@ word_t ast_item_get(ast_t *ast, bool is_addr, word_t aggregate, type_t item_type
         }
     }
 
-    case TYPE_STRING: UNREACHABLE(); break; // todo
-
     case TYPE_INVALID:
     case TYPE_UNRESOLVED:
     case TYPE_PARAM_STRUCT:
@@ -599,6 +600,8 @@ void ast_item_set(ast_t *ast, type_t type, void *addr, word_t value, size_t byte
         break;
     }
 
+    case TYPE_STRUCT:
+    case TYPE_STRING:
     case TYPE_ARRAY: {
         void *src;
         if (td->size > WORD_SIZE) {
@@ -672,9 +675,6 @@ void ast_item_set(ast_t *ast, type_t type, void *addr, word_t value, size_t byte
         }
         }
     }
-
-    case TYPE_STRUCT: UNREACHABLE(); break; // todo
-    case TYPE_STRING: UNREACHABLE(); break; // todo
 
     case TYPE_INVALID:
     case TYPE_UNRESOLVED:
@@ -1643,6 +1643,7 @@ static void ast_copy_expr_val_to_memory(ast_t *ast, type_t type, word_t src, voi
 
     case TYPE_VOID: break;
 
+    case TYPE_STRING:
     case TYPE_ARRAY:
     case TYPE_STRUCT: {
         if (td->size > WORD_SIZE) {
@@ -1663,8 +1664,6 @@ static void ast_copy_expr_val_to_memory(ast_t *ast, type_t type, word_t src, voi
         memcpy(dest, &src.as.u, WORD_SIZE);
         break;
     }
-
-    case TYPE_STRING: UNREACHABLE(); break; //todo
 
     case TYPE_COUNT:
     case TYPE_UNREACHABLE:
@@ -1836,7 +1835,7 @@ bool ast_find_field_by_name(struct_fields_t fields, string_view_t name, struct_f
 
 bool ast_find_struct_field_by_name(ast_t *ast, type_t struct_type, string_view_t name, struct_field_t *field, size_t *index) {
     typedata_t *td = ast_type2td(ast, struct_type);
-    MUST(td->kind == TYPE_STRUCT);
+    MUST(td->kind == TYPE_STRUCT || td->kind == TYPE_STRING);
     return ast_find_field_by_name(td->as.struct_.fields, name, field, index);
 }
 
@@ -1991,6 +1990,46 @@ ast_inferred_function_t *ast_inferred_function_from_funcdef(ast_t *ast, ast_node
     }
 
     return func;
+}
+
+string_t parse_token_as_str8(string_view_t str, arena_t *arena) {
+    ++str.data;
+    str.length -= 2;
+
+    string_t s = sv2string(str, arena);
+    return s;
+}
+
+word_t ast_struct_item_get(ast_t *ast, type_t struct_type, string_view_t field_name, word_t struct_) {
+    typedata_t *td = ast_type2td(ast, struct_type);
+    MUST(td->kind == TYPE_STRING || td->kind == TYPE_STRUCT);
+
+    struct_field_t field;
+    size_t field_index;
+    bool success = ast_find_field_by_name(td->as.struct_.fields, field_name, &field, &field_index);
+    MUST(success);
+
+    word_t ret = ast_item_get(ast, td->size > WORD_SIZE, struct_, field.type, field.offset);
+    return ret;
+}
+
+void ast_struct_item_set(ast_t *ast, type_t struct_type, string_view_t field_name, word_t *struct_, word_t value) {
+    typedata_t *td = ast_type2td(ast, struct_type);
+    MUST(td->kind == TYPE_STRING || td->kind == TYPE_STRUCT);
+
+    void *addr = NULL;
+    if (td->size > WORD_SIZE) {
+        addr = struct_->as.p;
+    } else {
+        addr = struct_;
+    }
+
+    struct_field_t field;
+    size_t field_index;
+    bool success = ast_find_field_by_name(td->as.struct_.fields, field_name, &field, &field_index);
+    MUST(success);
+
+    ast_item_set(ast, field.type, addr+field.offset, value, 0);
 }
 
 static void stan_realize_parameterized_struct(analyzer_t *analyzer, analysis_state_t state, ast_node_t *param_struct_call) {
@@ -2743,6 +2782,7 @@ void resolve_expression(
                     break;
                 }
 
+                case TYPE_STRING:
                 case TYPE_STRUCT: {
                     tmp_arena_t *tmp = allocator_borrow();
 
@@ -2927,9 +2967,6 @@ void resolve_expression(
 
                 case TYPE_VOID: break;
 
-
-                case TYPE_STRING: UNREACHABLE(); break; // todo
-
                 case TYPE_COUNT:
                 case TYPE_INVALID:
                 case TYPE_UNRESOLVED:
@@ -2959,7 +2996,22 @@ void resolve_expression(
         }
 
         case AST_NODE_TYPE_EXPRESSION_PRIMARY: {
-            INVALIDATE(expr);
+            if (expr->start.type == TOKEN_STRING) {
+                expr->value_type = ast->type_set.str8_t_;
+                expr->expr_val = ast_node_val_word(WORDU(0));
+
+                typedata_t *td = ast_type2td(ast, ast->type_set.str8_t_);
+                if (td->size > WORD_SIZE) {
+                    void *w = ast_multiword_value(ast, b2w(td->size));
+                    expr->expr_val = ast_node_val_word(WORDP(w));
+                }
+
+                string_t value = parse_token_as_str8(expr->start.view, ast->arena);
+                ast_struct_item_set(ast, expr->value_type, lit2sv("cstr"), &expr->expr_val.word, WORDP((void*)value.cstr));
+                ast_struct_item_set(ast, expr->value_type, lit2sv("length"), &expr->expr_val.word, WORDI((s64)value.length));
+            } else {
+                INVALIDATE(expr);
+            }
             break;
         }
 
@@ -3437,6 +3489,7 @@ void resolve_expression(
             typedata_t *lhstd = ast_type2td(ast, lhs_type);
             switch (lhstd->kind){
             case TYPE_POINTER:
+            case TYPE_STRING:
             case TYPE_STRUCT: {
                 if (lhstd->kind == TYPE_POINTER) {
                     typedata_t *innertd = ast_type2td(ast, lhstd->as.ptr.type);
@@ -4542,8 +4595,8 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
     }
     
     // check core module
-    unless (decl) {
-        ast_node_t *module = get_module_or_null(ast, str(CORE_MODULE_NAME));
+    if (!decl && ast->core_module_or_null) {
+        ast_node_t *module = ast->core_module_or_null;
         ASSERT(module, "core should be there");
 
         for (size_t i = 0; i < module->children.count; ++i) {
@@ -4877,26 +4930,41 @@ static void analyzer_init(analyzer_t *analyzer, ast_t *ast, arena_t *arena) {
     analyzer->pending_dependencies.allocator = arena;
 }
 
+static void resolve_module(analyzer_t *analyzer, ast_t *ast, ast_node_t *module) {
+    scope_t global_scope = {0};
+    scope_init(&global_scope, ast->arena, SCOPE_TYPE_MODULE, NULL, module);
+    analysis_state_t state = (analysis_state_t) {
+        .scope = &global_scope
+    };
+
+    forward_scan_constant_names(analyzer, &global_scope, module->children);
+    size_t last_decl = resolve_declarations_until_unreachable(analyzer, ast, state, module->children, false);
+    if (last_decl < module->children.count) {
+        module->children.count = last_decl+1;
+    }
+}
+
 bool resolve_ast(ast_t *ast) {
     analyzer_t analyzer = {0};
-    // tmp_arena_t *tmp = allocator_borrow();
 
-    // analyzer_init(&analyzer, ast, tmp->allocator);
     analyzer_init(&analyzer, ast, ast->arena);
+
+    resolve_module(&analyzer, ast, ast->core_module_or_null);
+
+    for (size_t i = 0; i < ast->core_module_or_null->children.count; ++i) {
+        ast_node_t *decl = ast->core_module_or_null->children.items[i];
+        if (sv_eq(decl->identifier.view, lit2sv("str8_t"))) {
+            typedata_t *decltd = ast_type2td(ast, decl->expr_val.word.as.t);
+            typedata_t *str8td = ast_type2td(ast, ast->type_set.str8_t_);
+            *str8td = *decltd;
+            str8td->kind = TYPE_STRING;
+            break;
+        }
+    }
 
     ast_node_t *module;
     kh_foreach_value(ast->moduleid2node, module, {
-        scope_t global_scope = {0};
-        scope_init(&global_scope, ast->arena, SCOPE_TYPE_MODULE, NULL, module);
-        analysis_state_t state = (analysis_state_t) {
-            .scope = &global_scope
-        };
-
-        forward_scan_constant_names(&analyzer, &global_scope, module->children);
-        size_t last_decl = resolve_declarations_until_unreachable(&analyzer, ast, state, module->children, false);
-        if (last_decl < module->children.count) {
-            module->children.count = last_decl+1;
-        }
+        resolve_module(&analyzer, ast, module);
     });
 
     ast->resolved = !analyzer.had_error;
