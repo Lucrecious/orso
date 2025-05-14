@@ -519,11 +519,17 @@ static void cgen_constant(cgen_t *cgen, word_t word, type_t type) {
 
                 sb_add_format(&cgen->sb, ".%s = ", field.name.cstr);
 
-                if (fieldtd->size > WORD_SIZE) {
-                    cgen_constant(cgen, WORDP(item_data_addr), field.type);
+                if (typedata->kind == TYPE_STRING && string_eq(field.name, lit2str("cstr"))) {
+                    // todo: needs better conversion, use hexadecimal instead
+                    cstr_t cstr = *((char**)item_data_addr);
+                    sb_add_format(&cgen->sb, "\"%s\"", cstr);
                 } else {
-                    word_t val = ast_mem2word(cgen->ast, item_data_addr, field.type);
-                    cgen_constant(cgen, val, field.type);
+                    if (fieldtd->size > WORD_SIZE) {
+                        cgen_constant(cgen, WORDP(item_data_addr), field.type);
+                    } else {
+                        word_t val = ast_mem2word(cgen->ast, item_data_addr, field.type);
+                        cgen_constant(cgen, val, field.type);
+                    }
                 }
             }
 
@@ -1804,6 +1810,7 @@ static void cgen_initializer_list(cgen_t *cgen, ast_node_t *list, cgen_var_t var
         break;
     }
 
+    case TYPE_STRING:
     case TYPE_STRUCT: {
         size_t list_start = an_list_start(list);
         size_t list_end = an_list_end(list);
@@ -2170,6 +2177,7 @@ static void cgen_struct(cgen_t *cgen, type_t type, bools_t *bools) {
     typedata_t *td = ast_type2td(cgen->ast, type);
 
     switch (td->kind) {
+    case TYPE_STRING:
     case TYPE_STRUCT: {
         for (size_t i = 0; i < td->as.struct_.fields.count; ++i) {
             struct_field_t field = td->as.struct_.fields.items[i];
@@ -2331,6 +2339,7 @@ static void cgen_typedefs(cgen_t *cgen, typedatas_t *tds) {
             break;
         }
 
+        case TYPE_STRING:
         case TYPE_STRUCT: {
             // typedef struct <struct_name> <struct_name>
 
@@ -2449,9 +2458,12 @@ void compile_ast_to_c(ast_t *ast, string_builder_t *sb) {
     cgen_generate_cnames_for_types(ast);
     cgen_t cgen = make_cgen(ast);
 
-
     string_t moduleid;
     ast_node_t *module;
+    cgen_cache_requires_tmp(&ast->type_set.types, ast->core_module_or_null);
+    cgen_module(&cgen, lit2str(CORE_MODULE_NAME), ast->core_module_or_null);
+
+
     kh_foreach(ast->moduleid2node, moduleid, module, cgen_cache_requires_tmp(&ast->type_set.types, module));
     kh_foreach(ast->moduleid2node, moduleid, module, cgen_module(&cgen, moduleid, module));
 

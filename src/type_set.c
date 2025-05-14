@@ -151,6 +151,13 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
     static typedata_t type_f32 = {.name=lit2str("f32"), .kind=TYPE_NUMBER, .size=NUM_SIZE_32, .alignment=NUM_SIZE_32, .as.num = NUM_TYPE_FLOAT, .capabilities=TYPE_CAP_NUMBER};
     static typedata_t type_f64 = {.name=lit2str("f64"), .kind=TYPE_NUMBER, .size=NUM_SIZE_64, .alignment=NUM_SIZE_64, .as.num = NUM_TYPE_FLOAT, .capabilities=TYPE_CAP_NUMBER};
 
+    #define CHAR_IS_SIGNED ((char)-1 < 0)
+    static typedata_t type_char = {.name=lit2str("char"), .kind=TYPE_NUMBER, .size=sizeof(char), .alignment=sizeof(char), .as.num = CHAR_IS_SIGNED ? NUM_TYPE_SIGNED : NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_NUMBER)};
+    #undef CHAR_IS_SIGNED
+
+    static typedata_t type_schar = {.name=lit2str("schar"), .kind=TYPE_NUMBER, .size=sizeof(signed char), .alignment=sizeof(signed char), .as.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_NUMBER)};
+    static typedata_t type_uchar = {.name=lit2str("uchar"), .kind=TYPE_NUMBER, .size=sizeof(unsigned char), .alignment=sizeof(unsigned char), .as.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_NUMBER)};
+
     static typedata_t type_s8 = {.name=lit2str("s8"), .kind=TYPE_NUMBER, .size=NUM_SIZE_8, .alignment=NUM_SIZE_8, .as.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_NUMBER)};
     static typedata_t type_u8 = {.name=lit2str("u8"), .kind=TYPE_NUMBER, .size=NUM_SIZE_8, .alignment=NUM_SIZE_8, .as.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_NUMBER)};
 
@@ -203,6 +210,15 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
 
     set->f64_ = typeid(set->types.count);
     array_push(&set->types, &type_f64);
+
+    set->char_ = typeid(set->types.count);
+    array_push(&set->types, &type_char);
+
+    set->schar_ = typeid(set->types.count);
+    array_push(&set->types, &type_schar);
+
+    set->uchar_ = typeid(set->types.count);
+    array_push(&set->types, &type_uchar);
 
     set->s8_ = typeid(set->types.count);
     array_push(&set->types, &type_s8);

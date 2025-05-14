@@ -117,9 +117,37 @@ ast_t *build_ast(string_t source, arena_t *arena, string_t file_path) {
     ast_init(ast, arena);
     ast->vm = vm_default(arena);
 
-    bool parsed = parse(ast, file_path, string2sv(source));
+    {
+        string_t core_path = lit2str("./bin/core.odl");
+        Nob_String_Builder sb = {0};
+        bool success = nob_read_entire_file(core_path.cstr, &sb);
+        if (!success) abort();
+        
+        string_builder_t sb_ = {.items=sb.items, .count=sb.count};
 
-    if (parsed) {
+        string_t core_source = sb_render(&sb_, ast->arena);
+
+        nob_sb_free(sb);
+
+        ast_node_t *core = parse_source_into_module(ast, core_path, string2sv(core_source));
+        ast->core_module_or_null = core;
+    }
+    
+    ast_node_t *program = parse_source_into_module(ast, file_path, string2sv(source));
+
+    tmp_arena_t *tmp = allocator_borrow();
+    string_t programid; {
+        string_t absolute_path;
+        bool success = core_abspath(file_path, tmp->allocator, &absolute_path);
+        MUST(success);
+
+        string_t base64 = str2base64(absolute_path, tmp->allocator);
+        programid = base64;
+    }
+    ast_add_module(ast, program, programid);
+    allocator_return(tmp);
+
+    if (ast->errors.count == 0) {
         resolve_ast(ast);
     }
 

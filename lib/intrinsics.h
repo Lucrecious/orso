@@ -26,6 +26,12 @@ typedef unsigned int uint;
 
 typedef const char *cstr_t;
 
+typedef struct string_t string_t;
+struct string_t {
+    cstr_t cstr;
+    size_t length;
+};
+
 typedef struct type_t type_t;
 struct type_t {
     u64 i;

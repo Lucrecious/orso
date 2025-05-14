@@ -99,6 +99,10 @@ if (sv_eq(identifier, lit2sv(#name))) {\
     RETURN_IF_TYPE(f32, t->f32_)
     RETURN_IF_TYPE(f64, t->f64_)
 
+    RETURN_IF_TYPE(char, t->char_)
+    RETURN_IF_TYPE(uchar, t->uchar_)
+    RETURN_IF_TYPE(schar, t->schar_)
+
     RETURN_IF_TYPE(u8, t->u8_)
     RETURN_IF_TYPE(s8, t->s8_)
 
@@ -4510,14 +4514,14 @@ static ast_node_t *get_builtin_decl(ast_t *ast, string_view_t identifier) {
     return decl;
 }
 
-static ast_node_t *get_module_or_null(ast_t *ast, string_t moduleid) {
-    ast_node_t *module;
-    if (table_get(s2n, ast->moduleid2node, moduleid, &module)) {
-        return module;
-    }
+// static ast_node_t *get_module_or_null(ast_t *ast, string_t moduleid) {
+//     ast_node_t *module;
+//     if (table_get(s2n, ast->moduleid2node, moduleid, &module)) {
+//         return module;
+//     }
 
-    return NULL;
-}
+//     return NULL;
+// }
 
 static ast_node_t *get_defval_or_null_by_identifier_and_error(
         analyzer_t *analyzer,
@@ -4956,7 +4960,9 @@ bool resolve_ast(ast_t *ast) {
         if (sv_eq(decl->identifier.view, lit2sv("str8_t"))) {
             typedata_t *decltd = ast_type2td(ast, decl->expr_val.word.as.t);
             typedata_t *str8td = ast_type2td(ast, ast->type_set.str8_t_);
+            string_t name = str8td->name;
             *str8td = *decltd;
+            str8td->name = name;
             str8td->kind = TYPE_STRING;
             break;
         }

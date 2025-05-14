@@ -17,6 +17,10 @@ struct type_table_t {
     type_t void_;
     type_t bool_;
 
+    type_t char_;
+    type_t schar_;
+    type_t uchar_;
+
     type_t s8_;
     type_t u8_;
 

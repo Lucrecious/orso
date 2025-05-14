@@ -2342,34 +2342,12 @@ bool parse_string_to_module(ast_t *ast, ast_node_t *module, string_t filepath, s
     return !parser.had_error;
 }
 
-bool parse(ast_t *ast, string_t file_path, string_view_t source) {
-    {
-        Nob_String_Builder sb = {0};
-        bool success = nob_read_entire_file("./bin/core.odl", &sb);
-        if (!success) abort();
-        
-        string_builder_t sb_ = {.items=sb.items, .count=sb.count};
-
-        string_t core_source = sb_render(&sb_, ast->arena);
-
-        nob_sb_free(sb);
-
-        ast_node_t *core_mod = ast_begin_module(ast);
-        parse_string_to_module(ast, core_mod, file_path, string2sv(core_source));
-        ast_end_module(core_mod);
-
-        ast->core_module_or_null = core_mod;
-        // ast_add_module(ast, core_mod, lit2str(CORE_MODULE_NAME));
-    }
-
-
+ast_node_t *parse_source_into_module(ast_t *ast, string_t file_path, string_view_t source) {
     ast_node_t *module = ast_begin_module(ast);
     parse_string_to_module(ast, module, file_path, source);
     ast_end_module(module);
 
-    ast_add_module(ast, module, lit2str("program"));
-
-    return ast->errors.count == 0;
+    return module;
 }
 
 token_type_t parser_opeq2op(token_type_t type) {

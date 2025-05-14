@@ -399,7 +399,7 @@ void ast_print_node(ast_t *ast, ast_node_t *node);
 void ast_print(ast_t *ast, const char *name);
 
 bool parse_string_to_module(ast_t *ast, ast_node_t *module, string_t filepath, string_view_t source);
-bool parse(ast_t *ast, string_t file_path, string_view_t source);
+ast_node_t *parse_source_into_module(ast_t *ast, string_t file_path, string_view_t source);
 token_type_t parser_opeq2op(token_type_t type);
 
 void ast_init(ast_t *ast, arena_t *arena);

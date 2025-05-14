@@ -9,12 +9,6 @@
 #include <stdio.h>
 #include <string.h>
 
-typedef struct string_t string_t;
-struct string_t {
-    cstr_t cstr;
-    size_t length;
-};
-
 typedef struct string_view_t string_view_t;
 struct string_view_t {
     cstr_t data;
@@ -63,6 +57,9 @@ void sb_add_char(string_builder_t *sb, char c);
 void sb_add_cstr(string_builder_t *sb, cstr_t cstr);
 void sb_add_format(string_builder_t *sb, cstr_t format, ...);
 string_t sb_render(string_builder_t *builder, arena_t *allocator);
+string_t str2base64(string_t s, arena_t *arena);
+bool core_abspath(string_t relpath, arena_t *arena, string_t *result);
+
 
 #define str(lit) ((string_t){ .cstr = (lit), .length = (sizeof(lit)/sizeof(char) - sizeof(char)) })
 #define lit2str(lit) str(lit)
@@ -242,6 +239,85 @@ void sb_add_format(string_builder_t *sb, cstr_t format, ...) {
 string_t sb_render(string_builder_t *builder, arena_t *allocator) {
     return cstrn2string(builder->items, builder->count, allocator);
 }
+
+char base64[64] = {
+    'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
+    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '-', '_',
+};
+
+string_t str2base64(string_t s, arena_t *arena) {
+    tmp_arena_t *tmp = allocator_borrow();
+    size_t left_over = sizeof(char)*s.length%3;
+    
+    cstr_t suffix;
+    switch (left_over) {
+    case 0: suffix = ""; break;
+    case 1: suffix = "_"; break;
+    case 2: suffix = "__"; break;
+    default: UNREACHABLE(); break;
+    }
+
+    if (left_over > 0) {
+        s = string_format("%s%s", tmp->allocator, s.cstr, suffix);
+    }
+
+    string_builder_t sb = {.allocator=tmp->allocator};
+
+    sb_add_char(&sb, 'x');
+
+    for (size_t i = 0; i < s.length; i += 3) {
+        u8 a = (u8)s.cstr[i];
+        u8 b = (u8)s.cstr[i+1];
+        u8 c = (u8)s.cstr[i+2];
+        s32 combined = a | (b << 8) | (c << 16);
+
+        char ap = (char)(combined & 0x3f);
+        char bp = (char)((combined & 0xFC0) >> 6);
+        char cp = (char)((combined & 0x3F000) >> 12);
+        char dp = (char)((combined & 0xFC0000) >> 18);
+
+        ap = base64[(int)ap];
+        bp = base64[(int)bp];
+        cp = base64[(int)cp];
+        dp = base64[(int)dp];
+
+        sb_add_char(&sb, ap);
+        sb_add_char(&sb, bp);
+        sb_add_char(&sb, cp);
+        sb_add_char(&sb, dp);
+    }
+
+    string_t ret = sb_render(&sb, arena);
+
+    allocator_return(tmp);
+
+    return ret;
+}
+
+#ifdef _WIN32
+
+string_t core_abspath(string_t relpath, arena_t *arena) {
+    fprintf(stderr, "Error: core_abspath is not implemented for Windows yet.\n");
+    return (string_t){0};
+}
+
+#else
+
+#include <limits.h>
+
+bool core_abspath(string_t relpath, arena_t *arena, string_t *result) {
+    char resolved_path[PATH_MAX];
+    if (realpath(relpath.cstr, resolved_path) == NULL) {
+        return false;
+    }
+
+    *result = cstr2string(resolved_path, arena);
+    return true;
+}
+
+#endif
+
 
 u64 cstrn_to_u64(const char* text, size_t length) {
     u64 integer = 0;

@@ -2,7 +2,6 @@ main :: () -> void {
     foo := "bar";
     for i := 0; i < foo.length; ++i {
         addr := foo.cstr + (i as ptrdiff_t);
-        printint(*addr as int);
-        println();
+        addr;
     };
 };
