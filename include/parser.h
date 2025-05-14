@@ -374,6 +374,11 @@ struct errors_t {
     arena_t *allocator;
 };
 
+khint_t hashptr_(void *ptr);
+bool hasheq_(void *a, void *b);
+
+declare_table(fn2an, void*, ast_node_t*);
+
 typedef struct ast_t {
     arena_t *arena;
 
@@ -389,6 +394,8 @@ typedef struct ast_t {
     table_t(s2w) *builtins;
     table_t(s2w) *intrinsic_fns;
     table_t(p2s) *intrinsicfn2cname;
+    table_t(fn2an) *fn2an;
+
 
     ast_node_t *core_module_or_null;
     table_t(s2n) *moduleid2node;

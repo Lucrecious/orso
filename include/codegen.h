@@ -2374,6 +2374,14 @@ bool compile_modules(vm_t *vm, ast_t *ast) {
 
     gen_t gen = make_gen(ast, vm->program_mem, &arena, vm->arena);
 
+    {
+        function_t *function;
+        ast_node_t *funcdef;
+        kh_foreach(ast->fn2an, function, funcdef, {
+            gen_funcdef(ast, vm, funcdef);
+        });
+    }
+
     ast_node_t *module;
     kh_foreach_value(ast->moduleid2node, module, gen_module(&gen, module, vm->global_init_func));
 

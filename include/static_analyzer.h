@@ -13,6 +13,8 @@ typedef struct analyzer_t {
 
     function_t placeholder;
 
+    ast_nodes_t run_required_uncompiled_funcdefs;
+
     struct {
         ast_node_t **items;
         size_t capacity;

@@ -72,6 +72,7 @@ static int type_equal_(type_t a, type_t b) {
 
 implement_table(t2w, type_t, word_t, type_hash, type_equal_)
 implement_table(type2ns, type_t, ast_node_and_scope_t, type_hash, type_equal_)
+implement_table(fn2an, void*, ast_node_t*, hashptr_, hasheq_);
 
 static bool streq___(const string_t a, const string_t b) {
     return string_eq(a, b);
@@ -91,11 +92,11 @@ uint32_t fnv1_hash__(string_t s) {
 implement_table(s2w, string_t, word_t, fnv1_hash__, streq___)
 implement_table(s2n, string_t, ast_node_t*, fnv1_hash__, streq___)
 
-static khint_t hashptr_(void *ptr) {
+khint_t hashptr_(void *ptr) {
     return (khint_t)(u64)ptr;
 }
 
-static bool hasheq_(void *a, void *b) {
+bool hasheq_(void *a, void *b) {
     return a == b;
 }
 
@@ -152,6 +153,7 @@ void ast_init(ast_t *ast, arena_t *arena) {
     ast->builtins = table_new(s2w, ast->arena);
     ast->intrinsic_fns = table_new(s2w, ast->arena);
     ast->intrinsicfn2cname = table_new(p2s, ast->arena);
+    ast->fn2an = table_new(fn2an, ast->arena);
     ast->moduleid2node = table_new(s2n, ast->arena);
 
     ast->type_to_zero_word = table_new(t2w, ast->arena);

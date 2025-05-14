@@ -13,14 +13,6 @@ bool compile_ast_to_c(ast_t *ast, string_t build_directory, strings_t* sources, 
 #ifdef CODEGENC_IMPLEMENTATION
 #include "memarr.h"
 
-khint_t hashptr_(void *ptr) {
-    return (khint_t)(u64)ptr;
-}
-
-bool hasheq_(void *a, void *b) {
-    return a == b;
-}
-
 typedef struct funcdata_t funcdata_t;
 struct funcdata_t {
     string_t name;

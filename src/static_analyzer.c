@@ -1369,16 +1369,17 @@ static bool retry_resolve_possible_struct_or_error(analyzer_t *analyzer, ast_nod
     return !is_invalid;
 }
 
-static size_t stan_function_is_building(analyzer_t *analyzer, function_t *function) {
-    bool passed_through_fold = false;
+static size_t stan_function_is_building(analyzer_t *analyzer, function_t *function, bool *passed_through_fold) {
+    *passed_through_fold = false;
+
     for (size_t i = analyzer->pending_dependencies.count; i > 0; --i) {
         ast_node_t *dep = analyzer->pending_dependencies.items[i-1];
 
         switch (dep->node_type) {
-        case AST_NODE_TYPE_EXPRESSION_DIRECTIVE: passed_through_fold = true; break;
+        case AST_NODE_TYPE_EXPRESSION_DIRECTIVE: *passed_through_fold = true; break;
         case AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION: {
             function_t *pending_function = (function_t*)dep->expr_val.word.as.p;
-            if (passed_through_fold && function == pending_function) {
+            if (*passed_through_fold && function == pending_function) {
                 return i-1;
             }
             break;
@@ -2278,7 +2279,8 @@ static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
 
             {
                 function_t *function = (function_t*)realized_funcdef->expr_val.word.as.p;
-                size_t dep_start = stan_function_is_building(analyzer, function);
+                bool passed_through_fold = false;
+                size_t dep_start = stan_function_is_building(analyzer, function, &passed_through_fold);
                 if (dep_start < analyzer->pending_dependencies.count) {
                     stan_circular_dependency_error(analyzer, ast, callee, dep_start);
                 }
@@ -2393,6 +2395,13 @@ void resolve_expression(
             --analyzer->pending_dependencies.count;
 
             if (!analyzer->had_error && analyzer->run_vm) {
+                for (size_t i = 0; i < analyzer->run_required_uncompiled_funcdefs.count; ++i) {
+                    ast_node_t *funcdef = analyzer->run_required_uncompiled_funcdefs.items[i];
+                    gen_funcdef(ast, analyzer->run_vm, funcdef);
+                }
+
+                analyzer->run_required_uncompiled_funcdefs.count = 0;
+
                 unless (TYPE_IS_INVALID(child->value_type)) {
                     typedata_t *td = ast_type2td(ast, child->value_type);
 
@@ -4644,9 +4653,19 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
     case TYPE_FUNCTION: {
         if (!decl->is_mutable) {
             function_t *function = (function_t*)decl->expr_val.word.as.p;
-            size_t dep_start = stan_function_is_building(analyzer, function);
+            bool passed_through_fold = false;
+            size_t dep_start = stan_function_is_building(analyzer, function, &passed_through_fold);
             if (dep_start < analyzer->pending_dependencies.count) {
                 stan_circular_dependency_error(analyzer, ast, def, dep_start);
+            }
+
+            if (passed_through_fold) {
+                ast_node_t *funcdef;
+                bool success = table_get(fn2an, ast->fn2an, function, &funcdef);
+                UNUSED(success);
+                MUST(success);
+
+                array_push(&analyzer->run_required_uncompiled_funcdefs, funcdef);
             }
         }
         break;
@@ -4793,6 +4812,7 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
     }
 
     array_push(&analyzer->pending_dependencies, funcdef);
+    table_put(fn2an, ast->fn2an, function, funcdef);
 
     {
         analysis_state_t new_state = state;
@@ -4833,16 +4853,6 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
     }
 
     --analyzer->pending_dependencies.count;
-
-    if (analyzer->had_error) {
-        goto defer;
-    }
-
-    unless (analyzer->run_vm) {
-        goto defer;
-    }
-
-    gen_funcdef(ast, analyzer->run_vm, funcdef);
 
 defer:
     allocator_return(tmp);
@@ -4931,6 +4941,7 @@ static void analyzer_init(analyzer_t *analyzer, ast_t *ast, arena_t *arena) {
 
     analyzer->arena = arena;
     analyzer->placeholder = zer0(function_t);
+    analyzer->run_required_uncompiled_funcdefs = (ast_nodes_t){.allocator=arena};
     analyzer->pending_dependencies.allocator = arena;
 }
 
@@ -4975,7 +4986,6 @@ bool resolve_ast(ast_t *ast) {
 
     ast->resolved = !analyzer.had_error;
 
-    // allocator_return(tmp);
     return ast->resolved;
 }
 
