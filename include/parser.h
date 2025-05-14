@@ -316,6 +316,8 @@ struct ast_node_t {
     ast_node_t *ref_decl;
     type_patterns_t type_decl_patterns;
 
+    string_t filepath;
+
     size_t param_end;
     size_t arg_index;
     size_t value_offset;

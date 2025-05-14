@@ -214,6 +214,8 @@ ast_node_t *ast_node_new(arena_t *arena, ast_node_type_t node_type, token_t star
 
     node->last_statement = &nil_node;
 
+    node->filepath = lit2str("");
+
     node->children = (ast_nodes_t){.allocator=arena};
     node->realized_copies = (inferred_copies_t){.allocator=arena};
     node->type_decl_patterns = (type_patterns_t){.allocator=arena};
@@ -348,7 +350,7 @@ ast_node_t *ast_node_copy(arena_t *arena, ast_node_t *node) {
     copy->ccode_continue_label = node->ccode_continue_label;
     copy->ccode_init_func_name = node->ccode_init_func_name;
     copy->ccode_var_name = node->ccode_var_name;
-    
+
     if (node->defined_scope.creator) {
         scope_init(&copy->defined_scope, arena, node->defined_scope.type, node->defined_scope.outer, copy);
 
@@ -374,6 +376,7 @@ ast_node_t *ast_node_copy(arena_t *arena, ast_node_t *node) {
     copy->condition_negated = node->condition_negated;
     copy->end = node->end;
     copy->expr_val = node->expr_val;
+    copy->filepath = string_copy(node->filepath, arena);
     copy->has_default_value = node->has_default_value;
     copy->identifier = node->identifier;
     copy->is_compile_time_param = node->is_compile_time_param;
@@ -2338,6 +2341,7 @@ bool parse_string_to_module(ast_t *ast, ast_node_t *module, string_t filepath, s
     advance(&parser);
 
     parse_into_module(&parser, module);
+    module->filepath = string_copy(filepath, ast->arena);
 
     return !parser.had_error;
 }

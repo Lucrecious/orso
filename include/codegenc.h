@@ -6,7 +6,7 @@
 #include "tmp.h"
 #include <inttypes.h>
 
-void compile_ast_to_c(ast_t *ast, string_builder_t *sb);
+bool compile_ast_to_c(ast_t *ast, string_t build_directory, strings_t* sources, arena_t *arena);
 
 #endif
 
@@ -29,17 +29,22 @@ struct funcdata_t {
 
 define_table(p2n, void*, funcdata_t, hashptr_, hasheq_);
 
+typedef struct cgen_state_t cgen_state_t;
+struct cgen_state_t {
+    size_t *tmp_count;
+    table_t(p2n) *functions;
+};
+
 typedef struct cgen_t cgen_t;
 struct cgen_t {
     ast_t *ast;
-    size_t tmp_count;
     size_t indent;
 
-    arena_t tmp_arena;
+    arena_t *tmp_arena;
 
     string_builder_t sb;
 
-    table_t(p2n) *functions;
+    cgen_state_t state;
 };
 
 
@@ -58,12 +63,12 @@ static cgen_var_t nil_cvar = {.is_new = false, .id = 0 , .type = typeid(TYPE_INV
 #define has_var(tv) ((tv).id > 0 || (tv).name.length > 0)
 
 static string_t cgen_local_def_name(cgen_t *cgen, string_view_t name) {
-    string_t r = string_format("%.*s_", &cgen->tmp_arena, (int)name.length, name.data);
+    string_t r = string_format("%.*s_", cgen->tmp_arena, (int)name.length, name.data);
     return r;
 }
 
 static string_t cgen_function_name(cgen_t *cgen, string_view_t name) {
-    string_t r = string_format("%.*s_odlfn%zu_", &cgen->tmp_arena, (int)name.length, name.data, ++cgen->tmp_count);
+    string_t r = string_format("%.*s_odlfn%zu_", cgen->tmp_arena, (int)name.length, name.data, ++(*cgen->state.tmp_count));
     return r;
 }
 
@@ -78,7 +83,7 @@ static cgen_var_t cgen_user_var(cgen_t *cgen, string_view_t name, type_t type) {
 
 static cgen_var_t cgen_global_var(cgen_t *cgen, string_view_t name, type_t type) {
     cgen_var_t var = {0};
-    var.name = string_format("%.*s_odlvar", &cgen->tmp_arena, name.length, name.data);
+    var.name = string_format("%.*s_odlvar", cgen->tmp_arena, name.length, name.data);
     var.type = type;
     var.is_new = true;
     return var;
@@ -91,7 +96,7 @@ static cgen_var_t cgen_var_used(cgen_var_t var) {
 }
 
 static cgen_var_t cgen_next_tmpid(cgen_t *cgen, type_t type) {
-    return (cgen_var_t){ .is_new = true, .id = ++cgen->tmp_count, .type = type };
+    return (cgen_var_t){ .is_new = true, .id = ++(*cgen->state.tmp_count), .type = type };
 }
 
 static void cgen_indent(cgen_t *cgen) {
@@ -127,14 +132,14 @@ static cstr_t cgen_var_name(cgen_t *cgen, cgen_var_t var) {
     if (var.name.length > 0) {
         return var.name.cstr;
     } else {
-        string_t result = string_format("tmp%llu", &cgen->tmp_arena, var.id);
+        string_t result = string_format("tmp%llu", cgen->tmp_arena, var.id);
         return result.cstr;
     }
 }
 
 static cstr_t cgen_var(cgen_t *cgen, cgen_var_t var) {
     if (var.is_new) {
-        string_t result = string_format("%s %s", &cgen->tmp_arena, cgen_type_name(cgen, var.type), cgen_var_name(cgen, var));
+        string_t result = string_format("%s %s", cgen->tmp_arena, cgen_type_name(cgen, var.type), cgen_var_name(cgen, var));
         return result.cstr;
     } else {
         return cgen_var_name(cgen, var);
@@ -143,7 +148,7 @@ static cstr_t cgen_var(cgen_t *cgen, cgen_var_t var) {
 
 static cstr_t cgen_lvar(cgen_t *cgen, cgen_var_t var) {
     if (var.is_new) {
-        string_t result = string_format("%s *%s", &cgen->tmp_arena, cgen_type_name(cgen, var.type), cgen_var_name(cgen, var));
+        string_t result = string_format("%s *%s", cgen->tmp_arena, cgen_type_name(cgen, var.type), cgen_var_name(cgen, var));
         return result.cstr;
     } else {
         return cgen_var_name(cgen, var);
@@ -151,8 +156,8 @@ static cstr_t cgen_lvar(cgen_t *cgen, cgen_var_t var) {
 }
 
 static string_t cgen_next_label(cgen_t *cgen, cstr_t label_name) {
-    ++cgen->tmp_count;
-    string_t label = string_format("%s%zu_", &cgen->tmp_arena, label_name, cgen->tmp_count);
+    ++(*cgen->state.tmp_count);
+    string_t label = string_format("%s%zu_", cgen->tmp_arena, label_name, *cgen->state.tmp_count);
     return label;
 }
 
@@ -367,7 +372,7 @@ static void cgen_struct_end(cgen_t *cgen) {
 
 static string_t cgen_get_function_name(cgen_t *cgen, function_t *function) {
     funcdata_t result = {.name=lit2str("")};
-    bool success = table_get(p2n, cgen->functions, function, &result);
+    bool success = table_get(p2n, cgen->state.functions, function, &result);
     UNUSED(success);
     ASSERT(success, "the function should be in there already");
     return result.name;
@@ -2066,7 +2071,7 @@ static void cgen_generate_function_names(cgen_t *cgen, ast_node_t *node) {
     if (node->expr_val.is_concrete && td->kind == TYPE_FUNCTION) {
         function_t *function = node->expr_val.word.as.p;
         funcdata_t funcdata;
-        unless (table_get(p2n, cgen->functions, function, &funcdata)) {
+        unless (table_get(p2n, cgen->state.functions, function, &funcdata)) {
             funcdata.type = node->value_type;
 
             bool got_name = false;
@@ -2075,11 +2080,11 @@ static void cgen_generate_function_names(cgen_t *cgen, ast_node_t *node) {
                 funcdata.name = cgen_function_name(cgen, node->identifier.view);
             } else if (node->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION) {
                 got_name = true;
-                funcdata.name = string_format("func%zu", &cgen->tmp_arena, ++cgen->tmp_count);
+                funcdata.name = string_format("func%zu", cgen->tmp_arena, ++(*cgen->state.tmp_count));
             }
 
             if (got_name) {
-                table_put(p2n, cgen->functions, function, funcdata);
+                table_put(p2n, cgen->state.functions, function, funcdata);
             }
         }
     }
@@ -2092,7 +2097,7 @@ static void cgen_generate_function_names(cgen_t *cgen, ast_node_t *node) {
 
 void cgen_forward_declare_functions(cgen_t *cgen) {
     funcdata_t funcdata;
-    kh_foreach_value(cgen->functions, funcdata, {
+    kh_foreach_value(cgen->state.functions, funcdata, {
         typedata_t *td = type2typedata(&cgen->ast->type_set.types, funcdata.type);
         type_t rettype = td->as.function.return_type;
         
@@ -2130,7 +2135,7 @@ static void cgen_function_definitions(cgen_t *cgen, ast_node_t *node) {
         function_t *function = (function_t*)node->expr_val.word.as.p;
 
         funcdata_t funcdata;
-        bool success = table_get(p2n, cgen->functions, function, &funcdata);
+        bool success = table_get(p2n, cgen->state.functions, function, &funcdata);
         UNUSED(success);
         ASSERT(success, "the funcdata should already be there");
 
@@ -2228,10 +2233,10 @@ static void cgen_struct(cgen_t *cgen, type_t type, bools_t *bools) {
     allocator_return(tmp);
 }
 
-void cgen_functions(cgen_t *cgen, ast_node_t *top_node) {
+void cgen_functions(cgen_t *cgen, cgen_t *cgenh, ast_node_t *top_node) {
     cgen_generate_function_names(cgen, top_node);
 
-    cgen_forward_declare_functions(cgen);
+    cgen_forward_declare_functions(cgenh);
 
     sb_add_cstr(&cgen->sb, "\n");
 
@@ -2375,10 +2380,18 @@ static void cgen_typedefs(cgen_t *cgen, typedatas_t *tds) {
     }
 }
 
-cgen_t make_cgen(ast_t *ast) {
-    cgen_t cgen = {.ast = ast, .tmp_count = 0 };
-    cgen.sb.allocator = &cgen.tmp_arena;
-    cgen.functions = table_new(p2n, &cgen.tmp_arena);
+cgen_state_t make_cgen_state(arena_t *arena) {
+    cgen_state_t state = {0};
+    state.tmp_count = (size_t*)arena_alloc(arena, sizeof(size_t));
+    *state.tmp_count = 0;
+    state.functions = table_new(p2n, arena);
+    return state;
+}
+
+cgen_t make_cgen(ast_t *ast, arena_t *arena, cgen_state_t state) {
+    cgen_t cgen = {.ast = ast, .state = state, .tmp_arena=arena };
+    cgen.sb.allocator = arena;
+    cgen.sb.allocator = arena;
 
     return cgen;
 }
@@ -2398,8 +2411,8 @@ void cgen_declare_global_decls(cgen_t *cgen, ast_nodes_t *decls) {
 }
 
 void cgen_init_function(cgen_t *cgen, ast_node_t *module) {
-    size_t id = ++cgen->tmp_count;
-    string_t init_func_name = string_format("_module_init_%zu", &cgen->tmp_arena, id);
+    size_t id = ++(*cgen->state.tmp_count);
+    string_t init_func_name = string_format("_module_init_%zu", cgen->tmp_arena, id);
     module->ccode_init_func_name = init_func_name;
     sb_add_format(&cgen->sb, "void %s(void) {\n", init_func_name.cstr);
     cgen_indent(cgen);
@@ -2423,58 +2436,121 @@ void cgen_init_function(cgen_t *cgen, ast_node_t *module) {
 }
 
 
-void cgen_global_decls(cgen_t *cgen, ast_node_t *module) {
-    cgen_declare_global_decls(cgen, &module->children);
+void cgen_global_decls(cgen_t *cgen, cgen_t *cgenh, ast_node_t *module) {
+    cgen_declare_global_decls(cgenh, &module->children);
 
     cgen_init_function(cgen, module);
 }
 
-void cgen_module(cgen_t *cgen, string_t moduleid, ast_node_t *module) {
-    bool is_core = string_eq(moduleid, lit2str(CORE_MODULE_NAME));
+static void cgen_begin_h(cgen_t *cgenh, string_t moduleid) {
+    sb_add_format(&cgenh->sb, "#ifndef %s\n", moduleid.cstr);
+    sb_add_format(&cgenh->sb, "#define %s\n\n", moduleid.cstr);
+}
+
+static void cgen_end_h(cgen_t *cgenh) {
+    sb_add_format(&cgenh->sb, "\n#endif\n");
+}
+
+static void cgen_module(cgen_t *cgen, cgen_t *cgenh, bool is_core, ast_node_t *module, string_t moduleid, string_t include) {
+    cgen_begin_h(cgenh, moduleid);
 
     // only core has the intrinsic implementation
     if (is_core) {
-        sb_add_cstr(&cgen->sb, "#define INTRINSICS_IMPLEMENTATION\n");
-    }
-    cgen_add_include(cgen, "intrinsics.h");
-
-    if (is_core) {
         cgen_add_include(cgen, "core.h");
-        cgen_add_include(cgen, "core.c");
+        sb_add_cstr(&cgen->sb, "#define INTRINSICS_IMPLEMENTATION\n");
+        cgen_add_include(cgen, "intrinsics.h");
+        cgen_add_include(cgenh, "intrinsics.h");
+
+        cgen_typedefs(cgenh, &cgen->ast->type_set.types);
+        cgen_structs(cgenh);
+    } else {
+        cgen_add_include(cgen, include.cstr);
+        cgen_add_include(cgen, "core.h");
+        cgen_add_include(cgenh, "core.h");
     }
 
-    if (is_core) {
-        // todo: this needs to go into its own file honestly
-        cgen_typedefs(cgen, &cgen->ast->type_set.types);
-        cgen_structs(cgen);
-    }
+    cgen_functions(cgen, cgenh, module);
 
-    cgen_functions(cgen, module);
+    cgen_global_decls(cgen, cgenh, module);
 
-    cgen_global_decls(cgen, module);
+    cgen_end_h(cgenh);
 }
 
-void compile_ast_to_c(ast_t *ast, string_builder_t *sb) {
+static string_t cgen_generate_filename(string_t moduleid, string_t filepath, arena_t *arena) {
+    string_view_t filename = sv_filename(string2sv(filepath));
+
+    string_t result = string_format("%s_%.*s", arena, moduleid.cstr, filename.length, filename.data);
+    return result;
+}
+
+bool compile_ast_to_c(ast_t *ast, string_t build_directory, strings_t *sources, arena_t *arena) {
     cgen_generate_cnames_for_types(ast);
-    cgen_t cgen = make_cgen(ast);
 
-    string_t moduleid;
-    ast_node_t *module;
-    cgen_cache_requires_tmp(&ast->type_set.types, ast->core_module_or_null);
-    cgen_module(&cgen, lit2str(CORE_MODULE_NAME), ast->core_module_or_null);
+    *sources = (strings_t){.allocator=arena};
+
+    tmp_arena_t *tmp = allocator_borrow();
+
+    cgen_state_t cgen_state = make_cgen_state(tmp->allocator);
+    cgen_t cgen = {0};
+    cgen_t cgenh = {0};
+
+    bool success = true;
+    {
+        cgen = make_cgen(ast, tmp->allocator, cgen_state);
+        cgenh = make_cgen(ast, tmp->allocator, cgen_state);
+
+        string_t core_base_name = string_format("%s%s", arena, build_directory.cstr, CORE_MODULE_NAME);
+
+        string_t corec = string_format("%s.c", tmp->allocator, core_base_name.cstr);
+        string_t coreh = string_format("%s.h", tmp->allocator, core_base_name.cstr);
+
+        cgen_cache_requires_tmp(&ast->type_set.types, ast->core_module_or_null);
+        cgen_module(&cgen, &cgenh, true, ast->core_module_or_null, lit2str(CORE_MODULE_NAME),
+                sv2string(sv_filename(string2sv(coreh)), tmp->allocator));
 
 
-    kh_foreach(ast->moduleid2node, moduleid, module, cgen_cache_requires_tmp(&ast->type_set.types, module));
-    kh_foreach(ast->moduleid2node, moduleid, module, cgen_module(&cgen, moduleid, module));
+        array_push(sources, corec);
 
-    function_t *main_or_null = find_main_or_null(ast);
-
-    if (main_or_null) {
-        string_t funcname = cgen_get_function_name(&cgen, main_or_null);
-        sb_add_format(&cgen.sb, "int main() { %s(); }\n\n", funcname.cstr);
+        success &= write_entire_file(corec.cstr, cgen.sb.items, cgen.sb.count);
+        success &= write_entire_file(coreh.cstr, cgenh.sb.items, cgenh.sb.count);
     }
 
-    sb_add_format(sb, "%.*s", cgen.sb.count, cgen.sb.items);
+    {
+        string_t moduleid;
+        ast_node_t *module;
+        kh_foreach(ast->moduleid2node, moduleid, module, cgen_cache_requires_tmp(&ast->type_set.types, module));
+
+        kh_foreach(ast->moduleid2node, moduleid, module, {
+            cgen = make_cgen(ast, tmp->allocator, cgen_state);
+
+
+            string_t filename = cgen_generate_filename(moduleid, module->filepath, tmp->allocator);
+            string_t base_path = string_format("%s%s", arena, build_directory.cstr, filename.cstr);
+
+            string_t pathc = string_format("%s.c", tmp->allocator, base_path.cstr);
+            string_t pathh = string_format("%s.h", tmp->allocator, base_path.cstr);
+            cgenh = make_cgen(ast, tmp->allocator, cgen_state);
+
+            cgen_module(&cgen, &cgenh, false, module, moduleid,
+                    sv2string(sv_filename(string2sv(pathh)), tmp->allocator));
+
+            function_t *main_or_null = find_main_or_null(ast);
+
+            if (main_or_null) {
+                string_t funcname = cgen_get_function_name(&cgen, main_or_null);
+                sb_add_format(&cgen.sb, "int main() { %s(); }\n\n", funcname.cstr);
+            }
+
+            success &= write_entire_file(pathc.cstr, cgen.sb.items, cgen.sb.count);
+            success &= write_entire_file(pathh.cstr, cgenh.sb.items, cgenh.sb.count);
+
+            array_push(sources, pathc);
+        });
+    }
+
+    allocator_return(tmp);
+
+    return success;
 }
 
 #undef CODEGENC_IMPLEMENTATION

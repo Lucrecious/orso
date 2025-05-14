@@ -176,9 +176,9 @@ string_view_t sv_filename(string_view_t sv) {
     if (sv.length == 0) return sv;
     size_t begin = 0;
 
-    for (size_t i = sv.length-1; i >= 0; --i) {
-        if (sv.data[i] == '\\' || sv.data[i] == '/') {
-            begin = i+1;
+    for (size_t i = sv.length; i > 0; --i) {
+        if (sv.data[i-1] == '\\' || sv.data[i-1] == '/') {
+            begin = i;
             break;
         }
     }
@@ -298,13 +298,17 @@ string_t str2base64(string_t s, arena_t *arena) {
 #ifdef _WIN32
 
 string_t core_abspath(string_t relpath, arena_t *arena) {
-    fprintf(stderr, "Error: core_abspath is not implemented for Windows yet.\n");
-    return (string_t){0};
+    #error "not implemented"
+}
+
+void core_fileid(string_t absolute_path, string_builder_t *result) {
+    #error "not implemented"
 }
 
 #else
 
 #include <limits.h>
+#include <sys/stat.h>
 
 bool core_abspath(string_t relpath, arena_t *arena, string_t *result) {
     char resolved_path[PATH_MAX];
@@ -313,6 +317,25 @@ bool core_abspath(string_t relpath, arena_t *arena, string_t *result) {
     }
 
     *result = cstr2string(resolved_path, arena);
+    return true;
+}
+
+bool core_fileid(string_t absolute_path, string_builder_t *result) {
+    struct stat sb;
+    if (stat(absolute_path.cstr, &sb) == -1) return false;
+
+    #define IDSIZE (sizeof(sb.st_dev)+sizeof(sb.st_ino))
+    char bytes[IDSIZE];
+    memcmp(bytes, &sb.st_dev, sizeof(sb.st_dev));
+    memcmp(bytes+sizeof(sb.st_dev), &sb.st_ino, sizeof(sb.st_ino));
+
+    for (size_t i = 0; i < IDSIZE; ++i) {
+        char c = bytes[i];
+        sb_add_char(result, c);
+    }
+
+    #undef IDSIZE
+
     return true;
 }
 

@@ -1,7 +1,6 @@
 main :: () -> void {
     foo := "bar";
     for i := 0; i < foo.length; ++i {
-        addr := foo.cstr + (i as ptrdiff_t);
-        addr;
+        print(foo);
     };
 };

@@ -133,18 +133,25 @@ ast_t *build_ast(string_t source, arena_t *arena, string_t file_path) {
         ast->core_module_or_null = core;
     }
     
-    ast_node_t *program = parse_source_into_module(ast, file_path, string2sv(source));
-
     tmp_arena_t *tmp = allocator_borrow();
-    string_t programid; {
-        string_t absolute_path;
-        bool success = core_abspath(file_path, tmp->allocator, &absolute_path);
-        MUST(success);
+    {
+        ast_node_t *program = parse_source_into_module(ast, file_path, string2sv(source));
 
-        string_t base64 = str2base64(absolute_path, tmp->allocator);
-        programid = base64;
+        string_t programid; {
+            string_t absolute_path;
+            bool success = core_abspath(file_path, tmp->allocator, &absolute_path);
+            MUST(success);
+
+            string_builder_t sb = {.allocator=tmp->allocator};
+            success = core_fileid(absolute_path, &sb);
+            MUST(success);
+
+            string_t id = sb_render(&sb, tmp->allocator);
+            id = str2base64(id, tmp->allocator);
+            programid = id;
+        }
+        ast_add_module(ast, program, programid);
     }
-    ast_add_module(ast, program, programid);
     allocator_return(tmp);
 
     if (ast->errors.count == 0) {
@@ -157,25 +164,28 @@ ast_t *build_ast(string_t source, arena_t *arena, string_t file_path) {
 bool generate_exe(ast_t *ast, string_t output_path) {
     tmp_arena_t *tmp = allocator_borrow();
 
-    string_builder_t sb = {.allocator=tmp->allocator};
+    strings_t sources = {0};
 
-    compile_ast_to_c(ast, &sb);
+    bool success = compile_ast_to_c(ast, lit2str("./build/"), &sources, tmp->allocator);
 
-    bool success = write_entire_file("./build/tmp.c", sb.items, sb.count);
+    if (success) {
+        cc_t cc = cc_make(CC_GCC, tmp->allocator);
+        cc.output_type = CC_EXE;
+        cc.output_path = string_copy(output_path, tmp->allocator);
 
-    cc_t cc = cc_make(CC_GCC, tmp->allocator);
-    cc.output_type = CC_EXE;
-    cc.output_path = string_copy(output_path, tmp->allocator);
+        for (size_t i = 0; i < sources.count; ++i) {
+            string_t src = sources.items[i];
+            cc_source(&cc, src);
+        }
 
-    cc_source(&cc, lit2str("./build/tmp.c"));
+        cc_include_dir(&cc, lit2str("./lib"));
+        cc_no_warning(&cc, lit2str("unused-value"));
+        
+        // stops warnings from ((x == y)) type of conditions
+        cc_no_warning(&cc, lit2str("parentheses-equality"));
 
-    cc_include_dir(&cc, lit2str("./lib"));
-    cc_no_warning(&cc, lit2str("unused-value"));
-    
-    // stops warnings from ((x == y)) type of conditions
-    cc_no_warning(&cc, lit2str("parentheses-equality"));
-
-    cc_build(&cc);
+        success = cc_build(&cc);
+    }
 
     allocator_return(tmp);
 
