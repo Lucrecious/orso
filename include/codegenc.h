@@ -539,7 +539,7 @@ static void cgen_constant(cgen_t *cgen, word_t word, type_t type) {
         }
 
         case TYPE_VOID:
-
+        case TYPE_MODULE:
         case TYPE_PARAM_STRUCT:
         case TYPE_INFERRED_FUNCTION:
         case TYPE_UNREACHABLE:
@@ -655,6 +655,7 @@ static void cgen_aggregate_arith_binary(cgen_t *cgen, token_type_t op, type_t ty
         break;
     }
 
+    case TYPE_MODULE:
     case TYPE_VOID:
     case TYPE_BOOL:
     case TYPE_STRING:
@@ -2308,12 +2309,14 @@ static void cgen_generate_cnames_for_types(ast_t *ast) {
             break;
         }
 
+        case TYPE_MODULE:
         case TYPE_PARAM_STRUCT:
         case TYPE_INFERRED_FUNCTION:
         case TYPE_UNREACHABLE:
         case TYPE_UNRESOLVED:
         case TYPE_INVALID: break;
-        default: UNREACHABLE(); break;
+
+        case TYPE_COUNT: UNREACHABLE(); break;
         }
     }
 }
@@ -2526,7 +2529,7 @@ bool compile_ast_to_c(ast_t *ast, string_t build_directory, strings_t *sources, 
             cgen_module(&cgen, &cgenh, false, module, moduleid,
                     sv2string(sv_filename(string2sv(pathh)), tmp->allocator));
 
-            function_t *main_or_null = find_main_or_null(ast);
+            function_t *main_or_null = find_main_or_null(module);
 
             if (main_or_null) {
                 string_t funcname = cgen_get_function_name(&cgen, main_or_null);

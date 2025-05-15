@@ -21,6 +21,9 @@ Roadmap to 0.5v
 - single line short hand function body with =>
 
 #Roadmap to 1.0v:
+- inferred function are first-class citizens at compile-time
+- paramterized structs are first-class citizens as compile-time
+- #insert-like directive
 - strings - better encoding
 - parameterized structs can be inferred
 - syntax highlighter for vscode vim

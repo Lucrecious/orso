@@ -1,0 +1,1 @@
+print :: (s: str8_t) -> void {};

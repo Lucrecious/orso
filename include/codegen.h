@@ -285,6 +285,7 @@ static reg_mov_size_t type2movsize(gen_t *gen, type_t t) {
 
 
     case TYPE_COUNT:
+    case TYPE_MODULE:
     case TYPE_UNREACHABLE:
     case TYPE_PARAM_STRUCT:
     case TYPE_INFERRED_FUNCTION:
@@ -603,6 +604,7 @@ static void emit_bin_op_aggregates(gen_t *gen, texloc_t loc, function_t *functio
     case TYPE_INVALID:
     case TYPE_UNRESOLVED:
     case TYPE_PARAM_STRUCT:
+    case TYPE_MODULE:
     case TYPE_INFERRED_FUNCTION:
     case TYPE_UNREACHABLE:
     case TYPE_COUNT: UNREACHABLE(); break;
@@ -1311,6 +1313,7 @@ static void gen_expr_val(gen_t *gen, texloc_t loc, function_t *function, type_t 
             break;
         }
         
+        case TYPE_MODULE:
         case TYPE_VOID:
         case TYPE_UNREACHABLE:
         case TYPE_INVALID:

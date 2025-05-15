@@ -1795,24 +1795,23 @@ static ast_node_t *parse_inferred_type_decl(parser_t *parser) {
 }
 
 static ast_node_t *parse_directive(parser_t *parser) {
-    bool allow_multiple_args = false;
+    bool use_bracket = false;
 
     ast_node_t *directive = ast_call_begin(parser->ast, AST_NODE_TYPE_EXPRESSION_DIRECTIVE, parser->previous);
     directive->identifier = parser->previous;
 
     if (match(parser, TOKEN_PARENTHESIS_OPEN)) {
-        allow_multiple_args = true;
+        use_bracket = true;
     }
 
     do {
         ast_node_t *arg = parse_expression(parser);
         array_push(&directive->children, arg);
 
-        unless (allow_multiple_args) break;
-        unless (match(parser, TOKEN_COMMA)) break;
+        if (!match(parser, TOKEN_COMMA)) break;
     } while (true);
 
-    if (allow_multiple_args) {
+    if (use_bracket) {
         unless (consume(parser, TOKEN_PARENTHESIS_CLOSE)) {
             parser_error(parser, OR_ERROR(
                 .tag = ERROR_PARSER_EXPECTED_CLOSE_PARENTHESIS,
@@ -2384,6 +2383,7 @@ word_t ast_mem2word(ast_t *ast, void *data, type_t type) {
     typedata_t *td = ast_type2td(ast, type);
 
     switch (td->kind) {
+    case TYPE_MODULE:
     case TYPE_UNREACHABLE:
     case TYPE_PARAM_STRUCT:
     case TYPE_INFERRED_FUNCTION:

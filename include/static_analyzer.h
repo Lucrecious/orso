@@ -26,7 +26,8 @@ typedef struct analyzer_t {
 } analyzer_t;
 
 bool resolve_ast(ast_t *ast);
-function_t *find_main_or_null(ast_t *ast);
+function_t *find_main_or_null(ast_node_t *module);
+string_t ast_generate_moduleid(string_t file_path, arena_t *arena);
 
 word_t ast_struct_item_get(ast_t *ast, type_t struct_type, string_view_t field_name, word_t struct_);
 void ast_struct_item_set(ast_t *ast, type_t struct_type, string_view_t field_name, word_t *struct_, word_t value);

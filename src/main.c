@@ -137,19 +137,7 @@ ast_t *build_ast(string_t source, arena_t *arena, string_t file_path) {
     {
         ast_node_t *program = parse_source_into_module(ast, file_path, string2sv(source));
 
-        string_t programid; {
-            string_t absolute_path;
-            bool success = core_abspath(file_path, tmp->allocator, &absolute_path);
-            MUST(success);
-
-            string_builder_t sb = {.allocator=tmp->allocator};
-            success = core_fileid(absolute_path, &sb);
-            MUST(success);
-
-            string_t id = sb_render(&sb, tmp->allocator);
-            id = str2base64(id, tmp->allocator);
-            programid = id;
-        }
+        string_t programid = ast_generate_moduleid(file_path, tmp->allocator);
         ast_add_module(ast, program, programid);
     }
     allocator_return(tmp);
@@ -262,10 +250,12 @@ bool interpret(string_t input_file_path) {
         goto defer;
     }
 
-    function_t *main_or_null = find_main_or_null(ast);
-    if (main_or_null) {
-        vm_fresh_run(ast->vm, main_or_null);
-    }
+    // function_t *main_or_null = find_main_or_null(ast);
+    // if (main_or_null) {
+    //     vm_fresh_run(ast->vm, main_or_null);
+    // }
+
+    UNREACHABLE();
 
 
     return_defer(true);
@@ -298,14 +288,15 @@ bool debug(string_t input_file_path) {
         goto defer;
     }
 
-    function_t *main_or_null = find_main_or_null(ast);
-    if (main_or_null) {
-        debugger_t debugger = {0};
-        debugger_init(&debugger, &arena);
+    // function_t *main_or_null = find_main_or_null(ast,);
+    // if (main_or_null) {
+    //     debugger_t debugger = {0};
+    //     debugger_init(&debugger, &arena);
 
-        vm_set_entry_point(ast->vm, main_or_null);
-        while(debugger_step(&debugger, ast->vm));
-    }
+    //     vm_set_entry_point(ast->vm, main_or_null);
+    //     while(debugger_step(&debugger, ast->vm));
+    // }
+    UNREACHABLE();
 
     return_defer(true);
 

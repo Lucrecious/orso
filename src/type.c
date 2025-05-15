@@ -19,6 +19,7 @@ bool type_equal(typedata_t *a, typedata_t *b) {
     switch (a->kind) {
         case TYPE_PARAM_STRUCT: return false;
         case TYPE_INFERRED_FUNCTION: return false;
+        case TYPE_MODULE: return false;
 
         case TYPE_FUNCTION:
         case TYPE_INTRINSIC_FUNCTION: {
@@ -174,6 +175,7 @@ string_t type_to_string_toplevel(typedatas_t types, type_t type, arena_t *alloca
             case TYPE_UNRESOLVED: type_name = "<unresolved>"; break;
             case TYPE_UNREACHABLE: type_name = "<unreachable>"; break;
             case TYPE_INFERRED_FUNCTION: type_name = "<inferred funcdef>"; break;
+            case TYPE_MODULE: type_name = "<module>"; break;
             case TYPE_PARAM_STRUCT: type_name = "param struct"; break;
 
             case TYPE_COUNT:

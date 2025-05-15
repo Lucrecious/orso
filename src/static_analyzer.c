@@ -8,6 +8,7 @@
 #include "codegen.h"
 #include "tmp.h"
 #include "core.h"
+#include "../nob.h"
 
 #include "intrinsics.h"
 
@@ -571,6 +572,7 @@ word_t ast_item_get(ast_t *ast, bool is_addr, word_t aggregate, type_t item_type
         }
     }
 
+    case TYPE_MODULE:
     case TYPE_INVALID:
     case TYPE_UNRESOLVED:
     case TYPE_PARAM_STRUCT:
@@ -683,6 +685,7 @@ void ast_item_set(ast_t *ast, type_t type, void *addr, word_t value, size_t byte
     case TYPE_INVALID:
     case TYPE_UNRESOLVED:
     case TYPE_PARAM_STRUCT:
+    case TYPE_MODULE:
     case TYPE_INFERRED_FUNCTION:
     case TYPE_UNREACHABLE:
     case TYPE_COUNT: UNREACHABLE(); break;
@@ -1660,6 +1663,7 @@ static void ast_copy_expr_val_to_memory(ast_t *ast, type_t type, word_t src, voi
         break;
     }
 
+    case TYPE_MODULE:
     case TYPE_PARAM_STRUCT:
     case TYPE_POINTER:
     case TYPE_INTRINSIC_FUNCTION:
@@ -2362,6 +2366,93 @@ static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
     }
 }
 
+string_t ast_word2str(ast_t *ast, word_t word) {
+    word_t cstr = ast_struct_item_get(ast, ast->type_set.str8_t_, lit2sv("cstr"), word);
+    word_t length = ast_struct_item_get(ast, ast->type_set.str8_t_, lit2sv("length"), word);
+    string_t s = {
+        .cstr = cstr.as.p,
+        .length = (size_t)length.as.u
+    };
+
+    return s;
+}
+
+
+string_t ast_generate_moduleid(string_t file_path, arena_t *arena) {
+    tmp_arena_t *tmp = allocator_borrow();
+
+    string_t absolute_path;
+    bool success = core_abspath(file_path, tmp->allocator, &absolute_path);
+    MUST(success);
+
+    string_builder_t sb = {.allocator=tmp->allocator};
+    success = core_fileid(absolute_path, &sb);
+    MUST(success);
+
+    string_t id = sb_render(&sb, tmp->allocator);
+    id = str2base64(id, arena);
+
+    allocator_return(tmp);
+
+    return id;
+}
+
+static void resolve_module(analyzer_t *analyzer, ast_t *ast, ast_node_t *module) {
+    scope_t global_scope = {0};
+    scope_init(&global_scope, ast->arena, SCOPE_TYPE_MODULE, NULL, module);
+    analysis_state_t state = (analysis_state_t) {
+        .scope = &global_scope
+    };
+
+    forward_scan_constant_names(analyzer, &global_scope, module->children);
+    size_t last_decl = resolve_declarations_until_unreachable(analyzer, ast, state, module->children, false);
+    if (last_decl < module->children.count) {
+        module->children.count = last_decl+1;
+    }
+}
+
+static ast_node_t *stan_load_module_or_errornull(analyzer_t *analyzer, ast_t *ast, ast_node_t *arg_ref, string_view_t module_path) {
+    tmp_arena_t *tmp = allocator_borrow();
+    string_t s = sv2string(module_path, tmp->allocator);
+
+    ast_node_t *result = NULL;
+    Nob_String_Builder sb = {0};
+    
+    string_t moduleid = ast_generate_moduleid(s, tmp->allocator);
+
+    ast_node_t *module;
+    if (table_get(s2n, ast->moduleid2node, moduleid, &module)) {
+        nob_return_defer(module);
+    }
+
+    string_t source;
+    if (!nob_read_entire_file(s.cstr, &sb)) {
+        stan_error(analyzer, OR_ERROR(
+            .tag = ERROR_ANALYSIS_CANNOT_FIND_MODULE,
+            .level = ERROR_SOURCE_ANALYSIS,
+            .msg = lit2str("cannot find module: '$1.$'"),
+            .args = ORERR_ARGS(error_arg_node(arg_ref)),
+            .show_code_lines = ORERR_LINES(0),
+        ));
+        nob_return_defer(NULL);
+    }
+
+    source = cstrn2string(sb.items, sb.count, tmp->allocator);
+
+    module = parse_source_into_module(ast, s, string2sv(source));
+
+    ast_add_module(ast, module, moduleid);
+
+    resolve_module(analyzer, ast, module);
+    
+    nob_return_defer(module);
+
+defer:
+    nob_sb_free(sb);
+    allocator_return(tmp);
+    return result;
+}
+
 void resolve_expression(
         analyzer_t *analyzer,
         ast_t *ast,
@@ -2380,57 +2471,95 @@ void resolve_expression(
 
     switch (expr->node_type) {
         case AST_NODE_TYPE_EXPRESSION_DIRECTIVE: {
-            ASSERT(sv_eq(expr->identifier.view, lit2sv("@run")), "only run is implemented right now");
+            if (sv_eq(expr->identifier.view, lit2sv("@run"))) {
+                scope_t scope = {0};
+                scope_init(&scope, analyzer->ast->arena, SCOPE_TYPE_FOLD_DIRECTIVE, state.scope, expr);
+                analysis_state_t new_state = state;
+                new_state.scope = &scope;
 
-            scope_t scope = {0};
-            scope_init(&scope, analyzer->ast->arena, SCOPE_TYPE_FOLD_DIRECTIVE, state.scope, expr);
-            analysis_state_t new_state = state;
-            new_state.scope = &scope;
+                array_push(&analyzer->pending_dependencies, expr);
 
-            array_push(&analyzer->pending_dependencies, expr);
+                ast_node_t *child = expr->children.items[0];
+                resolve_expression(analyzer, ast, new_state, implicit_type, child, true);
 
-            ast_node_t *child = expr->children.items[0];
-            resolve_expression(analyzer, ast, new_state, implicit_type, child, true);
+                --analyzer->pending_dependencies.count;
 
-            --analyzer->pending_dependencies.count;
-
-            if (!analyzer->had_error && analyzer->run_vm) {
-                for (size_t i = 0; i < analyzer->run_required_uncompiled_funcdefs.count; ++i) {
-                    ast_node_t *funcdef = analyzer->run_required_uncompiled_funcdefs.items[i];
-                    gen_funcdef(ast, analyzer->run_vm, funcdef);
-                }
-
-                analyzer->run_required_uncompiled_funcdefs.count = 0;
-
-                unless (TYPE_IS_INVALID(child->value_type)) {
-                    typedata_t *td = ast_type2td(ast, child->value_type);
-
-                    word_t result;
-                    bool success = stan_run(analyzer, analyzer->run_vm, child, &result);
-                    if (td->size > WORD_SIZE) {
-                        void *word = ast_multiword_value(ast, b2w2b(td->size));
-                        ast_copy_expr_val_to_memory(ast, child->value_type, result, word);
-                        result.as.p = word;
+                if (!analyzer->had_error && analyzer->run_vm) {
+                    for (size_t i = 0; i < analyzer->run_required_uncompiled_funcdefs.count; ++i) {
+                        ast_node_t *funcdef = analyzer->run_required_uncompiled_funcdefs.items[i];
+                        gen_funcdef(ast, analyzer->run_vm, funcdef);
                     }
 
-                    if (success) {
-                        expr->expr_val = ast_node_val_word(result);
-                        expr->value_type = child->value_type;
+                    analyzer->run_required_uncompiled_funcdefs.count = 0;
+
+                    unless (TYPE_IS_INVALID(child->value_type)) {
+                        typedata_t *td = ast_type2td(ast, child->value_type);
+
+                        word_t result;
+                        bool success = stan_run(analyzer, analyzer->run_vm, child, &result);
+                        if (td->size > WORD_SIZE) {
+                            void *word = ast_multiword_value(ast, b2w2b(td->size));
+                            ast_copy_expr_val_to_memory(ast, child->value_type, result, word);
+                            result.as.p = word;
+                        }
+
+                        if (success) {
+                            expr->expr_val = ast_node_val_word(result);
+                            expr->value_type = child->value_type;
+                        } else {
+                            INVALIDATE(expr);
+                        }
                     } else {
                         INVALIDATE(expr);
                     }
                 } else {
-                    INVALIDATE(expr);
-                }
-                break;
-            } else {
-                // make sure we cannot compile
-                analyzer->had_error = true;
+                    // make sure we cannot compile
+                    analyzer->had_error = true;
 
-                // todo: output a warning that is not buildable or something
-                expr->value_type = child->value_type;
-                expr->expr_val = child->expr_val;
+                    // todo: output a warning that is not buildable or something
+                    expr->value_type = child->value_type;
+                    expr->expr_val = child->expr_val;
+                }
+            } else if (sv_eq(expr->identifier.view, lit2sv("@load"))) {
+                ast_node_t *child = expr->children.items[0];
+                resolve_expression(analyzer, ast, state, implicit_type, child, true);
+
+                INVALIDATE(expr);
+
+                if (!TYPE_IS_INVALID(child->value_type)) {
+                    typedata_t *td = ast_type2td(ast, child->value_type);
+                    if (td->kind != TYPE_STRING) {
+                        stan_error(analyzer, OR_ERROR(
+                            .tag = ERROR_ANALYSIS_TYPE_MISMATCH,
+                            .level = ERROR_SOURCE_ANALYSIS,
+                            .msg = lit2str("expected type '$1.$' but got '$2.$'"),
+                            .args = ORERR_ARGS(error_arg_node(child), error_arg_type(typeid(TYPE_STRING)), error_arg_type(expr->value_type)),
+                            .show_code_lines = ORERR_LINES(0),
+                        ));
+                        INVALIDATE(expr);
+                        break;
+                    }
+
+                    if (!child->expr_val.is_concrete) {
+                        stan_error(analyzer, OR_ERROR(
+                            .tag = ERROR_ANALYSIS_EXPECTED_CONSTANT,
+                            .level = ERROR_SOURCE_ANALYSIS,
+                            .msg = lit2str("expected constant for load call"),
+                            .args = ORERR_ARGS(error_arg_node(child)),
+                            .show_code_lines = ORERR_LINES(0),
+                        ));
+                        INVALIDATE(expr);
+                        break;
+                    }
+
+                    string_t module_path = ast_word2str(ast, child->expr_val.word);
+
+                    ast_node_t *module = stan_load_module_or_errornull(analyzer, ast, child, string2sv(module_path));
+                    expr->expr_val = ast_node_val_word(WORDP(module));
+                    expr->value_type = typeid(TYPE_MODULE);
+                }
             }
+            break;
         }
 
         case AST_NODE_TYPE_EXPRESSION_GROUPING: {
@@ -2983,6 +3112,7 @@ void resolve_expression(
                 case TYPE_COUNT:
                 case TYPE_INVALID:
                 case TYPE_UNRESOLVED:
+                case TYPE_MODULE:
                 case TYPE_PARAM_STRUCT:
                 case TYPE_INFERRED_FUNCTION:
                 case TYPE_UNREACHABLE: UNREACHABLE(); break;
@@ -4945,20 +5075,6 @@ static void analyzer_init(analyzer_t *analyzer, ast_t *ast, arena_t *arena) {
     analyzer->pending_dependencies.allocator = arena;
 }
 
-static void resolve_module(analyzer_t *analyzer, ast_t *ast, ast_node_t *module) {
-    scope_t global_scope = {0};
-    scope_init(&global_scope, ast->arena, SCOPE_TYPE_MODULE, NULL, module);
-    analysis_state_t state = (analysis_state_t) {
-        .scope = &global_scope
-    };
-
-    forward_scan_constant_names(analyzer, &global_scope, module->children);
-    size_t last_decl = resolve_declarations_until_unreachable(analyzer, ast, state, module->children, false);
-    if (last_decl < module->children.count) {
-        module->children.count = last_decl+1;
-    }
-}
-
 bool resolve_ast(ast_t *ast) {
     analyzer_t analyzer = {0};
 
@@ -4989,17 +5105,13 @@ bool resolve_ast(ast_t *ast) {
     return ast->resolved;
 }
 
-function_t *find_main_or_null(ast_t *ast) {
-    string_t moduleid;
-    ast_node_t *module;
-    kh_foreach(ast->moduleid2node, moduleid, module, ({
-        for (size_t i = 0; i < module->children.count; ++i) {
-            ast_node_t *decl = module->children.items[i];
-            if (sv_eq(decl->identifier.view, lit2sv("main"))) {
-                return decl->expr_val.word.as.p;
-            }
+function_t *find_main_or_null(ast_node_t *module) {
+    for (size_t i = 0; i < module->children.count; ++i) {
+        ast_node_t *decl = module->children.items[i];
+        if (sv_eq(decl->identifier.view, lit2sv("main"))) {
+            return decl->expr_val.word.as.p;
         }
-    }));
+    }
 
     return NULL;
 }

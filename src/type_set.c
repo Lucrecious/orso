@@ -143,6 +143,7 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
     static typedata_t type_unresolved = {.name=lit2str("<unresolved>"), .kind=TYPE_UNRESOLVED, .size=0, .alignment=0};
     static typedata_t type_inferred_funcdef = {.name=lit2str("<inferred funcdef>"), .kind=TYPE_INFERRED_FUNCTION, .size=0, .alignment=0};
     static typedata_t type_param_struct = {.name=lit2str("<param struct>"), .kind=TYPE_PARAM_STRUCT, .size=0, .alignment=0};
+    static typedata_t type_module = {.name=lit2str("<module>"), .kind=TYPE_MODULE, .size=0, .alignment=0};
     static typedata_t type_unreachable = {.name=lit2str("<unreachable>"), .kind=TYPE_UNREACHABLE, .size=0, .alignment=0};
 
     static typedata_t type_void = {.name=lit2str("void"), .kind=TYPE_VOID, .size=0, .alignment=0, .capabilities=TYPE_CAP_NONE};
@@ -189,6 +190,9 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
 
     type_t param_struct_ = typeid(set->types.count);
     array_push(&set->types, &type_param_struct);
+
+    type_t module_ = typeid(set->types.count);
+    array_push(&set->types, &type_module);
 
     type_t unreachable = typeid(set->types.count);
     array_push(&set->types, &type_unreachable);
@@ -263,6 +267,7 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
     ASSERT(unresolved.i == TYPE_UNRESOLVED, "must be same as type unresolved");
     ASSERT(inferred_funcdef.i == TYPE_INFERRED_FUNCTION, "must be same as type inferred func def");
     ASSERT(param_struct_.i == TYPE_PARAM_STRUCT, "must be same as type param struct");
+    ASSERT(module_.i == TYPE_MODULE, "must be same as type module");
     ASSERT(unreachable.i == TYPE_UNREACHABLE, "must be same as type unreachable");
     ASSERT(set->void_.i == TYPE_VOID, "must be same as type void");
     ASSERT(set->bool_.i == TYPE_BOOL, "must be same as type bool");

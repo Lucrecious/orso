@@ -59,6 +59,7 @@ void sb_add_format(string_builder_t *sb, cstr_t format, ...);
 string_t sb_render(string_builder_t *builder, arena_t *allocator);
 string_t str2base64(string_t s, arena_t *arena);
 bool core_abspath(string_t relpath, arena_t *arena, string_t *result);
+bool core_fileid(string_t absolute_path, string_builder_t *result);
 
 
 #define str(lit) ((string_t){ .cstr = (lit), .length = (sizeof(lit)/sizeof(char) - sizeof(char)) })
@@ -243,7 +244,7 @@ string_t sb_render(string_builder_t *builder, arena_t *allocator) {
 char base64[64] = {
     'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
     'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
-    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '-', '_',
+    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '_', '.',
 };
 
 string_t str2base64(string_t s, arena_t *arena) {
@@ -272,20 +273,21 @@ string_t str2base64(string_t s, arena_t *arena) {
         u8 c = (u8)s.cstr[i+2];
         s32 combined = a | (b << 8) | (c << 16);
 
-        char ap = (char)(combined & 0x3f);
-        char bp = (char)((combined & 0xFC0) >> 6);
-        char cp = (char)((combined & 0x3F000) >> 12);
-        char dp = (char)((combined & 0xFC0000) >> 18);
+        char chars[4];
 
-        ap = base64[(int)ap];
-        bp = base64[(int)bp];
-        cp = base64[(int)cp];
-        dp = base64[(int)dp];
+        chars[0] = (char)(combined & 0x3f);
+        chars[1] = (char)((combined & 0xFC0) >> 6);
+        chars[2] = (char)((combined & 0x3F000) >> 12);
+        chars[3] = (char)((combined & 0xFC0000) >> 18);
 
-        sb_add_char(&sb, ap);
-        sb_add_char(&sb, bp);
-        sb_add_char(&sb, cp);
-        sb_add_char(&sb, dp);
+        for (size_t i = 0; i < 4; ++i) {
+            chars[i] = base64[(int)chars[i]];
+            if (chars[i] == '.') {
+                sb_add_cstr(&sb, "ab");
+            } else {
+                sb_add_char(&sb, chars[i]);
+            }
+        }
     }
 
     string_t ret = sb_render(&sb, arena);
@@ -301,7 +303,7 @@ string_t core_abspath(string_t relpath, arena_t *arena) {
     #error "not implemented"
 }
 
-void core_fileid(string_t absolute_path, string_builder_t *result) {
+bool core_fileid(string_t absolute_path, string_builder_t *result) {
     #error "not implemented"
 }
 
