@@ -57,7 +57,7 @@ void sb_add_char(string_builder_t *sb, char c);
 void sb_add_cstr(string_builder_t *sb, cstr_t cstr);
 void sb_add_format(string_builder_t *sb, cstr_t format, ...);
 string_t sb_render(string_builder_t *builder, arena_t *allocator);
-string_t str2base64(string_t s, arena_t *arena);
+string_t bytes2alphanum(char *s, size_t length, arena_t *arena);
 bool core_abspath(string_t relpath, arena_t *arena, string_t *result);
 bool core_fileid(string_t absolute_path, string_builder_t *result);
 
@@ -247,30 +247,17 @@ char base64[64] = {
     '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '_', '.',
 };
 
-string_t str2base64(string_t s, arena_t *arena) {
+string_t bytes2alphanum(char *s, size_t length, arena_t *arena) {
     tmp_arena_t *tmp = allocator_borrow();
-    size_t left_over = sizeof(char)*s.length%3;
     
-    cstr_t suffix;
-    switch (left_over) {
-    case 0: suffix = ""; break;
-    case 1: suffix = "_"; break;
-    case 2: suffix = "__"; break;
-    default: UNREACHABLE(); break;
-    }
-
-    if (left_over > 0) {
-        s = string_format("%s%s", tmp->allocator, s.cstr, suffix);
-    }
-
     string_builder_t sb = {.allocator=tmp->allocator};
 
     sb_add_char(&sb, 'x');
 
-    for (size_t i = 0; i < s.length; i += 3) {
-        u8 a = (u8)s.cstr[i];
-        u8 b = (u8)s.cstr[i+1];
-        u8 c = (u8)s.cstr[i+2];
+    for (size_t i = 0; i < length; i += 3) {
+        u8 a = (u8)s[i];
+        u8 b = (u8)(i+1 < length ? s[i+1] : '_');
+        u8 c = (u8)(i+2 < length ? s[i+2] : '_');
         s32 combined = a | (b << 8) | (c << 16);
 
         char chars[4];
@@ -328,8 +315,8 @@ bool core_fileid(string_t absolute_path, string_builder_t *result) {
 
     #define IDSIZE (sizeof(sb.st_dev)+sizeof(sb.st_ino))
     char bytes[IDSIZE];
-    memcmp(bytes, &sb.st_dev, sizeof(sb.st_dev));
-    memcmp(bytes+sizeof(sb.st_dev), &sb.st_ino, sizeof(sb.st_ino));
+    memcpy(bytes, &sb.st_dev, sizeof(sb.st_dev));
+    memcpy(bytes+sizeof(sb.st_dev), &sb.st_ino, sizeof(sb.st_ino));
 
     for (size_t i = 0; i < IDSIZE; ++i) {
         char c = bytes[i];

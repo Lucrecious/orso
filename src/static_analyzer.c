@@ -2389,8 +2389,7 @@ string_t ast_generate_moduleid(string_t file_path, arena_t *arena) {
     success = core_fileid(absolute_path, &sb);
     MUST(success);
 
-    string_t id = sb_render(&sb, tmp->allocator);
-    id = str2base64(id, arena);
+    string_t id = bytes2alphanum(sb.items, sb.count, arena);
 
     allocator_return(tmp);
 
@@ -4575,6 +4574,15 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
                 .args = ORERR_ARGS(error_arg_node(init_expr)),
                 .show_code_lines = ORERR_LINES(0),
             ));
+        } else {
+            typedata_t *td = ast_type2td(ast, init_expr->value_type);
+            if (td->kind == TYPE_FUNCTION) {
+                function_t *fn = decl->expr_val.word.as.p;
+                if (fn->name.length == 0) {
+                    // todo: give function proper arena?? figure out memory model better??
+                    fn->name = sv2string(decl->identifier.view, fn->code.allocator);
+                }
+            }
         }
     }
 

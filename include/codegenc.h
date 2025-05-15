@@ -2085,7 +2085,7 @@ static void cgen_generate_function_names(cgen_t *cgen, ast_node_t *module) {
             funcdata.type = funcdef->value_type;
 
             if (function->name.length == 0) {
-                funcdata.name = string_format("func%zu", cgen->tmp_arena, ++(*cgen->state.tmp_count));
+                funcdata.name = string_format("__oranonfn_%zu", cgen->tmp_arena, ++(*cgen->state.tmp_count));
             } else {
                 funcdata.name = cgen_function_name(cgen, string2sv(function->name));
             }
