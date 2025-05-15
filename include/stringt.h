@@ -173,6 +173,21 @@ string_t sv2string(string_view_t sv, arena_t *allocator) {
     return result;
 }
 
+string_view_t sv_no_ext(string_view_t sv) {
+    if (sv.length == 0) return sv;
+    size_t end = sv.length;
+
+    for (size_t i = sv.length; i > 0; --i) {
+        if (sv.data[i-1] == '.') {
+            end = i-1;
+            break;
+        }
+    }
+
+    sv.length = end;
+    return sv;
+}
+
 string_view_t sv_filename(string_view_t sv) {
     if (sv.length == 0) return sv;
     size_t begin = 0;

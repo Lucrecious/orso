@@ -2396,6 +2396,18 @@ string_t ast_generate_moduleid(string_t file_path, arena_t *arena) {
     return id;
 }
 
+static ast_node_t *stan_find_owning_module_or_null(scope_t *scope) {
+    while (scope && scope->type != SCOPE_TYPE_MODULE) {
+        scope = scope->outer;
+    }
+
+    if (scope) {
+        return scope->creator;
+    } else {
+        return NULL;
+    }
+}
+
 static void resolve_module(analyzer_t *analyzer, ast_t *ast, ast_node_t *module) {
     scope_init(&module->defined_scope, ast->arena, SCOPE_TYPE_MODULE, NULL, module);
     analysis_state_t state = (analysis_state_t) {
@@ -2555,6 +2567,13 @@ void resolve_expression(
                     ast_node_t *module = stan_load_module_or_errornull(analyzer, ast, child, string2sv(module_path));
                     expr->expr_val = ast_node_val_word(WORDP(module));
                     expr->value_type = typeid(TYPE_MODULE);
+
+
+                    {
+                        ast_node_t *owning_module = stan_find_owning_module_or_null(state.scope);
+                        MUST(owning_module);
+                        array_push(&owning_module->module_deps, module);
+                    }
                 }
             }
             break;
@@ -4502,6 +4521,9 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
 
     if (state.scope->type == SCOPE_TYPE_MODULE) {
         decl->is_global = true;
+        if (decl->is_mutable) {
+            array_push(&ast->global_decls_in_resolution_order, decl);
+        }
     }
 
     if (TYPE_IS_INVALID(decl->value_type)) {
@@ -4859,18 +4881,6 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
     }
 
     return decl;
-}
-
-static ast_node_t *stan_find_owning_module_or_null(scope_t *scope) {
-    while (scope && scope->type != SCOPE_TYPE_MODULE) {
-        scope = scope->outer;
-    }
-
-    if (scope) {
-        return scope->creator;
-    } else {
-        return NULL;
-    }
 }
 
 static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t state, ast_node_t *funcdef) {

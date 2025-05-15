@@ -54,18 +54,15 @@ static cgen_var_t nil_cvar = {.is_new = false, .id = 0 , .type = typeid(TYPE_INV
 #define no_var(tv) ((tv).id == 0 && (tv).name.length == 0)
 #define has_var(tv) ((tv).id > 0 || (tv).name.length > 0)
 
-static string_t cgen_function_name(cgen_t *cgen, string_view_t name) {
-    string_t r = string_format("__or%.*s_%zu_", cgen->tmp_arena, (int)name.length, name.data, ++(*cgen->state.tmp_count));
+static string_t cgen_function_name(cgen_state_t state, string_view_t name, arena_t *arena) {
+    string_t r = string_format("__or%.*s_%zu_", arena, (int)name.length, name.data, ++(*state.tmp_count));
     return r;
 }
 
-static cgen_var_t cgen_global_var_gennew(cgen_t *cgen, string_view_t name, type_t type) {
-    cgen_var_t var = {0};
-    size_t tmpid = ++(*cgen->state.tmp_count);
-    var.name = string_format("__or%.*s_%zu_", cgen->tmp_arena, name.length, name.data, tmpid);
-    var.type = type;
-    var.is_new = true;
-    return var;
+static string_t cgen_global_new_name(string_view_t name, cgen_state_t state, arena_t *arena) {
+    size_t tmpid = ++(*state.tmp_count);
+    string_t new_name = string_format("__or%.*s_%zu_", arena, name.length, name.data, tmpid);
+    return new_name;
 }
 
 static cgen_var_t cgen_user_var(cgen_t *cgen, string_view_t name, type_t type, bool is_global) {
@@ -2074,23 +2071,23 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
     }
 }
 
-static void cgen_generate_function_names(cgen_t *cgen, ast_node_t *module) {
+static void cgen_generate_function_names(ast_t *ast, cgen_state_t state, ast_node_t *module) {
     for (size_t i = 0; i < module->owned_funcdefs.count; ++i) {
         ast_node_t *funcdef = module->owned_funcdefs.items[i];
         function_t *function = funcdef->expr_val.word.as.p;
         MUST(funcdef->expr_val.is_concrete);
 
         funcdata_t funcdata;
-        unless (table_get(p2n, cgen->state.functions, function, &funcdata)) {
+        unless (table_get(p2n, state.functions, function, &funcdata)) {
             funcdata.type = funcdef->value_type;
 
             if (function->name.length == 0) {
-                funcdata.name = string_format("__oranonfn_%zu", cgen->tmp_arena, ++(*cgen->state.tmp_count));
+                funcdata.name = string_format("__oranonfn_%zu", ast->arena, ++(*state.tmp_count));
             } else {
-                funcdata.name = cgen_function_name(cgen, string2sv(function->name));
+                funcdata.name = cgen_function_name(state, string2sv(function->name), ast->arena);
             }
 
-            table_put(p2n, cgen->state.functions, function, funcdata);
+            table_put(p2n, state.functions, function, funcdata);
         }
     }
 }
@@ -2230,8 +2227,6 @@ static void cgen_struct(cgen_t *cgen, type_t type, bools_t *bools) {
 }
 
 void cgen_functions(cgen_t *cgen, cgen_t *cgenh, ast_node_t *module) {
-    cgen_generate_function_names(cgen, module);
-
     cgen_forward_declare_functions(cgenh, module);
 
     sb_add_cstr(&cgen->sb, "\n");
@@ -2400,45 +2395,11 @@ void cgen_declare_global_decls(cgen_t *cgen, ast_nodes_t *decls) {
         if (decl->is_intrinsic) continue;
         if (an_is_constant(decl)) continue;
 
-        cgen_var_t var = cgen_global_var_gennew(cgen, decl->identifier.view, decl->value_type);
-        decl->ccode_var_name = string_copy(var.name, cgen->ast->arena);
-
+        cgen_var_t var = cgen_user_var(cgen, string2sv(decl->ccode_var_name), decl->value_type, true);
         sb_add_format(&cgen->sb, "%s;\n", cgen_var(cgen, var));
     }
 
     sb_add_cstr(&cgen->sb, "\n");
-}
-
-void cgen_init_function(cgen_t *cgen, ast_node_t *module) {
-    size_t id = ++(*cgen->state.tmp_count);
-    string_t init_func_name = string_format("__orminit_%zu", cgen->tmp_arena, id);
-    module->ccode_init_func_name = init_func_name;
-    sb_add_format(&cgen->sb, "void %s(void) {\n", init_func_name.cstr);
-    cgen_indent(cgen);
-
-    for (size_t i = 0; i < module->children.count; ++i) {
-        ast_node_t *decl = module->children.items[i];
-        if (decl->is_intrinsic) continue;
-        if (an_is_constant(decl)) continue;
-
-        cgen_var_t var = cgen_user_var(cgen, string2sv(decl->ccode_var_name), decl->value_type, true);
-        var.is_new = false;
-
-        ast_node_t *init_expr = an_decl_expr(decl);
-        cgen_statement(cgen, init_expr, var, true);
-
-        sb_add_cstr(&cgen->sb, "\n");
-    }
-
-    cgen_unindent(cgen);
-    sb_add_cstr(&cgen->sb, "}\n\n");
-}
-
-
-void cgen_global_decls(cgen_t *cgen, cgen_t *cgenh, ast_node_t *module) {
-    cgen_declare_global_decls(cgenh, &module->children);
-
-    cgen_init_function(cgen, module);
 }
 
 static void cgen_begin_h(cgen_t *cgenh, string_t moduleid) {
@@ -2450,46 +2411,147 @@ static void cgen_end_h(cgen_t *cgenh) {
     sb_add_format(&cgenh->sb, "\n#endif\n");
 }
 
-static void cgen_module(cgen_t *cgen, cgen_t *cgenh, bool is_core, ast_node_t *module, string_t moduleid, string_t include) {
-    cgen_begin_h(cgenh, moduleid);
+void cgen_init_function_file(cgen_t *cgen, cgen_t *cgenh, ast_t *ast) {
+    // size_t id = ++(*cgen->state.tmp_count);
+    string_t init_func_name = string_format("__orminit_", cgen->tmp_arena);
 
-    // only core has the intrinsic implementation
-    if (is_core) {
-        cgen_add_include(cgen, "core.h");
-        sb_add_cstr(&cgen->sb, "#define INTRINSICS_IMPLEMENTATION\n");
-        cgen_add_include(cgen, "intrinsics.h");
-        cgen_add_include(cgenh, "intrinsics.h");
+    // .h
+    {
+        cgen_begin_h(cgenh, lit2str("__orinit_func_h"));
 
-        cgen_typedefs(cgenh, &cgen->ast->type_set.types);
-        cgen_structs(cgenh);
-    } else {
-        cgen_add_include(cgen, include.cstr);
-        cgen_add_include(cgen, "core.h");
-        cgen_add_include(cgenh, "core.h");
+        sb_add_format(&cgenh->sb, "void %s(void);\n", init_func_name.cstr);
+
+        cgen_end_h(cgenh);
     }
 
-    cgen_global_decls(cgen, cgenh, module);
+    // .c
+    {
+        cgen_add_include(cgen, "__orinit_func.h");
 
-    cgen_functions(cgen, cgenh, module);
+        {
+            ast_node_t *module;
+            kh_foreach_value(ast->moduleid2node, module, {
+                cgen_add_include(cgen, module->ccode_associated_h.cstr);
+            });
+        }
 
-    cgen_end_h(cgenh);
+        sb_add_format(&cgen->sb, "void %s(void) {\n", init_func_name.cstr);
+        cgen_indent(cgen);
+
+        for (size_t i = 0; i < ast->global_decls_in_resolution_order.count; ++i) {
+            ast_node_t *decl = ast->global_decls_in_resolution_order.items[i];
+
+            cgen_var_t var = cgen_user_var(cgen, string2sv(decl->ccode_var_name), decl->value_type, true);
+            var.is_new = false;
+
+            ast_node_t *init_expr = an_decl_expr(decl);
+            cgen_statement(cgen, init_expr, var, true);
+
+            sb_add_cstr(&cgen->sb, "\n");
+        }
+
+        cgen_unindent(cgen);
+        sb_add_cstr(&cgen->sb, "}\n\n");
+    }
 }
 
-static string_t cgen_generate_filename(string_t moduleid, string_t filepath, arena_t *arena) {
+
+void cgen_global_decls(cgen_t *cgenh, ast_node_t *module) {
+    cgen_declare_global_decls(cgenh, &module->children);
+}
+
+static void cgen_module(cgen_t *cgen, cgen_t *cgenh, bool is_core, ast_node_t *module, string_t moduleid) {
+    // .h
+    {
+        cgen_begin_h(cgenh, moduleid);
+        if (is_core) {
+            cgen_add_include(cgenh, "intrinsics.h");
+            cgen_typedefs(cgenh, &cgen->ast->type_set.types);
+            cgen_structs(cgenh);
+        } else {
+            cgen_add_include(cgenh, "core.h");
+        }
+
+        cgen_global_decls(cgenh, module);
+
+        cgen_end_h(cgenh);
+    }
+
+    // .c
+    {
+        if (is_core) {
+            cgen_add_include(cgen, "core.h");
+
+            // only core has the intrinsic implementation
+            sb_add_cstr(&cgen->sb, "#define INTRINSICS_IMPLEMENTATION\n");
+            cgen_add_include(cgen, "intrinsics.h");
+        } else {
+            cgen_add_include(cgen, module->ccode_associated_h.cstr);
+            cgen_add_include(cgen, "core.h");
+
+            for (size_t i = 0; i < module->module_deps.count; ++i) {
+                ast_node_t *m = module->module_deps.items[i];
+                cgen_add_include(cgen, m->ccode_associated_h.cstr);
+            }
+        }
+
+        cgen_functions(cgen, cgenh, module);
+    }
+}
+
+static string_t cgen_generate_filename_hext(string_t moduleid, string_t filepath, arena_t *arena) {
     string_view_t filename = sv_filename(string2sv(filepath));
 
-    string_t result = string_format("%s_%.*s", arena, moduleid.cstr, filename.length, filename.data);
+    string_t result = string_format("%s_%.*s.h", arena, moduleid.cstr, filename.length, filename.data);
     return result;
+}
+
+static string_t cgen_generate_associated_c_from_h_filename(string_t hfilename, arena_t *arena) {
+    string_view_t noext = sv_no_ext(string2sv(hfilename));
+    string_t cname = string_format("%.*s.c", arena, noext.length, noext.data);
+    return cname;
+}
+
+static void cgen_generate_associated_h_filename(ast_t *ast) {
+    ast->core_module_or_null->ccode_associated_h = lit2str("core.h");
+
+    string_t moduleid;
+    ast_node_t *module;
+    kh_foreach(ast->moduleid2node, moduleid, module, {
+        string_t filename = cgen_generate_filename_hext(moduleid, module->filepath, ast->arena);
+        module->ccode_associated_h = filename;
+    });
+}
+
+static void cgen_generate_global_names(ast_t *ast, cgen_state_t state) {
+    for (size_t i = 0; i < ast->global_decls_in_resolution_order.count; ++i) {
+        ast_node_t *decl = ast->global_decls_in_resolution_order.items[i];
+        string_t name = cgen_global_new_name(decl->identifier.view, state, ast->arena);
+        decl->ccode_var_name = name;
+    }
 }
 
 bool compile_ast_to_c(ast_t *ast, string_t build_directory, strings_t *sources, arena_t *arena) {
     cgen_generate_cnames_for_types(ast);
 
-    *sources = (strings_t){.allocator=arena};
+    cgen_generate_associated_h_filename(ast);
 
     tmp_arena_t *tmp = allocator_borrow();
-
     cgen_state_t cgen_state = make_cgen_state(tmp->allocator);
+    cgen_generate_global_names(ast, cgen_state);
+    cgen_cache_requires_tmp(&ast->type_set.types, ast->core_module_or_null);
+    cgen_generate_function_names(ast, cgen_state, ast->core_module_or_null);
+
+    {
+        ast_node_t *module;
+        kh_foreach_value(ast->moduleid2node, module, cgen_cache_requires_tmp(&ast->type_set.types, module));
+        kh_foreach_value(ast->moduleid2node, module, cgen_cache_requires_tmp(&ast->type_set.types, module));
+        kh_foreach_value(ast->moduleid2node, module, cgen_generate_function_names(ast, cgen_state, module));
+    }
+
+    *sources = (strings_t){.allocator=arena};
+
+
     cgen_t cgen = {0};
     cgen_t cgenh = {0};
 
@@ -2498,47 +2560,57 @@ bool compile_ast_to_c(ast_t *ast, string_t build_directory, strings_t *sources, 
         cgen = make_cgen(ast, tmp->allocator, cgen_state);
         cgenh = make_cgen(ast, tmp->allocator, cgen_state);
 
-        string_t core_base_name = string_format("%s%s", arena, build_directory.cstr, CORE_MODULE_NAME);
+        string_t corec = cgen_generate_associated_c_from_h_filename(ast->core_module_or_null->ccode_associated_h, tmp->allocator);
 
-        string_t corec = string_format("%s.c", tmp->allocator, core_base_name.cstr);
-        string_t coreh = string_format("%s.h", tmp->allocator, core_base_name.cstr);
-
-        cgen_cache_requires_tmp(&ast->type_set.types, ast->core_module_or_null);
-        cgen_module(&cgen, &cgenh, true, ast->core_module_or_null, lit2str(CORE_MODULE_NAME),
-                sv2string(sv_filename(string2sv(coreh)), tmp->allocator));
+        cgen_module(&cgen, &cgenh, true, ast->core_module_or_null, lit2str(CORE_MODULE_NAME));
 
 
+        corec = string_format("%s%s", tmp->allocator, build_directory.cstr, corec.cstr);
         array_push(sources, corec);
+
+        string_t coreh = string_format("%s%s", tmp->allocator, build_directory.cstr, ast->core_module_or_null->ccode_associated_h.cstr);
 
         success &= write_entire_file(corec.cstr, cgen.sb.items, cgen.sb.count);
         success &= write_entire_file(coreh.cstr, cgenh.sb.items, cgenh.sb.count);
     }
 
     {
+        cgen = make_cgen(ast, tmp->allocator, cgen_state);
+        cgenh = make_cgen(ast, tmp->allocator, cgen_state);
+
+        cgen_init_function_file(&cgen, &cgenh, ast);
+
+        string_t init_funcc = string_format("%s%s", tmp->allocator, build_directory.cstr, "__orinit_func.c");
+        array_push(sources, init_funcc);
+
+        string_t init_funch = string_format("%s%s", tmp->allocator, build_directory.cstr, "__orinit_func.h");
+
+        success &= write_entire_file(init_funcc.cstr, cgen.sb.items, cgen.sb.count);
+        success &= write_entire_file(init_funch.cstr, cgenh.sb.items, cgenh.sb.count);
+    }
+
+    {
         string_t moduleid;
         ast_node_t *module;
-        kh_foreach(ast->moduleid2node, moduleid, module, cgen_cache_requires_tmp(&ast->type_set.types, module));
 
         kh_foreach(ast->moduleid2node, moduleid, module, {
             cgen = make_cgen(ast, tmp->allocator, cgen_state);
-
-
-            string_t filename = cgen_generate_filename(moduleid, module->filepath, tmp->allocator);
-            string_t base_path = string_format("%s%s", arena, build_directory.cstr, filename.cstr);
-
-            string_t pathc = string_format("%s.c", tmp->allocator, base_path.cstr);
-            string_t pathh = string_format("%s.h", tmp->allocator, base_path.cstr);
             cgenh = make_cgen(ast, tmp->allocator, cgen_state);
 
-            cgen_module(&cgen, &cgenh, false, module, moduleid,
-                    sv2string(sv_filename(string2sv(pathh)), tmp->allocator));
+            cgen_module(&cgen, &cgenh, false, module, moduleid);
 
             function_t *main_or_null = find_main_or_null(module);
 
             if (main_or_null) {
+                cgen_add_include(&cgen, "__orinit_func.h");
                 string_t funcname = cgen_get_function_name(&cgen, main_or_null);
-                sb_add_format(&cgen.sb, "int main() { %s(); }\n\n", funcname.cstr);
+                sb_add_format(&cgen.sb, "int main() { __orminit_(); %s(); }\n\n", funcname.cstr);
             }
+
+            string_t pathc = cgen_generate_associated_c_from_h_filename(module->ccode_associated_h, tmp->allocator);
+            pathc = string_format("%s%s", tmp->allocator, build_directory.cstr, pathc.cstr);
+
+            string_t pathh = string_format("%s%s", tmp->allocator, build_directory.cstr, module->ccode_associated_h.cstr);;
 
             success &= write_entire_file(pathc.cstr, cgen.sb.items, cgen.sb.count);
             success &= write_entire_file(pathh.cstr, cgenh.sb.items, cgenh.sb.count);

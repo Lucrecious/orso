@@ -156,6 +156,8 @@ void ast_init(ast_t *ast, arena_t *arena) {
     ast->fn2an = table_new(fn2an, ast->arena);
     ast->moduleid2node = table_new(s2n, ast->arena);
 
+    ast->global_decls_in_resolution_order = (ast_nodes_t){.allocator=ast->arena};
+
     ast->type_to_zero_word = table_new(t2w, ast->arena);
     ast->type_to_creation_node = table_new(type2ns, ast->arena);
 }
@@ -221,6 +223,7 @@ ast_node_t *ast_node_new(arena_t *arena, ast_node_type_t node_type, token_t star
 
     node->children = (ast_nodes_t){.allocator=arena};
     node->owned_funcdefs = (ast_nodes_t){.allocator=arena};
+    node->module_deps = (ast_nodes_t){.allocator=arena};
     node->realized_copies = (inferred_copies_t){.allocator=arena};
     node->type_decl_patterns = (type_patterns_t){.allocator=arena};
 
@@ -352,7 +355,6 @@ ast_node_t *ast_node_copy(arena_t *arena, ast_node_t *node) {
     copy->branch_type = node->branch_type;
     copy->ccode_break_label = node->ccode_break_label;
     copy->ccode_continue_label = node->ccode_continue_label;
-    copy->ccode_init_func_name = node->ccode_init_func_name;
     copy->ccode_var_name = node->ccode_var_name;
 
     if (node->defined_scope.creator) {
@@ -404,6 +406,7 @@ ast_node_t *ast_node_copy(arena_t *arena, ast_node_t *node) {
     copy->operator = node->operator;
 
     MUST(copy->owned_funcdefs.count == 0);
+    MUST(copy->module_deps.count == 0);
 
     copy->param_end = node->param_end;
 

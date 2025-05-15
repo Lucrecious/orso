@@ -333,6 +333,7 @@ struct ast_node_t {
     ast_nodes_t children;
 
     ast_nodes_t owned_funcdefs;
+    ast_nodes_t module_deps;
 
     token_t identifier;
     token_t label;
@@ -347,7 +348,7 @@ struct ast_node_t {
     string_t ccode_break_label;
     string_t ccode_continue_label;
     string_t ccode_var_name;
-    string_t ccode_init_func_name;
+    string_t ccode_associated_h;
 };
 
 declare_table(t2w, type_t, word_t)
@@ -402,6 +403,8 @@ typedef struct ast_t {
 
     ast_node_t *core_module_or_null;
     table_t(s2n) *moduleid2node;
+
+    ast_nodes_t global_decls_in_resolution_order;
 
     table_t(t2w) *type_to_zero_word;
     table_t(type2ns) *type_to_creation_node;
