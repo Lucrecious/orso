@@ -307,6 +307,7 @@ struct ast_node_t {
     scope_t defined_scope;
 
     // todo: to optimize for space consider merging these into a flag enum
+    bool is_global;
     bool has_default_value;
     bool is_mutable;
     bool is_intrinsic;
@@ -330,6 +331,8 @@ struct ast_node_t {
     ast_node_t *last_statement;
 
     ast_nodes_t children;
+
+    ast_nodes_t owned_funcdefs;
 
     token_t identifier;
     token_t label;

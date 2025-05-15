@@ -1,1 +1,5 @@
 print :: (s: str8_t) -> void {};
+
+PI :: 3.14159;
+
+test := 1;

@@ -197,6 +197,7 @@ ast_node_t *ast_node_new(arena_t *arena, ast_node_type_t node_type, token_t star
 
     node->param_end = 0;
 
+    node->is_global = false;
     node->is_mutable = false;
     node->is_exported = false;
     node->is_intrinsic = false;
@@ -219,6 +220,7 @@ ast_node_t *ast_node_new(arena_t *arena, ast_node_type_t node_type, token_t star
     node->filepath = lit2str("");
 
     node->children = (ast_nodes_t){.allocator=arena};
+    node->owned_funcdefs = (ast_nodes_t){.allocator=arena};
     node->realized_copies = (inferred_copies_t){.allocator=arena};
     node->type_decl_patterns = (type_patterns_t){.allocator=arena};
 
@@ -385,6 +387,7 @@ ast_node_t *ast_node_copy(arena_t *arena, ast_node_t *node) {
     copy->is_consumed = node->is_consumed;
     copy->is_exported = node->is_exported;
     copy->is_free_number = node->is_free_number;
+    copy->is_global = node->is_global;
     copy->is_intrinsic = node->is_intrinsic;
     copy->is_mutable = node->is_mutable;
 
@@ -399,6 +402,8 @@ ast_node_t *ast_node_copy(arena_t *arena, ast_node_t *node) {
     copy->node_type = node->node_type;
 
     copy->operator = node->operator;
+
+    MUST(copy->owned_funcdefs.count == 0);
 
     copy->param_end = node->param_end;
 

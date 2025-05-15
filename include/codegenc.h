@@ -54,30 +54,31 @@ static cgen_var_t nil_cvar = {.is_new = false, .id = 0 , .type = typeid(TYPE_INV
 #define no_var(tv) ((tv).id == 0 && (tv).name.length == 0)
 #define has_var(tv) ((tv).id > 0 || (tv).name.length > 0)
 
-static string_t cgen_local_def_name(cgen_t *cgen, string_view_t name) {
-    string_t r = string_format("%.*s_", cgen->tmp_arena, (int)name.length, name.data);
-    return r;
-}
-
 static string_t cgen_function_name(cgen_t *cgen, string_view_t name) {
-    string_t r = string_format("%.*s_odlfn%zu_", cgen->tmp_arena, (int)name.length, name.data, ++(*cgen->state.tmp_count));
+    string_t r = string_format("__or%.*s_%zu_", cgen->tmp_arena, (int)name.length, name.data, ++(*cgen->state.tmp_count));
     return r;
 }
 
-static cgen_var_t cgen_user_var(cgen_t *cgen, string_view_t name, type_t type) {
+static cgen_var_t cgen_global_var_gennew(cgen_t *cgen, string_view_t name, type_t type) {
     cgen_var_t var = {0};
-    var.name = cgen_local_def_name(cgen, name);
+    size_t tmpid = ++(*cgen->state.tmp_count);
+    var.name = string_format("__or%.*s_%zu_", cgen->tmp_arena, name.length, name.data, tmpid);
     var.type = type;
     var.is_new = true;
-
     return var;
 }
 
-static cgen_var_t cgen_global_var(cgen_t *cgen, string_view_t name, type_t type) {
+static cgen_var_t cgen_user_var(cgen_t *cgen, string_view_t name, type_t type, bool is_global) {
     cgen_var_t var = {0};
-    var.name = string_format("%.*s_odlvar", cgen->tmp_arena, name.length, name.data);
     var.type = type;
     var.is_new = true;
+
+    if (is_global) {
+        var.name = sv2string(name, cgen->tmp_arena);
+    } else {
+        var.name = string_format("%.*s_", cgen->tmp_arena, (int)name.length, name.data);
+    }
+
     return var;
 }
 
@@ -568,7 +569,13 @@ static void cgen_declaration(cgen_t *cgen, ast_node_t *declaration) {
             // skip over the constants since they are inlined
             if (!declaration->is_mutable) break;
 
-            cgen_var_t var = cgen_user_var(cgen, declaration->identifier.view, declaration->value_type);
+            string_view_t identifier;
+            if (declaration->is_global) {
+                identifier = string2sv(declaration->ccode_var_name);
+            } else {
+                identifier = declaration->identifier.view;
+            }
+            cgen_var_t var = cgen_user_var(cgen, identifier, declaration->value_type, declaration->is_global);
             cgen_statement(cgen, an_decl_expr(declaration), var, true);
             break;
         }
@@ -1019,7 +1026,15 @@ static void cgen_lvalue(cgen_t *cgen, ast_node_t *lvalue, cgen_var_t var) {
             sb_add_format(&cgen->sb, "%s = ", cgen_lvar(cgen, var));
         }
 
-        cgen_var_t lvalue_var = cgen_user_var(cgen, lvalue->identifier.view, lvalue->value_type);
+        // todo: use ccode_var_name for all variables actually
+        string_view_t identifier;
+        if (lvalue->ref_decl->is_global) {
+            identifier = string2sv(lvalue->ref_decl->ccode_var_name);
+        } else {
+            identifier = lvalue->identifier.view;
+        }
+
+        cgen_var_t lvalue_var = cgen_user_var(cgen, identifier, lvalue->value_type, lvalue->ref_decl->is_global);
         sb_add_format(&cgen->sb, "(&%s)", cgen_var_name(cgen, lvalue_var));
         break;
     }
@@ -1479,7 +1494,15 @@ static void cgen_def_value(cgen_t *cgen, ast_node_t *def_value, cgen_var_t var) 
         sb_add_format(&cgen->sb, "%s = ", cgen_var(cgen, var));
     }
 
-    sb_add_format(&cgen->sb, "%s", cgen_local_def_name(cgen, def_value->identifier.view).cstr);
+    string_view_t identifier;
+    if (def_value->ref_decl->is_global) {
+        identifier = string2sv(def_value->ref_decl->ccode_var_name);
+    } else {
+        identifier = def_value->identifier.view;
+    }
+
+    cgen_var_t defname = cgen_user_var(cgen, identifier, def_value->value_type, def_value->ref_decl->is_global);
+    sb_add_format(&cgen->sb, "%s", cgen_var_name(cgen, defname));
 
     if (has_var(var)) {
         sb_add_cstr(&cgen->sb, ";\n");
@@ -2051,46 +2074,37 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
     }
 }
 
-static void cgen_generate_function_names(cgen_t *cgen, ast_node_t *node) {
-    if (node->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION && TYPE_IS_INFERRED_FUNCTION(node->value_type)) {
-        for (size_t i = 0; i < node->realized_copies.count; ++i) {
-            inferred_copy_t copy = node->realized_copies.items[i];
-            cgen_generate_function_names(cgen, copy.copy);
-        }
-        return;
-    }
+static void cgen_generate_function_names(cgen_t *cgen, ast_node_t *module) {
+    for (size_t i = 0; i < module->owned_funcdefs.count; ++i) {
+        ast_node_t *funcdef = module->owned_funcdefs.items[i];
+        function_t *function = funcdef->expr_val.word.as.p;
+        MUST(funcdef->expr_val.is_concrete);
 
-    typedata_t *td = type2typedata(&cgen->ast->type_set.types, node->value_type);
-    if (node->expr_val.is_concrete && td->kind == TYPE_FUNCTION) {
-        function_t *function = node->expr_val.word.as.p;
         funcdata_t funcdata;
         unless (table_get(p2n, cgen->state.functions, function, &funcdata)) {
-            funcdata.type = node->value_type;
+            funcdata.type = funcdef->value_type;
 
-            bool got_name = false;
-            if (node->node_type == AST_NODE_TYPE_DECLARATION_DEFINITION && !node->is_mutable) {
-                got_name = true;
-                funcdata.name = cgen_function_name(cgen, node->identifier.view);
-            } else if (node->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION) {
-                got_name = true;
+            if (function->name.length == 0) {
                 funcdata.name = string_format("func%zu", cgen->tmp_arena, ++(*cgen->state.tmp_count));
+            } else {
+                funcdata.name = cgen_function_name(cgen, string2sv(function->name));
             }
 
-            if (got_name) {
-                table_put(p2n, cgen->state.functions, function, funcdata);
-            }
+            table_put(p2n, cgen->state.functions, function, funcdata);
         }
-    }
-
-    for (size_t i = 0; i < node->children.count; ++i) {
-        ast_node_t *child = node->children.items[i];
-        cgen_generate_function_names(cgen, child);
     }
 }
 
-void cgen_forward_declare_functions(cgen_t *cgen) {
-    funcdata_t funcdata;
-    kh_foreach_value(cgen->state.functions, funcdata, {
+void cgen_forward_declare_functions(cgen_t *cgen, ast_node_t *module) {
+    for (size_t i = 0; i < module->owned_funcdefs.count; ++i) {
+        ast_node_t *funcdef = module->owned_funcdefs.items[i];
+        MUST(funcdef->expr_val.is_concrete);
+
+        function_t *function = (function_t*)funcdef->expr_val.word.as.p;
+        funcdata_t funcdata;
+        bool success = table_get(p2n, cgen->state.functions, function, &funcdata);
+        UNUSED(success); MUST(success);
+
         typedata_t *td = type2typedata(&cgen->ast->type_set.types, funcdata.type);
         type_t rettype = td->as.function.return_type;
         
@@ -2105,27 +2119,21 @@ void cgen_forward_declare_functions(cgen_t *cgen) {
         }
 
         sb_add_cstr(&cgen->sb, ");\n");
-    });
+    }
 }
 
-static void cgen_function_definitions(cgen_t *cgen, ast_node_t *node) {
-    if (node->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION) {
-        if (TYPE_IS_INFERRED_FUNCTION(node->value_type)) {
-            for (size_t i = 0; i < node->realized_copies.count; ++i) {
-                inferred_copy_t copy = node->realized_copies.items[i];
-                cgen_function_definitions(cgen, copy.copy);
-            }
-            return;
-        }
-
+static void cgen_function_definitions(cgen_t *cgen, ast_node_t *module) {
+    for (size_t i = 0; i < module->owned_funcdefs.count; ++i) {
         // <ret_type> <func_name>(<arg1_type> <arg1_name>, <arg2_type> <arg2_name>, ..., <argn_type> <argn_name>) {
-        typedata_t *td = type2typedata(&cgen->ast->type_set.types, node->value_type);
+        ast_node_t *funcdef = module->owned_funcdefs.items[i];
+
+        typedata_t *td = type2typedata(&cgen->ast->type_set.types, funcdef->value_type);
 
         typedata_t *rettd = type2typedata(&cgen->ast->type_set.types, td->as.function.return_type);
 
         sb_add_format(&cgen->sb, "%s ", rettd->name.cstr);
 
-        function_t *function = (function_t*)node->expr_val.word.as.p;
+        function_t *function = (function_t*)funcdef->expr_val.word.as.p;
 
         funcdata_t funcdata;
         bool success = table_get(p2n, cgen->state.functions, function, &funcdata);
@@ -2134,17 +2142,17 @@ static void cgen_function_definitions(cgen_t *cgen, ast_node_t *node) {
 
         sb_add_format(&cgen->sb, "%s(", funcdata.name.cstr);
 
-        for (size_t i = an_func_def_arg_start(node); i < an_func_def_arg_end(node); ++i) {
-            if (i != an_func_def_arg_start(node)) {
+        for (size_t i = an_func_def_arg_start(funcdef); i < an_func_def_arg_end(funcdef); ++i) {
+            if (i != an_func_def_arg_start(funcdef)) {
                 sb_add_cstr(&cgen->sb, ", ");
             }
 
-            ast_node_t *arg = node->children.items[i];
+            ast_node_t *arg = funcdef->children.items[i];
             type_t arg_type = arg->value_type;
             if (TYPE_IS_VOID(arg_type)) {
                 sb_add_cstr(&cgen->sb, "void");
             } else {
-                cgen_var_t var = cgen_user_var(cgen, arg->identifier.view, arg_type);
+                cgen_var_t var = cgen_user_var(cgen, arg->identifier.view, arg_type, false);
                 sb_add_format(&cgen->sb, "%s", cgen_var(cgen, var));
             }
         }
@@ -2154,17 +2162,12 @@ static void cgen_function_definitions(cgen_t *cgen, ast_node_t *node) {
 
         cgen_add_indent(cgen);
 
-        cgen_expression(cgen, an_func_def_block(node), nil_cvar);
+        cgen_expression(cgen, an_func_def_block(funcdef), nil_cvar);
 
         cgen_semicolon_nl(cgen);
 
         cgen_unindent(cgen);
         sb_add_cstr(&cgen->sb, "}\n\n");
-    }
-
-    for (size_t i = 0; i < node->children.count; ++i) {
-        ast_node_t *child = node->children.items[i];
-        cgen_function_definitions(cgen, child);
     }
 }
 
@@ -2226,14 +2229,14 @@ static void cgen_struct(cgen_t *cgen, type_t type, bools_t *bools) {
     allocator_return(tmp);
 }
 
-void cgen_functions(cgen_t *cgen, cgen_t *cgenh, ast_node_t *top_node) {
-    cgen_generate_function_names(cgen, top_node);
+void cgen_functions(cgen_t *cgen, cgen_t *cgenh, ast_node_t *module) {
+    cgen_generate_function_names(cgen, module);
 
-    cgen_forward_declare_functions(cgenh);
+    cgen_forward_declare_functions(cgenh, module);
 
     sb_add_cstr(&cgen->sb, "\n");
 
-    cgen_function_definitions(cgen, top_node);
+    cgen_function_definitions(cgen, module);
 }
 
 static void cgen_generate_cnames_for_types(ast_t *ast) {
@@ -2397,7 +2400,8 @@ void cgen_declare_global_decls(cgen_t *cgen, ast_nodes_t *decls) {
         if (decl->is_intrinsic) continue;
         if (an_is_constant(decl)) continue;
 
-        cgen_var_t var = cgen_global_var(cgen, decl->identifier.view, decl->value_type);
+        cgen_var_t var = cgen_global_var_gennew(cgen, decl->identifier.view, decl->value_type);
+        decl->ccode_var_name = string_copy(var.name, cgen->ast->arena);
 
         sb_add_format(&cgen->sb, "%s;\n", cgen_var(cgen, var));
     }
@@ -2407,7 +2411,7 @@ void cgen_declare_global_decls(cgen_t *cgen, ast_nodes_t *decls) {
 
 void cgen_init_function(cgen_t *cgen, ast_node_t *module) {
     size_t id = ++(*cgen->state.tmp_count);
-    string_t init_func_name = string_format("_module_init_%zu", cgen->tmp_arena, id);
+    string_t init_func_name = string_format("__orminit_%zu", cgen->tmp_arena, id);
     module->ccode_init_func_name = init_func_name;
     sb_add_format(&cgen->sb, "void %s(void) {\n", init_func_name.cstr);
     cgen_indent(cgen);
@@ -2417,7 +2421,7 @@ void cgen_init_function(cgen_t *cgen, ast_node_t *module) {
         if (decl->is_intrinsic) continue;
         if (an_is_constant(decl)) continue;
 
-        cgen_var_t var = cgen_global_var(cgen, decl->identifier.view, decl->value_type);
+        cgen_var_t var = cgen_user_var(cgen, string2sv(decl->ccode_var_name), decl->value_type, true);
         var.is_new = false;
 
         ast_node_t *init_expr = an_decl_expr(decl);
@@ -2464,9 +2468,9 @@ static void cgen_module(cgen_t *cgen, cgen_t *cgenh, bool is_core, ast_node_t *m
         cgen_add_include(cgenh, "core.h");
     }
 
-    cgen_functions(cgen, cgenh, module);
-
     cgen_global_decls(cgen, cgenh, module);
+
+    cgen_functions(cgen, cgenh, module);
 
     cgen_end_h(cgenh);
 }

@@ -84,7 +84,7 @@ static void stan_error(analyzer_t *analyzer, error_t error) {
 static ast_node_t *get_defval_or_null_by_identifier_and_error(
         analyzer_t *analyzer,
         ast_t *ast,
-        analysis_state_t state,
+        scope_t *scope,
         ast_node_t *def,
         scope_t **found_scope);
 
@@ -2398,13 +2398,12 @@ string_t ast_generate_moduleid(string_t file_path, arena_t *arena) {
 }
 
 static void resolve_module(analyzer_t *analyzer, ast_t *ast, ast_node_t *module) {
-    scope_t global_scope = {0};
-    scope_init(&global_scope, ast->arena, SCOPE_TYPE_MODULE, NULL, module);
+    scope_init(&module->defined_scope, ast->arena, SCOPE_TYPE_MODULE, NULL, module);
     analysis_state_t state = (analysis_state_t) {
-        .scope = &global_scope
+        .scope = &module->defined_scope
     };
 
-    forward_scan_constant_names(analyzer, &global_scope, module->children);
+    forward_scan_constant_names(analyzer, &module->defined_scope, module->children);
     size_t last_decl = resolve_declarations_until_unreachable(analyzer, ast, state, module->children, false);
     if (last_decl < module->children.count) {
         module->children.count = last_decl+1;
@@ -3587,7 +3586,7 @@ void resolve_expression(
 
             scope_t *def_scope;
 
-            ast_node_t *decl = get_defval_or_null_by_identifier_and_error(analyzer, ast, state, expr, &def_scope);
+            ast_node_t *decl = get_defval_or_null_by_identifier_and_error(analyzer, ast, state.scope, expr, &def_scope);
 
             if (decl == NULL) {
                 INVALIDATE(expr);
@@ -3738,6 +3737,36 @@ void resolve_expression(
 
                 expr->value_type = field.type;
                 expr->expr_val = ast_node_val_word(field.default_value);
+                break;
+            }
+
+            case TYPE_MODULE: {
+                if (!lhs->expr_val.is_concrete) {
+                    // todo: remove
+                    UNREACHABLE();
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = ERROR_ANALYSIS_EXPECTED_CONSTANT,
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("expected a constant module"),
+                        .args = ORERR_ARGS(error_arg_node(lhs)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
+                    INVALIDATE(expr);
+                    break;
+                }
+
+                ast_node_t *module = (ast_node_t*)lhs->expr_val.word.as.p;
+                scope_t *found_scope;
+                ast_node_t *defval = get_defval_or_null_by_identifier_and_error(analyzer, ast, &module->defined_scope, expr, &found_scope);
+                if (defval == NULL) {
+                    INVALIDATE(expr);
+                    break;
+                }
+
+                expr->node_type = AST_NODE_TYPE_EXPRESSION_DEF_VALUE;
+                expr->ref_decl = defval;
+                expr->value_type = defval->value_type;
+                expr->expr_val = defval->expr_val;
                 break;
             }
 
@@ -4472,6 +4501,10 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
         declare_definition(analyzer, state.scope, decl);
     }
 
+    if (state.scope->type == SCOPE_TYPE_MODULE) {
+        decl->is_global = true;
+    }
+
     if (TYPE_IS_INVALID(decl->value_type)) {
         return;
     }
@@ -4665,7 +4698,7 @@ static ast_node_t *get_builtin_decl(ast_t *ast, string_view_t identifier) {
 static ast_node_t *get_defval_or_null_by_identifier_and_error(
         analyzer_t *analyzer,
         ast_t *ast,
-        analysis_state_t state,
+        scope_t *scope,
         ast_node_t *def,
         scope_t **search_scope) { // TODO: consider removing search scope from params, check if it's actually used
 
@@ -4682,7 +4715,7 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
     }
 
     word_t def_slot;
-    *search_scope = state.scope;
+    *search_scope = scope;
 
     ast_node_t *decl = NULL;
 
@@ -4722,11 +4755,11 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
             return NULL;
         }
 
-        if (passed_local_mutable_access_barrier && decl->is_mutable) {
+        if (passed_local_mutable_access_barrier && decl->is_mutable && (*search_scope)->type != SCOPE_TYPE_MODULE) {
             stan_error(analyzer, OR_ERROR(
                 .tag = ERROR_ANALYSIS_DEFINITION_DOES_NOT_EXIST_IN_THE_SAME_RUN_SCOPE,
                 .level = ERROR_SOURCE_ANALYSIS,
-                .msg = lit2str("declaration for '$2.$' does not exist in the same run scope it's being used in"),
+                .msg = lit2str("declaration for '$2.$' does not exist in the same local scope it's being used in"),
                 .args = ORERR_ARGS(error_arg_node(def), error_arg_node(decl),
                     error_arg_token(decl->identifier)),
                 .show_code_lines = ORERR_LINES(0, 1),
@@ -4765,7 +4798,7 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
     MUST(decl->node_type == AST_NODE_TYPE_DECLARATION_DEFINITION);
 
     if (TYPE_IS_UNRESOLVED(decl->value_type)) {
-        analysis_state_t new_state = state;
+        analysis_state_t new_state = {0};
         new_state.scope = *search_scope;
         size_t dep_start = stan_declaration_is_recursive(analyzer, decl);
         if (dep_start < analyzer->pending_dependencies.count) {
@@ -4820,8 +4853,27 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
     return decl;
 }
 
+static ast_node_t *stan_find_owning_module_or_null(scope_t *scope) {
+    while (scope && scope->type != SCOPE_TYPE_MODULE) {
+        scope = scope->outer;
+    }
+
+    if (scope) {
+        return scope->creator;
+    } else {
+        return NULL;
+    }
+}
+
 static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t state, ast_node_t *funcdef) {
     ASSERT(funcdef->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION, "must be function declaration at this point");
+
+    // todo: is it possible to do this at parse time?
+    {
+        ast_node_t *module = stan_find_owning_module_or_null(state.scope);
+        MUST(module);
+        array_push(&module->owned_funcdefs, funcdef);
+    }
 
     scope_init(&funcdef->defined_scope, ast->arena, SCOPE_TYPE_FUNCDEF, state.scope, funcdef);
     
