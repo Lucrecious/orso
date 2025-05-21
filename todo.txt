@@ -1,5 +1,7 @@
+Bugs:
+    - circular dependencies across module global variables produces wrong and bugged out error message
 Roadmap to 0.5v
-- custom modules (multifile programs)
+- remove unless and until, leave only if and while
 - strings
     - implemented in core, with regular string syntactic sugar
     - warning that only memory is compared
@@ -11,7 +13,7 @@ Roadmap to 0.5v
     - basically, do not output errors that only result from a propogating error (like if a type is invalid don't error just keep going)
     - cover all errors
 - type list exposed as a module
-- ffi but only for native and scripts
+- ffi
 - compiler as module
 - switch expression
     - keep it simple
@@ -22,7 +24,7 @@ Roadmap to 0.5v
 
 #Roadmap to 1.0v:
 - inferred function are first-class citizens at compile-time
-- paramterized structs are first-class citizens as compile-time
+- paramterized structs are first-class citizens at compile-time
 - #insert-like directive
 - strings - better encoding
 - parameterized structs can be inferred
@@ -34,10 +36,10 @@ Roadmap to 0.5v
 - switch expression
     - add some optimization strategies 
 - strings
-    - they compare contents not ptrs
     - string library
 - compile-time macros
-    - @if, @assert, @inline
+    - @if - compile-time if/else
+    - @assert, @inline
 - custom replacing macros (ast only, function-like)
 - expose ast to language as module
 - allow custom compile-time directives 

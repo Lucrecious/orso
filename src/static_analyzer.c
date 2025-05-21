@@ -2447,7 +2447,7 @@ static ast_node_t *stan_load_module_or_errornull(analyzer_t *analyzer, ast_t *as
         nob_return_defer(NULL);
     }
 
-    source = cstrn2string(sb.items, sb.count, tmp->allocator);
+    source = cstrn2string(sb.items, sb.count, ast->arena);
 
     module = parse_source_into_module(ast, s, string2sv(source));
 
@@ -4465,6 +4465,8 @@ static void forward_scan_inferred_types(ast_node_t *decl, ast_node_t *decl_type,
 }
 
 static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, analysis_state_t state, ast_node_t *decl) {
+    if (TYPE_IS_RESOLVED(decl->value_type)) return;
+
     array_push(&analyzer->pending_dependencies, decl);
 
     ast_node_t *decl_type = an_decl_type(decl);

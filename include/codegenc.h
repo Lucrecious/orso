@@ -2226,11 +2226,7 @@ static void cgen_struct(cgen_t *cgen, type_t type, bools_t *bools) {
     allocator_return(tmp);
 }
 
-void cgen_functions(cgen_t *cgen, cgen_t *cgenh, ast_node_t *module) {
-    cgen_forward_declare_functions(cgenh, module);
-
-    sb_add_cstr(&cgen->sb, "\n");
-
+void cgen_define_functions(cgen_t *cgen, ast_node_t *module) {
     cgen_function_definitions(cgen, module);
 }
 
@@ -2413,7 +2409,7 @@ static void cgen_end_h(cgen_t *cgenh) {
 
 void cgen_init_function_file(cgen_t *cgen, cgen_t *cgenh, ast_t *ast) {
     // size_t id = ++(*cgen->state.tmp_count);
-    string_t init_func_name = string_format("__orminit_", cgen->tmp_arena);
+    string_t init_func_name = lit2str("__orminit_");//string_format("__orminit_", cgen->tmp_arena);
 
     // .h
     {
@@ -2474,6 +2470,8 @@ static void cgen_module(cgen_t *cgen, cgen_t *cgenh, bool is_core, ast_node_t *m
 
         cgen_global_decls(cgenh, module);
 
+        cgen_forward_declare_functions(cgenh, module);
+
         cgen_end_h(cgenh);
     }
 
@@ -2495,7 +2493,7 @@ static void cgen_module(cgen_t *cgen, cgen_t *cgenh, bool is_core, ast_node_t *m
             }
         }
 
-        cgen_functions(cgen, cgenh, module);
+        cgen_define_functions(cgen, module);
     }
 }
 
@@ -2512,7 +2510,7 @@ static string_t cgen_generate_associated_c_from_h_filename(string_t hfilename, a
     return cname;
 }
 
-static void cgen_generate_associated_h_filename(ast_t *ast) {
+static void cgen_generate_associated_h_filenames(ast_t *ast) {
     ast->core_module_or_null->ccode_associated_h = lit2str("core.h");
 
     string_t moduleid;
@@ -2534,7 +2532,7 @@ static void cgen_generate_global_names(ast_t *ast, cgen_state_t state) {
 bool compile_ast_to_c(ast_t *ast, string_t build_directory, strings_t *sources, arena_t *arena) {
     cgen_generate_cnames_for_types(ast);
 
-    cgen_generate_associated_h_filename(ast);
+    cgen_generate_associated_h_filenames(ast);
 
     tmp_arena_t *tmp = allocator_borrow();
     cgen_state_t cgen_state = make_cgen_state(tmp->allocator);
@@ -2544,7 +2542,6 @@ bool compile_ast_to_c(ast_t *ast, string_t build_directory, strings_t *sources, 
 
     {
         ast_node_t *module;
-        kh_foreach_value(ast->moduleid2node, module, cgen_cache_requires_tmp(&ast->type_set.types, module));
         kh_foreach_value(ast->moduleid2node, module, cgen_cache_requires_tmp(&ast->type_set.types, module));
         kh_foreach_value(ast->moduleid2node, module, cgen_generate_function_names(ast, cgen_state, module));
     }
