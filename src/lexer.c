@@ -128,7 +128,7 @@ static void skip_whitespace(lexer_t *lexer) {
                 advance(lexer);
                 break;
             case '\n':
-                lexer->line++;
+                ++lexer->line;
                 lexer->line_start = lexer->current;
                 advance(lexer);
                 break;
@@ -143,7 +143,8 @@ static bool skip_comments(lexer_t *lexer) {
         while (!is_at_end(lexer)) {
             char c = advance(lexer);
             if (c == '\n') {
-                lexer->line++;
+                ++lexer->line;
+                lexer->line_start = lexer->current-1;
                 return true;
             }
         }
@@ -166,7 +167,10 @@ static bool skip_comments(lexer_t *lexer) {
             }
 
             char c = advance(lexer);
-            lexer->line += (c == '\n');
+            if (c == '\n') {
+                ++lexer->line;
+                lexer->line_start = lexer->current;
+            }
         }
 
         error_token(lexer, lit2sv("Expected closing comment */ before file end"));

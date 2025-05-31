@@ -7,21 +7,9 @@
 #include "vm.h"
 #include "codegen.h"
 #include "tmp.h"
-#include "core.h"
 #include "../nob.h"
 
 #include "intrinsics.h"
-
-#define X(export_fn_name, c_fn_name, return_type, code, ...) { .name=(#export_fn_name), .cname=(#c_fn_name), .fn=(c_fn_name##_i_) },
-#define XARG(name, type)
-#define XRET(type, c_fn_name, ...)
-struct { cstr_t name; cstr_t cname; intrinsic_fn_t fn; } intrinsic_fns[] = {
-#undef XRET
-#undef XARG
-#include "intrinsic_fns.x"
-};
-#undef X
-#define INTRINSIC_FUNCTION_COUNT (sizeof(intrinsic_fns) / sizeof(intrinsic_fns[0]))
 
 #define EXPRESSION_RESOLVED(expression) (!TYPE_IS_UNRESOLVED((expression)->value_type))
 
@@ -63,15 +51,6 @@ static ast_node_t *add_builtin_definition(ast_t *ast, string_view_t identifier, 
     decl->is_mutable = false;
 
     table_put(s2w, ast->builtins, sv2string(identifier, ast->arena), WORDP(decl));
-
-    for (size_t i = 0; i < INTRINSIC_FUNCTION_COUNT; ++i) {
-        string_t name = cstr2string(intrinsic_fns[i].name, ast->arena);
-        string_t cname = cstr2string(intrinsic_fns[i].cname, ast->arena);
-        intrinsic_fn_t fn = intrinsic_fns[i].fn;
-
-        table_put(s2w, ast->intrinsic_fns, name, WORDP(fn));
-        table_put(p2s, ast->intrinsicfn2cname, fn, cname);
-    }
 
     return decl;
 }
@@ -2377,6 +2356,16 @@ string_t ast_word2str(ast_t *ast, word_t word) {
     return s;
 }
 
+static ffi_t make_ffi(ast_t *ast) {
+    ffi_t ffi = {0};
+    ffi.arg_types = (types_t){.allocator=ast->arena};
+    ffi.funcname = lit2str("");
+    ffi.libpath = lit2str("");
+    ffi.node = &nil_node;
+    ffi.return_type = typeid(TYPE_INVALID);
+    return ffi;
+}
+
 
 string_t ast_generate_moduleid(string_t file_path, arena_t *arena) {
     tmp_arena_t *tmp = allocator_borrow();
@@ -2419,6 +2408,35 @@ static void resolve_module(analyzer_t *analyzer, ast_t *ast, ast_node_t *module)
     if (last_decl < module->children.count) {
         module->children.count = last_decl+1;
     }
+}
+
+static bool resolve_directive_argument(analyzer_t *analyzer, ast_t *ast, analysis_state_t state, ast_node_t *arg, size_t arg_zero_based_pos, type_t expected_type) {
+    resolve_expression(analyzer, ast, state, typeid(TYPE_STRING), arg, true);
+    if (!typeid_eq(expected_type, arg->value_type)) {
+        if (!TYPE_IS_INVALID(arg->value_type)) {
+            stan_error(analyzer, OR_ERROR(
+                .tag = ERROR_ANALYSIS_NUMBER_ARGS_CALL_FUNC_MISTMATCH,
+                .level = ERROR_SOURCE_ANALYSIS,
+                .msg = lit2str("'fficall' argument $3.$ requires a '$1.$' but got '$2.$'"),
+                .args = ORERR_ARGS(error_arg_node(arg), error_arg_type(expected_type), error_arg_type(arg->value_type), error_arg_sz(arg_zero_based_pos + 1)),
+                .show_code_lines = ORERR_LINES(0),
+            ));
+        }
+        return false;
+    }
+
+    if (!arg->expr_val.is_concrete) {
+        stan_error(analyzer, OR_ERROR(
+            .tag = ERROR_ANALYSIS_EXPECTED_CONSTANT,
+            .level = ERROR_SOURCE_ANALYSIS,
+            .msg = lit2str("'fficall' argument $1.$ must be a constant"),
+            .args = ORERR_ARGS(error_arg_node(arg), error_arg_sz(arg_zero_based_pos+1)),
+            .show_code_lines = ORERR_LINES(0),
+        ));
+        return false;
+    }
+
+    return true;
 }
 
 static ast_node_t *stan_load_module_or_errornull(analyzer_t *analyzer, ast_t *ast, ast_node_t *arg_ref, string_view_t module_path) {
@@ -2531,6 +2549,18 @@ void resolve_expression(
                     expr->expr_val = child->expr_val;
                 }
             } else if (sv_eq(expr->identifier.view, lit2sv("@load"))) {
+                if (expr->children.count == 0) {
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = ERROR_ANALYSIS_ARG_REQUIRED,
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("'load' directive requires exactly 1 'str_t' argument"),
+                        .args = ORERR_ARGS(error_arg_node(expr)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
+                    INVALIDATE(expr);
+                    break;
+                }
+
                 ast_node_t *child = expr->children.items[0];
                 resolve_expression(analyzer, ast, state, implicit_type, child, true);
 
@@ -2575,6 +2605,145 @@ void resolve_expression(
                         array_push(&owning_module->module_deps, module);
                     }
                 }
+            } else if (sv_eq(expr->identifier.view, lit2sv("@fficall"))) {
+                if (expr->children.count < an_fficall_arg_start(expr)) {
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = ERROR_ANALYSIS_NUMBER_ARGS_CALL_FUNC_MISTMATCH,
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("'fficall' requires at least 4 arguments: <lib>, <call convention>, <return type>, <function name>, [args]"),
+                        .args = ORERR_ARGS(error_arg_node(expr)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
+                    INVALIDATE(expr);
+                    break;
+                }
+
+                ast_node_t *libpath_node = an_fficall_libpath(expr);
+                if (!resolve_directive_argument(analyzer, ast, state, libpath_node, 0, typeid(TYPE_STRING))) {
+                    INVALIDATE(expr);
+                    break;
+                }
+
+                tmp_arena_t *tmp = allocator_borrow();
+
+                string_t libpath = ast_word2str(ast, libpath_node->expr_val.word);
+                string_t abslibpath;
+                if (!core_abspath(libpath, tmp->allocator, &abslibpath)) {
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = ERROR_ANALYSIS_ARG_REQUIRED,
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("'$1.$' cannot get library absolute path"),
+                        .args = ORERR_ARGS(error_arg_node(expr->children.items[0]), error_arg_str(ast, libpath)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
+                }
+
+                allocator_return(tmp);
+
+                ast_node_t *callconv_node = an_fficall_callconv(expr);
+                if (!resolve_directive_argument(analyzer, ast, state, callconv_node, 1, typeid(TYPE_STRING))) {
+                    INVALIDATE(expr);
+                    break;
+                }
+
+                ast_node_t *retarg_node = an_fficall_rettype(expr);
+                if (!resolve_directive_argument(analyzer, ast, state, retarg_node, 2, typeid(TYPE_TYPE))) {
+                    INVALIDATE(expr);
+                    break;
+                }
+
+                type_t fficall_return_type = retarg_node->expr_val.word.as.t;
+
+                ast_node_t *funcname_node = an_fficall_funcname(expr);
+                if (!resolve_directive_argument(analyzer, ast, state, funcname_node, 3, typeid(TYPE_STRING))) {
+                    INVALIDATE(expr);
+                    break;
+                }
+
+                tmp = allocator_borrow();
+
+                size_t arg_count = an_fficall_arg_end(expr) - an_fficall_arg_start(expr);
+
+                types_t types = {.allocator=tmp->allocator};
+
+                for (size_t i = an_fficall_arg_start(expr); i < an_fficall_arg_end(expr); ++i) {
+                    ast_node_t *arg = expr->children.items[i];
+                    resolve_expression(analyzer, ast, state, typeid(TYPE_UNRESOLVED), arg, true);
+                    if (!TYPE_IS_INVALID(arg->value_type) && TYPE_IS_RESOLVED(arg->value_type)) {
+                        array_push(&types,arg->value_type);
+                    }
+                }
+
+                do {
+                    if (types.count == arg_count) {
+                        string_t funcname = ast_word2str(ast, funcname_node->expr_val.word);
+                        string_t key = string_format("%s:%s", tmp->allocator, abslibpath.cstr, funcname.cstr);
+                        ffi_t ffi;
+                        if (!table_get(s2fis, ast->ffis, key, &ffi)) {
+                            ffi_t ffi = make_ffi(ast);
+                            ffi.funcname = string_copy(funcname, ast->arena);
+                            ffi.libpath = string_copy(abslibpath, ast->arena);
+                            ffi.return_type = fficall_return_type;
+                            ffi.node = expr;
+                            for (size_t i = 0; i < types.count; ++i) {
+                                type_t arg_type = types.items[i];
+                                array_push(&ffi.arg_types, arg_type);
+                            }
+
+                            key = string_copy(key, ast->arena);
+                            table_put(s2fis, ast->ffis, key, ffi);
+                        } else {
+                            if (!typeid_eq(ffi.return_type, fficall_return_type)) {
+                                stan_error(analyzer, OR_ERROR(
+                                    .tag = ERROR_ANALYSIS_TYPE_MISMATCH,
+                                    .level = ERROR_SOURCE_ANALYSIS,
+                                    .msg = lit2str("this fficall uses a '$1.$' return type but the first fficall analyzed uses '$2.$'"),
+                                    .args = ORERR_ARGS(error_arg_node(expr), error_arg_type(fficall_return_type), error_arg_type(ffi.return_type),
+                                            error_arg_node(ffi.node)),
+                                    .show_code_lines = ORERR_LINES(0, 3),
+                                ));
+                                break;
+                            }
+
+                            if (arg_count != ffi.arg_types.count) {
+                                stan_error(analyzer, OR_ERROR(
+                                    .tag = ERROR_ANALYSIS_NUMBER_ARGS_CALL_FUNC_MISTMATCH,
+                                    .level = ERROR_SOURCE_ANALYSIS,
+                                    .msg = lit2str("this fficall has '$1.$' argument(s) but the first fficall analyzed uses '$2.$'"),
+                                    .args = ORERR_ARGS(error_arg_node(expr), error_arg_sz(arg_count), error_arg_sz(ffi.arg_types.count),
+                                            error_arg_node(ffi.node)),
+                                    .show_code_lines = ORERR_LINES(0, 3),
+                                ));
+                                break;
+                            }
+
+                            bool match = true;
+                            for (size_t i = 0; i < arg_count; ++i) {
+                                type_t expected = ffi.arg_types.items[i];
+                                type_t actual = types.items[i];
+                                if (!typeid_eq(expected, actual)) {
+                                    match = false;
+                                    stan_error(analyzer, OR_ERROR(
+                                        .tag = ERROR_ANALYSIS_NUMBER_ARGS_CALL_FUNC_MISTMATCH,
+                                        .level = ERROR_SOURCE_ANALYSIS,
+                                        .msg = lit2str("this fficall uses a '$1.$' type for argument '$2.$' but the first fficall analyzed uses '$3.$' for the same argument"),
+                                        .args = ORERR_ARGS(error_arg_node(expr), error_arg_type(actual), error_arg_sz(i+1), error_arg_type(expected),
+                                                error_arg_node(ffi.node)),
+                                        .show_code_lines = ORERR_LINES(0, 4),
+                                    ));
+                                }
+                            }
+
+                            if (!match) {
+                                break;
+                            }
+                        }
+                    }
+                } while(false);
+
+                allocator_return(tmp);
+
+                expr->value_type = fficall_return_type;
             }
             break;
         }

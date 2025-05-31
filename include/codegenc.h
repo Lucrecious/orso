@@ -290,6 +290,15 @@ static void cgen_cache_requires_tmp(typedatas_t *types, ast_node_t *expression) 
             break;
         }
 
+        case AST_NODE_TYPE_EXPRESSION_DIRECTIVE: {
+            if (sv_eq(expression->identifier.view, lit2sv("@fficall"))) {
+                expression->requires_tmp_for_cgen = true;
+            } else {
+                expression->requires_tmp_for_cgen = false;
+            }
+            break;
+        }
+
         case AST_NODE_TYPE_EXPRESSION_BRANCHING:
         case AST_NODE_TYPE_EXPRESSION_JMP:
         case AST_NODE_TYPE_EXPRESSION_BLOCK: {
@@ -1933,38 +1942,49 @@ static void cgen_dot_access(cgen_t *cgen, ast_node_t *dot, cgen_var_t var) {
 
         sb_add_format(&cgen->sb, "%s%.*s", operator, dot->identifier.view.length, dot->identifier.view.data);
     } else {
-        cgen_var_t lhs_var;
-        // if (an_is_notnone(dot->lvalue_node)) {
-        //     lhs_var = cgen_next_tmpid(cgen, dot->value_type);
+        cgen_var_t lhs_var = cgen_next_tmpid(cgen, lhs->value_type);
+        cgen_statement(cgen, lhs, lhs_var, false);
 
-        //     cgen_lvalue(cgen, dot->lvalue_node, lhs_var);
-        //     cgen_semicolon_nl(cgen);
+        cgen_add_indent(cgen);
 
-        //     cgen_add_indent(cgen);
+        if (has_var(var)) {
+            sb_add_format(&cgen->sb, "%s = ", cgen_var(cgen, var));
+        }
 
-        //     if (has_var(var)) {
-        //         sb_add_format(&cgen->sb, "%s = ", cgen_var(cgen, var));
-        //     }
-
-        //     sb_add_format(&cgen->sb, "(*%s)", cgen_var_name(cgen, lhs_var));
-        // } else {
-            lhs_var = cgen_next_tmpid(cgen, lhs->value_type);
-            cgen_statement(cgen, lhs, lhs_var, false);
-
-            cgen_add_indent(cgen);
-
-            if (has_var(var)) {
-                sb_add_format(&cgen->sb, "%s = ", cgen_var(cgen, var));
-            }
-
-            // cstr_t deref = "";
-            // if (an_is_notnone(dot->lvalue_node)) {
-            //     deref = "*";
-            // }
-
-            sb_add_format(&cgen->sb, "(%s%s)%s%.*s", "", cgen_var_name(cgen, lhs_var), operator, dot->identifier.view.length, dot->identifier.view.data);
-        // }
+        sb_add_format(&cgen->sb, "(%s%s)%s%.*s", "", cgen_var_name(cgen, lhs_var), operator, dot->identifier.view.length, dot->identifier.view.data);
     }
+}
+
+static void cgen_fficall(cgen_t *cgen, ast_node_t *fficall, cgen_var_t var) {
+    MUST(fficall->requires_tmp_for_cgen);
+
+    size_t arg_count = an_fficall_arg_end(fficall) - an_fficall_arg_start(fficall);
+    cgen_var_t vars[arg_count];
+
+    for (size_t i = an_fficall_arg_start(fficall); i < an_fficall_arg_end(fficall); ++i) {
+        ast_node_t *arg = fficall->children.items[i];
+
+        cgen_var_t tmp = cgen_next_tmpid(cgen, arg->value_type);
+        vars[i-an_fficall_arg_start(arg)] = tmp;
+        cgen_statement(cgen, arg, tmp, i != an_fficall_arg_start(arg));
+    }
+
+    if (arg_count > 0) {
+        cgen_add_indent(cgen);
+    }
+
+    if (has_var(var)) {
+        sb_add_format(&cgen->sb, "%s = ", cgen_var(cgen, var));
+    }
+
+    sb_add_format(&cgen->sb, "%s(", fficall->ccode_var_name.cstr);
+    for (size_t i = 0; i < arg_count; ++i) {
+        cgen_var_t tmp = vars[i];
+        sb_add_format(&cgen->sb, "%s", cgen_var_name(cgen, tmp));
+    }
+    sb_add_cstr(&cgen->sb, ")");
+
+    cgen_semicolon_nl(cgen);
 }
 
 static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var) {
@@ -2066,6 +2086,12 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
         }
 
         case AST_NODE_TYPE_EXPRESSION_STRUCT: break;
+
+        case AST_NODE_TYPE_EXPRESSION_DIRECTIVE: {
+            MUST(sv_eq(expression->identifier.view, lit2sv("@fficall")));
+            cgen_fficall(cgen, expression, var);
+            break;
+        }
 
         default: UNREACHABLE(); break;
     }

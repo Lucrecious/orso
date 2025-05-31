@@ -4,5 +4,3 @@ str8_t :: struct {
     cstr := (&char).{};
     length := 0;
 };
-
-print :: (s: str8_t) -> void {};

@@ -1,5 +1,0 @@
-io :: @load "./lib/io.or";
-cc :: @load "./lib/compiler.or";
-
-main :: () -> void {
-};

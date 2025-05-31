@@ -45,8 +45,18 @@ typedef enum scope_type_t {
     SCOPE_TYPE_INFERRED_PARAMS          = 1 << 9,
 } scope_type_t;
 
+typedef struct ffi_t ffi_t;
+struct ffi_t {
+    string_t funcname;
+    string_t libpath;
+    type_t return_type;
+    types_t arg_types;
+    ast_node_t *node;
+};
+
 declare_table(s2w, string_t, word_t)
 declare_table(s2n, string_t, ast_node_t*)
+declare_table(s2fis, string_t, ffi_t)
 
 typedef struct scope_t {
     ast_node_t *creator;
@@ -180,6 +190,13 @@ ast_node_t nil_node;
 #define an_struct_start(n) ((n)->param_end)
 #define an_struct_end(n) ((n)->children.count)
 #define an_dot_lhs(n) ((n)->children.items[0])
+
+#define an_fficall_libpath(n) ((n)->children.items[0])
+#define an_fficall_callconv(n) ((n)->children.items[1])
+#define an_fficall_rettype(n) ((n)->children.items[2])
+#define an_fficall_funcname(n) ((n)->children.items[3])
+#define an_fficall_arg_start(n) (4)
+#define an_fficall_arg_end(n) ((n)->children.count)
 
 #define an_is_none(n)    ((n)->node_type == AST_NODE_TYPE_NONE)
 #define an_is_notnone(n) ((n)->node_type != AST_NODE_TYPE_NONE)
@@ -399,6 +416,7 @@ typedef struct ast_t {
     table_t(s2w) *intrinsic_fns;
     table_t(p2s) *intrinsicfn2cname;
     table_t(fn2an) *fn2an;
+    table_t(s2fis) *ffis;
 
 
     ast_node_t *core_module_or_null;

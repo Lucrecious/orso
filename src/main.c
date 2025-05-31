@@ -118,7 +118,7 @@ ast_t *build_ast(string_t source, arena_t *arena, string_t file_path) {
     ast->vm = vm_default(arena);
 
     {
-        string_t core_path = lit2str("./bin/core.odl");
+        string_t core_path = lit2str("./bin/core.or");
         Nob_String_Builder sb = {0};
         bool success = nob_read_entire_file(core_path.cstr, &sb);
         if (!success) abort();

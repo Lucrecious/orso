@@ -1,0 +1,8 @@
+println :: (s: str8_t) -> void {
+    @fficall "./lib/libcore.a", "cdecl", void, "println", s.cstr;
+    @fficall "./lib/libcore.a", "cdecl", void, "println", s.cstr;
+};
+
+main :: () -> void {
+    println("Hello, world!");
+};

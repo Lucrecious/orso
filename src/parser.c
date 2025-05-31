@@ -91,6 +91,7 @@ uint32_t fnv1_hash__(string_t s) {
 
 implement_table(s2w, string_t, word_t, fnv1_hash__, streq___)
 implement_table(s2n, string_t, ast_node_t*, fnv1_hash__, streq___)
+implement_table(s2fis, string_t, ffi_t, fnv1_hash__, streq___)
 
 khint_t hashptr_(void *ptr) {
     return (khint_t)(u64)ptr;
@@ -155,6 +156,7 @@ void ast_init(ast_t *ast, arena_t *arena) {
     ast->intrinsicfn2cname = table_new(p2s, ast->arena);
     ast->fn2an = table_new(fn2an, ast->arena);
     ast->moduleid2node = table_new(s2n, ast->arena);
+    ast->ffis = table_new(s2fis, ast->arena);
 
     ast->global_decls_in_resolution_order = (ast_nodes_t){.allocator=ast->arena};
 
