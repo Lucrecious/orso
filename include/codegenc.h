@@ -6,7 +6,7 @@
 #include "tmp.h"
 #include <inttypes.h>
 
-bool compile_ast_to_c(ast_t *ast, string_t build_directory, strings_t* sources, arena_t *arena);
+bool compile_ast_to_c(ast_t *ast, string_t build_directory, strings_t *sources, strings_t *libs, arena_t *arena);
 
 #endif
 
@@ -1955,6 +1955,15 @@ static void cgen_dot_access(cgen_t *cgen, ast_node_t *dot, cgen_var_t var) {
     }
 }
 
+static string_t ffi_cfuncname(ffi_t *ffi, arena_t *arena) {
+    string_t libpath = ffi->libpath;
+    string_view_t prefix = sv_filename(string2sv(libpath));
+    prefix = sv_no_ext(prefix);
+
+    string_t result = string_format("__orffi%.*s_%s", arena, prefix.length, prefix.data, ffi->funcname);
+    return result;
+}
+
 static void cgen_fficall(cgen_t *cgen, ast_node_t *fficall, cgen_var_t var) {
     MUST(fficall->requires_tmp_for_cgen);
 
@@ -1977,7 +1986,13 @@ static void cgen_fficall(cgen_t *cgen, ast_node_t *fficall, cgen_var_t var) {
         sb_add_format(&cgen->sb, "%s = ", cgen_var(cgen, var));
     }
 
-    sb_add_format(&cgen->sb, "%s(", fficall->ccode_var_name.cstr);
+    {
+        MUST(fficall->ffi_or_null);
+        tmp_arena_t *tmp = allocator_borrow();
+        sb_add_format(&cgen->sb, "%s(", ffi_cfuncname(fficall->ffi_or_null, tmp->allocator).cstr);
+
+        allocator_return(tmp);
+    }
     for (size_t i = 0; i < arg_count; ++i) {
         cgen_var_t tmp = vars[i];
         sb_add_format(&cgen->sb, "%s", cgen_var_name(cgen, tmp));
@@ -2424,9 +2439,9 @@ void cgen_declare_global_decls(cgen_t *cgen, ast_nodes_t *decls) {
     sb_add_cstr(&cgen->sb, "\n");
 }
 
-static void cgen_begin_h(cgen_t *cgenh, string_t moduleid) {
-    sb_add_format(&cgenh->sb, "#ifndef %s\n", moduleid.cstr);
-    sb_add_format(&cgenh->sb, "#define %s\n\n", moduleid.cstr);
+static void cgen_begin_h(cgen_t *cgenh, string_t header_define) {
+    sb_add_format(&cgenh->sb, "#ifndef %s\n", header_define.cstr);
+    sb_add_format(&cgenh->sb, "#define %s\n\n", header_define.cstr);
 }
 
 static void cgen_end_h(cgen_t *cgenh) {
@@ -2512,6 +2527,7 @@ static void cgen_module(cgen_t *cgen, cgen_t *cgenh, bool is_core, ast_node_t *m
         } else {
             cgen_add_include(cgen, module->ccode_associated_h.cstr);
             cgen_add_include(cgen, "core.h");
+            cgen_add_include(cgen, "orffi.h");
 
             for (size_t i = 0; i < module->module_deps.count; ++i) {
                 ast_node_t *m = module->module_deps.items[i];
@@ -2555,7 +2571,191 @@ static void cgen_generate_global_names(ast_t *ast, cgen_state_t state) {
     }
 }
 
-bool compile_ast_to_c(ast_t *ast, string_t build_directory, strings_t *sources, arena_t *arena) {
+typedef struct ffis_t ffis_t;
+struct ffis_t {
+    ffi_t **items;
+    size_t capacity;
+    size_t count;
+    arena_t *allocator;
+};
+
+typedef struct ffilib_t ffilib_t;
+struct ffilib_t {
+    string_t libpath;
+    ffis_t ffis;
+};
+
+typedef struct ffilibs_t ffilibs_t;
+struct ffilibs_t {
+    struct ffilib_t *items;
+    size_t count;
+    size_t capacity;
+    arena_t *allocator;
+};
+
+
+static bool find_ffilib(ffilibs_t *libs, string_t libpath, ffilib_t **ffilib) {
+    for (size_t i = 0; i < libs->count; ++i) {
+        string_t path = libs->items[i].libpath;
+        if (string_eq(path, libpath)) {
+            *ffilib = &libs->items[i];
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static bool cgen_generate_ffi(ast_t *ast, cgen_t *cgen, cgen_t *cgenh, cgen_state_t cgen_state, string_t build_dir, strings_t *sources, strings_t *libpaths) {
+    tmp_arena_t *tmp = allocator_borrow();
+
+    ffilibs_t libs = {.allocator=tmp->allocator};
+    {
+        string_t key;
+        ffi_t *ffi;
+        kh_foreach(ast->ffis, key, ffi, {
+            ffilib_t *fl = NULL;
+            if (!find_ffilib(&libs, ffi->libpath, &fl)) {
+                ffilib_t flib = {0};
+                flib.libpath = ffi->libpath;
+                flib.ffis = (ffis_t){.allocator=tmp->allocator};
+                array_push(&libs, flib);
+                fl = &libs.items[libs.count-1];
+
+                array_push(libpaths, flib.libpath);
+            }
+
+            array_push(&fl->ffis, ffi);
+        });
+    }
+
+    bool success = true;
+
+    strings_t ffihs = {.allocator=tmp->allocator};
+
+    for (size_t i = 0; i < libs.count; ++i) {
+        *cgen = make_cgen(ast, tmp->allocator, cgen_state);
+        *cgenh = make_cgen(ast, tmp->allocator, cgen_state);
+
+        string_t libpath = libs.items[i].libpath;
+        ffilib_t lib = libs.items[i];
+
+        string_view_t filename = sv_no_ext(sv_filename(string2sv(libpath)));
+        string_t header_define = string_format("orffi%.*s_H_", tmp->allocator, filename.length, filename.data);
+
+        // h
+        {
+            cgen_begin_h(cgenh, header_define);
+
+            cgen_add_include(cgenh, "core.h");
+
+            for (size_t j = 0; j < lib.ffis.count; ++j) {
+                ffi_t *ffi = libs.items[i].ffis.items[j];
+
+                sb_add_format(&cgenh->sb, "%s %s(", cgen_type_name(cgenh, ffi->return_type), ffi_cfuncname(ffi, tmp->allocator).cstr);
+                for (size_t i = 0; i < ffi->arg_types.count; ++i) {
+                    if (i != 0) {
+                        sb_add_cstr(&cgenh->sb, ", ");
+                    }
+
+                    sb_add_format(&cgenh->sb, "%s", cgen_type_name(cgenh, ffi->arg_types.items[i]));
+                }
+
+                sb_add_cstr(&cgenh->sb, ")");
+                cgen_semicolon_nl(cgenh);
+            }
+
+            cgen_end_h(cgenh);
+        }
+
+        // c
+        {
+            string_t orffih = string_format("orffi%.*s.h", tmp->allocator, filename.length, filename.data);
+            array_push(&ffihs, orffih);
+
+            cgen_add_include(cgen, orffih.cstr);
+
+            for (size_t j = 0; j < lib.ffis.count; ++j) {
+                ffi_t *ffi = libs.items[i].ffis.items[j];
+
+                sb_add_format(&cgen->sb, "%s %s(", cgen_type_name(cgen, ffi->return_type), ffi->funcname.cstr);
+
+                for (size_t i = 0; i < ffi->arg_types.count; ++i) {
+                    if (i != 0) {
+                        sb_add_cstr(&cgen->sb, ", ");
+                    }
+
+                    sb_add_format(&cgen->sb, "%s", cgen_type_name(cgen, ffi->arg_types.items[i]));
+                }
+                sb_add_cstr(&cgen->sb, ")");
+                cgen_semicolon_nl(cgen);
+
+                sb_add_format(&cgen->sb, "%s %s(", cgen_type_name(cgen, ffi->return_type), ffi_cfuncname(ffi, tmp->allocator).cstr);
+                for (size_t i = 0; i < ffi->arg_types.count; ++i) {
+                    if (i != 0) {
+                        sb_add_cstr(&cgen->sb, ", ");
+                    }
+
+                    sb_add_format(&cgen->sb, "%s arg%zu", cgen_type_name(cgen, ffi->arg_types.items[i]), i);
+                }
+
+                sb_add_cstr(&cgen->sb, ") {\n");
+                
+                cgen_indent(cgen);
+                cgen_add_indent(cgen);
+                if (!TYPE_IS_VOID(ffi->return_type)) {
+                    sb_add_cstr(&cgen->sb, "return ");
+                }
+
+                sb_add_format(&cgen->sb, "%s(", ffi->funcname.cstr);
+                for (size_t i = 0; i < ffi->arg_types.count; ++i) {
+                    if (i != 0) {
+                        sb_add_cstr(&cgen->sb, ", ");
+                    }
+
+                    sb_add_format(&cgen->sb, "arg%zu", i);
+                }
+
+                sb_add_cstr(&cgen->sb, ")");
+                cgen_semicolon_nl(cgen);
+
+                cgen_unindent(cgen);
+                cgen_add_indent(cgen);
+
+                sb_add_cstr(&cgen->sb, "}\n\n");
+            }
+        }
+
+        string_t orffic = string_format("%sorffi%.*s.c", tmp->allocator, build_dir.cstr, filename.length, filename.data);
+        string_t orffih = string_format("%sorffi%.*s.h", tmp->allocator, build_dir.cstr, filename.length, filename.data);
+        array_push(sources, orffic);
+
+        success &= write_entire_file(orffic.cstr, cgen->sb.items, cgen->sb.count);
+        success &= write_entire_file(orffih.cstr, cgenh->sb.items, cgenh->sb.count);
+    }
+
+    // orffi.h
+    {
+        *cgenh = make_cgen(ast, tmp->allocator, cgen_state);
+        cgen_begin_h(cgenh, lit2str("ORFFI_H_"));
+
+        for (size_t i = 0; i < ffihs.count; ++i) {
+            string_t h = ffihs.items[i];
+            cgen_add_include(cgenh, h.cstr);
+        }
+
+        cgen_end_h(cgenh);
+
+        string_t h = string_format("%sorffi.h", tmp->allocator, build_dir.cstr);
+        success &= write_entire_file(h.cstr, cgenh->sb.items, cgenh->sb.count);
+    }
+
+    allocator_return(tmp);
+
+    return success;
+}
+
+bool compile_ast_to_c(ast_t *ast, string_t build_directory, strings_t *sources, strings_t *libs, arena_t *arena) {
     cgen_generate_cnames_for_types(ast);
 
     cgen_generate_associated_h_filenames(ast);
@@ -2573,12 +2773,14 @@ bool compile_ast_to_c(ast_t *ast, string_t build_directory, strings_t *sources, 
     }
 
     *sources = (strings_t){.allocator=arena};
+    *libs = (strings_t){.allocator=arena};
 
 
     cgen_t cgen = {0};
     cgen_t cgenh = {0};
-
     bool success = true;
+
+    // core
     {
         cgen = make_cgen(ast, tmp->allocator, cgen_state);
         cgenh = make_cgen(ast, tmp->allocator, cgen_state);
@@ -2586,7 +2788,6 @@ bool compile_ast_to_c(ast_t *ast, string_t build_directory, strings_t *sources, 
         string_t corec = cgen_generate_associated_c_from_h_filename(ast->core_module_or_null->ccode_associated_h, tmp->allocator);
 
         cgen_module(&cgen, &cgenh, true, ast->core_module_or_null, lit2str(CORE_MODULE_NAME));
-
 
         corec = string_format("%s%s", tmp->allocator, build_directory.cstr, corec.cstr);
         array_push(sources, corec);
@@ -2597,6 +2798,12 @@ bool compile_ast_to_c(ast_t *ast, string_t build_directory, strings_t *sources, 
         success &= write_entire_file(coreh.cstr, cgenh.sb.items, cgenh.sb.count);
     }
 
+    // ffi
+    {
+        success &= cgen_generate_ffi(ast, &cgen, &cgenh, cgen_state, build_directory, sources, libs);
+    }
+
+    // init func
     {
         cgen = make_cgen(ast, tmp->allocator, cgen_state);
         cgenh = make_cgen(ast, tmp->allocator, cgen_state);
@@ -2612,6 +2819,7 @@ bool compile_ast_to_c(ast_t *ast, string_t build_directory, strings_t *sources, 
         success &= write_entire_file(init_funch.cstr, cgenh.sb.items, cgenh.sb.count);
     }
 
+    // code
     {
         string_t moduleid;
         ast_node_t *module;

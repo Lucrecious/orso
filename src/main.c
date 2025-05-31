@@ -153,8 +153,9 @@ bool generate_exe(ast_t *ast, string_t output_path) {
     tmp_arena_t *tmp = allocator_borrow();
 
     strings_t sources = {0};
+    strings_t libs = {0};
 
-    bool success = compile_ast_to_c(ast, lit2str("./build/"), &sources, tmp->allocator);
+    bool success = compile_ast_to_c(ast, lit2str("./build/"), &sources, &libs, tmp->allocator);
 
     if (success) {
         cc_t cc = cc_make(CC_GCC, tmp->allocator);
@@ -164,6 +165,11 @@ bool generate_exe(ast_t *ast, string_t output_path) {
         for (size_t i = 0; i < sources.count; ++i) {
             string_t src = sources.items[i];
             cc_source(&cc, src);
+        }
+
+        for (size_t i = 0; i < libs.count; ++i) {
+            string_t libpath = libs.items[i];
+            cc_libpath(&cc, libpath);
         }
 
         cc_include_dir(&cc, lit2str("./lib"));

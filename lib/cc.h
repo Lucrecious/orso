@@ -23,6 +23,7 @@ struct cc_t {
     string_t output_path;
     cc_output_type_t output_type;
     strings_t sources;
+    strings_t libpaths;
     strings_t include_dirs;
     strings_t no_warnings;
 };
@@ -42,6 +43,7 @@ cc_t cc_make(cc_cc_t cc_cc, arena_t *arena) {
         .cc = cc_cc,
         .arena = arena, 
         .sources = {.allocator=arena},
+        .libpaths = {.allocator=arena},
         .include_dirs = {.allocator=arena},
         .no_warnings = {.allocator=arena},
         .output_path = lit2str("a.out"),
@@ -51,6 +53,10 @@ cc_t cc_make(cc_cc_t cc_cc, arena_t *arena) {
 
 void cc_source(cc_t *cc, string_t source_path) {
     array_push(&cc->sources, string_copy(source_path, cc->arena));
+}
+
+void cc_libpath(cc_t *cc, string_t libpath) {
+    array_push(&cc->libpaths, string_copy(libpath, cc->arena));
 }
 
 void cc_include_dir(cc_t *cc, string_t dir) {
@@ -144,6 +150,11 @@ bool cc_build(cc_t *cc) {
             for (size_t i = 0; i < source_out_paths.count; ++i) {
                 string_t source_out_path = source_out_paths.items[i];
                 cmd_append(&cmd, source_out_path.cstr);
+            }
+
+            for (size_t i = 0; i < cc->libpaths.count; ++i) {
+                string_t libpath = cc->libpaths.items[i];
+                cmd_append(&cmd, libpath.cstr);
             }
 
             bool success = cmd_run_sync_and_reset(&cmd);

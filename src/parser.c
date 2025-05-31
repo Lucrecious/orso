@@ -91,7 +91,7 @@ uint32_t fnv1_hash__(string_t s) {
 
 implement_table(s2w, string_t, word_t, fnv1_hash__, streq___)
 implement_table(s2n, string_t, ast_node_t*, fnv1_hash__, streq___)
-implement_table(s2fis, string_t, ffi_t, fnv1_hash__, streq___)
+implement_table(s2fis, string_t, ffi_t*, fnv1_hash__, streq___)
 
 khint_t hashptr_(void *ptr) {
     return (khint_t)(u64)ptr;
@@ -198,6 +198,7 @@ ast_node_t *ast_node_new(arena_t *arena, ast_node_type_t node_type, token_t star
     node->ccode_break_label = lit2str("");
     node->ccode_continue_label = lit2str("");
     node->ccode_var_name = lit2str("");
+    node->ffi_or_null = NULL;
 
     node->param_end = 0;
 

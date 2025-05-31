@@ -49,6 +49,7 @@ typedef struct ffi_t ffi_t;
 struct ffi_t {
     string_t funcname;
     string_t libpath;
+    string_t callconv;
     type_t return_type;
     types_t arg_types;
     ast_node_t *node;
@@ -56,7 +57,7 @@ struct ffi_t {
 
 declare_table(s2w, string_t, word_t)
 declare_table(s2n, string_t, ast_node_t*)
-declare_table(s2fis, string_t, ffi_t)
+declare_table(s2fis, string_t, ffi_t*)
 
 typedef struct scope_t {
     ast_node_t *creator;
@@ -334,6 +335,7 @@ struct ast_node_t {
     ast_node_t *ref_decl;
     type_patterns_t type_decl_patterns;
 
+    ffi_t *ffi_or_null;
     string_t filepath;
 
     size_t param_end;
