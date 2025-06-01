@@ -941,18 +941,23 @@ static ast_node_t *parse_number(parser_t *parser) {
                 type = parser->ast->type_set.size_t_;
             } else if (sv_ends_with(numsv, "pd")) {
                 type = parser->ast->type_set.ptrdiff_t_;
+            } else if (sv_ends_with(numsv, "d")) {
+                type = parser->ast->type_set.f64_;
+            } else if (sv_ends_with(numsv, "f")) {
+                type = parser->ast->type_set.f32_;
             } else {
                 is_free_number = true;
             }
 
-            bool do_signed = true;
+            num_type_t num_type = NUM_TYPE_SIGNED;
             unless (TYPE_IS_UNRESOLVED(type)) {
                 typedata_t *td = type2typedata(&parser->ast->type_set.types, type);
-                do_signed = (td->as.num == NUM_TYPE_SIGNED);
+                num_type = td->as.num;
 
                 switch((num_size_t)td->size) {
                 case NUM_SIZE_8: {
-                    if (do_signed) {
+                    switch (num_type) {
+                    case NUM_TYPE_SIGNED: {
                         if (value > INT8_MAX) {
                             parser_error(parser, OR_ERROR(
                                 .tag = WARNING_PARSER_NUMBER_OVERFLOW,
@@ -962,7 +967,10 @@ static ast_node_t *parse_number(parser_t *parser) {
                                 .show_code_lines = ORERR_LINES(0),
                             ));
                         }
-                    } else {
+                        break;
+                    }
+
+                    case NUM_TYPE_UNSIGNED: {
                         if (value > UINT8_MAX) {
                             parser_error(parser, OR_ERROR(
                                 .tag = WARNING_PARSER_NUMBER_OVERFLOW,
@@ -972,12 +980,18 @@ static ast_node_t *parse_number(parser_t *parser) {
                                 .show_code_lines = ORERR_LINES(0),
                             ));
                         }
+                        break;
                     }
+
+                    case NUM_TYPE_FLOAT: UNREACHABLE(); break;
+                    }
+
                     break;
                 }
 
                 case NUM_SIZE_16: {
-                    if (do_signed) {
+                    switch (num_type) {
+                    case NUM_TYPE_SIGNED: {
                         if (value > INT16_MAX) {
                             parser_error(parser, OR_ERROR(
                                 .tag = WARNING_PARSER_NUMBER_OVERFLOW,
@@ -987,7 +1001,10 @@ static ast_node_t *parse_number(parser_t *parser) {
                                 .show_code_lines = ORERR_LINES(0),
                             ));
                         }
-                    } else {
+                        break;
+                    }
+
+                    case NUM_TYPE_UNSIGNED: {
                         if (value > UINT16_MAX) {
                             parser_error(parser, OR_ERROR(
                                 .tag = WARNING_PARSER_NUMBER_OVERFLOW,
@@ -997,12 +1014,17 @@ static ast_node_t *parse_number(parser_t *parser) {
                                 .show_code_lines = ORERR_LINES(0),
                             ));
                         }
+                        break;
                     }
+                    case NUM_TYPE_FLOAT: UNREACHABLE(); break;
+                    }
+
                     break;
                 }
 
                 case NUM_SIZE_32: {
-                    if (do_signed) {
+                    switch (num_type) {
+                    case NUM_TYPE_SIGNED: {
                         if (value > INT32_MAX) {
                             parser_error(parser, OR_ERROR(
                                 .tag = WARNING_PARSER_NUMBER_OVERFLOW,
@@ -1012,7 +1034,10 @@ static ast_node_t *parse_number(parser_t *parser) {
                                 .show_code_lines = ORERR_LINES(0),
                             ));
                         }
-                    } else {
+                        break;
+                    }
+
+                    case NUM_TYPE_UNSIGNED: {
                         if (value > UINT32_MAX) {
                             parser_error(parser, OR_ERROR(
                                 .tag = WARNING_PARSER_NUMBER_OVERFLOW,
@@ -1022,6 +1047,12 @@ static ast_node_t *parse_number(parser_t *parser) {
                                 .show_code_lines = ORERR_LINES(0),
                             ));
                         }
+                        break;
+                    }
+
+                    case NUM_TYPE_FLOAT: {
+                        break;
+                    }
                     }
                     break;
                 }
@@ -1032,11 +1063,23 @@ static ast_node_t *parse_number(parser_t *parser) {
 
 
             ast_node_t *primary;
-            if (do_signed) {
+            switch (num_type) {
+            case NUM_TYPE_SIGNED: {
                 primary = ast_primaryi(parser->ast, (s32)value, type, parser->previous);
-            } else {
-                primary = ast_primaryu(parser->ast, value, type, parser->previous);
+                break;
             }
+
+            case NUM_TYPE_UNSIGNED: {
+                primary = ast_primaryu(parser->ast, value, type, parser->previous);
+                break;
+            }
+
+            case NUM_TYPE_FLOAT: {
+                primary = ast_primaryf(parser->ast, value, type, parser->previous);
+                break;
+            }
+            }
+
             primary->is_free_number = is_free_number;
 
             return primary;

@@ -223,6 +223,8 @@ static token_t number(lexer_t *lexer) {
     } else if (peek(lexer) == 'p' && peek_next(lexer) == 'd') {
         advance(lexer);
         advance(lexer);
+    } else if (peek(lexer) == 'f' || peek(lexer) == 'd') {
+        advance(lexer);
     } else if (peek(lexer) == 's' || peek(lexer) == 'u') {
         advance(lexer);
 
