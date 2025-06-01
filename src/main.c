@@ -54,20 +54,10 @@
 void myerror(ast_t *ast, error_t error) {
     UNUSED(ast);
 
-    error_source_t error_source = error_sources[error.type];
-
-    switch (error_source) {
-    case ERROR_SOURCE_CODEGEN:
-    case ERROR_SOURCE_PARSEREX:
-    case ERROR_SOURCE_ANALYSIS:
-    case ERROR_SOURCE_PARSER: {
-        tmp_arena_t *tmp = allocator_borrow();
-        string_t error_str = error2richstring(ast, error, tmp->allocator);
-        fprintf(stderr, "%s", error_str.cstr);
-        allocator_return(tmp);
-        break;
-    }
-    }
+    tmp_arena_t *tmp = allocator_borrow();
+    string_t error_str = error2richstring(ast, error, tmp->allocator);
+    fprintf(stderr, "%s", error_str.cstr);
+    allocator_return(tmp);
 }
 
 void print_errors(ast_t *ast) {

@@ -355,7 +355,7 @@ string_t error2richstring(ast_t *ast, error_t error, arena_t *arena) {
         sb_add_cstr(&sb, "\n");
     }
 
-    if (error.tag == ERROR_ANALYSIS_COMPILE_TIME_CIRCULAR_DEPENDENCIES) {
+    if (sv_starts_with(cstr2sv(error.tag), "sem.circ-dep")) {
         sb_add_cstr(&sb, "dependency list:\n");
         ast_nodes_t *deps = error.args[1].ptr;
         for (size_t i = 0; i < deps->count; ++i) {

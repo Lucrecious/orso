@@ -52,6 +52,7 @@ string_view_t string2sv(string_t string);
 string_t sv2string(string_view_t sv, arena_t *allocator);
 string_view_t sv_filename(string_view_t sv);
 bool sv_ends_with(string_view_t sv, cstr_t cstr);
+bool sv_starts_with(string_view_t sv, cstr_t prefix);
 
 void sb_add_char(string_builder_t *sb, char c);
 void sb_add_cstr(string_builder_t *sb, cstr_t cstr);
@@ -212,6 +213,14 @@ bool sv_ends_with(string_view_t sv, cstr_t cstr) {
     }
 
     return true;
+}
+
+bool sv_starts_with(string_view_t sv, cstr_t prefix) {
+    size_t s = strlen(prefix);
+    if (s > sv.length) return false;
+
+    bool same = (strncmp(sv.data, prefix, s) == 0);
+    return same;
 }
 
 void sb_add_char(string_builder_t *builder, char c) {

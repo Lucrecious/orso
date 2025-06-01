@@ -11,18 +11,6 @@ enum error_source_t {
     ERROR_SOURCE_CODEGEN,
 };
 
-#define X(error_type, message, error_source_type) error_type,
-typedef enum error_type_t error_type_t;
-enum error_type_t {
-#include "error.x"
-ERROR_COUNT,
-};
-
-#undef X
-
-cstr_t const error_messages[ERROR_COUNT];
-error_source_t error_sources[ERROR_COUNT];
-
 typedef enum error_arg_type_t error_arg_type_t;
 enum error_arg_type_t {
     ERROR_ARG_TYPE_NONE,
@@ -50,15 +38,7 @@ struct error_arg_t {
 #define MAX_ERROR_ARGS 8
 
 typedef struct error_t {
-    error_type_t type;
-    cstr_t message;
-    ast_node_t *node;
-    token_t got_token;
-    token_t after_token;
-    bool is_warning;
-
-    // new error
-    error_type_t tag;
+    cstr_t tag;
     string_t msg;
     error_source_t level;
     size_t arg_count;
