@@ -13,6 +13,10 @@ bool compile_ast_to_c(ast_t *ast, string_t build_directory, strings_t *sources, 
 #ifdef CODEGENC_IMPLEMENTATION
 #include "memarr.h"
 
+#define CORE_H_FILENAME "core.h"
+#define ORFFI_H_FILENAME "orffi.h"
+
+
 typedef struct funcdata_t funcdata_t;
 struct funcdata_t {
     string_t name;
@@ -2510,7 +2514,7 @@ static void cgen_module(cgen_t *cgen, cgen_t *cgenh, bool is_core, ast_node_t *m
             cgen_typedefs(cgenh, &cgen->ast->type_set.types);
             cgen_structs(cgenh);
         } else {
-            cgen_add_include(cgenh, "core.h");
+            cgen_add_include(cgenh, CORE_H_FILENAME);
         }
 
         cgen_global_decls(cgenh, module);
@@ -2523,15 +2527,15 @@ static void cgen_module(cgen_t *cgen, cgen_t *cgenh, bool is_core, ast_node_t *m
     // .c
     {
         if (is_core) {
-            cgen_add_include(cgen, "core.h");
+            cgen_add_include(cgen, CORE_H_FILENAME);
 
             // only core has the intrinsic implementation
             sb_add_cstr(&cgen->sb, "#define INTRINSICS_IMPLEMENTATION\n");
             cgen_add_include(cgen, "intrinsics.h");
         } else {
             cgen_add_include(cgen, module->ccode_associated_h.cstr);
-            cgen_add_include(cgen, "core.h");
-            cgen_add_include(cgen, "orffi.h");
+            cgen_add_include(cgen, CORE_H_FILENAME);
+            cgen_add_include(cgen, ORFFI_H_FILENAME);
 
             for (size_t i = 0; i < module->module_deps.count; ++i) {
                 ast_node_t *m = module->module_deps.items[i];
@@ -2557,7 +2561,7 @@ static string_t cgen_generate_associated_c_from_h_filename(string_t hfilename, a
 }
 
 static void cgen_generate_associated_h_filenames(ast_t *ast) {
-    ast->core_module_or_null->ccode_associated_h = lit2str("core.h");
+    ast->core_module_or_null->ccode_associated_h = lit2str(CORE_H_FILENAME);
 
     string_t moduleid;
     ast_node_t *module;
@@ -2651,7 +2655,7 @@ static bool cgen_generate_ffi(ast_t *ast, cgen_t *cgen, cgen_t *cgenh, cgen_stat
         {
             cgen_begin_h(cgenh, header_define);
 
-            cgen_add_include(cgenh, "core.h");
+            cgen_add_include(cgenh, CORE_H_FILENAME);
 
             for (size_t j = 0; j < lib.ffis.count; ++j) {
                 ffi_t *ffi = libs.items[i].ffis.items[j];
@@ -2750,7 +2754,7 @@ static bool cgen_generate_ffi(ast_t *ast, cgen_t *cgen, cgen_t *cgenh, cgen_stat
 
         cgen_end_h(cgenh);
 
-        string_t h = string_format("%sorffi.h", tmp->allocator, build_dir.cstr);
+        string_t h = string_format("%s"ORFFI_H_FILENAME, tmp->allocator, build_dir.cstr);
         success &= write_entire_file(h.cstr, cgenh->sb.items, cgenh->sb.count);
     }
 
