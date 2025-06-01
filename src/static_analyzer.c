@@ -2994,7 +2994,6 @@ void resolve_expression(
             typedata_t *type_expr_td = ast_type2td(ast, type_expr->value_type);
             switch (type_expr_td->kind) {
             case TYPE_TYPE: {
-
                 if (!type_expr->expr_val.is_concrete) {
                     stan_error(analyzer, OR_ERROR(
                         .tag = ERROR_ANALYSIS_EXPECTED_CONSTANT,
@@ -3013,7 +3012,6 @@ void resolve_expression(
 
                 switch (init_type_td->kind) {
                 case TYPE_ARRAY: {
-
                     type_t arg_implicit_type;
                     {
                         type_t t = type_expr->expr_val.word.as.t;
@@ -3314,6 +3312,7 @@ void resolve_expression(
                         .show_code_lines = ORERR_LINES(0),
                     ));
                 }
+                INVALIDATE(expr);
                 break;
             }
             

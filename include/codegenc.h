@@ -1994,6 +1994,10 @@ static void cgen_fficall(cgen_t *cgen, ast_node_t *fficall, cgen_var_t var) {
         allocator_return(tmp);
     }
     for (size_t i = 0; i < arg_count; ++i) {
+        if (i != 0) {
+            sb_add_cstr(&cgen->sb, ", ");
+        }
+
         cgen_var_t tmp = vars[i];
         sb_add_format(&cgen->sb, "%s", cgen_var_name(cgen, tmp));
     }

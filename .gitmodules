@@ -1,3 +1,6 @@
 [submodule "tinycc"]
 	path = tinycc
 	url = https://github.com/Lucrecious/tinycc.git
+[submodule "vendor/--depth=1"]
+	path = vendor/--depth=1
+	url = https://github.com/raysan5/raylib

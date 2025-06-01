@@ -178,6 +178,15 @@ bool generate_exe(ast_t *ast, string_t output_path) {
         // stops warnings from ((x == y)) type of conditions
         cc_no_warning(&cc, lit2str("parentheses-equality"));
 
+        cc_flag(&cc, lit2str("-std=c99"));
+
+        cc_flag(&cc, lit2str("-framework"));
+        cc_flag(&cc, lit2str("IOKit"));
+        cc_flag(&cc, lit2str("-framework"));
+        cc_flag(&cc, lit2str("Cocoa"));
+        cc_flag(&cc, lit2str("-framework"));
+        cc_flag(&cc, lit2str("OpenGL"));
+
         success = cc_build(&cc);
     }
 
