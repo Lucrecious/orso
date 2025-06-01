@@ -1,27 +1,9 @@
-rl :: @load "./vendor/raylib.or";
-
 main :: () -> void {
-    rl.init_window(800, 600, "raylib orso");
-
-    rl.set_target_fps(60);
-
-    dir := rl.vec2_t.{1, 0};
-    speed := 50f;
-
-    pos := rl.vec2_t.{0, 50};
-
-    while not rl.window_should_close() {
-        d := rl.get_frame_time();
-        rl.begin_drawing();
-
-        rl.clear_background(rl.black);
-
-        rl.draw_rectanglev(pos, .{50, 50}, rl.blue);
-
-        pos += dir*rl.vec2_t.{speed*d, speed*d};
-
-        rl.end_drawing();
+    {
+        y := 0;
+        x := {{y;} + 4;};
+        1;
+        2;
+        @run 3;
     };
-
-    rl.close_window();
 };

@@ -1513,10 +1513,6 @@ static void cgen_def_value(cgen_t *cgen, ast_node_t *def_value, cgen_var_t var) 
 
     cgen_var_t defname = cgen_user_var(cgen, identifier, def_value->value_type, def_value->ref_decl->is_global);
     sb_add_format(&cgen->sb, "%s", cgen_var_name(cgen, defname));
-
-    if (has_var(var)) {
-        sb_add_cstr(&cgen->sb, ";\n");
-    }
 }
 
 static void cgen_break_or_continue(cgen_t *cgen, ast_node_t *jmp, token_type_t type) {
@@ -2006,8 +2002,6 @@ static void cgen_fficall(cgen_t *cgen, ast_node_t *fficall, cgen_var_t var) {
         sb_add_format(&cgen->sb, "%s", cgen_var_name(cgen, tmp));
     }
     sb_add_cstr(&cgen->sb, ")");
-
-    cgen_semicolon_nl(cgen);
 }
 
 static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var) {
