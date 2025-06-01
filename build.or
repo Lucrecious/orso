@@ -1,0 +1,10 @@
+orso :: @load "./lib/orso.or";
+
+main :: () -> void {
+    c := orso.compiler_t.{};
+    c.root_source = "probe.or";
+    c.build_dir = "./build/";
+    c.output_name = "probe";
+
+    orso.build(&c);
+};

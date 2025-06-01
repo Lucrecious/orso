@@ -15,6 +15,8 @@ bool compile_expr_to_function(function_t *function, ast_t *ast, ast_node_t *expr
 
 #ifdef CODEGEN_IMPLEMENTATION
 
+#include "static_analyzer.h"
+
 typedef struct local_t local_t;
 struct local_t {
     size_t stack_location;

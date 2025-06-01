@@ -1,3 +1,0 @@
-io :: @load "./lib/io.or";
-
-B := io.A;

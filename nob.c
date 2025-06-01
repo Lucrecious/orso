@@ -164,6 +164,7 @@ int main(int argc, char **argv) {
         cb_source(&cb, SOURCES[i]);
     }
 
+    cb_source(&cb, "./lib/orso.c");
     cb_source(&cb, "./src/main.c");
 
     cb_build(&cb);

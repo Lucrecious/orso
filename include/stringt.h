@@ -41,6 +41,7 @@ string_t cstr2string(cstr_t cstr, arena_t *allocator);
 string_t string_format(cstr_t format, arena_t *allocator, ...);
 strings_t string_split(cstr_t cstr, cstr_t delimiters, arena_t *allocator);
 string_t string_copy(string_t s, arena_t *allocator);
+string_t string_path_combine(string_t a, string_t b, arena_t *arena);
 
 size_t string2size(string_t s);
 
@@ -109,6 +110,28 @@ string_t string_format(const cstr_t format, arena_t *allocator, ...) {
 
 	return (string_t){ .cstr = buffer, .length = (size_t)(size < 0 ? 0 : size - 1) };
 }
+
+#if WIN_32_
+#define FS '\\'
+#else
+#define FS '/'
+#endif
+string_t string_path_combine(string_t a, string_t b, arena_t *arena) {
+    string_view_t asv = string2sv(a);
+    while (asv.length > 0 && asv.data[asv.length-1] == FS) {
+        --asv.length;
+    }
+
+    string_view_t bsv = string2sv(b);
+    while (bsv.length > 0 && (bsv.data[0] == FS || bsv.data[0] == '.')) {
+        --bsv.length;
+        ++bsv.data;
+    }
+
+    string_t result = string_format("%.*s/%.*s", arena, asv.length, asv.data, bsv.length, bsv.data);
+    return result;
+}
+#undef FS
 
 strings_t string_split(cstr_t cstr, cstr_t delimiters, arena_t *allocator) {
     tmp_arena_t *tmp = allocator_borrow();

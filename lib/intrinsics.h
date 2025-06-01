@@ -48,8 +48,6 @@ struct word_t {
     } as;
 };
 
-#include "typedefs.gen.h"
-
 #define WORD_SIZE sizeof(word_t)
 
 #define b2w(size)  ((size + (WORD_SIZE-1)) / WORD_SIZE)

@@ -1,0 +1,10 @@
+compiler_t :: struct {
+    root_source := "";
+    build_dir := "./build/";
+    output_name := "program";
+};
+
+build :: (c: &compiler_t) -> bool {
+    success := @icall "__orcompiler_build", c;
+    return success;
+};

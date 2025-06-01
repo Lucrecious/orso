@@ -1,3 +1,0 @@
-println :: (s: str8_t) -> void {
-    //@fficall "./lib/libcore.a", "cdecl", void, "println", s.cstr;
-};
