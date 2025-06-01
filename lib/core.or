@@ -1,4 +1,4 @@
-// core lib
+# core lib
 
 str8_t :: struct {
     cstr := (&char).{};

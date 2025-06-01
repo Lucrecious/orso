@@ -874,11 +874,11 @@ static void synchronize(parser_t* parser) {
     }
 }
 
-static ast_node_t *parse_decl(parser_t* parser, bool is_top_level);
-static ast_node_t *parse_expression(parser_t* parser);
-static ast_node_t *parse_statement(parser_t* parser);
+static ast_node_t *parse_decl(parser_t *parser);
+static ast_node_t *parse_expression(parser_t *parser);
+static ast_node_t *parse_statement(parser_t *parser);
 static parse_rule_t *parser_get_rule(token_type_t type);
-static bool check_expression(parser_t* parser);
+static bool check_expression(parser_t *parser);
 static ast_node_t* parse_precedence(parser_t* parser, prec_t precedence);
 
 bool ast_node_type_is_expression(ast_node_type_t node_type) {
@@ -1311,7 +1311,7 @@ static ast_node_t *parse_block(parser_t *parser) {
             continue;
         }
 
-        ast_node_t *decl_node = parse_decl(parser, false);
+        ast_node_t *decl_node = parse_decl(parser);
 
         unless (consume(parser, TOKEN_SEMICOLON)) {
             parser_error(parser, OR_ERROR(
@@ -1393,7 +1393,7 @@ static ast_node_t *parse_branch(parser_t *parser) {
     // declares before condition for blocks 
     ast_node_t *last_decl;
     while (true) {
-        last_decl = parse_decl(parser, false);
+        last_decl = parse_decl(parser);
 
         if (check(parser, TOKEN_BRACE_OPEN) || (check(parser, TOKEN_DO) || check(parser, TOKEN_THEN))) break;
 
@@ -1500,7 +1500,7 @@ static ast_node_t *parse_for(parser_t *parser) {
 
     ast_node_t *decl;
     if (!match(parser, TOKEN_SEMICOLON)) {
-        decl = parse_decl(parser, false);
+        decl = parse_decl(parser);
         unless (consume(parser, TOKEN_SEMICOLON)) {
             parser_error(parser, OR_ERROR(
                 .tag = ERROR_PARSER_EXPECTED_SEMICOLON,
@@ -1626,7 +1626,7 @@ static void parse_parameters(parser_t *parser, ast_nodes_t *children) {
         bool is_compile_time_param = match(parser, TOKEN_BANG);
         token_t bang = parser->previous;
 
-        ast_node_t *decl = parse_decl(parser, false);
+        ast_node_t *decl = parse_decl(parser);
         decl->is_compile_time_param = is_compile_time_param;
 
         if (decl->node_type == AST_NODE_TYPE_DECLARATION_DEFINITION && decl->has_default_value && is_compile_time_param) {
@@ -2265,15 +2265,23 @@ static ast_node_t *parse_decl_def(parser_t *parser) {
         }
     }
 
-    advance(parser);
+    unless (consume(parser, TOKEN_IDENTIFIER)) {
+        parser_error(parser, OR_ERROR(
+            .tag = ERROR_PARSER_EXPECTED_DECLARATION_OR_STATEMENT,
+            .level = ERROR_SOURCE_PARSER,
+            .msg = lit2str("expected declaration for variable or constant"),
+            .args = ORERR_ARGS(error_arg_token(parser->current)),
+            .show_code_lines = ORERR_LINES(0),
+        ));
+    }
+
     token_t identifier = parser->previous;
 
-    // this may not be hit ever... not sure yet
     unless (consume(parser, TOKEN_COLON)) {
         parser_error(parser, OR_ERROR(
             .tag = ERROR_PARSER_EXPECTED_COLON_AFTER_DECLARATION_IDENTIFIER,
             .level = ERROR_SOURCE_PARSER,
-            .msg = lit2str("expected ':' after declaration identifier (may not be hit)"),
+            .msg = lit2str("expected ':' after declaration identifier"),
             .args = ORERR_ARGS(error_arg_token(identifier)),
             .show_code_lines = ORERR_LINES(0),
         ));
@@ -2327,23 +2335,13 @@ static ast_node_t *parse_decl_def(parser_t *parser) {
     return decldef;
 }
 
-static ast_node_t *parse_decl(parser_t *parser, bool is_top_level) {
+static ast_node_t *parse_decl(parser_t *parser) {
     ast_node_t *node = NULL;
 
     if (is_incoming_decl_def(parser)) {
         node = parse_decl_def(parser);
     } else {
         node = parse_statement(parser);
-        if (is_top_level) {
-            // may never be hit...
-            parser_error(parser, OR_ERROR(
-                .tag = ERROR_PARSER_EXPECTED_DECLARATION,
-                .level = ERROR_SOURCE_PARSER,
-                .msg = lit2str("only declarations are allowed at the module scope"),
-                .args = ORERR_ARGS(error_arg_node(node)),
-                .show_code_lines = ORERR_LINES(0),
-            ));
-        }
     }
 
     return node;
@@ -2351,41 +2349,30 @@ static ast_node_t *parse_decl(parser_t *parser, bool is_top_level) {
 
 static void parse_into_module(parser_t *parser, ast_node_t *module) {
     until (match(parser, TOKEN_EOF)) {
-        if (is_incoming_decl_def(parser)) {
-            ast_node_t *decldef = parse_decl(parser, true);
-            array_push(&module->children, decldef);
+        ast_node_t *decldef = parse_decl(parser);
+        array_push(&module->children, decldef);
 
-            unless (consume(parser, TOKEN_SEMICOLON)) {
-                parser_error(parser, OR_ERROR(
-                    .tag = ERROR_PARSER_EXPECTED_SEMICOLON,
-                    .level = ERROR_SOURCE_PARSER,
-                    .msg = lit2str("expected ';' after declaration in module"),
-                    .args = ORERR_ARGS(error_arg_token(parser->current)),
-                    .show_code_lines = ORERR_LINES(0),
-                ));
-            }
-        } else {
+        if (decldef->node_type == AST_NODE_TYPE_DECLARATION_STATEMENT) {
             parser_error(parser, OR_ERROR(
                 .tag = ERROR_PARSER_EXPECTED_DECLARATION,
                 .level = ERROR_SOURCE_PARSER,
-                .msg = lit2str("expected a declaration in the module scope"),
+                .msg = lit2str("expected declaration, not a statement, in module scope"),
+                .args = ORERR_ARGS(error_arg_node(decldef)),
+                .show_code_lines = ORERR_LINES(0),
+            ));
+        }
+
+        unless (consume(parser, TOKEN_SEMICOLON)) {
+            parser_error(parser, OR_ERROR(
+                .tag = ERROR_PARSER_EXPECTED_SEMICOLON,
+                .level = ERROR_SOURCE_PARSER,
+                .msg = lit2str("expected ';' after declaration in module"),
                 .args = ORERR_ARGS(error_arg_token(parser->current)),
                 .show_code_lines = ORERR_LINES(0),
             ));
         }
 
         synchronize(parser);
-    }
-
-    unless (consume(parser, TOKEN_EOF)) {
-        // not sure when this is hit
-        parser_error(parser, OR_ERROR(
-            .tag = ERROR_PARSEREX_EXPECTED_EOF_AFTER_MODULE,
-            .level = ERROR_SOURCE_PARSER,
-            .msg = lit2str("expected end-of-file after module"),
-            .args = ORERR_ARGS(error_arg_node(module)),
-            .show_code_lines = ORERR_LINES(0),
-        ));
     }
 }
 

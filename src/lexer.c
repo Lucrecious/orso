@@ -139,7 +139,7 @@ static void skip_whitespace(lexer_t *lexer) {
 }
 
 static bool skip_comments(lexer_t *lexer) {
-    if (match2(lexer, "//")) {
+    if (match(lexer, '#')) {
         while (!is_at_end(lexer)) {
             char c = advance(lexer);
             if (c == '\n') {
@@ -148,11 +148,11 @@ static bool skip_comments(lexer_t *lexer) {
                 return true;
             }
         }
-    } else if (match2(lexer, "/*")) {
+    } else if (match2(lexer, "#*")) {
         s32 rings = 1;
 
         while (!is_at_end(lexer)) {
-            if (match2(lexer, "*/")) {
+            if (match2(lexer, "*#")) {
                 rings--;
                 continue;
             }
@@ -161,7 +161,7 @@ static bool skip_comments(lexer_t *lexer) {
                 return true;
             }
 
-            if (match2(lexer, "/*")) {
+            if (match2(lexer, "#*")) {
                 rings++;
                 continue;
             }
