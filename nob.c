@@ -1,134 +1,39 @@
 #define NOB_IMPLEMENTATION
+#define NOB_STRIP_PREFIX
 #include "nob.h"
+#undef UNREACHABLE
+#undef UNUSED
+#undef sv_eq
+#undef NOB_IMPLEMENTATION
 
 #define ARENA_IMPLEMENTATION
 #include "include/arena.h"
 
 #include <stdlib.h>
+
+#define INTRINSICS_IMPLEMENTION
 #include "lib/intrinsics.h"
 
+#define CC_IMPLEMENTATION
+#include "lib/cc.h"
 
-const char* SOURCES[] = {
-    "./src/lexer.c",
-    "./src/parser.c",
-    "./src/static_analyzer.c",
-    "./src/type.c",
-    "./src/type_set.c",
-    "./src/debugger.c",
-    "./src/error.c",
-    "./lib/core.c",
+#define STRINGT_IMPLEMENTATION
+#include "include/stringt.h"
+
+#define TMP_IMPLEMENTATION
+#include "include/tmp.h"
+
+
+orstring_t SOURCES[] = {
+    lit2str("./src/lexer.c"),
+    lit2str("./src/parser.c"),
+    lit2str("./src/static_analyzer.c"),
+    lit2str("./src/type.c"),
+    lit2str("./src/type_set.c"),
+    lit2str("./src/debugger.c"),
+    lit2str("./src/error.c"),
+    lit2str("./lib/core.c"),
 };
-
-typedef enum cb_std_t cb_std_t;
-enum cb_std_t {
-    cb_std_c99
-};
-
-typedef struct c_builder_t c_builder_t;
-struct c_builder_t {
-    arena_t *allocator;
-    cb_std_t std;
-    orcstr_t output;
-
-    struct {
-        orcstr_t *items;
-        size_t count;
-        size_t capacity;
-    } flags;
-
-    struct {
-        orcstr_t *items;
-        size_t count;
-        size_t capacity;
-    } sources;
-
-    struct {
-        orcstr_t *items;
-        size_t count;
-        size_t capacity;
-    } includes;
-
-    struct {
-        orcstr_t *items;
-        size_t count;
-        size_t capacity;
-    } library_dirs;
-
-    struct {
-        orcstr_t *items;
-        size_t count;
-        size_t capacity;
-    } libraries;
-};
-
-void cb_flags(c_builder_t *cb, size_t n, ...) {
-    va_list args;
-    va_start(args, n);
-    
-    for (size_t i = 0; i < n; ++i) {
-        orcstr_t flag = va_arg(args, orcstr_t);
-        flag = arena_strdup(cb->allocator, flag);
-        nob_da_append(&cb->flags, flag);
-    }
-
-    va_end(args);
-}
-
-void cb_source(c_builder_t *cb, orcstr_t src) {
-    src = arena_strdup(cb->allocator, src);
-    nob_da_append(&cb->sources, src);
-}
-
-void cb_include(c_builder_t *cb, orcstr_t include_path) {
-    include_path = arena_strdup(cb->allocator, include_path);
-    nob_da_append(&cb->includes, include_path);
-}
-
-void cb_library_dir(c_builder_t *cb, orcstr_t library_dir) {
-    library_dir = arena_strdup(cb->allocator, library_dir);
-    nob_da_append(&cb->library_dirs, library_dir);
-}
-
-void cb_library(c_builder_t *cb, orcstr_t library) {
-    library = arena_strdup(cb->allocator, library);
-    nob_da_append(&cb->libraries, library);
-}
-
-
-bool cb_build(c_builder_t *cb) {
-    Nob_Cmd cmd = {0};
-
-    nob_cmd_append(&cmd, "cc");
-
-    nob_cmd_append(&cmd, "-o", cb->output);
-
-    for (size_t i = 0; i < cb->flags.count; ++i) {
-        nob_cmd_append(&cmd, cb->flags.items[i]);
-    }
-
-    for (size_t i = 0; i < cb->includes.count; ++i) {
-        nob_cmd_append(&cmd, nob_temp_sprintf("-I%s", cb->includes.items[i]));
-    }
-
-    for (size_t i = 0; i < cb->library_dirs.count; ++i) {
-        nob_cmd_append(&cmd, nob_temp_sprintf("-L%s", cb->library_dirs.items[i]));
-    }
-
-    for (size_t i = 0; i < cb->libraries.count; ++i) {
-        nob_cmd_append(&cmd, nob_temp_sprintf("-l%s", cb->libraries.items[i]));
-    }
-
-    for (size_t i = 0; i < cb->sources.count; ++i) {
-        orcstr_t src = cb->sources.items[i];
-        nob_cmd_append(&cmd, src);
-    }
-
-    bool success = nob_cmd_run_sync(cmd);
-
-    nob_cmd_free(cmd);
-
-    return success;
-}
 
 int main(int argc, char **argv) {
     NOB_GO_REBUILD_URSELF(argc, argv);
@@ -139,35 +44,48 @@ int main(int argc, char **argv) {
 
     // build test
     {
-        c_builder_t cb = {.allocator=&allocator};
-        cb.std = cb_std_c99;
-        cb_flags(&cb, 3, "-Wall", "-Wextra", "-fsanitize=address");
+        cc_t cc = cc_make(CC_GCC, &allocator);
+        cc.output_type = CC_EXE;
+        cc_flag(&cc, lit2str("-std=c99"));
+        cc_flag(&cc, lit2str("-Wall"));
+        cc_flag(&cc, lit2str("-Wextra"));
+        cc_flag(&cc, lit2str("-fsanitize=address"));
 
-        cb_source(&cb, "./tests/test.c");
-        cb.output = nob_temp_sprintf("./bin/test");
+        cc_source(&cc, lit2str("./tests/test.c"));
+        cc.output_path = lit2str("./bin/test");
 
-        cb_build(&cb);
+        cc_build(&cc);
     }
+    
+    // build liborso
+    {
+        cc_t cc = cc_make(CC_GCC, &allocator);
+        cc.output_type = CC_EXE;
 
-    c_builder_t cb = {.allocator=&allocator};
-    cb.std = cb_std_c99;
-    cb_flags(&cb, 3, "-Wall", "-Wextra", "-Wconversion", "-fsanitize=address");
+        cc_flag(&cc, lit2str("-std=c99"));
+        cc_flag(&cc, lit2str("-Wall"));
+        cc_flag(&cc, lit2str("-Wextra"));
+        cc_flag(&cc, lit2str("-Wconversion"));
+        cc_flag(&cc, lit2str("-fsanitize=address"));
 
-    cb_include(&cb, "./include");
-    cb_include(&cb, "./lib");
+        cc_include_dir(&cc, lit2str("./include"));
+        cc_include_dir(&cc, lit2str("./lib"));
 
-    cb_flags(&cb, 2, "-ggdb", "-DDEBUG");
+        cc_flag(&cc, lit2str("-ggdb"));
+        cc_flag(&cc, lit2str("-DDEBUG"));
 
-    cb.output = nob_temp_sprintf("./bin/orso");
+        cc.output_path = lit2str("./bin/orso");
 
-    for (size_t i = 0; i < sizeof(SOURCES) / sizeof(SOURCES[0]); i++) {
-        cb_source(&cb, SOURCES[i]);
+        for (size_t i = 0; i < sizeof(SOURCES) / sizeof(SOURCES[0]); i++) {
+            cc_source(&cc, SOURCES[i]);
+        }
+
+        cc_source(&cc, lit2str("./lib/orso.c"));
+
+        cc_source(&cc, lit2str("./src/main.c"));
+
+        cc_build(&cc);
     }
-
-    cb_source(&cb, "./lib/orso.c");
-    cb_source(&cb, "./src/main.c");
-
-    cb_build(&cb);
 
     nob_copy_file("./lib/core.or", "./bin/core.or");
 

@@ -10,7 +10,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "intrinsics.h"
+#include "../lib/intrinsics.h"
 
 #define unless(condition) if (!(condition))
 #define until(condition) while (!(condition))

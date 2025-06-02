@@ -1,8 +1,8 @@
 #ifndef CC_H_
 #define CC_H_
 
-#include "stringt.h"
-#include "../nob.h"
+#include "intrinsics.h"
+#include "../include/stringt.h"
 
 typedef enum cc_cc_t cc_cc_t;
 enum cc_cc_t {
@@ -41,6 +41,12 @@ bool cc_build(cc_t *cc);
 #endif
 
 #ifdef CC_IMPLEMENTATION
+
+#include "../include/array.h"
+
+#define NOB_STRIP_PREFIX
+#include "../nob.h"
+
 cc_t cc_make(cc_cc_t cc_cc, arena_t *arena) {
     return (cc_t){
         .cc = cc_cc,
