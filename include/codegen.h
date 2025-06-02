@@ -274,7 +274,7 @@ static reg_mov_size_t type2movsize(gen_t *gen, type_t t) {
     }
 
     case TYPE_VOID: return REG_MOV_SIZE_0;
-    case TYPE_BOOL: return REG_MOV_SIZE_U8;
+    case TYPE_BOOL: return type2movsize(gen, gen->ast->type_set.int_);
 
     case TYPE_STRING:
     case TYPE_TYPE:
@@ -1243,7 +1243,7 @@ static void gen_expr_val(gen_t *gen, texloc_t loc, function_t *function, type_t 
     } else {
         switch (td->kind) {
         case TYPE_BOOL: {
-            u8 val = (u8)word.as.u;
+            bool val = (bool)word.as.s;
             gen_constant(gen, loc, function, &val, type, val_dst);
         }
 

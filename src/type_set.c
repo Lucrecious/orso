@@ -147,7 +147,7 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
     static typedata_t type_unreachable = {.name=lit2str("<unreachable>"), .kind=TYPE_UNREACHABLE, .size=0, .alignment=0};
 
     static typedata_t type_void = {.name=lit2str("void"), .kind=TYPE_VOID, .size=0, .alignment=0, .capabilities=TYPE_CAP_NONE};
-    static typedata_t type_bool = {.name=lit2str("bool"), .kind=TYPE_BOOL, .size=NUM_SIZE_8, .alignment=NUM_SIZE_8, .capabilities=TYPE_CAP_LOGICAL};
+    static typedata_t type_bool = {.name=lit2str("bool"), .kind=TYPE_BOOL, .size=sizeof(bool), .alignment=sizeof(bool), .capabilities=TYPE_CAP_LOGICAL};
     static typedata_t type_str8 = {.name=lit2str("str8_t"), .kind=TYPE_STRING, .size=0, .alignment=0, .capabilities=TYPE_CAP_NONE};
     static typedata_t type_f32 = {.name=lit2str("f32"), .kind=TYPE_NUMBER, .size=NUM_SIZE_32, .alignment=NUM_SIZE_32, .as.num = NUM_TYPE_FLOAT, .capabilities=TYPE_CAP_NUMBER};
     static typedata_t type_f64 = {.name=lit2str("f64"), .kind=TYPE_NUMBER, .size=NUM_SIZE_64, .alignment=NUM_SIZE_64, .as.num = NUM_TYPE_FLOAT, .capabilities=TYPE_CAP_NUMBER};

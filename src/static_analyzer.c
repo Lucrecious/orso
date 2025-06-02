@@ -463,7 +463,7 @@ word_t ast_item_get(ast_t *ast, bool is_addr, word_t aggregate, type_t item_type
     switch (td->kind) {
     case TYPE_VOID: return WORDU(0);
     case TYPE_BOOL: {
-        u8 res = *((u8*)addr);
+        bool res = *((bool*)addr);
         return WORDU(res);
     }
 
@@ -569,7 +569,7 @@ void ast_item_set(ast_t *ast, type_t type, void *addr, word_t value, size_t byte
     switch (td->kind) {
     case TYPE_VOID: return;
     case TYPE_BOOL: {
-        *((u8*)addr) = cast(u8, value.as.u);
+        *((bool*)addr) = cast(bool, value.as.u);
         return;
     }
 
@@ -1601,8 +1601,8 @@ static void ast_copy_expr_val_to_memory(ast_t *ast, type_t type, word_t src, voi
     }
 
     case TYPE_BOOL: {
-        u8 val = (u8)src.as.u;
-        memcpy(dest, &val, sizeof(u8));
+        bool val = (bool)src.as.u;
+        memcpy(dest, &val, sizeof(bool));
         break;
     }
 

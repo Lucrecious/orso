@@ -635,8 +635,8 @@ static ast_node_t *ast_primaryf(ast_t *ast, f64 value, type_t type, token_t toke
 static ast_node_t *ast_primaryb(ast_t *ast, bool value, ast_node_t extra_params) {
     ast_node_t *primary = ast_node_new(ast->arena, AST_NODE_TYPE_EXPRESSION_PRIMARY, extra_params.start);
 
-    u8 byte_value = (u8)value;
-    word_t word = {.as.u=byte_value};
+    bool byte_value = (bool)value;
+    word_t word = {.as.s=byte_value};
 
     primary->expr_val = ast_node_val_word(word);
     primary->value_type = typeid(TYPE_BOOL);
@@ -2416,7 +2416,7 @@ word_t ast_mem2word(ast_t *ast, void *data, type_t type) {
 
     case TYPE_VOID: return (word_t){0};
 
-    case TYPE_BOOL: return (word_t){ .as.u = (*((u8*)data)) };
+    case TYPE_BOOL: return (word_t){ .as.s = (*((bool*)data)) };
 
     case TYPE_POINTER:
     case TYPE_INTRINSIC_FUNCTION:

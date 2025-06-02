@@ -1,7 +1,7 @@
 #ifndef ORSO_H_
 #define ORSO_H_
 
-#include "stringt.h"
+#include "intrinsics.h"
 
 typedef struct orso_compiler_t orso_compiler_t;
 struct orso_compiler_t {
