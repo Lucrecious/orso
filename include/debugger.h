@@ -8,7 +8,7 @@
 
 typedef struct source_location_t source_location_t;
 struct source_location_t {
-    string_t file_path;
+    orstring_t file_path;
     texloc_t text_location;
 };
 
@@ -29,7 +29,7 @@ struct debugger_t {
 
 void debugger_init(debugger_t *debugger, arena_t *allocator);
 bool debugger_step(debugger_t *debugger, vm_t *vm);
-string_t disassemble_instruction(instruction_t in, arena_t *allocator);
+orstring_t disassemble_instruction(instruction_t in, arena_t *allocator);
 
 source_location_t vm_find_source_location(vm_t *vm);
 

@@ -44,7 +44,7 @@ static void add_definition(scope_t *scope, arena_t *allocator, string_view_t ide
     table_put(s2w, scope->definitions, sv2string(identifier, allocator), WORDP(decl));
 }
 
-static ast_node_t *add_builtin_definition(ast_t *ast, string_view_t identifier, type_t type, word_t word) {
+static ast_node_t *add_builtin_definition(ast_t *ast, string_view_t identifier, ortype_t type, orword_t word) {
     ast_node_t *decl = ast_node_new(ast->arena, AST_NODE_TYPE_DECLARATION_DEFINITION, nil_token);
     decl->value_type = type;
     decl->expr_val = ast_node_val_word(word);
@@ -67,7 +67,7 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
         ast_node_t *def,
         scope_t **found_scope);
 
-static bool is_builtin_type(type_table_t *t, string_view_t identifier, type_t *type) {
+static bool is_builtin_type(type_table_t *t, string_view_t identifier, ortype_t *type) {
 #define RETURN_IF_TYPE(name, t) \
 if (sv_eq(identifier, lit2sv(#name))) {\
     *type = (t); \
@@ -139,10 +139,10 @@ static bool check_call_on_func_or_error(analyzer_t *analyzer, ast_t *ast, ast_no
     size_t min_args = func_type_arg_count < arg_count ? func_type_arg_count : arg_count;
 
     for (size_t i = 0; i < min_args; ++i) {
-        type_t parameter_type = func_td->as.function.argument_types.items[i];
+        ortype_t parameter_type = func_td->as.function.argument_types.items[i];
 
         ast_node_t *arg = call->children.items[arg_start + i];
-        type_t argument_type = arg->value_type;
+        ortype_t argument_type = arg->value_type;
         unless (typeid_eq(parameter_type, argument_type) && !TYPE_IS_INVALID(argument_type)) {
             errored = true;
             stan_error(analyzer, OR_ERROR(
@@ -223,7 +223,7 @@ static bool fold_funcsig_or_error(analyzer_t *analyzer, ast_t *ast, ast_node_t *
             break;
         }
 
-        type_t type = typeid(parameter->expr_val.word.as.u);
+        ortype_t type = typeid(parameter->expr_val.word.as.u);
         array_push(&parameter_types, type);
     }
 
@@ -254,11 +254,11 @@ static bool fold_funcsig_or_error(analyzer_t *analyzer, ast_t *ast, ast_node_t *
         goto defer;
     }
 
-    type_t return_type = typeid(return_type_expression->expr_val.word.as.u);
+    ortype_t return_type = typeid(return_type_expression->expr_val.word.as.u);
 
-    type_t function_type = type_set_fetch_function(&ast->type_set, return_type, parameter_types);
+    ortype_t function_type = type_set_fetch_function(&ast->type_set, return_type, parameter_types);
 
-    word_t funcsig_word = WORDU(function_type.i);
+    orword_t funcsig_word = WORDU(function_type.i);
 
     sig->expr_val = ast_node_val_word(funcsig_word);
 
@@ -335,7 +335,7 @@ static bool get_nearest_jmp_scope_in_func_or_error(
     }
     return false;
 }
-type_t resolve_block_return_types_or_error(analyzer_t *analyzer, ast_node_t *block) {
+ortype_t resolve_block_return_types_or_error(analyzer_t *analyzer, ast_node_t *block) {
     switch (block->node_type) {
         case AST_NODE_TYPE_EXPRESSION_BRANCHING: {
             ast_node_t *then = an_then(block);
@@ -372,11 +372,11 @@ type_t resolve_block_return_types_or_error(analyzer_t *analyzer, ast_node_t *blo
                 return typeid(TYPE_UNREACHABLE);
             }
 
-            type_t type = types.items[0];
+            ortype_t type = types.items[0];
             ast_node_t *node = nodes.items[0];
 
             for (size_t i = 1; i < types.count; ++i) {
-                type_t other_type = types.items[i];
+                ortype_t other_type = types.items[i];
                 ast_node_t *other_node = nodes.items[i];
 
                 if (block->is_consumed && !typeid_eq(other_type, type)) {
@@ -447,7 +447,7 @@ static void forward_scan_constant_names(analyzer_t *analyzer, scope_t *scope, as
     }
 }
 
-word_t ast_item_get(ast_t *ast, bool is_addr, word_t aggregate, type_t item_type, size_t byte_offset) {
+orword_t ast_item_get(ast_t *ast, bool is_addr, orword_t aggregate, ortype_t item_type, size_t byte_offset) {
     typedata_t *td = ast_type2td(ast, item_type);
     
     void *addr;
@@ -468,7 +468,7 @@ word_t ast_item_get(ast_t *ast, bool is_addr, word_t aggregate, type_t item_type
     }
 
     case TYPE_TYPE: {
-        type_t res = *((type_t*)addr);
+        ortype_t res = *((ortype_t*)addr);
         return WORDT(res);
     }
 
@@ -485,7 +485,7 @@ word_t ast_item_get(ast_t *ast, bool is_addr, word_t aggregate, type_t item_type
         if (td->size > WORD_SIZE) {
             return WORDP(addr);
         } else {
-            word_t arr = *((word_t*)addr);
+            orword_t arr = *((orword_t*)addr);
             return arr;
         }
     }
@@ -495,19 +495,19 @@ word_t ast_item_get(ast_t *ast, bool is_addr, word_t aggregate, type_t item_type
         case NUM_TYPE_UNSIGNED: {
             switch ((num_size_t)td->size) {
             case NUM_SIZE_8: {
-                u8 res = *((u8*)addr);
+                oru8 res = *((oru8*)addr);
                 return WORDU(res);
             }
             case NUM_SIZE_16: {
-                u16 res = *((u16*)addr);
+                oru16 res = *((oru16*)addr);
                 return WORDU(res);
             }
             case NUM_SIZE_32: {
-                u32 res = *((u32*)addr);
+                oru32 res = *((oru32*)addr);
                 return WORDU(res);
             }
             case NUM_SIZE_64: {
-                u64 res = *((u64*)addr);
+                oru64 res = *((oru64*)addr);
                 return WORDU(res);
             }
             }
@@ -516,19 +516,19 @@ word_t ast_item_get(ast_t *ast, bool is_addr, word_t aggregate, type_t item_type
         case NUM_TYPE_SIGNED: {
             switch ((num_size_t)td->size) {
             case NUM_SIZE_8: {
-                s8 res = *((s8*)addr);
+                ors8 res = *((ors8*)addr);
                 return WORDI(res);
             }
             case NUM_SIZE_16: {
-                s16 res = *((s16*)addr);
+                ors16 res = *((ors16*)addr);
                 return WORDI(res);
             }
             case NUM_SIZE_32: {
-                s32 res = *((s32*)addr);
+                ors32 res = *((ors32*)addr);
                 return WORDI(res);
             }
             case NUM_SIZE_64: {
-                s64 res = *((s64*)addr);
+                ors64 res = *((ors64*)addr);
                 return WORDI(res);
             }
             }
@@ -539,11 +539,11 @@ word_t ast_item_get(ast_t *ast, bool is_addr, word_t aggregate, type_t item_type
             case NUM_SIZE_16: UNREACHABLE(); break;
 
             case NUM_SIZE_32: {
-                f32 res = *((f32*)addr);
+                orf32 res = *((orf32*)addr);
                 return WORDD(res);
             }
             case NUM_SIZE_64: {
-                f64 res = *((f64*)addr);
+                orf64 res = *((orf64*)addr);
                 return WORDD(res);
             }
             }
@@ -561,7 +561,7 @@ word_t ast_item_get(ast_t *ast, bool is_addr, word_t aggregate, type_t item_type
     }
 }
 
-void ast_item_set(ast_t *ast, type_t type, void *addr, word_t value, size_t byte_offset) {
+void ast_item_set(ast_t *ast, ortype_t type, void *addr, orword_t value, size_t byte_offset) {
     typedata_t *td = ast_type2td(ast, type);
 
     addr += byte_offset;
@@ -574,7 +574,7 @@ void ast_item_set(ast_t *ast, type_t type, void *addr, word_t value, size_t byte
     }
 
     case TYPE_TYPE: {
-        *((type_t*)addr) = value.as.t;
+        *((ortype_t*)addr) = value.as.t;
         break;
     }
 
@@ -604,19 +604,19 @@ void ast_item_set(ast_t *ast, type_t type, void *addr, word_t value, size_t byte
         case NUM_TYPE_UNSIGNED: {
             switch ((num_size_t)td->size) {
             case NUM_SIZE_8: {
-                *((u8*)addr) = cast(u8, value.as.u);
+                *((oru8*)addr) = cast(oru8, value.as.u);
                 return;
             }
             case NUM_SIZE_16: {
-                *((u16*)addr) = cast(u16, value.as.u);
+                *((oru16*)addr) = cast(oru16, value.as.u);
                 return;
             }
             case NUM_SIZE_32: {
-                *((u32*)addr) = cast(u32, value.as.u);
+                *((oru32*)addr) = cast(oru32, value.as.u);
                 return;
             }
             case NUM_SIZE_64: {
-                *((u64*)addr) = cast(u64, value.as.u);
+                *((oru64*)addr) = cast(oru64, value.as.u);
                 return;
             }
             }
@@ -625,19 +625,19 @@ void ast_item_set(ast_t *ast, type_t type, void *addr, word_t value, size_t byte
         case NUM_TYPE_SIGNED: {
             switch ((num_size_t)td->size) {
             case NUM_SIZE_8: {
-                *((s8*)addr) = cast(s8, value.as.s);
+                *((ors8*)addr) = cast(ors8, value.as.s);
                 return;
             }
             case NUM_SIZE_16: {
-                *((s16*)addr) = cast(s16, value.as.s);
+                *((ors16*)addr) = cast(ors16, value.as.s);
                 return;
             }
             case NUM_SIZE_32: {
-                *((s32*)addr) = cast(s32, value.as.s);
+                *((ors32*)addr) = cast(ors32, value.as.s);
                 return;
             }
             case NUM_SIZE_64: {
-                *((s64*)addr) = cast(s64, value.as.s);
+                *((ors64*)addr) = cast(ors64, value.as.s);
                 return;
             }
             }
@@ -649,11 +649,11 @@ void ast_item_set(ast_t *ast, type_t type, void *addr, word_t value, size_t byte
             case NUM_SIZE_16: UNREACHABLE(); break;
 
             case NUM_SIZE_32: {
-                *((f32*)addr) = cast(f32, value.as.d);
+                *((orf32*)addr) = cast(orf32, value.as.d);
                 return;
             }
             case NUM_SIZE_64: {
-                *((f64*)addr) = cast(f64, value.as.d);
+                *((orf64*)addr) = cast(orf64, value.as.d);
                 return;
             }
             }
@@ -671,7 +671,7 @@ void ast_item_set(ast_t *ast, type_t type, void *addr, word_t value, size_t byte
     }
 }
 
-void constant_fold_bin_arithmetic(ast_t *ast, token_type_t operator, type_t type, word_t l, word_t r, void *result) {
+void constant_fold_bin_arithmetic(ast_t *ast, token_type_t operator, ortype_t type, orword_t l, orword_t r, void *result) {
     typedata_t *td = ast_type2td(ast, type);
 
     #define case_block(type, l, r, v) do { switch (operator) { \
@@ -688,9 +688,9 @@ void constant_fold_bin_arithmetic(ast_t *ast, token_type_t operator, type_t type
     case TYPE_NUMBER: {
         switch (td->as.num) {
         case NUM_TYPE_SIGNED: {
-            s64 lhsi = l.as.s;
-            s64 rhsi = r.as.s;
-            s64 res;
+            ors64 lhsi = l.as.s;
+            ors64 rhsi = r.as.s;
+            ors64 res;
 
             switch((num_size_t)td->size) {
             case NUM_SIZE_8: case_block(s8, lhsi, rhsi, s); break;
@@ -704,9 +704,9 @@ void constant_fold_bin_arithmetic(ast_t *ast, token_type_t operator, type_t type
         }
         
         case NUM_TYPE_UNSIGNED: {
-            u64 lhsu = l.as.u;
-            u64 rhsu = l.as.u;
-            u64 res;
+            oru64 lhsu = l.as.u;
+            oru64 rhsu = l.as.u;
+            oru64 res;
 
             switch((num_size_t)td->size) {
             case NUM_SIZE_8: case_block(u8, lhsu, rhsu, u); break;
@@ -720,9 +720,9 @@ void constant_fold_bin_arithmetic(ast_t *ast, token_type_t operator, type_t type
         }
 
         case NUM_TYPE_FLOAT: {
-            f64 lhsf = l.as.d;
-            f64 rhsf = r.as.d;
-            f64 res;
+            orf64 lhsf = l.as.d;
+            orf64 rhsf = r.as.d;
+            orf64 res;
 
             switch((num_size_t)td->size) {
             case NUM_SIZE_32: case_block(f, lhsf, rhsf, d); break;
@@ -744,8 +744,8 @@ void constant_fold_bin_arithmetic(ast_t *ast, token_type_t operator, type_t type
 
         size_t aligned_size = td_align(inner_td->size, inner_td->alignment);
         for (size_t i = 0; i < td->as.arr.count; ++i) {
-            word_t item_l = ast_item_get(ast, td->size > WORD_SIZE, l, td->as.arr.type, i*aligned_size);
-            word_t item_r = ast_item_get(ast, td->size > WORD_SIZE, r, td->as.arr.type, i*aligned_size);
+            orword_t item_l = ast_item_get(ast, td->size > WORD_SIZE, l, td->as.arr.type, i*aligned_size);
+            orword_t item_r = ast_item_get(ast, td->size > WORD_SIZE, r, td->as.arr.type, i*aligned_size);
 
             void *addr = array_addr + (i*aligned_size);
 
@@ -759,8 +759,8 @@ void constant_fold_bin_arithmetic(ast_t *ast, token_type_t operator, type_t type
 
         for (size_t i = 0; i < td->as.struct_.fields.count; ++i) {
             struct_field_t field = td->as.struct_.fields.items[i];
-            word_t item_l = ast_item_get(ast, td->size > WORD_SIZE, l, field.type, field.offset);
-            word_t item_r = ast_item_get(ast, td->size > WORD_SIZE, r, field.type, field.offset);
+            orword_t item_l = ast_item_get(ast, td->size > WORD_SIZE, l, field.type, field.offset);
+            orword_t item_r = ast_item_get(ast, td->size > WORD_SIZE, r, field.type, field.offset);
 
             void *addr = struct_addr + field.offset;
             constant_fold_bin_arithmetic(ast, operator, field.type, item_l, item_r, addr);
@@ -774,15 +774,15 @@ void constant_fold_bin_arithmetic(ast_t *ast, token_type_t operator, type_t type
     #undef case_block
 }
 
-word_t constant_fold_bin_comparison(ast_t *ast, token_type_t operator, type_t type, word_t a, word_t b) {
+orword_t constant_fold_bin_comparison(ast_t *ast, token_type_t operator, ortype_t type, orword_t a, orword_t b) {
     typedata_t *typedata = ast_type2td(ast, type);
 
     switch (typedata->kind) {
     case TYPE_NUMBER: {
         switch (typedata->as.num) {
         case NUM_TYPE_SIGNED: {
-            s64 lhsi = a.as.s;
-            s64 rhsi = b.as.s;
+            ors64 lhsi = a.as.s;
+            ors64 rhsi = b.as.s;
             bool result = 0;
 
             switch (operator) {
@@ -793,12 +793,12 @@ word_t constant_fold_bin_comparison(ast_t *ast, token_type_t operator, type_t ty
             default: UNREACHABLE();
             }
 
-            return WORDU((u64)result);
+            return WORDU((oru64)result);
         }
         
         case NUM_TYPE_UNSIGNED: {
-            u64 lhsu = a.as.u;
-            u64 rhsu = b.as.u;
+            oru64 lhsu = a.as.u;
+            oru64 rhsu = b.as.u;
             bool result = 0;
 
             switch (operator) {
@@ -811,12 +811,12 @@ word_t constant_fold_bin_comparison(ast_t *ast, token_type_t operator, type_t ty
             default: UNREACHABLE();
             }
 
-            return WORDU((u64)result);
+            return WORDU((oru64)result);
         }
 
         case NUM_TYPE_FLOAT: {
-            f64 lhsf = a.as.d;
-            f64 rhsf = b.as.d;
+            orf64 lhsf = a.as.d;
+            orf64 rhsf = b.as.d;
             bool result = 0;
 
             switch (operator) {
@@ -829,18 +829,18 @@ word_t constant_fold_bin_comparison(ast_t *ast, token_type_t operator, type_t ty
             default: UNREACHABLE();
             }
 
-            return WORDU((u64)result);
+            return WORDU((oru64)result);
         }
         }
     }
 
-    case TYPE_STRUCT: UNREACHABLE(); /*todo*/ return (word_t){0};
+    case TYPE_STRUCT: UNREACHABLE(); /*todo*/ return (orword_t){0};
 
-    default: UNREACHABLE(); return (word_t){0};
+    default: UNREACHABLE(); return (orword_t){0};
     }
 }
 
-static bool stan_can_cast(typedatas_t *types, type_t dst, type_t src) {
+static bool stan_can_cast(typedatas_t *types, ortype_t dst, ortype_t src) {
     typedata_t *srctd = type2typedata(types, src);
     typedata_t *dsttd = type2typedata(types, dst);
 
@@ -875,7 +875,7 @@ static bool stan_can_cast(typedatas_t *types, type_t dst, type_t src) {
     return false;
 }
 
-static word_t constant_fold_cast(ast_t *ast, word_t in, type_t dst, type_t src) {
+static orword_t constant_fold_cast(ast_t *ast, orword_t in, ortype_t dst, ortype_t src) {
     typedata_t *desttd = ast_type2td(ast, dst);
     typedata_t *sourcetd = ast_type2td(ast, src);
     ASSERT(stan_can_cast(&ast->type_set.types, dst, src), "must be castable");
@@ -888,51 +888,51 @@ static word_t constant_fold_cast(ast_t *ast, word_t in, type_t dst, type_t src) 
         #define VALI (in.as.s)
         #define VALF (in.as.d)
 
-        word_t result = {0};
+        orword_t result = {0};
         if (CASTING(SIGNED, SIGNED)) {
-            if (DSIZE(8)) result.as.s = cast(s8, VALI);
-            else if (DSIZE(16)) result.as.s = cast(s16, VALI);
-            else if (DSIZE(32)) result.as.s = cast(s32, VALI);
+            if (DSIZE(8)) result.as.s = cast(ors8, VALI);
+            else if (DSIZE(16)) result.as.s = cast(ors16, VALI);
+            else if (DSIZE(32)) result.as.s = cast(ors32, VALI);
             else result.as.s = VALI;
         } else if (CASTING(SIGNED, UNSIGNED)) {
-            if (DSIZE(8)) result.as.u = cast(u8, cast(u64, VALI));
-            else if (DSIZE(16)) result.as.u = cast(u16, cast(u64, VALI));
-            else if (DSIZE(32)) result.as.u = cast(u32, cast(u64, VALI));
-            else if (DSIZE(64)) result.as.u = cast(u64, VALI);
+            if (DSIZE(8)) result.as.u = cast(oru8, cast(oru64, VALI));
+            else if (DSIZE(16)) result.as.u = cast(oru16, cast(oru64, VALI));
+            else if (DSIZE(32)) result.as.u = cast(oru32, cast(oru64, VALI));
+            else if (DSIZE(64)) result.as.u = cast(oru64, VALI);
             else UNREACHABLE();
         } else if (CASTING(SIGNED, FLOAT)) {
-            if (DSIZE(32)) result.as.d = cast(f32, VALI);
-            else if (DSIZE(64)) result.as.d = cast(f64, VALI);
+            if (DSIZE(32)) result.as.d = cast(orf32, VALI);
+            else if (DSIZE(64)) result.as.d = cast(orf64, VALI);
             else UNREACHABLE();
         } else if (CASTING(UNSIGNED, UNSIGNED)) {
-            if (DSIZE(8)) result.as.u = cast(u8, VALU);
-            else if (DSIZE(16)) result.as.u = cast(u16, VALU);
-            else if (DSIZE(32)) result.as.u = cast(u32, VALU);
+            if (DSIZE(8)) result.as.u = cast(oru8, VALU);
+            else if (DSIZE(16)) result.as.u = cast(oru16, VALU);
+            else if (DSIZE(32)) result.as.u = cast(oru32, VALU);
             else result.as.u = VALU;
         } else if (CASTING(UNSIGNED, SIGNED)) {
-            if (DSIZE(8)) result.as.s = cast(s8, cast(s64, VALU));
-            else if (DSIZE(16)) result.as.s = cast(s16, cast(s64, VALU));
-            else if (DSIZE(32)) result.as.s = cast(s32, cast(s64, VALU));
-            else if (DSIZE(64)) result.as.s = cast(s64, VALU);
+            if (DSIZE(8)) result.as.s = cast(ors8, cast(ors64, VALU));
+            else if (DSIZE(16)) result.as.s = cast(ors16, cast(ors64, VALU));
+            else if (DSIZE(32)) result.as.s = cast(ors32, cast(ors64, VALU));
+            else if (DSIZE(64)) result.as.s = cast(ors64, VALU);
             else UNREACHABLE();
         } else if (CASTING(UNSIGNED, FLOAT)) {
-            if (DSIZE(32)) result.as.d = cast(f32, VALU);
-            else if (DSIZE(64)) result.as.d = cast(f64, VALU);
+            if (DSIZE(32)) result.as.d = cast(orf32, VALU);
+            else if (DSIZE(64)) result.as.d = cast(orf64, VALU);
             else UNREACHABLE();
         } else if (CASTING(FLOAT, FLOAT)) {
-            if (DSIZE(32)) result.as.d = cast(f32, VALF);
+            if (DSIZE(32)) result.as.d = cast(orf32, VALF);
             else result.as.d = VALF;
         } else if (CASTING(FLOAT, SIGNED)) {
-            if (DSIZE(8)) result.as.u = cast(u8, cast(u64, VALF));
-            else if (DSIZE(16)) result.as.u = cast(u16, cast(u64, VALF));
-            else if (DSIZE(32)) result.as.u = cast(u32, cast(u64, VALF));
-            else if (DSIZE(64)) result.as.u = cast(u64, VALF);
+            if (DSIZE(8)) result.as.u = cast(oru8, cast(oru64, VALF));
+            else if (DSIZE(16)) result.as.u = cast(oru16, cast(oru64, VALF));
+            else if (DSIZE(32)) result.as.u = cast(oru32, cast(oru64, VALF));
+            else if (DSIZE(64)) result.as.u = cast(oru64, VALF);
             else UNREACHABLE();
         } else if (CASTING(FLOAT, SIGNED)) {
-            if (DSIZE(8)) result.as.s = cast(s8, cast(s64, VALF));
-            else if (DSIZE(16)) result.as.s = cast(s16, cast(s64, VALF));
-            else if (DSIZE(32)) result.as.s = cast(s32, cast(s64, VALF));
-            else if (DSIZE(64)) result.as.s = cast(s64, VALF);
+            if (DSIZE(8)) result.as.s = cast(ors8, cast(ors64, VALF));
+            else if (DSIZE(16)) result.as.s = cast(ors16, cast(ors64, VALF));
+            else if (DSIZE(32)) result.as.s = cast(ors32, cast(ors64, VALF));
+            else if (DSIZE(64)) result.as.s = cast(ors64, VALF);
             else UNREACHABLE();
         } else UNREACHABLE();
 
@@ -952,7 +952,7 @@ static word_t constant_fold_cast(ast_t *ast, word_t in, type_t dst, type_t src) 
     }
 }
 
-static ast_node_t *ast_implicit_cast(ast_t *ast, ast_node_t *expr, type_t dst_type) {
+static ast_node_t *ast_implicit_cast(ast_t *ast, ast_node_t *expr, ortype_t dst_type) {
     ast_node_t *inferred_type = ast_inferred_type_decl(ast, token_implicit_at_start(expr->start), token_implicit_at_start(expr->start));
     inferred_type->value_type = typeid(TYPE_TYPE);
     inferred_type->expr_val = ast_node_val_word(WORDT(dst_type));
@@ -961,14 +961,14 @@ static ast_node_t *ast_implicit_cast(ast_t *ast, ast_node_t *expr, type_t dst_ty
     cast->value_type = dst_type;
 
     if (expr->expr_val.is_concrete) {
-        word_t result = constant_fold_cast(ast, expr->expr_val.word, dst_type, expr->value_type);
+        orword_t result = constant_fold_cast(ast, expr->expr_val.word, dst_type, expr->value_type);
         cast->expr_val = ast_node_val_word(result);
         cast->is_free_number = expr->is_free_number;
     }
 
     return cast;
 }
-bool type_size_is_platform_specific(type_table_t *type_table, type_t type) {
+bool type_size_is_platform_specific(type_table_t *type_table, ortype_t type) {
     #define IS(t) typeid_eq(type, type_table->t##_)
     if (IS(s8) || IS(s16) || IS(s32) || IS(s64) ||
         IS(u8) || IS(u16) || IS(u32) || IS(u64) ||
@@ -978,7 +978,7 @@ bool type_size_is_platform_specific(type_table_t *type_table, type_t type) {
     return true;
 }
 
-static ast_node_t *cast_implicitly_if_necessary(ast_t *ast, type_t dst_type, ast_node_t *expr) {
+static ast_node_t *cast_implicitly_if_necessary(ast_t *ast, ortype_t dst_type, ast_node_t *expr) {
     ASSERT(TYPE_IS_RESOLVED(expr->value_type), "expression must be resolved already");
 
     if (typeid_eq(dst_type, expr->value_type)) return expr;
@@ -995,7 +995,7 @@ static ast_node_t *cast_implicitly_if_necessary(ast_t *ast, type_t dst_type, ast
 
         // if we now what the value of the number we just implicitly cast it...
         if (expr->expr_val.is_concrete && expr->is_free_number) {
-            word_t w = expr->expr_val.word;
+            orword_t w = expr->expr_val.word;
             switch (dst_num) {
             case NUM_TYPE_SIGNED:
                 switch ((num_size_t)(dsttd->size)) {
@@ -1003,7 +1003,7 @@ static ast_node_t *cast_implicitly_if_necessary(ast_t *ast, type_t dst_type, ast
                     switch(expr_num) {
                     case NUM_TYPE_SIGNED: if (w.as.s < INT8_MIN || w.as.s > INT8_MAX) return expr; break;
                     case NUM_TYPE_UNSIGNED: if (w.as.u > INT8_MAX) return expr; break;
-                    case NUM_TYPE_FLOAT: if (w.as.d < INT8_MIN || w.as.d > INT8_MAX || w.as.d != ((s8)w.as.d)) return expr; break;
+                    case NUM_TYPE_FLOAT: if (w.as.d < INT8_MIN || w.as.d > INT8_MAX || w.as.d != ((ors8)w.as.d)) return expr; break;
                     }
                     break;
                 
@@ -1011,7 +1011,7 @@ static ast_node_t *cast_implicitly_if_necessary(ast_t *ast, type_t dst_type, ast
                     switch(expr_num) {
                     case NUM_TYPE_SIGNED: if (w.as.s < INT16_MIN || w.as.s > INT16_MAX) return expr; break;
                     case NUM_TYPE_UNSIGNED: if (w.as.u > INT16_MAX) return expr; break;
-                    case NUM_TYPE_FLOAT: if (w.as.d < INT16_MIN || w.as.d > INT16_MAX || w.as.d != ((s16)w.as.d)) return expr; break;
+                    case NUM_TYPE_FLOAT: if (w.as.d < INT16_MIN || w.as.d > INT16_MAX || w.as.d != ((ors16)w.as.d)) return expr; break;
                     }
                     break;
                 
@@ -1019,7 +1019,7 @@ static ast_node_t *cast_implicitly_if_necessary(ast_t *ast, type_t dst_type, ast
                     switch(expr_num) {
                     case NUM_TYPE_SIGNED: if (w.as.s < INT32_MIN || w.as.s > INT32_MAX) return expr; break;
                     case NUM_TYPE_UNSIGNED: if (w.as.u > INT32_MAX)  return expr; break;
-                    case NUM_TYPE_FLOAT: if (w.as.d < INT32_MIN || w.as.d > INT32_MAX || w.as.d != ((s32)w.as.d)) return expr; break;
+                    case NUM_TYPE_FLOAT: if (w.as.d < INT32_MIN || w.as.d > INT32_MAX || w.as.d != ((ors32)w.as.d)) return expr; break;
                     }
                     break;
                 
@@ -1027,7 +1027,7 @@ static ast_node_t *cast_implicitly_if_necessary(ast_t *ast, type_t dst_type, ast
                     switch(expr_num) {
                     case NUM_TYPE_SIGNED: break;
                     case NUM_TYPE_UNSIGNED: if (w.as.u > INT64_MAX)  return expr; break;
-                    case NUM_TYPE_FLOAT: if (w.as.d < INT64_MIN || w.as.d > INT64_MAX || w.as.d != ((s64)w.as.d)) return expr; break;
+                    case NUM_TYPE_FLOAT: if (w.as.d < INT64_MIN || w.as.d > INT64_MAX || w.as.d != ((ors64)w.as.d)) return expr; break;
                     }
                     break;
                 }
@@ -1039,7 +1039,7 @@ static ast_node_t *cast_implicitly_if_necessary(ast_t *ast, type_t dst_type, ast
                     switch(expr_num) {
                     case NUM_TYPE_SIGNED: if (w.as.s < 0 || w.as.s > UINT8_MAX) return expr; break;
                     case NUM_TYPE_UNSIGNED: if (w.as.u > UINT8_MAX) return expr; break;
-                    case NUM_TYPE_FLOAT: if (w.as.d < 0 || w.as.d > UINT8_MAX || w.as.d != ((u8)w.as.d)) return expr; break;
+                    case NUM_TYPE_FLOAT: if (w.as.d < 0 || w.as.d > UINT8_MAX || w.as.d != ((oru8)w.as.d)) return expr; break;
                     }
                     break;
                 
@@ -1047,7 +1047,7 @@ static ast_node_t *cast_implicitly_if_necessary(ast_t *ast, type_t dst_type, ast
                     switch(expr_num) {
                     case NUM_TYPE_SIGNED: if (w.as.s < 0 || w.as.s > UINT16_MAX) return expr; break;
                     case NUM_TYPE_UNSIGNED: if (w.as.u > UINT16_MAX) return expr; break;
-                    case NUM_TYPE_FLOAT: if (w.as.d < 0 || w.as.d > UINT16_MAX || w.as.d != ((u16)w.as.d)) return expr; break;
+                    case NUM_TYPE_FLOAT: if (w.as.d < 0 || w.as.d > UINT16_MAX || w.as.d != ((oru16)w.as.d)) return expr; break;
                     }
                     break;
                 
@@ -1055,7 +1055,7 @@ static ast_node_t *cast_implicitly_if_necessary(ast_t *ast, type_t dst_type, ast
                     switch(expr_num) {
                     case NUM_TYPE_SIGNED: if (w.as.s < 0 || w.as.s > UINT32_MAX) return expr; break;
                     case NUM_TYPE_UNSIGNED: if (w.as.u > UINT32_MAX)  return expr; break;
-                    case NUM_TYPE_FLOAT: if (w.as.d < 0 || w.as.d > UINT32_MAX || w.as.d != ((u32)w.as.d)) return expr; break;
+                    case NUM_TYPE_FLOAT: if (w.as.d < 0 || w.as.d > UINT32_MAX || w.as.d != ((oru32)w.as.d)) return expr; break;
                     }
                     break;
                 
@@ -1063,7 +1063,7 @@ static ast_node_t *cast_implicitly_if_necessary(ast_t *ast, type_t dst_type, ast
                     switch(expr_num) {
                     case NUM_TYPE_SIGNED: if (w.as.s < 0) return expr; break;
                     case NUM_TYPE_UNSIGNED: break;
-                    case NUM_TYPE_FLOAT: if (w.as.d < 0 || w.as.d > UINT64_MAX || w.as.d != ((u64)w.as.d)) return expr; break;
+                    case NUM_TYPE_FLOAT: if (w.as.d < 0 || w.as.d > UINT64_MAX || w.as.d != ((oru64)w.as.d)) return expr; break;
                     }
                     break;
                 }
@@ -1094,7 +1094,7 @@ static ast_node_t *cast_implicitly_if_necessary(ast_t *ast, type_t dst_type, ast
     return cast;
 }
 
-static bool stan_run(analyzer_t *analyzer, vm_t *vm, ast_node_t *expr, word_t *out_result) {
+static bool stan_run(analyzer_t *analyzer, vm_t *vm, ast_node_t *expr, orword_t *out_result) {
     tmp_arena_t *tmp = allocator_borrow();
 
     function_t *function = new_function(vm->program_mem, tmp->allocator);
@@ -1102,14 +1102,14 @@ static bool stan_run(analyzer_t *analyzer, vm_t *vm, ast_node_t *expr, word_t *o
 
     vm_fresh_run(analyzer->run_vm, function);
 
-    word_t result = analyzer->run_vm->registers[REG_RESULT];
+    orword_t result = analyzer->run_vm->registers[REG_RESULT];
     *out_result = result;
 
     allocator_return(tmp);
     return true;
 }
 
-static matched_value_t stan_pattern_match_or_error(analyzer_t *analyzer, ast_node_t *decl, type_path_t *expected, type_t actual, ast_node_t *arg) {
+static matched_value_t stan_pattern_match_or_error(analyzer_t *analyzer, ast_node_t *decl, type_path_t *expected, ortype_t actual, ast_node_t *arg) {
     if (TYPE_IS_INVALID(actual)) {
         return (matched_value_t){.type=typeid(TYPE_INVALID)};
     }
@@ -1184,7 +1184,7 @@ static matched_value_t stan_pattern_match_or_error(analyzer_t *analyzer, ast_nod
             return (matched_value_t){.type=typeid(TYPE_INVALID)};
         }
 
-        type_t arg_type = td->as.function.argument_types.items[arg_index];
+        ortype_t arg_type = td->as.function.argument_types.items[arg_index];
 
         return stan_pattern_match_or_error(analyzer, decl, expected->next, arg_type, arg);
     }
@@ -1201,7 +1201,7 @@ static matched_value_t stan_pattern_match_or_error(analyzer_t *analyzer, ast_nod
             return (matched_value_t){.type=typeid(TYPE_INVALID)};
         }
 
-        type_t ret_type = td->as.function.return_type;
+        ortype_t ret_type = td->as.function.return_type;
 
         return stan_pattern_match_or_error(analyzer, decl, expected->next, ret_type, arg);
     }
@@ -1272,7 +1272,7 @@ static void stan_circular_dependency_error(analyzer_t *analyzer, ast_t *ast, ast
 
 static void resolve_struct(analyzer_t *analyzer, ast_t *ast, analysis_state_t state, ast_node_t *struct_def);
 
-static void retry_struct_resolve(analyzer_t *analyzer, ast_node_t *dep_expr, type_t struct_type) {
+static void retry_struct_resolve(analyzer_t *analyzer, ast_node_t *dep_expr, ortype_t struct_type) {
     ast_node_t *struct_decl = NULL;
     for (size_t i = analyzer->pending_dependencies.count; i > 0; --i) {
         ast_node_t *dep = analyzer->pending_dependencies.items[i-1];
@@ -1302,7 +1302,7 @@ static void retry_struct_resolve(analyzer_t *analyzer, ast_node_t *dep_expr, typ
     }
 }
 
-static bool retry_resolve_possible_struct_or_error(analyzer_t *analyzer, ast_node_t *dep_expr, type_t struct_type) {
+static bool retry_resolve_possible_struct_or_error(analyzer_t *analyzer, ast_node_t *dep_expr, ortype_t struct_type) {
     typedata_t *td = ast_type2td(analyzer->ast, struct_type);
     if (td->kind != TYPE_STRUCT || td->as.struct_.status == STRUCT_STATUS_COMPLETE) {
         return true;
@@ -1352,7 +1352,7 @@ static size_t stan_function_is_building(analyzer_t *analyzer, function_t *functi
     return analyzer->pending_dependencies.count;
 }
 
-size_t stan_struct_is_building(analyzer_t *analyzer, type_t struct_type) {
+size_t stan_struct_is_building(analyzer_t *analyzer, ortype_t struct_type) {
     bool passed_through_fold = false;
     for (size_t i = analyzer->pending_dependencies.count; i > 0; --i) {
         ast_node_t *dep = analyzer->pending_dependencies.items[i-1];
@@ -1360,7 +1360,7 @@ size_t stan_struct_is_building(analyzer_t *analyzer, type_t struct_type) {
         switch (dep->node_type) {
         case AST_NODE_TYPE_EXPRESSION_DIRECTIVE: passed_through_fold = true; break;
         case AST_NODE_TYPE_EXPRESSION_STRUCT: {
-            type_t t = dep->expr_val.word.as.t;
+            ortype_t t = dep->expr_val.word.as.t;
             if (passed_through_fold && typeid_eq(t, struct_type)) {
                 return i-1;
             }
@@ -1389,7 +1389,7 @@ void resolve_expression(
         analyzer_t *analyzer,
         ast_t *ast,
         analysis_state_t state,
-        type_t implicit_type,
+        ortype_t implicit_type,
         ast_node_t *expr,
         bool is_consumed);
 
@@ -1542,7 +1542,7 @@ static ast_node_t *stan_realize_inferred_funcdefcall_or_errornull(analyzer_t *an
     return result;
 }
 
-static void ast_copy_expr_val_to_memory(ast_t *ast, type_t type, word_t src, void *dest) {
+static void ast_copy_expr_val_to_memory(ast_t *ast, ortype_t type, orword_t src, void *dest) {
     typedata_t *td = ast_type2td(ast, type);
 
     switch (td->kind) {
@@ -1553,14 +1553,14 @@ static void ast_copy_expr_val_to_memory(ast_t *ast, type_t type, word_t src, voi
             case NUM_SIZE_8: UNREACHABLE(); break;
             case NUM_SIZE_16: UNREACHABLE(); break;
             case NUM_SIZE_32: {
-                f32 val = (f32)src.as.d;
-                memcpy(dest, &val, sizeof(f32));
+                orf32 val = (orf32)src.as.d;
+                memcpy(dest, &val, sizeof(orf32));
                 break;
             }
 
             case NUM_SIZE_64: {
-                f64 val = (f64)src.as.d;
-                memcpy(dest, &val, sizeof(f64));
+                orf64 val = (orf64)src.as.d;
+                memcpy(dest, &val, sizeof(orf64));
                 break;
             }
             }
@@ -1571,26 +1571,26 @@ static void ast_copy_expr_val_to_memory(ast_t *ast, type_t type, word_t src, voi
         case NUM_TYPE_UNSIGNED: {
             switch ((num_size_t)td->size) {
             case NUM_SIZE_8: {
-                u8 val = (u8)src.as.u;
-                memcpy(dest, &val, sizeof(u8));
+                oru8 val = (oru8)src.as.u;
+                memcpy(dest, &val, sizeof(oru8));
                 break;
             }
 
             case NUM_SIZE_16: {
-                u16 val = (u16)src.as.u;
-                memcpy(dest, &val, sizeof(u16));
+                oru16 val = (oru16)src.as.u;
+                memcpy(dest, &val, sizeof(oru16));
                 break;
             }
 
             case NUM_SIZE_32: {
-                u32 val = (u32)src.as.u;
-                memcpy(dest, &val, sizeof(u32));
+                oru32 val = (oru32)src.as.u;
+                memcpy(dest, &val, sizeof(oru32));
                 break;
             }
 
             case NUM_SIZE_64: {
-                u64 val = (u64)src.as.u;
-                memcpy(dest, &val, sizeof(u64));
+                oru64 val = (oru64)src.as.u;
+                memcpy(dest, &val, sizeof(oru64));
                 break;
             }
             }
@@ -1643,7 +1643,7 @@ static struct_field_t ast_struct_field_from_decl(ast_t *ast, ast_node_t *decl, a
     field.name = sv2string(decl->identifier.view, arena);
     field.type = decl->value_type;
 
-    word_t word = an_decl_expr(decl)->expr_val.word;
+    orword_t word = an_decl_expr(decl)->expr_val.word;
     typedata_t *td = ast_type2td(ast, field.type);
     if (td->size > WORD_SIZE) {
         void *data = arena_alloc(arena, td->size);
@@ -1681,7 +1681,7 @@ static void resolve_struct(analyzer_t *analyzer, ast_t *ast, analysis_state_t st
         declare_definition(analyzer, new_state.scope, decl);
     }
 
-    type_t struct_type;
+    ortype_t struct_type;
     if (TYPE_IS_UNRESOLVED(struct_def->value_type)) {
         struct_type = type_set_fetch_anonymous_incomplete_struct(&ast->type_set);
         struct_def->value_type = typeid(TYPE_TYPE);
@@ -1799,7 +1799,7 @@ bool ast_find_field_by_name(struct_fields_t fields, string_view_t name, struct_f
     return false;
 }
 
-bool ast_find_struct_field_by_name(ast_t *ast, type_t struct_type, string_view_t name, struct_field_t *field, size_t *index) {
+bool ast_find_struct_field_by_name(ast_t *ast, ortype_t struct_type, string_view_t name, struct_field_t *field, size_t *index) {
     typedata_t *td = ast_type2td(ast, struct_type);
     MUST(td->kind == TYPE_STRUCT || td->kind == TYPE_STRING);
     return ast_find_field_by_name(td->as.struct_.fields, name, field, index);
@@ -1958,15 +1958,15 @@ ast_inferred_function_t *ast_inferred_function_from_funcdef(ast_t *ast, ast_node
     return func;
 }
 
-string_t parse_token_as_str8(string_view_t str, arena_t *arena) {
+orstring_t parse_token_as_str8(string_view_t str, arena_t *arena) {
     ++str.data;
     str.length -= 2;
 
-    string_t s = sv2string(str, arena);
+    orstring_t s = sv2string(str, arena);
     return s;
 }
 
-word_t ast_struct_item_get(ast_t *ast, type_t struct_type, string_view_t field_name, word_t struct_) {
+orword_t ast_struct_item_get(ast_t *ast, ortype_t struct_type, string_view_t field_name, orword_t struct_) {
     typedata_t *td = ast_type2td(ast, struct_type);
     MUST(td->kind == TYPE_STRING || td->kind == TYPE_STRUCT);
 
@@ -1975,11 +1975,11 @@ word_t ast_struct_item_get(ast_t *ast, type_t struct_type, string_view_t field_n
     bool success = ast_find_field_by_name(td->as.struct_.fields, field_name, &field, &field_index);
     MUST(success);
 
-    word_t ret = ast_item_get(ast, td->size > WORD_SIZE, struct_, field.type, field.offset);
+    orword_t ret = ast_item_get(ast, td->size > WORD_SIZE, struct_, field.type, field.offset);
     return ret;
 }
 
-void ast_struct_item_set(ast_t *ast, type_t struct_type, string_view_t field_name, word_t *struct_, word_t value) {
+void ast_struct_item_set(ast_t *ast, ortype_t struct_type, string_view_t field_name, orword_t *struct_, orword_t value) {
     typedata_t *td = ast_type2td(ast, struct_type);
     MUST(td->kind == TYPE_STRING || td->kind == TYPE_STRUCT);
 
@@ -2045,7 +2045,7 @@ static void stan_realize_parameterized_struct(analyzer_t *analyzer, analysis_sta
         resolve_declaration_definition(analyzer, analyzer->ast, (analysis_state_t){.scope=&inferred_scope}, param);
         param->is_mutable = false;
 
-        type_t implicit_type = TYPE_IS_INVALID(param->value_type) ? typeid(TYPE_UNRESOLVED) : param->value_type;
+        ortype_t implicit_type = TYPE_IS_INVALID(param->value_type) ? typeid(TYPE_UNRESOLVED) : param->value_type;
 
         size_t arg_index = i+an_call_arg_start(param_struct_call);
         ast_node_t *arg = param_struct_call->children.items[arg_index];
@@ -2146,11 +2146,11 @@ defer:
     allocator_return(tmp);
 }
 
-static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t state, ast_node_t *call, type_t implicit_type) {
+static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t state, ast_node_t *call, ortype_t implicit_type) {
     ast_node_t *callee = an_callee(call);
     resolve_expression(analyzer, ast, state, implicit_type, callee, true);
 
-    type_t callee_type = callee->value_type;
+    ortype_t callee_type = callee->value_type;
     typedata_t *callee_td = ast_type2td(ast, callee_type);
 
     call->value_type = typeid(TYPE_INVALID);
@@ -2278,7 +2278,7 @@ static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
 
             size_t argi = i - an_call_arg_start(expr);
             
-            type_t arg_implicit_type = typeid(TYPE_UNRESOLVED);
+            ortype_t arg_implicit_type = typeid(TYPE_UNRESOLVED);
             if (argi < callee_td->as.function.argument_types.count) {
                 arg_implicit_type = callee_td->as.function.argument_types.items[argi];
             }
@@ -2323,10 +2323,10 @@ static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
     }
 }
 
-string_t ast_word2str(ast_t *ast, word_t word) {
-    word_t cstr = ast_struct_item_get(ast, ast->type_set.str8_t_, lit2sv("cstr"), word);
-    word_t length = ast_struct_item_get(ast, ast->type_set.str8_t_, lit2sv("length"), word);
-    string_t s = {
+orstring_t ast_word2str(ast_t *ast, orword_t word) {
+    orword_t cstr = ast_struct_item_get(ast, ast->type_set.str8_t_, lit2sv("cstr"), word);
+    orword_t length = ast_struct_item_get(ast, ast->type_set.str8_t_, lit2sv("length"), word);
+    orstring_t s = {
         .cstr = cstr.as.p,
         .length = (size_t)length.as.u
     };
@@ -2346,10 +2346,10 @@ static ffi_t *make_ffi(ast_t *ast) {
 }
 
 
-string_t ast_generate_moduleid(string_t file_path, arena_t *arena) {
+orstring_t ast_generate_moduleid(orstring_t file_path, arena_t *arena) {
     tmp_arena_t *tmp = allocator_borrow();
 
-    string_t absolute_path;
+    orstring_t absolute_path;
     bool success = core_abspath(file_path, tmp->allocator, &absolute_path);
     MUST(success);
 
@@ -2357,7 +2357,7 @@ string_t ast_generate_moduleid(string_t file_path, arena_t *arena) {
     success = core_fileid(absolute_path, &sb);
     MUST(success);
 
-    string_t id = bytes2alphanum(sb.items, sb.count, arena);
+    orstring_t id = bytes2alphanum(sb.items, sb.count, arena);
 
     allocator_return(tmp);
 
@@ -2389,7 +2389,7 @@ static void resolve_module(analyzer_t *analyzer, ast_t *ast, ast_node_t *module)
     }
 }
 
-static bool resolve_directive_argument(analyzer_t *analyzer, ast_t *ast, analysis_state_t state, ast_node_t *arg, size_t arg_zero_based_pos, type_t expected_type) {
+static bool resolve_directive_argument(analyzer_t *analyzer, ast_t *ast, analysis_state_t state, ast_node_t *arg, size_t arg_zero_based_pos, ortype_t expected_type) {
     resolve_expression(analyzer, ast, state, typeid(TYPE_STRING), arg, true);
     if (!typeid_eq(expected_type, arg->value_type)) {
         if (!TYPE_IS_INVALID(arg->value_type)) {
@@ -2420,19 +2420,19 @@ static bool resolve_directive_argument(analyzer_t *analyzer, ast_t *ast, analysi
 
 static ast_node_t *stan_load_module_or_errornull(analyzer_t *analyzer, ast_t *ast, ast_node_t *arg_ref, string_view_t module_path) {
     tmp_arena_t *tmp = allocator_borrow();
-    string_t s = sv2string(module_path, tmp->allocator);
+    orstring_t s = sv2string(module_path, tmp->allocator);
 
     ast_node_t *result = NULL;
     Nob_String_Builder sb = {0};
     
-    string_t moduleid = ast_generate_moduleid(s, tmp->allocator);
+    orstring_t moduleid = ast_generate_moduleid(s, tmp->allocator);
 
     ast_node_t *module;
     if (table_get(s2n, ast->moduleid2node, moduleid, &module)) {
         nob_return_defer(module);
     }
 
-    string_t source;
+    orstring_t source;
     if (!nob_read_entire_file(s.cstr, &sb)) {
         stan_error(analyzer, OR_ERROR(
             .tag = "sem.nomodule.loadmodule",
@@ -2464,7 +2464,7 @@ void resolve_expression(
         analyzer_t *analyzer,
         ast_t *ast,
         analysis_state_t state,
-        type_t implicit_type,
+        ortype_t implicit_type,
         ast_node_t *expr,
         bool is_consumed) {
     
@@ -2502,7 +2502,7 @@ void resolve_expression(
                     unless (TYPE_IS_INVALID(child->value_type)) {
                         typedata_t *td = ast_type2td(ast, child->value_type);
 
-                        word_t result;
+                        orword_t result;
                         bool success = stan_run(analyzer, analyzer->run_vm, child, &result);
                         if (td->size > WORD_SIZE) {
                             void *word = ast_multiword_value(ast, b2w2b(td->size));
@@ -2571,7 +2571,7 @@ void resolve_expression(
                         break;
                     }
 
-                    string_t module_path = ast_word2str(ast, child->expr_val.word);
+                    orstring_t module_path = ast_word2str(ast, child->expr_val.word);
 
                     ast_node_t *module = stan_load_module_or_errornull(analyzer, ast, child, string2sv(module_path));
                     expr->expr_val = ast_node_val_word(WORDP(module));
@@ -2586,7 +2586,7 @@ void resolve_expression(
                 }
             } else if (sv_eq(expr->identifier.view, lit2sv("@fficall"))) {
                 tmp_arena_t *tmp = allocator_borrow();
-                type_t fficall_return_type = typeid(TYPE_INVALID);
+                ortype_t fficall_return_type = typeid(TYPE_INVALID);
 
                 if (expr->children.count < an_fficall_arg_start(expr)) {
                     stan_error(analyzer, OR_ERROR(
@@ -2606,8 +2606,8 @@ void resolve_expression(
                     goto defer;
                 }
 
-                string_t libpath = ast_word2str(ast, libpath_node->expr_val.word);
-                string_t abslibpath;
+                orstring_t libpath = ast_word2str(ast, libpath_node->expr_val.word);
+                orstring_t abslibpath;
                 if (!core_abspath(libpath, tmp->allocator, &abslibpath)) {
                     stan_error(analyzer, OR_ERROR(
                         .tag = "sem.inarg.fficall-libpath",
@@ -2650,8 +2650,8 @@ void resolve_expression(
                     }
                 }
 
-                string_t funcname = ast_word2str(ast, funcname_node->expr_val.word);
-                string_t key = string_format("%s:%s", tmp->allocator, abslibpath.cstr, funcname.cstr);
+                orstring_t funcname = ast_word2str(ast, funcname_node->expr_val.word);
+                orstring_t key = string_format("%s:%s", tmp->allocator, abslibpath.cstr, funcname.cstr);
                 ffi_t *ffi;
                 if (!table_get(s2fis, ast->ffis, key, &ffi)) {
                     ffi = make_ffi(ast);
@@ -2661,7 +2661,7 @@ void resolve_expression(
                     ffi->return_type = fficall_return_type;
                     ffi->node = expr;
                     for (size_t i = 0; i < types.count; ++i) {
-                        type_t arg_type = types.items[i];
+                        ortype_t arg_type = types.items[i];
                         array_push(&ffi->arg_types, arg_type);
                     }
 
@@ -2694,8 +2694,8 @@ void resolve_expression(
 
                     bool match = true;
                     for (size_t i = 0; i < arg_count; ++i) {
-                        type_t expected = ffi->arg_types.items[i];
-                        type_t actual = types.items[i];
+                        ortype_t expected = ffi->arg_types.items[i];
+                        ortype_t actual = types.items[i];
                         if (!typeid_eq(expected, actual)) {
                             match = false;
                             stan_error(analyzer, OR_ERROR(
@@ -2822,13 +2822,13 @@ void resolve_expression(
                 MUST(false); // todo: error maybe or inferred idk
             }
 
-            type_t array_value_type = type_expr->expr_val.word.as.t;
+            ortype_t array_value_type = type_expr->expr_val.word.as.t;
             if (!retry_resolve_possible_struct_or_error(analyzer, type_expr, array_value_type)) {
                 INVALIDATE(expr);
                 break;
             }
 
-            type_t array_type = type_set_fetch_array(&ast->type_set, array_value_type, size_expr->expr_val.word.as.u);
+            ortype_t array_type = type_set_fetch_array(&ast->type_set, array_value_type, size_expr->expr_val.word.as.u);
 
             expr->value_type = typeid(TYPE_TYPE);
             expr->expr_val = ast_node_val_word(WORDT(array_type));
@@ -2857,7 +2857,7 @@ void resolve_expression(
                 expr->lvalue_node = expr;
             }
 
-            type_t item_type = typeid(TYPE_INVALID);
+            ortype_t item_type = typeid(TYPE_INVALID);
             // accessee
             {
                 if (accessee_td->kind != TYPE_ARRAY && accessee_td->kind != TYPE_POINTER) {
@@ -2874,7 +2874,7 @@ void resolve_expression(
 
                 switch (accessee_td->kind) {
                 case TYPE_POINTER: {
-                    type_t ptr_inner = accessee_td->as.ptr.type;
+                    ortype_t ptr_inner = accessee_td->as.ptr.type;
                     typedata_t *ptr_inner_td = ast_type2td(ast, ptr_inner);
 
                     if (ptr_inner_td->kind != TYPE_ARRAY) {
@@ -2983,16 +2983,16 @@ void resolve_expression(
                     break;
                 }
 
-                type_t init_type = type_expr->expr_val.word.as.t;
+                ortype_t init_type = type_expr->expr_val.word.as.t;
                 typedata_t *init_type_td = ast_type2td(ast, init_type);
 
                 expr->value_type = init_type;
 
                 switch (init_type_td->kind) {
                 case TYPE_ARRAY: {
-                    type_t arg_implicit_type;
+                    ortype_t arg_implicit_type;
                     {
-                        type_t t = type_expr->expr_val.word.as.t;
+                        ortype_t t = type_expr->expr_val.word.as.t;
                         typedata_t *td = ast_type2td(ast, t);
                         arg_implicit_type = td->as.arr.type;
                     }
@@ -3012,7 +3012,7 @@ void resolve_expression(
                         break;
                     }
 
-                    type_t array_type = init_type_td->as.arr.type;
+                    ortype_t array_type = init_type_td->as.arr.type;
 
                     bool is_constant = true;
 
@@ -3062,7 +3062,7 @@ void resolve_expression(
                     }
 
                     if (is_constant) {
-                        word_t *start;
+                        orword_t *start;
                         if (init_type_td->size > WORD_SIZE) {
                             start = ast_multiword_value(ast, b2w(init_type_td->size));
                             expr->expr_val = ast_node_val_word(WORDP(start));
@@ -3201,7 +3201,7 @@ void resolve_expression(
                     }
 
                     if (is_constant) {
-                        word_t *start;
+                        orword_t *start;
                         if (init_type_td->size > WORD_SIZE) {
                             start = ast_multiword_value(ast, b2w(init_type_td->size));
                             expr->expr_val = ast_node_val_word(WORDP(start));
@@ -3310,9 +3310,9 @@ void resolve_expression(
                     expr->expr_val = ast_node_val_word(WORDP(w));
                 }
 
-                string_t value = parse_token_as_str8(expr->start.view, ast->arena);
+                orstring_t value = parse_token_as_str8(expr->start.view, ast->arena);
                 ast_struct_item_set(ast, expr->value_type, lit2sv("cstr"), &expr->expr_val.word, WORDP((void*)value.cstr));
-                ast_struct_item_set(ast, expr->value_type, lit2sv("length"), &expr->expr_val.word, WORDI((s64)value.length));
+                ast_struct_item_set(ast, expr->value_type, lit2sv("length"), &expr->expr_val.word, WORDI((ors64)value.length));
             } else {
                 INVALIDATE(expr);
             }
@@ -3419,7 +3419,7 @@ void resolve_expression(
                 expr->value_type = left->value_type;
                 if (left->expr_val.is_concrete && right->expr_val.is_concrete) {
                     typedata_t *exprtd = ast_type2td(ast, expr->value_type);
-                    word_t result;
+                    orword_t result;
                     void *result_addr;
                     if (exprtd->size > WORD_SIZE) {
                         result_addr = ast_multiword_value(ast, exprtd->size);
@@ -3434,7 +3434,7 @@ void resolve_expression(
                     if (exprtd->size > WORD_SIZE) {
                         expr->expr_val = ast_node_val_word(WORDP(result_addr));
                     } else {
-                        word_t val = ast_item_get(ast, true, WORDP(result_addr), expr->value_type, 0);
+                        orword_t val = ast_item_get(ast, true, WORDP(result_addr), expr->value_type, 0);
                         expr->expr_val = ast_node_val_word(val);
                     }
                 }
@@ -3456,15 +3456,15 @@ void resolve_expression(
                 
                 // constant fold
                 if (left->expr_val.is_concrete && right->expr_val.is_concrete) {
-                    word_t wordl = left->expr_val.word;
-                    word_t wordr = right->expr_val.word;
+                    orword_t wordl = left->expr_val.word;
+                    orword_t wordr = right->expr_val.word;
 
                     typedata_t *td = ast_type2td(ast, left->value_type);
                     if (td->size > WORD_SIZE) {
                         // todo
                         UNREACHABLE();
                     } else {
-                        u8 result = (u8)(memcmp(&wordl, &wordr, WORD_SIZE) == 0);
+                        oru8 result = (oru8)(memcmp(&wordl, &wordr, WORD_SIZE) == 0);
                         switch (expr->operator.type) {
                         case TOKEN_EQUAL_EQUAL: {
                             expr->expr_val = ast_node_val_word(WORDU(result));
@@ -3509,7 +3509,7 @@ void resolve_expression(
 
                 expr->value_type = typeid(TYPE_BOOL);
                 if (left->expr_val.is_concrete && right->expr_val.is_concrete) {
-                    word_t word = constant_fold_bin_comparison(ast, expr->operator.type, left->value_type, left->expr_val.word, right->expr_val.word);
+                    orword_t word = constant_fold_bin_comparison(ast, expr->operator.type, left->value_type, left->expr_val.word, right->expr_val.word);
                     expr->expr_val = ast_node_val_word(word);
                     expr->is_free_number = left->is_free_number && right->is_free_number;
                 }
@@ -3554,7 +3554,7 @@ void resolve_expression(
                     default: UNREACHABLE();
                     }
 
-                    expr->expr_val = ast_node_val_word(WORDU((u64)result));
+                    expr->expr_val = ast_node_val_word(WORDU((oru64)result));
                     expr->is_free_number = left->is_free_number && right->is_free_number;
                 }
             } else if (expr->operator.type == TOKEN_LESS_LESS) {
@@ -3579,13 +3579,13 @@ void resolve_expression(
 
                 if (TYPE_IS_TYPE(op->value_type) && op->expr_val.is_concrete) {
                     expr->value_type = typeid(TYPE_TYPE);
-                    type_t ptr_type = type_set_fetch_pointer(&ast->type_set, op->expr_val.word.as.t);
+                    ortype_t ptr_type = type_set_fetch_pointer(&ast->type_set, op->expr_val.word.as.t);
                     expr->expr_val = ast_node_val_word(WORDT(ptr_type));
                 } else {
                     switch (op->lvalue_node->node_type) {
                     case AST_NODE_TYPE_EXPRESSION_DEF_VALUE: {
                         if (op->lvalue_node->ref_decl->is_mutable) {
-                            type_t ptr_type = type_set_fetch_pointer(&ast->type_set, op->lvalue_node->value_type);
+                            ortype_t ptr_type = type_set_fetch_pointer(&ast->type_set, op->lvalue_node->value_type);
                             expr->value_type = ptr_type;
                         } else {
                             stan_error(analyzer, OR_ERROR(
@@ -3601,13 +3601,13 @@ void resolve_expression(
                     }
 
                     case AST_NODE_TYPE_EXPRESSION_ARRAY_ITEM_ACCESS: {
-                        type_t type = type_set_fetch_pointer(&ast->type_set, op->lvalue_node->value_type);
+                        ortype_t type = type_set_fetch_pointer(&ast->type_set, op->lvalue_node->value_type);
                         expr->value_type = type;
                         break;
                     }
 
                     case AST_NODE_TYPE_EXPRESSION_DOT_ACCESS: {
-                        type_t type = type_set_fetch_pointer(&ast->type_set, op->lvalue_node->value_type);
+                        ortype_t type = type_set_fetch_pointer(&ast->type_set, op->lvalue_node->value_type);
                         expr->value_type = type;
                         break;
                     }
@@ -3678,7 +3678,7 @@ void resolve_expression(
                     if (an_operand(expr)->expr_val.is_concrete) {
                         bool value = an_operand(expr)->expr_val.word.as.u;
                         value = !value;
-                        expr->expr_val = ast_node_val_word(WORDU((u64)value));
+                        expr->expr_val = ast_node_val_word(WORDU((oru64)value));
                     }
                     break;
                 }
@@ -3713,14 +3713,14 @@ void resolve_expression(
                     if (an_operand(expr)->expr_val.is_concrete) {
                         switch (operand_td->as.num) {
                         case NUM_TYPE_SIGNED: {
-                            s64 val = operand->expr_val.word.as.s;
+                            ors64 val = operand->expr_val.word.as.s;
                             val = -val;
                             expr->expr_val = ast_node_val_word(WORDI(val));
                             break;
                         }
 
                         case NUM_TYPE_FLOAT: {
-                            f64 val = operand->expr_val.word.as.d;
+                            orf64 val = operand->expr_val.word.as.d;
                             val = -val;
                             expr->expr_val = ast_node_val_word(WORDD(val));
                             break;
@@ -3763,7 +3763,7 @@ void resolve_expression(
         }
 
         case AST_NODE_TYPE_EXPRESSION_DOT_ACCESS: {
-            type_t lhs_type = implicit_type;
+            ortype_t lhs_type = implicit_type;
             ast_node_t *lhs = an_dot_lhs(expr);
             if (an_is_notnone(lhs)) {
                 resolve_expression(analyzer, ast, state, implicit_type, lhs, true);
@@ -3840,7 +3840,7 @@ void resolve_expression(
                     typedata_t *fieldtd = ast_type2td(ast, field.type);
                     start += fieldtd->size;
 
-                    word_t result = ast_mem2word(ast, start, field.type);
+                    orword_t result = ast_mem2word(ast, start, field.type);
                     expr->expr_val = ast_node_val_word(result);
                 }
                 break;
@@ -3859,7 +3859,7 @@ void resolve_expression(
                     break;
                 }
 
-                type_t struct_type = lhs->expr_val.word.as.t;
+                ortype_t struct_type = lhs->expr_val.word.as.t;
                 typedata_t *td = ast_type2td(ast, struct_type);
                 if (td->kind != TYPE_STRUCT) {
                     stan_error(analyzer, OR_ERROR(
@@ -3999,7 +3999,7 @@ void resolve_expression(
 
             expr->value_type = lvalue_node->value_type;
 
-            type_t rhs_type = rhs->value_type;
+            ortype_t rhs_type = rhs->value_type;
             unless (TYPE_IS_INVALID(rhs_type) || TYPE_IS_INVALID(lhs->value_type) || typeid_eq(lvalue_node->value_type, rhs_type)) {
                 stan_error(analyzer, OR_ERROR(
                     .tag = "sem.type-mismatch.decl-and-type",
@@ -4085,7 +4085,7 @@ void resolve_expression(
 
                 resolve_expression(analyzer, ast, branch_state, implicit_type, an_else(expr), is_consumed);
 
-                type_t branch_type = resolve_block_return_types_or_error(analyzer, expr);
+                ortype_t branch_type = resolve_block_return_types_or_error(analyzer, expr);
                 expr->value_type = branch_type;
 
                 if (TYPE_IS_INVALID(branch_type)) {
@@ -4138,10 +4138,10 @@ void resolve_expression(
 
                 if (expr->is_consumed) {
                     if (types.count > 0) {
-                        type_t check_type = types.items[0];
+                        ortype_t check_type = types.items[0];
                             ast_node_t *check_node = nodes.items[0];
                         for (size_t i = 1; i < types.count; ++i) {
-                            type_t other_type = types.items[i];
+                            ortype_t other_type = types.items[i];
                             unless (typeid_eq(check_type, other_type)) {
                                 ast_node_t *other_node = nodes.items[i];
                                 stan_error(analyzer, OR_ERROR(
@@ -4176,7 +4176,7 @@ void resolve_expression(
                     scope_t *func_def_scope = NULL;
                     bool success = get_nearest_jmp_scope_in_func_or_error(analyzer, expr, state.scope, SCOPE_TYPE_FUNCDEF, lit2sv(""), &func_def_scope);
 
-                    type_t implicit_type = typeid(TYPE_UNRESOLVED);
+                    ortype_t implicit_type = typeid(TYPE_UNRESOLVED);
                     unless (success) {
                         INVALIDATE(expr);
                     } else {
@@ -4313,7 +4313,7 @@ void resolve_expression(
 
                 ast_node_t *expr_arg = expr->children.items[arg_start];
                 resolve_expression(analyzer, ast, state, typeid(TYPE_UNRESOLVED), expr_arg, true);
-                type_t expr_type = expr_arg->value_type;
+                ortype_t expr_type = expr_arg->value_type;
 
                 if (TYPE_IS_TYPE(expr_type) && expr_arg->expr_val.is_concrete) {
                     expr_arg->value_type = typeid(TYPE_TYPE);
@@ -4344,7 +4344,7 @@ void resolve_expression(
                 ast_node_t *arg = expr->children.items[arg_start];
                 resolve_expression(analyzer, ast, state, typeid(TYPE_UNRESOLVED), arg, true);
 
-                type_t arg_type = arg->value_type;
+                ortype_t arg_type = arg->value_type;
                 typedata_t *argtd = ast_type2td(ast, arg_type);
 
                 if (argtd->kind != TYPE_ARRAY) {
@@ -4391,7 +4391,7 @@ void resolve_expression(
                     expr->value_type = type_expr->expr_val.word.as.t;
 
                     if (cast_expr->expr_val.is_concrete) {
-                        word_t result = constant_fold_cast(ast, cast_expr->expr_val.word, expr->value_type, cast_expr->value_type);
+                        orword_t result = constant_fold_cast(ast, cast_expr->expr_val.word, expr->value_type, cast_expr->value_type);
                         expr->expr_val = ast_node_val_word(result);
                         expr->is_free_number = cast_expr->is_free_number;
                     }
@@ -4428,10 +4428,10 @@ void resolve_expression(
 }
 
 static void declare_definition(analyzer_t *analyzer, scope_t *scope, ast_node_t *definition) {
-    word_t def_word;
+    orword_t def_word;
     
     tmp_arena_t *tmp = allocator_borrow();
-    string_t identifier = sv2string(definition->identifier.view, tmp->allocator);
+    orstring_t identifier = sv2string(definition->identifier.view, tmp->allocator);
 
     bool defined_through_some_recursive_definition = false;
     if (table_get(s2w, scope->definitions, identifier, &def_word)) {
@@ -4710,7 +4710,7 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
 
     {
         ast_node_t *decl_expr = an_decl_expr(decl);
-        type_t declared_type = decl->value_type;
+        ortype_t declared_type = decl->value_type;
 
         ast_node_t *casted_expr = cast_implicitly_if_necessary(ast, declared_type, decl_expr);
         unless (typeid_eq(declared_type, casted_expr->value_type)) {
@@ -4768,16 +4768,16 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
 
 static ast_node_t *get_builtin_decl(ast_t *ast, string_view_t identifier) {
     tmp_arena_t *tmp = allocator_borrow();
-    string_t identifier_ = sv2string(identifier, tmp->allocator);
+    orstring_t identifier_ = sv2string(identifier, tmp->allocator);
 
     ast_node_t *decl;
-    word_t def_slot;
+    orword_t def_slot;
     unless (table_get(s2w, ast->builtins, identifier_, &def_slot)) {
-        type_t type;
+        ortype_t type;
         // native_function_t *function;
         bool has_value = false;
-        type_t value_type;
-        word_t value_slot;
+        ortype_t value_type;
+        orword_t value_slot;
         if (is_builtin_type(&ast->type_set, identifier, &type)) {
             has_value = true;
             value_slot = WORDT(type);
@@ -4825,7 +4825,7 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
         }
     }
 
-    word_t def_slot;
+    orword_t def_slot;
     *search_scope = scope;
 
     ast_node_t *decl = NULL;
@@ -4841,7 +4841,7 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
 
         {
             tmp_arena_t *tmp = allocator_borrow();
-            string_t identifier_ = sv2string(def->identifier.view, tmp->allocator);
+            orstring_t identifier_ = sv2string(def->identifier.view, tmp->allocator);
 
             unless (table_get(s2w, (*search_scope)->definitions, identifier_, &def_slot)) {
                 NEXT_SCOPE();
@@ -4950,7 +4950,7 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
 
     if (!decl->is_mutable && TYPE_IS_TYPE(decl->value_type)) {
         MUST(decl->expr_val.is_concrete);
-        type_t type = decl->expr_val.word.as.t;
+        ortype_t type = decl->expr_val.word.as.t;
         typedata_t *td = ast_type2td(ast, type);
         if (td->kind == TYPE_STRUCT) {
             size_t dep_start = stan_struct_is_building(analyzer, type);
@@ -5016,7 +5016,7 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
 
     // dip out if it's inferred function, we'll resolve this when its called...
     if (is_inferred_function) {
-        type_t function_type = typeid(TYPE_INFERRED_FUNCTION);
+        ortype_t function_type = typeid(TYPE_INFERRED_FUNCTION);
         funcdef->value_type = function_type;
         ast_inferred_function_t *inferred_func = ast_inferred_function_from_funcdef(ast, funcdef, ast->arena);
         funcdef->expr_val = ast_node_val_word(WORDP(inferred_func));
@@ -5038,7 +5038,7 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
         }
     }
 
-    type_t return_type = typeid(TYPE_VOID);
+    ortype_t return_type = typeid(TYPE_VOID);
     {
         resolve_expression(analyzer, ast, state, typeid(TYPE_UNRESOLVED), an_func_def_return(funcdef), true);
     }
@@ -5069,7 +5069,7 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
         goto defer;
     }
 
-    type_t function_type = type_set_fetch_function(&ast->type_set, return_type, parameter_types);
+    ortype_t function_type = type_set_fetch_function(&ast->type_set, return_type, parameter_types);
     funcdef->value_type = function_type;
 
     // create empty placeholder function immeidately in case definition is recursive
@@ -5120,7 +5120,7 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
         
         ast_node_t *ret_expr = an_expression(jmp);
 
-        type_t ret_expr_type = ret_expr->value_type;
+        ortype_t ret_expr_type = ret_expr->value_type;
         unless (TYPE_IS_INVALID(ret_expr_type) || typeid_eq(ret_expr_type, return_type)) {
             stan_error(analyzer, OR_ERROR(
                 .tag = "sem.type-mismatch.return-funcdef",
@@ -5238,7 +5238,7 @@ bool resolve_ast(ast_t *ast) {
         if (sv_eq(decl->identifier.view, lit2sv("str8_t"))) {
             typedata_t *decltd = ast_type2td(ast, decl->expr_val.word.as.t);
             typedata_t *str8td = ast_type2td(ast, ast->type_set.str8_t_);
-            string_t name = str8td->name;
+            orstring_t name = str8td->name;
             *str8td = *decltd;
             str8td->name = name;
             str8td->kind = TYPE_STRING;

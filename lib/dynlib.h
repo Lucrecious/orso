@@ -8,9 +8,9 @@ struct dynlib_t {
     void *handle;
 };
 
-dynlib_t dynlib_load(string_t path);
+dynlib_t dynlib_load(orstring_t path);
 void dynlib_unload(dynlib_t dl);
-void *dynlib_symbol(dynlib_t dl, string_t symbol_name);
+void *dynlib_symbol(dynlib_t dl, orstring_t symbol_name);
 
 #endif
 
@@ -18,7 +18,7 @@ void *dynlib_symbol(dynlib_t dl, string_t symbol_name);
 
 #include <dlfcn.h>
 
-dynlib_t dynlib_load(string_t path) {
+dynlib_t dynlib_load(orstring_t path) {
     dynlib_t dl;
     dl.handle = dlopen(path.cstr, RTLD_LOCAL);
     return dl;
@@ -29,7 +29,7 @@ void dynlib_unload(dynlib_t dl) {
     UNUSED(dl);
 }
 
-void *dynlib_symbol(dynlib_t dl, string_t symbol_name) {
+void *dynlib_symbol(dynlib_t dl, orstring_t symbol_name) {
     return dlsym(dl.handle, symbol_name.cstr);
 }
 

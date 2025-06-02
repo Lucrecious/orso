@@ -1,7 +1,7 @@
 #define NOB_IMPLEMENTATION
 #include "../nob.h"
 
-typedef const char *cstr_t;
+typedef const char *orcstr_t;
 
 void print_usage(void) {
     printf("usage :\n");
@@ -23,13 +23,13 @@ Nob_String_View sv_filename(Nob_String_View sv) {
     return sv;
 }
 
-static bool test(cstr_t test_file_path) {
+static bool test(orcstr_t test_file_path) {
     Nob_String_View test_file_path_sv = nob_sv_from_cstr(test_file_path);
     Nob_String_View filename = sv_filename(test_file_path_sv);
 
-    cstr_t native_results_path = nob_temp_sprintf(".tmp/%.*s.result.native", filename.count, filename.data);
-    cstr_t interp_results_path = nob_temp_sprintf(".tmp/%.*s.result.interp", filename.count, filename.data);
-    cstr_t executable_file_path = nob_temp_sprintf(".tmp/%.*s.out", filename.count, filename.data);
+    orcstr_t native_results_path = nob_temp_sprintf(".tmp/%.*s.result.native", filename.count, filename.data);
+    orcstr_t interp_results_path = nob_temp_sprintf(".tmp/%.*s.result.interp", filename.count, filename.data);
+    orcstr_t executable_file_path = nob_temp_sprintf(".tmp/%.*s.out", filename.count, filename.data);
     
     Nob_Fd nativefd = nob_fd_open_for_write(native_results_path);
     Nob_Fd interpfd = nob_fd_open_for_write(interp_results_path);
@@ -49,7 +49,7 @@ static bool test(cstr_t test_file_path) {
 
     nob_log(NOB_INFO, "---- Executable path: %s", executable_file_path);
 
-    cstr_t call_test = nob_temp_sprintf("./%s", executable_file_path);
+    orcstr_t call_test = nob_temp_sprintf("./%s", executable_file_path);
     nob_cmd_append(&cmd, call_test);
     if (!nob_cmd_run_sync_redirect_and_reset(&cmd, (Nob_Cmd_Redirect){
         .fdout = &nativefd,
@@ -88,7 +88,7 @@ int main(int argc, char *argv[]) {
     nob_shift(argv, argc);
 
     Nob_String_View test_file_path;
-    cstr_t ctest_file_path;
+    orcstr_t ctest_file_path;
     if (argc) {
         ctest_file_path = argv[0];
         test_file_path = nob_sv_from_cstr(ctest_file_path);
@@ -110,13 +110,13 @@ int main(int argc, char *argv[]) {
         size_t checkpoint = nob_temp_save();
         if (nob_read_entire_dir(ctest_file_path, &files)) {
             for (size_t i = 0; i < files.count; ++i) {
-                cstr_t filename = files.items[i];
+                orcstr_t filename = files.items[i];
 
                 if (!nob_sv_end_with(nob_sv_from_cstr(filename), ".odl")) {
                     continue;
                 }
 
-                cstr_t fullpath = nob_temp_sprintf("%s%s", ctest_file_path, filename);
+                orcstr_t fullpath = nob_temp_sprintf("%s%s", ctest_file_path, filename);
 
                 bool success = test(fullpath);
                 if (!success) break;

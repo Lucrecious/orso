@@ -8,22 +8,22 @@ void debugger_init(debugger_t *debugger, arena_t *allocator) {
     debugger->breakpoints = (breakpoints_t){.allocator=allocator};
 }
 
-static string_t get_input(arena_t *allocator) {
+static orstring_t get_input(arena_t *allocator) {
     char input[256] = {0};
 
     fgets(input, 256, stdin);
     // scanf("%255[^\n]", input);
 
-    string_t s = cstr2string(input, allocator);
+    orstring_t s = cstr2string(input, allocator);
     return s;
 }
 
-string_t disassemble_instruction(instruction_t in, arena_t *allocator) {
+orstring_t disassemble_instruction(instruction_t in, arena_t *allocator) {
     op_code_t op = (op_code_t)in.op;
     switch (op) {
         case OP_NOP: return lit2str("OP_NOP");
 
-        #define OP_CAST(suffix) string_format("OP_CAST"#suffix"(reg_result: %c, reg_op: %c)", allocator, (u32)in.as.casting.reg_result, (u32)in.as.casting.reg_op);
+        #define OP_CAST(suffix) string_format("OP_CAST"#suffix"(reg_result: %c, reg_op: %c)", allocator, (oru32)in.as.casting.reg_result, (oru32)in.as.casting.reg_op);
 
         case OP_B2F: return OP_CAST(B2F);
         case OP_S2F: return OP_CAST(S2F);
@@ -59,23 +59,23 @@ string_t disassemble_instruction(instruction_t in, arena_t *allocator) {
 
         case OP_JMP_IF_COND:
             return string_format("OP_JMP_IF_COND(condition_reg: %c, check_for: %lu, amount: %lu)", allocator,
-                    (u32)in.as.jmp.condition_reg, (u32)in.as.jmp.check_for, in.as.jmp.amount);
+                    (oru32)in.as.jmp.condition_reg, (oru32)in.as.jmp.check_for, in.as.jmp.amount);
 
         case OP_LOAD_ADDR:
             return string_format("OP_LOAD_ADDR(reg_dest: %c, index: %d)", allocator,
-                    (u32)in.as.load_addr.reg_dest, (u32)in.as.load_addr.memaddr);
+                    (oru32)in.as.load_addr.reg_dest, (oru32)in.as.load_addr.memaddr);
 
         case OP_LOAD_REG_ADDR:
             return string_format("OP_LOAD_ADDR(reg_dest: %c, reg: %d)", allocator,
-                    (u32)in.as.load_addr.reg_dest, (u32)in.as.load_addr.memaddr);
+                    (oru32)in.as.load_addr.reg_dest, (oru32)in.as.load_addr.memaddr);
 
-        case OP_JMP: return string_format("OP_JMP(amount: %lu)", allocator, (u32)in.as.jmp.amount);
-        case OP_LOOP: return string_format("OP_LOOP(amount: %lu)", allocator, (u32)in.as.jmp.amount);
+        case OP_JMP: return string_format("OP_JMP(amount: %lu)", allocator, (oru32)in.as.jmp.amount);
+        case OP_LOOP: return string_format("OP_LOOP(amount: %lu)", allocator, (oru32)in.as.jmp.amount);
 
         #define OP_REG_TO_REG(SUFFIX) string_format("OP_MOV"#SUFFIX"(reg_src: %c, reg_dst: %c, offset: %d)", allocator, \
-                (u32)in.as.mov_reg_to_reg.reg_source, \
-                (u32)in.as.mov_reg_to_reg.reg_destination, \
-                (u32)in.as.mov_reg_to_reg.byte_offset);
+                (oru32)in.as.mov_reg_to_reg.reg_source, \
+                (oru32)in.as.mov_reg_to_reg.reg_destination, \
+                (oru32)in.as.mov_reg_to_reg.byte_offset);
 
         case OP_MOVU8_REG_TO_ADDR: return OP_REG_TO_REG(U8_REG_TO_REGADDR);
         case OP_MOVU16_REG_TO_ADDR: return OP_REG_TO_REG(U16_REG_TO_REGADDR);
@@ -96,37 +96,37 @@ string_t disassemble_instruction(instruction_t in, arena_t *allocator) {
 
         case OP_MOV_REG_TO_REG: {
             return string_format("OP_MOV_REG_TO_REG(reg_source: %c, reg_destination: %c)", allocator,
-                    (u32)in.as.mov_reg_to_reg.reg_source,
-                    (u32)in.as.mov_reg_to_reg.reg_destination);
+                    (oru32)in.as.mov_reg_to_reg.reg_source,
+                    (oru32)in.as.mov_reg_to_reg.reg_destination);
         }
 
         case OP_MEMCMP: {
             return string_format("MEMCMP(op1s: %c, op1e: %c, op2s: %c, r: %c)", allocator,
-                    (u32)in.as.memcmp.op1_start,
-                    (u32)in.as.memcmp.op1_end,
-                    (u32)in.as.memcmp.op2_start,
-                    (u32)in.as.memcmp.reg_result);
+                    (oru32)in.as.memcmp.op1_start,
+                    (oru32)in.as.memcmp.op1_end,
+                    (oru32)in.as.memcmp.op2_start,
+                    (oru32)in.as.memcmp.reg_result);
             break;
         }
 
         case OP_SUBU_IM: {
             return string_format("OP_SUBU_IM(reg_operand: %c, immediate: %lu, reg_result: %c)", allocator,
-                    (u32)in.as.binu_reg_immediate.reg_operand,
-                    (u32)in.as.binu_reg_immediate.immediate,
-                    (u32)in.as.binu_reg_immediate.reg_result);
+                    (oru32)in.as.binu_reg_immediate.reg_operand,
+                    (oru32)in.as.binu_reg_immediate.immediate,
+                    (oru32)in.as.binu_reg_immediate.reg_result);
         }
 
         case OP_ADDU_IM: {
             return string_format("OP_ADDU_IM(reg_operand: %c, immediate: %lu, reg_result: %c)", allocator,
-                    (u32)in.as.binu_reg_immediate.reg_operand,
-                    (u32)in.as.binu_reg_immediate.immediate,
-                    (u32)in.as.binu_reg_immediate.reg_result);
+                    (oru32)in.as.binu_reg_immediate.reg_operand,
+                    (oru32)in.as.binu_reg_immediate.immediate,
+                    (oru32)in.as.binu_reg_immediate.reg_result);
         }
 
         #define OP_BIN_REG_REG(type) string_format("OP_"#type"_REG_REG(reg_op1: %c, reg_op2: %c, reg_result: %c)", allocator,\
-                (u32)in.as.bin_reg_to_reg.reg_op1,\
-                (u32)in.as.bin_reg_to_reg.reg_op2,\
-                (u32)in.as.bin_reg_to_reg.reg_result)
+                (oru32)in.as.bin_reg_to_reg.reg_op1,\
+                (oru32)in.as.bin_reg_to_reg.reg_op2,\
+                (oru32)in.as.bin_reg_to_reg.reg_result)
 
         case OP_ADDI: return OP_BIN_REG_REG(ADDI);
         case OP_SUBI: return OP_BIN_REG_REG(SUBI);
@@ -173,8 +173,8 @@ string_t disassemble_instruction(instruction_t in, arena_t *allocator) {
         #undef OP_BIN_REG_REG
 
         #define OP_UNARY_REG_REG(type) string_format("OP_"#type"(reg_op: %c, reg_result: %c)", allocator,\
-                (u32)in.as.unary_reg_to_reg.reg_op,\
-                (u32)in.as.unary_reg_to_reg.reg_result)
+                (oru32)in.as.unary_reg_to_reg.reg_op,\
+                (oru32)in.as.unary_reg_to_reg.reg_result)
         
         case OP_NOT: return OP_UNARY_REG_REG(NOT);
 
@@ -185,10 +185,10 @@ string_t disassemble_instruction(instruction_t in, arena_t *allocator) {
 
         case OP_CALL: return lit2str("OP_CALL");
         case OP_INTRINSIC_CALL: return string_format("OP_INTRINSIC(reg_arg_bot: %c, reg_op: %c, reg_result: %c, reg_result_addr: %c)", allocator,
-                (u32)in.as.call.reg_arg_bottom_memaddr,
-                (u32)in.as.call.reg_op,
-                (u32)in.as.call.reg_result,
-                (u32)in.as.call.reg_result_addr);
+                (oru32)in.as.call.reg_arg_bottom_memaddr,
+                (oru32)in.as.call.reg_op,
+                (oru32)in.as.call.reg_result,
+                (oru32)in.as.call.reg_result_addr);
         case OP_RETURN: return lit2str("OP_RETURN");
     }
 }
@@ -215,7 +215,7 @@ static void show_line(vm_t *vm, size_t bytecode_around) {
         }
 
         texloc_t location = function->locations.items[i];
-        string_t as_string = disassemble_instruction(function->code.items[i], tmp_arena->allocator);
+        orstring_t as_string = disassemble_instruction(function->code.items[i], tmp_arena->allocator);
         printf("%04zu:%04zu: %s\n", location.line+1, location.column+1, as_string.cstr);
     }
 
@@ -233,20 +233,20 @@ bool debugger_step(debugger_t *debugger, vm_t *vm) {
     arena_reset(tmp);
 
     printf(">> ");
-    string_t input = get_input(tmp);
+    orstring_t input = get_input(tmp);
     strings_t command_n_args = string_split(input.cstr, " \n", tmp);
     if (command_n_args.count == 0) {
         return true;
     }
 
-    string_t command = command_n_args.items[0];
+    orstring_t command = command_n_args.items[0];
 
     if (cstr_eq(command.cstr, "quit") || cstr_eq(command.cstr, "q")) {
         return false;
     } else if (cstr_eq(command.cstr, "show")) {
         size_t amount = 0;
         if (command_n_args.count > 1) {
-            string_t arg = command_n_args.items[1];
+            orstring_t arg = command_n_args.items[1];
             amount = string2size(arg);
         }
         show_line(vm, amount);
@@ -259,7 +259,7 @@ bool debugger_step(debugger_t *debugger, vm_t *vm) {
         } 
 
         bool has_type = false;
-        string_t type;
+        orstring_t type;
         if (command_n_args.count == 3) {
             has_type = true;
             type = command_n_args.items[2];
@@ -276,7 +276,7 @@ bool debugger_step(debugger_t *debugger, vm_t *vm) {
 
             size_t count = 0;
             while (stack_bottom < stack_frame) {
-                u8 m = *((u8*)--stack_frame);
+                oru8 m = *((oru8*)--stack_frame);
                 printf("%02x ", m);
                 ++count;
                 if (count == 8) {
@@ -291,7 +291,7 @@ bool debugger_step(debugger_t *debugger, vm_t *vm) {
             if (has_type) {
                 print_as_word = false;
                 if (string_eq(type, lit2str("f"))) {
-                    f32 f = *((f32*)loc);
+                    orf32 f = *((orf32*)loc);
                     printf("%f\n", f);
                 } else {
                     print_as_word = true;
@@ -299,7 +299,7 @@ bool debugger_step(debugger_t *debugger, vm_t *vm) {
             }
 
             if (print_as_word) {
-                word_t reg = *((word_t*)loc);
+                orword_t reg = *((orword_t*)loc);
                 printf("%02zu: %lld, %llu, %lf, %p\n", stack_location, reg.as.s, reg.as.u, reg.as.d, reg.as.p);
             }
         }
@@ -317,7 +317,7 @@ bool debugger_step(debugger_t *debugger, vm_t *vm) {
             return true;
         }
 
-        string_t line_number = command_n_args.items[1];
+        orstring_t line_number = command_n_args.items[1];
         size_t line = string2size(line_number);
 
         while (try_vm_step(vm)) {
@@ -348,24 +348,24 @@ bool debugger_step(debugger_t *debugger, vm_t *vm) {
     } else if (cstr_eq(command.cstr, "reg")) {
         size_t number = REGISTER_COUNT;
         if (command_n_args.count > 1) {
-            string_t arg = command_n_args.items[1];
+            orstring_t arg = command_n_args.items[1];
             number = (size_t)arg.cstr[0];
             number = number < REGISTER_COUNT ? number : REGISTER_COUNT-1;
         }
 
         if (number == REGISTER_COUNT) {
             for (size_t i = 0; i < REGISTER_COUNT; ++i) {
-                word_t reg = vm->registers[i];
+                orword_t reg = vm->registers[i];
                 printf("%02zu: %lld, %llu, %lf, %p\n", i, reg.as.s, reg.as.u, reg.as.d, reg.as.p);
             }
             printf("\n");
         } else {
-            word_t reg = vm->registers[number];
+            orword_t reg = vm->registers[number];
             printf("%02zu: %lld, %llu, %lf, %p\n", number, reg.as.s, reg.as.u, reg.as.d, reg.as.p);
         }
     } else if (cstr_eq(command.cstr, "mem")) {
         if (command_n_args.count == 2) {
-            string_t arg = command_n_args.items[1];
+            orstring_t arg = command_n_args.items[1];
             size_t memaddr = string2size(arg);
 
             
@@ -375,7 +375,7 @@ bool debugger_step(debugger_t *debugger, vm_t *vm) {
                 return true;
             }
 
-            word_t data = *(word_t*)(memarr->data + memaddr);
+            orword_t data = *(orword_t*)(memarr->data + memaddr);
             printf("mem: %llx\n", data.as.u);
         }
     } else {
@@ -394,7 +394,7 @@ source_location_t vm_find_source_location(vm_t *vm) {
     size_t index = vm->call_frame.pc;
 
     texloc_t text_location = function->locations.items[index];
-    string_t file_path = text_location.filepath;
+    orstring_t file_path = text_location.filepath;
 
     return (source_location_t){
         .file_path = file_path,

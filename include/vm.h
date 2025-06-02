@@ -145,7 +145,7 @@ struct instruction_t {
             byte reg_result;
         } memcmp;
         struct {
-            u32 amount;
+            oru32 amount;
             byte condition_reg;
             byte check_for;
         } jmp;
@@ -153,7 +153,7 @@ struct instruction_t {
         struct {
             byte reg_result;
             byte reg_operand;
-            u32 immediate;
+            oru32 immediate;
         } binu_reg_immediate;
 
         struct {
@@ -165,13 +165,13 @@ struct instruction_t {
 
         struct {
             byte reg_result;
-            u32 mem_address;
+            oru32 mem_address;
         } mov_mem_to_reg;
 
         struct {
             byte reg_destination;
             byte reg_source;
-            u32 byte_offset;
+            oru32 byte_offset;
         } mov_reg_to_reg;
 
         struct {
@@ -193,7 +193,7 @@ struct instruction_t {
         } casting;
 
         struct {
-            u32 memaddr;
+            oru32 memaddr;
             byte reg_dest;
         } load_addr;
     } as;
@@ -204,7 +204,7 @@ struct instruction_t {
 
 typedef struct function_t function_t;
 struct function_t {
-    string_t name;
+    orstring_t name;
     struct {
         texloc_t *items;
         size_t count;
@@ -239,7 +239,7 @@ struct vm_t {
     call_frame_t call_frames[UINT8_MAX];
     size_t call_frame_count;
     call_frame_t call_frame;
-    word_t registers[REGISTER_COUNT];
+    orword_t registers[REGISTER_COUNT];
 
     arena_t *arena;
     memarr_t *program_mem;
@@ -346,13 +346,13 @@ void vm_step(vm_t *vm) {
         }
 
         case OP_JMP: {
-            u32 jmp_amount = in.as.jmp.amount;
+            oru32 jmp_amount = in.as.jmp.amount;
             IP_ADV(jmp_amount);
             break;
         }
         
         case OP_LOOP: {
-            u32 jump_amount = in.as.jmp.amount;
+            oru32 jump_amount = in.as.jmp.amount;
             IP_DCR(jump_amount);
             break;
         }
@@ -362,7 +362,7 @@ void vm_step(vm_t *vm) {
             bool check_for = in.as.jmp.check_for;
             bool is_true = (check_for == vm->registers[reg].as.u);
             if (is_true) {
-                u32 jmp_amount = in.as.jmp.amount;
+                oru32 jmp_amount = in.as.jmp.amount;
                 IP_ADV(jmp_amount);
             } else {
                 IP_ADV(1);
@@ -372,7 +372,7 @@ void vm_step(vm_t *vm) {
 
         case OP_LOAD_ADDR: {
             byte reg_dest = in.as.load_addr.reg_dest;
-            u32 index = in.as.load_addr.memaddr;
+            oru32 index = in.as.load_addr.memaddr;
 
             vm->registers[reg_dest].as.p = MEMORY->data + index;
             IP_ADV(1);
@@ -399,7 +399,7 @@ void vm_step(vm_t *vm) {
 
         case OP_ADDU_IM: {
             byte s = in.as.binu_reg_immediate.reg_operand;
-            u32 immediate = in.as.binu_reg_immediate.immediate;
+            oru32 immediate = in.as.binu_reg_immediate.immediate;
 
             byte d = in.as.binu_reg_immediate.reg_result;
 
@@ -411,7 +411,7 @@ void vm_step(vm_t *vm) {
 
         case OP_SUBU_IM: {
             byte s = in.as.binu_reg_immediate.reg_operand;
-            u32 immediate = in.as.binu_reg_immediate.immediate;
+            oru32 immediate = in.as.binu_reg_immediate.immediate;
 
             byte d = in.as.binu_reg_immediate.reg_result;
 
@@ -428,47 +428,47 @@ void vm_step(vm_t *vm) {
             IP_ADV(1); \
         } while(false); break
 
-        case OP_B2D: do_cast(d, s, f64, s8);
-        case OP_S2D: do_cast(d, s, f64, s16);
-        case OP_I2D: do_cast(d, s, f64, s32);
-        case OP_UB2D: do_cast(d, s, f64, u8);
-        case OP_US2D: do_cast(d, s, f64, u16);
-        case OP_U2D: do_cast(d, s, f64, u32);
+        case OP_B2D: do_cast(d, s, orf64, ors8);
+        case OP_S2D: do_cast(d, s, orf64, ors16);
+        case OP_I2D: do_cast(d, s, orf64, ors32);
+        case OP_UB2D: do_cast(d, s, orf64, oru8);
+        case OP_US2D: do_cast(d, s, orf64, oru16);
+        case OP_U2D: do_cast(d, s, orf64, oru32);
 
-        case OP_B2F: do_cast(d, s, f32, s8);
-        case OP_S2F: do_cast(d, s, f32, s16);
-        case OP_I2F: do_cast(d, s, f32, s32);
-        case OP_UB2F: do_cast(d, s, f32, u8);
-        case OP_US2F: do_cast(d, s, f32, u16);
-        case OP_U2F: do_cast(d, s, f32, u32);
+        case OP_B2F: do_cast(d, s, orf32, ors8);
+        case OP_S2F: do_cast(d, s, orf32, ors16);
+        case OP_I2F: do_cast(d, s, orf32, ors32);
+        case OP_UB2F: do_cast(d, s, orf32, oru8);
+        case OP_US2F: do_cast(d, s, orf32, oru16);
+        case OP_U2F: do_cast(d, s, orf32, oru32);
 
-        case OP_D2F: do_cast(d, d, f32, f64);
-        case OP_D2UL: do_cast(u, d, u64, f64);
-        case OP_D2L: do_cast(s, d, s64, f64);
+        case OP_D2F: do_cast(d, d, orf32, orf64);
+        case OP_D2UL: do_cast(u, d, oru64, orf64);
+        case OP_D2L: do_cast(s, d, ors64, orf64);
 
-        case OP_UL2UB: do_cast(u, u, u8, u64);
-        case OP_UL2US: do_cast(u, u, u16, u64);
-        case OP_UL2U: do_cast(u, u, u32, u64);
-        case OP_UL2L: do_cast(s, u, s64, u64);
-        case OP_UL2F: do_cast(d, u, f32, u64);
-        case OP_UL2D: do_cast(d, u, f64, u64);
+        case OP_UL2UB: do_cast(u, u, oru8, oru64);
+        case OP_UL2US: do_cast(u, u, oru16, oru64);
+        case OP_UL2U: do_cast(u, u, oru32, oru64);
+        case OP_UL2L: do_cast(s, u, ors64, oru64);
+        case OP_UL2F: do_cast(d, u, orf32, oru64);
+        case OP_UL2D: do_cast(d, u, orf64, oru64);
 
-        case OP_L2B: do_cast(s, s, s8, s64);
-        case OP_L2S: do_cast(s, s, s16, s64);
-        case OP_L2I: do_cast(s, s, s32, s64);
-        case OP_L2UL: do_cast(u, s, u64, s64);
-        case OP_L2F: do_cast(d, s, f32, s64);
-        case OP_L2D: do_cast(d, s, f64, s64);
+        case OP_L2B: do_cast(s, s, ors8, ors64);
+        case OP_L2S: do_cast(s, s, ors16, ors64);
+        case OP_L2I: do_cast(s, s, ors32, ors64);
+        case OP_L2UL: do_cast(u, s, oru64, ors64);
+        case OP_L2F: do_cast(d, s, orf32, ors64);
+        case OP_L2D: do_cast(d, s, orf64, ors64);
 
         #undef do_cast
 
         // conversion to unsigned for wrapped operation on overflow but converted back to integer after (c is ub for signed overflow)
         #define case_bini_reg_reg(name, op, type) case OP_##name: {\
-            type##64 a = vm->registers[in.as.bin_reg_to_reg.reg_op1].as.type; \
-            type##64 b = vm->registers[in.as.bin_reg_to_reg.reg_op2].as.type; \
+            or##type##64 a = vm->registers[in.as.bin_reg_to_reg.reg_op1].as.type; \
+            or##type##64 b = vm->registers[in.as.bin_reg_to_reg.reg_op2].as.type; \
             byte c = in.as.bin_reg_to_reg.reg_result; \
             num_size_t sz = in.as.bin_reg_to_reg.size; \
-            type##64 result = 0; \
+            or##type##64 result = 0; \
             switch (sz) {\
             case NUM_SIZE_8: {\
                 result = op##type##8_(a, b);\
@@ -510,11 +510,11 @@ void vm_step(vm_t *vm) {
         #undef case_bini_reg_reg
 
         #define case_bind_reg_reg(name, op) case OP_##name: { \
-            f64 a = vm->registers[in.as.bin_reg_to_reg.reg_op1].as.d; \
-            f64 b = vm->registers[in.as.bin_reg_to_reg.reg_op2].as.d; \
+            orf64 a = vm->registers[in.as.bin_reg_to_reg.reg_op1].as.d; \
+            orf64 b = vm->registers[in.as.bin_reg_to_reg.reg_op2].as.d; \
             byte c = in.as.bin_reg_to_reg.reg_result; \
             num_size_t sz = in.as.bin_reg_to_reg.size; \
-            f64 result = 0.0; \
+            orf64 result = 0.0; \
             switch (sz) { \
             case NUM_SIZE_32: { \
                 result = op##f_(a, b); \
@@ -589,28 +589,28 @@ void vm_step(vm_t *vm) {
         #define case_mov_regaddr_to_reg(name, q, type, mask) case OP_MOV##name##_ADDR_TO_REG: { \
             byte regaddr = in.as.mov_reg_to_reg.reg_source; \
             byte reg_dest = in.as.mov_reg_to_reg.reg_destination; \
-            u32 offset = in.as.mov_reg_to_reg.byte_offset; \
+            oru32 offset = in.as.mov_reg_to_reg.byte_offset; \
             vm->registers[reg_dest].as.q = (*((type*)(vm->registers[regaddr].as.p + offset))); \
             IP_ADV(1); \
         } break
         
-        case_mov_regaddr_to_reg(U8, u, u8, 0xF);
-        case_mov_regaddr_to_reg(U16, u, u16, 0xFF);
-        case_mov_regaddr_to_reg(U32, u, u32, 0xFFFF);
+        case_mov_regaddr_to_reg(U8, u, oru8, 0xF);
+        case_mov_regaddr_to_reg(U16, u, oru16, 0xFF);
+        case_mov_regaddr_to_reg(U32, u, oru32, 0xFFFF);
 
-        case_mov_regaddr_to_reg(S8, s, s8, 0xF);
-        case_mov_regaddr_to_reg(S16, s, s16, 0xFF);
-        case_mov_regaddr_to_reg(S32, s, s32, 0xFFFF);
+        case_mov_regaddr_to_reg(S8, s, ors8, 0xF);
+        case_mov_regaddr_to_reg(S16, s, ors16, 0xFF);
+        case_mov_regaddr_to_reg(S32, s, ors32, 0xFFFF);
 
-        case_mov_regaddr_to_reg(F32, d, f32, 0xFFFF);
+        case_mov_regaddr_to_reg(F32, d, orf32, 0xFFFF);
 
         #undef case_mov_regaddr_to_reg
 
         case OP_MOVWORD_ADDR_TO_REG: {
             byte regaddr = in.as.mov_reg_to_reg.reg_source;
             byte reg_dest = in.as.mov_reg_to_reg.reg_destination;
-            u32 offset = in.as.mov_reg_to_reg.byte_offset;
-            memcpy(&vm->registers[reg_dest], vm->registers[regaddr].as.p + offset, sizeof(word_t));
+            oru32 offset = in.as.mov_reg_to_reg.byte_offset;
+            memcpy(&vm->registers[reg_dest], vm->registers[regaddr].as.p + offset, sizeof(orword_t));
             IP_ADV(1);
             break;
         }
@@ -618,23 +618,23 @@ void vm_step(vm_t *vm) {
         #define case_mov_reg_to_regaddr(name, q, type) case OP_MOV##name##_REG_TO_ADDR: { \
             byte reg_src = in.as.mov_reg_to_reg.reg_source; \
             byte regaddr = in.as.mov_reg_to_reg.reg_destination; \
-            u32 offset = in.as.mov_reg_to_reg.byte_offset; \
+            oru32 offset = in.as.mov_reg_to_reg.byte_offset; \
             *((type*)(vm->registers[regaddr].as.p + offset)) = (type)vm->registers[reg_src].as.q; \
             IP_ADV(1); \
         } break
 
-        case_mov_reg_to_regaddr(U8, u, u8);
-        case_mov_reg_to_regaddr(U16, u, u16);
-        case_mov_reg_to_regaddr(U32, u, u32);
-        case_mov_reg_to_regaddr(F32, d, f32);
+        case_mov_reg_to_regaddr(U8, u, oru8);
+        case_mov_reg_to_regaddr(U16, u, oru16);
+        case_mov_reg_to_regaddr(U32, u, oru32);
+        case_mov_reg_to_regaddr(F32, d, orf32);
 
         #undef case_mov_reg_to_regaddr
 
         case OP_MOVWORD_REG_TO_ADDR: {
             byte reg_src = in.as.mov_reg_to_reg.reg_source;
             byte regaddr = in.as.mov_reg_to_reg.reg_destination;
-            u32 offset = in.as.mov_reg_to_reg.byte_offset;
-            memcpy(vm->registers[regaddr].as.p + offset, &vm->registers[reg_src], sizeof(word_t));
+            oru32 offset = in.as.mov_reg_to_reg.byte_offset;
+            memcpy(vm->registers[regaddr].as.p + offset, &vm->registers[reg_src], sizeof(orword_t));
             IP_ADV(1);
             break;
         }

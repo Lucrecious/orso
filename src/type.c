@@ -94,7 +94,7 @@ bool type_equal(typedata_t *a, typedata_t *b) {
     }
 }
 
-bool type_in_list(types_t list, type_t find) {
+bool type_in_list(types_t list, ortype_t find) {
     for (size_t i = 0; i < list.count; i++) {
         if (typeid_eq(list.items[i], find)) {
             return true;
@@ -104,7 +104,7 @@ bool type_in_list(types_t list, type_t find) {
     return false;
 }
 
-string_t type_to_string_toplevel(typedatas_t types, type_t type, arena_t *allocator, bool is_toplevel) {
+orstring_t type_to_string_toplevel(typedatas_t types, ortype_t type, arena_t *allocator, bool is_toplevel) {
     tmp_arena_t *tmp_arena = allocator_borrow();
 
     string_builder_t sb = {.allocator = tmp_arena->allocator};
@@ -119,13 +119,13 @@ string_t type_to_string_toplevel(typedatas_t types, type_t type, arena_t *alloca
                 sb_add_char(&sb, ',');
             }
 
-            string_t arg_type = type_to_string_toplevel(types, type_info->as.function.argument_types.items[i], allocator, false);
+            orstring_t arg_type = type_to_string_toplevel(types, type_info->as.function.argument_types.items[i], allocator, false);
             sb_add_cstr(&sb, arg_type.cstr);
         }
 
         sb_add_cstr(&sb, ") -> ");
 
-        string_t return_type = type_to_string_toplevel(types, type_info->as.function.return_type, allocator, false);
+        orstring_t return_type = type_to_string_toplevel(types, type_info->as.function.return_type, allocator, false);
         sb_add_cstr(&sb, return_type.cstr);
     } else if (type_is_struct(types, type)) {
         if (type_info->as.struct_.name_or_null) {
@@ -138,13 +138,13 @@ string_t type_to_string_toplevel(typedatas_t types, type_t type, arena_t *alloca
             sb_add_cstr(&sb, " { ");
 
             for (size_t i = 0; i < type_info->as.struct_.fields.count; i++) {
-                string_t name = type_info->as.struct_.fields.items[i].name;
+                orstring_t name = type_info->as.struct_.fields.items[i].name;
 
                 sb_add_cstr(&sb, name.cstr);
                 sb_add_cstr(&sb, ": ");
 
-                type_t field_type = type_info->as.struct_.fields.items[i].type;
-                string_t type_string = type_to_string_toplevel(types, field_type, allocator, false);
+                ortype_t field_type = type_info->as.struct_.fields.items[i].type;
+                orstring_t type_string = type_to_string_toplevel(types, field_type, allocator, false);
                 sb_add_cstr(&sb, type_string.cstr);
 
                 sb_add_cstr(&sb, "; ");
@@ -155,10 +155,10 @@ string_t type_to_string_toplevel(typedatas_t types, type_t type, arena_t *alloca
     } else if (type_is_pointer(types, type)) {
         sb_add_char(&sb, '&');
 
-        string_t type_string = type_to_string_toplevel(types, type_info->as.ptr.type, allocator, false);
+        orstring_t type_string = type_to_string_toplevel(types, type_info->as.ptr.type, allocator, false);
         sb_add_cstr(&sb, type_string.cstr);
     } else {
-        cstr_t type_name;
+        orcstr_t type_name;
         switch (type_info->kind) {
             case TYPE_NUMBER:
             case TYPE_BOOL:
@@ -189,13 +189,13 @@ string_t type_to_string_toplevel(typedatas_t types, type_t type, arena_t *alloca
         sb_add_cstr(&sb, type_name);
     }
 
-    string_t string = sb_render(&sb, allocator);
+    orstring_t string = sb_render(&sb, allocator);
 
     allocator_return(tmp_arena);
 
     return string;
 }
 
-string_t type_to_string(typedatas_t types, type_t type, arena_t *allocator) {
+orstring_t type_to_string(typedatas_t types, ortype_t type, arena_t *allocator) {
     return type_to_string_toplevel(types, type, allocator, true);
 }

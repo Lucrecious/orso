@@ -14,7 +14,7 @@ error_arg_t error_arg_node(ast_node_t *node) {
     return (error_arg_t){.type=ERROR_ARG_TYPE_NODE, .node_or_null=node};
 }
 
-error_arg_t error_arg_str(ast_t *ast, string_t str) {
+error_arg_t error_arg_str(ast_t *ast, orstring_t str) {
     str = string_copy(str, ast->arena);
     return (error_arg_t){.type=ERROR_ARG_TYPE_STRING, .str=str};
 }
@@ -23,7 +23,7 @@ error_arg_t error_arg_sz(size_t sz) {
     return (error_arg_t){.type=ERROR_ARG_TYPE_SIZE, .size=sz};
 }
 
-error_arg_t error_arg_type(type_t type) {
+error_arg_t error_arg_type(ortype_t type) {
     return (error_arg_t){.type=ERROR_ARG_TYPE_TYPE, .type_type=type};
 }
 
@@ -68,7 +68,7 @@ static string_view_t get_line(string_view_t source, string_view_t somewhere_in_s
     return view;
 }
 
-static string_t get_source_snippet(error_arg_t arg, arena_t *arena) {
+static orstring_t get_source_snippet(error_arg_t arg, arena_t *arena) {
     string_view_t source = lit2sv("");
     string_view_t view = source;
     size_t column_hint = 0;
@@ -115,14 +115,14 @@ static string_t get_source_snippet(error_arg_t arg, arena_t *arena) {
 
     sb_add_cstr(&sb, "\n");
 
-    string_t result = sb_render(&sb, arena);
+    orstring_t result = sb_render(&sb, arena);
 
     allocator_return(tmp_arena);
 
     return result;
 }
 
-static size_t find_next_char_index(string_t s, size_t starting_index, char target) {
+static size_t find_next_char_index(orstring_t s, size_t starting_index, char target) {
     for (size_t i = starting_index; i < s.length; ++i) {
         if (s.cstr[i] == target) return i;
     }
@@ -130,7 +130,7 @@ static size_t find_next_char_index(string_t s, size_t starting_index, char targe
     return s.length;
 }
 
-static cstr_t tokentype2string(token_type_t token_type) {
+static orcstr_t tokentype2string(token_type_t token_type) {
     switch (token_type) {
         case TOKEN_AMPERSAND: return "&";
         case TOKEN_AND: return "and";
@@ -207,7 +207,7 @@ static cstr_t tokentype2string(token_type_t token_type) {
 }
 
 
-static string_t error_format(string_t message_format, typedatas_t *tds, error_arg_t *args, arena_t *arena) {
+static orstring_t error_format(orstring_t message_format, typedatas_t *tds, error_arg_t *args, arena_t *arena) {
     tmp_arena_t *tmp = allocator_borrow();
     string_builder_t sb = {.allocator=tmp->allocator};
 
@@ -222,7 +222,7 @@ static string_t error_format(string_t message_format, typedatas_t *tds, error_ar
             ASSERT(dot_index < message_format.length, "must");
 
             string_view_t arg_index_sv = {.data=message_format.cstr+i, .length=dot_index-i};
-            string_t arg_index_str = sv2string(arg_index_sv, tmp->allocator);
+            orstring_t arg_index_str = sv2string(arg_index_sv, tmp->allocator);
             size_t arg_index = string2size(arg_index_str);
 
             i = dot_index + 1;
@@ -238,7 +238,7 @@ static string_t error_format(string_t message_format, typedatas_t *tds, error_ar
             if (sv_eq(field_sv, lit2sv("kind"))) {
                 switch (arg.type) {
                 case ERROR_ARG_TYPE_TOKEN: {
-                    cstr_t token_type_str = tokentype2string(arg.token.type);
+                    orcstr_t token_type_str = tokentype2string(arg.token.type);
                     sb_add_cstr(&sb, token_type_str);
                     break;
                 }
@@ -265,7 +265,7 @@ static string_t error_format(string_t message_format, typedatas_t *tds, error_ar
                 }
                 case ERROR_ARG_TYPE_TYPE: {
                     tmp_arena_t *tmp = allocator_borrow();
-                    string_t s = type_to_string(*tds, arg.type_type, tmp->allocator);
+                    orstring_t s = type_to_string(*tds, arg.type_type, tmp->allocator);
 
                     sb_add_format(&sb, "%s", s.cstr);
 
@@ -287,7 +287,7 @@ static string_t error_format(string_t message_format, typedatas_t *tds, error_ar
                 case ERROR_ARG_TYPE_NODE: {
                     if (arg.node_or_null) {
                         tmp_arena_t *tmp = allocator_borrow();
-                        string_t s = type_to_string(*tds, arg.node_or_null->value_type, tmp->allocator);
+                        orstring_t s = type_to_string(*tds, arg.node_or_null->value_type, tmp->allocator);
 
                         sb_add_format(&sb, "%s", s.cstr);
 
@@ -298,7 +298,7 @@ static string_t error_format(string_t message_format, typedatas_t *tds, error_ar
 
                 case ERROR_ARG_TYPE_TYPE: {
                     tmp_arena_t *tmp = allocator_borrow();
-                    string_t s = type_to_string(*tds, arg.type_type, tmp->allocator);
+                    orstring_t s = type_to_string(*tds, arg.type_type, tmp->allocator);
 
                     sb_add_format(&sb, "%s", s.cstr);
 
@@ -312,21 +312,21 @@ static string_t error_format(string_t message_format, typedatas_t *tds, error_ar
         }
     }
 
-    string_t result = sb_render(&sb, arena);
+    orstring_t result = sb_render(&sb, arena);
 
     allocator_return(tmp);
     
     return result;
 }
 
-string_t error2richstring(ast_t *ast, error_t error, arena_t *arena) {
+orstring_t error2richstring(ast_t *ast, error_t error, arena_t *arena) {
     tmp_arena_t *tmp = allocator_borrow();
 
     string_builder_t sb = {.allocator=tmp->allocator};
 
-    string_t message = error_format(error.msg, &ast->type_set.types, error.args, tmp->allocator);
+    orstring_t message = error_format(error.msg, &ast->type_set.types, error.args, tmp->allocator);
 
-    cstr_t error_level = "";
+    orcstr_t error_level = "";
     switch (error.level) {
     case ERROR_SOURCE_PARSEREX:
     case ERROR_SOURCE_PARSER: error_level = "syntax"; break;
@@ -339,9 +339,9 @@ string_t error2richstring(ast_t *ast, error_t error, arena_t *arena) {
     }
 
     for (size_t i = 0; i < error.show_line_count; ++i) {
-        s64 arg_index = error.show_code_lines[i];
+        ors64 arg_index = error.show_code_lines[i];
         error_arg_t arg = error.args[arg_index];
-        string_t snippet = get_source_snippet(arg, tmp->allocator);
+        orstring_t snippet = get_source_snippet(arg, tmp->allocator);
 
         texloc_t loc = error_arg_loc(arg);
 
@@ -361,7 +361,7 @@ string_t error2richstring(ast_t *ast, error_t error, arena_t *arena) {
         for (size_t i = 0; i < deps->count; ++i) {
             ast_node_t *dep = deps->items[i];
 
-            string_t snippet = get_source_snippet(error_arg_node(dep), tmp->allocator);
+            orstring_t snippet = get_source_snippet(error_arg_node(dep), tmp->allocator);
             texloc_t loc = error_arg_loc(error_arg_node(dep));
 
             typedata_t *td = ast_type2td(ast, dep->value_type);
@@ -376,7 +376,7 @@ string_t error2richstring(ast_t *ast, error_t error, arena_t *arena) {
 
     sb_add_cstr(&sb, "\n");
 
-    string_t result = sb_render(&sb, arena);
+    orstring_t result = sb_render(&sb, arena);
 
     allocator_return(tmp);
 

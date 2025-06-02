@@ -48,7 +48,7 @@ static token_t error_token(lexer_t *lexer, string_view_t message_view) {
     return token;
 }
 
-void lexer_init(lexer_t *lexer, string_t file_path, string_view_t code) {
+void lexer_init(lexer_t *lexer, orstring_t file_path, string_view_t code) {
     lexer->file_path = file_path;
     lexer->source = code;
     lexer->line = 0;
@@ -149,7 +149,7 @@ static bool skip_comments(lexer_t *lexer) {
             }
         }
     } else if (match2(lexer, "#*")) {
-        s32 rings = 1;
+        ors32 rings = 1;
 
         while (!is_at_end(lexer)) {
             if (match2(lexer, "*#")) {
@@ -260,7 +260,7 @@ static token_t number(lexer_t *lexer) {
     return create_token(lexer, is_float ? TOKEN_FLOAT : TOKEN_INTEGER);
 }
 
-static token_type_t check_keyword(lexer_t *lexer, s32 start, s32 length,
+static token_type_t check_keyword(lexer_t *lexer, ors32 start, ors32 length,
         const char* rest, token_type_t type) {
     if (lexer->current - lexer->start == start + length &&
         memcmp(lexer->start + start, rest, (size_t)length)== 0) {

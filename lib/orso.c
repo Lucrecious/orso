@@ -56,7 +56,7 @@ static void myerror(ast_t *ast, error_t error) {
     UNUSED(ast);
 
     tmp_arena_t *tmp = allocator_borrow();
-    string_t error_str = error2richstring(ast, error, tmp->allocator);
+    orstring_t error_str = error2richstring(ast, error, tmp->allocator);
     fprintf(stderr, "%s", error_str.cstr);
     allocator_return(tmp);
 }
@@ -68,13 +68,13 @@ static void print_errors(ast_t *ast) {
     }
 }
 
-static bool load_file(string_t in, string_t *source, arena_t *arena) {
+static bool load_file(orstring_t in, orstring_t *source, arena_t *arena) {
     String_Builder sb = {0};
     bool success = nob_read_entire_file(in.cstr, &sb);
     if (!success) return false;
 
     string_builder_t sb_ = {.items=sb.items, .count=sb.count};
-    string_t src = sb_render(&sb_, arena);
+    orstring_t src = sb_render(&sb_, arena);
 
     nob_sb_free(sb);
 
@@ -83,20 +83,20 @@ static bool load_file(string_t in, string_t *source, arena_t *arena) {
     return true;
 }
 
-static ast_t *build_ast(string_t source, arena_t *arena, string_t file_path) {
+static ast_t *build_ast(orstring_t source, arena_t *arena, orstring_t file_path) {
     ast_t *ast = arena_alloc(arena, sizeof(ast_t));
     ast_init(ast, arena);
     ast->vm = vm_default(arena);
 
     {
-        string_t core_path = lit2str("./bin/core.or");
+        orstring_t core_path = lit2str("./bin/core.or");
         Nob_String_Builder sb = {0};
         bool success = nob_read_entire_file(core_path.cstr, &sb);
         if (!success) abort();
         
         string_builder_t sb_ = {.items=sb.items, .count=sb.count};
 
-        string_t core_source = sb_render(&sb_, ast->arena);
+        orstring_t core_source = sb_render(&sb_, ast->arena);
 
         nob_sb_free(sb);
 
@@ -108,7 +108,7 @@ static ast_t *build_ast(string_t source, arena_t *arena, string_t file_path) {
     {
         ast_node_t *program = parse_source_into_module(ast, file_path, string2sv(source));
 
-        string_t programid = ast_generate_moduleid(file_path, tmp->allocator);
+        orstring_t programid = ast_generate_moduleid(file_path, tmp->allocator);
         ast_add_module(ast, program, programid);
     }
     allocator_return(tmp);
@@ -120,7 +120,7 @@ static ast_t *build_ast(string_t source, arena_t *arena, string_t file_path) {
     return ast;
 }
 
-static bool generate_exe(ast_t *ast, string_t output_path) {
+static bool generate_exe(ast_t *ast, orstring_t output_path) {
     tmp_arena_t *tmp = allocator_borrow();
 
     strings_t sources = {0};
@@ -134,12 +134,12 @@ static bool generate_exe(ast_t *ast, string_t output_path) {
         cc.output_path = string_copy(output_path, tmp->allocator);
 
         for (size_t i = 0; i < sources.count; ++i) {
-            string_t src = sources.items[i];
+            orstring_t src = sources.items[i];
             cc_source(&cc, src);
         }
 
         for (size_t i = 0; i < libs.count; ++i) {
-            string_t libpath = libs.items[i];
+            orstring_t libpath = libs.items[i];
             cc_libpath(&cc, libpath);
         }
 
@@ -170,7 +170,7 @@ static bool generate_exe(ast_t *ast, string_t output_path) {
 int orso_build(orso_compiler_t *compiler) {
     arena_t arena = {0};
 
-    string_t source;
+    orstring_t source;
     bool success = load_file(compiler->root_source, &source, &arena);
     if (!success) return 0;
 
@@ -183,7 +183,7 @@ int orso_build(orso_compiler_t *compiler) {
         return_defer(false);
     }
 
-    string_t output_file_path = string_path_combine(compiler->build_dir, compiler->output_name, &arena);
+    orstring_t output_file_path = string_path_combine(compiler->build_dir, compiler->output_name, &arena);
     success = generate_exe(ast, output_file_path);
     if (!success) {
         print_errors(ast);
@@ -198,10 +198,10 @@ defer:
     return result;
 }
 
-void print_ast(string_t input_file_path) {
+void print_ast(orstring_t input_file_path) {
     arena_t arena = {0};
 
-    string_t source;
+    orstring_t source;
     bool success = load_file(input_file_path, &source, &arena);
     if (!success) exit(1);
 
@@ -214,10 +214,10 @@ void print_ast(string_t input_file_path) {
     arena_free(&arena);
 }
 
-bool interpret(string_t input_file_path) {
+bool interpret(orstring_t input_file_path) {
     arena_t arena = {0};
 
-    string_t source;
+    orstring_t source;
     bool success = load_file(input_file_path, &source, &arena);
     if (!success) exit(1);
 
@@ -252,10 +252,10 @@ defer:
     return result;
 }
 
-bool debug(string_t input_file_path) {
+bool debug(orstring_t input_file_path) {
     arena_t arena = {0};
 
-    string_t source;
+    orstring_t source;
     bool success = load_file(input_file_path, &source, &arena);
     if (!success) exit(1);
 

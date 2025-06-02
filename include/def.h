@@ -19,7 +19,7 @@
 
 #define megabytes(bytes) ((size_t)((bytes)*1000*1000))
 
-typedef u8 byte;
+typedef oru8 byte;
 typedef void* ptr;
 
 #define unless(condition) if (!(condition))
@@ -30,19 +30,19 @@ typedef void* ptr;
 #define zero(ptr, type) memset(ptr, 0, sizeof(type))
 #define zer0(type) ((type){0})
 
-FORCE_INLINE s32 mins32(s32 a, s32 b) {
+FORCE_INLINE ors32 mins32(ors32 a, ors32 b) {
   return a < b ? a : b;
 }
 
-FORCE_INLINE s32 maxs32(s32 a, s32 b) {
+FORCE_INLINE ors32 maxs32(ors32 a, ors32 b) {
   return a > b ? a : b;
 }
 
-FORCE_INLINE u32 minu32(u32 a, u32 b) {
+FORCE_INLINE oru32 minu32(oru32 a, oru32 b) {
   return a < b ? a : b;
 }
 
-FORCE_INLINE u32 maxu32(u32 a, u32 b) {
+FORCE_INLINE oru32 maxu32(oru32 a, oru32 b) {
   return a > b ? a : b;
 }
 

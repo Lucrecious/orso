@@ -69,7 +69,7 @@ operator_t operators[TOKEN_SIZE];
 
 typedef struct texloc_t texloc_t;
 struct texloc_t {
-    string_t filepath;
+    orstring_t filepath;
     size_t line;
     size_t column;
 };
@@ -101,15 +101,15 @@ struct token_t {
 typedef struct lexer_t lexer_t;
 struct lexer_t {
     token_t previous_token;
-    string_t file_path;
+    orstring_t file_path;
     string_view_t source;
-    s32 line;
-    cstr_t start;
-    cstr_t line_start;
-    cstr_t current;
+    ors32 line;
+    orcstr_t start;
+    orcstr_t line_start;
+    orcstr_t current;
 };
 
-void lexer_init(lexer_t *state, string_t file_path, string_view_t code);
+void lexer_init(lexer_t *state, orstring_t file_path, string_view_t code);
 token_t lexer_next_token(lexer_t *state);
 
 #endif

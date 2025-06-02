@@ -5,13 +5,13 @@
 
 #include <stdlib.h>
 
-void log_fatal(cstr_t format, ...);
+void log_fatal(orcstr_t format, ...);
 
 #endif
 
 #ifdef LOG_IMPLEMENTATION
 
-void log_fatal(cstr_t format, ...) {
+void log_fatal(orcstr_t format, ...) {
     va_list args;
     va_start(args, format);
 

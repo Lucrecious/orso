@@ -32,21 +32,21 @@ int main(int argc, char **argv) {
     arena_t arena = {0};
 
     if (argc) {
-        cstr_t option = shift(argv, argc);
+        orcstr_t option = shift(argv, argc);
         if (strncmp(option, "build", 5) == 0) {
-            cstr_t output = "a.out";
+            orcstr_t output = "a.out";
             if (argc > 2) {
                 fprintf(stderr, "build option requires at least an input and optional output odl file\n");
                 exit(1);
             }
 
-            cstr_t input = shift(argv, argc);
+            orcstr_t input = shift(argv, argc);
             if (argc) {
                 output = shift(argv, argc);
             }
 
-            string_t sinput = cstr2string(input, &arena);
-            string_t soutput = cstr2string(output, &arena);
+            orstring_t sinput = cstr2string(input, &arena);
+            orstring_t soutput = cstr2string(output, &arena);
 
             {
                 orso_compiler_t compiler = {0};

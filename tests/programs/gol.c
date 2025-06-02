@@ -5,24 +5,24 @@
 typedef void(*fn_void)();
 typedef void* p_void;
 typedef p_void(*fn_size_t_p_void)(size_t);
-typedef bool_(*fn_p_void_size_t_bool_)(p_void,size_t);
+typedef orbool(*fn_p_void_size_t_bool_)(p_void,size_t);
 typedef size_t(*fn_size_t)();
-typedef u64(*fn_u64)();
+typedef oru64(*fn_u64)();
 typedef int(*fn_int)();
 typedef void(*fn_int_void)(int);
 typedef void(*fn_void)();
-typedef f64(*fn_u64_f64)(u64);
-typedef struct arr_5_u8 arr_5_u8; struct arr_5_u8 { u8 arr[5]; };
+typedef orf64(*fn_u64_f64)(oru64);
+typedef struct arr_5_u8 arr_5_u8; struct arr_5_u8 { oru8 arr[5]; };
 typedef struct arr_5_arr_5_u8 arr_5_arr_5_u8; struct arr_5_arr_5_u8 { arr_5_u8 arr[5]; };
 typedef arr_5_arr_5_u8* p_arr_5_arr_5_u8;
 typedef void(*fn_p_arr_5_arr_5_u8_void)(p_arr_5_arr_5_u8);
-typedef void(*fn_p_arr_5_arr_5_u8_u8_void)(p_arr_5_arr_5_u8,u8);
+typedef void(*fn_p_arr_5_arr_5_u8_u8_void)(p_arr_5_arr_5_u8,oru8);
 typedef int(*fn_p_arr_5_arr_5_u8_int_int_int)(p_arr_5_arr_5_u8,int,int);
-f64 ns2sec_odlfn1_(u64);
+orf64 ns2sec_odlfn1_(oru64);
 
-f64 ns2sec_odlfn1_(u64 ns_) {
+orf64 ns2sec_odlfn1_(oru64 ns_) {
   {
-    f64 tmp2 = muld_((cast(f64, ns_)), 1e-09);
+    orf64 tmp2 = muld_((cast(orf64, ns_)), 1e-09);
     return tmp2;
   };
 }
@@ -31,11 +31,11 @@ f64 ns2sec_odlfn1_(u64 ns_) {
 void _module_init_3(void) {
 }
 
-void func1(p_arr_5_arr_5_u8, u8);
+void func1(p_arr_5_arr_5_u8, oru8);
 void render_board_odlfn2_(p_arr_5_arr_5_u8);
 int neighbors_odlfn3_(p_arr_5_arr_5_u8, int, int);
 
-void func1(p_arr_5_arr_5_u8 arr_, u8 value_) {
+void func1(p_arr_5_arr_5_u8 arr_, oru8 value_) {
   {
     {
       int w_ = int_(0);
@@ -238,7 +238,7 @@ int expr(void) {
                         {
                           int n_ = ((neighbors_odlfn3_)(board_, x_, y_));
 
-                          u8 alive_ = ((*(board_)).arr[y_].arr[x_]);
+                          oru8 alive_ = ((*(board_)).arr[y_].arr[x_]);
 
                           {
                             if (((alive_ > u8_(0)) && (n_ < int_(2)))) {

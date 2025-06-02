@@ -6,7 +6,7 @@
 #include "tmp.h"
 #include <inttypes.h>
 
-bool compile_ast_to_c(ast_t *ast, string_t build_directory, strings_t *sources, strings_t *libs, arena_t *arena);
+bool compile_ast_to_c(ast_t *ast, orstring_t build_directory, strings_t *sources, strings_t *libs, arena_t *arena);
 
 #endif
 
@@ -19,8 +19,8 @@ bool compile_ast_to_c(ast_t *ast, string_t build_directory, strings_t *sources, 
 
 typedef struct funcdata_t funcdata_t;
 struct funcdata_t {
-    string_t name;
-    type_t type;
+    orstring_t name;
+    ortype_t type;
 };
 
 define_table(p2n, void*, funcdata_t, hashptr_, hasheq_);
@@ -46,10 +46,10 @@ struct cgen_t {
 
 typedef struct cgen_var_t cgen_var_t;
 struct cgen_var_t {
-    string_t name;
+    orstring_t name;
     bool is_new;
     size_t id;
-    type_t type;
+    ortype_t type;
 };
 
 static cgen_var_t nil_cvar = {.is_new = false, .id = 0 , .type = typeid(TYPE_INVALID) };
@@ -58,18 +58,18 @@ static cgen_var_t nil_cvar = {.is_new = false, .id = 0 , .type = typeid(TYPE_INV
 #define no_var(tv) ((tv).id == 0 && (tv).name.length == 0)
 #define has_var(tv) ((tv).id > 0 || (tv).name.length > 0)
 
-static string_t cgen_function_name(cgen_state_t state, string_view_t name, arena_t *arena) {
-    string_t r = string_format("__or%.*s_%zu_", arena, (int)name.length, name.data, ++(*state.tmp_count));
+static orstring_t cgen_function_name(cgen_state_t state, string_view_t name, arena_t *arena) {
+    orstring_t r = string_format("__or%.*s_%zu_", arena, (int)name.length, name.data, ++(*state.tmp_count));
     return r;
 }
 
-static string_t cgen_global_new_name(string_view_t name, cgen_state_t state, arena_t *arena) {
+static orstring_t cgen_global_new_name(string_view_t name, cgen_state_t state, arena_t *arena) {
     size_t tmpid = ++(*state.tmp_count);
-    string_t new_name = string_format("__or%.*s_%zu_", arena, name.length, name.data, tmpid);
+    orstring_t new_name = string_format("__or%.*s_%zu_", arena, name.length, name.data, tmpid);
     return new_name;
 }
 
-static cgen_var_t cgen_user_var(cgen_t *cgen, string_view_t name, type_t type, bool is_global) {
+static cgen_var_t cgen_user_var(cgen_t *cgen, string_view_t name, ortype_t type, bool is_global) {
     cgen_var_t var = {0};
     var.type = type;
     var.is_new = true;
@@ -89,7 +89,7 @@ static cgen_var_t cgen_var_used(cgen_var_t var) {
     return r;
 }
 
-static cgen_var_t cgen_next_tmpid(cgen_t *cgen, type_t type) {
+static cgen_var_t cgen_next_tmpid(cgen_t *cgen, ortype_t type) {
     return (cgen_var_t){ .is_new = true, .id = ++(*cgen->state.tmp_count), .type = type };
 }
 
@@ -107,61 +107,61 @@ static void cgen_add_indent(cgen_t *cgen) {
     }
 }
 
-static void cgen_add_include(cgen_t *cgen, cstr_t include_path) {
+static void cgen_add_include(cgen_t *cgen, orcstr_t include_path) {
     sb_add_format(&cgen->sb, "#include \"%s\"\n", include_path);
 }
 
-static cstr_t cgen_typedata_name(typedata_t *typedata) {
+static orcstr_t cgen_typedata_name(typedata_t *typedata) {
     ASSERT(typedata->name.length > 0, "all types must have a name before calling this");
     return typedata->name.cstr;
 }
 
-static cstr_t cgen_type_name(cgen_t *cgen, type_t type) {
+static orcstr_t cgen_type_name(cgen_t *cgen, ortype_t type) {
     typedata_t *typedata = type2typedata(&cgen->ast->type_set.types, type);
-    cstr_t value = cgen_typedata_name(typedata);
+    orcstr_t value = cgen_typedata_name(typedata);
     return value;
 }
 
-static cstr_t cgen_var_name(cgen_t *cgen, cgen_var_t var) {
+static orcstr_t cgen_var_name(cgen_t *cgen, cgen_var_t var) {
     if (var.name.length > 0) {
         return var.name.cstr;
     } else {
-        string_t result = string_format("tmp%llu", cgen->tmp_arena, var.id);
+        orstring_t result = string_format("tmp%llu", cgen->tmp_arena, var.id);
         return result.cstr;
     }
 }
 
-static cstr_t cgen_var(cgen_t *cgen, cgen_var_t var) {
+static orcstr_t cgen_var(cgen_t *cgen, cgen_var_t var) {
     if (var.is_new) {
-        string_t result = string_format("%s %s", cgen->tmp_arena, cgen_type_name(cgen, var.type), cgen_var_name(cgen, var));
+        orstring_t result = string_format("%s %s", cgen->tmp_arena, cgen_type_name(cgen, var.type), cgen_var_name(cgen, var));
         return result.cstr;
     } else {
         return cgen_var_name(cgen, var);
     }
 }
 
-static cstr_t cgen_lvar(cgen_t *cgen, cgen_var_t var) {
+static orcstr_t cgen_lvar(cgen_t *cgen, cgen_var_t var) {
     if (var.is_new) {
-        string_t result = string_format("%s *%s", cgen->tmp_arena, cgen_type_name(cgen, var.type), cgen_var_name(cgen, var));
+        orstring_t result = string_format("%s *%s", cgen->tmp_arena, cgen_type_name(cgen, var.type), cgen_var_name(cgen, var));
         return result.cstr;
     } else {
         return cgen_var_name(cgen, var);
     }
 }
 
-static string_t cgen_next_label(cgen_t *cgen, cstr_t label_name) {
+static orstring_t cgen_next_label(cgen_t *cgen, orcstr_t label_name) {
     ++(*cgen->state.tmp_count);
-    string_t label = string_format("%s%zu_", cgen->tmp_arena, label_name, *cgen->state.tmp_count);
+    orstring_t label = string_format("%s%zu_", cgen->tmp_arena, label_name, *cgen->state.tmp_count);
     return label;
 }
 
-static void cgen_jmp_label(cgen_t *cgen, string_t label) {
+static void cgen_jmp_label(cgen_t *cgen, orstring_t label) {
     sb_add_format(&cgen->sb, "%s:", label.cstr);
 }
 
 static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t tmp_var);
 
-static bool cgen_binary_is_macro(token_type_t type, typedata_t *optd, cstr_t *operator_or_func_name) {
+static bool cgen_binary_is_macro(token_type_t type, typedata_t *optd, orcstr_t *operator_or_func_name) {
     #define set_op(lit, is_func) { if (operator_or_func_name) *operator_or_func_name = (lit); return (is_func); } break
 
     if (is_type_kind_aggregate(optd->kind)) {
@@ -193,7 +193,7 @@ static bool cgen_binary_is_macro(token_type_t type, typedata_t *optd, cstr_t *op
             case NUM_SIZE_8: {
                 switch (optd->as.num) {
                 case NUM_TYPE_SIGNED: case_block(s8); break;
-                case NUM_TYPE_UNSIGNED: case_block(u8); break;
+                case NUM_TYPE_UNSIGNED: case_block(oru8); break;
                 default: UNREACHABLE(); break;
                 }
                 break;
@@ -201,8 +201,8 @@ static bool cgen_binary_is_macro(token_type_t type, typedata_t *optd, cstr_t *op
 
             case NUM_SIZE_16: {
                 switch (optd->as.num) {
-                case NUM_TYPE_SIGNED: case_block(s16); break;
-                case NUM_TYPE_UNSIGNED: case_block(u16); break;
+                case NUM_TYPE_SIGNED: case_block(ors16); break;
+                case NUM_TYPE_UNSIGNED: case_block(oru16); break;
                 default: UNREACHABLE(); break;
                 }
                 break;
@@ -210,8 +210,8 @@ static bool cgen_binary_is_macro(token_type_t type, typedata_t *optd, cstr_t *op
 
             case NUM_SIZE_32: {
                 switch (optd->as.num) {
-                case NUM_TYPE_SIGNED: case_block(s32); break;
-                case NUM_TYPE_UNSIGNED: case_block(u32); break;
+                case NUM_TYPE_SIGNED: case_block(ors32); break;
+                case NUM_TYPE_UNSIGNED: case_block(oru32); break;
                 case NUM_TYPE_FLOAT: case_block(f); break;
                 }
                 break;
@@ -219,8 +219,8 @@ static bool cgen_binary_is_macro(token_type_t type, typedata_t *optd, cstr_t *op
 
             case NUM_SIZE_64: {
                 switch (optd->as.num) {
-                case NUM_TYPE_SIGNED: case_block(s64); break;
-                case NUM_TYPE_UNSIGNED: case_block(u64); break;
+                case NUM_TYPE_SIGNED: case_block(ors64); break;
+                case NUM_TYPE_UNSIGNED: case_block(oru64); break;
                 case NUM_TYPE_FLOAT: case_block(d); break;
                 }
                 break;
@@ -357,7 +357,7 @@ static void cgen_cache_requires_tmp(typedatas_t *types, ast_node_t *expression) 
     }
 }
 
-static void cgen_array_start(cgen_t *cgen, type_t type) {
+static void cgen_array_start(cgen_t *cgen, ortype_t type) {
     sb_add_format(&cgen->sb, "((%s){ .arr={", ast_type2td(cgen->ast, type)->name);
 }
 
@@ -365,7 +365,7 @@ static void cgen_array_end(cgen_t *cgen) {
     sb_add_cstr(&cgen->sb, " }})");
 }
 
-static void cgen_struct_start(cgen_t *cgen, type_t type) {
+static void cgen_struct_start(cgen_t *cgen, ortype_t type) {
     sb_add_format(&cgen->sb, "((%s){ ", ast_type2td(cgen->ast, type)->name);
 }
 
@@ -373,7 +373,7 @@ static void cgen_struct_end(cgen_t *cgen) {
     sb_add_cstr(&cgen->sb, " })");
 }
 
-static string_t cgen_get_function_name(cgen_t *cgen, function_t *function) {
+static orstring_t cgen_get_function_name(cgen_t *cgen, function_t *function) {
     funcdata_t result = {.name=lit2str("")};
     bool success = table_get(p2n, cgen->state.functions, function, &result);
     UNUSED(success);
@@ -381,26 +381,26 @@ static string_t cgen_get_function_name(cgen_t *cgen, function_t *function) {
     return result.name;
 }
 
-static string_t cgen_get_instrinsic_fn_name(ast_t *ast, intrinsic_fn_t fn) {
-    string_t name = lit2str("");
+static orstring_t cgen_get_instrinsic_fn_name(ast_t *ast, intrinsic_fn_t fn) {
+    orstring_t name = lit2str("");
     bool success = table_get(p2s, ast->intrinsicfn2cname, fn, &name);
     UNUSED(success);
     ASSERT(success, "intrinsics should all be in there...");
     return name;
 }
 
-static void cgen_constant(cgen_t *cgen, word_t word, type_t type) {
+static void cgen_constant(cgen_t *cgen, orword_t word, ortype_t type) {
     typedata_t *typedata = ast_type2td(cgen->ast, type);
 
     switch (typedata->kind) {
         case TYPE_NUMBER: {
-            cstr_t numtype = cgen_typedata_name(typedata);
+            orcstr_t numtype = cgen_typedata_name(typedata);
             switch ((num_size_t)typedata->size) {
                 case NUM_SIZE_8: {
                     switch (typedata->as.num) {
                     case NUM_TYPE_FLOAT: UNREACHABLE(); break;
-                    case NUM_TYPE_SIGNED: sb_add_format(&cgen->sb, "%s_(%"PRIi32")", numtype, (s32)word.as.s); break;
-                    case NUM_TYPE_UNSIGNED: sb_add_format(&cgen->sb, "%s_(%"PRIu32")", numtype, (u32)word.as.u); break;
+                    case NUM_TYPE_SIGNED: sb_add_format(&cgen->sb, "_%s(%"PRIi32")", numtype, (ors32)word.as.s); break;
+                    case NUM_TYPE_UNSIGNED: sb_add_format(&cgen->sb, "_%s(%"PRIu32")", numtype, (oru32)word.as.u); break;
                     }
                     break;
                 }
@@ -408,34 +408,34 @@ static void cgen_constant(cgen_t *cgen, word_t word, type_t type) {
                 case NUM_SIZE_16: {
                     switch (typedata->as.num) {
                     case NUM_TYPE_FLOAT: UNREACHABLE(); break;
-                    case NUM_TYPE_SIGNED: sb_add_format(&cgen->sb, "%s_(%"PRIi32")", numtype, (s32)word.as.s); break;
-                    case NUM_TYPE_UNSIGNED: sb_add_format(&cgen->sb, "%s_(%"PRIu32")", numtype, (u32)word.as.u); break;
+                    case NUM_TYPE_SIGNED: sb_add_format(&cgen->sb, "_%s(%"PRIi32")", numtype, (ors32)word.as.s); break;
+                    case NUM_TYPE_UNSIGNED: sb_add_format(&cgen->sb, "_%s(%"PRIu32")", numtype, (oru32)word.as.u); break;
                     }
                     break;
                 }
 
                 case NUM_SIZE_32: {
                     switch (typedata->as.num) {
-                    case NUM_TYPE_FLOAT: sb_add_format(&cgen->sb, "%s_(%g)", numtype, (f32)word.as.d); break;
-                    case NUM_TYPE_SIGNED: sb_add_format(&cgen->sb, "%s_(%"PRIi32")", numtype, (s32)word.as.s); break;
-                    case NUM_TYPE_UNSIGNED: sb_add_format(&cgen->sb, "%s_(%"PRIu32")", numtype, (u32)word.as.u); break;
+                    case NUM_TYPE_FLOAT: sb_add_format(&cgen->sb, "_%s(%g)", numtype, (orf32)word.as.d); break;
+                    case NUM_TYPE_SIGNED: sb_add_format(&cgen->sb, "_%s(%"PRIi32")", numtype, (ors32)word.as.s); break;
+                    case NUM_TYPE_UNSIGNED: sb_add_format(&cgen->sb, "_%s(%"PRIu32")", numtype, (oru32)word.as.u); break;
                     }
                     break;
                 }
 
                 case NUM_SIZE_64: {
                     switch (typedata->as.num) {
-                        case NUM_TYPE_FLOAT: sb_add_format(&cgen->sb, "%lg", (f64)word.as.d); break;
+                        case NUM_TYPE_FLOAT: sb_add_format(&cgen->sb, "%lg", (orf64)word.as.d); break;
                         case NUM_TYPE_SIGNED: {
                             if (word.as.s == INT64_MIN) {
                                 // the smallest 64bit integer cannot be expressed as a single number literal
                                 // due to how C99 parses numbers
-                                sb_add_format(&cgen->sb, "INT64_MIN", (s64)word.as.s); break;
+                                sb_add_format(&cgen->sb, "INT64_MIN", (ors64)word.as.s); break;
                             } else {
-                                sb_add_format(&cgen->sb, "%"PRIi64"ll", (s64)word.as.s); break;
+                                sb_add_format(&cgen->sb, "%"PRIi64"ll", (ors64)word.as.s); break;
                             }
                         }
-                        case NUM_TYPE_UNSIGNED: sb_add_format(&cgen->sb, "%"PRIu64""PRIu64, (u64)word.as.u); break;
+                        case NUM_TYPE_UNSIGNED: sb_add_format(&cgen->sb, "%"PRIu64""PRIu64, (oru64)word.as.u); break;
                     }
                     break;
                 }
@@ -457,7 +457,7 @@ static void cgen_constant(cgen_t *cgen, word_t word, type_t type) {
 
         case TYPE_FUNCTION: {
             function_t *function = word.as.p;
-            string_t funcname = cgen_get_function_name(cgen, function);
+            orstring_t funcname = cgen_get_function_name(cgen, function);
 
             sb_add_cstr(&cgen->sb, "(");
             sb_add_format(&cgen->sb, "%s", funcname.cstr);
@@ -467,7 +467,7 @@ static void cgen_constant(cgen_t *cgen, word_t word, type_t type) {
 
         case TYPE_INTRINSIC_FUNCTION: {
             intrinsic_fn_t fn = word.as.p;
-            string_t funcname = cgen_get_instrinsic_fn_name(cgen->ast, fn);
+            orstring_t funcname = cgen_get_instrinsic_fn_name(cgen->ast, fn);
             sb_add_cstr(&cgen->sb, "(");
             sb_add_format(&cgen->sb, "%s", funcname.cstr);
             sb_add_cstr(&cgen->sb, ")");
@@ -484,7 +484,7 @@ static void cgen_constant(cgen_t *cgen, word_t word, type_t type) {
                 data_addr = &word;
             }
 
-            type_t inner_type = typedata->as.arr.type;
+            ortype_t inner_type = typedata->as.arr.type;
             typedata_t *innertd = ast_type2td(cgen->ast, inner_type);
             size_t inner_item_size = td_align(innertd->size, innertd->alignment);
             for (size_t i = 0; i < typedata->as.arr.count; ++i) {
@@ -496,7 +496,7 @@ static void cgen_constant(cgen_t *cgen, word_t word, type_t type) {
                 if (innertd->size > WORD_SIZE) {
                     cgen_constant(cgen, WORDP(item_data_addr), inner_type);
                 } else {
-                    word_t val = ast_mem2word(cgen->ast, item_data_addr, inner_type);
+                    orword_t val = ast_mem2word(cgen->ast, item_data_addr, inner_type);
                     cgen_constant(cgen, val, inner_type);
                 }
             }
@@ -529,13 +529,13 @@ static void cgen_constant(cgen_t *cgen, word_t word, type_t type) {
 
                 if (typedata->kind == TYPE_STRING && string_eq(field.name, lit2str("cstr"))) {
                     // todo: needs better conversion, use hexadecimal instead
-                    cstr_t cstr = *((char**)item_data_addr);
+                    orcstr_t cstr = *((char**)item_data_addr);
                     sb_add_format(&cgen->sb, "\"%s\"", cstr);
                 } else {
                     if (fieldtd->size > WORD_SIZE) {
                         cgen_constant(cgen, WORDP(item_data_addr), field.type);
                     } else {
-                        word_t val = ast_mem2word(cgen->ast, item_data_addr, field.type);
+                        orword_t val = ast_mem2word(cgen->ast, item_data_addr, field.type);
                         cgen_constant(cgen, val, field.type);
                     }
                 }
@@ -599,9 +599,9 @@ static void cgen_declaration(cgen_t *cgen, ast_node_t *declaration) {
     }
 }
 
-static void cgen_scaler_aggregate_binary(cgen_t *cgen, type_t type, token_type_t op, string_view_t lhs, string_view_t rhs) {
+static void cgen_scaler_aggregate_binary(cgen_t *cgen, ortype_t type, token_type_t op, string_view_t lhs, string_view_t rhs) {
     typedata_t *td = ast_type2td(cgen->ast, type);
-    cstr_t name_or_op;
+    orcstr_t name_or_op;
     bool is_macro = cgen_binary_is_macro(op, td, &name_or_op);
     if (is_macro) {
         // pointer arithmetic is always a macro
@@ -615,7 +615,7 @@ static void cgen_scaler_aggregate_binary(cgen_t *cgen, type_t type, token_type_t
     }
 }
 
-static void cgen_aggregate_arith_binary(cgen_t *cgen, token_type_t op, type_t type, string_builder_t *lhs_lvalue, string_builder_t *rhs_lvalue) {
+static void cgen_aggregate_arith_binary(cgen_t *cgen, token_type_t op, ortype_t type, string_builder_t *lhs_lvalue, string_builder_t *rhs_lvalue) {
     typedata_t *td = ast_type2td(cgen->ast, type);
 
     switch (td->kind) {
@@ -690,7 +690,7 @@ static void cgen_aggregate_arith_binary(cgen_t *cgen, token_type_t op, type_t ty
 }
 
 static void cgen_binary(cgen_t *cgen, ast_node_t *binary, cgen_var_t var) {
-    cstr_t operator_or_function_name = NULL;
+    orcstr_t operator_or_function_name = NULL;
 
     ast_node_t *lhs = an_lhs(binary);
     ast_node_t *rhs = an_rhs(binary);
@@ -799,7 +799,7 @@ static void cgen_binary(cgen_t *cgen, ast_node_t *binary, cgen_var_t var) {
             MUST(operator_is_arithmetic(binary->operator.type) || operator_is_comparing(binary->operator.type));
 
             if (operator_is_comparing(binary->operator.type)) {
-                cstr_t memcmp = "__ormemcmp";
+                orcstr_t memcmp = "__ormemcmp";
                 string_view_t lhs = cstr2sv(cgen_var_name(cgen, lhs_var));
                 string_view_t rhs = cstr2sv(cgen_var_name(cgen, rhs_var));
 
@@ -832,7 +832,7 @@ static void cgen_binary(cgen_t *cgen, ast_node_t *binary, cgen_var_t var) {
     }
 }
 
-static cstr_t cgen_token2unary(token_type_t type) {
+static orcstr_t cgen_token2unary(token_type_t type) {
     switch (type) {
         case TOKEN_MINUS: return "-";
         case TOKEN_NOT: return "!";
@@ -846,7 +846,7 @@ static cstr_t cgen_token2unary(token_type_t type) {
 static void cgen_lvalue(cgen_t *cgen, ast_node_t *lvalue, cgen_var_t var);
 
 static void cgen_unary(cgen_t *cgen, ast_node_t *unary, cgen_var_t var) {
-    cstr_t op = cgen_token2unary(unary->operator.type);
+    orcstr_t op = cgen_token2unary(unary->operator.type);
     ast_node_t *oprnd = an_operand(unary);
     switch (unary->operator.type) {
     case TOKEN_AMPERSAND: {
@@ -859,7 +859,7 @@ static void cgen_unary(cgen_t *cgen, ast_node_t *unary, cgen_var_t var) {
             cgen_expression(cgen, oprnd, nil_cvar);
             sb_add_cstr(&cgen->sb, ")");
         } else {
-            type_t inner = ast_type2td(cgen->ast, unary->value_type)->as.ptr.type;
+            ortype_t inner = ast_type2td(cgen->ast, unary->value_type)->as.ptr.type;
             cgen_var_t tmp = cgen_next_tmpid(cgen, inner);
             cgen_lvalue(cgen, oprnd, tmp);
             cgen_semicolon_nl(cgen);
@@ -1055,7 +1055,7 @@ static void cgen_lvalue(cgen_t *cgen, ast_node_t *lvalue, cgen_var_t var) {
 
         struct_field_t field;
         {
-            type_t struct_type = lhs->value_type;
+            ortype_t struct_type = lhs->value_type;
             if (lhstd->kind == TYPE_POINTER) {
                 struct_type = lhstd->as.ptr.type;
             }
@@ -1073,7 +1073,7 @@ static void cgen_lvalue(cgen_t *cgen, ast_node_t *lvalue, cgen_var_t var) {
 
             cgen_expression(cgen, lhs, nil_cvar);
 
-            cstr_t op = lhstd->kind == TYPE_POINTER ? "->" : ".";
+            orcstr_t op = lhstd->kind == TYPE_POINTER ? "->" : ".";
             sb_add_cstr(&cgen->sb, op);
 
             sb_add_format(&cgen->sb, "%s)", field.name);
@@ -1083,7 +1083,7 @@ static void cgen_lvalue(cgen_t *cgen, ast_node_t *lvalue, cgen_var_t var) {
             cgen_lvalue(cgen, lhs->lvalue_node, lhsvar);
             cgen_semicolon_nl(cgen);
 
-            cstr_t deref = lhstd->kind == TYPE_POINTER ? "*" : "";
+            orcstr_t deref = lhstd->kind == TYPE_POINTER ? "*" : "";
 
             cgen_add_indent(cgen);
 
@@ -1182,7 +1182,7 @@ static void cgen_assignment(cgen_t *cgen, ast_node_t *assignment, cgen_var_t var
             } else {
                 cgen_add_indent(cgen);
 
-                cstr_t func_or_op;
+                orcstr_t func_or_op;
                 bool is_macro = cgen_binary_is_macro(equals_tok, td, &func_or_op);
                 if (is_macro) {
                     sb_add_format(&cgen->sb, "(%s) = %s(*(%s), %s)",
@@ -1305,7 +1305,7 @@ static void cgen_end_branch(cgen_t *cgen) {
     sb_add_cstr(&cgen->sb, "}");
 }
 
-static void cgen_condition_and_open_block(cgen_t *cgen, ast_node_t *branch, cstr_t branch_cstr) {
+static void cgen_condition_and_open_block(cgen_t *cgen, ast_node_t *branch, orcstr_t branch_cstr) {
     if (an_condition(branch)->requires_tmp_for_cgen) {
         if (branch->branch_type == BRANCH_TYPE_WHILE) {
             cgen_add_indent(cgen);
@@ -1360,7 +1360,7 @@ static void cgen_if(cgen_t *cgen, ast_node_t *branch, cgen_var_t var) {
     bool skip_else = an_else(branch)->node_type == AST_NODE_TYPE_EXPRESSION_NIL;
     cgen_begin_branch(cgen, branch, var, skip_else);
 
-    cstr_t if_or_unless = branch->condition_negated ? "unless" : "if";
+    orcstr_t if_or_unless = branch->condition_negated ? "unless" : "if";
     cgen_indent(cgen);
     cgen_condition_and_open_block(cgen, branch, if_or_unless);
 
@@ -1405,7 +1405,7 @@ static void cgen_while_or_for(cgen_t *cgen, ast_node_t *branch, cgen_var_t var) 
         cgen_declaration(cgen, an_for_decl(branch));
     }
 
-    cstr_t while_or_until = branch->condition_negated ? "until" : "while";
+    orcstr_t while_or_until = branch->condition_negated ? "until" : "while";
     cgen_condition_and_open_block(cgen, branch, while_or_until);
 
     cgen_then(cgen, branch, var);
@@ -1531,13 +1531,13 @@ static void cgen_break_or_continue(cgen_t *cgen, ast_node_t *jmp, token_type_t t
 
     switch (type) {
         case TOKEN_CONTINUE: {
-            string_t continue_label = jmp->jmp_out_scope_node->ccode_continue_label;
+            orstring_t continue_label = jmp->jmp_out_scope_node->ccode_continue_label;
             sb_add_format(&cgen->sb, "goto %s", continue_label.cstr);
             break;
         }
 
         case TOKEN_BREAK: {
-            string_t break_label = jmp->jmp_out_scope_node->ccode_break_label;
+            orstring_t break_label = jmp->jmp_out_scope_node->ccode_break_label;
             sb_add_format(&cgen->sb, "goto %s", break_label.cstr);
             break;
         }
@@ -1775,7 +1775,7 @@ static void cgen_item_access(cgen_t *cgen, ast_node_t *item_access, cgen_var_t v
 
 static void cgen_initializer_list(cgen_t *cgen, ast_node_t *list, cgen_var_t var) {
     tmp_arena_t *tmp = allocator_borrow();
-    type_t list_type = list->value_type;
+    ortype_t list_type = list->value_type;
     typedata_t *list_td = ast_type2td(cgen->ast, list_type);
 
     switch (list_td->kind) {
@@ -1926,7 +1926,7 @@ static void cgen_initializer_list(cgen_t *cgen, ast_node_t *list, cgen_var_t var
 static void cgen_dot_access(cgen_t *cgen, ast_node_t *dot, cgen_var_t var) {
     ast_node_t *lhs = an_dot_lhs(dot);
     typedata_t *lhstd = ast_type2td(cgen->ast, lhs->value_type);
-    cstr_t operator;
+    orcstr_t operator;
     if (lhstd->kind == TYPE_POINTER) {
         operator = "->";
     }  else {
@@ -1955,12 +1955,12 @@ static void cgen_dot_access(cgen_t *cgen, ast_node_t *dot, cgen_var_t var) {
     }
 }
 
-static string_t ffi_cfuncname(ffi_t *ffi, arena_t *arena) {
-    string_t libpath = ffi->libpath;
+static orstring_t ffi_cfuncname(ffi_t *ffi, arena_t *arena) {
+    orstring_t libpath = ffi->libpath;
     string_view_t prefix = sv_filename(string2sv(libpath));
     prefix = sv_no_ext(prefix);
 
-    string_t result = string_format("__orffi%.*s_%s", arena, prefix.length, prefix.data, ffi->funcname);
+    orstring_t result = string_format("__orffi%.*s_%s", arena, prefix.length, prefix.data, ffi->funcname);
     return result;
 }
 
@@ -2146,12 +2146,12 @@ void cgen_forward_declare_functions(cgen_t *cgen, ast_node_t *module) {
         UNUSED(success); MUST(success);
 
         typedata_t *td = type2typedata(&cgen->ast->type_set.types, funcdata.type);
-        type_t rettype = td->as.function.return_type;
+        ortype_t rettype = td->as.function.return_type;
         
         sb_add_format(&cgen->sb, "%s %s(", cgen_type_name(cgen, rettype), funcdata.name);
         
         for (size_t a = 0; a < td->as.function.argument_types.count; ++a) {
-            type_t argtype = td->as.function.argument_types.items[a];
+            ortype_t argtype = td->as.function.argument_types.items[a];
             if (a != 0) {
                 sb_add_cstr(&cgen->sb, ", ");
             }
@@ -2188,7 +2188,7 @@ static void cgen_function_definitions(cgen_t *cgen, ast_node_t *module) {
             }
 
             ast_node_t *arg = funcdef->children.items[i];
-            type_t arg_type = arg->value_type;
+            ortype_t arg_type = arg->value_type;
             if (TYPE_IS_VOID(arg_type)) {
                 sb_add_cstr(&cgen->sb, "void");
             } else {
@@ -2211,7 +2211,7 @@ static void cgen_function_definitions(cgen_t *cgen, ast_node_t *module) {
     }
 }
 
-static void cgen_struct(cgen_t *cgen, type_t type, bools_t *bools) {
+static void cgen_struct(cgen_t *cgen, ortype_t type, bools_t *bools) {
     if (bools->items[type.i]) return;
     bools->items[type.i] = true;
 
@@ -2280,16 +2280,16 @@ static void cgen_generate_cnames_for_types(ast_t *ast) {
     for (size_t i = 0; i < tds->count; ++i) {
         typedata_t *td = tds->items[i];
         switch(td->kind) {
-        case TYPE_BOOL: td->name = lit2str("bool_"); break;
+        case TYPE_BOOL: td->name = lit2str("orbool"); break;
         case TYPE_STRING:
         case TYPE_NUMBER: ASSERT(td->name.length != 0, "should be already set"); break;
-        case TYPE_TYPE: td->name = lit2str("type_t"); break;
+        case TYPE_TYPE: td->name = lit2str("ortype_t"); break;
         case TYPE_VOID: td->name = lit2str("void"); break;
         case TYPE_POINTER: {
             typedata_t *innertd = type2typedata(tds, td->as.ptr.type);
             ASSERT(innertd->name.length != 0, "all dependendant types should be before this one by construction");
 
-            string_t name = string_format("p_%s", arena, innertd->name.cstr);
+            orstring_t name = string_format("p_%s", arena, innertd->name.cstr);
             td->name = name;
             break;
         }
@@ -2303,12 +2303,12 @@ static void cgen_generate_cnames_for_types(ast_t *ast) {
             sb_add_cstr(&sb, "fn_");
 
             for (size_t i = 0; i < td->as.function.argument_types.count; ++i) {
-                type_t arg_type = td->as.function.argument_types.items[i];
+                ortype_t arg_type = td->as.function.argument_types.items[i];
                 typedata_t *argtd = type2typedata(tds, arg_type);
                 sb_add_format(&sb, "%s_", argtd->name.cstr);
             }
 
-            type_t ret_type = td->as.function.return_type;
+            ortype_t ret_type = td->as.function.return_type;
             typedata_t *rettd = type2typedata(tds, ret_type);
 
             sb_add_format(&sb, "%s", rettd->name.cstr);
@@ -2392,7 +2392,7 @@ static void cgen_typedefs(cgen_t *cgen, typedatas_t *tds) {
             sb_add_format(&cgen->sb, "%s(*%s)(", rettd->name.cstr, td->name.cstr);
 
             for (size_t i = 0; i < td->as.function.argument_types.count; ++i) {
-                type_t arg_type = td->as.function.argument_types.items[i];
+                ortype_t arg_type = td->as.function.argument_types.items[i];
                 typedata_t *argtd = type2typedata(tds, arg_type);
 
                 if (i != 0) {
@@ -2441,7 +2441,7 @@ void cgen_declare_global_decls(cgen_t *cgen, ast_nodes_t *decls) {
     sb_add_cstr(&cgen->sb, "\n");
 }
 
-static void cgen_begin_h(cgen_t *cgenh, string_t header_define) {
+static void cgen_begin_h(cgen_t *cgenh, orstring_t header_define) {
     sb_add_format(&cgenh->sb, "#ifndef %s\n", header_define.cstr);
     sb_add_format(&cgenh->sb, "#define %s\n\n", header_define.cstr);
 }
@@ -2452,7 +2452,7 @@ static void cgen_end_h(cgen_t *cgenh) {
 
 void cgen_init_function_file(cgen_t *cgen, cgen_t *cgenh, ast_t *ast) {
     // size_t id = ++(*cgen->state.tmp_count);
-    string_t init_func_name = lit2str("__orminit_");//string_format("__orminit_", cgen->tmp_arena);
+    orstring_t init_func_name = lit2str("__orminit_");//string_format("__orminit_", cgen->tmp_arena);
 
     // .h
     {
@@ -2499,7 +2499,7 @@ void cgen_global_decls(cgen_t *cgenh, ast_node_t *module) {
     cgen_declare_global_decls(cgenh, &module->children);
 }
 
-static void cgen_module(cgen_t *cgen, cgen_t *cgenh, bool is_core, ast_node_t *module, string_t moduleid) {
+static void cgen_module(cgen_t *cgen, cgen_t *cgenh, bool is_core, ast_node_t *module, orstring_t moduleid) {
     // .h
     {
         cgen_begin_h(cgenh, moduleid);
@@ -2541,26 +2541,26 @@ static void cgen_module(cgen_t *cgen, cgen_t *cgenh, bool is_core, ast_node_t *m
     }
 }
 
-static string_t cgen_generate_filename_hext(string_t moduleid, string_t filepath, arena_t *arena) {
+static orstring_t cgen_generate_filename_hext(orstring_t moduleid, orstring_t filepath, arena_t *arena) {
     string_view_t filename = sv_filename(string2sv(filepath));
 
-    string_t result = string_format("%s_%.*s.h", arena, moduleid.cstr, filename.length, filename.data);
+    orstring_t result = string_format("%s_%.*s.h", arena, moduleid.cstr, filename.length, filename.data);
     return result;
 }
 
-static string_t cgen_generate_associated_c_from_h_filename(string_t hfilename, arena_t *arena) {
+static orstring_t cgen_generate_associated_c_from_h_filename(orstring_t hfilename, arena_t *arena) {
     string_view_t noext = sv_no_ext(string2sv(hfilename));
-    string_t cname = string_format("%.*s.c", arena, noext.length, noext.data);
+    orstring_t cname = string_format("%.*s.c", arena, noext.length, noext.data);
     return cname;
 }
 
 static void cgen_generate_associated_h_filenames(ast_t *ast) {
     ast->core_module_or_null->ccode_associated_h = lit2str(CORE_H_FILENAME);
 
-    string_t moduleid;
+    orstring_t moduleid;
     ast_node_t *module;
     kh_foreach(ast->moduleid2node, moduleid, module, {
-        string_t filename = cgen_generate_filename_hext(moduleid, module->filepath, ast->arena);
+        orstring_t filename = cgen_generate_filename_hext(moduleid, module->filepath, ast->arena);
         module->ccode_associated_h = filename;
     });
 }
@@ -2568,7 +2568,7 @@ static void cgen_generate_associated_h_filenames(ast_t *ast) {
 static void cgen_generate_global_names(ast_t *ast, cgen_state_t state) {
     for (size_t i = 0; i < ast->global_decls_in_resolution_order.count; ++i) {
         ast_node_t *decl = ast->global_decls_in_resolution_order.items[i];
-        string_t name = cgen_global_new_name(decl->identifier.view, state, ast->arena);
+        orstring_t name = cgen_global_new_name(decl->identifier.view, state, ast->arena);
         decl->ccode_var_name = name;
     }
 }
@@ -2583,7 +2583,7 @@ struct ffis_t {
 
 typedef struct ffilib_t ffilib_t;
 struct ffilib_t {
-    string_t libpath;
+    orstring_t libpath;
     ffis_t ffis;
 };
 
@@ -2596,9 +2596,9 @@ struct ffilibs_t {
 };
 
 
-static bool find_ffilib(ffilibs_t *libs, string_t libpath, ffilib_t **ffilib) {
+static bool find_ffilib(ffilibs_t *libs, orstring_t libpath, ffilib_t **ffilib) {
     for (size_t i = 0; i < libs->count; ++i) {
-        string_t path = libs->items[i].libpath;
+        orstring_t path = libs->items[i].libpath;
         if (string_eq(path, libpath)) {
             *ffilib = &libs->items[i];
             return true;
@@ -2608,12 +2608,12 @@ static bool find_ffilib(ffilibs_t *libs, string_t libpath, ffilib_t **ffilib) {
     return false;
 }
 
-static bool cgen_generate_ffi(ast_t *ast, cgen_t *cgen, cgen_t *cgenh, cgen_state_t cgen_state, string_t build_dir, strings_t *sources, strings_t *libpaths) {
+static bool cgen_generate_ffi(ast_t *ast, cgen_t *cgen, cgen_t *cgenh, cgen_state_t cgen_state, orstring_t build_dir, strings_t *sources, strings_t *libpaths) {
     tmp_arena_t *tmp = allocator_borrow();
 
     ffilibs_t libs = {.allocator=tmp->allocator};
     {
-        string_t key;
+        orstring_t key;
         ffi_t *ffi;
         kh_foreach(ast->ffis, key, ffi, {
             ffilib_t *fl = NULL;
@@ -2639,11 +2639,11 @@ static bool cgen_generate_ffi(ast_t *ast, cgen_t *cgen, cgen_t *cgenh, cgen_stat
         *cgen = make_cgen(ast, tmp->allocator, cgen_state);
         *cgenh = make_cgen(ast, tmp->allocator, cgen_state);
 
-        string_t libpath = libs.items[i].libpath;
+        orstring_t libpath = libs.items[i].libpath;
         ffilib_t lib = libs.items[i];
 
         string_view_t filename = sv_no_ext(sv_filename(string2sv(libpath)));
-        string_t header_define = string_format("orffi%.*s_H_", tmp->allocator, filename.length, filename.data);
+        orstring_t header_define = string_format("orffi%.*s_H_", tmp->allocator, filename.length, filename.data);
 
         // h
         {
@@ -2672,7 +2672,7 @@ static bool cgen_generate_ffi(ast_t *ast, cgen_t *cgen, cgen_t *cgenh, cgen_stat
 
         // c
         {
-            string_t orffih = string_format("orffi%.*s.h", tmp->allocator, filename.length, filename.data);
+            orstring_t orffih = string_format("orffi%.*s.h", tmp->allocator, filename.length, filename.data);
             array_push(&ffihs, orffih);
 
             cgen_add_include(cgen, orffih.cstr);
@@ -2728,8 +2728,8 @@ static bool cgen_generate_ffi(ast_t *ast, cgen_t *cgen, cgen_t *cgenh, cgen_stat
             }
         }
 
-        string_t orffic = string_format("%sorffi%.*s.c", tmp->allocator, build_dir.cstr, filename.length, filename.data);
-        string_t orffih = string_format("%sorffi%.*s.h", tmp->allocator, build_dir.cstr, filename.length, filename.data);
+        orstring_t orffic = string_format("%sorffi%.*s.c", tmp->allocator, build_dir.cstr, filename.length, filename.data);
+        orstring_t orffih = string_format("%sorffi%.*s.h", tmp->allocator, build_dir.cstr, filename.length, filename.data);
         array_push(sources, orffic);
 
         success &= write_entire_file(orffic.cstr, cgen->sb.items, cgen->sb.count);
@@ -2742,13 +2742,13 @@ static bool cgen_generate_ffi(ast_t *ast, cgen_t *cgen, cgen_t *cgenh, cgen_stat
         cgen_begin_h(cgenh, lit2str("ORFFI_H_"));
 
         for (size_t i = 0; i < ffihs.count; ++i) {
-            string_t h = ffihs.items[i];
+            orstring_t h = ffihs.items[i];
             cgen_add_include(cgenh, h.cstr);
         }
 
         cgen_end_h(cgenh);
 
-        string_t h = string_format("%s"ORFFI_H_FILENAME, tmp->allocator, build_dir.cstr);
+        orstring_t h = string_format("%s"ORFFI_H_FILENAME, tmp->allocator, build_dir.cstr);
         success &= write_entire_file(h.cstr, cgenh->sb.items, cgenh->sb.count);
     }
 
@@ -2757,7 +2757,7 @@ static bool cgen_generate_ffi(ast_t *ast, cgen_t *cgen, cgen_t *cgenh, cgen_stat
     return success;
 }
 
-bool compile_ast_to_c(ast_t *ast, string_t build_directory, strings_t *sources, strings_t *libs, arena_t *arena) {
+bool compile_ast_to_c(ast_t *ast, orstring_t build_directory, strings_t *sources, strings_t *libs, arena_t *arena) {
     cgen_generate_cnames_for_types(ast);
 
     cgen_generate_associated_h_filenames(ast);
@@ -2787,14 +2787,14 @@ bool compile_ast_to_c(ast_t *ast, string_t build_directory, strings_t *sources, 
         cgen = make_cgen(ast, tmp->allocator, cgen_state);
         cgenh = make_cgen(ast, tmp->allocator, cgen_state);
 
-        string_t corec = cgen_generate_associated_c_from_h_filename(ast->core_module_or_null->ccode_associated_h, tmp->allocator);
+        orstring_t corec = cgen_generate_associated_c_from_h_filename(ast->core_module_or_null->ccode_associated_h, tmp->allocator);
 
         cgen_module(&cgen, &cgenh, true, ast->core_module_or_null, lit2str(CORE_MODULE_NAME));
 
         corec = string_format("%s%s", tmp->allocator, build_directory.cstr, corec.cstr);
         array_push(sources, corec);
 
-        string_t coreh = string_format("%s%s", tmp->allocator, build_directory.cstr, ast->core_module_or_null->ccode_associated_h.cstr);
+        orstring_t coreh = string_format("%s%s", tmp->allocator, build_directory.cstr, ast->core_module_or_null->ccode_associated_h.cstr);
 
         success &= write_entire_file(corec.cstr, cgen.sb.items, cgen.sb.count);
         success &= write_entire_file(coreh.cstr, cgenh.sb.items, cgenh.sb.count);
@@ -2812,10 +2812,10 @@ bool compile_ast_to_c(ast_t *ast, string_t build_directory, strings_t *sources, 
 
         cgen_init_function_file(&cgen, &cgenh, ast);
 
-        string_t init_funcc = string_format("%s%s", tmp->allocator, build_directory.cstr, "__orinit_func.c");
+        orstring_t init_funcc = string_format("%s%s", tmp->allocator, build_directory.cstr, "__orinit_func.c");
         array_push(sources, init_funcc);
 
-        string_t init_funch = string_format("%s%s", tmp->allocator, build_directory.cstr, "__orinit_func.h");
+        orstring_t init_funch = string_format("%s%s", tmp->allocator, build_directory.cstr, "__orinit_func.h");
 
         success &= write_entire_file(init_funcc.cstr, cgen.sb.items, cgen.sb.count);
         success &= write_entire_file(init_funch.cstr, cgenh.sb.items, cgenh.sb.count);
@@ -2823,7 +2823,7 @@ bool compile_ast_to_c(ast_t *ast, string_t build_directory, strings_t *sources, 
 
     // code
     {
-        string_t moduleid;
+        orstring_t moduleid;
         ast_node_t *module;
 
         kh_foreach(ast->moduleid2node, moduleid, module, {
@@ -2836,14 +2836,14 @@ bool compile_ast_to_c(ast_t *ast, string_t build_directory, strings_t *sources, 
 
             if (main_or_null) {
                 cgen_add_include(&cgen, "__orinit_func.h");
-                string_t funcname = cgen_get_function_name(&cgen, main_or_null);
+                orstring_t funcname = cgen_get_function_name(&cgen, main_or_null);
                 sb_add_format(&cgen.sb, "int main() { __orminit_(); %s(); }\n\n", funcname.cstr);
             }
 
-            string_t pathc = cgen_generate_associated_c_from_h_filename(module->ccode_associated_h, tmp->allocator);
+            orstring_t pathc = cgen_generate_associated_c_from_h_filename(module->ccode_associated_h, tmp->allocator);
             pathc = string_format("%s%s", tmp->allocator, build_directory.cstr, pathc.cstr);
 
-            string_t pathh = string_format("%s%s", tmp->allocator, build_directory.cstr, module->ccode_associated_h.cstr);;
+            orstring_t pathh = string_format("%s%s", tmp->allocator, build_directory.cstr, module->ccode_associated_h.cstr);;
 
             success &= write_entire_file(pathc.cstr, cgen.sb.items, cgen.sb.count);
             success &= write_entire_file(pathh.cstr, cgenh.sb.items, cgenh.sb.count);

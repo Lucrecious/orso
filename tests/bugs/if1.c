@@ -1,12 +1,12 @@
 #define INTRINSICS_IMPLEMENTATION
 #include "intrinsics.h"
 
-s32 expr(void) {
-s32 result_; {
-    s32 e_ = 0;
+ors32 expr(void) {
+ors32 result_; {
+    ors32 e_ = 0;
 
-    s32 h_; {
-      bool_ tmp3; {
+    ors32 h_; {
+      orbool tmp3; {
         tmp3 = false;
       };
       while (tmp3) {

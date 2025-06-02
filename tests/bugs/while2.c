@@ -1,13 +1,13 @@
 #define INTRINSICS_IMPLEMENTATION
 #include "intrinsics.h"
 
-s32 expr(void) {
-s32 result_; {
-    s32 sum_ = 0;
+ors32 expr(void) {
+ors32 result_; {
+    ors32 sum_ = 0;
 
-    s32 count_ = 5;
+    ors32 count_ = 5;
 
-    s32 tmp1; {
+    ors32 tmp1; {
       while ((count_ > 0)) {
         {
           tmp1 = ((count_ = (count_ - 1)));

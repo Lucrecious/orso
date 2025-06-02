@@ -20,7 +20,7 @@ typedef struct cc_t cc_t;
 struct cc_t {
     arena_t *arena;
     cc_cc_t cc;
-    string_t output_path;
+    orstring_t output_path;
     cc_output_type_t output_type;
     strings_t sources;
     strings_t libpaths;
@@ -30,11 +30,11 @@ struct cc_t {
 };
 
 cc_t cc_make(cc_cc_t cc_cc, arena_t *arena);
-void cc_source(cc_t *cc, string_t mem_source);
-void cc_libpath(cc_t *cc, string_t libpath);
-void cc_flag(cc_t *cc, string_t flag);
-void cc_include_dir(cc_t *cc, string_t dir);
-void cc_no_warning(cc_t *cc, string_t warning);
+void cc_source(cc_t *cc, orstring_t mem_source);
+void cc_libpath(cc_t *cc, orstring_t libpath);
+void cc_flag(cc_t *cc, orstring_t flag);
+void cc_include_dir(cc_t *cc, orstring_t dir);
+void cc_no_warning(cc_t *cc, orstring_t warning);
 bool cc_build(cc_t *cc);
 
 
@@ -55,27 +55,27 @@ cc_t cc_make(cc_cc_t cc_cc, arena_t *arena) {
     };
 }
 
-void cc_source(cc_t *cc, string_t source_path) {
+void cc_source(cc_t *cc, orstring_t source_path) {
     array_push(&cc->sources, string_copy(source_path, cc->arena));
 }
 
-void cc_libpath(cc_t *cc, string_t libpath) {
+void cc_libpath(cc_t *cc, orstring_t libpath) {
     array_push(&cc->libpaths, string_copy(libpath, cc->arena));
 }
 
-void cc_flag(cc_t *cc, string_t flag) {
+void cc_flag(cc_t *cc, orstring_t flag) {
     array_push(&cc->flags, string_copy(flag, cc->arena));
 }
 
-void cc_include_dir(cc_t *cc, string_t dir) {
+void cc_include_dir(cc_t *cc, orstring_t dir) {
     array_push(&cc->include_dirs, dir);
 }
 
-void cc_no_warning(cc_t *cc, string_t warning) {
+void cc_no_warning(cc_t *cc, orstring_t warning) {
     array_push(&cc->no_warnings, warning);
 }
 
-static string_t cc_name(cc_cc_t cc) {
+static orstring_t cc_name(cc_cc_t cc) {
     switch (cc) {
         case CC_GCC: return lit2str("gcc");
     }
@@ -88,46 +88,46 @@ bool cc_build(cc_t *cc) {
     strings_t source_out_paths = {.allocator=cc->arena};
 
     for (size_t i = 0; i < cc->sources.count; ++i) {
-        string_t path = cc->sources.items[i];
+        orstring_t path = cc->sources.items[i];
         array_push(&source_paths, path);
 
-        string_t patho = string_format("%s%llu.o", cc->arena, path.cstr, i);
+        orstring_t patho = string_format("%s%llu.o", cc->arena, path.cstr, i);
         array_push(&source_out_paths, patho);
     }
 
     Cmd cmd = {0};
-    string_t cc_name_ = cc_name(cc->cc);
+    orstring_t cc_name_ = cc_name(cc->cc);
 
     for (size_t i = 0; i < source_paths.count; ++i) {
         cmd_append(&cmd, cc_name_.cstr);
 
         cmd_append(&cmd, "-c");
 
-        string_t source_path = source_paths.items[i];
+        orstring_t source_path = source_paths.items[i];
         cmd_append(&cmd, source_path.cstr);
 
         for (size_t i = 0; i < cc->include_dirs.count; ++i) {
-            string_t include_dir = cc->include_dirs.items[i];
-            string_t include_dir_flag = string_format("-I%s", cc->arena, include_dir.cstr);
+            orstring_t include_dir = cc->include_dirs.items[i];
+            orstring_t include_dir_flag = string_format("-I%s", cc->arena, include_dir.cstr);
             cmd_append(&cmd, include_dir_flag.cstr);
         }
 
         for (size_t i = 0; i < cc->no_warnings.count; ++i) {
-            string_t warning = cc->no_warnings.items[i];
-            string_t nowarning_flag = string_format("-Wno-%s", cc->arena, warning.cstr);
+            orstring_t warning = cc->no_warnings.items[i];
+            orstring_t nowarning_flag = string_format("-Wno-%s", cc->arena, warning.cstr);
             cmd_append(&cmd, nowarning_flag.cstr);
         }
 
         cmd_append(&cmd, "-o");
         
-        string_t source_out_path = source_out_paths.items[i];
+        orstring_t source_out_path = source_out_paths.items[i];
         cmd_append(&cmd, source_out_path.cstr);
 
         bool success = cmd_run_sync_and_reset(&cmd);
         if (!success) return false;
     }
 
-    string_t outfile = string_format("%s", cc->arena, cc->output_path.cstr);
+    orstring_t outfile = string_format("%s", cc->arena, cc->output_path.cstr);
 
     switch (cc->output_type) {
         case CC_DYNAMIC: {
@@ -138,7 +138,7 @@ bool cc_build(cc_t *cc) {
             cmd_append(&cmd, outfile.cstr);
 
             for (size_t i = 0; i < source_out_paths.count; ++i) {
-                string_t source_out_path = source_out_paths.items[i];
+                orstring_t source_out_path = source_out_paths.items[i];
                 cmd_append(&cmd, source_out_path.cstr);
             }
 
@@ -156,17 +156,17 @@ bool cc_build(cc_t *cc) {
             cmd_append(&cmd, outfile.cstr);
 
             for (size_t i = 0; i < source_out_paths.count; ++i) {
-                string_t source_out_path = source_out_paths.items[i];
+                orstring_t source_out_path = source_out_paths.items[i];
                 cmd_append(&cmd, source_out_path.cstr);
             }
 
             for (size_t i = 0; i < cc->libpaths.count; ++i) {
-                string_t libpath = cc->libpaths.items[i];
+                orstring_t libpath = cc->libpaths.items[i];
                 cmd_append(&cmd, libpath.cstr);
             }
 
             for (size_t i = 0; i < cc->flags.count; ++i) {
-                string_t flag = cc->flags.items[i];
+                orstring_t flag = cc->flags.items[i];
                 cmd_append(&cmd, flag.cstr);
             }
 

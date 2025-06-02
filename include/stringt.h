@@ -11,13 +11,13 @@
 
 typedef struct string_view_t string_view_t;
 struct string_view_t {
-    cstr_t data;
+    orcstr_t data;
     size_t length;
 };
 
 typedef struct strings_t strings_t;
 struct strings_t {
-    string_t *items;
+    orstring_t *items;
     size_t count;
     size_t capacity;
     arena_t *allocator;
@@ -36,35 +36,35 @@ struct string_builder_t {
 #define STRING_EMPTY (string_t){.cstr="", .length=0}
 
 bool sv_eq(string_view_t a, string_view_t b);
-string_t cstrn2string(cstr_t cstr, size_t n, arena_t *allocator);
-string_t cstr2string(cstr_t cstr, arena_t *allocator);
-string_t string_format(cstr_t format, arena_t *allocator, ...);
-strings_t string_split(cstr_t cstr, cstr_t delimiters, arena_t *allocator);
-string_t string_copy(string_t s, arena_t *allocator);
-string_t string_path_combine(string_t a, string_t b, arena_t *arena);
+orstring_t cstrn2string(orcstr_t cstr, size_t n, arena_t *allocator);
+orstring_t cstr2string(orcstr_t cstr, arena_t *allocator);
+orstring_t string_format(orcstr_t format, arena_t *allocator, ...);
+strings_t string_split(orcstr_t cstr, orcstr_t delimiters, arena_t *allocator);
+orstring_t string_copy(orstring_t s, arena_t *allocator);
+orstring_t string_path_combine(orstring_t a, orstring_t b, arena_t *arena);
 
-size_t string2size(string_t s);
+size_t string2size(orstring_t s);
 
-u64 cstrn_to_u64(const char* text, size_t length);
-f64 cstrn_to_f64(const char* text, size_t length);
+oru64 cstrn_to_u64(const char* text, size_t length);
+orf64 cstrn_to_f64(const char* text, size_t length);
 
 #define cstr2sv(cstr) (string_view_t){.data=(cstr), .length=strlen(cstr)}
-string_view_t string2sv(string_t string);
-string_t sv2string(string_view_t sv, arena_t *allocator);
+string_view_t string2sv(orstring_t string);
+orstring_t sv2string(string_view_t sv, arena_t *allocator);
 string_view_t sv_filename(string_view_t sv);
-bool sv_ends_with(string_view_t sv, cstr_t cstr);
-bool sv_starts_with(string_view_t sv, cstr_t prefix);
+bool sv_ends_with(string_view_t sv, orcstr_t cstr);
+bool sv_starts_with(string_view_t sv, orcstr_t prefix);
 
 void sb_add_char(string_builder_t *sb, char c);
-void sb_add_cstr(string_builder_t *sb, cstr_t cstr);
-void sb_add_format(string_builder_t *sb, cstr_t format, ...);
-string_t sb_render(string_builder_t *builder, arena_t *allocator);
-string_t bytes2alphanum(char *s, size_t length, arena_t *arena);
-bool core_abspath(string_t relpath, arena_t *arena, string_t *result);
-bool core_fileid(string_t absolute_path, string_builder_t *result);
+void sb_add_cstr(string_builder_t *sb, orcstr_t cstr);
+void sb_add_format(string_builder_t *sb, orcstr_t format, ...);
+orstring_t sb_render(string_builder_t *builder, arena_t *allocator);
+orstring_t bytes2alphanum(char *s, size_t length, arena_t *arena);
+bool core_abspath(orstring_t relpath, arena_t *arena, orstring_t *result);
+bool core_fileid(orstring_t absolute_path, string_builder_t *result);
 
 
-#define str(lit) ((string_t){ .cstr = (lit), .length = (sizeof(lit)/sizeof(char) - sizeof(char)) })
+#define str(lit) ((orstring_t){ .cstr = (lit), .length = (sizeof(lit)/sizeof(char) - sizeof(char)) })
 #define lit2str(lit) str(lit)
 #define lit2sv(lit) ((string_view_t){ .data = lit, .length = (sizeof(lit)/sizeof(char) - sizeof(char)) })
 
@@ -79,20 +79,20 @@ bool sv_eq(string_view_t a, string_view_t b) {
     return strncmp(a.data, b.data, a.length) == 0;
 }
 
-string_t cstrn2string(const cstr_t cstr, size_t n, arena_t *allocator) {
+orstring_t cstrn2string(const orcstr_t cstr, size_t n, arena_t *allocator) {
     char *new_cstr = (char*)arena_alloc(allocator, (n + 1)*sizeof(char));
     memcpy(new_cstr, cstr, n);
     new_cstr[n] = '\0';
-    string_t s = { .cstr = new_cstr, .length = n };
+    orstring_t s = { .cstr = new_cstr, .length = n };
     return s;
 }
 
-string_t cstr2string(const cstr_t cstr, arena_t *allocator) {
+orstring_t cstr2string(const orcstr_t cstr, arena_t *allocator) {
     size_t size = strlen(cstr);
     return cstrn2string(cstr, size, allocator);
 }
 
-string_t string_format(const cstr_t format, arena_t *allocator, ...) {
+orstring_t string_format(const orcstr_t format, arena_t *allocator, ...) {
 	va_list args;
     va_list args_copy;
 	va_start(args, allocator);
@@ -108,7 +108,7 @@ string_t string_format(const cstr_t format, arena_t *allocator, ...) {
 
 	va_end(args_copy);
 
-	return (string_t){ .cstr = buffer, .length = (size_t)(size < 0 ? 0 : size - 1) };
+	return (orstring_t){ .cstr = buffer, .length = (size_t)(size < 0 ? 0 : size - 1) };
 }
 
 #if WIN_32_
@@ -116,7 +116,7 @@ string_t string_format(const cstr_t format, arena_t *allocator, ...) {
 #else
 #define FS '/'
 #endif
-string_t string_path_combine(string_t a, string_t b, arena_t *arena) {
+orstring_t string_path_combine(orstring_t a, orstring_t b, arena_t *arena) {
     string_view_t asv = string2sv(a);
     while (asv.length > 0 && asv.data[asv.length-1] == FS) {
         --asv.length;
@@ -128,20 +128,20 @@ string_t string_path_combine(string_t a, string_t b, arena_t *arena) {
         ++bsv.data;
     }
 
-    string_t result = string_format("%.*s/%.*s", arena, asv.length, asv.data, bsv.length, bsv.data);
+    orstring_t result = string_format("%.*s/%.*s", arena, asv.length, asv.data, bsv.length, bsv.data);
     return result;
 }
 #undef FS
 
-strings_t string_split(cstr_t cstr, cstr_t delimiters, arena_t *allocator) {
+strings_t string_split(orcstr_t cstr, orcstr_t delimiters, arena_t *allocator) {
     tmp_arena_t *tmp = allocator_borrow();
     string_builder_t sb = {.allocator=tmp->allocator};
 
     strings_t split = {.allocator=allocator};
 
-    for (cstr_t c = cstr; *c; ++c) {
+    for (orcstr_t c = cstr; *c; ++c) {
         bool split_here = false;
-        for (cstr_t d = delimiters; *d; ++d) {
+        for (orcstr_t d = delimiters; *d; ++d) {
             if (*d == *c) {
                 split_here = true;
                 break;
@@ -152,7 +152,7 @@ strings_t string_split(cstr_t cstr, cstr_t delimiters, arena_t *allocator) {
             sb_add_char(&sb, *c);
         } else {
             if (sb.count > 0) {
-                string_t s = sb_render(&sb, allocator);
+                orstring_t s = sb_render(&sb, allocator);
                 array_push(&split, s);
             }
 
@@ -161,7 +161,7 @@ strings_t string_split(cstr_t cstr, cstr_t delimiters, arena_t *allocator) {
     }
 
     if (sb.count > 0) {
-        string_t s = sb_render(&sb, allocator);
+        orstring_t s = sb_render(&sb, allocator);
         array_push(&split, s);
     }
 
@@ -170,30 +170,30 @@ strings_t string_split(cstr_t cstr, cstr_t delimiters, arena_t *allocator) {
     return split;
 }
 
-string_t string_copy(string_t s, arena_t *allocator) {
+orstring_t string_copy(orstring_t s, arena_t *allocator) {
     char *copy = arena_alloc(allocator, sizeof(char)*(s.length+1));
     strncpy(copy, s.cstr, s.length);
     copy[s.length] = '\0';
 
-    string_t result = {.cstr=copy, .length=s.length};
+    orstring_t result = {.cstr=copy, .length=s.length};
     return result;
 }
 
-size_t string2size(string_t s) {
+size_t string2size(orstring_t s) {
     size_t size = strtoul(s.cstr, NULL, 10);
     return size;
 }
 
-string_view_t string2sv(string_t string) {
+string_view_t string2sv(orstring_t string) {
     return (string_view_t){.data=string.cstr, .length=string.length};
 }
 
-string_t sv2string(string_view_t sv, arena_t *allocator) {
+orstring_t sv2string(string_view_t sv, arena_t *allocator) {
     char *s = arena_alloc(allocator, sizeof(char)*(sv.length+1));
     strncpy(s, sv.data, sv.length);
     s[sv.length] = '\0';
 
-    string_t result = {.cstr=s, .length=sv.length};
+    orstring_t result = {.cstr=s, .length=sv.length};
     return result;
 }
 
@@ -226,7 +226,7 @@ string_view_t sv_filename(string_view_t sv) {
     return (string_view_t){.data=sv.data+begin, .length=sv.length-begin};
 }
 
-bool sv_ends_with(string_view_t sv, cstr_t cstr) {
+bool sv_ends_with(string_view_t sv, orcstr_t cstr) {
     size_t len = strlen(cstr);
     if (len > sv.length) return false;
     if (len == 0) return true;
@@ -238,7 +238,7 @@ bool sv_ends_with(string_view_t sv, cstr_t cstr) {
     return true;
 }
 
-bool sv_starts_with(string_view_t sv, cstr_t prefix) {
+bool sv_starts_with(string_view_t sv, orcstr_t prefix) {
     size_t s = strlen(prefix);
     if (s > sv.length) return false;
 
@@ -250,15 +250,15 @@ void sb_add_char(string_builder_t *builder, char c) {
     array_push(builder, c);
 }
 
-void sb_add_cstr(string_builder_t *builder, cstr_t cstr) {
-    cstr_t c = cstr;
+void sb_add_cstr(string_builder_t *builder, orcstr_t cstr) {
+    orcstr_t c = cstr;
     while (*c) {
         array_push(builder, *c);
         c = ++cstr;
     }
 }
 
-void sb_add_format(string_builder_t *sb, cstr_t format, ...) {
+void sb_add_format(string_builder_t *sb, orcstr_t format, ...) {
 	va_list args;
 	va_start(args, format);
 
@@ -284,7 +284,7 @@ void sb_add_format(string_builder_t *sb, cstr_t format, ...) {
     allocator_return(tmp);
 }
 
-string_t sb_render(string_builder_t *builder, arena_t *allocator) {
+orstring_t sb_render(string_builder_t *builder, arena_t *allocator) {
     return cstrn2string(builder->items, builder->count, allocator);
 }
 
@@ -294,7 +294,7 @@ char base64[64] = {
     '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '_', '.',
 };
 
-string_t bytes2alphanum(char *s, size_t length, arena_t *arena) {
+orstring_t bytes2alphanum(char *s, size_t length, arena_t *arena) {
     tmp_arena_t *tmp = allocator_borrow();
     
     string_builder_t sb = {.allocator=tmp->allocator};
@@ -302,10 +302,10 @@ string_t bytes2alphanum(char *s, size_t length, arena_t *arena) {
     sb_add_char(&sb, 'x');
 
     for (size_t i = 0; i < length; i += 3) {
-        u8 a = (u8)s[i];
-        u8 b = (u8)(i+1 < length ? s[i+1] : '_');
-        u8 c = (u8)(i+2 < length ? s[i+2] : '_');
-        s32 combined = a | (b << 8) | (c << 16);
+        oru8 a = (oru8)s[i];
+        oru8 b = (oru8)(i+1 < length ? s[i+1] : '_');
+        oru8 c = (oru8)(i+2 < length ? s[i+2] : '_');
+        ors32 combined = a | (b << 8) | (c << 16);
 
         char chars[4];
 
@@ -324,7 +324,7 @@ string_t bytes2alphanum(char *s, size_t length, arena_t *arena) {
         }
     }
 
-    string_t ret = sb_render(&sb, arena);
+    orstring_t ret = sb_render(&sb, arena);
 
     allocator_return(tmp);
 
@@ -346,7 +346,7 @@ bool core_fileid(string_t absolute_path, string_builder_t *result) {
 #include <limits.h>
 #include <sys/stat.h>
 
-bool core_abspath(string_t relpath, arena_t *arena, string_t *result) {
+bool core_abspath(orstring_t relpath, arena_t *arena, orstring_t *result) {
     char resolved_path[PATH_MAX];
     if (realpath(relpath.cstr, resolved_path) == NULL) {
         return false;
@@ -356,7 +356,7 @@ bool core_abspath(string_t relpath, arena_t *arena, string_t *result) {
     return true;
 }
 
-bool core_fileid(string_t absolute_path, string_builder_t *result) {
+bool core_fileid(orstring_t absolute_path, string_builder_t *result) {
     struct stat sb;
     if (stat(absolute_path.cstr, &sb) == -1) return false;
 
@@ -378,8 +378,8 @@ bool core_fileid(string_t absolute_path, string_builder_t *result) {
 #endif
 
 
-u64 cstrn_to_u64(const char* text, size_t length) {
-    u64 integer = 0;
+oru64 cstrn_to_u64(const char* text, size_t length) {
+    oru64 integer = 0;
 
     for (size_t i = 0; i < length; i++) {
         char digit = text[i];
@@ -393,15 +393,15 @@ u64 cstrn_to_u64(const char* text, size_t length) {
         }
 
         integer *= 10;
-        integer += (u64)ones;
+        integer += (oru64)ones;
     }
 
     return integer;
 }
 
-f64 cstrn_to_f64(const char* text, size_t length) {
-    f64 value = 0;
-    f64 fact = 1;
+orf64 cstrn_to_f64(const char* text, size_t length) {
+    orf64 value = 0;
+    orf64 fact = 1;
     bool point_seen = false;
 
     for (char* c = (char*)text; c != (text + length); c++) {
@@ -414,7 +414,7 @@ f64 cstrn_to_f64(const char* text, size_t length) {
             continue;
         }
 
-        s32 digit = *c - '0';
+        ors32 digit = *c - '0';
         if (digit < 0 || digit > 9) {
             break;
         }

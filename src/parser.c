@@ -48,23 +48,23 @@ struct_definition        -> `struct` `{` definition* `}`
 type_init                ->  logic_or`{` `}`
 */
 
-static khint_t type_hash(type_t id) {
+static khint_t type_hash(ortype_t id) {
     return kh_int64_hash_func((khint64_t)id.i);
 }
 
-static int type_equal_(type_t a, type_t b) {
+static int type_equal_(ortype_t a, ortype_t b) {
     return typeid_eq(a, b);
 }
 
-implement_table(t2w, type_t, word_t, type_hash, type_equal_)
-implement_table(type2ns, type_t, ast_node_and_scope_t, type_hash, type_equal_)
+implement_table(t2w, ortype_t, orword_t, type_hash, type_equal_)
+implement_table(type2ns, ortype_t, ast_node_and_scope_t, type_hash, type_equal_)
 implement_table(fn2an, void*, ast_node_t*, hashptr_, hasheq_);
 
-static bool streq___(const string_t a, const string_t b) {
+static bool streq___(const orstring_t a, const orstring_t b) {
     return string_eq(a, b);
 }
 
-uint32_t fnv1_hash__(string_t s) {
+uint32_t fnv1_hash__(orstring_t s) {
 	uint32_t hash = 0x811C9DC5;
 
 	for (size_t i = 0; i < s.length; i++) {
@@ -75,19 +75,19 @@ uint32_t fnv1_hash__(string_t s) {
 	return hash;
 }
 
-implement_table(s2w, string_t, word_t, fnv1_hash__, streq___)
-implement_table(s2n, string_t, ast_node_t*, fnv1_hash__, streq___)
-implement_table(s2fis, string_t, ffi_t*, fnv1_hash__, streq___)
+implement_table(s2w, orstring_t, orword_t, fnv1_hash__, streq___)
+implement_table(s2n, orstring_t, ast_node_t*, fnv1_hash__, streq___)
+implement_table(s2fis, orstring_t, ffi_t*, fnv1_hash__, streq___)
 
 khint_t hashptr_(void *ptr) {
-    return (khint_t)(u64)ptr;
+    return (khint_t)(oru64)ptr;
 }
 
 bool hasheq_(void *a, void *b) {
     return a == b;
 }
 
-implement_table(p2s, void*, string_t, hashptr_, hasheq_);
+implement_table(p2s, void*, orstring_t, hashptr_, hasheq_);
 
 typedef struct parser_t {
     ast_t *ast;
@@ -349,8 +349,8 @@ ast_node_t *ast_node_copy(arena_t *arena, ast_node_t *node) {
     if (node->defined_scope.creator) {
         scope_init(&copy->defined_scope, arena, node->defined_scope.type, node->defined_scope.outer, copy);
 
-        string_t name;
-        word_t word;
+        orstring_t name;
+        orword_t word;
         int _a;
         kh_foreach(node->defined_scope.definitions, name, word, {
             khint_t index = kh_put(s2w, copy->defined_scope.definitions, name, &_a);
@@ -445,12 +445,12 @@ void ast_end_module(ast_node_t *module) {
     module->end = max_token;
 }
 
-void ast_add_module(ast_t *ast, ast_node_t *module, string_t moduleid) {
+void ast_add_module(ast_t *ast, ast_node_t *module, orstring_t moduleid) {
     moduleid = string_copy(moduleid, ast->arena);
     table_put(s2n, ast->moduleid2node, moduleid, module);
 }
 
-ast_node_t *ast_implicit_expr(ast_t *ast, type_t type, word_t value, token_t where) {
+ast_node_t *ast_implicit_expr(ast_t *ast, ortype_t type, orword_t value, token_t where) {
     ast_node_t *expr = ast_node_new(ast->arena, AST_NODE_TYPE_EXPRESSION_PRIMARY, where);
     expr->value_type = type;
     expr->expr_val = ast_node_val_word(value);
@@ -469,7 +469,7 @@ ast_node_t *ast_decldef(ast_t *ast, token_t identifier, ast_node_t *type_expr, a
     return definition_node;
 }
 
-ast_node_t *ast_nil(ast_t *ast, type_t value_type, token_t token_location) {
+ast_node_t *ast_nil(ast_t *ast, ortype_t value_type, token_t token_location) {
     ast_node_t *nil_node = ast_node_new(ast->arena, AST_NODE_TYPE_EXPRESSION_NIL, token_location);
     nil_node->value_type = value_type;
     nil_node->expr_val = zero_value(ast, value_type);
@@ -510,7 +510,7 @@ void ast_struct_end(ast_node_t *struct_, token_t end) {
     struct_->end = end;
 }
 
-static ast_node_t *ast_primaryu(ast_t *ast, u64 value, type_t type, token_t token) {
+static ast_node_t *ast_primaryu(ast_t *ast, oru64 value, ortype_t type, token_t token) {
     if (TYPE_IS_UNRESOLVED(type)) {
         if (value < UINT_MAX) {
             type = ast->type_set.uint_;
@@ -521,22 +521,22 @@ static ast_node_t *ast_primaryu(ast_t *ast, u64 value, type_t type, token_t toke
 
     typedata_t *td = type2typedata(&ast->type_set.types, type);
 
-    word_t word = {0};
+    orword_t word = {0};
     switch ((num_size_t)td->size) {
     case NUM_SIZE_8: {
-        u8 v = cast(u8, value);
+        oru8 v = cast(oru8, value);
         word.as.u = v;
         break;
     }
 
     case NUM_SIZE_16: {
-        u16 v = cast(u16, value);
+        oru16 v = cast(oru16, value);
         word.as.u = v;
         break;
     }
 
     case NUM_SIZE_32: {
-        u32 v = cast(u32, value);
+        oru32 v = cast(oru32, value);
         word.as.u = v;
         break;
     }
@@ -556,7 +556,7 @@ static ast_node_t *ast_primaryu(ast_t *ast, u64 value, type_t type, token_t toke
     return primary;
 }
 
-static ast_node_t *ast_primaryi(ast_t *ast, s64 value, type_t type, token_t token) {
+static ast_node_t *ast_primaryi(ast_t *ast, ors64 value, ortype_t type, token_t token) {
     if (TYPE_IS_UNRESOLVED(type)) {
         if (value >= INT_MIN && value <= INT_MAX) {
             type = ast->type_set.int_;
@@ -567,22 +567,22 @@ static ast_node_t *ast_primaryi(ast_t *ast, s64 value, type_t type, token_t toke
 
     typedata_t *td = type2typedata(&ast->type_set.types, type);
 
-    word_t word = {0};
+    orword_t word = {0};
     switch ((num_size_t)td->size) {
     case NUM_SIZE_8: {
-        s8 v = cast(s8, value);
+        ors8 v = cast(ors8, value);
         word.as.s = v;
         break;
     }
 
     case NUM_SIZE_16: {
-        s16 v = cast(s16, value);
+        ors16 v = cast(ors16, value);
         word.as.s = v;
         break;
     }
 
     case NUM_SIZE_32: {
-        s32 v = cast(s32, value);
+        ors32 v = cast(ors32, value);
         word.as.s = v;
         break;
     }
@@ -602,19 +602,19 @@ static ast_node_t *ast_primaryi(ast_t *ast, s64 value, type_t type, token_t toke
     return primary;
 }
 
-static ast_node_t *ast_primaryf(ast_t *ast, f64 value, type_t type, token_t token) {
+static ast_node_t *ast_primaryf(ast_t *ast, orf64 value, ortype_t type, token_t token) {
     if (TYPE_IS_UNRESOLVED(type)) {
         type = ast->type_set.f32_;
     }
 
     typedata_t *td = type2typedata(&ast->type_set.types, type);
 
-    word_t word = {0};
+    orword_t word = {0};
     switch ((num_size_t)td->size) {
     case NUM_SIZE_8: UNREACHABLE(); break;
     case NUM_SIZE_16: UNREACHABLE(); break;
     case NUM_SIZE_32: {
-        f32 v = (f32)value;
+        orf32 v = (orf32)value;
         word.as.d = v;
         break;
     }
@@ -636,7 +636,7 @@ static ast_node_t *ast_primaryb(ast_t *ast, bool value, ast_node_t extra_params)
     ast_node_t *primary = ast_node_new(ast->arena, AST_NODE_TYPE_EXPRESSION_PRIMARY, extra_params.start);
 
     bool byte_value = (bool)value;
-    word_t word = {.as.s=byte_value};
+    orword_t word = {.as.s=byte_value};
 
     primary->expr_val = ast_node_val_word(word);
     primary->value_type = typeid(TYPE_BOOL);
@@ -799,7 +799,7 @@ static void ast_call_end(ast_node_t *call, token_t end) {
     call->end = end;
 }
 
-static void parser_init(parser_t *parser, ast_t *ast, string_t file_path, string_view_t source) {
+static void parser_init(parser_t *parser, ast_t *ast, orstring_t file_path, string_view_t source) {
     lexer_init(&parser->lexer, file_path, source);
     parser->ast = ast;
     parser->had_error = false;
@@ -895,11 +895,11 @@ static ast_node_t *parse_number(parser_t *parser) {
             token_t token = parser->previous;
             string_view_t numsv = token.view;
             // todo: check for overflow on u64 and s64
-            u64 value = cstrn_to_u64(numsv.data, numsv.length);
+            oru64 value = cstrn_to_u64(numsv.data, numsv.length);
 
             bool is_free_number = false;
 
-            type_t type = typeid(TYPE_UNRESOLVED);
+            ortype_t type = typeid(TYPE_UNRESOLVED);
             if (sv_ends_with(numsv, "s")) {
                 type = parser->ast->type_set.int_;
             } else if (sv_ends_with(numsv, "u")) {
@@ -1048,7 +1048,7 @@ static ast_node_t *parse_number(parser_t *parser) {
             ast_node_t *primary;
             switch (num_type) {
             case NUM_TYPE_SIGNED: {
-                primary = ast_primaryi(parser->ast, (s32)value, type, parser->previous);
+                primary = ast_primaryi(parser->ast, (ors32)value, type, parser->previous);
                 break;
             }
 
@@ -1069,10 +1069,10 @@ static ast_node_t *parse_number(parser_t *parser) {
         }
 
         case TOKEN_FLOAT: {
-            f64 value = cstrn_to_f64(parser->previous.view.data, parser->previous.view.length);
+            orf64 value = cstrn_to_f64(parser->previous.view.data, parser->previous.view.length);
 
             bool is_number_free = false;
-            type_t type = parser->ast->type_set.f64_;
+            ortype_t type = parser->ast->type_set.f64_;
             if (sv_ends_with(parser->previous.view, "f")) {
                 type = parser->ast->type_set.f32_;
             } else if (sv_ends_with(parser->previous.view, "d")) {
@@ -1561,7 +1561,7 @@ static bool is_incoming_function_signature(parser_t* parser) {
     ASSERT(parenthesis_open.type == TOKEN_PARENTHESIS_OPEN, "must be starting to open a parenthesis");
 
     lexer_t look_ahead_lexer = parser->lexer;
-    s32 parenthesis_level = 1;
+    ors32 parenthesis_level = 1;
     token_t next = parser->current;
     // get matching close parenthesis
     while (true) {
@@ -2359,7 +2359,7 @@ static void parse_into_module(parser_t *parser, ast_node_t *module) {
     }
 }
 
-bool parse_string_to_module(ast_t *ast, ast_node_t *module, string_t filepath, string_view_t source) {
+bool parse_string_to_module(ast_t *ast, ast_node_t *module, orstring_t filepath, string_view_t source) {
     parser_t parser = {0};
     parser_init(&parser, ast, filepath, source);
     
@@ -2371,7 +2371,7 @@ bool parse_string_to_module(ast_t *ast, ast_node_t *module, string_t filepath, s
     return !parser.had_error;
 }
 
-ast_node_t *parse_source_into_module(ast_t *ast, string_t file_path, string_view_t source) {
+ast_node_t *parse_source_into_module(ast_t *ast, orstring_t file_path, string_view_t source) {
     ast_node_t *module = ast_begin_module(ast);
     parse_string_to_module(ast, module, file_path, source);
     ast_end_module(module);
@@ -2392,10 +2392,10 @@ token_type_t parser_opeq2op(token_type_t type) {
     }
 }
 
-word_t *ast_multiword_value(ast_t *ast, size_t size_words) {
-    word_t z = {.as.u = 0};
+orword_t *ast_multiword_value(ast_t *ast, size_t size_words) {
+    orword_t z = {.as.u = 0};
 
-    word_t *start = (word_t*)(ast->multiword_data.data + ast->multiword_data.count);
+    orword_t *start = (orword_t*)(ast->multiword_data.data + ast->multiword_data.count);
     for (size_t i = 0; i < size_words; ++i) {
         memarr_push(&ast->multiword_data, &z, WORD_SIZE);
     }
@@ -2403,7 +2403,7 @@ word_t *ast_multiword_value(ast_t *ast, size_t size_words) {
     return start;
 }
 
-word_t ast_mem2word(ast_t *ast, void *data, type_t type) {
+orword_t ast_mem2word(ast_t *ast, void *data, ortype_t type) {
     typedata_t *td = ast_type2td(ast, type);
 
     switch (td->kind) {
@@ -2412,27 +2412,27 @@ word_t ast_mem2word(ast_t *ast, void *data, type_t type) {
     case TYPE_PARAM_STRUCT:
     case TYPE_INFERRED_FUNCTION:
     case TYPE_UNRESOLVED:
-    case TYPE_INVALID: return (word_t){0};
+    case TYPE_INVALID: return (orword_t){0};
 
-    case TYPE_VOID: return (word_t){0};
+    case TYPE_VOID: return (orword_t){0};
 
-    case TYPE_BOOL: return (word_t){ .as.s = (*((bool*)data)) };
+    case TYPE_BOOL: return (orword_t){ .as.s = (*((bool*)data)) };
 
     case TYPE_POINTER:
     case TYPE_INTRINSIC_FUNCTION:
     case TYPE_FUNCTION:
-    case TYPE_TYPE: return *((word_t*)data);
+    case TYPE_TYPE: return *((orword_t*)data);
 
     case TYPE_NUMBER: {
         switch (td->as.num) {
-        case NUM_TYPE_FLOAT: return td->size == NUM_SIZE_32 ? WORDD(*((f32*)data)) : *((word_t*)data);
+        case NUM_TYPE_FLOAT: return td->size == NUM_SIZE_32 ? WORDD(*((orf32*)data)) : *((orword_t*)data);
         case NUM_TYPE_SIGNED:
         case NUM_TYPE_UNSIGNED: {
             switch ((num_size_t)td->size) {
-            case NUM_SIZE_8: return WORDU(*((u8*)data));
-            case NUM_SIZE_16: return WORDU(*((u16*)data));
-            case NUM_SIZE_32: return WORDU(*((u32*)data));
-            case NUM_SIZE_64: return *((word_t*)data);
+            case NUM_SIZE_8: return WORDU(*((oru8*)data));
+            case NUM_SIZE_16: return WORDU(*((oru16*)data));
+            case NUM_SIZE_32: return WORDU(*((oru32*)data));
+            case NUM_SIZE_64: return *((orword_t*)data);
             }
         }
         }
@@ -2444,22 +2444,22 @@ word_t ast_mem2word(ast_t *ast, void *data, type_t type) {
         if (td->size > WORD_SIZE) {
             return WORDP(data);
         } else {
-            return *((word_t*)data);
+            return *((orword_t*)data);
         }
     }
 
-    case TYPE_COUNT: UNREACHABLE(); return (word_t){0};
+    case TYPE_COUNT: UNREACHABLE(); return (orword_t){0};
     }
 }
 
-ast_node_val_t zero_value(ast_t *ast, type_t type) {
+ast_node_val_t zero_value(ast_t *ast, ortype_t type) {
     if (TYPE_IS_UNRESOLVED(type)) return ast_node_val_word(WORDU(0));
 
     typedata_t *type_info = ast->type_set.types.items[type.i];
-    word_t value = {0};
+    orword_t value = {0};
     if (type_info->size > WORD_SIZE) {
         typedata_t *td = type2typedata(&ast->type_set.types, type);
-        word_t *data = ast_multiword_value(ast, b2w(td->size));
+        orword_t *data = ast_multiword_value(ast, b2w(td->size));
         value = WORDP(data);
     }
 
@@ -2467,13 +2467,13 @@ ast_node_val_t zero_value(ast_t *ast, type_t type) {
     return val;
 }
 
-static void print_indent(u32 level) {
-    for (u32 i = 0; i < level; ++i) {
+static void print_indent(oru32 level) {
+    for (oru32 i = 0; i < level; ++i) {
         printf(" ");
     }
 }
 
-static void print_line(const cstr_t format, ...) {
+static void print_line(const orcstr_t format, ...) {
 	va_list args;
 	va_start(args, format);
 
@@ -2484,14 +2484,14 @@ static void print_line(const cstr_t format, ...) {
 	printf("\n");
 }
 
-static void ast_print_ast_node(typedatas_t types, ast_node_t *node, u32 level) {
+static void ast_print_ast_node(typedatas_t types, ast_node_t *node, oru32 level) {
     tmp_arena_t *tmp = allocator_borrow();
 
     #define type2cstr(node) (type_to_string(types, node->value_type, tmp->allocator).cstr)
 
     switch (node->node_type) {
         case AST_NODE_TYPE_EXPRESSION_BINARY: {
-            string_t label = string_format("binary (%.*s): %s", tmp->allocator, node->operator.view.length, node->operator.view.data, type2cstr(node));
+            orstring_t label = string_format("binary (%.*s): %s", tmp->allocator, node->operator.view.length, node->operator.view.data, type2cstr(node));
 
             print_indent(level);
             print_line("%s", label.cstr);
@@ -2508,14 +2508,14 @@ static void ast_print_ast_node(typedatas_t types, ast_node_t *node, u32 level) {
 
         case AST_NODE_TYPE_EXPRESSION_NIL: {
             print_indent(level);
-            string_t label = string_format("nil: %s", tmp->allocator, type2cstr(node));
+            orstring_t label = string_format("nil: %s", tmp->allocator, type2cstr(node));
             print_line("%s", label.cstr);
             break;
         }
 
         case AST_NODE_TYPE_EXPR_INFERRED_TYPE_DECL: {
             print_indent(level);
-            string_t label = string_format("inferred type decl: %.*s = %s", tmp->allocator, node->identifier.view.length, node->identifier.view.data, type_to_string(types, node->expr_val.word.as.t, tmp->allocator));
+            orstring_t label = string_format("inferred type decl: %.*s = %s", tmp->allocator, node->identifier.view.length, node->identifier.view.data, type_to_string(types, node->expr_val.word.as.t, tmp->allocator));
             print_line("%s", label.cstr);
             break;
         }
@@ -2678,7 +2678,7 @@ static void ast_print_ast_node(typedatas_t types, ast_node_t *node, u32 level) {
 
                 case BRANCH_TYPE_IF:
                 case BRANCH_TYPE_WHILE: {
-                    cstr_t branch = NULL;
+                    orcstr_t branch = NULL;
                     if (node->branch_type == BRANCH_TYPE_IF) {
                         if (node->condition_negated) {
                             branch = "unless";

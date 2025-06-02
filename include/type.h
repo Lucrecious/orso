@@ -8,7 +8,7 @@
 
 typedef struct types_t types_t;
 struct types_t {
-    type_t *items;
+    ortype_t *items;
     size_t count;
     size_t capacity;
     arena_t *allocator;
@@ -48,9 +48,9 @@ enum type_kind_t {
 
 typedef struct struct_field_t struct_field_t;
 struct struct_field_t {
-    string_t name;
-    type_t type;
-    word_t default_value;
+    orstring_t name;
+    ortype_t type;
+    orword_t default_value;
 
     // not relevant for hashing
     size_t offset;
@@ -80,10 +80,10 @@ enum num_type_t {
 
 typedef enum num_size_t num_size_t;
 enum num_size_t {
-    NUM_SIZE_8 = sizeof(u8),
-    NUM_SIZE_16 = sizeof(u16),
-    NUM_SIZE_32 = sizeof(u32),
-    NUM_SIZE_64 = sizeof(u64),
+    NUM_SIZE_8 = sizeof(oru8),
+    NUM_SIZE_16 = sizeof(oru16),
+    NUM_SIZE_32 = sizeof(oru32),
+    NUM_SIZE_64 = sizeof(oru64),
 };
 
 typedef enum type_caps_t type_caps_t;
@@ -104,7 +104,7 @@ enum struct_status_t {
 };
 
 struct typedata_t {
-    string_t name;
+    orstring_t name;
     type_kind_t kind;
     type_caps_t capabilities;
     size_t size; // not serialized
@@ -113,12 +113,12 @@ struct typedata_t {
         num_type_t num;
 
         struct {
-            type_t return_type;
+            ortype_t return_type;
             types_t argument_types;
         } function;
 
         struct {
-            cstr_t name_or_null;
+            orcstr_t name_or_null;
 
             struct_fields_t fields;
             struct_fields_t constants;
@@ -127,12 +127,12 @@ struct typedata_t {
         } struct_;
 
         struct {
-            type_t type;
+            ortype_t type;
         } ptr;
 
         struct {
             size_t count;
-            type_t type;
+            ortype_t type;
         } arr;
     } as;
 };
@@ -152,6 +152,6 @@ bool is_type_kind_aggregate(type_kind_t kind);
 
 bool type_equal(typedata_t *a, typedata_t *b);
 
-string_t type_to_string(typedatas_t types, type_t type, arena_t *allocator);
+orstring_t type_to_string(typedatas_t types, ortype_t type, arena_t *allocator);
 
 #endif

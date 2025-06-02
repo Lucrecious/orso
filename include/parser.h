@@ -47,17 +47,17 @@ typedef enum scope_type_t {
 
 typedef struct ffi_t ffi_t;
 struct ffi_t {
-    string_t funcname;
-    string_t libpath;
-    string_t callconv;
-    type_t return_type;
+    orstring_t funcname;
+    orstring_t libpath;
+    orstring_t callconv;
+    ortype_t return_type;
     types_t arg_types;
     ast_node_t *node;
 };
 
-declare_table(s2w, string_t, word_t)
-declare_table(s2n, string_t, ast_node_t*)
-declare_table(s2fis, string_t, ffi_t*)
+declare_table(s2w, orstring_t, orword_t)
+declare_table(s2n, orstring_t, ast_node_t*)
+declare_table(s2fis, orstring_t, ffi_t*)
 
 typedef struct scope_t {
     ast_node_t *creator;
@@ -215,7 +215,7 @@ enum ast_branch_type_t {
 typedef struct ast_node_val_t ast_node_val_t;
 struct ast_node_val_t {
     bool is_concrete;
-    word_t word;
+    orword_t word;
 };
 
 #define ast_node_val_nil() ((ast_node_val_t){0})
@@ -235,8 +235,8 @@ enum match_type_t {
 
 typedef struct matched_value_t matched_value_t;
 struct matched_value_t {
-    type_t type;
-    word_t word;
+    ortype_t type;
+    orword_t word;
 };
 
 typedef struct matched_values_t matched_values_t;
@@ -315,7 +315,7 @@ struct ast_node_t {
 
     token_t start, end, operator;
 
-    type_t value_type;
+    ortype_t value_type;
 
     bool requires_tmp_for_cgen;
 
@@ -336,7 +336,7 @@ struct ast_node_t {
     type_patterns_t type_decl_patterns;
 
     ffi_t *ffi_or_null;
-    string_t filepath;
+    orstring_t filepath;
 
     size_t param_end;
     size_t arg_index;
@@ -364,20 +364,20 @@ struct ast_node_t {
 
     size_t vm_jmp_index;
     val_dst_t vm_val_dst;
-    string_t ccode_break_label;
-    string_t ccode_continue_label;
-    string_t ccode_var_name;
-    string_t ccode_associated_h;
+    orstring_t ccode_break_label;
+    orstring_t ccode_continue_label;
+    orstring_t ccode_var_name;
+    orstring_t ccode_associated_h;
 };
 
-declare_table(t2w, type_t, word_t)
+declare_table(t2w, ortype_t, orword_t)
 
 typedef struct ast_node_and_scope_t {
     ast_node_t *node;
     scope_t *scope;
 } ast_node_and_scope_t;
 
-declare_table(type2ns, type_t, ast_node_and_scope_t)
+declare_table(type2ns, ortype_t, ast_node_and_scope_t)
 
 typedef struct fd_pairs_t fd_pairs_t;
 struct fd_pairs_t {
@@ -387,7 +387,7 @@ struct fd_pairs_t {
     arena_t *allocator;
 };
 
-declare_table(p2s, void*, string_t);
+declare_table(p2s, void*, orstring_t);
 
 typedef struct errors_t errors_t;
 struct errors_t {
@@ -433,8 +433,8 @@ typedef struct ast_t {
 void ast_print_node(ast_t *ast, ast_node_t *node);
 void ast_print(ast_t *ast, const char *name);
 
-bool parse_string_to_module(ast_t *ast, ast_node_t *module, string_t filepath, string_view_t source);
-ast_node_t *parse_source_into_module(ast_t *ast, string_t file_path, string_view_t source);
+bool parse_string_to_module(ast_t *ast, ast_node_t *module, orstring_t filepath, string_view_t source);
+ast_node_t *parse_source_into_module(ast_t *ast, orstring_t file_path, string_view_t source);
 token_type_t parser_opeq2op(token_type_t type);
 
 void ast_init(ast_t *ast, arena_t *arena);
@@ -445,23 +445,23 @@ void scope_init(scope_t *scope, arena_t *allocator, scope_type_t type, scope_t *
 
 ast_node_t *ast_node_new(arena_t *arena, ast_node_type_t node_type, token_t start);
 ast_node_t *ast_node_copy(arena_t *arena, ast_node_t *node);
-ast_node_t *ast_nil(ast_t *ast, type_t value_type, token_t token_location);
+ast_node_t *ast_nil(ast_t *ast, ortype_t value_type, token_t token_location);
 ast_node_t *ast_decldef(ast_t *ast, token_t identifier, ast_node_t *type_expr, ast_node_t *init_expr);
 ast_node_t *ast_def_value(ast_t *ast, token_t identifer);
 ast_node_t *ast_inferred_type_decl(ast_t *ast, token_t squiggle_token, token_t identifer);
 ast_node_t *ast_cast(ast_t *ast, ast_node_t *expr_type, ast_node_t *expr);
 ast_node_t *ast_begin_module(ast_t *ast);
 void ast_end_module(ast_node_t *module);
-void ast_add_module(ast_t *ast, ast_node_t *module, string_t moduleid);
-ast_node_t *ast_implicit_expr(ast_t *ast, type_t type, word_t value, token_t where);
-word_t *ast_multiword_value(ast_t *ast, size_t size_words);
-word_t ast_mem2word(ast_t *ast, void *data, type_t type);
+void ast_add_module(ast_t *ast, ast_node_t *module, orstring_t moduleid);
+ast_node_t *ast_implicit_expr(ast_t *ast, ortype_t type, orword_t value, token_t where);
+orword_t *ast_multiword_value(ast_t *ast, size_t size_words);
+orword_t ast_mem2word(ast_t *ast, void *data, ortype_t type);
 
 bool ast_node_type_is_expression(ast_node_type_t node_type);
 
 token_t token_implicit_at_start(token_t token);
 token_t token_implicit_at_end(token_t token);
 
-ast_node_val_t zero_value(ast_t *ast, type_t type);
+ast_node_val_t zero_value(ast_t *ast, ortype_t type);
 
 #endif

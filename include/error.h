@@ -30,21 +30,21 @@ struct error_arg_t {
     ast_node_t *node_or_null;
     token_t token;
     size_t size;
-    type_t type_type;
+    ortype_t type_type;
     void *ptr;
-    string_t str;
+    orstring_t str;
 };
 
 #define MAX_ERROR_ARGS 8
 
 typedef struct error_t {
-    cstr_t tag;
-    string_t msg;
+    orcstr_t tag;
+    orstring_t msg;
     error_source_t level;
     size_t arg_count;
     error_arg_t args[MAX_ERROR_ARGS];
     size_t show_line_count;
-    s64 show_code_lines[MAX_ERROR_ARGS];
+    ors64 show_code_lines[MAX_ERROR_ARGS];
 
 } error_t;
 
@@ -61,15 +61,15 @@ typedef void (*error_function_t)(ast_t *ast, error_t error);
 
 #define OR_ERROR(...) ((error_t){__VA_ARGS__})
 #define ORERR_ARGS(...) {__VA_ARGS__}, .arg_count = (sizeof((error_arg_t[]){__VA_ARGS__})/sizeof(error_arg_t))
-#define ORERR_LINES(...) {__VA_ARGS__}, .show_line_count = (sizeof((s64[]){__VA_ARGS__})/sizeof(s64))
+#define ORERR_LINES(...) {__VA_ARGS__}, .show_line_count = (sizeof((ors64[]){__VA_ARGS__})/sizeof(ors64))
 
-string_t error2richstring(ast_t *ast, error_t error, arena_t *arena);
+orstring_t error2richstring(ast_t *ast, error_t error, arena_t *arena);
 
 error_arg_t error_arg_token(token_t token);
 error_arg_t error_arg_node(ast_node_t *node);
 error_arg_t error_arg_sz(size_t sz);
-error_arg_t error_arg_type(type_t type);
+error_arg_t error_arg_type(ortype_t type);
 error_arg_t error_arg_ptr(void *ptr);
-error_arg_t error_arg_str(ast_t *ast, string_t str);
+error_arg_t error_arg_str(ast_t *ast, orstring_t str);
 
 #endif

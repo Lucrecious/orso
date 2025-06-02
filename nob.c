@@ -28,34 +28,34 @@ typedef struct c_builder_t c_builder_t;
 struct c_builder_t {
     arena_t *allocator;
     cb_std_t std;
-    cstr_t output;
+    orcstr_t output;
 
     struct {
-        cstr_t *items;
+        orcstr_t *items;
         size_t count;
         size_t capacity;
     } flags;
 
     struct {
-        cstr_t *items;
+        orcstr_t *items;
         size_t count;
         size_t capacity;
     } sources;
 
     struct {
-        cstr_t *items;
+        orcstr_t *items;
         size_t count;
         size_t capacity;
     } includes;
 
     struct {
-        cstr_t *items;
+        orcstr_t *items;
         size_t count;
         size_t capacity;
     } library_dirs;
 
     struct {
-        cstr_t *items;
+        orcstr_t *items;
         size_t count;
         size_t capacity;
     } libraries;
@@ -66,7 +66,7 @@ void cb_flags(c_builder_t *cb, size_t n, ...) {
     va_start(args, n);
     
     for (size_t i = 0; i < n; ++i) {
-        cstr_t flag = va_arg(args, cstr_t);
+        orcstr_t flag = va_arg(args, orcstr_t);
         flag = arena_strdup(cb->allocator, flag);
         nob_da_append(&cb->flags, flag);
     }
@@ -74,22 +74,22 @@ void cb_flags(c_builder_t *cb, size_t n, ...) {
     va_end(args);
 }
 
-void cb_source(c_builder_t *cb, cstr_t src) {
+void cb_source(c_builder_t *cb, orcstr_t src) {
     src = arena_strdup(cb->allocator, src);
     nob_da_append(&cb->sources, src);
 }
 
-void cb_include(c_builder_t *cb, cstr_t include_path) {
+void cb_include(c_builder_t *cb, orcstr_t include_path) {
     include_path = arena_strdup(cb->allocator, include_path);
     nob_da_append(&cb->includes, include_path);
 }
 
-void cb_library_dir(c_builder_t *cb, cstr_t library_dir) {
+void cb_library_dir(c_builder_t *cb, orcstr_t library_dir) {
     library_dir = arena_strdup(cb->allocator, library_dir);
     nob_da_append(&cb->library_dirs, library_dir);
 }
 
-void cb_library(c_builder_t *cb, cstr_t library) {
+void cb_library(c_builder_t *cb, orcstr_t library) {
     library = arena_strdup(cb->allocator, library);
     nob_da_append(&cb->libraries, library);
 }
@@ -119,7 +119,7 @@ bool cb_build(c_builder_t *cb) {
     }
 
     for (size_t i = 0; i < cb->sources.count; ++i) {
-        cstr_t src = cb->sources.items[i];
+        orcstr_t src = cb->sources.items[i];
         nob_cmd_append(&cmd, src);
     }
 

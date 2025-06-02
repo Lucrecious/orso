@@ -66,7 +66,7 @@ static void emit_binu_reg_im(function_t *function, texloc_t loc, reg_t reg_dest,
 
         instruction_t in = {0};
         in.op = plus_or_minus == '-' ? OP_SUBU_IM : OP_ADDU_IM;
-        in.as.binu_reg_immediate.immediate = (u32)op_amount;
+        in.as.binu_reg_immediate.immediate = (oru32)op_amount;
         in.as.binu_reg_immediate.reg_operand = (byte)(first_time ? reg_op : reg_dest);
         in.as.binu_reg_immediate.reg_result = (byte)reg_dest;
 
@@ -94,7 +94,7 @@ static val_dst_t val_dst_stack_point(size_t stack_point) {
     return dst;
 }
 
-static val_dst_t emit_val_dst_stack_reserve(gen_t *gen, texloc_t loc, function_t *function, type_t type) {
+static val_dst_t emit_val_dst_stack_reserve(gen_t *gen, texloc_t loc, function_t *function, ortype_t type) {
     typedata_t *td = ast_type2td(gen->ast, type);
     emit_reserve_stack_space(gen, loc, function, b2w2b(td->size));
 
@@ -111,7 +111,7 @@ static val_dst_t val_dst_return() {
     return dst;
 }
 
-static val_dst_t emit_val_dst_reg_or_stack_point_reserve(gen_t *gen, texloc_t loc, function_t *function, type_t type, reg_t reg) {
+static val_dst_t emit_val_dst_reg_or_stack_point_reserve(gen_t *gen, texloc_t loc, function_t *function, ortype_t type, reg_t reg) {
     typedata_t *td = ast_type2td(gen->ast, type);
     if (td->size > WORD_SIZE) {
         emit_reserve_stack_space(gen, loc, function, b2w2b(td->size));
@@ -181,7 +181,7 @@ static void emit_addr_to_reg(gen_t *gen, function_t *function, texloc_t loc, reg
         return;
     }
 
-    u32 offst = (u32)offset;
+    oru32 offst = (oru32)offset;
 
     instruction_t in = {0};
     switch (mov_size) {
@@ -218,7 +218,7 @@ static void emit_reg_to_addr(gen_t *gen, function_t *function, texloc_t loc, reg
         return;
     }
 
-    u32 offst = (u32)offset;
+    oru32 offst = (oru32)offset;
 
     instruction_t in = {0};
     switch (mov_size) {
@@ -245,7 +245,7 @@ static void emit_reg_to_addr(gen_t *gen, function_t *function, texloc_t loc, reg
     emit_instruction(function, loc, in);
 }
 
-static reg_mov_size_t type2movsize(gen_t *gen, type_t t) {
+static reg_mov_size_t type2movsize(gen_t *gen, ortype_t t) {
     typedata_t *td = type2typedata(&gen->ast->type_set.types, t);
     switch (td->kind) {
     case TYPE_NUMBER: {
@@ -338,7 +338,7 @@ static void emit_push_reg(gen_t *gen, texloc_t loc, function_t *function, reg_t 
 
         emit_multiword_addr_to_addr(gen, function, loc, REG_STACK_BOTTOM, reg_src, tmp, size_bytes);
     } else {
-        emit_binu_reg_im(function, loc, REG_STACK_BOTTOM, REG_STACK_BOTTOM, (u32)WORD_SIZE, '-');
+        emit_binu_reg_im(function, loc, REG_STACK_BOTTOM, REG_STACK_BOTTOM, (oru32)WORD_SIZE, '-');
         emit_reg_to_addr(gen, function, loc, mov_size, REG_STACK_BOTTOM, reg_src, 0);
     }
 }
@@ -348,13 +348,13 @@ static void emit_stack_point_to_reg(gen_t *gen, function_t *function, texloc_t l
     emit_binu_reg_im(function, loc, reg, REG_STACK_FRAME, stack_point, '-');
 }
 
-static void emit_pop_to_reg(gen_t *gen, texloc_t loc, function_t *function, reg_t reg_destination, type_t type) {
+static void emit_pop_to_reg(gen_t *gen, texloc_t loc, function_t *function, reg_t reg_destination, ortype_t type) {
     if (TYPE_IS_VOID(type)) return;
 
     gen->stack_size -= WORD_SIZE;
 
     emit_addr_to_reg(gen, function, loc, type2movsize(gen, type), reg_destination, REG_STACK_BOTTOM, 0);
-    emit_binu_reg_im(function, loc, REG_STACK_BOTTOM, REG_STACK_BOTTOM, (u32)sizeof(word_t), '+');
+    emit_binu_reg_im(function, loc, REG_STACK_BOTTOM, REG_STACK_BOTTOM, (oru32)sizeof(orword_t), '+');
 }
  // todo: remoe
 static void emit_popn_bytes(gen_t *gen, function_t *function, size_t pop_size_bytes, texloc_t loc, bool decrement_stack) {
@@ -539,7 +539,7 @@ static void emit_bin_op(texloc_t loc, function_t *function, token_type_t token_t
     emit_instruction(function, loc, instruction);
 }
 
-static void emit_bin_op_aggregates(gen_t *gen, texloc_t loc, function_t *function, token_type_t token_type, type_t type, size_t op1_stack_point, size_t op2_stack_point, val_dst_t val_dst, size_t byte_offset) {
+static void emit_bin_op_aggregates(gen_t *gen, texloc_t loc, function_t *function, token_type_t token_type, ortype_t type, size_t op1_stack_point, size_t op2_stack_point, val_dst_t val_dst, size_t byte_offset) {
     typedata_t *td = ast_type2td(gen->ast, type);
 
     switch (td->kind) {
@@ -612,7 +612,7 @@ static void emit_bin_op_aggregates(gen_t *gen, texloc_t loc, function_t *functio
     }
 }
 
-static void emit_val_dst_reg(gen_t *gen, texloc_t loc, function_t *function, type_t type, reg_t dst, reg_t src, bool is_addr) {
+static void emit_val_dst_reg(gen_t *gen, texloc_t loc, function_t *function, ortype_t type, reg_t dst, reg_t src, bool is_addr) {
     if (is_addr) {
         emit_addr_to_reg(gen, function, loc, type2movsize(gen, type), dst, src, 0);
     } else {
@@ -622,7 +622,7 @@ static void emit_val_dst_reg(gen_t *gen, texloc_t loc, function_t *function, typ
     }
 }
 
-static void emit_val_dst_stack_point(gen_t *gen, texloc_t loc, function_t *function, type_t type, reg_t src, reg_t tmp, reg_t tmp2, val_dst_t val_dst, bool is_addr_override) {
+static void emit_val_dst_stack_point(gen_t *gen, texloc_t loc, function_t *function, ortype_t type, reg_t src, reg_t tmp, reg_t tmp2, val_dst_t val_dst, bool is_addr_override) {
     typedata_t *td = ast_type2td(gen->ast, type);
 
     emit_stack_point_to_reg(gen, function, loc, tmp, val_dst.stack_point);
@@ -660,7 +660,7 @@ static void emit_val_dst_stack_point(gen_t *gen, texloc_t loc, function_t *funct
     }
 }
 
-static void emit_val_dst_return(gen_t *gen, texloc_t loc, function_t *function, type_t type, reg_t reg_src, reg_t tmp1, reg_t tmp2, bool is_addr_override) {
+static void emit_val_dst_return(gen_t *gen, texloc_t loc, function_t *function, ortype_t type, reg_t reg_src, reg_t tmp1, reg_t tmp2, bool is_addr_override) {
     typedata_t *td = ast_type2td(gen->ast, type);
     bool is_addr = true;
     unless (is_addr_override) {
@@ -682,7 +682,7 @@ static void emit_val_dst_return(gen_t *gen, texloc_t loc, function_t *function, 
     }
 }
 
-static void emit_reg_to_val_dst(gen_t *gen, texloc_t loc, function_t *function, type_t type, val_dst_t val_dst, reg_t src, reg_t tmp1, reg_t tmp2, bool is_addr_override) {
+static void emit_reg_to_val_dst(gen_t *gen, texloc_t loc, function_t *function, ortype_t type, val_dst_t val_dst, reg_t src, reg_t tmp1, reg_t tmp2, bool is_addr_override) {
     switch (val_dst.type) {
     case VAL_DST_REG: {
         emit_val_dst_reg(gen, loc, function, type, val_dst.reg, src, is_addr_override);
@@ -705,7 +705,7 @@ static void emit_reg_to_val_dst(gen_t *gen, texloc_t loc, function_t *function, 
 
 // rename to emit_unary_on_result_reg
 // assumes operand is in result reg
-static void emit_unary_on_result_reg(gen_t *gen, texloc_t loc, function_t *function, token_type_t token_type, type_t type, val_dst_t val_dst) {
+static void emit_unary_on_result_reg(gen_t *gen, texloc_t loc, function_t *function, token_type_t token_type, ortype_t type, val_dst_t val_dst) {
     typedata_t *td = type2typedata(&gen->ast->type_set.types, type);
 
     switch (token_type) {
@@ -839,7 +839,7 @@ static void gen_patch_jmp(gen_t *gen, function_t *function, size_t index) {
     }
 
     instruction_t *instruction = &function->code.items[index];
-    instruction->as.jmp.amount = (u32)amount;
+    instruction->as.jmp.amount = (oru32)amount;
 }
 
 static void add_constant(gen_t *gen, function_t *function, texloc_t loc, void *data, size_t size, reg_t reg_destination_ptr) {
@@ -856,13 +856,13 @@ static void add_constant(gen_t *gen, function_t *function, texloc_t loc, void *d
 
     instruction_t in = {0};
     in.op = OP_LOAD_ADDR;
-    in.as.load_addr.memaddr = (u32)index;
+    in.as.load_addr.memaddr = (oru32)index;
     in.as.load_addr.reg_dest = (byte)reg_destination_ptr;
 
     emit_instruction(function, loc, in);
 }
 
-static void gen_constant(gen_t *gen, texloc_t loc, function_t *function, void *data, type_t type, val_dst_t val_dst) {
+static void gen_constant(gen_t *gen, texloc_t loc, function_t *function, void *data, ortype_t type, val_dst_t val_dst) {
     typedata_t *td = type2typedata(&gen->ast->type_set.types, type);
 
     add_constant(gen, function, loc, data, td->size, REG_RESULT);
@@ -927,7 +927,7 @@ static void gen_binary(gen_t *gen, function_t *function, ast_node_t *binary, val
 
                 typedata_t *lhsinnertd = type2typedata(&gen->ast->type_set.types, lhstd->as.ptr.type);
 
-                size_t factor_size = lhsinnertd->size > 0 ? lhsinnertd->size : sizeof(u8);
+                size_t factor_size = lhsinnertd->size > 0 ? lhsinnertd->size : sizeof(oru8);
 
                 val_dst_t factor_size_dst = emit_val_dst_reg_or_stack_point_reserve(gen, loc, function, gen->ast->type_set.size_t_, REG_RESULT);
                 gen_constant(gen, loc, function, &factor_size, gen->ast->type_set.size_t_, factor_size_dst);
@@ -1062,7 +1062,7 @@ static local_t *find_local(gen_t *gen, ast_node_t *ref_decl) {
     return NULL;
 }
 
-size_t get_inner_item_size(ast_t *ast, type_t type) {
+size_t get_inner_item_size(ast_t *ast, ortype_t type) {
     typedata_t *td = ast_type2td(ast, type);
 
     switch (td->kind) {
@@ -1080,7 +1080,7 @@ size_t get_inner_item_size(ast_t *ast, type_t type) {
     }
 }
 
-static void gen_item_access_array_addr(gen_t *gen, function_t *function, texloc_t loc, val_dst_t val_dst, reg_t reg_lvalue, ast_node_t *accessor, type_t accessee_type) {
+static void gen_item_access_array_addr(gen_t *gen, function_t *function, texloc_t loc, val_dst_t val_dst, reg_t reg_lvalue, ast_node_t *accessor, ortype_t accessee_type) {
     // push lvalue
     emit_push_reg(gen, loc, function, reg_lvalue, REG_T, REG_MOV_SIZE_WORD, 0);
 
@@ -1089,7 +1089,7 @@ static void gen_item_access_array_addr(gen_t *gen, function_t *function, texloc_
         gen_expression(gen, function, accessor, stack_dst);
     }
 
-    type_t accessor_type = accessor->value_type;
+    ortype_t accessor_type = accessor->value_type;
 
     {
         size_t item_size = get_inner_item_size(gen->ast, accessee_type);
@@ -1146,7 +1146,7 @@ static void gen_lvalue(gen_t *gen, function_t *function, ast_node_t *lvalue, val
     case AST_NODE_TYPE_EXPRESSION_ARRAY_ITEM_ACCESS: {
         ast_node_t *accessee = an_item_accessee(lvalue);
         typedata_t *accessee_td = ast_type2td(gen->ast, accessee->value_type);
-        type_t accessee_type;
+        ortype_t accessee_type;
         switch (accessee_td->kind) {
         case TYPE_POINTER: {
             // gen address
@@ -1224,14 +1224,14 @@ static void gen_unary(gen_t *gen, function_t *function, ast_node_t *unary, val_d
     }
 }
 
-static void gen_expr_val(gen_t *gen, texloc_t loc, function_t *function, type_t type, word_t word, val_dst_t val_dst) {
+static void gen_expr_val(gen_t *gen, texloc_t loc, function_t *function, ortype_t type, orword_t word, val_dst_t val_dst) {
     typedata_t *td = ast_type2td(gen->ast, type);
     if (td->size > WORD_SIZE) {
         if (td->kind == TYPE_STRING) {
-            word_t val = ast_struct_item_get(gen->ast, type, lit2sv("cstr"), word);
-            word_t l = ast_struct_item_get(gen->ast, type, lit2sv("length"), word);
+            orword_t val = ast_struct_item_get(gen->ast, type, lit2sv("cstr"), word);
+            orword_t l = ast_struct_item_get(gen->ast, type, lit2sv("length"), word);
 
-            size_t val_bytes = sizeof(u8)*(l.as.u + 1);
+            size_t val_bytes = sizeof(oru8)*(l.as.u + 1);
             size_t mem_index = memarr_push(function->memory, val.as.p, val_bytes);
             void *data = function->memory->data + mem_index;
             memcpy(data, val.as.p, val_bytes);
@@ -1255,13 +1255,13 @@ static void gen_expr_val(gen_t *gen, texloc_t loc, function_t *function, type_t 
                 case NUM_SIZE_16: UNREACHABLE(); break;
 
                 case NUM_SIZE_32: {
-                    f32 val = (f32)word.as.d;
+                    orf32 val = (orf32)word.as.d;
                     gen_constant(gen, loc, function, &val, type, val_dst);
                     break;
                 }
 
                 case NUM_SIZE_64: {
-                    f64 val = (f64)word.as.d;
+                    orf64 val = (orf64)word.as.d;
                     gen_constant(gen, loc, function, &val, type, val_dst);
                     break;
                 }
@@ -1273,24 +1273,24 @@ static void gen_expr_val(gen_t *gen, texloc_t loc, function_t *function, type_t 
             case NUM_TYPE_UNSIGNED: {
                 switch ((num_size_t)td->size) {
                 case NUM_SIZE_8: {
-                    u8 val = (u8)word.as.u;
+                    oru8 val = (oru8)word.as.u;
                     gen_constant(gen, loc, function, &val, type, val_dst);
                     break;
                 }
                 case NUM_SIZE_16: {
-                    u16 val = (u16)word.as.u;
+                    oru16 val = (oru16)word.as.u;
                     gen_constant(gen, loc, function, &val, type, val_dst);
                     break;
                 }
 
                 case NUM_SIZE_32: {
-                    u32 val = (u32)word.as.u;
+                    oru32 val = (oru32)word.as.u;
                     gen_constant(gen, loc, function, &val, type, val_dst);
                     break;
                 }
 
                 case NUM_SIZE_64: {
-                    u64 val = (u64)word.as.u;
+                    oru64 val = (oru64)word.as.u;
                     gen_constant(gen, loc, function, &val, type, val_dst);
                     break;
                 }
@@ -1361,7 +1361,7 @@ static void gen_local_decldef(gen_t *gen, function_t *function, ast_node_t *decl
 
 static size_t gen_global_decldef(gen_t *gen, ast_node_t *decldef) {
     typedata_t *td = type2typedata(&gen->ast->type_set.types, decldef->value_type);
-    u8 data[td->size];
+    oru8 data[td->size];
     memset(data, 0, td->size);
     size_t global_index = memarr_push(gen->program_memory, &data, td->size);
 
@@ -1421,7 +1421,7 @@ static void gen_global_addr(gen_t *gen, texloc_t loc, function_t *function, size
         return;
     }
 
-    u32 idx = (u32)index;
+    oru32 idx = (oru32)index;
 
     instruction_t in = {0};
     in.op = OP_LOAD_ADDR;
@@ -1470,7 +1470,7 @@ static void gen_loop(gen_t *gen, function_t *function, texloc_t location, size_t
     }
     instruction_t in = {0};
     in.op = OP_LOOP;
-    in.as.jmp.amount = (u32)amount;
+    in.as.jmp.amount = (oru32)amount;
     emit_instruction(function, location, in);
 }
 
@@ -1891,7 +1891,7 @@ static void gen_bcall(gen_t *gen, function_t *function, ast_node_t *call, val_ds
     }
 }
 
-static void emit_cast(gen_t *gen, function_t *function, type_t dest, type_t source, texloc_t loc) {
+static void emit_cast(gen_t *gen, function_t *function, ortype_t dest, ortype_t source, texloc_t loc) {
     typedata_t *desttd = type2typedata(&gen->ast->type_set.types, dest);
     typedata_t *sourcetd = type2typedata(&gen->ast->type_set.types, source);
 

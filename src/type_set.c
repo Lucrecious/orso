@@ -8,7 +8,7 @@
 #define ALLOC(TYPE) (TYPE*)arena_alloc(set->allocator, sizeof(TYPE))
 #define ALLOC_N(TYPE, N) (TYPE*)arena_alloc(set->allocator, sizeof(TYPE)*N)
 
-typedata_t *function_type_new(type_table_t *set, types_t arguments, type_t return_type, bool is_native) {
+typedata_t *function_type_new(type_table_t *set, types_t arguments, ortype_t return_type, bool is_native) {
     typedata_t *function_type = ALLOC(typedata_t);
     function_type->kind = is_native ? TYPE_INTRINSIC_FUNCTION : TYPE_FUNCTION;
     function_type->as.function.argument_types = (types_t){.allocator=set->allocator};
@@ -24,7 +24,7 @@ typedata_t *function_type_new(type_table_t *set, types_t arguments, type_t retur
     return function_type;
 }
 
-typedata_t *pointer_type_new(type_table_t *set, type_t type) {
+typedata_t *pointer_type_new(type_table_t *set, ortype_t type) {
     typedata_t *pointer = ALLOC(typedata_t);
     pointer->kind = TYPE_POINTER;
     pointer->as.ptr.type = type;
@@ -35,7 +35,7 @@ typedata_t *pointer_type_new(type_table_t *set, type_t type) {
     return pointer;
 }
 
-void array_type_new(type_table_t *set, size_t size, type_t type, typedata_t *result) {
+void array_type_new(type_table_t *set, size_t size, ortype_t type, typedata_t *result) {
     typedata_t *itemtd = set->types.items[type.i];
     result->kind = TYPE_ARRAY;
     result->as.arr.type = type;
@@ -123,13 +123,13 @@ typedata_t *type_copy_new(type_table_t *set, typedata_t *type) {
     return NULL;
 }
 
-static type_t track_type(type_table_t *set, typedata_t *type) {
+static ortype_t track_type(type_table_t *set, typedata_t *type) {
     array_push(&set->types, type);
     table_put(type2u64, set->types2index, type, typeid(set->types.count-1));
     return typeid(set->types.count-1);
 }
 
-static type_t add_type_no_track(type_table_t *set, typedata_t *type) {
+static ortype_t add_type_no_track(type_table_t *set, typedata_t *type) {
     array_push(&set->types, type);
     return typeid(set->types.count-1);
 }
@@ -147,54 +147,54 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
     static typedata_t type_unreachable = {.name=lit2str("<unreachable>"), .kind=TYPE_UNREACHABLE, .size=0, .alignment=0};
 
     static typedata_t type_void = {.name=lit2str("void"), .kind=TYPE_VOID, .size=0, .alignment=0, .capabilities=TYPE_CAP_NONE};
-    static typedata_t type_bool = {.name=lit2str("bool"), .kind=TYPE_BOOL, .size=sizeof(bool), .alignment=sizeof(bool), .capabilities=TYPE_CAP_LOGICAL};
-    static typedata_t type_str8 = {.name=lit2str("str8_t"), .kind=TYPE_STRING, .size=0, .alignment=0, .capabilities=TYPE_CAP_NONE};
-    static typedata_t type_f32 = {.name=lit2str("f32"), .kind=TYPE_NUMBER, .size=NUM_SIZE_32, .alignment=NUM_SIZE_32, .as.num = NUM_TYPE_FLOAT, .capabilities=TYPE_CAP_NUMBER};
-    static typedata_t type_f64 = {.name=lit2str("f64"), .kind=TYPE_NUMBER, .size=NUM_SIZE_64, .alignment=NUM_SIZE_64, .as.num = NUM_TYPE_FLOAT, .capabilities=TYPE_CAP_NUMBER};
+    static typedata_t type_bool = {.name=lit2str("orbool"), .kind=TYPE_BOOL, .size=sizeof(bool), .alignment=sizeof(bool), .capabilities=TYPE_CAP_LOGICAL};
+    static typedata_t type_str8 = {.name=lit2str("orstr8_t"), .kind=TYPE_STRING, .size=0, .alignment=0, .capabilities=TYPE_CAP_NONE};
+    static typedata_t type_f32 = {.name=lit2str("orf32"), .kind=TYPE_NUMBER, .size=NUM_SIZE_32, .alignment=NUM_SIZE_32, .as.num = NUM_TYPE_FLOAT, .capabilities=TYPE_CAP_NUMBER};
+    static typedata_t type_f64 = {.name=lit2str("orf64"), .kind=TYPE_NUMBER, .size=NUM_SIZE_64, .alignment=NUM_SIZE_64, .as.num = NUM_TYPE_FLOAT, .capabilities=TYPE_CAP_NUMBER};
 
     #define CHAR_IS_SIGNED ((char)-1 < 0)
-    static typedata_t type_char = {.name=lit2str("char"), .kind=TYPE_NUMBER, .size=sizeof(char), .alignment=sizeof(char), .as.num = CHAR_IS_SIGNED ? NUM_TYPE_SIGNED : NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_NUMBER)};
+    static typedata_t type_char = {.name=lit2str("orchar"), .kind=TYPE_NUMBER, .size=sizeof(char), .alignment=sizeof(char), .as.num = CHAR_IS_SIGNED ? NUM_TYPE_SIGNED : NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_NUMBER)};
     #undef CHAR_IS_SIGNED
 
-    static typedata_t type_schar = {.name=lit2str("schar"), .kind=TYPE_NUMBER, .size=sizeof(signed char), .alignment=sizeof(signed char), .as.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_NUMBER)};
-    static typedata_t type_uchar = {.name=lit2str("uchar"), .kind=TYPE_NUMBER, .size=sizeof(unsigned char), .alignment=sizeof(unsigned char), .as.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_NUMBER)};
+    static typedata_t type_schar = {.name=lit2str("orschar"), .kind=TYPE_NUMBER, .size=sizeof(signed char), .alignment=sizeof(signed char), .as.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_NUMBER)};
+    static typedata_t type_uchar = {.name=lit2str("oruchar"), .kind=TYPE_NUMBER, .size=sizeof(unsigned char), .alignment=sizeof(unsigned char), .as.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_NUMBER)};
 
-    static typedata_t type_s8 = {.name=lit2str("s8"), .kind=TYPE_NUMBER, .size=NUM_SIZE_8, .alignment=NUM_SIZE_8, .as.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_NUMBER)};
-    static typedata_t type_u8 = {.name=lit2str("u8"), .kind=TYPE_NUMBER, .size=NUM_SIZE_8, .alignment=NUM_SIZE_8, .as.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_NUMBER)};
+    static typedata_t type_s8 = {.name=lit2str("ors8"), .kind=TYPE_NUMBER, .size=NUM_SIZE_8, .alignment=NUM_SIZE_8, .as.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_NUMBER)};
+    static typedata_t type_u8 = {.name=lit2str("oru8"), .kind=TYPE_NUMBER, .size=NUM_SIZE_8, .alignment=NUM_SIZE_8, .as.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_NUMBER)};
 
-    static typedata_t type_s16 = {.name=lit2str("s16"), .kind=TYPE_NUMBER, .size=NUM_SIZE_16, .alignment=NUM_SIZE_16, .as.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_NUMBER)};
-    static typedata_t type_u16 = {.name=lit2str("u16"), .kind=TYPE_NUMBER, .size=NUM_SIZE_16, .alignment=NUM_SIZE_16, .as.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_NUMBER)};
+    static typedata_t type_s16 = {.name=lit2str("ors16"), .kind=TYPE_NUMBER, .size=NUM_SIZE_16, .alignment=NUM_SIZE_16, .as.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_NUMBER)};
+    static typedata_t type_u16 = {.name=lit2str("oru16"), .kind=TYPE_NUMBER, .size=NUM_SIZE_16, .alignment=NUM_SIZE_16, .as.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_NUMBER)};
 
-    static typedata_t type_s32 = {.name=lit2str("s32"), .kind=TYPE_NUMBER, .size=NUM_SIZE_32, .alignment=NUM_SIZE_32, .as.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_NUMBER)};
-    static typedata_t type_u32 = {.name=lit2str("u32"), .kind=TYPE_NUMBER, .size=NUM_SIZE_32, .alignment=NUM_SIZE_32, .as.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_NUMBER)};
+    static typedata_t type_s32 = {.name=lit2str("ors32"), .kind=TYPE_NUMBER, .size=NUM_SIZE_32, .alignment=NUM_SIZE_32, .as.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_NUMBER)};
+    static typedata_t type_u32 = {.name=lit2str("oru32"), .kind=TYPE_NUMBER, .size=NUM_SIZE_32, .alignment=NUM_SIZE_32, .as.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_NUMBER)};
 
-    static typedata_t type_s64 = {.name=lit2str("s64"), .kind=TYPE_NUMBER, .size=NUM_SIZE_64, .alignment=NUM_SIZE_64, .as.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_NUMBER)};
-    static typedata_t type_u64 = {.name=lit2str("u64"), .kind=TYPE_NUMBER, .size=NUM_SIZE_64, .alignment=NUM_SIZE_64, .as.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_NUMBER)};
+    static typedata_t type_s64 = {.name=lit2str("ors64"), .kind=TYPE_NUMBER, .size=NUM_SIZE_64, .alignment=NUM_SIZE_64, .as.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_NUMBER)};
+    static typedata_t type_u64 = {.name=lit2str("oru64"), .kind=TYPE_NUMBER, .size=NUM_SIZE_64, .alignment=NUM_SIZE_64, .as.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_NUMBER)};
 
-    static typedata_t type_int = {.name=lit2str("int"), .kind=TYPE_NUMBER, .size=sizeof(int), .alignment=sizeof(int), .as.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_NUMBER)};
-    static typedata_t type_uint = {.name=lit2str("uint"), .kind=TYPE_NUMBER, .size=sizeof(unsigned int), .alignment=sizeof(unsigned int), .as.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_NUMBER)};
-    static typedata_t type_size_t = {.name=lit2str("size_t"), .kind=TYPE_NUMBER, .size=sizeof(size_t), .alignment=sizeof(size_t), .as.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_NUMBER)};
-    static typedata_t type_ptrdiff_t = {.name=lit2str("s64"), .kind=TYPE_NUMBER, .size=sizeof(s64), .alignment=sizeof(s64), .as.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_NUMBER)};
+    static typedata_t type_int = {.name=lit2str("orint"), .kind=TYPE_NUMBER, .size=sizeof(int), .alignment=sizeof(int), .as.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_NUMBER)};
+    static typedata_t type_uint = {.name=lit2str("oruint"), .kind=TYPE_NUMBER, .size=sizeof(unsigned int), .alignment=sizeof(unsigned int), .as.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_NUMBER)};
+    static typedata_t type_size_t = {.name=lit2str("orsize_t"), .kind=TYPE_NUMBER, .size=sizeof(size_t), .alignment=sizeof(size_t), .as.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_NUMBER)};
+    static typedata_t type_ptrdiff_t = {.name=lit2str("ors64"), .kind=TYPE_NUMBER, .size=sizeof(ors64), .alignment=sizeof(ors64), .as.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_NUMBER)};
 
-    static typedata_t type_type = {.name=lit2str("type"), .kind=TYPE_TYPE, .size=sizeof(type_t), .alignment=sizeof(type_t), .capabilities=(TYPE_CAP_NONE)};
+    static typedata_t type_type = {.name=lit2str("ortype"), .kind=TYPE_TYPE, .size=sizeof(ortype_t), .alignment=sizeof(ortype_t), .capabilities=(TYPE_CAP_NONE)};
     static typedata_t empty_function = {.name=lit2str(""), .kind = TYPE_FUNCTION, .size = sizeof(void*), .alignment=sizeof(void*), .as.function.return_type = typeid(TYPE_VOID), .capabilities=(TYPE_CAP_NONE)};
 
-    type_t invalid = typeid(set->types.count);
+    ortype_t invalid = typeid(set->types.count);
     array_push(&set->types, &type_invalid);
 
-    type_t unresolved = typeid(set->types.count);
+    ortype_t unresolved = typeid(set->types.count);
     array_push(&set->types, &type_unresolved);
 
-    type_t inferred_funcdef = typeid(set->types.count);
+    ortype_t inferred_funcdef = typeid(set->types.count);
     array_push(&set->types, &type_inferred_funcdef);
 
-    type_t param_struct_ = typeid(set->types.count);
+    ortype_t param_struct_ = typeid(set->types.count);
     array_push(&set->types, &type_param_struct);
 
-    type_t module_ = typeid(set->types.count);
+    ortype_t module_ = typeid(set->types.count);
     array_push(&set->types, &type_module);
 
-    type_t unreachable = typeid(set->types.count);
+    ortype_t unreachable = typeid(set->types.count);
     array_push(&set->types, &type_unreachable);
 
     set->void_ = typeid(set->types.count);
@@ -206,7 +206,7 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
     set->str8_t_ = typeid(set->types.count);
     array_push(&set->types, &type_str8);
 
-    type_t type_ = typeid(set->types.count);
+    ortype_t type_ = typeid(set->types.count);
     array_push(&set->types, &type_type);
 
     set->f32_ = typeid(set->types.count);
@@ -275,58 +275,58 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
     ASSERT(type_.i == TYPE_TYPE, "must be same as type type");
 }
 
-typedata_t *type2typedata(typedatas_t *types, type_t type) {
+typedata_t *type2typedata(typedatas_t *types, ortype_t type) {
     return types->items[type.i];
 }
 
-bool type_is_function(typedatas_t types, type_t type) {
+bool type_is_function(typedatas_t types, ortype_t type) {
     return type2typedata(&types, type)->kind == TYPE_FUNCTION;
 }
 
-bool type_is_intrinsic_function(typedatas_t types, type_t type) {
+bool type_is_intrinsic_function(typedatas_t types, ortype_t type) {
     return type2typedata(&types, type)->kind == TYPE_INTRINSIC_FUNCTION;
 }
 
-bool type_is_struct(typedatas_t types, type_t type) {
+bool type_is_struct(typedatas_t types, ortype_t type) {
     return type2typedata(&types, type)->kind == TYPE_STRUCT;
 }
 
-bool type_is_pointer(typedatas_t types, type_t type) {
+bool type_is_pointer(typedatas_t types, ortype_t type) {
     return type2typedata(&types, type)->kind == TYPE_POINTER;
 }
 
 static khint_t hash_type(typedata_t *type) {
 #define ADD_HASH(HASH, APPEND) HASH ^= APPEND; HASH *= 16777619
 
-    u32 hash = 2166136261u;
+    oru32 hash = 2166136261u;
     ADD_HASH(hash, type->kind);
 
     if (type->kind == TYPE_FUNCTION) {
         ADD_HASH(hash, type->as.function.argument_types.count);
 
         for (size_t i = 0; i < type->as.function.argument_types.count; ++i) {
-            ADD_HASH(hash, (u64)(type->as.function.argument_types.items[i].i));
+            ADD_HASH(hash, (oru64)(type->as.function.argument_types.items[i].i));
         }
 
-        ADD_HASH(hash, (u64)(type->as.function.return_type.i));
+        ADD_HASH(hash, (oru64)(type->as.function.return_type.i));
     } else if (type->kind == TYPE_STRUCT) {
         ASSERT(type->as.struct_.name_or_null == NULL, "only anonymous structs are hashed");
 
-        ADD_HASH(hash, (u32)type->as.struct_.fields.count);
+        ADD_HASH(hash, (oru32)type->as.struct_.fields.count);
 
         for (size_t i = 0; i < type->as.struct_.fields.count; i++) {
-            string_t name = type->as.struct_.fields.items[i].name;
+            orstring_t name = type->as.struct_.fields.items[i].name;
             for (size_t i = 0; i < name.length; i++) {
-                ADD_HASH(hash, (u32)name.cstr[i]);
+                ADD_HASH(hash, (oru32)name.cstr[i]);
             }
             
-            ADD_HASH(hash, (u64)(type->as.struct_.fields.items[i].type.i));
+            ADD_HASH(hash, (oru64)(type->as.struct_.fields.items[i].type.i));
         }
     } else if (type->kind == TYPE_POINTER) {
-        ADD_HASH(hash, (u64)(type->as.ptr.type.i));
+        ADD_HASH(hash, (oru64)(type->as.ptr.type.i));
     } else if (type->kind == TYPE_ARRAY) {
-        ADD_HASH(hash, (u64)(type->as.arr.type.i));
-        ADD_HASH(hash, (u64)(type->as.arr.count));
+        ADD_HASH(hash, (oru64)(type->as.arr.type.i));
+        ADD_HASH(hash, (oru64)(type->as.arr.count));
     }
 
     return hash;
@@ -334,9 +334,9 @@ static khint_t hash_type(typedata_t *type) {
 #undef ADD_HASH
 }
 
-implement_table(type2u64, typedata_t*, type_t, hash_type, type_equal);
+implement_table(type2u64, typedata_t*, ortype_t, hash_type, type_equal);
 
-type_t type_set_fetch_pointer(type_table_t* set, type_t inner_type) {
+ortype_t type_set_fetch_pointer(type_table_t* set, ortype_t inner_type) {
     typedata_t pointer_type = {
         .kind = TYPE_POINTER,
         .as.ptr.type = inner_type,
@@ -344,7 +344,7 @@ type_t type_set_fetch_pointer(type_table_t* set, type_t inner_type) {
         .capabilities = TYPE_CAP_NONE
     };
 
-    type_t type;
+    ortype_t type;
     if (table_get(type2u64, set->types2index, &pointer_type, &type)) {
         return type;
     }
@@ -355,11 +355,11 @@ type_t type_set_fetch_pointer(type_table_t* set, type_t inner_type) {
     return type;
 }
 
-type_t type_set_fetch_array(type_table_t *set, type_t value_type, size_t size) {
+ortype_t type_set_fetch_array(type_table_t *set, ortype_t value_type, size_t size) {
     typedata_t array_type;
     array_type_new(set, size, value_type, &array_type);
 
-    type_t type;
+    ortype_t type;
     if (table_get(type2u64, set->types2index, &array_type, &type)) {
         return type;
     }
@@ -370,23 +370,23 @@ type_t type_set_fetch_array(type_table_t *set, type_t value_type, size_t size) {
     return type;
 }
 
-type_t type_set_fetch_anonymous_incomplete_struct(type_table_t *set) {
+ortype_t type_set_fetch_anonymous_incomplete_struct(type_table_t *set) {
     typedata_t struct_type = {0};
     incomplete_struct_type_init(set, (struct_fields_t){0}, (struct_fields_t){0}, &struct_type);
 
     typedata_t *typeinfo = type_copy_new(set, &struct_type);
     typeinfo->as.struct_.status = STRUCT_STATUS_INCOMPLETE;
-    type_t type = add_type_no_track(set, typeinfo);
+    ortype_t type = add_type_no_track(set, typeinfo);
     return type;
 }
 
-void type_set_invalid_struct(type_table_t *set, type_t incomplete_type) {
+void type_set_invalid_struct(type_table_t *set, ortype_t incomplete_type) {
     typedata_t *td = type2typedata(&set->types, incomplete_type);
     MUST(td->kind == TYPE_STRUCT);
     td->as.struct_.status = STRUCT_STATUS_INVALID;
 }
 
-void type_set_complete_struct(type_table_t *set, type_t incomplete_type, struct_fields_t fields, struct_fields_t consts) {
+void type_set_complete_struct(type_table_t *set, ortype_t incomplete_type, struct_fields_t fields, struct_fields_t consts) {
     typedata_t *td = type2typedata(&set->types, incomplete_type);
     MUST(td->kind == TYPE_STRUCT && td->as.struct_.status == STRUCT_STATUS_INCOMPLETE);
 
@@ -397,7 +397,7 @@ void type_set_complete_struct(type_table_t *set, type_t incomplete_type, struct_
     td->as.struct_.status = STRUCT_STATUS_COMPLETE;
 }
 
-type_t type_set_fetch_function(type_table_t *set, type_t return_type, types_t arguments) {
+ortype_t type_set_fetch_function(type_table_t *set, ortype_t return_type, types_t arguments) {
     typedata_t function_type = {
         .kind = TYPE_FUNCTION,
         .as.function.argument_types = arguments,
@@ -405,7 +405,7 @@ type_t type_set_fetch_function(type_table_t *set, type_t return_type, types_t ar
         .size = sizeof(void*),
     };
 
-    type_t type;
+    ortype_t type;
     if (table_get(type2u64, set->types2index, &function_type, &type)) {
         return type;
     }
@@ -416,12 +416,12 @@ type_t type_set_fetch_function(type_table_t *set, type_t return_type, types_t ar
     return type;
 }
 
-type_t type_set_fetch_intrinsic_function(type_table_t *set, type_t function_type) {
+ortype_t type_set_fetch_intrinsic_function(type_table_t *set, ortype_t function_type) {
     typedata_t *td = type2typedata(&set->types, function_type);
     typedata_t functd = *td;
     functd.kind = TYPE_INTRINSIC_FUNCTION;
 
-    type_t type;
+    ortype_t type;
     if (table_get(type2u64, set->types2index, &functd, &type)) {
         return type;
     }
