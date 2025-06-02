@@ -2834,7 +2834,7 @@ void ast_print_node(ast_t *ast, ast_node_t *node) {
 }
 
 void ast_print(ast_t* ast, const char* name) {
-    UNUSED(name);
+    ORUNUSED(name);
 
     ast_node_t *module;
     kh_foreach_value(ast->moduleid2node, module, {

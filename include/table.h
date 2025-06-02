@@ -36,7 +36,7 @@ typedef khiter_t tbliter_t;
         kh_clear(NAME, h); \
     }\
     tbliter_t table_##NAME##_begin(kh_##NAME##_t *h) {\
-        UNUSED(h);\
+        ORUNUSED(h);\
         return  kh_begin(h);\
     }\
     tbliter_t table_##NAME##_end(kh_##NAME##_t *h) {\

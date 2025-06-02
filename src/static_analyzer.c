@@ -4936,7 +4936,7 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
             if (passed_through_fold) {
                 ast_node_t *funcdef;
                 bool success = table_get(fn2an, ast->fn2an, function, &funcdef);
-                UNUSED(success);
+                ORUNUSED(success);
                 MUST(success);
 
                 array_push(&analyzer->run_required_uncompiled_funcdefs, funcdef);

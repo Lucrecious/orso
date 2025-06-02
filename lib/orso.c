@@ -2,7 +2,6 @@
 #define NOB_STRIP_PREFIX
 #include "../nob.h"
 #undef UNREACHABLE
-#undef UNUSED
 #undef sv_eq
 #undef NOB_IMPLEMENTATION
 

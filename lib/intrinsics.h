@@ -8,7 +8,7 @@
 
 #define CORE_MODULE_NAME "core"
 
-#define UNUSED(arg) ((void)arg)
+#define ORUNUSED(arg) ((void)(arg))
 
 typedef signed char orschar;
 typedef unsigned char oruchar;
