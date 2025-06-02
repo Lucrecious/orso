@@ -10,6 +10,6 @@ struct orso_compiler_t {
     orstring_t output_name;
 };
 
-int orso_build(orso_compiler_t *compiler);
+bool ororso_build(orso_compiler_t *compiler);
 
 #endif

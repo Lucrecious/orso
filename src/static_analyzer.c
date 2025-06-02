@@ -2389,15 +2389,15 @@ static void resolve_module(analyzer_t *analyzer, ast_t *ast, ast_node_t *module)
     }
 }
 
-static bool resolve_directive_argument(analyzer_t *analyzer, ast_t *ast, analysis_state_t state, ast_node_t *arg, size_t arg_zero_based_pos, ortype_t expected_type) {
+static bool resolve_directive_argument(analyzer_t *analyzer, ast_t *ast, analysis_state_t state, ast_node_t *directive, ast_node_t *arg, size_t arg_zero_based_pos, ortype_t expected_type) {
     resolve_expression(analyzer, ast, state, ortypeid(TYPE_STRING), arg, true);
     if (!ortypeid_eq(expected_type, arg->value_type)) {
         if (!TYPE_IS_INVALID(arg->value_type)) {
             stan_error(analyzer, OR_ERROR(
                 .tag = "sem.type-mismatch.directive",
                 .level = ERROR_SOURCE_ANALYSIS,
-                .msg = lit2str("'fficall' argument $3.$ requires a '$1.$' but got '$2.$'"),
-                .args = ORERR_ARGS(error_arg_node(arg), error_arg_type(expected_type), error_arg_type(arg->value_type), error_arg_sz(arg_zero_based_pos + 1)),
+                .msg = lit2str("'$4.$' argument $3.$ requires a '$1.$' but got '$2.$'"),
+                .args = ORERR_ARGS(error_arg_node(arg), error_arg_type(expected_type), error_arg_type(arg->value_type), error_arg_sz(arg_zero_based_pos + 1), error_arg_node(directive)),
                 .show_code_lines = ORERR_LINES(0),
             ));
         }
@@ -2408,8 +2408,8 @@ static bool resolve_directive_argument(analyzer_t *analyzer, ast_t *ast, analysi
         stan_error(analyzer, OR_ERROR(
             .tag = "sem.noconst.directive",
             .level = ERROR_SOURCE_ANALYSIS,
-            .msg = lit2str("'fficall' argument $1.$ must be a constant"),
-            .args = ORERR_ARGS(error_arg_node(arg), error_arg_sz(arg_zero_based_pos+1)),
+            .msg = lit2str("'$2.$' argument $1.$ must be a constant"),
+            .args = ORERR_ARGS(error_arg_node(arg), error_arg_sz(arg_zero_based_pos+1), error_arg_node(directive)),
             .show_code_lines = ORERR_LINES(0),
         ));
         return false;
@@ -2601,7 +2601,7 @@ void resolve_expression(
                 }
 
                 ast_node_t *libpath_node = an_fficall_libpath(expr);
-                if (!resolve_directive_argument(analyzer, ast, state, libpath_node, 0, ortypeid(TYPE_STRING))) {
+                if (!resolve_directive_argument(analyzer, ast, state, expr, libpath_node, 0, ortypeid(TYPE_STRING))) {
                     INVALIDATE(expr);
                     goto defer;
                 }
@@ -2619,13 +2619,13 @@ void resolve_expression(
                 }
 
                 ast_node_t *callconv_node = an_fficall_callconv(expr);
-                if (!resolve_directive_argument(analyzer, ast, state, callconv_node, 1, ortypeid(TYPE_STRING))) {
+                if (!resolve_directive_argument(analyzer, ast, state, expr, callconv_node, 1, ortypeid(TYPE_STRING))) {
                     INVALIDATE(expr);
                     goto defer;
                 }
 
                 ast_node_t *retarg_node = an_fficall_rettype(expr);
-                if (!resolve_directive_argument(analyzer, ast, state, retarg_node, 2, ortypeid(TYPE_TYPE))) {
+                if (!resolve_directive_argument(analyzer, ast, state, expr, retarg_node, 2, ortypeid(TYPE_TYPE))) {
                     INVALIDATE(expr);
                     goto defer;
                 }
@@ -2633,7 +2633,7 @@ void resolve_expression(
                 fficall_return_type = retarg_node->expr_val.word.as.t;
 
                 ast_node_t *funcname_node = an_fficall_funcname(expr);
-                if (!resolve_directive_argument(analyzer, ast, state, funcname_node, 3, ortypeid(TYPE_STRING))) {
+                if (!resolve_directive_argument(analyzer, ast, state, expr, funcname_node, 3, ortypeid(TYPE_STRING))) {
                     INVALIDATE(expr);
                     goto defer;
                 }

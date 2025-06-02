@@ -5,6 +5,6 @@ compiler_t :: struct {
 };
 
 build :: (c: &compiler_t) -> bool {
-    success := @icall "__orcompiler_build", c;
+    success := @icall "ororso_build", c;
     return success;
 };

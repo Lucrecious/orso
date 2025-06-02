@@ -166,7 +166,7 @@ static bool generate_exe(ast_t *ast, orstring_t output_path) {
     return success;
 }
 
-int orso_build(orso_compiler_t *compiler) {
+bool ororso_build(orso_compiler_t *compiler) {
     arena_t arena = {0};
 
     orstring_t source;

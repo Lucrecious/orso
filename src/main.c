@@ -53,7 +53,7 @@ int main(int argc, char **argv) {
                 compiler.build_dir = lit2str("./build/");
                 compiler.root_source = sinput;
                 compiler.output_name = soutput;
-                orso_build(&compiler);
+                ororso_build(&compiler);
             }
 
         }
