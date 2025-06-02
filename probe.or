@@ -1,4 +1,5 @@
 main :: () -> void {
-    x := 0s8;
-    x;
+    x :: int;
+    y := int;
+    y == x;
 };

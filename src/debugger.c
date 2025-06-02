@@ -370,8 +370,8 @@ bool debugger_step(debugger_t *debugger, vm_t *vm) {
 
             
             memarr_t *memarr = vm->call_frame.function->memory;
-            if (memaddr + WORD_SIZE > memarr->count) {
-                printf("memory location is too high max is: %zu\n", memarr->count - WORD_SIZE);
+            if (memaddr + ORWORD_SIZE > memarr->count) {
+                printf("memory location is too high max is: %zu\n", memarr->count - ORWORD_SIZE);
                 return true;
             }
 

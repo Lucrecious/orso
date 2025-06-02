@@ -27,12 +27,12 @@ bool type_equal(typedata_t *a, typedata_t *b) {
                 return false;
             }
 
-            unless (typeid_eq(a->as.function.return_type, b->as.function.return_type)) {
+            unless (ortypeid_eq(a->as.function.return_type, b->as.function.return_type)) {
                 return false;
             }
 
             for (size_t i = 0; i < a->as.function.argument_types.count; ++i) {
-                unless (typeid_eq(a->as.function.argument_types.items[i], b->as.function.argument_types.items[i])) {
+                unless (ortypeid_eq(a->as.function.argument_types.items[i], b->as.function.argument_types.items[i])) {
                     return false;
                 }
             }
@@ -56,7 +56,7 @@ bool type_equal(typedata_t *a, typedata_t *b) {
             }
 
             for (size_t i = 0; i < a->as.struct_.fields.count; i++) {
-                unless (typeid_eq(a->as.struct_.fields.items[i].type, b->as.struct_.fields.items[i].type)) {
+                unless (ortypeid_eq(a->as.struct_.fields.items[i].type, b->as.struct_.fields.items[i].type)) {
                     return false;
                 }
 
@@ -69,11 +69,11 @@ bool type_equal(typedata_t *a, typedata_t *b) {
         }
 
         case TYPE_POINTER: {
-            return typeid_eq(a->as.ptr.type, b->as.ptr.type);
+            return ortypeid_eq(a->as.ptr.type, b->as.ptr.type);
         }
 
         case TYPE_ARRAY: {
-            if (!typeid_eq(a->as.arr.type, b->as.arr.type)) return false;
+            if (!ortypeid_eq(a->as.arr.type, b->as.arr.type)) return false;
             if (a->as.arr.count != b->as.arr.count) return false;
             return true;
         }
@@ -96,7 +96,7 @@ bool type_equal(typedata_t *a, typedata_t *b) {
 
 bool type_in_list(types_t list, ortype_t find) {
     for (size_t i = 0; i < list.count; i++) {
-        if (typeid_eq(list.items[i], find)) {
+        if (ortypeid_eq(list.items[i], find)) {
             return true;
         }
     }

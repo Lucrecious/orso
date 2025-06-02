@@ -36,8 +36,8 @@ void memarr_free(memarr_t *arr) {
 }
 
 size_t memarr_push(memarr_t *arr, void *data, size_t size_bytes) {
-    size_t word_sized = (size_bytes + WORD_SIZE - 1)/WORD_SIZE;
-    size_t reserved_size = word_sized*WORD_SIZE;
+    size_t word_sized = (size_bytes + ORWORD_SIZE - 1)/ORWORD_SIZE;
+    size_t reserved_size = word_sized*ORWORD_SIZE;
 
     while ((arr->count + reserved_size) >= arr->capacity) {
         arr->data = arena_realloc(&arr->arena, arr->data, arr->capacity, arr->capacity*2);

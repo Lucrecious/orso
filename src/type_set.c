@@ -125,13 +125,13 @@ typedata_t *type_copy_new(type_table_t *set, typedata_t *type) {
 
 static ortype_t track_type(type_table_t *set, typedata_t *type) {
     array_push(&set->types, type);
-    table_put(type2u64, set->types2index, type, typeid(set->types.count-1));
-    return typeid(set->types.count-1);
+    table_put(type2u64, set->types2index, type, ortypeid(set->types.count-1));
+    return ortypeid(set->types.count-1);
 }
 
 static ortype_t add_type_no_track(type_table_t *set, typedata_t *type) {
     array_push(&set->types, type);
-    return typeid(set->types.count-1);
+    return ortypeid(set->types.count-1);
 }
 
 void type_set_init(type_table_t* set, arena_t *allocator) {
@@ -177,90 +177,90 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
     static typedata_t type_ptrdiff_t = {.name=lit2str("ors64"), .kind=TYPE_NUMBER, .size=sizeof(ors64), .alignment=sizeof(ors64), .as.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_NUMBER)};
 
     static typedata_t type_type = {.name=lit2str("ortype"), .kind=TYPE_TYPE, .size=sizeof(ortype_t), .alignment=sizeof(ortype_t), .capabilities=(TYPE_CAP_NONE)};
-    static typedata_t empty_function = {.name=lit2str(""), .kind = TYPE_FUNCTION, .size = sizeof(void*), .alignment=sizeof(void*), .as.function.return_type = typeid(TYPE_VOID), .capabilities=(TYPE_CAP_NONE)};
+    static typedata_t empty_function = {.name=lit2str(""), .kind = TYPE_FUNCTION, .size = sizeof(void*), .alignment=sizeof(void*), .as.function.return_type = ortypeid(TYPE_VOID), .capabilities=(TYPE_CAP_NONE)};
 
-    ortype_t invalid = typeid(set->types.count);
+    ortype_t invalid = ortypeid(set->types.count);
     array_push(&set->types, &type_invalid);
 
-    ortype_t unresolved = typeid(set->types.count);
+    ortype_t unresolved = ortypeid(set->types.count);
     array_push(&set->types, &type_unresolved);
 
-    ortype_t inferred_funcdef = typeid(set->types.count);
+    ortype_t inferred_funcdef = ortypeid(set->types.count);
     array_push(&set->types, &type_inferred_funcdef);
 
-    ortype_t param_struct_ = typeid(set->types.count);
+    ortype_t param_struct_ = ortypeid(set->types.count);
     array_push(&set->types, &type_param_struct);
 
-    ortype_t module_ = typeid(set->types.count);
+    ortype_t module_ = ortypeid(set->types.count);
     array_push(&set->types, &type_module);
 
-    ortype_t unreachable = typeid(set->types.count);
+    ortype_t unreachable = ortypeid(set->types.count);
     array_push(&set->types, &type_unreachable);
 
-    set->void_ = typeid(set->types.count);
+    set->void_ = ortypeid(set->types.count);
     array_push(&set->types, &type_void);
 
-    set->bool_ = typeid(set->types.count);
+    set->bool_ = ortypeid(set->types.count);
     array_push(&set->types, &type_bool);
 
-    set->str8_t_ = typeid(set->types.count);
+    set->str8_t_ = ortypeid(set->types.count);
     array_push(&set->types, &type_str8);
 
-    ortype_t type_ = typeid(set->types.count);
+    ortype_t type_ = ortypeid(set->types.count);
     array_push(&set->types, &type_type);
 
-    set->f32_ = typeid(set->types.count);
+    set->f32_ = ortypeid(set->types.count);
     array_push(&set->types, &type_f32);
 
-    set->f64_ = typeid(set->types.count);
+    set->f64_ = ortypeid(set->types.count);
     array_push(&set->types, &type_f64);
 
-    set->char_ = typeid(set->types.count);
+    set->char_ = ortypeid(set->types.count);
     array_push(&set->types, &type_char);
 
-    set->schar_ = typeid(set->types.count);
+    set->schar_ = ortypeid(set->types.count);
     array_push(&set->types, &type_schar);
 
-    set->uchar_ = typeid(set->types.count);
+    set->uchar_ = ortypeid(set->types.count);
     array_push(&set->types, &type_uchar);
 
-    set->s8_ = typeid(set->types.count);
+    set->s8_ = ortypeid(set->types.count);
     array_push(&set->types, &type_s8);
 
-    set->u8_ = typeid(set->types.count);
+    set->u8_ = ortypeid(set->types.count);
     array_push(&set->types, &type_u8);
 
-    set->s16_ = typeid(set->types.count);
+    set->s16_ = ortypeid(set->types.count);
     array_push(&set->types, &type_s16);
 
-    set->u16_ = typeid(set->types.count);
+    set->u16_ = ortypeid(set->types.count);
     array_push(&set->types, &type_u16);
 
-    set->s32_ = typeid(set->types.count);
+    set->s32_ = ortypeid(set->types.count);
     array_push(&set->types, &type_s32);
 
-    set->u32_ = typeid(set->types.count);
+    set->u32_ = ortypeid(set->types.count);
     array_push(&set->types, &type_u32);
 
-    set->s64_ = typeid(set->types.count);
+    set->s64_ = ortypeid(set->types.count);
     array_push(&set->types, &type_s64);
 
-    set->u64_ = typeid(set->types.count);
+    set->u64_ = ortypeid(set->types.count);
     array_push(&set->types, &type_u64);
 
-    set->int_ = typeid(set->types.count);
+    set->int_ = ortypeid(set->types.count);
     array_push(&set->types, &type_int);
 
-    set->uint_ = typeid(set->types.count);
+    set->uint_ = ortypeid(set->types.count);
     array_push(&set->types, &type_uint);
 
-    set->size_t_ = typeid(set->types.count);
+    set->size_t_ = ortypeid(set->types.count);
     array_push(&set->types, &type_size_t);
 
-    set->ptrdiff_t_ = typeid(set->types.count);
+    set->ptrdiff_t_ = ortypeid(set->types.count);
     array_push(&set->types, &type_ptrdiff_t);
 
-    set->empty_function_ = typeid(set->types.count);
+    set->empty_function_ = ortypeid(set->types.count);
     array_push(&set->types, &empty_function);
     
     ASSERT(invalid.i == TYPE_INVALID, "must be same as type invalid");

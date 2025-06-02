@@ -34,12 +34,12 @@ ortype_t get_type_odlfn1_() {
 
     {
       if ((x_ == int_(0))) {
-        ortype_t tmp2 = typeid(8);
+        ortype_t tmp2 = ortypeid(8);
         return tmp2;
       }
     };
 
-    ortype_t tmp3 = typeid(17);
+    ortype_t tmp3 = ortypeid(17);
     return tmp3;
   };
 }
@@ -51,11 +51,11 @@ ortype_t expr(void) {
   ortype_t tmp4; {
     fn_type_t get_type_ = (get_type_odlfn1_);
 
-    ortype_t int_or_float_ = typeid(17);
+    ortype_t int_or_float_ = ortypeid(17);
 
     int n_ = int_(1);
 
-    tmp4 = typeid(17);
+    tmp4 = ortypeid(17);
   };
 
   return tmp4;

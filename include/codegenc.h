@@ -52,7 +52,7 @@ struct cgen_var_t {
     ortype_t type;
 };
 
-static cgen_var_t nil_cvar = {.is_new = false, .id = 0 , .type = typeid(TYPE_INVALID) };
+static cgen_var_t nil_cvar = {.is_new = false, .id = 0 , .type = ortypeid(TYPE_INVALID) };
 
 
 #define no_var(tv) ((tv).id == 0 && (tv).name.length == 0)
@@ -169,12 +169,12 @@ static bool cgen_binary_is_macro(token_type_t type, typedata_t *optd, orcstr_t *
     }
 
     #define case_block(numtype) do { switch (type) {\
-        case TOKEN_PLUS: set_op("add"#numtype"_", true); break; \
-        case TOKEN_MINUS: set_op("sub"#numtype"_", true); \
-        case TOKEN_SLASH: set_op("div"#numtype"_", true); \
-        case TOKEN_STAR: set_op("mul"#numtype"_", true); \
-        case TOKEN_PERCENT: set_op("mod"#numtype"_", true); \
-        case TOKEN_PERCENT_PERCENT: set_op("rem"#numtype"_", true); \
+        case TOKEN_PLUS: set_op("oradd"#numtype, true); break; \
+        case TOKEN_MINUS: set_op("orsub"#numtype, true); \
+        case TOKEN_SLASH: set_op("ordiv"#numtype, true); \
+        case TOKEN_STAR: set_op("ormul"#numtype, true); \
+        case TOKEN_PERCENT: set_op("ormod"#numtype, true); \
+        case TOKEN_PERCENT_PERCENT: set_op("orrem"#numtype, true); \
         default: set_op("", false); \
     }} while (false)
 
@@ -182,8 +182,8 @@ static bool cgen_binary_is_macro(token_type_t type, typedata_t *optd, orcstr_t *
         switch (optd->kind) {
         case TYPE_POINTER: {
             switch (type) {
-                case TOKEN_MINUS: set_op("subptr_", true);
-                case TOKEN_PLUS: set_op("addptr_", true);
+                case TOKEN_MINUS: set_op("orsubptr", true);
+                case TOKEN_PLUS: set_op("oraddptr", true);
                 default: UNREACHABLE();
             }
             break;
@@ -251,7 +251,7 @@ static bool cgen_binary_is_macro(token_type_t type, typedata_t *optd, orcstr_t *
             }
 
             case TYPE_TYPE: {
-                set_op("typeid_eq", true);
+                set_op("ortypeid_eq", true);
                 break;
             }
 
@@ -269,7 +269,7 @@ static bool cgen_binary_is_macro(token_type_t type, typedata_t *optd, orcstr_t *
             }
 
             case TYPE_TYPE: {
-                set_op("typeid_nq", true);
+                set_op("ortypeid_nq", true);
                 break;
             }
 
@@ -451,7 +451,7 @@ static void cgen_constant(cgen_t *cgen, orword_t word, ortype_t type) {
         }
 
         case TYPE_TYPE: {
-            sb_add_format(&cgen->sb, "typeid(%"PRIu64")", word.as.t.i);
+            sb_add_format(&cgen->sb, "ortypeid(%"PRIu64")", word.as.t.i);
             break;
         }
 
@@ -478,7 +478,7 @@ static void cgen_constant(cgen_t *cgen, orword_t word, ortype_t type) {
             cgen_array_start(cgen, type);
 
             void *data_addr;
-            if (typedata->size > WORD_SIZE) {
+            if (typedata->size > ORWORD_SIZE) {
                 data_addr = word.as.p;
             } else {
                 data_addr = &word;
@@ -493,8 +493,8 @@ static void cgen_constant(cgen_t *cgen, orword_t word, ortype_t type) {
                 }
 
                 void *item_data_addr = data_addr + i*inner_item_size;
-                if (innertd->size > WORD_SIZE) {
-                    cgen_constant(cgen, WORDP(item_data_addr), inner_type);
+                if (innertd->size > ORWORD_SIZE) {
+                    cgen_constant(cgen, ORWORDP(item_data_addr), inner_type);
                 } else {
                     orword_t val = ast_mem2word(cgen->ast, item_data_addr, inner_type);
                     cgen_constant(cgen, val, inner_type);
@@ -510,7 +510,7 @@ static void cgen_constant(cgen_t *cgen, orword_t word, ortype_t type) {
             cgen_struct_start(cgen, type);
 
             void *data_addr;
-            if (typedata->size > WORD_SIZE) {
+            if (typedata->size > ORWORD_SIZE) {
                 data_addr = word.as.p;
             } else {
                 data_addr = &word;
@@ -532,8 +532,8 @@ static void cgen_constant(cgen_t *cgen, orword_t word, ortype_t type) {
                     orcstr_t cstr = *((char**)item_data_addr);
                     sb_add_format(&cgen->sb, "\"%s\"", cstr);
                 } else {
-                    if (fieldtd->size > WORD_SIZE) {
-                        cgen_constant(cgen, WORDP(item_data_addr), field.type);
+                    if (fieldtd->size > ORWORD_SIZE) {
+                        cgen_constant(cgen, ORWORDP(item_data_addr), field.type);
                     } else {
                         orword_t val = ast_mem2word(cgen->ast, item_data_addr, field.type);
                         cgen_constant(cgen, val, field.type);
@@ -1546,7 +1546,7 @@ static void cgen_break_or_continue(cgen_t *cgen, ast_node_t *jmp, token_type_t t
 }
 
 static bool cgen_is_void_nil(ast_node_t *expr) {
-    return typeid_eq(typeid(TYPE_VOID), expr->value_type) && expr->node_type == AST_NODE_TYPE_EXPRESSION_NIL;
+    return ortypeid_eq(ortypeid(TYPE_VOID), expr->value_type) && expr->node_type == AST_NODE_TYPE_EXPRESSION_NIL;
 }
 
 static void cgen_return(cgen_t *cgen, ast_node_t *ret) {
@@ -2263,7 +2263,7 @@ static void cgen_struct(cgen_t *cgen, ortype_t type, bools_t *bools) {
     }
 
     for (size_t i = 0; i < cgen->ast->type_set.types.count; ++i) {
-        cgen_struct(cgen, typeid(i), &bools);
+        cgen_struct(cgen, ortypeid(i), &bools);
     }
 
     allocator_return(tmp);
@@ -2333,7 +2333,7 @@ static void cgen_generate_cnames_for_types(ast_t *ast) {
         }
 
         case TYPE_STRUCT: {
-            // struct_typeid<typeid>
+            // struct_typeid<ortypeid>
 
             tmp_arena_t *tmp = allocator_borrow();
             string_builder_t sb = {.allocator=tmp->allocator};
@@ -2789,7 +2789,7 @@ bool compile_ast_to_c(ast_t *ast, orstring_t build_directory, strings_t *sources
 
         orstring_t corec = cgen_generate_associated_c_from_h_filename(ast->core_module_or_null->ccode_associated_h, tmp->allocator);
 
-        cgen_module(&cgen, &cgenh, true, ast->core_module_or_null, lit2str(CORE_MODULE_NAME));
+        cgen_module(&cgen, &cgenh, true, ast->core_module_or_null, lit2str(ORCORE_MODULE_NAME));
 
         corec = string_format("%s%s", tmp->allocator, build_directory.cstr, corec.cstr);
         array_push(sources, corec);

@@ -53,7 +53,7 @@ static khint_t type_hash(ortype_t id) {
 }
 
 static int type_equal_(ortype_t a, ortype_t b) {
-    return typeid_eq(a, b);
+    return ortypeid_eq(a, b);
 }
 
 implement_table(t2w, ortype_t, orword_t, type_hash, type_equal_)
@@ -156,7 +156,7 @@ ast_node_t nil_node = {
     .end = nil_token,
     .operator = nil_token,
 
-    .value_type = typeid(TYPE_INVALID),
+    .value_type = ortypeid(TYPE_INVALID),
     .lvalue_node = &nil_node,
     .ref_decl = &nil_node,
     .jmp_out_scope_node = &nil_node,
@@ -524,19 +524,19 @@ static ast_node_t *ast_primaryu(ast_t *ast, oru64 value, ortype_t type, token_t 
     orword_t word = {0};
     switch ((num_size_t)td->size) {
     case NUM_SIZE_8: {
-        oru8 v = cast(oru8, value);
+        oru8 v = orcast(oru8, value);
         word.as.u = v;
         break;
     }
 
     case NUM_SIZE_16: {
-        oru16 v = cast(oru16, value);
+        oru16 v = orcast(oru16, value);
         word.as.u = v;
         break;
     }
 
     case NUM_SIZE_32: {
-        oru32 v = cast(oru32, value);
+        oru32 v = orcast(oru32, value);
         word.as.u = v;
         break;
     }
@@ -570,19 +570,19 @@ static ast_node_t *ast_primaryi(ast_t *ast, ors64 value, ortype_t type, token_t 
     orword_t word = {0};
     switch ((num_size_t)td->size) {
     case NUM_SIZE_8: {
-        ors8 v = cast(ors8, value);
+        ors8 v = orcast(ors8, value);
         word.as.s = v;
         break;
     }
 
     case NUM_SIZE_16: {
-        ors16 v = cast(ors16, value);
+        ors16 v = orcast(ors16, value);
         word.as.s = v;
         break;
     }
 
     case NUM_SIZE_32: {
-        ors32 v = cast(ors32, value);
+        ors32 v = orcast(ors32, value);
         word.as.s = v;
         break;
     }
@@ -639,14 +639,14 @@ static ast_node_t *ast_primaryb(ast_t *ast, bool value, ast_node_t extra_params)
     orword_t word = {.as.s=byte_value};
 
     primary->expr_val = ast_node_val_word(word);
-    primary->value_type = typeid(TYPE_BOOL);
+    primary->value_type = ortypeid(TYPE_BOOL);
 
     return primary;
 }
 
 static ast_node_t *ast_primary_str(ast_t *ast, token_t where) {
     ast_node_t *primary = ast_node_new(ast->arena, AST_NODE_TYPE_EXPRESSION_PRIMARY, where);
-    primary->value_type = typeid(TYPE_UNRESOLVED);
+    primary->value_type = ortypeid(TYPE_UNRESOLVED);
 
     return primary;
 }
@@ -668,7 +668,7 @@ static ast_node_t *ast_break(ast_t *ast, ast_node_t *expr, token_t label, token_
 
 static ast_node_t *ast_continue(ast_t *ast, token_t label, token_t jmp_token) {
     ast_node_t *continue_ = ast_node_new(ast->arena, AST_NODE_TYPE_EXPRESSION_JMP, jmp_token);
-    an_expression(continue_) = ast_nil(ast, typeid(TYPE_VOID), token_implicit_at_end(label));
+    an_expression(continue_) = ast_nil(ast, ortypeid(TYPE_VOID), token_implicit_at_end(label));
     continue_->identifier = label;
     continue_->end = label;
     return continue_;
@@ -695,7 +695,7 @@ static void ast_block_end(ast_node_t *block, token_t end) {
 
     if (block->children.count == 0) {
         block->node_type = AST_NODE_TYPE_EXPRESSION_NIL;
-        block->value_type = typeid(TYPE_VOID);
+        block->value_type = ortypeid(TYPE_VOID);
     }
 }
 
@@ -739,7 +739,7 @@ ast_node_t *ast_inferred_type_decl(ast_t *ast, token_t squiggle_token, token_t i
     inferred_type_decl->end = identifer;
     inferred_type_decl->identifier = identifer;
     inferred_type_decl->is_mutable = false;
-    inferred_type_decl->value_type = typeid(TYPE_UNRESOLVED);
+    inferred_type_decl->value_type = ortypeid(TYPE_UNRESOLVED);
 
     return inferred_type_decl;
 }
@@ -899,7 +899,7 @@ static ast_node_t *parse_number(parser_t *parser) {
 
             bool is_free_number = false;
 
-            ortype_t type = typeid(TYPE_UNRESOLVED);
+            ortype_t type = ortypeid(TYPE_UNRESOLVED);
             if (sv_ends_with(numsv, "s")) {
                 type = parser->ast->type_set.int_;
             } else if (sv_ends_with(numsv, "u")) {
@@ -1116,7 +1116,7 @@ static ast_node_t *parse_jmp(parser_t *parser) {
     if (has_expr && check_expression(parser)) {
         expr = parse_expression(parser);
     } else {
-        expr = ast_nil(parser->ast, typeid(TYPE_VOID), token_implicit_at_end(parser->previous));
+        expr = ast_nil(parser->ast, ortypeid(TYPE_VOID), token_implicit_at_end(parser->previous));
     }
 
 
@@ -1443,7 +1443,7 @@ static ast_node_t *parse_branch(parser_t *parser) {
     }
 
     unless (match(parser, next_token_check)) {
-        else_branch = ast_nil(parser->ast, typeid(TYPE_VOID), token_implicit_at_end(then_branch->end));
+        else_branch = ast_nil(parser->ast, ortypeid(TYPE_VOID), token_implicit_at_end(then_branch->end));
     } else {
         else_branch = parse_expression(parser);
     }
@@ -1543,12 +1543,12 @@ static ast_node_t *parse_for(parser_t *parser) {
     if (match(parser, TOKEN_THEN)) {
         then = parse_expression(parser);
     } else {
-        then = ast_nil(parser->ast, typeid(TYPE_VOID), token_implicit_at_end(loop->end));
+        then = ast_nil(parser->ast, ortypeid(TYPE_VOID), token_implicit_at_end(loop->end));
     }
 
     // true implicit condition if nothing
     if (an_is_none(cond)) {
-        cond = ast_implicit_expr(parser->ast, typeid(TYPE_BOOL), WORDU(1), token_implicit_at_start(end_of_check));
+        cond = ast_implicit_expr(parser->ast, ortypeid(TYPE_BOOL), ORWORDU(1), token_implicit_at_start(end_of_check));
     }
 
     ast_node_t *for_ = ast_for(parser->ast, decl, cond, increment, loop, then, start);
@@ -1671,7 +1671,7 @@ static void parse_function_signature(parser_t *parser, ast_node_t *func_sig) {
         an_func_def_return(func_sig) = parse_expression(parser);
         parser->inside_type_context = inside_type_context;
     } else {
-        an_func_def_return(func_sig) = ast_nil(parser->ast, typeid(TYPE_VOID), token_implicit_at_end(func_sig->end));
+        an_func_def_return(func_sig) = ast_nil(parser->ast, ortypeid(TYPE_VOID), token_implicit_at_end(func_sig->end));
     }
 }
 
@@ -1736,7 +1736,7 @@ static ast_node_t *parse_grouping_or_function_signature_or_definition(parser_t *
     if (node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE) {
         parse_function_signature(parser, expr);
 
-        expr->value_type = typeid(TYPE_UNRESOLVED);
+        expr->value_type = ortypeid(TYPE_UNRESOLVED);
         expr->end = parser->previous;
 
         if (match(parser, TOKEN_BRACE_OPEN)) {
@@ -1782,7 +1782,7 @@ static ast_node_t *parse_grouping_or_function_signature_or_definition(parser_t *
 
 static ast_node_t *parse_call(parser_t *parser) {
     ast_node_t *call = ast_call_begin(parser->ast, AST_NODE_TYPE_EXPRESSION_CALL, parser->previous);
-    an_callee(call) = ast_nil(parser->ast, typeid(TYPE_VOID), token_implicit_at_end(parser->previous));
+    an_callee(call) = ast_nil(parser->ast, ortypeid(TYPE_VOID), token_implicit_at_end(parser->previous));
     MUST(call->children.count == 1);
     parse_arguments(parser, call);
 
@@ -1803,7 +1803,7 @@ static ast_node_t *parse_unary(parser_t *parser) {
         equals.type= (equals.type == TOKEN_MINUS_MINUS ? TOKEN_MINUS_EQUAL : TOKEN_PLUS_EQUAL);
         equals.view.length = 0;
 
-        ast_node_t *one = ast_implicit_expr(parser->ast, parser->ast->type_set.u64_, WORDU(1), equals);
+        ast_node_t *one = ast_implicit_expr(parser->ast, parser->ast->type_set.u64_, ORWORDU(1), equals);
         one->is_free_number = true;
 
         ast_node_t *assignment = ast_assignment(parser->ast, operand, one, equals);
@@ -2279,7 +2279,7 @@ static ast_node_t *parse_decl_def(parser_t *parser) {
         parser->inside_type_context = inside_type_context;
 
     } else {
-        type_expr = ast_implicit_expr(parser->ast, typeid(TYPE_TYPE), WORDT(typeid(TYPE_UNRESOLVED)), token_implicit_at_end(parser->previous));
+        type_expr = ast_implicit_expr(parser->ast, ortypeid(TYPE_TYPE), ORWORDT(ortypeid(TYPE_UNRESOLVED)), token_implicit_at_end(parser->previous));
     }
 
     ASSERT(type_expr, "should be set by now");
@@ -2306,7 +2306,7 @@ static ast_node_t *parse_decl_def(parser_t *parser) {
         parser->inside_type_context = inside_type_context;
     } else {
         has_default_value = false;
-        init_expr = ast_nil(parser->ast, typeid(TYPE_UNRESOLVED), token_implicit_at_end(parser->previous));
+        init_expr = ast_nil(parser->ast, ortypeid(TYPE_UNRESOLVED), token_implicit_at_end(parser->previous));
     }
 
     ASSERT(init_expr, "should be set by now");
@@ -2397,7 +2397,7 @@ orword_t *ast_multiword_value(ast_t *ast, size_t size_words) {
 
     orword_t *start = (orword_t*)(ast->multiword_data.data + ast->multiword_data.count);
     for (size_t i = 0; i < size_words; ++i) {
-        memarr_push(&ast->multiword_data, &z, WORD_SIZE);
+        memarr_push(&ast->multiword_data, &z, ORWORD_SIZE);
     }
 
     return start;
@@ -2425,13 +2425,13 @@ orword_t ast_mem2word(ast_t *ast, void *data, ortype_t type) {
 
     case TYPE_NUMBER: {
         switch (td->as.num) {
-        case NUM_TYPE_FLOAT: return td->size == NUM_SIZE_32 ? WORDD(*((orf32*)data)) : *((orword_t*)data);
+        case NUM_TYPE_FLOAT: return td->size == NUM_SIZE_32 ? ORWORDD(*((orf32*)data)) : *((orword_t*)data);
         case NUM_TYPE_SIGNED:
         case NUM_TYPE_UNSIGNED: {
             switch ((num_size_t)td->size) {
-            case NUM_SIZE_8: return WORDU(*((oru8*)data));
-            case NUM_SIZE_16: return WORDU(*((oru16*)data));
-            case NUM_SIZE_32: return WORDU(*((oru32*)data));
+            case NUM_SIZE_8: return ORWORDU(*((oru8*)data));
+            case NUM_SIZE_16: return ORWORDU(*((oru16*)data));
+            case NUM_SIZE_32: return ORWORDU(*((oru32*)data));
             case NUM_SIZE_64: return *((orword_t*)data);
             }
         }
@@ -2441,8 +2441,8 @@ orword_t ast_mem2word(ast_t *ast, void *data, ortype_t type) {
     case TYPE_STRING:
     case TYPE_STRUCT:
     case TYPE_ARRAY: {
-        if (td->size > WORD_SIZE) {
-            return WORDP(data);
+        if (td->size > ORWORD_SIZE) {
+            return ORWORDP(data);
         } else {
             return *((orword_t*)data);
         }
@@ -2453,14 +2453,14 @@ orword_t ast_mem2word(ast_t *ast, void *data, ortype_t type) {
 }
 
 ast_node_val_t zero_value(ast_t *ast, ortype_t type) {
-    if (TYPE_IS_UNRESOLVED(type)) return ast_node_val_word(WORDU(0));
+    if (TYPE_IS_UNRESOLVED(type)) return ast_node_val_word(ORWORDU(0));
 
     typedata_t *type_info = ast->type_set.types.items[type.i];
     orword_t value = {0};
-    if (type_info->size > WORD_SIZE) {
+    if (type_info->size > ORWORD_SIZE) {
         typedata_t *td = type2typedata(&ast->type_set.types, type);
-        orword_t *data = ast_multiword_value(ast, b2w(td->size));
-        value = WORDP(data);
+        orword_t *data = ast_multiword_value(ast, orb2w(td->size));
+        value = ORWORDP(data);
     }
 
     ast_node_val_t val = ast_node_val_word(value);

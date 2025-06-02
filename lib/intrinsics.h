@@ -6,7 +6,7 @@
 #include <math.h>
 #include <string.h>
 
-#define CORE_MODULE_NAME "core"
+#define ORCORE_MODULE_NAME "core"
 
 #define ORUNUSED(arg) ((void)(arg))
 
@@ -52,16 +52,16 @@ struct orword_t {
     } as;
 };
 
-#define WORD_SIZE sizeof(orword_t)
+#define ORWORD_SIZE sizeof(orword_t)
 
-#define b2w(size)  ((size + (WORD_SIZE-1)) / WORD_SIZE)
-#define b2w2b(size) (b2w(size)*WORD_SIZE)
+#define orb2w(size)  ((size + (ORWORD_SIZE-1)) / ORWORD_SIZE)
+#define orb2w2b(size) (orb2w(size)*ORWORD_SIZE)
 
-#define WORDI(value) ((orword_t){.as.s=(value)})
-#define WORDU(value) ((orword_t){.as.u=(value)})
-#define WORDD(value) ((orword_t){.as.d=(value)})
-#define WORDP(value) ((orword_t){.as.p=(value)})
-#define WORDT(value) ((orword_t){.as.t=(value)})
+#define ORWORDI(value) ((orword_t){.as.s=(value)})
+#define ORWORDU(value) ((orword_t){.as.u=(value)})
+#define ORWORDD(value) ((orword_t){.as.d=(value)})
+#define ORWORDP(value) ((orword_t){.as.p=(value)})
+#define ORWORDT(value) ((orword_t){.as.t=(value)})
 
 #define _ors8(lit) ((ors8)lit)
 #define _oru8(lit) ((oru8)lit)
@@ -76,135 +76,129 @@ struct orword_t {
 #define _orint(lit) ((int)lit)
 #define _oruint(lit) ((oruint)lit)
 
-#define fn_t_(var_name, return_type, ...) return_type (*var_name)(__VA_ARGS__)
+#define orfn_t_(var_name, return_type, ...) return_type (*var_name)(__VA_ARGS__)
 
-#define typeid(index) ((ortype_t){.i=(index)})
-#define typeid_eq(t1, t2) ((t1).i == (t2).i)
-#define typeid_nq(t1, t2) (!typeid_eq(t1, t2))
+#define ortypeid(index) ((ortype_t){.i=(index)})
+#define ortypeid_eq(t1, t2) ((t1).i == (t2).i)
+#define ortypeid_nq(t1, t2) (!ortypeid_eq(t1, t2))
 
 #define __IS_TWO_COMPLIMENT ((-1 & 3) == 3)
 #if !__IS_TWO_COMPLIMENT
 #error "compiler is only defined for machines that use 2's compliment"
 #endif
 
-#define true 1
-#define false 0
-
-#define unless(condition) if (!(condition))
-#define until(condition) while (!(condition))
-
 #endif
 
-#define opi_(a, b, i, u, op) ((i)(((u)a) op (u)b))
-#define opu_(a, b, u, op) ((u)(((u)a) op ((u)b)))
-#define modd_(a, b)  (modd(a, b))
-#define remd_(a, b) (remd(a, b))
-#define modi_(a, b) (modi(a, b))
-#define modu_(a, b) (modu(a, b))
-#define div_(a, b) ((b) != 0 ? ((a)/(b)) : 0)
+#define oropi(a, b, i, u, op) ((i)(((u)a) op (u)b))
+#define oropu(a, b, u, op) ((u)(((u)a) op ((u)b)))
+#define ormodd(a, b)  (ormodd_(a, b))
+#define orremd(a, b) (orremd_(a, b))
+#define ormodi(a, b) (ormodi_(a, b))
+#define ormodu(a, b) (ormodu_(a, b))
+#define ordiv(a, b) ((b) != 0 ? ((a)/(b)) : 0)
 
-#define divi_(a, b, imin) ((a == imin && b == -1) ? (imin) : (div_(a, b)))
+#define ordivi(a, b, imin) ((a == imin && b == -1) ? (imin) : (ordiv(a, b)))
 
-#define adds8_(a, b) opi_(a, b, ors8, oru8, +)
-#define subs8_(a, b) opi_(a, b, ors8, oru8, -)
-#define muls8_(a, b) opi_(a, b, ors8, oru8, *)
-#define divs8_(a, b) divi_(a, b, INT8_MIN)
-#define mods8_(a, b) modi_(a, b)
-#define rems8_(a, b) (a % b)
+#define oradds8(a, b) oropi(a, b, ors8, oru8, +)
+#define orsubs8(a, b) oropi(a, b, ors8, oru8, -)
+#define ormuls8(a, b) oropi(a, b, ors8, oru8, *)
+#define ordivs8(a, b) ordivi(a, b, INT8_MIN)
+#define ormods8(a, b) ormodi(a, b)
+#define orrems8(a, b) (a % b)
 
-#define adds16_(a, b) opi_(a, b, ors16, oru16, +)
-#define subs16_(a, b) opi_(a, b, ors16, oru16, -)
-#define muls16_(a, b) opi_(a, b, ors16, oru16, *)
-#define divs16_(a, b) divi_(a, b, INT16_MIN)
-#define mods16_(a, b) modi_(a, b)
-#define rems16_(a, b) (a % b)
+#define oradds16(a, b) oropi(a, b, ors16, oru16, +)
+#define orsubs16(a, b) oropi(a, b, ors16, oru16, -)
+#define ormuls16(a, b) oropi(a, b, ors16, oru16, *)
+#define ordivs16(a, b) ordivi(a, b, INT16_MIN)
+#define ormods16(a, b) ormodi(a, b)
+#define orrems16(a, b) (a % b)
 
-#define adds32_(a, b) opi_(a, b, ors32, oru32, +)
-#define subs32_(a, b) opi_(a, b, ors32, oru32, -)
-#define muls32_(a, b) opi_(a, b, ors32, oru32, *)
-#define divs32_(a, b) divi_(a, b, INT32_MIN)
-#define mods32_(a, b) modi_(a, b)
-#define rems32_(a, b) (a % b)
+#define oradds32(a, b) oropi(a, b, ors32, oru32, +)
+#define orsubs32(a, b) oropi(a, b, ors32, oru32, -)
+#define ormuls32(a, b) oropi(a, b, ors32, oru32, *)
+#define ordivs32(a, b) ordivi(a, b, INT32_MIN)
+#define ormods32(a, b) ormodi(a, b)
+#define orrems32(a, b) (a % b)
 
-#define adds64_(a, b) opi_(a, b, ors64, oru64, +)
-#define subs64_(a, b) opi_(a, b, ors64, oru64, -)
-#define muls64_(a, b) opi_(a, b, ors64, oru64, *)
-#define divs64_(a, b) divi_(a, b, INT64_MIN)
-#define mods64_(a, b) modi_(a, b)
-#define rems64_(a, b) (a % b)
+#define oradds64(a, b) oropi(a, b, ors64, oru64, +)
+#define orsubs64(a, b) oropi(a, b, ors64, oru64, -)
+#define ormuls64(a, b) oropi(a, b, ors64, oru64, *)
+#define ordivs64(a, b) ordivi(a, b, INT64_MIN)
+#define ormods64(a, b) ormodi(a, b)
+#define orrems64(a, b) (a % b)
 
-#define addu8_(a, b) opu_(a, b, oru8, +)
-#define subu8_(a, b) opu_(a, b, oru8, -)
-#define mulu8_(a, b) opu_(a, b, oru8, *)
-#define divu8_(a, b) div_(a, b)
-#define modu8_(a, b) modu_(a, b)
-#define remu8_(a, b) (a % b)
+#define oraddu8(a, b) oropu(a, b, oru8, +)
+#define orsubu8(a, b) oropu(a, b, oru8, -)
+#define ormulu8(a, b) oropu(a, b, oru8, *)
+#define ordivu8(a, b) ordiv(a, b)
+#define ormodu8(a, b) ormodu(a, b)
+#define orremu8(a, b) (a % b)
 
-#define addu16_(a, b) opu_(a, b, oru16, +)
-#define subu16_(a, b) opu_(a, b, oru16, -)
-#define mulu16_(a, b) opu_(a, b, oru16, *)
-#define divu16_(a, b) div_(a, b)
-#define modu16_(a, b) modu_(a, b)
-#define remu16_(a, b) (a % b)
+#define oraddu16(a, b) oropu(a, b, oru16, +)
+#define orsubu16(a, b) oropu(a, b, oru16, -)
+#define ormulu16(a, b) oropu(a, b, oru16, *)
+#define ordivu16(a, b) ordiv(a, b)
+#define ormodu16(a, b) ormodu(a, b)
+#define orremu16(a, b) (a % b)
 
-#define addu32_(a, b) opu_(a, b, oru32, +)
-#define subu32_(a, b) opu_(a, b, oru32, -)
-#define mulu32_(a, b) opu_(a, b, oru32, *)
-#define divu32_(a, b) div_(a, b)
-#define modu32_(a, b) modu_(a, b)
-#define remu32_(a, b) (a % b)
+#define oraddu32(a, b) oropu(a, b, oru32, +)
+#define orsubu32(a, b) oropu(a, b, oru32, -)
+#define ormulu32(a, b) oropu(a, b, oru32, *)
+#define ordivu32(a, b) ordiv(a, b)
+#define ormodu32(a, b) ormodu(a, b)
+#define orremu32(a, b) (a % b)
 
-#define addu64_(a, b) opu_(a, b, oru64, +)
-#define subu64_(a, b) opu_(a, b, oru64, -)
-#define mulu64_(a, b) opu_(a, b, oru64, *)
-#define divu64_(a, b) div_(a, b)
-#define modu64_(a, b) modu_(a, b)
-#define remu64_(a, b) (a % b)
+#define oraddu64(a, b) oropu(a, b, oru64, +)
+#define orsubu64(a, b) oropu(a, b, oru64, -)
+#define ormulu64(a, b) oropu(a, b, oru64, *)
+#define ordivu64(a, b) ordiv(a, b)
+#define ormodu64(a, b) ormodu(a, b)
+#define orremu64(a, b) (a % b)
 
-#define addf_(a, b) (((orf32)a) + ((orf32)b))
-#define subf_(a, b) (((orf32)a) - ((orf32)b))
-#define mulf_(a, b) (((orf32)a) * ((orf32)b))
-#define divf_(a, b) div_(a, b)
-#define modf_(a, b) modd_(a, b)
-#define remf_(a, b) remd_(a, b)
+#define oraddf(a, b) (((orf32)a) + ((orf32)b))
+#define orsubf(a, b) (((orf32)a) - ((orf32)b))
+#define ormulf(a, b) (((orf32)a) * ((orf32)b))
+#define ordivf(a, b) ordiv(a, b)
+#define ormodf(a, b) ormodd(a, b)
+#define orremf(a, b) orremd(a, b)
 
-#define addd_(a, b) (a + b)
-#define subd_(a, b) (a - b)
-#define muld_(a, b) (a * b)
-#define divd_(a, b) div_(a, b)
+#define oraddd(a, b) (a + b)
+#define orsubd(a, b) (a - b)
+#define ormuld(a, b) (a * b)
+#define ordivd(a, b) ordiv(a, b)
 
-#define addptr_(ptr, a) ((ptr) + (ors64)(a))
-#define subptr_(ptr, a) ((ptr) - (ors64)(a))
+#define oraddptr(ptr, a) ((ptr) + (ors64)(a))
+#define orsubptr(ptr, a) ((ptr) - (ors64)(a))
 
-#define min_(a, b) ((a) < (b) ? (a) : (b))
-#define max_(a, b) ((a) > (b) ? (a) : (b))
+#define ormin(a, b) ((a) < (b) ? (a) : (b))
+#define ormax(a, b) ((a) > (b) ? (a) : (b))
 
-#define cast(type, value) ((type)value)
+#define orcast(type, value) ((type)value)
 
 #define __ormemcmp(a, b, size) (memcmp(a, b, size) == 0)
 
-orf64 modd(orf64 a, orf64 b);
-orf64 remd(orf64 a, orf64 b);
-ors64 modi(ors64 a, ors64 b);
-oru64 modu(oru64 a, oru64 b);
+orf64 ormodd_(orf64 a, orf64 b);
+orf64 orremd_(orf64 a, orf64 b);
+ors64 ormodi_(ors64 a, ors64 b);
+oru64 ormodu_(oru64 a, oru64 b);
 
 #ifdef INTRINSICS_IMPLEMENTATION
 
-orf64 modd(orf64 a, orf64 b) {
+orf64 ormodd_(orf64 a, orf64 b) {
     orf64 b_ = b < 0 ? -b : b;
     return fmod(fmod(a, b) + b_, b_);
 }
 
-orf64 remd(orf64 a, orf64 b) {
+orf64 orremd_(orf64 a, orf64 b) {
     return fmod(a, b);
 }
 
-ors64 modi(ors64 a, ors64 b) {
+ors64 ormodi_(ors64 a, ors64 b) {
     ors64 b_ = b < 0 ? -b : b;
     return ((a%b) + b_) % b_;
 }
 
-oru64 modu(oru64 a, oru64 b) {
+oru64 ormodu_(oru64 a, oru64 b) {
     return a%b;
 }
 

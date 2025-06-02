@@ -424,7 +424,7 @@ void vm_step(vm_t *vm) {
         #define do_cast(d, s, dtype, stype) do { \
             byte result = in.as.casting.reg_result; \
             byte op = in.as.casting.reg_op; \
-            vm->registers[result].as.d = cast(dtype, (stype)vm->registers[op].as.s); \
+            vm->registers[result].as.d = orcast(dtype, (stype)vm->registers[op].as.s); \
             IP_ADV(1); \
         } while(false); break
 
@@ -471,19 +471,19 @@ void vm_step(vm_t *vm) {
             or##type##64 result = 0; \
             switch (sz) {\
             case NUM_SIZE_8: {\
-                result = op##type##8_(a, b);\
+                result = or##op##type##8(a, b);\
                 break;\
             }\
             case NUM_SIZE_16: {\
-                result = op##type##16_(a, b);\
+                result = or##op##type##16(a, b);\
                 break;\
             }\
             case NUM_SIZE_32: {\
-                result = op##type##32_(a, b);\
+                result = or##op##type##32(a, b);\
                 break;\
             }\
             case NUM_SIZE_64: {\
-                result = op##type##64_(a, b);\
+                result = or##op##type##64(a, b);\
                 break;\
             }\
             }\
@@ -517,11 +517,11 @@ void vm_step(vm_t *vm) {
             orf64 result = 0.0; \
             switch (sz) { \
             case NUM_SIZE_32: { \
-                result = op##f_(a, b); \
+                result = or##op##f(a, b); \
                 break; \
             } \
             case NUM_SIZE_64: { \
-                result = op##d_(a, b); \
+                result = or##op##d(a, b); \
                 break; \
             } \
             default: UNREACHABLE(); break; \

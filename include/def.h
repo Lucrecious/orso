@@ -12,6 +12,9 @@
 
 #include "intrinsics.h"
 
+#define unless(condition) if (!(condition))
+#define until(condition) while (!(condition))
+
 #define FORCE_INLINE inline __attribute__((always_inline))
 
 #define println(cstr) printf(cstr"\n");
