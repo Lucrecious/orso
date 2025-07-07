@@ -150,12 +150,12 @@ static bool generate_exe(ast_t *ast, orstring_t output_path) {
 
         cc_flag(&cc, lit2str("-std=c99"));
 
-        cc_flag(&cc, lit2str("-framework"));
-        cc_flag(&cc, lit2str("IOKit"));
-        cc_flag(&cc, lit2str("-framework"));
-        cc_flag(&cc, lit2str("Cocoa"));
-        cc_flag(&cc, lit2str("-framework"));
-        cc_flag(&cc, lit2str("OpenGL"));
+        // cc_flag(&cc, lit2str("-framework"));
+        // cc_flag(&cc, lit2str("IOKit"));
+        // cc_flag(&cc, lit2str("-framework"));
+        // cc_flag(&cc, lit2str("Cocoa"));
+        // cc_flag(&cc, lit2str("-framework"));
+        // cc_flag(&cc, lit2str("OpenGL"));
 
         success = cc_build(&cc);
     }

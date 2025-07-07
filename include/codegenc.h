@@ -193,7 +193,7 @@ static bool cgen_binary_is_macro(token_type_t type, typedata_t *optd, orcstr_t *
             case NUM_SIZE_8: {
                 switch (optd->as.num) {
                 case NUM_TYPE_SIGNED: case_block(s8); break;
-                case NUM_TYPE_UNSIGNED: case_block(oru8); break;
+                case NUM_TYPE_UNSIGNED: case_block(u8); break;
                 default: UNREACHABLE(); break;
                 }
                 break;
@@ -201,8 +201,8 @@ static bool cgen_binary_is_macro(token_type_t type, typedata_t *optd, orcstr_t *
 
             case NUM_SIZE_16: {
                 switch (optd->as.num) {
-                case NUM_TYPE_SIGNED: case_block(ors16); break;
-                case NUM_TYPE_UNSIGNED: case_block(oru16); break;
+                case NUM_TYPE_SIGNED: case_block(s16); break;
+                case NUM_TYPE_UNSIGNED: case_block(u16); break;
                 default: UNREACHABLE(); break;
                 }
                 break;
@@ -210,8 +210,8 @@ static bool cgen_binary_is_macro(token_type_t type, typedata_t *optd, orcstr_t *
 
             case NUM_SIZE_32: {
                 switch (optd->as.num) {
-                case NUM_TYPE_SIGNED: case_block(ors32); break;
-                case NUM_TYPE_UNSIGNED: case_block(oru32); break;
+                case NUM_TYPE_SIGNED: case_block(s32); break;
+                case NUM_TYPE_UNSIGNED: case_block(u32); break;
                 case NUM_TYPE_FLOAT: case_block(f); break;
                 }
                 break;
@@ -219,8 +219,8 @@ static bool cgen_binary_is_macro(token_type_t type, typedata_t *optd, orcstr_t *
 
             case NUM_SIZE_64: {
                 switch (optd->as.num) {
-                case NUM_TYPE_SIGNED: case_block(ors64); break;
-                case NUM_TYPE_UNSIGNED: case_block(oru64); break;
+                case NUM_TYPE_SIGNED: case_block(s64); break;
+                case NUM_TYPE_UNSIGNED: case_block(u64); break;
                 case NUM_TYPE_FLOAT: case_block(d); break;
                 }
                 break;

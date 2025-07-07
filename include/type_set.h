@@ -45,7 +45,6 @@ struct type_table_t {
     ortype_t str8_t_;
     ortype_t symbol_;
     ortype_t type_;
-    ortype_t empty_function_;
 };
 
 void type_set_init(type_table_t *set, arena_t *allocator);

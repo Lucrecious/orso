@@ -260,9 +260,6 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
     set->ptrdiff_t_ = ortypeid(set->types.count);
     array_push(&set->types, &type_ptrdiff_t);
 
-    set->empty_function_ = ortypeid(set->types.count);
-    array_push(&set->types, &empty_function);
-    
     ASSERT(invalid.i == TYPE_INVALID, "must be same as type invalid");
     ASSERT(unresolved.i == TYPE_UNRESOLVED, "must be same as type unresolved");
     ASSERT(inferred_funcdef.i == TYPE_INFERRED_FUNCTION, "must be same as type inferred func def");
