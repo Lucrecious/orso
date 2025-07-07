@@ -1,5 +1,7 @@
-io :: @load "./lib/io.or";
+
+
 
 main :: () -> void {
-    io.test(1, 2);
+    x := @run io.test(1, 2);
+    x;
 };

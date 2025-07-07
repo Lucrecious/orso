@@ -177,7 +177,6 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
     static typedata_t type_ptrdiff_t = {.name=lit2str("ors64"), .kind=TYPE_NUMBER, .size=sizeof(ors64), .alignment=sizeof(ors64), .as.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_NUMBER)};
 
     static typedata_t type_type = {.name=lit2str("ortype"), .kind=TYPE_TYPE, .size=sizeof(ortype_t), .alignment=sizeof(ortype_t), .capabilities=(TYPE_CAP_NONE)};
-    static typedata_t empty_function = {.name=lit2str(""), .kind = TYPE_FUNCTION, .size = sizeof(void*), .alignment=sizeof(void*), .as.function.return_type = ortypeid(TYPE_VOID), .capabilities=(TYPE_CAP_NONE)};
 
     ortype_t invalid = ortypeid(set->types.count);
     array_push(&set->types, &type_invalid);
@@ -206,7 +205,7 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
     set->str8_t_ = ortypeid(set->types.count);
     array_push(&set->types, &type_str8);
 
-    ortype_t type_ = ortypeid(set->types.count);
+    set->type_ = ortypeid(set->types.count);
     array_push(&set->types, &type_type);
 
     set->f32_ = ortypeid(set->types.count);
@@ -269,7 +268,7 @@ void type_set_init(type_table_t* set, arena_t *allocator) {
     ASSERT(set->void_.i == TYPE_VOID, "must be same as type void");
     ASSERT(set->bool_.i == TYPE_BOOL, "must be same as type bool");
     ASSERT(set->str8_t_.i == TYPE_STRING, "must be same as type string");
-    ASSERT(type_.i == TYPE_TYPE, "must be same as type type");
+    ASSERT(set->type_.i == TYPE_TYPE, "must be same as type type");
 }
 
 typedata_t *type2typedata(typedatas_t *types, ortype_t type) {
