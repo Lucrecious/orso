@@ -104,7 +104,7 @@ orstring_t string_format(const orcstr_t format, arena_t *allocator, ...) {
 
     va_end(args);
 
-	vsnprintf(buffer, size, format, args_copy);
+	vsnprintf(buffer, (size_t)size, format, args_copy);
 
 	va_end(args_copy);
 
@@ -274,7 +274,7 @@ void sb_add_format(string_builder_t *sb, orcstr_t format, ...) {
 	char *buffer = arena_alloc(tmp->allocator, (size_t)(size + 1));
 
 	va_start(args, format);
-	vsnprintf(buffer, size + 1, format, args);
+	vsnprintf(buffer, (size_t)(size + 1), format, args);
 	va_end(args);
 
 	for (char *c = buffer; *c; ++c) {

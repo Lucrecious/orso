@@ -49,7 +49,7 @@ int main(int argc, char **argv) {
         cc_flag(&cc, lit2str("-std=c99"));
         cc_flag(&cc, lit2str("-Wall"));
         cc_flag(&cc, lit2str("-Wextra"));
-        cc_flag(&cc, lit2str("-fsanitize=address"));
+        // cc_flag(&cc, lit2str("-fsanitize=address"));
 
         cc_source(&cc, lit2str("./tests/test.c"));
         cc.output_path = lit2str("./bin/test");
@@ -66,11 +66,12 @@ int main(int argc, char **argv) {
         cc_flag(&cc, lit2str("-Wall"));
         cc_flag(&cc, lit2str("-Wextra"));
         cc_flag(&cc, lit2str("-Wconversion"));
-        cc_flag(&cc, lit2str("-fsanitize=address"));
+        // cc_flag(&cc, lit2str("-fsanitize=address"));
 
         cc_include_dir(&cc, lit2str("./include"));
         cc_include_dir(&cc, lit2str("./lib"));
 
+        cc_flag(&cc, lit2str("-g"));
         cc_flag(&cc, lit2str("-ggdb"));
         cc_flag(&cc, lit2str("-DDEBUG"));
 

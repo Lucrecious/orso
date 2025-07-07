@@ -126,6 +126,41 @@ typedef struct {
     prec_t precedence;
 } parse_rule_t;
 
+static void directives_init(ast_t *ast, orintrinsic_fns_t *fns) {
+    // run
+    {
+        orintrinsic_fn_t fn = {0};
+        fn.name = lit2str("run");
+        array_push(fns, fn);
+    }
+
+    // load
+    {
+        orintrinsic_fn_t fn = {0};
+        fn.name = lit2str("load");
+        fn.has_varargs = false;
+        fn.arg_types = (types_t){.allocator=ast->arena};
+        array_push(&fn.arg_types, ast->type_set.str8_t_);
+
+        array_push(fns, fn);
+    }
+
+    // fficall
+    {
+        orintrinsic_fn_t fn = {0};
+        fn.name = lit2str("fficall");
+        fn.has_varargs = true;
+        fn.arg_types = (types_t){.allocator=ast->arena};
+
+        array_push(&fn.arg_types, ast->type_set.str8_t_);
+        array_push(&fn.arg_types, ast->type_set.str8_t_);
+        array_push(&fn.arg_types, ast->type_set.type_);
+        array_push(&fn.arg_types, ast->type_set.str8_t_);
+
+        array_push(fns, fn);
+    }
+}
+
 void ast_init(ast_t *ast, arena_t *arena) {
     *ast = zer0(ast_t);
     ast->arena = arena;
@@ -138,13 +173,15 @@ void ast_init(ast_t *ast, arena_t *arena) {
     ast->errors = (errors_t){.allocator=arena};
 
     ast->builtins = table_new(s2w, ast->arena);
-    ast->intrinsic_fns = table_new(s2w, ast->arena);
     ast->intrinsicfn2cname = table_new(p2s, ast->arena);
     ast->fn2an = table_new(fn2an, ast->arena);
     ast->moduleid2node = table_new(s2n, ast->arena);
     ast->ffis = table_new(s2fis, ast->arena);
 
     ast->global_decls_in_resolution_order = (ast_nodes_t){.allocator=ast->arena};
+
+    ast->directives = (orintrinsic_fns_t){.allocator=ast->arena};
+    directives_init(ast, &ast->directives);
 
     ast->type_to_zero_word = table_new(t2w, ast->arena);
     ast->type_to_creation_node = table_new(type2ns, ast->arena);
@@ -2450,6 +2487,19 @@ orword_t ast_mem2word(ast_t *ast, void *data, ortype_t type) {
 
     case TYPE_COUNT: UNREACHABLE(); return (orword_t){0};
     }
+}
+
+bool ast_find_intrinsic_funcname(orintrinsic_fns_t fns, string_view_t name, orintrinsic_fn_t *fn) {
+    for (size_t i = 0; i < fns.count; ++i) {
+        orintrinsic_fn_t *f = &fns.items[i];
+        string_view_t fname = string2sv(f->name);
+        if (sv_eq(fname, name)) {
+            *fn = *f;
+            return true;
+        }
+    }
+
+    return false;
 }
 
 ast_node_val_t zero_value(ast_t *ast, ortype_t type) {

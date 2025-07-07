@@ -29,6 +29,7 @@ bool resolve_ast(ast_t *ast);
 function_t *find_main_or_null(ast_node_t *module);
 orstring_t ast_generate_moduleid(orstring_t file_path, arena_t *arena);
 
-orword_t ast_struct_item_get(ast_t *ast, ortype_t struct_type, string_view_t field_name, orword_t struct_);
+orstring_t ast_orstr2str(type_table_t *type_set, void *start);
+orword_t ast_struct_item_get(typedatas_t *types, ortype_t struct_type, string_view_t field_name, void *struct_);
 void ast_struct_item_set(ast_t *ast, ortype_t struct_type, string_view_t field_name, orword_t *struct_, orword_t value);
 #endif

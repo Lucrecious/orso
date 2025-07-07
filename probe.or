@@ -1,5 +1,5 @@
+io :: @load "./lib/io.or";
+
 main :: () -> void {
-    x :: int;
-    y := int;
-    y == x;
+    io.test(1, 2);
 };

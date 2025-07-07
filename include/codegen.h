@@ -1228,13 +1228,11 @@ static void gen_expr_val(gen_t *gen, texloc_t loc, function_t *function, ortype_
     typedata_t *td = ast_type2td(gen->ast, type);
     if (td->size > ORWORD_SIZE) {
         if (td->kind == TYPE_STRING) {
-            orword_t val = ast_struct_item_get(gen->ast, type, lit2sv("cstr"), word);
-            orword_t l = ast_struct_item_get(gen->ast, type, lit2sv("length"), word);
+            orstring_t s = ast_orstr2str(&gen->ast->type_set, word.as.p);
 
-            size_t val_bytes = sizeof(oru8)*(l.as.u + 1);
-            size_t mem_index = memarr_push(function->memory, val.as.p, val_bytes);
+            size_t val_bytes = sizeof(oru8)*(s.length + 1);
+            size_t mem_index = memarr_push(function->memory, (void*)s.cstr, val_bytes);
             void *data = function->memory->data + mem_index;
-            memcpy(data, val.as.p, val_bytes);
 
             ast_struct_item_set(gen->ast, type, lit2sv("cstr"), &word, ORWORDP(data));
         }

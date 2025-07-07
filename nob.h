@@ -1263,7 +1263,7 @@ char *nob_temp_sprintf(const char *format, ...)
     NOB_ASSERT(result != NULL && "Extend the size of the temporary allocator");
     // TODO: use proper arenas for the temporary allocator;
     va_start(args, format);
-    vsnprintf(result, n + 1, format, args);
+    vsnprintf(result, (size_t)(n + 1), format, args);
     va_end(args);
 
     return result;

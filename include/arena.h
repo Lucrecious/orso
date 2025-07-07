@@ -273,7 +273,7 @@ char *arena_sprintf(Arena *a, const char *format, ...)
     ARENA_ASSERT(n >= 0);
     char *result = (char*)arena_alloc(a, (size_t)n + 1);
     va_start(args, format);
-    vsnprintf(result, n + 1, format, args);
+    vsnprintf(result, (size_t)(n + 1), format, args);
     va_end(args);
 
     return result;

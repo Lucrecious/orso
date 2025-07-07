@@ -22,12 +22,12 @@ enum error_arg_type_t {
     ERROR_ARG_TYPE_STRING,
 };
 
-typedef struct ast_node_t ast_node_t;
+struct ast_node_t;
 
 typedef struct error_arg_t error_arg_t;
 struct error_arg_t {
     error_arg_type_t type;
-    ast_node_t *node_or_null;
+    struct ast_node_t *node_or_null;
     token_t token;
     size_t size;
     ortype_t type_type;
@@ -50,8 +50,8 @@ typedef struct error_t {
 
 #define MAX_PARAMETERS 100
 
-typedef struct ast_t ast_t;
-typedef void (*error_function_t)(ast_t *ast, error_t error);
+struct ast_t;
+typedef void (*error_function_t)(struct ast_t *ast, error_t error);
 
 #define make_error(et, n, gt, at) ((error_t){ .type = (et), .message = error_messages[et], .node = (n), .got_token = (gt), .after_token = (at), .is_warning=false })
 #define make_error_no_args(et) make_error(et, &nil_node, nil_token, nil_token)
@@ -63,13 +63,13 @@ typedef void (*error_function_t)(ast_t *ast, error_t error);
 #define ORERR_ARGS(...) {__VA_ARGS__}, .arg_count = (sizeof((error_arg_t[]){__VA_ARGS__})/sizeof(error_arg_t))
 #define ORERR_LINES(...) {__VA_ARGS__}, .show_line_count = (sizeof((ors64[]){__VA_ARGS__})/sizeof(ors64))
 
-orstring_t error2richstring(ast_t *ast, error_t error, arena_t *arena);
+orstring_t error2richstring(struct ast_t *ast, error_t error, arena_t *arena);
 
 error_arg_t error_arg_token(token_t token);
-error_arg_t error_arg_node(ast_node_t *node);
+error_arg_t error_arg_node(struct ast_node_t *node);
 error_arg_t error_arg_sz(size_t sz);
 error_arg_t error_arg_type(ortype_t type);
 error_arg_t error_arg_ptr(void *ptr);
-error_arg_t error_arg_str(ast_t *ast, orstring_t str);
+error_arg_t error_arg_str(struct ast_t *ast, orstring_t str);
 
 #endif

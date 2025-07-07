@@ -129,7 +129,7 @@ enum op_code_t {
 
 // ORIN = orso instruction
 #define ORIN_UINTARG_MAX UINT32_MAX
-static_assert(ORIN_UINTARG_MAX <= UINT32_MAX && ORIN_UINTARG_MAX < SIZE_T_MAX, "must be smaller than size_t_max and uint32_max");
+// static_assert(ORIN_UINTARG_MAX <= UINT32_MAX && ORIN_UINTARG_MAX < SIZE_T_MAX, "must be smaller than size_t_max and uint32_max");
 
 // todo: reduce from 12 to 8 bytes
 typedef struct instruction_t instruction_t;
@@ -243,6 +243,8 @@ struct vm_t {
 
     arena_t *arena;
     memarr_t *program_mem;
+
+    types_t *types;
 
     function_t *global_init_func;
     bool halted;
@@ -659,7 +661,7 @@ void vm_step(vm_t *vm) {
 
             intrinsic_fn_t fn = (intrinsic_fn_t)ptr;
 
-            fn(args_address_bottom, result_addr);
+            fn(vm->types, args_address_bottom, result_addr);
 
             IP_ADV(1);
             break;

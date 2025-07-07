@@ -112,6 +112,11 @@ bool cc_build(cc_t *cc) {
         orstring_t source_path = source_paths.items[i];
         cmd_append(&cmd, source_path.cstr);
 
+        for (size_t i = 0; i < cc->flags.count; ++i) {
+            orstring_t flag = cc->flags.items[i];
+            cmd_append(&cmd, flag.cstr);
+        }
+
         for (size_t i = 0; i < cc->include_dirs.count; ++i) {
             orstring_t include_dir = cc->include_dirs.items[i];
             orstring_t include_dir_flag = string_format("-I%s", cc->arena, include_dir.cstr);

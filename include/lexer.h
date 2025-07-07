@@ -60,7 +60,7 @@ struct operator_t {
     operator_type_t type;
 };
 
-operator_t operators[TOKEN_SIZE];
+extern operator_t operators[TOKEN_SIZE];
 
 #define operator_is_arithmetic(op) (operators[op].type == OPERATOR_TYPE_ARITHMETIC)
 #define operator_is_ordering(op) (operators[op].type == OPERATOR_TYPE_ORDERING)

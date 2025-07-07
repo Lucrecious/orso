@@ -10,7 +10,7 @@
 
 #include "table.h"
 
-typedef void (*intrinsic_fn_t)(void *args_reverse_order, void *result);
+typedef void (*intrinsic_fn_t)(types_t *types, void *args_reverse_order, void *result);
 
 typedef struct bools_t bools_t;
 struct bools_t {
@@ -148,7 +148,7 @@ struct ast_type_initializer_t {
     ast_nodes_t arguments;
 };
 
-ast_node_t nil_node;
+extern ast_node_t nil_node;
 
 #define an_idx(n, idx) ((idx) < (n)->children.count ? (n)->children.items[idx] : &nil_node)
 #define an_operand(n) ((n)->children.items[0])
@@ -198,6 +198,10 @@ ast_node_t nil_node;
 #define an_fficall_funcname(n) ((n)->children.items[3])
 #define an_fficall_arg_start(n) (4)
 #define an_fficall_arg_end(n) ((n)->children.count)
+
+#define an_icall_funcname(n) ((n)->children.items[0])
+#define an_icall_arg_start(n) (1)
+#define an_icall_arg_end(n) ((n)->children.count)
 
 #define an_is_none(n)    ((n)->node_type == AST_NODE_TYPE_NONE)
 #define an_is_notnone(n) ((n)->node_type != AST_NODE_TYPE_NONE)
@@ -307,6 +311,22 @@ struct val_dst_t {
     reg_t reg;
 };
 
+typedef struct orintrinsic_fn_t orintrinsic_fn_t;
+struct orintrinsic_fn_t {
+    orstring_t name;
+    types_t arg_types;
+
+    bool has_varargs;
+};
+
+typedef struct orintrinsic_fns_t orintrinsic_fns_t;
+struct orintrinsic_fns_t {
+    orintrinsic_fn_t *items;
+    size_t count;
+    size_t capacity;
+    arena_t *allocator;
+};
+
 // the ast node is pretty large and redundant right now on purpose
 // once the ast node is stable, it'll be compressed since many of these
 // fields are mutally exclusive
@@ -332,6 +352,8 @@ struct ast_node_t {
     bool is_exported;
     bool is_consumed;
     bool is_compile_time_param;
+    bool is_free_number;
+
     ast_node_t *ref_decl;
     type_patterns_t type_decl_patterns;
 
@@ -342,7 +364,6 @@ struct ast_node_t {
     size_t arg_index;
     size_t value_offset;
 
-    bool is_free_number;
     ast_node_val_t expr_val;
 
     ast_node_t *lvalue_node;
@@ -415,11 +436,11 @@ typedef struct ast_t {
     errors_t errors;
 
     table_t(s2w) *builtins;
-    table_t(s2w) *intrinsic_fns;
     table_t(p2s) *intrinsicfn2cname;
     table_t(fn2an) *fn2an;
     table_t(s2fis) *ffis;
 
+    orintrinsic_fns_t directives;
 
     ast_node_t *core_module_or_null;
     table_t(s2n) *moduleid2node;
@@ -456,6 +477,8 @@ void ast_add_module(ast_t *ast, ast_node_t *module, orstring_t moduleid);
 ast_node_t *ast_implicit_expr(ast_t *ast, ortype_t type, orword_t value, token_t where);
 orword_t *ast_multiword_value(ast_t *ast, size_t size_words);
 orword_t ast_mem2word(ast_t *ast, void *data, ortype_t type);
+
+bool ast_find_intrinsic_funcname(orintrinsic_fns_t fns, string_view_t name, orintrinsic_fn_t *fn);
 
 bool ast_node_type_is_expression(ast_node_type_t node_type);
 
