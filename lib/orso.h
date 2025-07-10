@@ -11,5 +11,6 @@ struct orso_compiler_t {
 };
 
 bool ororso_build(orso_compiler_t *compiler);
+bool orso_interpret(orstring_t input_file_path);
 
 #endif

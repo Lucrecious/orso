@@ -465,14 +465,14 @@ static void cgen_constant(cgen_t *cgen, orword_t word, ortype_t type) {
             break;
         }
 
-        case TYPE_INTRINSIC_FUNCTION: {
-            intrinsic_fn_t fn = word.as.p;
-            orstring_t funcname = cgen_get_instrinsic_fn_name(cgen->ast, fn);
-            sb_add_cstr(&cgen->sb, "(");
-            sb_add_format(&cgen->sb, "%s", funcname.cstr);
-            sb_add_cstr(&cgen->sb, ")");
-            break;
-        }
+        // case TYPE_INTRINSIC_FUNCTION: {
+        //     intrinsic_fn_t fn = word.as.p;
+        //     orstring_t funcname = cgen_get_instrinsic_fn_name(cgen->ast, fn);
+        //     sb_add_cstr(&cgen->sb, "(");
+        //     sb_add_format(&cgen->sb, "%s", funcname.cstr);
+        //     sb_add_cstr(&cgen->sb, ")");
+        //     break;
+        // }
 
         case TYPE_ARRAY: {
             cgen_array_start(cgen, type);
@@ -678,7 +678,6 @@ static void cgen_aggregate_arith_binary(cgen_t *cgen, token_type_t op, ortype_t 
     case TYPE_STRING:
     case TYPE_TYPE:
     case TYPE_FUNCTION:
-    case TYPE_INTRINSIC_FUNCTION:
     case TYPE_INVALID:
     case TYPE_UNRESOLVED:
     case TYPE_PARAM_STRUCT:
@@ -2303,7 +2302,6 @@ static void cgen_generate_cnames_for_types(ast_t *ast) {
             break;
         }
 
-        case TYPE_INTRINSIC_FUNCTION:
         case TYPE_FUNCTION: {
             tmp_arena_t *tmp = allocator_borrow();
             string_builder_t sb = {.allocator=tmp->allocator};

@@ -8,9 +8,9 @@
 #define ALLOC(TYPE) (TYPE*)arena_alloc(set->allocator, sizeof(TYPE))
 #define ALLOC_N(TYPE, N) (TYPE*)arena_alloc(set->allocator, sizeof(TYPE)*N)
 
-typedata_t *function_type_new(type_table_t *set, types_t arguments, ortype_t return_type, bool is_native) {
+typedata_t *function_type_new(type_table_t *set, types_t arguments, ortype_t return_type) {
     typedata_t *function_type = ALLOC(typedata_t);
-    function_type->kind = is_native ? TYPE_INTRINSIC_FUNCTION : TYPE_FUNCTION;
+    function_type->kind = TYPE_FUNCTION;
     function_type->as.function.argument_types = (types_t){.allocator=set->allocator};
     for (size_t i = 0; i < arguments.count; ++i) {
         array_push(&function_type->as.function.argument_types, arguments.items[i]);
@@ -71,7 +71,7 @@ void incomplete_struct_type_init(type_table_t *set, struct_fields_t fields, stru
 
     result->as.struct_.fields = fields;
 
-    result->size = (size_t)current_size;
+    result->size = current_size > 0 ? td_align((size_t)current_size, current_alignment) : 0;
     result->alignment = current_alignment;
     result->capabilities = all_arithmetic ? TYPE_CAP_ARITHMETIC : TYPE_CAP_NONE;
     result->as.struct_.status = STRUCT_STATUS_INCOMPLETE;
@@ -90,12 +90,11 @@ struct_fields_t fields_copy(struct_fields_t fields, arena_t *arena) {
 }
 
 typedata_t *type_copy_new(type_table_t *set, typedata_t *type) {
-    if (type->kind == TYPE_FUNCTION || type->kind == TYPE_INTRINSIC_FUNCTION) {
+    if (type->kind == TYPE_FUNCTION) {
         return (typedata_t*)function_type_new(
             set,
             type->as.function.argument_types,
-            type->as.function.return_type,
-            type->kind == TYPE_INTRINSIC_FUNCTION
+            type->as.function.return_type
         );
 }
 
@@ -279,10 +278,6 @@ bool type_is_function(typedatas_t types, ortype_t type) {
     return type2typedata(&types, type)->kind == TYPE_FUNCTION;
 }
 
-bool type_is_intrinsic_function(typedatas_t types, ortype_t type) {
-    return type2typedata(&types, type)->kind == TYPE_INTRINSIC_FUNCTION;
-}
-
 bool type_is_struct(typedatas_t types, ortype_t type) {
     return type2typedata(&types, type)->kind == TYPE_STRUCT;
 }
@@ -423,20 +418,3 @@ ortype_t type_set_fetch_function(type_table_t *set, ortype_t return_type, types_
 
     return type;
 }
-
-ortype_t type_set_fetch_intrinsic_function(type_table_t *set, ortype_t function_type) {
-    typedata_t *td = type2typedata(&set->types, function_type);
-    typedata_t functd = *td;
-    functd.kind = TYPE_INTRINSIC_FUNCTION;
-
-    ortype_t type;
-    if (table_get(type2u64, set->types2index, &functd, &type)) {
-        return type;
-    }
-
-    typedata_t *type_info = type_copy_new(set, &functd);
-    type = track_type(set, type_info);
-
-    return type;
-}
-

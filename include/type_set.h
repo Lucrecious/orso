@@ -51,7 +51,6 @@ void type_set_init(type_table_t *set, arena_t *allocator);
 
 typedata_t *type2typedata(typedatas_t *types, ortype_t type);
 bool type_is_function(typedatas_t types, ortype_t type);
-bool type_is_intrinsic_function(typedatas_t types, ortype_t type);
 bool type_is_struct(typedatas_t types, ortype_t type);
 bool type_is_pointer(typedatas_t types, ortype_t type);
 
@@ -59,10 +58,6 @@ ortype_t type_set_fetch_function(
     type_table_t *set,
     ortype_t return_type,
     types_t arguments);
-
-ortype_t type_set_fetch_intrinsic_function(
-    type_table_t* set,
-    ortype_t function_type);
 
 ortype_t type_set_fetch_pointer(type_table_t *set, ortype_t type);
 

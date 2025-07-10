@@ -7,7 +7,7 @@ dynarr_t :: struct(u: type) {
 push :: (arr: &dynarr_t(u), item: !u) -> void {
     if arr.count >= arr.capacity {
         new_cap := if arr.capacity == 0 then 8 else arr.capacity*2;
-        arr.items = @icall "realloc", arr.items as &void, sizeof(u)*arr.capacity, sizeof(u)*new_cap;
+        arr.items = (@icall "realloc", arr.items as &void, sizeof(u)*(arr.capacity as size_t), sizeof(u)*(new_cap as size_t)) as &u;
         arr.capacity = new_cap;
     };
 
@@ -20,4 +20,14 @@ at :: (arr: &dynarr_t(!u), index := 0) -> &u {
     # assert(index < arr.count);
     item := arr.items + (index as ptrdiff_t);
     return item;
+};
+
+free :: (arr: &dynarr_t(!u)) -> void {
+    @icall "realloc", arr.items as &void, sizeof(u)*(arr.capacity as size_t), 0sz;
+    *arr = .{};
+};
+
+shell_run :: (cmd: dynarr_t(str8_t)) -> bool {
+    success := @icall "shell_run", cmd.items, cmd.count as size_t;
+    return success;
 };

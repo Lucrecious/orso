@@ -124,7 +124,7 @@ static bool check_call_on_func_or_error(analyzer_t *analyzer, ast_t *ast, ast_no
     ast_node_t *callee = an_callee(call);
     typedata_t *func_td = ast_type2td(ast, callee->value_type);
 
-    ASSERT(func_td->kind == TYPE_FUNCTION || func_td->kind == TYPE_INTRINSIC_FUNCTION, "must be used only on func");
+    ASSERT(func_td->kind == TYPE_FUNCTION, "must be used only on func");
 
     size_t arg_start = an_call_arg_start(call);
     size_t arg_end = an_call_arg_end(call);
@@ -465,7 +465,6 @@ static orword_t ast_item_get(typedatas_t *types, void *aggregate, ortype_t item_
     }
 
     case TYPE_POINTER:
-    case TYPE_INTRINSIC_FUNCTION:
     case TYPE_FUNCTION: {
         void *res = *((void**)addr);
         return ORWORDP(res);
@@ -571,7 +570,6 @@ void ast_item_set(ast_t *ast, ortype_t type, void *addr, orword_t value, size_t 
     }
 
     case TYPE_POINTER:
-    case TYPE_INTRINSIC_FUNCTION:
     case TYPE_FUNCTION: {
         *((void**)addr) = value.as.p;
         break;
@@ -1666,7 +1664,6 @@ static void ast_copy_expr_val_to_memory(ast_t *ast, ortype_t type, orword_t src,
     case TYPE_MODULE:
     case TYPE_PARAM_STRUCT:
     case TYPE_POINTER:
-    case TYPE_INTRINSIC_FUNCTION:
     case TYPE_FUNCTION:
     case TYPE_TYPE:
     case TYPE_INFERRED_FUNCTION: {
@@ -2213,7 +2210,7 @@ static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
 
     call->value_type = ortypeid(TYPE_INVALID);
 
-    if (callee_td->kind == TYPE_FUNCTION || callee_td->kind == TYPE_INTRINSIC_FUNCTION || callee_td->kind == TYPE_INFERRED_FUNCTION) {
+    if (callee_td->kind == TYPE_FUNCTION || callee_td->kind == TYPE_INFERRED_FUNCTION) {
         size_t arg_start = an_call_arg_start(call);
         size_t arg_end = an_call_arg_end(call);
         size_t arg_count = arg_end - arg_start;
@@ -2256,7 +2253,7 @@ static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
                 }
             }
         // reconstruct/fill arguments for constant calls 
-        } else if (callee_td->kind != TYPE_INTRINSIC_FUNCTION) {
+        } else {
             if (callee_td->kind == TYPE_INFERRED_FUNCTION) {
                 ast_inferred_function_t *inferred_decl = callee->expr_val.word.as.p;
                 patch_call_argument_gaps(analyzer, ast, call, inferred_decl->arg_defaults, inferred_decl->has_defaults);
@@ -2508,13 +2505,6 @@ static ast_node_t *stan_load_module_or_errornull(analyzer_t *analyzer, ast_t *as
 
     module = parse_source_into_module(ast, s, string2sv(source));
 
-    {
-        string_view_t filename = sv_filename(module_path);
-        if (sv_eq(filename, lit2sv("orso.or"))) {
-            module->is_intrinsic = true;
-        }
-    }
-
     ast_add_module(ast, module, moduleid);
 
     resolve_module(analyzer, ast, module);
@@ -2525,13 +2515,6 @@ defer:
     nob_sb_free(sb);
     allocator_return(tmp);
     return result;
-}
-
-static void *orso_icall_arg(void *args, size_t *offset, size_t size_bytes)  {
-    void *ptr = args + (*offset);
-    size_bytes = orb2w2b(size_bytes);
-    *offset += size_bytes;
-    return ptr;
 }
 
 static bool __ororso_build(vm_t *vm, void *arg_start, void *result) {
@@ -2594,23 +2577,6 @@ bool check_dir_or_intr_params_or_error(analyzer_t *analyzer, analysis_state_t st
 
     return true;
 }
-
-void orso_intrinsics_init(ast_t *ast) {
-    // orso_build
-    {
-        orintrinsic_fn_t fn = {0};
-        fn.name = lit2str("orso_build");
-        fn.has_varargs = false;
-
-        fn.arg_types = (types_t){.allocator=ast->arena};
-        fn.ret_type = ortypeid(TYPE_BOOL);
-
-        // array_push(&fn.arg_types, ast->type_set.compiler_);
-
-        array_push(&ast->intrinsics, fn);
-    }
-}
-
 void resolve_expression(
         analyzer_t *analyzer,
         ast_t *ast,
@@ -2717,20 +2683,6 @@ void resolve_expression(
                         ast_node_t *owning_module = stan_find_owning_module_or_null(state.scope);
                         MUST(owning_module);
                         array_push(&owning_module->module_deps, module);
-                    }
-
-                    if (module->is_intrinsic) {
-                        string_view_t filename = sv_filename(string2sv(module_path));
-                        if (sv_eq(filename, lit2sv("orso.or"))) {
-                            for (size_t i = 0; i < module->children.count; ++i) {
-                                ast_node_t *decl = module->children.items[i];
-                                if (sv_eq(decl->identifier.view, lit2sv("compiler_t"))) {
-                                    // ast->type_set.compiler_ = an_decl_expr(decl)->expr_val.word.as.t;
-                                }
-                            }
-                        }
-
-                        orso_intrinsics_init(ast);
                     }
                 } else if (sv_eq(expr->identifier.view, lit2sv("@fficall"))) {
                     tmp_arena_t *tmp = allocator_borrow();
@@ -2854,10 +2806,11 @@ void resolve_expression(
                         break;
                     }
 
-                    expr->value_type = fn.ret_type;
+                    expr->value_type = in.ret_type;
 
                     size_t icall_count = expr->children.count - 1;
-                    check_dir_or_intr_params_or_error(analyzer, state, ast, expr, 1, icall_count, fn, false);
+                    check_dir_or_intr_params_or_error(analyzer, state, ast, expr, 1, icall_count, in, false);
+                    expr->intrinsic_fn = in;
                 }
             }
             break;
@@ -3374,7 +3327,6 @@ void resolve_expression(
                 case TYPE_TYPE: 
                 case TYPE_NUMBER:
                 case TYPE_FUNCTION:
-                case TYPE_INTRINSIC_FUNCTION:
                 case TYPE_POINTER: {
                     size_t arg_count = an_list_end(expr) - an_list_start(expr);
                     if (arg_count == 0) {

@@ -56,17 +56,16 @@ int main(int argc, char **argv) {
                 ororso_build(&compiler);
             }
 
-        }
-        // } else if (strncmp(option, "run", 3) == 0) {
-        //     if (argc != 1) {
-        //         fprintf(stderr, "run option requires input odl file\n");
-        //         exit(1);
-        //     }
+        } else if (strncmp(option, "run", 3) == 0) {
+            if (argc != 1) {
+                fprintf(stderr, "run option requires input odl file\n");
+                exit(1);
+            }
 
-        //     cstr_t filename = shift(argv, argc);
-        //     string_t file = {.cstr=filename, .length=strlen(filename)};
-        //     interpret(file);
-        // } else if (strncmp(option, "dbg", 3) == 0) {
+            orcstr_t filename = shift(argv, argc);
+            orstring_t file = {.cstr=filename, .length=strlen(filename)};
+            orso_interpret(file);
+        }// else if (strncmp(option, "dbg", 3) == 0) {
         //     if (argc != 1) {
         //         fprintf(stderr, "dbg option requires input odl file\n");
         //         exit(1);

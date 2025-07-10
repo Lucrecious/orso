@@ -213,7 +213,7 @@ void print_ast(orstring_t input_file_path) {
     arena_free(&arena);
 }
 
-bool interpret(orstring_t input_file_path) {
+bool orso_interpret(orstring_t input_file_path) {
     arena_t arena = {0};
 
     orstring_t source;
@@ -236,13 +236,16 @@ bool interpret(orstring_t input_file_path) {
         goto defer;
     }
 
-    // function_t *main_or_null = find_main_or_null(ast);
-    // if (main_or_null) {
-    //     vm_fresh_run(ast->vm, main_or_null);
-    // }
+    ast_node_t *module;
+    function_t *main_or_null;
+    kh_foreach_value(ast->moduleid2node, module, {
+        main_or_null = find_main_or_null(module);
+        if (main_or_null) break;
+    });
 
-    UNREACHABLE();
-
+    if (main_or_null) {
+        vm_fresh_run(ast->vm, main_or_null);
+    }
 
     return_defer(true);
 

@@ -279,7 +279,6 @@ static reg_mov_size_t type2movsize(gen_t *gen, ortype_t t) {
     case TYPE_STRING:
     case TYPE_TYPE:
     case TYPE_FUNCTION:
-    case TYPE_INTRINSIC_FUNCTION:
     case TYPE_POINTER: return REG_MOV_SIZE_WORD;
     case TYPE_ARRAY:
     case TYPE_STRUCT: return td->size > ORWORD_SIZE ? REG_MOV_SIZE_MULTIWORD_ADDR : REG_MOV_SIZE_WORD;
@@ -568,7 +567,6 @@ static void emit_bin_op_aggregates(gen_t *gen, texloc_t loc, function_t *functio
     case TYPE_TYPE:
     case TYPE_VOID:
     case TYPE_FUNCTION:
-    case TYPE_INTRINSIC_FUNCTION:
     case TYPE_POINTER: {
         MUST(operator_is_arithmetic(token_type));
         // todo: add optimization here to not do any of this at all if the val dst is void
@@ -1305,7 +1303,6 @@ static void gen_expr_val(gen_t *gen, texloc_t loc, function_t *function, ortype_
         case TYPE_POINTER:
         case TYPE_TYPE:
         case TYPE_FUNCTION:
-        case TYPE_INTRINSIC_FUNCTION:
         case TYPE_ARRAY:
         case TYPE_STRUCT: {
             gen_constant(gen, loc, function, &word, type, val_dst);
@@ -1727,10 +1724,10 @@ void gen_funcdef(ast_t *ast, vm_t *vm, ast_node_t *funcdef) {
     allocator_return(tmp);
 }
 
-static void gen_intrinsic_call(gen_t *gen, function_t *function, ast_node_t *call, val_dst_t val_dst) {
-    typedata_t *td = ast_type2td(gen->ast,  call->value_type);
+static void gen_intrinsic_call(gen_t *gen, function_t *function, ast_node_t *icall, val_dst_t val_dst) {
+    typedata_t *td = ast_type2td(gen->ast, icall->value_type);
 
-    texloc_t loc = call->start.loc;
+    texloc_t loc = icall->start.loc;
 
     size_t result_stack_point = 0;
     switch (val_dst.type) {
@@ -1764,8 +1761,8 @@ static void gen_intrinsic_call(gen_t *gen, function_t *function, ast_node_t *cal
 
     size_t stack_point = gen_stack_point(gen);
 
-    for (size_t i = an_call_arg_start(call); i < an_call_arg_end(call); ++i) {
-        ast_node_t *arg = call->children.items[i];
+    for (size_t i = 1; i < icall->children.count; ++i) {
+        ast_node_t *arg = icall->children.items[i];
         {
             val_dst_t dst = emit_val_dst_stack_reserve(gen, loc, function, arg->value_type);
             gen_expression(gen, function, arg, dst);
@@ -1774,9 +1771,8 @@ static void gen_intrinsic_call(gen_t *gen, function_t *function, ast_node_t *cal
 
     // prepare callee for call by putting it in the result register
     {
-        ast_node_t *callee = an_callee(call);
-        val_dst_t dst = emit_val_dst_reg_or_stack_point_reserve(gen, loc, function, callee->value_type, REG_RESULT);
-        gen_expression(gen, function, callee, dst);
+        val_dst_t dst = emit_val_dst_reg_or_stack_point_reserve(gen, loc, function, gen->ast->type_set.u64_, REG_RESULT);
+        gen_constant(gen, loc, function, &icall->intrinsic_fn.fnptr, gen->ast->type_set.u64_, dst);
     }
 
     // prepare addr where return value goes
@@ -1792,7 +1788,7 @@ static void gen_intrinsic_call(gen_t *gen, function_t *function, ast_node_t *cal
 
     switch (val_dst.type) {
     case VAL_DST_REG: {
-        emit_pop_to_reg(gen, loc, function, val_dst.reg, call->value_type);
+        emit_pop_to_reg(gen, loc, function, val_dst.reg, icall->value_type);
         break;
     }
 
@@ -1800,7 +1796,7 @@ static void gen_intrinsic_call(gen_t *gen, function_t *function, ast_node_t *cal
         if (td->size > ORWORD_SIZE) {
             emit_return_addr_to_reg(function, loc, REG_RESULT);
         } else {
-            emit_pop_to_reg(gen, loc, function, val_dst.reg, call->value_type);
+            emit_pop_to_reg(gen, loc, function, val_dst.reg, icall->value_type);
         }
         break;
     }
@@ -1816,7 +1812,7 @@ static void gen_call(gen_t *gen, function_t *function, ast_node_t *call, val_dst
     typedata_t *call_td = ast_type2td(gen->ast,  call->value_type);
     size_t clean_stack_point = gen_stack_point(gen);
     if (call_td->size > ORWORD_SIZE) {
-        emit_reserve_stack_space(gen, loc, function,  call_td->size);
+        emit_reserve_stack_space(gen, loc, function, call_td->size);
     }
 
     // store stack frame
@@ -2136,6 +2132,18 @@ static void gen_initializer_list(gen_t *gen, function_t *function, ast_node_t *l
     gen_pop_until_stack_point(gen, function, loc, clean_stack_point, true);
 }
 
+static void gen_directive(gen_t *gen, function_t *function, ast_node_t *dir, val_dst_t val_dst) {
+    if (sv_eq(dir->identifier.view, lit2sv("@fficall"))) {
+        // todo
+        UNREACHABLE();
+    } else if (sv_eq(dir->identifier.view, lit2sv("@icall"))) {
+        gen_intrinsic_call(gen, function, dir, val_dst);
+    } else {
+        // all other cases should be handled at compile-time
+        UNREACHABLE();
+    }
+}
+
 static void gen_dot_access(gen_t *gen, function_t *function, ast_node_t *dot_access, val_dst_t val_dst) {
     texloc_t loc = dot_access->start.loc;
     typedata_t *td = ast_type2td(gen->ast, dot_access->value_type);
@@ -2280,13 +2288,7 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
         }
 
         case AST_NODE_TYPE_EXPRESSION_CALL: {
-            typedata_t *calleetd = type2typedata(&gen->ast->type_set.types, an_callee(expression)->value_type);
-            bool is_intrinsic = (calleetd->kind == TYPE_INTRINSIC_FUNCTION);
-            if (is_intrinsic) {
-                gen_intrinsic_call(gen, function, expression, val_dst);
-            } else {
-                gen_call(gen, function, expression, val_dst);
-            }
+            gen_call(gen, function, expression, val_dst);
             break;
         }
 
@@ -2315,11 +2317,15 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
             break;
         }
 
+        case AST_NODE_TYPE_EXPRESSION_DIRECTIVE: {
+            gen_directive(gen, function, expression, val_dst);
+            break;
+        }
+
 
         // should be resolved at compile time
         case AST_NODE_TYPE_EXPR_INFERRED_TYPE_DECL: UNREACHABLE(); break;
         case AST_NODE_TYPE_EXPRESSION_STRUCT:
-        case AST_NODE_TYPE_EXPRESSION_DIRECTIVE:
         case AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE:
         case AST_NODE_TYPE_DECLARATION_STATEMENT:
         case AST_NODE_TYPE_NONE:
@@ -2416,6 +2422,7 @@ bool compile_program(vm_t *vm, ast_t *ast) {
     if (!success) return false;
 
     vm_global_init(vm);
+    vm->types = &ast->type_set;
     return true;
 }
 

@@ -321,6 +321,8 @@ struct orintrinsic_fn_t {
     types_t arg_types;
 
     bool has_varargs;
+
+    intrinsic_fn_t fnptr;
 };
 
 typedef struct orintrinsic_fns_t orintrinsic_fns_t;
@@ -360,6 +362,8 @@ struct ast_node_t {
 
     ast_node_t *ref_decl;
     type_patterns_t type_decl_patterns;
+
+    orintrinsic_fn_t intrinsic_fn;
 
     ffi_t *ffi_or_null;
     orstring_t filepath;

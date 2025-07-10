@@ -21,8 +21,7 @@ bool type_equal(typedata_t *a, typedata_t *b) {
         case TYPE_INFERRED_FUNCTION: return false;
         case TYPE_MODULE: return false;
 
-        case TYPE_FUNCTION:
-        case TYPE_INTRINSIC_FUNCTION: {
+        case TYPE_FUNCTION: {
             if (a->as.function.argument_types.count != b->as.function.argument_types.count) {
                 return false;
             }
@@ -39,6 +38,7 @@ bool type_equal(typedata_t *a, typedata_t *b) {
 
             return true;
         }
+
         case TYPE_STRUCT: {
             MUST(a->as.struct_.name_or_null == NULL);
             size_t a_name_length = a->as.struct_.name_or_null ? strlen(a->as.struct_.name_or_null) : 0;
@@ -111,7 +111,7 @@ orstring_t type_to_string_toplevel(typedatas_t types, ortype_t type, arena_t *al
 
     typedata_t *type_info = type2typedata(&types, type);
 
-    if (type_is_function(types, type) || type_is_intrinsic_function(types, type)) {
+    if (type_is_function(types, type)) {
         sb_add_char(&sb, '(');
 
         for (size_t i = 0; i < type_info->as.function.argument_types.count; ++i) {
@@ -181,7 +181,6 @@ orstring_t type_to_string_toplevel(typedatas_t types, ortype_t type, arena_t *al
             case TYPE_COUNT:
             case TYPE_STRUCT:
             case TYPE_FUNCTION:
-            case TYPE_INTRINSIC_FUNCTION:
             case TYPE_POINTER:
                 type_name = "<?>"; UNREACHABLE(); break;
         }

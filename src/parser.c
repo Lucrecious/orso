@@ -11,6 +11,8 @@
 #include "tmp.h"
 #include "../nob.h"
 
+#include "vm.h"
+
 /*
 program                  -> declaration* EOF
 declaration              -> definition | statement
@@ -172,6 +174,123 @@ static void directives_init(ast_t *ast, orintrinsic_fns_t *fns) {
     }
 }
 
+static void *orso_icall_arg(void *args, size_t *offset, size_t size_bytes)  {
+    void *ptr = args + (*offset);
+    size_bytes = orb2w2b(size_bytes);
+    *offset += size_bytes;
+    return ptr;
+}
+
+static void __orrealloc(struct vm_t *vm, void *args_reverse_order, void *result) {
+    NOB_UNUSED(vm);
+
+    size_t offset = 0;
+    size_t new_cap = *(size_t*)orso_icall_arg(args_reverse_order, &offset, ORWORD_SIZE);
+    size_t old_cap = *(size_t*)orso_icall_arg(args_reverse_order, &offset, ORWORD_SIZE);
+    void *ptr = *(void**)orso_icall_arg(args_reverse_order, &offset, ORWORD_SIZE);
+
+    NOB_UNUSED(old_cap);
+    
+    void *new_ptr = realloc(ptr, new_cap);
+
+    *(void**)(result) = new_ptr;
+}
+
+static void __orprintint(struct vm_t *vm, void *args_reverse_order, void *result) {
+    NOB_UNUSED(vm);
+    size_t offset = 0;
+    orint num = *(orint*)orso_icall_arg(args_reverse_order, &offset, sizeof(orint));
+    printf("%d\n", num);
+}
+
+orstring_t ast_orstr2str(type_table_t *type_set, void *start);
+static void __orshell_run(struct vm_t *vm, void *args_reverse_order, void *result) {
+    NOB_UNUSED(vm);
+    size_t offset = 0;
+    size_t count = *(size_t*)orso_icall_arg(args_reverse_order, &offset, sizeof(size_t));
+    void *strsptr = *(void**)orso_icall_arg(args_reverse_order, &offset, sizeof(void*));
+
+    orstring_t strs[count];
+    typedata_t *strtd = type2typedata(&vm->types->types, vm->types->str8_t_);
+    void *start = strsptr;
+    for (size_t i = 0; i < count; ++i) {
+        orstring_t s = ast_orstr2str(vm->types, start);
+        strs[i] = s;
+        start += strtd->size;
+    }
+
+    Nob_Cmd cmd = {0};
+    for (size_t i = 0; i < count; ++i) {
+        orstring_t s = strs[i];
+        nob_cmd_append(&cmd, s.cstr);
+    }
+
+    bool success = nob_cmd_run_sync(cmd);
+
+    *(bool*)result = success;
+
+    nob_cmd_free(cmd);
+}
+
+
+void intrinsics_init(ast_t *ast, orintrinsic_fns_t *fns) {
+    {
+        // realloc
+        {
+            orintrinsic_fn_t fn = {0};
+            fn.name = lit2str("realloc");
+            fn.has_varargs = false;
+            fn.arg_types = (types_t){.allocator=ast->arena};
+
+            ortype_t voidptr = type_set_fetch_pointer(&ast->type_set, ortypeid(TYPE_VOID));
+            array_push(&fn.arg_types, voidptr);
+            array_push(&fn.arg_types, ast->type_set.size_t_);
+            array_push(&fn.arg_types, ast->type_set.size_t_);
+
+            fn.ret_type = voidptr;
+
+            fn.fnptr = __orrealloc;
+
+            array_push(fns, fn);
+        }
+
+        // printint
+        {
+            orintrinsic_fn_t fn = {0};
+            fn.name = lit2str("printint");
+            fn.has_varargs = false;
+            fn.arg_types = (types_t){.allocator=ast->arena};
+
+            ortype_t voidptr = type_set_fetch_pointer(&ast->type_set, ortypeid(TYPE_VOID));
+            array_push(&fn.arg_types, ast->type_set.int_);
+
+            fn.ret_type = voidptr;
+
+            fn.fnptr = __orprintint;
+
+            array_push(fns, fn);
+        }
+
+        // shell_run
+        {
+            orintrinsic_fn_t fn = {0};
+            fn.name = lit2str("shell_run");
+            fn.has_varargs = false;
+            fn.arg_types = (types_t){.allocator=ast->arena};
+
+            ortype_t strptrs = type_set_fetch_pointer(&ast->type_set, ast->type_set.str8_t_);
+            array_push(&fn.arg_types, strptrs);
+            array_push(&fn.arg_types, ast->type_set.size_t_);
+
+            fn.ret_type = ast->type_set.bool_;
+
+            fn.fnptr = __orshell_run;
+
+            array_push(fns, fn);
+        }
+    }
+}
+
 void ast_init(ast_t *ast, arena_t *arena) {
     *ast = zer0(ast_t);
     ast->arena = arena;
@@ -195,6 +314,7 @@ void ast_init(ast_t *ast, arena_t *arena) {
     directives_init(ast, &ast->directives);
 
     ast->intrinsics = (orintrinsic_fns_t){.allocator=ast->arena};
+    intrinsics_init(ast, &ast->intrinsics);
 
     ast->type_to_zero_word = table_new(t2w, ast->arena);
     ast->type_to_creation_node = table_new(type2ns, ast->arena);
@@ -2469,7 +2589,6 @@ orword_t ast_mem2word(ast_t *ast, void *data, ortype_t type) {
     case TYPE_BOOL: return (orword_t){ .as.s = (*((bool*)data)) };
 
     case TYPE_POINTER:
-    case TYPE_INTRINSIC_FUNCTION:
     case TYPE_FUNCTION:
     case TYPE_TYPE: return *((orword_t*)data);
 
