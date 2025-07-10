@@ -1,7 +1,8 @@
-
+arr :: @load "./lib/orso.or";
 
 
 main :: () -> void {
-    x := @run io.test(1, 2);
-    x;
+    a := arr.dynarr_t(int).{};
+    arr.push(&a, 1);
+    arr.at(&a, 0);
 };

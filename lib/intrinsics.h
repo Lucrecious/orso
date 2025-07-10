@@ -5,6 +5,7 @@
 #include <stddef.h>
 #include <math.h>
 #include <string.h>
+#include <stdbool.h>
 
 #define ORCORE_MODULE_NAME "core"
 

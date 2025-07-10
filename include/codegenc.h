@@ -1701,13 +1701,13 @@ static void cgen_cast(cgen_t *cgen, ast_node_t *cast, cgen_var_t var) {
             sb_add_format(&cgen->sb, "%s = ", cgen_var(cgen, var));
         }
 
-        sb_add_format(&cgen->sb, "cast(%s, %s)", cgen_type_name(cgen, cast->value_type), cgen_var_name(cgen, tmp_var));
+        sb_add_format(&cgen->sb, "orcast(%s, %s)", cgen_type_name(cgen, cast->value_type), cgen_var_name(cgen, tmp_var));
     } else {
         if (has_var(var)) {
             sb_add_format(&cgen->sb, "%s = ", cgen_var(cgen, var));
         }
 
-        sb_add_format(&cgen->sb, "cast(%s, ", cgen_type_name(cgen, cast->value_type));
+        sb_add_format(&cgen->sb, "orcast(%s, ", cgen_type_name(cgen, cast->value_type));
 
         cgen_expression(cgen, castee, nil_cvar);
 
@@ -2138,6 +2138,11 @@ static void cgen_generate_function_names(ast_t *ast, cgen_state_t state, ast_nod
 void cgen_forward_declare_functions(cgen_t *cgen, ast_node_t *module) {
     for (size_t i = 0; i < module->owned_funcdefs.count; ++i) {
         ast_node_t *funcdef = module->owned_funcdefs.items[i];
+
+        if (ortypeid_eq(funcdef->value_type, ortypeid(TYPE_INFERRED_FUNCTION))) {
+            continue;
+        }
+
         MUST(funcdef->expr_val.is_concrete);
 
         function_t *function = (function_t*)funcdef->expr_val.word.as.p;
@@ -2166,6 +2171,10 @@ static void cgen_function_definitions(cgen_t *cgen, ast_node_t *module) {
     for (size_t i = 0; i < module->owned_funcdefs.count; ++i) {
         // <ret_type> <func_name>(<arg1_type> <arg1_name>, <arg2_type> <arg2_name>, ..., <argn_type> <argn_name>) {
         ast_node_t *funcdef = module->owned_funcdefs.items[i];
+
+        if (ortypeid_eq(funcdef->value_type, ortypeid(TYPE_INFERRED_FUNCTION))) {
+            continue;
+        }
 
         typedata_t *td = type2typedata(&cgen->ast->type_set.types, funcdef->value_type);
 

@@ -159,6 +159,17 @@ static void directives_init(ast_t *ast, orintrinsic_fns_t *fns) {
 
         array_push(fns, fn);
     }
+
+    // icall
+    {
+        orintrinsic_fn_t fn = {0};
+        fn.name = lit2str("icall");
+        fn.has_varargs = true;
+        fn.arg_types = (types_t){.allocator=ast->arena};
+
+        array_push(&fn.arg_types, ast->type_set.str8_t_);
+        array_push(fns, fn);
+    }
 }
 
 void ast_init(ast_t *ast, arena_t *arena) {
@@ -182,6 +193,8 @@ void ast_init(ast_t *ast, arena_t *arena) {
 
     ast->directives = (orintrinsic_fns_t){.allocator=ast->arena};
     directives_init(ast, &ast->directives);
+
+    ast->intrinsics = (orintrinsic_fns_t){.allocator=ast->arena};
 
     ast->type_to_zero_word = table_new(t2w, ast->arena);
     ast->type_to_creation_node = table_new(type2ns, ast->arena);

@@ -10,7 +10,9 @@
 
 #include "table.h"
 
-typedef void (*intrinsic_fn_t)(types_t *types, void *args_reverse_order, void *result);
+struct vm_t;
+
+typedef void (*intrinsic_fn_t)(struct vm_t *vm, void *args_reverse_order, void *result);
 
 typedef struct bools_t bools_t;
 struct bools_t {
@@ -233,6 +235,7 @@ enum match_type_t {
     MATCH_TYPE_POINTER,
     MATCH_TYPE_ARRAY_TYPE,
     MATCH_TYPE_ARRAY_SIZE,
+    MATCH_TYPE_STRUCT_PARAM,
     MATCH_TYPE_SIG_ARG,
     MATCH_TYPE_SIG_RET,
 };
@@ -314,6 +317,7 @@ struct val_dst_t {
 typedef struct orintrinsic_fn_t orintrinsic_fn_t;
 struct orintrinsic_fn_t {
     orstring_t name;
+    ortype_t ret_type;
     types_t arg_types;
 
     bool has_varargs;
@@ -441,6 +445,7 @@ typedef struct ast_t {
     table_t(s2fis) *ffis;
 
     orintrinsic_fns_t directives;
+    orintrinsic_fns_t intrinsics;
 
     ast_node_t *core_module_or_null;
     table_t(s2n) *moduleid2node;

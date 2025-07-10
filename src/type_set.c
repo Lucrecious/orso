@@ -134,7 +134,7 @@ static ortype_t add_type_no_track(type_table_t *set, typedata_t *type) {
     return ortypeid(set->types.count-1);
 }
 
-void type_set_init(type_table_t* set, arena_t *allocator) {
+void type_set_init(type_table_t *set, arena_t *allocator) {
     set->allocator = allocator;
     set->types2index = table_new(type2u64, allocator);
     set->types = (typedatas_t){.allocator=allocator};
@@ -391,6 +391,18 @@ void type_set_complete_struct(type_table_t *set, ortype_t incomplete_type, struc
 
     incomplete_struct_type_init(set, fields, consts, td);
     td->as.struct_.status = STRUCT_STATUS_COMPLETE;
+}
+
+void type_set_attach_params_to_struct_type(type_table_t *set, ortype_t struct_type, struct_fields_t params) {
+    typedata_t *td = type2typedata(&set->types, struct_type);
+    MUST(td->kind == TYPE_STRUCT);
+    MUST(td->as.struct_.params.allocator == NULL);
+
+    td->as.struct_.params = (struct_fields_t){.allocator=set->allocator};
+    for (size_t i = 0; i < params.count; ++i) {
+        struct_field_t field = params.items[i];
+        array_push(&td->as.struct_.params, field);
+    }
 }
 
 ortype_t type_set_fetch_function(type_table_t *set, ortype_t return_type, types_t arguments) {

@@ -244,7 +244,7 @@ struct vm_t {
     arena_t *arena;
     memarr_t *program_mem;
 
-    types_t *types;
+    type_table_t *types;
 
     function_t *global_init_func;
     bool halted;
@@ -661,7 +661,7 @@ void vm_step(vm_t *vm) {
 
             intrinsic_fn_t fn = (intrinsic_fn_t)ptr;
 
-            fn(vm->types, args_address_bottom, result_addr);
+            fn(vm, args_address_bottom, result_addr);
 
             IP_ADV(1);
             break;

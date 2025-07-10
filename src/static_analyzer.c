@@ -1109,6 +1109,16 @@ static bool stan_run(analyzer_t *analyzer, vm_t *vm, ast_node_t *expr, orword_t 
     return true;
 }
 
+bool ast_word_eq(type_table_t *type_set, ortype_t type, orword_t a, orword_t b) {
+    typedata_t *td = type2typedata(&type_set->types, type);
+
+    void *ap = td->size > ORWORD_SIZE ? a.as.p : &a;
+    void *bp = td->size > ORWORD_SIZE ? b.as.p : &b;
+
+    bool same = memcmp(ap, bp, td->size) == 0;
+    return same;
+}
+
 static matched_value_t stan_pattern_match_or_error(analyzer_t *analyzer, ast_node_t *decl, type_path_t *expected, ortype_t actual, ast_node_t *arg) {
     if (TYPE_IS_INVALID(actual)) {
         return (matched_value_t){.type=ortypeid(TYPE_INVALID)};
@@ -1189,6 +1199,43 @@ static matched_value_t stan_pattern_match_or_error(analyzer_t *analyzer, ast_nod
         return stan_pattern_match_or_error(analyzer, decl, expected->next, arg_type, arg);
     }
 
+    case MATCH_TYPE_STRUCT_PARAM: {
+        size_t arg_index = expected->index;
+        if (td->kind != TYPE_STRUCT || arg_index >= td->as.struct_.params.count) {
+            stan_error(analyzer, OR_ERROR(
+                .tag = "sem.nomatch.struct-param",
+                .level = ERROR_SOURCE_ANALYSIS,
+                .msg = lit2str("cannot match to struct parameter"),
+                .args = ORERR_ARGS(error_arg_node(arg), error_arg_node(an_decl_type(decl))),
+                .show_code_lines = ORERR_LINES(0, 1),
+            ));
+            return (matched_value_t){.type=ortypeid(TYPE_INVALID)};
+        }
+
+        ortype_t param_type = td->as.struct_.params.items[arg_index].type;
+        orword_t arg_word = td->as.struct_.params.items[arg_index].default_value;
+        if (TYPE_IS_TYPE(param_type)) {
+            return stan_pattern_match_or_error(analyzer, decl, expected->next, arg_word.as.t, arg);
+        }
+
+        if (expected->next->kind != MATCH_TYPE_IDENTIFIER) {
+            stan_error(analyzer, OR_ERROR(
+                .tag = "sem.nomatch.expected-value",
+                .level = ERROR_SOURCE_ANALYSIS,
+                .msg = lit2str("expected '$2.$' for struct parameter but got '$3.$'"),
+                .args = ORERR_ARGS(error_arg_node(arg), error_arg_node(an_decl_type(decl)),
+                        error_arg_type(param_type), error_arg_type(actual)),
+                .show_code_lines = ORERR_LINES(0, 1),
+            ));
+            return (matched_value_t){.type=ortypeid(TYPE_INVALID)};
+        }
+
+        return (matched_value_t){
+            .type=param_type,
+            .word=arg_word,
+        };
+    }
+
     case MATCH_TYPE_SIG_RET: {
         if (td->kind != TYPE_FUNCTION) {
             stan_error(analyzer, OR_ERROR(
@@ -1215,12 +1262,8 @@ static bool matched_values_eq(ast_t *ast, matched_values_t a, matched_values_t b
         matched_value_t mva = a.items[i];
         matched_value_t mvb = b.items[i];
         if (ortypeid_nq(mva.type, mvb.type)) return false;
-        typedata_t *td = ast_type2td(ast, mva.type);
-        if (td->size > ORWORD_SIZE) {
-            if (memcmp(mva.word.as.p, mvb.word.as.p, td->size) != 0) return false;
-        } else {
-            if (mva.word.as.u != mvb.word.as.u) return false;
-        }
+        bool same = ast_word_eq(&ast->type_set, mva.type, mva.word, mvb.word);
+        return same;
     }
 
     return true;
@@ -2130,6 +2173,21 @@ static void stan_realize_parameterized_struct(analyzer_t *analyzer, analysis_sta
 
             resolve_expression(analyzer, analyzer->ast, new_state, ortypeid(TYPE_UNRESOLVED), realized_struct, true);
         }
+
+        if (!TYPE_IS_INVALID(realized_struct->value_type)) {
+            ortype_t struct_type = realized_struct->expr_val.word.as.t;
+
+            struct_fields_t params = {.allocator=tmp->allocator};
+            for (size_t i = 0; i < values.count; ++i) {
+                struct_field_t field = {0};
+                field.type = values.items[i].type;
+                field.default_value = values.items[i].word;
+
+                array_push(&params, field);
+            }
+
+            type_set_attach_params_to_struct_type(&analyzer->ast->type_set, struct_type, params);
+        }
     }
 
     if (realized_struct == NULL || TYPE_IS_INVALID(realized_struct->value_type)) {
@@ -2391,7 +2449,7 @@ static void resolve_module(analyzer_t *analyzer, ast_t *ast, ast_node_t *module)
     }
 }
 
-static bool resolve_directive_argument_or_error(analyzer_t *analyzer, ast_t *ast, analysis_state_t state, ast_node_t *directive, ast_node_t *arg, size_t arg_zero_based_pos, ortype_t expected_type) {
+static bool resolve_directive_argument_or_error(analyzer_t *analyzer, ast_t *ast, analysis_state_t state, ast_node_t *directive, ast_node_t *arg, size_t arg_zero_based_pos, ortype_t expected_type, bool arg_must_be_compile_time) {
     resolve_expression(analyzer, ast, state, ortypeid(TYPE_STRING), arg, true);
     if (!ortypeid_eq(expected_type, arg->value_type)) {
         if (!TYPE_IS_INVALID(arg->value_type)) {
@@ -2406,7 +2464,7 @@ static bool resolve_directive_argument_or_error(analyzer_t *analyzer, ast_t *ast
         return false;
     }
 
-    if (!arg->expr_val.is_concrete) {
+    if (arg_must_be_compile_time && !arg->expr_val.is_concrete) {
         stan_error(analyzer, OR_ERROR(
             .tag = "sem.noconst.directive",
             .level = ERROR_SOURCE_ANALYSIS,
@@ -2450,6 +2508,13 @@ static ast_node_t *stan_load_module_or_errornull(analyzer_t *analyzer, ast_t *as
 
     module = parse_source_into_module(ast, s, string2sv(source));
 
+    {
+        string_view_t filename = sv_filename(module_path);
+        if (sv_eq(filename, lit2sv("orso.or"))) {
+            module->is_intrinsic = true;
+        }
+    }
+
     ast_add_module(ast, module, moduleid);
 
     resolve_module(analyzer, ast, module);
@@ -2469,48 +2534,47 @@ static void *orso_icall_arg(void *args, size_t *offset, size_t size_bytes)  {
     return ptr;
 }
 
-static bool __ororso_build(type_table_t *typeset, void *arg_start, void *result) {
-    size_t offset = 0;
-    ortype_t *type = (ortype_t*)orso_icall_arg(arg_start, &offset, sizeof(ortype_t));
-    typedata_t *td = type2typedata(&typeset->types, *type);
-    void *compiler = orso_icall_arg(arg_start, &offset, td->size);
+static bool __ororso_build(vm_t *vm, void *arg_start, void *result) {
+    // size_t offset = 0;
+    // ortype_t compiler_type = vm->types->compiler_;
+    // typedata_t *compiler_td = type2typedata(&vm->types->types, compiler_type);
+    // void *compiler = orso_icall_arg(arg_start, &offset, compiler_td->size);
 
-    struct_field_t field;
-    size_t field_index;
-    bool success = ast_find_field_by_name(td->as.struct_.fields, lit2sv("root_source"), &field, &field_index);
-    MUST(success);
+    // struct_field_t field;
+    // size_t field_index;
+    // bool success = ast_find_field_by_name(compiler_td->as.struct_.fields, lit2sv("root_source"), &field, &field_index);
+    // MUST(success);
 
-    void* ptr = compiler + field.offset;
-    orstring_t root_source = ast_orstr2str(typeset, ptr);
+    // void* ptr = compiler + field.offset;
+    // orstring_t root_source = ast_orstr2str(vm->types, ptr);
     return false;
 }
 
-bool check_directive_params_or_error(analyzer_t *analyzer, analysis_state_t state, ast_t *ast, ast_node_t *directive_call, orintrinsic_fn_t fn) {
+bool check_dir_or_intr_params_or_error(analyzer_t *analyzer, analysis_state_t state, ast_t *ast, ast_node_t *call, size_t start, size_t count, orintrinsic_fn_t fn, bool args_must_be_compile_time) {
     size_t expected_arg_count = fn.arg_types.count;
-    size_t actual_arg_count = an_dir_arg_end(directive_call) - an_dir_arg_start(directive_call);
     if (fn.has_varargs) {
-        if (actual_arg_count < expected_arg_count) {
-            orstring_t directive_name = sv2string(directive_call->identifier.view, ast->arena);
+        if (count < expected_arg_count) {
+            orstring_t directive_name = sv2string(call->identifier.view, ast->arena);
             stan_error(analyzer, OR_ERROR(
                 .tag = "sem.directive.not-enough-args",
                 .level = ERROR_SOURCE_ANALYSIS,
                 .msg = lit2str("'$1.$' requires at least $2.$ arguments but got $3.$"),
-                .args = ORERR_ARGS(error_arg_node(directive_call), error_arg_str(ast, directive_name),
-                        error_arg_sz(expected_arg_count), error_arg_sz(actual_arg_count)),
+                .args = ORERR_ARGS(error_arg_node(call), error_arg_str(ast, directive_name),
+                        error_arg_sz(expected_arg_count), error_arg_sz(count)),
                 .show_code_lines = ORERR_LINES(0),
             ));
 
             return false;
         }
     } else {
-        if (actual_arg_count != expected_arg_count) {
-            orstring_t directive_name = sv2string(directive_call->identifier.view, ast->arena);
+        if (count != expected_arg_count) {
+            orstring_t directive_name = sv2string(call->identifier.view, ast->arena);
             stan_error(analyzer, OR_ERROR(
                 .tag = "sem.directive.not-enough-args",
                 .level = ERROR_SOURCE_ANALYSIS,
                 .msg = lit2str("'$1.$' requires exactly $2.$ arguments but got $3.$"),
-                .args = ORERR_ARGS(error_arg_node(directive_call), error_arg_str(ast, directive_name),
-                        error_arg_sz(expected_arg_count), error_arg_sz(actual_arg_count)),
+                .args = ORERR_ARGS(error_arg_node(call), error_arg_str(ast, directive_name),
+                        error_arg_sz(expected_arg_count), error_arg_sz(count)),
                 .show_code_lines = ORERR_LINES(0),
             ));
 
@@ -2519,16 +2583,32 @@ bool check_directive_params_or_error(analyzer_t *analyzer, analysis_state_t stat
     }
 
     for (size_t i = 0; i < expected_arg_count; ++i) {
-        size_t argi = an_dir_arg_start(directive_call) + i;
-        ast_node_t *arg = directive_call->children.items[argi];
+        size_t argi = start + i;
+        ast_node_t *arg = call->children.items[argi];
         ortype_t expected_type = fn.arg_types.items[i];
 
-        if (!resolve_directive_argument_or_error(analyzer, ast, state, directive_call, arg, i, expected_type)) {
+        if (!resolve_directive_argument_or_error(analyzer, ast, state, call, arg, i, expected_type, args_must_be_compile_time)) {
             return false;
         }
     }
 
     return true;
+}
+
+void orso_intrinsics_init(ast_t *ast) {
+    // orso_build
+    {
+        orintrinsic_fn_t fn = {0};
+        fn.name = lit2str("orso_build");
+        fn.has_varargs = false;
+
+        fn.arg_types = (types_t){.allocator=ast->arena};
+        fn.ret_type = ortypeid(TYPE_BOOL);
+
+        // array_push(&fn.arg_types, ast->type_set.compiler_);
+
+        array_push(&ast->intrinsics, fn);
+    }
 }
 
 void resolve_expression(
@@ -2619,7 +2699,8 @@ void resolve_expression(
                 }
 
             } else {
-                if (!check_directive_params_or_error(analyzer, state, ast, expr, fn)) {
+                size_t dir_arg_count = an_dir_arg_end(expr) - an_dir_arg_start(expr);
+                if (!check_dir_or_intr_params_or_error(analyzer, state, ast, expr, an_dir_arg_start(expr), dir_arg_count, fn, true)) {
                     INVALIDATE(expr);
                     break;
                 }
@@ -2636,6 +2717,20 @@ void resolve_expression(
                         ast_node_t *owning_module = stan_find_owning_module_or_null(state.scope);
                         MUST(owning_module);
                         array_push(&owning_module->module_deps, module);
+                    }
+
+                    if (module->is_intrinsic) {
+                        string_view_t filename = sv_filename(string2sv(module_path));
+                        if (sv_eq(filename, lit2sv("orso.or"))) {
+                            for (size_t i = 0; i < module->children.count; ++i) {
+                                ast_node_t *decl = module->children.items[i];
+                                if (sv_eq(decl->identifier.view, lit2sv("compiler_t"))) {
+                                    // ast->type_set.compiler_ = an_decl_expr(decl)->expr_val.word.as.t;
+                                }
+                            }
+                        }
+
+                        orso_intrinsics_init(ast);
                     }
                 } else if (sv_eq(expr->identifier.view, lit2sv("@fficall"))) {
                     tmp_arena_t *tmp = allocator_borrow();
@@ -2743,40 +2838,26 @@ void resolve_expression(
 
                     expr->value_type = fficall_return_type;
                 } else if (sv_eq(expr->identifier.view, lit2sv("@icall"))) {
-                    UNREACHABLE();
-                    // if (expr->children.count == 0) {
-                    //     stan_error(analyzer, OR_ERROR(
-                    //         .tag = "sem.icall.noargs",
-                    //         .level = ERROR_SOURCE_ANALYSIS,
-                    //         .msg = lit2str("`icall` directive requires at least the name of intrinsic function"),
-                    //         .args = ORERR_ARGS(error_arg_node(expr)),
-                    //         .show_code_lines = ORERR_LINES(0),
-                    //     ));
+                    ast_node_t *function_name_node = expr->children.items[0];
+                    orstring_t fn_name = ast_orstr2str(&ast->type_set, function_name_node->expr_val.word.as.p);
 
-                    //     INVALIDATE(expr);
-                    //     break;
-                    // }
+                    orintrinsic_fn_t in = {0};
+                    if (!ast_find_intrinsic_funcname(ast->intrinsics, string2sv(fn_name), &in)) {
+                        stan_error(analyzer, OR_ERROR(
+                            .tag = "sem.nodirecive.directivecall",
+                            .level = ERROR_SOURCE_ANALYSIS,
+                            .msg = lit2str("'$1.$' is not a valid intrinsic function name"),
+                            .args = ORERR_ARGS(error_arg_node(expr), error_arg_str(ast, fn_name)),
+                            .show_code_lines = ORERR_LINES(0),
+                        ));
+                        INVALIDATE(expr);
+                        break;
+                    }
 
-                    // ast_node_t *funcname_node = an_icall_funcname(expr);
-                    // if (!resolve_directive_argument_or_error(analyzer, ast, state, expr, funcname_node, 0, ast->type_set.str8_t_)) {
-                    //     INVALIDATE(expr);
-                    //     break;
-                    // }
+                    expr->value_type = fn.ret_type;
 
-                    // orstring_t funcname = ast_orstr2str(&ast->type_set, funcname_node->expr_val.word.as.p);
-
-                    // orintrinsic_fn_t infn = {0};
-                    // if (!ast_find_intrinsic_func(astasda, funcname, &infn)) {
-                    //     stan_error(analyzer, OR_ERROR(
-                    //         .tag = "sem.icall.noinfn",
-                    //         .level = ERROR_SOURCE_ANALYSIS,
-                    //         .msg = lit2str("`icall` intrinsic function name '$1.$' cannot be found"),
-                    //         .args = ORERR_ARGS(error_arg_node(expr), error_arg_str(ast, funcname)),
-                    //         .show_code_lines = ORERR_LINES(0),
-                    //     ));
-
-                    //     INVALIDATE(expr);
-                    //     break;
+                    size_t icall_count = expr->children.count - 1;
+                    check_dir_or_intr_params_or_error(analyzer, state, ast, expr, 1, icall_count, fn, false);
                 }
             }
             break;
@@ -3516,6 +3597,21 @@ void resolve_expression(
                 if (left->expr_val.is_concrete && right->expr_val.is_concrete) {
                     orword_t wordl = left->expr_val.word;
                     orword_t wordr = right->expr_val.word;
+
+                    bool result = ast_word_eq(&ast->type_set, left->value_type, wordl, wordr);
+                    switch (expr->operator.type) {
+                    case TOKEN_EQUAL_EQUAL: {
+                        expr->expr_val = ast_node_val_word(ORWORDU((oru64)result));
+                        break;
+                    }
+
+                    case TOKEN_BANG_EQUAL: {
+                        expr->expr_val = ast_node_val_word(ORWORDU((oru64)(result == 0)));
+                        break;
+                    }
+
+                    default: UNREACHABLE(); break;
+                    }
 
                     typedata_t *td = ast_type2td(ast, left->value_type);
                     if (td->size > ORWORD_SIZE) {
@@ -4544,7 +4640,6 @@ static void forward_scan_inferred_types(ast_node_t *decl, ast_node_t *decl_type,
         case AST_NODE_TYPE_EXPRESSION_BINARY:
         case AST_NODE_TYPE_EXPRESSION_DOT_ACCESS:
         case AST_NODE_TYPE_EXPRESSION_BUILTIN_CALL:
-        case AST_NODE_TYPE_EXPRESSION_CALL:
         case AST_NODE_TYPE_EXPRESSION_PRIMARY:
         case AST_NODE_TYPE_EXPRESSION_DEF_VALUE:
         case AST_NODE_TYPE_EXPRESSION_BLOCK:
@@ -4582,6 +4677,33 @@ static void forward_scan_inferred_types(ast_node_t *decl, ast_node_t *decl_type,
                 type_path_t *path = new_type_path(MATCH_TYPE_POINTER, current, arena);
                 patterns->items[i].expected = path;
             }
+            break;
+        }
+
+        case AST_NODE_TYPE_EXPRESSION_CALL: {
+            tmp_arena_t *tmp = allocator_borrow();
+
+            size_t arg_count = an_call_arg_end(decl_type) - an_call_arg_start(decl_type);
+
+            for (size_t i = 0; i < arg_count; ++i) {
+                size_t arg_index = i;
+                ast_node_t *arg = decl_type->children.items[i + an_call_arg_start(decl_type)];
+
+                type_patterns_t pat = (type_patterns_t){.allocator=tmp->allocator};
+
+                forward_scan_inferred_types(decl, arg, arena, &pat);
+
+                for (size_t i = 0; i < pat.count; ++i) {
+                    type_path_t *current = pat.items[i].expected;
+                    type_path_t *path = new_type_path(MATCH_TYPE_STRUCT_PARAM, current, arena);
+                    path->index = arg_index;
+                    pat.items[i].expected = path;
+
+                    array_push(patterns, pat.items[i]);
+                }
+            }
+
+            allocator_return(tmp);
             break;
         }
 

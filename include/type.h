@@ -117,9 +117,11 @@ struct typedata_t {
             types_t argument_types;
         } function;
 
+        // structs do not need to be serialized since they're always all unique
         struct {
             orcstr_t name_or_null;
 
+            struct_fields_t params;
             struct_fields_t fields;
             struct_fields_t constants;
 
