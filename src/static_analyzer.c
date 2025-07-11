@@ -2517,22 +2517,6 @@ defer:
     return result;
 }
 
-static bool __ororso_build(vm_t *vm, void *arg_start, void *result) {
-    // size_t offset = 0;
-    // ortype_t compiler_type = vm->types->compiler_;
-    // typedata_t *compiler_td = type2typedata(&vm->types->types, compiler_type);
-    // void *compiler = orso_icall_arg(arg_start, &offset, compiler_td->size);
-
-    // struct_field_t field;
-    // size_t field_index;
-    // bool success = ast_find_field_by_name(compiler_td->as.struct_.fields, lit2sv("root_source"), &field, &field_index);
-    // MUST(success);
-
-    // void* ptr = compiler + field.offset;
-    // orstring_t root_source = ast_orstr2str(vm->types, ptr);
-    return false;
-}
-
 bool check_dir_or_intr_params_or_error(analyzer_t *analyzer, analysis_state_t state, ast_t *ast, ast_node_t *call, size_t start, size_t count, orintrinsic_fn_t fn, bool args_must_be_compile_time) {
     size_t expected_arg_count = fn.arg_types.count;
     if (fn.has_varargs) {
@@ -2672,6 +2656,9 @@ void resolve_expression(
                 }
 
                 if (sv_eq(expr->identifier.view, lit2sv("@load"))) {
+                    ast_node_t *owning_module = stan_find_owning_module_or_null(state.scope);
+                    MUST(owning_module);
+
                     ast_node_t *module_path_node = expr->children.items[an_dir_arg_start(expr)];
                     orstring_t module_path = ast_orstr2str(&ast->type_set, module_path_node->expr_val.word.as.p);
 
@@ -2679,11 +2666,7 @@ void resolve_expression(
                     expr->expr_val = ast_node_val_word(ORWORDP(module));
                     expr->value_type = ortypeid(TYPE_MODULE);
 
-                    {
-                        ast_node_t *owning_module = stan_find_owning_module_or_null(state.scope);
-                        MUST(owning_module);
-                        array_push(&owning_module->module_deps, module);
-                    }
+                    array_push(&owning_module->module_deps, module);
                 } else if (sv_eq(expr->identifier.view, lit2sv("@fficall"))) {
                     tmp_arena_t *tmp = allocator_borrow();
                     ortype_t fficall_return_type = ortypeid(TYPE_INVALID);

@@ -52,6 +52,7 @@ orf64 cstrn_to_f64(const char* text, size_t length);
 string_view_t string2sv(orstring_t string);
 orstring_t sv2string(string_view_t sv, arena_t *allocator);
 string_view_t sv_filename(string_view_t sv);
+string_view_t sv_dir_no_separator(string_view_t sv);
 bool sv_ends_with(string_view_t sv, orcstr_t cstr);
 bool sv_starts_with(string_view_t sv, orcstr_t prefix);
 
@@ -224,6 +225,20 @@ string_view_t sv_filename(string_view_t sv) {
     }
 
     return (string_view_t){.data=sv.data+begin, .length=sv.length-begin};
+}
+
+string_view_t sv_dir_no_separator(string_view_t sv) {
+    for (size_t i = sv.length; i > 0; --i) {
+        if (sv.data[i] == '\\' || sv.data[i] == '/') {
+            string_view_t dir = {
+                .data = sv.data,
+                .length = i,
+            };
+            return dir;
+        }
+    }
+
+    return sv;
 }
 
 bool sv_ends_with(string_view_t sv, orcstr_t cstr) {

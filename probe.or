@@ -1,22 +1,9 @@
-arr :: @load "./lib/orso.or";
+or_ :: @load "./lib/orso.or";
 
 
 main :: () -> void {
-    #a := arr.dynarr_t(int).{};
+    compiler := or_.compiler_t.{};
+    compiler.src = "hello_world.or";
 
-    #for i := 0; i < 1000; ++i {
-    #    arr.push(&a, i);
-    #};
-    #x := *arr.at(&a, 40);
-    #@icall "printint", x;
-    #@icall "printint", a.capacity as int;
-    #@icall "printint", a.count as int;
-
-    #arr.free(&a);
-    #@icall "printint", a.capacity as int;
-
-    cmd := arr.dynarr_t(str8_t).{};
-    arr.push(&cmd, "ls");
-    arr.push(&cmd, "-a");
-    arr.shell_run(cmd);
+    or_.build(&compiler);
 };

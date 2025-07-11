@@ -12,6 +12,8 @@
 #include "../nob.h"
 
 #include "vm.h"
+#include "static_analyzer.h"
+#include "orso.h"
 
 /*
 program                  -> declaration* EOF
@@ -198,6 +200,7 @@ static void __orrealloc(struct vm_t *vm, void *args_reverse_order, void *result)
 
 static void __orprintint(struct vm_t *vm, void *args_reverse_order, void *result) {
     NOB_UNUSED(vm);
+    NOB_UNUSED(result);
     size_t offset = 0;
     orint num = *(orint*)orso_icall_arg(args_reverse_order, &offset, sizeof(orint));
     printf("%d\n", num);
@@ -230,6 +233,27 @@ static void __orshell_run(struct vm_t *vm, void *args_reverse_order, void *resul
     *(bool*)result = success;
 
     nob_cmd_free(cmd);
+}
+
+static void __orcompiler_build(struct vm_t *vm, void *args_reverse_order, void *result) {
+    size_t offset = 0;
+    void *struct_ptr = *(void**)orso_icall_arg(args_reverse_order, &offset, ORWORD_SIZE);
+    ortype_t compiler_type = *(ortype_t*)orso_icall_arg(args_reverse_order, &offset, ORWORD_SIZE);
+
+    orso_compiler_t compiler = {0};
+
+    orword_t src_word = ast_struct_item_get(&vm->types->types, compiler_type, lit2sv("src"), struct_ptr);
+    compiler.root_source = ast_orstr2str(vm->types, src_word.as.p);
+
+    orword_t build_dir_word = ast_struct_item_get(&vm->types->types, compiler_type, lit2sv("build_dir"), struct_ptr);
+    compiler.build_dir = ast_orstr2str(vm->types, build_dir_word.as.p);
+
+    orword_t output_name_word = ast_struct_item_get(&vm->types->types, compiler_type, lit2sv("output_name"), struct_ptr);
+    compiler.output_name = ast_orstr2str(vm->types, output_name_word.as.p);
+
+    bool success = ororso_build(&compiler);
+
+    *(bool*)result = success;
 }
 
 
@@ -285,6 +309,26 @@ void intrinsics_init(ast_t *ast, orintrinsic_fns_t *fns) {
             fn.ret_type = ast->type_set.bool_;
 
             fn.fnptr = __orshell_run;
+
+            array_push(fns, fn);
+        }
+
+        // compiler_build
+        {
+            orintrinsic_fn_t fn = {0};
+            fn.name = lit2str("compiler_build");
+            fn.has_varargs = false;
+
+            fn.arg_types = (types_t){.allocator=ast->arena};
+
+            array_push(&fn.arg_types, ast->type_set.type_);
+
+            ortype_t voidptr = type_set_fetch_pointer(&ast->type_set, ortypeid(TYPE_VOID));
+            array_push(&fn.arg_types, voidptr);
+
+            fn.ret_type = ast->type_set.bool_;
+
+            fn.fnptr = __orcompiler_build;
 
             array_push(fns, fn);
         }
