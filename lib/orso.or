@@ -11,9 +11,11 @@ compiler_t :: struct {
     src := "";
     build_dir := "./build";
     output_name := "or.out";
+
+    cflags := da.dynarr_t(str8_t).{};
 };
 
 build :: (compiler: &compiler_t) -> bool {
-    success := @icall "compiler_build", compiler_t, compiler as &void;
+    success := @icall "build", compiler_t, da.dynarr_t(str8_t), compiler as &void;
     return success;
 };

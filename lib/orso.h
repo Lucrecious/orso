@@ -8,9 +8,19 @@ struct orso_compiler_t {
     orstring_t root_source;
     orstring_t build_dir;
     orstring_t output_name;
+
+    orstring_t *cflags;
+    size_t cflags_count;
 };
 
-bool ororso_build(orso_compiler_t *compiler);
-bool orso_interpret(orstring_t input_file_path);
+bool orbuild(void *compiler);
+bool orinterpret(orstring_t input_file_path);
+
+void *orrealloc(void *ptr, size_t old_size, size_t new_size);
+void orprintint(orint num);
+
+bool orshell_run(void *cmds, size_t count);
+
+
 
 #endif

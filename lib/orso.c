@@ -119,7 +119,7 @@ static ast_t *build_ast(orstring_t source, arena_t *arena, orstring_t file_path)
     return ast;
 }
 
-static bool generate_exe(ast_t *ast, orstring_t output_path) {
+static bool generate_exe(ast_t *ast, strings_t cflags, orstring_t output_path) {
     tmp_arena_t *tmp = allocator_borrow();
 
     strings_t sources = {0};
@@ -144,18 +144,19 @@ static bool generate_exe(ast_t *ast, orstring_t output_path) {
 
         cc_include_dir(&cc, lit2str("./lib"));
         cc_no_warning(&cc, lit2str("unused-value"));
+
+        // todo
+        nob_log(NOB_WARNING, "Hardcoded the library for orso here, need robust solution");
+        cc_libpath(&cc, lit2str("./bin/liborso.a"));
         
         // stops warnings from ((x == y)) type of conditions
         cc_no_warning(&cc, lit2str("parentheses-equality"));
 
         cc_flag(&cc, lit2str("-std=c99"));
 
-        cc_flag(&cc, lit2str("-framework"));
-        cc_flag(&cc, lit2str("IOKit"));
-        cc_flag(&cc, lit2str("-framework"));
-        cc_flag(&cc, lit2str("Cocoa"));
-        cc_flag(&cc, lit2str("-framework"));
-        cc_flag(&cc, lit2str("OpenGL"));
+        for (size_t i = 0; i < cflags.count; ++i) {
+            cc_flag(&cc, cflags.items[i]);
+        }
 
         success = cc_build(&cc);
     }
@@ -166,7 +167,9 @@ static bool generate_exe(ast_t *ast, orstring_t output_path) {
     return success;
 }
 
-bool ororso_build(orso_compiler_t *compiler) {
+bool orbuild(void *compiler_) {
+    orso_compiler_t *compiler = (orso_compiler_t*)compiler_;
+
     arena_t arena = {0};
 
     orstring_t source;
@@ -183,7 +186,14 @@ bool ororso_build(orso_compiler_t *compiler) {
     }
 
     orstring_t output_file_path = string_path_combine(compiler->build_dir, compiler->output_name, &arena);
-    success = generate_exe(ast, output_file_path);
+    {
+        strings_t cflags = {
+            .items = compiler->cflags,
+            .count = compiler->cflags_count,
+            .capacity = compiler->cflags_count,
+        };
+        success = generate_exe(ast, cflags, output_file_path);
+    }
     if (!success) {
         print_errors(ast);
         return_defer(false);
@@ -213,7 +223,7 @@ void print_ast(orstring_t input_file_path) {
     arena_free(&arena);
 }
 
-bool orso_interpret(orstring_t input_file_path) {
+bool orinterpret(orstring_t input_file_path) {
     arena_t arena = {0};
 
     orstring_t source;
@@ -292,4 +302,30 @@ bool debug(orstring_t input_file_path) {
 defer:
     arena_free(&arena);
     return result;
+}
+
+void *orrealloc(void *ptr, size_t old_size, size_t new_size) {
+    NOB_UNUSED(old_size);
+    ptr = realloc(ptr, new_size);
+    return ptr;
+}
+
+void orprintint(orint num) {
+    printf("%d\n", num);
+}
+
+bool orshell_run(void *cmds, size_t count) {
+    orstring_t *scmds = (orstring_t*)cmds;
+
+    Nob_Cmd cmd = {0};
+    for (size_t i = 0; i < count; ++i) {
+        orstring_t s = scmds[i];
+        nob_cmd_append(&cmd, s.cstr);
+    }
+
+    bool success = nob_cmd_run_sync(cmd);
+
+    nob_cmd_free(cmd);
+
+    return success;
 }

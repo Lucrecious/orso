@@ -381,11 +381,9 @@ static orstring_t cgen_get_function_name(cgen_t *cgen, function_t *function) {
     return result.name;
 }
 
-static orstring_t cgen_get_instrinsic_fn_name(ast_t *ast, intrinsic_fn_t fn) {
-    orstring_t name = lit2str("");
-    bool success = table_get(p2s, ast->intrinsicfn2cname, fn, &name);
-    UNUSED(success);
-    ASSERT(success, "intrinsics should all be in there...");
+static orstring_t cgen_get_instrinsic_fn_name(ast_t *ast, orintrinsic_fn_t fn, arena_t *arena) {
+    UNUSED(ast);
+    orstring_t name = string_format("or%s", arena, fn.name.cstr);
     return name;
 }
 
@@ -464,15 +462,6 @@ static void cgen_constant(cgen_t *cgen, orword_t word, ortype_t type) {
             sb_add_cstr(&cgen->sb, ")");
             break;
         }
-
-        // case TYPE_INTRINSIC_FUNCTION: {
-        //     intrinsic_fn_t fn = word.as.p;
-        //     orstring_t funcname = cgen_get_instrinsic_fn_name(cgen->ast, fn);
-        //     sb_add_cstr(&cgen->sb, "(");
-        //     sb_add_format(&cgen->sb, "%s", funcname.cstr);
-        //     sb_add_cstr(&cgen->sb, ")");
-        //     break;
-        // }
 
         case TYPE_ARRAY: {
             cgen_array_start(cgen, type);
@@ -2003,6 +1992,43 @@ static void cgen_fficall(cgen_t *cgen, ast_node_t *fficall, cgen_var_t var) {
     sb_add_cstr(&cgen->sb, ")");
 }
 
+void cgen_icall(cgen_t *cgen, ast_node_t *icall, cgen_var_t var) {
+    if (!icall->requires_tmp_for_cgen) {
+        tmp_arena_t *tmp = allocator_borrow();
+        orstring_t name = cgen_get_instrinsic_fn_name(cgen->ast, icall->intrinsic_fn, tmp->allocator);
+
+        if (has_var(var)) {
+            sb_add_format(&cgen->sb, "%s = (", cgen_var(cgen, var));
+        }
+
+        sb_add_format(&cgen->sb, "%s(", name.cstr);
+
+        size_t start = 1;
+        if (string_eq(icall->intrinsic_fn.name, lit2str("build"))) {
+            start = 3;
+        }
+        for (size_t i = start; i < icall->children.count; ++i) {
+            ast_node_t *arg = icall->children.items[i];
+
+            if (i != start) {
+                sb_add_cstr(&cgen->sb, ", ");
+            }
+
+            cgen_expression(cgen, arg, nil_cvar);
+        }
+
+        sb_add_format(&cgen->sb, ")");
+
+        if (has_var(var)) {
+            sb_add_cstr(&cgen->sb, ")");
+        }
+
+        allocator_return(tmp);
+    } else {
+        UNREACHABLE();
+    }
+}
+
 static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var) {
     if (expression->expr_val.is_concrete) {
         cgen_constant_or_nil(cgen, expression, var);
@@ -2104,8 +2130,13 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
         case AST_NODE_TYPE_EXPRESSION_STRUCT: break;
 
         case AST_NODE_TYPE_EXPRESSION_DIRECTIVE: {
-            MUST(sv_eq(expression->identifier.view, lit2sv("@fficall")));
-            cgen_fficall(cgen, expression, var);
+            if (sv_eq(expression->identifier.view, lit2sv("@fficall"))) {
+                cgen_fficall(cgen, expression, var);
+            } else if (sv_eq(expression->identifier.view, lit2sv("@icall"))) {
+                cgen_icall(cgen, expression, var);
+            } else {
+                UNREACHABLE();
+            }
             break;
         }
 
@@ -2512,6 +2543,7 @@ static void cgen_module(cgen_t *cgen, cgen_t *cgenh, bool is_core, ast_node_t *m
         cgen_begin_h(cgenh, moduleid);
         if (is_core) {
             cgen_add_include(cgenh, "intrinsics.h");
+            cgen_add_include(cgenh, "orso.h");
             cgen_typedefs(cgenh, &cgen->ast->type_set.types);
             cgen_structs(cgenh);
         } else {
@@ -2530,8 +2562,7 @@ static void cgen_module(cgen_t *cgen, cgen_t *cgenh, bool is_core, ast_node_t *m
         if (is_core) {
             cgen_add_include(cgen, CORE_H_FILENAME);
 
-            // only core has the intrinsic implementation
-            sb_add_cstr(&cgen->sb, "#define INTRINSICS_IMPLEMENTATION\n");
+            // implementation is not needed because its included in liborso
             cgen_add_include(cgen, "intrinsics.h");
         } else {
             cgen_add_include(cgen, module->ccode_associated_h.cstr);

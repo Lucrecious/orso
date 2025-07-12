@@ -1,9 +1,10 @@
+da :: @load "./lib/dynarr.or";
 or_ :: @load "./lib/orso.or";
 
 
 main :: () -> void {
     compiler := or_.compiler_t.{};
-    compiler.src = "hello_world.or";
+    compiler.src = "probe.or";
 
     or_.build(&compiler);
 };

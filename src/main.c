@@ -53,7 +53,7 @@ int main(int argc, char **argv) {
                 compiler.build_dir = lit2str("./build/");
                 compiler.root_source = sinput;
                 compiler.output_name = soutput;
-                ororso_build(&compiler);
+                orbuild(&compiler);
             }
 
         } else if (strncmp(option, "run", 3) == 0) {
@@ -64,7 +64,7 @@ int main(int argc, char **argv) {
 
             orcstr_t filename = shift(argv, argc);
             orstring_t file = {.cstr=filename, .length=strlen(filename)};
-            orso_interpret(file);
+            orinterpret(file);
         }// else if (strncmp(option, "dbg", 3) == 0) {
         //     if (argc != 1) {
         //         fprintf(stderr, "dbg option requires input odl file\n");

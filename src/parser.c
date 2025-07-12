@@ -191,10 +191,8 @@ static void __orrealloc(struct vm_t *vm, void *args_reverse_order, void *result)
     size_t old_cap = *(size_t*)orso_icall_arg(args_reverse_order, &offset, ORWORD_SIZE);
     void *ptr = *(void**)orso_icall_arg(args_reverse_order, &offset, ORWORD_SIZE);
 
-    NOB_UNUSED(old_cap);
+    void *new_ptr = orrealloc(ptr, old_cap, new_cap);
     
-    void *new_ptr = realloc(ptr, new_cap);
-
     *(void**)(result) = new_ptr;
 }
 
@@ -203,7 +201,7 @@ static void __orprintint(struct vm_t *vm, void *args_reverse_order, void *result
     NOB_UNUSED(result);
     size_t offset = 0;
     orint num = *(orint*)orso_icall_arg(args_reverse_order, &offset, sizeof(orint));
-    printf("%d\n", num);
+    orprintint(num);
 }
 
 orstring_t ast_orstr2str(type_table_t *type_set, void *start);
@@ -222,22 +220,15 @@ static void __orshell_run(struct vm_t *vm, void *args_reverse_order, void *resul
         start += strtd->size;
     }
 
-    Nob_Cmd cmd = {0};
-    for (size_t i = 0; i < count; ++i) {
-        orstring_t s = strs[i];
-        nob_cmd_append(&cmd, s.cstr);
-    }
-
-    bool success = nob_cmd_run_sync(cmd);
+    bool success = orshell_run((void*)&strs, count);
 
     *(bool*)result = success;
-
-    nob_cmd_free(cmd);
 }
 
-static void __orcompiler_build(struct vm_t *vm, void *args_reverse_order, void *result) {
+static void __orbuild(struct vm_t *vm, void *args_reverse_order, void *result) {
     size_t offset = 0;
     void *struct_ptr = *(void**)orso_icall_arg(args_reverse_order, &offset, ORWORD_SIZE);
+    ortype_t dynarr_type = *(ortype_t*)orso_icall_arg(args_reverse_order, &offset, ORWORD_SIZE);
     ortype_t compiler_type = *(ortype_t*)orso_icall_arg(args_reverse_order, &offset, ORWORD_SIZE);
 
     orso_compiler_t compiler = {0};
@@ -251,7 +242,29 @@ static void __orcompiler_build(struct vm_t *vm, void *args_reverse_order, void *
     orword_t output_name_word = ast_struct_item_get(&vm->types->types, compiler_type, lit2sv("output_name"), struct_ptr);
     compiler.output_name = ast_orstr2str(vm->types, output_name_word.as.p);
 
-    bool success = ororso_build(&compiler);
+    {
+        void *cflags_dynarr_ptr = ast_struct_item_get(&vm->types->types, compiler_type, lit2sv("cflags"), struct_ptr).as.p;
+        void *items_ptr = ast_struct_item_get(&vm->types->types, dynarr_type, lit2sv("items"), cflags_dynarr_ptr).as.p;
+        orint count_ = (orint)ast_struct_item_get(&vm->types->types, dynarr_type, lit2sv("count"), cflags_dynarr_ptr).as.s;
+        size_t count = count_ < 0 ? 0 : (size_t)count_;
+
+        compiler.cflags = realloc(0, sizeof(orstring_t)*count);
+        compiler.cflags_count = count;
+        {
+            typedata_t *strtd = type2typedata(&vm->types->types, vm->types->str8_t_);
+            void *start = items_ptr;
+            for (size_t i = 0; i < count; ++i) {
+                orstring_t item = ast_orstr2str(vm->types, start);
+                start += strtd->size;
+                compiler.cflags[i] = item;
+            }
+        }
+    }
+
+    bool success = orbuild(&compiler);
+
+    void *_1 = realloc(compiler.cflags, 0);
+    NOB_UNUSED(_1);
 
     *(bool*)result = success;
 }
@@ -316,11 +329,12 @@ void intrinsics_init(ast_t *ast, orintrinsic_fns_t *fns) {
         // compiler_build
         {
             orintrinsic_fn_t fn = {0};
-            fn.name = lit2str("compiler_build");
+            fn.name = lit2str("build");
             fn.has_varargs = false;
 
             fn.arg_types = (types_t){.allocator=ast->arena};
 
+            array_push(&fn.arg_types, ast->type_set.type_);
             array_push(&fn.arg_types, ast->type_set.type_);
 
             ortype_t voidptr = type_set_fetch_pointer(&ast->type_set, ortypeid(TYPE_VOID));
@@ -328,7 +342,7 @@ void intrinsics_init(ast_t *ast, orintrinsic_fns_t *fns) {
 
             fn.ret_type = ast->type_set.bool_;
 
-            fn.fnptr = __orcompiler_build;
+            fn.fnptr = __orbuild;
 
             array_push(fns, fn);
         }

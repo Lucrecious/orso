@@ -75,17 +75,26 @@ int main(int argc, char **argv) {
         cc_flag(&cc, lit2str("-ggdb"));
         cc_flag(&cc, lit2str("-DDEBUG"));
 
-        cc.output_path = lit2str("./bin/orso");
-
         for (size_t i = 0; i < sizeof(SOURCES) / sizeof(SOURCES[0]); i++) {
             cc_source(&cc, SOURCES[i]);
         }
 
-        cc_source(&cc, lit2str("./lib/orso.c"));
+        // build as a library first
+        {
+            cc.output_path = lit2str("./bin/liborso.a");
+            cc.output_type = CC_STATIC;
+            cc_source(&cc, lit2str("./lib/orso.c"));
+            cc_build(&cc);
+        }
 
-        cc_source(&cc, lit2str("./src/main.c"));
+        // then compiler
+        {
+            cc.output_path = lit2str("./bin/orso");
+            cc.output_type = CC_EXE;
+            cc_source(&cc, lit2str("./src/main.c"));
+            cc_build(&cc);
+        }
 
-        cc_build(&cc);
     }
 
     nob_copy_file("./lib/core.or", "./bin/core.or");

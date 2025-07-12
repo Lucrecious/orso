@@ -186,7 +186,21 @@ bool cc_build(cc_t *cc) {
 
             break;
         }
-        case CC_STATIC: UNREACHABLE(); break;
+        case CC_STATIC: {
+            cmd_append(&cmd, "ar");
+            cmd_append(&cmd, "rcs");
+            cmd_append(&cmd, outfile.cstr);
+
+            for (size_t i = 0; i < source_out_paths.count; ++i) {
+                orstring_t source_out_path = source_out_paths.items[i];
+                cmd_append(&cmd, source_out_path.cstr);
+            }
+
+            bool success = cmd_run_sync_and_reset(&cmd);
+            if (!success) return false;
+
+            break;
+        }
     }
 
     return true;

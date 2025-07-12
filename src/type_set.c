@@ -172,7 +172,7 @@ void type_set_init(type_table_t *set, arena_t *allocator) {
 
     static typedata_t type_int = {.name=lit2str("orint"), .kind=TYPE_NUMBER, .size=sizeof(int), .alignment=sizeof(int), .as.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_NUMBER)};
     static typedata_t type_uint = {.name=lit2str("oruint"), .kind=TYPE_NUMBER, .size=sizeof(unsigned int), .alignment=sizeof(unsigned int), .as.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_NUMBER)};
-    static typedata_t type_size_t = {.name=lit2str("orsize_t"), .kind=TYPE_NUMBER, .size=sizeof(size_t), .alignment=sizeof(size_t), .as.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_NUMBER)};
+    static typedata_t type_size_t = {.name=lit2str("size_t"), .kind=TYPE_NUMBER, .size=sizeof(size_t), .alignment=sizeof(size_t), .as.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_NUMBER)};
     static typedata_t type_ptrdiff_t = {.name=lit2str("ors64"), .kind=TYPE_NUMBER, .size=sizeof(ors64), .alignment=sizeof(ors64), .as.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_NUMBER)};
 
     static typedata_t type_type = {.name=lit2str("ortype"), .kind=TYPE_TYPE, .size=sizeof(ortype_t), .alignment=sizeof(ortype_t), .capabilities=(TYPE_CAP_NONE)};
