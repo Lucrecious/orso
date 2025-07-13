@@ -2997,7 +2997,7 @@ void resolve_expression(
 
             if (accessee->expr_val.is_concrete && accessor->expr_val.is_concrete) {
                 // todo
-                UNREACHABLE();
+                // UNREACHABLE();
             }
 
             break;

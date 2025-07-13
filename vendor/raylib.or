@@ -1,0 +1,87 @@
+vec2_t :: struct {
+    x: f32;
+    y: f32;
+};
+
+color_t :: struct {
+    r := 0u8;
+    g := 0u8;
+    b := 0u8;
+    a := 0u8;
+};
+
+white :: color_t.{255, 255, 255, 255};
+raywhite :: color_t.{245, 245, 245, 255};
+black :: color_t.{0, 0, 0, 255};
+red :: color_t.{255, 0, 0, 255};
+green :: color_t.{0, 255, 0, 255};
+blue :: color_t.{0, 0, 255, 255};
+
+mouse_button_left :: 0;
+mouse_button_right :: 1;
+mouse_button_middle :: 3;
+
+init_window :: (width: int, height: int, label: str8_t) -> void {
+    @fficall "./vendor/raylib/src/libraylib.a", "cdecl", void, "InitWindow", width, height, label.cstr;
+};
+
+close_window :: () -> void {
+    @fficall "./vendor/raylib/src/libraylib.a", "cdecl", void, "CloseWindow";
+};
+
+window_should_close :: () -> bool {
+    return @fficall "./vendor/raylib/src/libraylib.a", "cdecl", bool, "WindowShouldClose";
+};
+
+begin_drawing :: () -> void {
+    @fficall "./vendor/raylib/src/libraylib.a", "cdecl", void, "BeginDrawing";
+};
+
+end_drawing :: () -> void {
+    @fficall "./vendor/raylib/src/libraylib.a", "cdecl", void, "EndDrawing";
+};
+
+draw_rectanglev :: (pos: vec2_t, size: vec2_t, color: color_t) -> void {
+    @fficall "./vendor/raylib/src/libraylib.a", "cdecl", void, "DrawRectangleV", pos, size, color;
+};
+
+draw_rectangle :: (pos: [2]int, size: [2]int, color: color_t) -> void {
+    @fficall "./vendor/raylib/src/libraylib.a", "cdecl", void, "DrawRectangle", pos[0], pos[1], size[0], size[1], color;
+};
+
+draw_text :: (text: str8_t, pos: [2]int, size: int, color: color_t) -> void {
+    @fficall "./vendor/raylib/src/libraylib.a", "cdecl", void, "DrawText", text.cstr, pos[0], pos[1], size, color;
+};
+
+clear_background :: (color: color_t) -> void {
+    @fficall "./vendor/raylib/src/libraylib.a", "cdecl", void, "ClearBackground", color;
+};
+
+draw_pixel :: (posx: int, posy: int, color: color_t) -> void {
+    @fficall "./vendor/raylib/src/libraylib.a", "cdecl", void, "DrawPixel", posx, posy, color;
+};
+
+draw_fps :: (posx: int, posy: int) -> void {
+    @fficall "./vendor/raylib/src/libraylib.a", "cdecl", void, "DrawFPS", posx, posy;
+};
+
+set_target_fps :: (fps: int) -> void {
+    @fficall "./vendor/raylib/src/libraylib.a", "cdecl", void, "SetTargetFPS", fps;
+};
+
+get_frame_time :: () -> f32 {
+    return @fficall "./vendor/raylib/src/libraylib.a", "cdecl", f32, "GetFrameTime";
+};
+
+get_sec_elapsed :: () -> f64 {
+    return @fficall "./vendor/raylib/src/libraylib.a", "cdecl", f64, "GetTime";
+};
+
+is_mouse_button_pressed :: (button: int) -> bool {
+    return @fficall "./vendor/raylib/src/libraylib.a", "cdecl", bool, "IsMouseButtonPressed", button;
+};
+
+get_mouse_position :: () -> [2]int {
+    result :=  @fficall "./vendor/raylib/src/libraylib.a", "cdecl", [2]f32, "GetMousePosition";
+    return .{result[0] as int, result[1] as int};
+};
