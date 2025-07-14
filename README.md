@@ -1,15 +1,28 @@
 # The Orso Programming Language
 Orso is a small, portable, statically-typed, expression-based language with powerful metaprogramming and compile-time evaluation tools.
 
-It maintains a simple and terse syntax making it easy to learn. The terseness of the syntax is intended to rival Lua's.
+It maintains a simple and terse syntax making it easy to learn.
+
+## Who is this language for?
+Me.
+
+Realistically, I will be the only programmer to seriously use this programming language, so I am building it to cater specifically to my needs. As such, it's very opinionated - if you like programming in a similar style as me, there's a chance you might enjoy orso, otherwise, you'll probably hate it.
+
+orso takes inspiration from a few different languages, mainly, Jai, Odin and C.
+
+It's also nice for education. Aside from the dynamic FFI library (libffi, which hasn't been integrated yet), everything, including its arbitrary compile-time expression evaluation, is handwritten by me. In terms of code volume, the goal is to keep it under ~25K lines of code, which iirc is similar to Lua's LoC.
+
+The project implements a register-based virtual machine, a transpiler from my AST representation to C99, a static analyzer (type analysis, compile-time evaluation, and other semantic analysis), and more. For beginners, I think it's a great project to learn from since it's such a small language relative to others - it's harder to get lost in the codebase.
 
 ## Key Features
 - Statically typed 
 - Expression-based
+- Generics (Inferred Function Definitions and Paramterized Struct Definitions)
 - Arbitrary Expression Compile-Time Evaluation
 - First-Class Types
 - Manual Memory Mangement
 - Easy C interop
+- Small Syntax
 
 ## Syntax
 Orso is expression-based which means almost all of its language constructs evaluate to some "value". In fact, the only language constructs that are not expressions are
@@ -18,202 +31,206 @@ Due to this, I've found that without an explicit way to separate expressions, th
 To migitate this, semicolons are required to signal the end of all expressions and declarations - to be frank, they're everywhere! This is the trade-off
 that I think needs to be made to keep this language minimal and simple.
 
-### Variable and Compile-Time Value Declarations
-These are the only non-expressions constructs in the entire language, although they technically evaluate to `void`. However, from a pragmatic sense, the syntax makes
-it impossible to ever use these constructs anywhere that needs an expression to be evaluated.
+### Code Examples
+#### Game of Life
+This should give you a good idea of how a simple orso program may look like. There aren't any comments but, honestly, any beginner programmer should be able to understand it. If you're familiar with Odin and C, you're going to be right at home. There's really nothing crazy in here syntax wise.
 
 ```python
-# variable declarations
-x := 0;
-y: sint = 0;
+rl :: @load "./vendor/raylib.or";
 
-# compile-time value declarations
-PI :: 3.14;
-TAU : double : PI*2;
-```
+board_x :: 32;
+board_y :: 32;
 
-### Expressions
-Some of these features are not implemeneted yet, and I've left comments pointing those out.
+grid_size :: [2]int.{board_x, board_y};
+cell_size :: [2]int.{16, 16};
 
-#### Block Expressions
-```python
-temperature := {
-  wind_chill := 4;
-  air_tmp := 1;
-  wind_chill + air_tmp; # block evaluates to final statement
+board_t :: [board_x][board_y]bool;
+
+window_size :: grid_size * cell_size;
+
+delta :: 0.15;
+
+main :: () -> void {
+    board_ := board_t.{};
+    buffer_ := board_t.{};
+
+    board := &board_;
+    buffer := &buffer_;
+
+    clear_board :: (board: &board_t) -> void {
+        for i := 0; i < len(*board); ++i do
+            for j := 0; j < len(board[0]); ++j {
+                board[i][j] = false;
+            };
+    };
+
+    mark  :: (board: &board_t, pos: [2]int, with := true) -> void {
+        if pos[0] >= 0 and pos[0] < len(*board) and pos[1] >= 0 and pos[1] < len(board[0]) {
+            board[pos[0]][pos[1]] = with;
+        };
+    };
+
+    is_marked :: (board: &board_t, pos: [2]int) -> bool {
+        while pos[0] < 0 do pos[0] += len(*board);
+        while pos[1] < 0 do pos[1] += len(board[0]);
+
+        pos[0] %= len(*board);
+        pos[1] %= len(board[0]);
+
+        marked := board[pos[0]][pos[1]];
+        return marked;
+    };
+
+    count_neighbors :: (board: &board_t, x: int, y: int) -> int {
+        nc := 0;
+
+        for sx := x-1; sx < x+2; ++sx do
+            for sy := y-1; sy < y+2; ++sy {
+                if sx == x and sy == y then continue;
+                nc += if is_marked(board, .{sx, sy}) then 1 else 0;
+            };
+        
+        return nc;
+    };
+
+    update_board :: (dst: &board_t, src: &board_t) -> void {
+        for x := 0; x < len(*src); ++x do
+            for y := 0; y < len(src[0]); ++y {
+                nc := count_neighbors(src, x, y);
+                alive := src[x][y];
+                if alive and nc < 2 then
+                    dst[x][y] = false
+                else if alive and (nc == 2 or nc == 3) then
+                    dst[x][y] = true
+                else if alive and nc > 3 then
+                    dst[x][y] = false
+                else if not alive and nc == 3 then
+                    dst[x][y] = true;
+            };
+    };
+
+    rl.init_window(window_size[0], window_size[1], "Game of Life");
+
+    rl.set_target_fps(60);
+
+    update := false;
+
+    sec_left := delta;
+
+    while not rl.window_should_close() {
+        rl.begin_drawing();
+
+            rl.clear_background(rl.raywhite);
+
+            has_alive := false;
+
+            for i := 0; i < grid_size[0]; ++i do
+                for j := 0; j < grid_size[1]; ++j {
+                    if not has_alive and board[i][j] then has_alive = true;
+
+                    color := if board[i][j] then
+                        rl.black
+                    else
+                        if i % 2 == j % 2 then
+                            rl.white
+                        else
+                            rl.raywhite;
+
+                    rl.draw_rectangle(.{i, j}*cell_size, cell_size, color);
+                };
+
+
+            if update and not has_alive then update = false;
+            
+            if rl.is_mouse_button_pressed(rl.mouse_button_left) {
+                mouse_pos := rl.get_mouse_position()/cell_size;
+                marked := board[mouse_pos[0]][mouse_pos[1]];
+                mark(board, mouse_pos, not marked);
+                
+                update = false;
+                sec_left = delta;
+            };
+
+            if rl.is_mouse_button_pressed(rl.mouse_button_right) {
+                update = not update;
+                sec_left = delta;
+            };
+
+            if update {
+                if sec_left < 0 {
+                    sec_left = delta;
+
+                    tmp := buffer;
+                    buffer = board;
+                    board = tmp;
+
+                    clear_board(board);
+                    update_board(board, buffer);
+                };
+
+                sec_left -= rl.get_frame_time();
+            };
+
+        rl.end_drawing();
+    };
+
+    rl.close_window();
 };
 ```
 
-#### If Expressions
-``` python
-is_hot_outside := if temperature > 25 then "yes" else "no";
-```
+#### Dynamic Array
 
-#### Do-Block Expressions
+This is a good example of the generic syntax in orso. It's makes use of inferred function definitions and parameterized struct definitions.
+
 ```python
-# allows for a break to return an expression
-is_cold_outside := do {
-  if is_hot_outside then break "no";
-  if temperature < 0 then "yes" else "cool";
-};
-```
+# usage
+main :: () -> void {
+  arr := make(int);
+  push(&arr, 6);
+  push(&arr, 9);
 
-#### Loops and Labeled Do-Blocks
-```python
-hotter_day := do:find for month := 0; month < 12; ++month {
-  for day := 0; day < 30; ++day {
-     temp := get_temperature(month, day);
-     if temp < temperature then break:find temp; # breaks out of do block with label
-  };
-} then 0; 
+  *at(&arr, 0) = 4;
+  x := *at(&arr, 1);
 
-```
-
-#### Unreachable Expressions
-```python
-input := {
-  # input is an "unreachable" type if there's no input
-  unless has_input() then return;
-  get_input();
+  free(&arr);
 };
 
-# `&` is the operator to take an address of an l-value
-handle_input(&input);
-```
-
-
-#### Function Definition Expressions
-```python
-add :: (a: sint, b: sint) -> void {
-  return a + b;
+# parameters in a struct definition indicates values must be provided as compile-time constants
+dynarr_t :: struct(u: type) {
+    items := (&u).{};
+    count := 0;
+    capacity := 0;
 };
 
-# short-hand (not implemented yet)
-add :: (a: sint, b: sint) -> void => a + b;
-```
-
-#### Struct Definition Expressions
-```python
-bar_t :: struct {
-  drink_count: sint;
-};
-```
-
-Instantiating and accessing fields like this
-```python
-omallys := bar_t.{ drink_count: 10_000 };
-jims := bar_t.{ 100 };
-
-if omallys.drink_count > jims.drink_count then
-  printint(1)
-else
-  printint(0);
-```
-
-The dot operator works on pointers to structs as well
-```python
-buy_drink :: (bar: &bar_t, amount: sint) -> void {
-  if bar.drink_count > amount then
-    amount = bar.drink_count;
-  bar.drink_count -= amount;
-};
-```
-
-#### Type Expressions
-Types are also treated like expressions.
-```python
-alias_for_sint :: sint;
-
-var_for_sint := int;
-
-# compare them like regular values
-alias_for_sint != var_for_sint and var_for_sint == int;
-```
-
-There are many more expressions, but these examples should highlight the idea.
-
-### Flexible Arithmetic
-All types that are capable of arithmetic operations are flagged as such. For primitives, this just means the number types.
-However, arithmetic operations are common between aggregate types as well. It's not uncommon to create an aggregate type
-to model a positon (vector) or rotation (quarternion).
-
-In orso, aggregates types that are made up of types capable of arithmetic, can also be used for arithmetics.
-```python
-vec3_t :: struct {
-  x := 0.0;
-  y := 0.0;
-  z := 0.0;
+# the `!` before a parameter in a function signature indicates that the respective argument
+# must be provided as a compile-time constant at call-time
+make :: (!u: type) -> dynarr_t(u) {
+    arr := dynarr_t(u).{};
+    return arr;
 };
 
-a := vec3_t.{1, 2, 3};
-b := vec3_t.{4, 5, 6};
+# the `!` before a type in a function signature indicates that the function definition is
+# inferred at call-time during compilation
+push :: (arr: &dynarr_t(u), item: !u) -> void {
+    if arr.count >= arr.capacity {
+        new_cap := if arr.capacity == 0 then 8 else arr.capacity*2;
+        arr.items = (@icall "realloc", arr.items as &void,
+            sizeof(u)*(arr.capacity as size_t), sizeof(u)*(new_cap as size_t)) as &u;
+        arr.capacity = new_cap;
+    };
 
-# adding structs composed of arithmetic types is fine
-c := a + b;
-
-matrix_t :: [3][3]f64;
-
-mat1 := matrix_t.{.{1, 0, 0}, .{0, 1, 0}, .{0, 0, 1}};
-mat2 := matrix_t.{.{0, 0, 1}, .{0, 1, 0}, .{1, 0, 0}};
-
-# adding arrays composed of arithmetic types is fine
-mat3 := mat1 + mat2;
-```
-
-### Metaprogramming
-While the metaprogramming features are minimal, they are quite powerful.
-
-#### Inferred Function Definition
-```python
-add :: (a: !u, b: u) -> u {
-  return a + b;
+    *(arr.items + (arr.count as ptrdiff_t)) = item;
+    ++arr.count;
 };
 
-# copy of add is created for `double`s, inferred by the `1.5` argument
-add(1.5, 2.6);
-
-# copy of add is created for `sint`s, inferred by the `5` argument
-add(5, 10);
-```
-
-#### Inferred Struct Definition
-todo
-
-#### Arbitrary Expression Compile-Time Evaluation
-
-This can be used to evaluate values you want to be present at compile-time.
-
-```python
-gen_pi :: (precision: double) -> double {
-  pi := # evaluate PI using an interative approach
-  return pi;
+at :: (arr: &dynarr_t(!u), index := 0) -> &u {
+    if index < 0 then index = arr.count - index;
+    item := arr.items + (index as ptrdiff_t);
+    return item;
 };
 
-# `@run` directive attempts to run any expression at compile-time
-PI :: @run gen_pi(0.000000001);
+free :: (arr: &dynarr_t(!u)) -> void {
+    @icall "realloc", arr.items as &void, sizeof(u)*(arr.capacity as size_t), 0sz;
+    *arr = .{};
+};
 ```
-
-Since everything is an expression, you can also do this inside the type annotation
-```python
-get_real_type :: () -> type => if HIGH_PRECISION then double else float;
-real : @run get_real_type() = 10 .0; 
-```
-
-This will run the `get_real_type` at compile-time and provide a compile-time type value to the type annotation to use to define the variable.
-
-You can inline the actual expression too
-```python
-real : @run if HIGH_PRECISION then double else float = 10 .0; 
-```
-
-#### Macros
-todo
-
-#### Custom Compiler Directives
-todo
-
-
-
-
-
-
