@@ -42,21 +42,6 @@ int main(int argc, char **argv) {
 
     nob_mkdir_if_not_exists("./bin");
 
-    // build test
-    {
-        cc_t cc = cc_make(CC_GCC, &allocator);
-        cc.output_type = CC_EXE;
-        cc_flag(&cc, lit2str("-std=c99"));
-        cc_flag(&cc, lit2str("-Wall"));
-        cc_flag(&cc, lit2str("-Wextra"));
-        // cc_flag(&cc, lit2str("-fsanitize=address"));
-
-        cc_source(&cc, lit2str("./tests/test.c"));
-        cc.output_path = lit2str("./bin/test");
-
-        cc_build(&cc);
-    }
-    
     // build liborso
     {
         cc_t cc = cc_make(CC_GCC, &allocator);
@@ -87,15 +72,53 @@ int main(int argc, char **argv) {
             cc_build(&cc);
         }
 
-        // then compiler
-        {
-            cc.output_path = lit2str("./bin/orso");
-            cc.output_type = CC_EXE;
-            cc_source(&cc, lit2str("./src/main.c"));
-            cc_build(&cc);
-        }
-
     }
+
+    // build test
+    {
+        cc_t cc = cc_make(CC_GCC, &allocator);
+        cc.output_type = CC_EXE;
+        cc_flag(&cc, lit2str("-std=c99"));
+        cc_flag(&cc, lit2str("-Wall"));
+        cc_flag(&cc, lit2str("-Wextra"));
+        cc_flag(&cc, lit2str("-g"));
+        cc_flag(&cc, lit2str("-ggdb"));
+        cc_flag(&cc, lit2str("-DDEBUG"));
+        // cc_flag(&cc, lit2str("-fsanitize=address"));
+
+        cc_include_dir(&cc, lit2str("./include"));
+        cc_include_dir(&cc, lit2str("./lib"));
+
+        cc_libpath(&cc, lit2str("./bin/liborso.a"));
+
+        cc_source(&cc, lit2str("./tests/test.c"));
+        cc.output_path = lit2str("./bin/test");
+
+        cc_build(&cc);
+    }
+
+    {
+        cc_t cc = cc_make(CC_GCC, &allocator);
+        cc.output_type = CC_EXE;
+        cc_flag(&cc, lit2str("-std=c99"));
+        cc_flag(&cc, lit2str("-Wall"));
+        cc_flag(&cc, lit2str("-Wextra"));
+        cc_flag(&cc, lit2str("-g"));
+        cc_flag(&cc, lit2str("-ggdb"));
+        cc_flag(&cc, lit2str("-DDEBUG"));
+
+        cc_include_dir(&cc, lit2str("./include"));
+        cc_include_dir(&cc, lit2str("./lib"));
+
+        cc_libpath(&cc, lit2str("./bin/liborso.a"));
+
+        cc_source(&cc, lit2str("./src/main.c"));
+
+        cc.output_path = lit2str("./bin/orso");
+        cc.output_type = CC_EXE;
+        cc_build(&cc);
+    }
+    
 
     nob_copy_file("./lib/core.or", "./bin/core.or");
 

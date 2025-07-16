@@ -1,35 +1,34 @@
-#define NOB_IMPLEMENTATION
 #include "../nob.h"
+#include <stdlib.h>
 
-typedef const char *orcstr_t;
+#include "orso.h"
+#include "parser.h"
+
+// from orso.c
+ast_t *orbuild_ast(orstring_t source, arena_t *arena, orstring_t file_path);
+void print_errors(ast_t *ast);
+
+typedef const char *cstr_t;
 
 void print_usage(void) {
     printf("usage :\n");
     printf("  test              - prints this usage text\n");
     printf("  test <testpath>   - <testpath> is the relative path to the odl file to test, paths ending in / or \\\\ will test the directory recursively\n");
+    printf("  errors [tag]      - [tag] is the full or sub-path of the error, otherwise all are tested");
     printf("\n");
 }
 
-Nob_String_View sv_filename(Nob_String_View sv) {
-    for (size_t i = sv.count; i > 0; --i) {
-        if (sv.data[i-1] == '\\' || sv.data[i-1] == '/') {
-            return (Nob_String_View){
-                .count = sv.count - (i),
-                .data = sv.data+(i),
-            };
-        }
-    }
+static bool test(cstr_t test_file_path) {
+    Nob_String_View test_file_path_sv_ = nob_sv_from_cstr(test_file_path);
+    string_view_t test_file_path_sv = {
+        .data = test_file_path_sv_.data,
+        .length = test_file_path_sv_.count
+    };
+    string_view_t filename = sv_filename(test_file_path_sv);
 
-    return sv;
-}
-
-static bool test(orcstr_t test_file_path) {
-    Nob_String_View test_file_path_sv = nob_sv_from_cstr(test_file_path);
-    Nob_String_View filename = sv_filename(test_file_path_sv);
-
-    orcstr_t native_results_path = nob_temp_sprintf(".tmp/%.*s.result.native", filename.count, filename.data);
-    orcstr_t interp_results_path = nob_temp_sprintf(".tmp/%.*s.result.interp", filename.count, filename.data);
-    orcstr_t executable_file_path = nob_temp_sprintf(".tmp/%.*s.out", filename.count, filename.data);
+    cstr_t native_results_path = nob_temp_sprintf(".tmp/%.*s.result.native", filename.length, filename.data);
+    cstr_t interp_results_path = nob_temp_sprintf(".tmp/%.*s.result.interp", filename.length, filename.data);
+    cstr_t executable_file_path = nob_temp_sprintf(".tmp/%.*s.out", filename.length, filename.data);
     
     Nob_Fd nativefd = nob_fd_open_for_write(native_results_path);
     Nob_Fd interpfd = nob_fd_open_for_write(interp_results_path);
@@ -49,7 +48,7 @@ static bool test(orcstr_t test_file_path) {
 
     nob_log(NOB_INFO, "---- Executable path: %s", executable_file_path);
 
-    orcstr_t call_test = nob_temp_sprintf("./%s", executable_file_path);
+    cstr_t call_test = nob_temp_sprintf("./%s", executable_file_path);
     nob_cmd_append(&cmd, call_test);
     if (!nob_cmd_run_sync_redirect_and_reset(&cmd, (Nob_Cmd_Redirect){
         .fdout = &nativefd,
@@ -84,49 +83,181 @@ defer:
     return result;
 }
 
+typedef struct cstrs_t cstrs_t;
+struct cstrs_t {
+    cstr_t *items;
+    size_t capacity;
+    size_t count;
+};
+
+#define da_push(arr, item) do { \
+    size_t new_capacity = (arr)->capacity; \
+    while ((arr)->count >= new_capacity) \
+        new_capacity = new_capacity == 0 ? 8 : new_capacity*2; \
+    if (new_capacity != (arr)->capacity) { \
+        (arr)->items = realloc((arr)->items, new_capacity*sizeof(*((arr)->items))); \
+        (arr)->capacity = new_capacity; \
+    } \
+    (arr)->items[((arr)->count)++] = (item); \
+} while (0)
+
+static bool find_char_before_eol(cstr_t s_, char c, size_t *result_index) {
+    size_t index = 0;
+    char *s = (char*)s_;
+    while (*s != '\0' && *s != '\n') {
+        if (*s == c) {
+            *result_index = index;
+            return true;
+        }
+
+        ++index;
+        ++s;
+    }
+
+    return false;
+}
+
+typedef struct error_tag_t error_tag_t;
+struct error_tag_t {
+    cstr_t file;
+    size_t line;
+    size_t column;
+    cstr_t tag;
+};
+
+typedef struct error_tags_t error_tags_t;
+struct error_tags_t {
+    error_tag_t *items;
+    size_t count;
+    size_t capacity;
+};
+
+static error_tags_t get_all_error_tags() {
+    const size_t path_count = 3;
+    cstr_t src_paths[path_count] = {
+        "./src/parser.c",
+        "./src/static_analyzer.c",
+        "./include/codegen.h"
+    };
+
+    error_tags_t tags = {0};
+
+    const cstr_t tag_label = ".tag";
+    const size_t tag_size = strlen(tag_label);
+
+    for (size_t i = 0; i < path_count; ++i) {
+        cstr_t path = src_paths[i];
+        Nob_String_Builder sb = {0};
+        bool success = nob_read_entire_file(path, &sb);
+        NOB_ASSERT(success);
+
+        size_t line = 0;
+        size_t column = 0;
+
+        for (size_t j = 0; j < sb.count; ++j) {
+            ++column;
+
+            if (sb.items[j] == '\n') {
+                ++line;
+                column = 0;
+            }
+
+            if (strncmp(tag_label, sb.items+j, tag_size) == 0) {
+                size_t tag_start = 0;
+                success = find_char_before_eol(sb.items+j, '\"', &tag_start);
+                NOB_ASSERT(success);
+                tag_start += j+1;
+
+                size_t tag_end = 0;
+                success = find_char_before_eol(sb.items+tag_start, '\"', &tag_end);
+                NOB_ASSERT(success);
+
+                tag_end += tag_start;
+
+                size_t count = tag_end - tag_start;
+                cstr_t tag = strndup(sb.items+tag_start, count);
+
+                error_tag_t error_tag = {
+                    .file = path,
+                    .line = line,
+                    .column = column,
+                    .tag = tag,
+                };
+
+                da_push(&tags, error_tag);
+
+                j = tag_end+1;
+            }
+        }
+
+        nob_sb_free(sb);
+    }
+
+    return tags;
+}
+
 int main(int argc, char *argv[]) {
     nob_shift(argv, argc);
 
-    Nob_String_View test_file_path;
-    orcstr_t ctest_file_path;
-    if (argc) {
-        ctest_file_path = argv[0];
-        test_file_path = nob_sv_from_cstr(ctest_file_path);
-    } else {
+    if (argc == 0) {
         print_usage();
-        return 0;
+        return 1;
     }
 
-    nob_mkdir_if_not_exists(".tmp");
+    cstr_t command = argv[0];
 
-    bool is_dir = false;
-    char last_char = test_file_path.data[test_file_path.count-1];
-    if (last_char == '/' || last_char == '\\') {
-        is_dir = true;
-    }
+    if (strcmp(command, "errors") == 0) {
+        error_tags_t tags = get_all_error_tags();
+        nob_log(NOB_INFO, "error tag count: %zu", tags.count);
+        for (size_t i = 0; i < tags.count; ++i) {
+            error_tag_t tag = tags.items[i];
+            nob_log(NOB_INFO, "%s:%zu:%zu: %s", tag.file, tag.line+1, tag.column, tag.tag);
 
-    if (is_dir) {
-        Nob_File_Paths files = {0};
-        size_t checkpoint = nob_temp_save();
-        if (nob_read_entire_dir(ctest_file_path, &files)) {
-            for (size_t i = 0; i < files.count; ++i) {
-                orcstr_t filename = files.items[i];
+            cstr_t filepath = nob_temp_sprintf("./tests/errors/%s.or", tag.tag);
 
-                if (!nob_sv_end_with(nob_sv_from_cstr(filename), ".odl")) {
-                    continue;
-                }
-
-                orcstr_t fullpath = nob_temp_sprintf("%s%s", ctest_file_path, filename);
-
-                bool success = test(fullpath);
-                if (!success) break;
-
-                nob_temp_rewind(checkpoint);
+            Nob_String_Builder sb = {0};
+            bool success = nob_read_entire_file(filepath, &sb);
+            if (!success) {
+                nob_log(NOB_ERROR, "could not run test for error: '%s'", tag.tag);
+                break;
             }
 
-            nob_da_free(files);
+            orstring_t src = {
+                .cstr = sb.items,
+                .length = sb.count,
+            };
+
+            arena_t arena = {0};
+            orstring_t filepath_ = {
+                .cstr = filepath,
+                .length = strlen(filepath),
+            };
+            ast_t *ast = orbuild_ast(src, &arena, filepath_);
+
+            success = false;
+            if (ast->errors.count != 1) {
+                nob_log(NOB_ERROR, "expected 1 error but got '%zu' instead", ast->errors.count);
+                goto loop_end;
+            }
+
+            orcstr_t actual_tag = ast->errors.items[0].tag;
+            if (strcmp(actual_tag, tag.tag) != 0) {
+                nob_log(NOB_ERROR, "expected error '%s' error but got '%s' instead", tag.tag, actual_tag);
+                print_errors(ast);
+                goto loop_end;
+            }
+
+            success = true;
+
+        loop_end:
+            arena_free(&arena);
+
+            if (!success) break;
         }
-    } else {
-        test(ctest_file_path);
+
+    } else if (strcmp(command, "test") == 0) {
+        NOB_TODO("test");
     }
+
+    return 0;
 }

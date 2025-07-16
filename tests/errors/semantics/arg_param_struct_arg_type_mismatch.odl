@@ -1,9 +1,0 @@
-pair_t :: struct(key_t: type, value_t: type) {
-    key := key_t.{};
-    value := value_t.{};
-};
-
-main :: () -> void {
-    a := pair_t(10, int).{1, 1};
-    a;
-};

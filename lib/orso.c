@@ -60,7 +60,7 @@ static void myerror(ast_t *ast, error_t error) {
     allocator_return(tmp);
 }
 
-static void print_errors(ast_t *ast) {
+void print_errors(ast_t *ast) {
     for (size_t i = 0; i < ast->errors.count; ++i) {
         error_t error = ast->errors.items[i];
         myerror(ast, error);
@@ -82,7 +82,7 @@ static bool load_file(orstring_t in, orstring_t *source, arena_t *arena) {
     return true;
 }
 
-static ast_t *build_ast(orstring_t source, arena_t *arena, orstring_t file_path) {
+ast_t *orbuild_ast(orstring_t source, arena_t *arena, orstring_t file_path) {
     ast_t *ast = arena_alloc(arena, sizeof(ast_t));
     ast_init(ast, arena);
     ast->vm = vm_default(arena);
@@ -176,7 +176,7 @@ bool orbuild(void *compiler_) {
     bool success = load_file(compiler->root_source, &source, &arena);
     if (!success) return 0;
 
-    ast_t *ast = build_ast(source, &arena, compiler->root_source);
+    ast_t *ast = orbuild_ast(source, &arena, compiler->root_source);
 
     bool result = false;
 
@@ -214,7 +214,7 @@ void print_ast(orstring_t input_file_path) {
     bool success = load_file(input_file_path, &source, &arena);
     if (!success) exit(1);
 
-    ast_t *ast = build_ast(source, &arena, input_file_path);
+    ast_t *ast = orbuild_ast(source, &arena, input_file_path);
 
     if (!ast->resolved) {
         print_errors(ast);
@@ -230,7 +230,7 @@ bool orinterpret(orstring_t input_file_path) {
     bool success = load_file(input_file_path, &source, &arena);
     if (!success) exit(1);
 
-    ast_t *ast = build_ast(source, &arena, input_file_path);
+    ast_t *ast = orbuild_ast(source, &arena, input_file_path);
 
     bool result = false;
 
@@ -271,7 +271,7 @@ bool debug(orstring_t input_file_path) {
     bool success = load_file(input_file_path, &source, &arena);
     if (!success) exit(1);
 
-    ast_t *ast = build_ast(source, &arena, input_file_path);
+    ast_t *ast = orbuild_ast(source, &arena, input_file_path);
 
     bool result = false;
 

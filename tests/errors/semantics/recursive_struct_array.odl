@@ -1,7 +1,0 @@
-main :: () -> void {
-    foo_t :: struct {
-        foos: [2]foo_t;
-    };
-
-    foo_t.{};
-};

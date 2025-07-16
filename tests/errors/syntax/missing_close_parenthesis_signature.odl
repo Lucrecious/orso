@@ -1,2 +1,0 @@
-main :: () -> void {
-    f :: (a: int -> void) -> void

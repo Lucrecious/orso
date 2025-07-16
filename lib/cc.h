@@ -187,9 +187,7 @@ bool cc_build(cc_t *cc) {
             break;
         }
         case CC_STATIC: {
-            cmd_append(&cmd, "ar");
-            cmd_append(&cmd, "rcs");
-            cmd_append(&cmd, outfile.cstr);
+            cmd_append(&cmd, "ar", "rcs", outfile.cstr);
 
             for (size_t i = 0; i < source_out_paths.count; ++i) {
                 orstring_t source_out_path = source_out_paths.items[i];

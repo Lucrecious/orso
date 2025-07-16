@@ -1,9 +1,0 @@
-main :: () -> void {
-    mytype :: () -> foo_t {
-        return .{};
-    };
-
-    foo_t :: struct {
-        foo := @run mytype();
-    };
-};

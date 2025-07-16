@@ -1,5 +1,0 @@
-main :: () -> void {
-    () -> int {
-        return true;
-    };
-};

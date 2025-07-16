@@ -1,9 +1,9 @@
 rl :: @load "./vendor/raylib.or";
 
-# alias for pair of floats
-vec2f_t :: [2]f32;
-
-grid_size :: [2]int.{32, 32};
+GX :: 32;
+GY :: 32;
+board_t :: [GX][GY]bool;
+grid_size :: [2]int.{GX, GY};
 cell_size :: [2]int.{16, 16};
 
 window_size :: grid_size * cell_size;
@@ -11,28 +11,31 @@ window_size :: grid_size * cell_size;
 delta :: 0.15;
 
 main :: () -> void {
-    board_ := [32][32]bool.{};
-    buffer_ := [32][32]bool.{};
+    # board := &&board_t.{};
+    # buffer := &&board_t.{};
+    
+    board_ := board_t.{};
+    buffer_ := board_t.{};
 
     board := &board_;
     buffer := &buffer_;
 
-    clear_board :: (board: &[32][32]bool) -> void {
+    clear_board :: (board: &board_t) -> void {
         for i := 0; i < len(*board); ++i do
             for j := 0; j < len(board[0]); ++j {
                 board[i][j] = false;
             };
     };
 
-    mark  :: (board: &[32][32]bool, pos: [2]int, with := true) -> void {
+    mark  :: (board: &board_t, pos: [2]int, with := true) -> void {
         if pos[0] >= 0 and pos[0] < len(*board) and pos[1] >= 0 and pos[1] < len(board[0]) {
             board[pos[0]][pos[1]] = with;
         };
     };
 
-    is_marked :: (board: &[32][32]bool, pos: [2]int) -> bool {
+    is_marked :: (board: &board_t, pos: [2]int) -> bool {
         while pos[0] < 0 do pos[0] += len(*board);
-        while pos[1] < 0 do pos[1] += len(*board);
+        while pos[1] < 0 do pos[1] += len(board[0]);
 
         pos[0] %= len(*board);
         pos[1] %= len(board[0]);
@@ -41,7 +44,7 @@ main :: () -> void {
         return marked;
     };
 
-    count_neighbors :: (board: &[32][32]bool, x: int, y: int) -> int {
+    count_neighbors :: (board: &board_t, x: int, y: int) -> int {
         nc := 0;
 
         for sx := x-1; sx < x+2; ++sx do
@@ -53,7 +56,7 @@ main :: () -> void {
         return nc;
     };
 
-    update_board :: (dst: &[32][32]bool, src: &[32][32]bool) -> void {
+    update_board :: (dst: &board_t, src: &board_t) -> void {
         for x := 0; x < len(*src); ++x do
             for y := 0; y < len(src[0]); ++y {
                 nc := count_neighbors(src, x, y);
@@ -110,8 +113,7 @@ main :: () -> void {
 
             if rl.is_mouse_button_pressed(rl.mouse_button_right) {
                 update = not update;
-                if not update then
-                    sec_left = delta;
+                sec_left = delta;
             };
 
             if update {

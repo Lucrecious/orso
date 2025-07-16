@@ -1171,7 +1171,7 @@ static ast_node_t *parse_number(parser_t *parser) {
                     case NUM_TYPE_SIGNED: {
                         if (value > INT8_MAX) {
                             parser_error(parser, OR_ERROR(
-                                .tag = "syn.too-large.i8",
+                                .tag = "syn.overflow.s8-value",
                                 .level = ERROR_SOURCE_PARSER,
                                 .msg = lit2str("number too large to fit in an 's8'"),
                                 .args = ORERR_ARGS(error_arg_token(token)),
@@ -1184,7 +1184,7 @@ static ast_node_t *parse_number(parser_t *parser) {
                     case NUM_TYPE_UNSIGNED: {
                         if (value > UINT8_MAX) {
                             parser_error(parser, OR_ERROR(
-                                .tag = "syn.too-large.u8",
+                                .tag = "syn.overflow.u8-value",
                                 .level = ERROR_SOURCE_PARSER,
                                 .msg = lit2str("number too large to fit in a 'u8'"),
                                 .args = ORERR_ARGS(error_arg_token(token)),
@@ -1205,7 +1205,7 @@ static ast_node_t *parse_number(parser_t *parser) {
                     case NUM_TYPE_SIGNED: {
                         if (value > INT16_MAX) {
                             parser_error(parser, OR_ERROR(
-                                .tag = "syn.too-large.s16",
+                                .tag = "syn.overflow.s16-value",
                                 .level = ERROR_SOURCE_PARSER,
                                 .msg = lit2str("number too large to fit in a 's16'"),
                                 .args = ORERR_ARGS(error_arg_token(token)),
@@ -1218,7 +1218,7 @@ static ast_node_t *parse_number(parser_t *parser) {
                     case NUM_TYPE_UNSIGNED: {
                         if (value > UINT16_MAX) {
                             parser_error(parser, OR_ERROR(
-                                .tag = "syn.too-large.u16",
+                                .tag = "syn.overflow.u16-value",
                                 .level = ERROR_SOURCE_PARSER,
                                 .msg = lit2str("number too large to fit in a 'u16'"),
                                 .args = ORERR_ARGS(error_arg_token(token)),
@@ -1238,7 +1238,7 @@ static ast_node_t *parse_number(parser_t *parser) {
                     case NUM_TYPE_SIGNED: {
                         if (value > INT32_MAX) {
                             parser_error(parser, OR_ERROR(
-                                .tag = "syn.too-large.s32",
+                                .tag = "syn.overflow.s32-value",
                                 .level = ERROR_SOURCE_PARSER,
                                 .msg = lit2str("number too large to fit in a 's32'"),
                                 .args = ORERR_ARGS(error_arg_token(token)),
@@ -1251,7 +1251,7 @@ static ast_node_t *parse_number(parser_t *parser) {
                     case NUM_TYPE_UNSIGNED: {
                         if (value > UINT32_MAX) {
                             parser_error(parser, OR_ERROR(
-                                .tag = "syn.too-large.u32",
+                                .tag = "syn.overflow.u32-value",
                                 .level = ERROR_SOURCE_PARSER,
                                 .msg = lit2str("number too large to fit in a 'u32'"),
                                 .args = ORERR_ARGS(error_arg_token(token)),

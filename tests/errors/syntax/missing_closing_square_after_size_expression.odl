@@ -1,4 +1,0 @@
-main :: () -> void {
-    arr := [2]int.{};
-    arr[1;
-};

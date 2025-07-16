@@ -15,7 +15,7 @@ push :: (arr: &dynarr_t(u), item: !u) -> void {
     ++arr.count;
 };
 
-at :: (arr: &dynarr_t(!u), index := 0) -> &u {
+at :: @op "[]", (arr: &dynarr_t(!u), index := 0) -> &u {
     if index < 0 then index = arr.count - index;
     # assert(index < arr.count);
     item := arr.items + (index as ptrdiff_t);

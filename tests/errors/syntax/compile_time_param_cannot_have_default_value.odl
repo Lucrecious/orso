@@ -1,9 +1,0 @@
-main :: () -> void {
-    add :: (!a := 0) -> int {
-        return a;
-    };
-
-    x := add(1);
-    printint(x);
-    println();
-};

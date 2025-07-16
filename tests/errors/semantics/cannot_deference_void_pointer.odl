@@ -1,5 +1,0 @@
-main :: () -> void  {
-    x := 0;
-    xp := &x as &void;
-    *xp;
-};
