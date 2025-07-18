@@ -1,0 +1,6 @@
+main :: () -> void {
+    x := false;
+    do:outer {
+        if { if x then break:outer; true; } then true;
+    };
+};

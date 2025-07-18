@@ -1,0 +1,3 @@
+main :: () -> void {
+    @fficall "libraylib.a";
+};

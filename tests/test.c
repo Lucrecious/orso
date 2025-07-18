@@ -200,6 +200,27 @@ static void log_error_tag_location(error_tag_t tag, bool is_skipping) {
     nob_log(NOB_INFO, "%s%s:%zu:%zu: %s", is_skipping ? "SKIPPED -- " : "", tag.file, tag.line+1, tag.column, tag.tag);
 }
 
+static bool check_error(ast_t *ast, error_tag_t expected_tag, size_t expected_error_count, size_t check_index) {
+    MUST(check_index < expected_error_count);
+
+    if (ast->errors.count != expected_error_count) {
+        nob_log(NOB_ERROR, "expected 1 error but got '%zu' instead", ast->errors.count);
+        if (ast->errors.count > 0) {
+            print_errors(ast);
+        }
+        return false;
+    }
+
+    orcstr_t actual_tag = ast->errors.items[check_index].tag;
+    if (strcmp(actual_tag, expected_tag.tag) != 0) {
+        nob_log(NOB_ERROR, "expected error '%s' error but got '%s' instead", expected_tag.tag, actual_tag);
+        print_errors(ast);
+        return false;
+    }
+
+    return true;
+}
+
 int main(int argc, char *argv[]) {
     nob_shift(argv, argc);
 
@@ -269,24 +290,16 @@ int main(int argc, char *argv[]) {
             ast_t *ast = orbuild_ast(src, &arena, filepath_);
 
             success = false;
-            if (ast->errors.count != 1) {
-                nob_log(NOB_ERROR, "expected 1 error but got '%zu' instead", ast->errors.count);
-                if (ast->errors.count > 0) {
-                    print_errors(ast);
-                }
-                goto loop_end;
+
+            // exceptions
+            if (strcmp(tag.tag, "sem.fficall-mismatch.return-type") == 0
+            || strcmp(tag.tag, "sem.type-mismatch.fficall-arg") == 0
+            || strcmp(tag.tag, "sem.arg-count-mismatch.fiicall-call") == 0) {
+                success = check_error(ast, tag, 3, 2);
+            } else {
+                success = check_error(ast, tag, 1, 0);
             }
 
-            orcstr_t actual_tag = ast->errors.items[0].tag;
-            if (strcmp(actual_tag, tag.tag) != 0) {
-                nob_log(NOB_ERROR, "expected error '%s' error but got '%s' instead", tag.tag, actual_tag);
-                print_errors(ast);
-                goto loop_end;
-            }
-
-            success = true;
-
-        loop_end:
             arena_free(&arena);
 
             if (!success) break;

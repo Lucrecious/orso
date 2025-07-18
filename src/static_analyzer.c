@@ -146,7 +146,7 @@ static bool check_call_on_func_or_error(analyzer_t *analyzer, ast_t *ast, ast_no
         unless (ortypeid_eq(parameter_type, argument_type) && !TYPE_IS_INVALID(argument_type)) {
             errored = true;
             stan_error(analyzer, OR_ERROR(
-                .tag = "sem.type-mismatch.call-check",
+                .tag = "sem.type-mismatch.call-arg",
                 .level = ERROR_SOURCE_ANALYSIS,
                 .msg = lit2str("argument $0.$ is type '$1.$' but '$2.$' requires type '$3.$'"),
                 .args = ORERR_ARGS(
@@ -176,7 +176,7 @@ static bool fold_funcsig_or_error(analyzer_t *analyzer, ast_t *ast, ast_node_t *
 
     unless (an_func_def_return(sig)->expr_val.is_concrete) {
         stan_error(analyzer, OR_ERROR(
-            .tag = "sem.constant.func-sig",
+            .tag = "sem.expected-constant.func-sig-return",
             .level = ERROR_SOURCE_ANALYSIS,
             .msg = lit2str("return type for function signature must be a constant"),
             .args = ORERR_ARGS(error_arg_node(an_func_def_return(sig))),
@@ -197,7 +197,7 @@ static bool fold_funcsig_or_error(analyzer_t *analyzer, ast_t *ast, ast_node_t *
         unless (parameter->expr_val.is_concrete) {
             hit_error = true;
             stan_error(analyzer, OR_ERROR(
-                .tag = "sem.noconst.sig-param",
+                .tag = "sem.expected-constant.func-sig-param",
                 .level = ERROR_SOURCE_ANALYSIS,
                 .msg = lit2str("parameter type $1.$ for function signature must be a constant"),
                 .args = ORERR_ARGS(error_arg_node(parameter), error_arg_sz(i-an_func_def_arg_start(sig) + 1)),
@@ -214,7 +214,7 @@ static bool fold_funcsig_or_error(analyzer_t *analyzer, ast_t *ast, ast_node_t *
         unless (TYPE_IS_TYPE(parameter->value_type)) {
             hit_error = true;
             stan_error(analyzer, OR_ERROR(
-                .tag = "sem.type-mismatch.param-type",
+                .tag = "sem.type-mismatch.func-sig-param-type",
                 .level = ERROR_SOURCE_ANALYSIS,
                 .msg = lit2str("parameter expression must be type 'type'"),
                 .args = ORERR_ARGS(error_arg_node(parameter), error_arg_sz(i-an_func_def_arg_start(sig) + 1)),
@@ -244,7 +244,7 @@ static bool fold_funcsig_or_error(analyzer_t *analyzer, ast_t *ast, ast_node_t *
     ast_node_t *return_type_expression = an_func_def_return(sig);
     if (!TYPE_IS_TYPE(return_type_expression->value_type)) {
         stan_error(analyzer, OR_ERROR(
-            .tag = "sem.type-mismatch.expr-type",
+            .tag = "sem.type-mismatch.func-sig-return-type",
             .level = ERROR_SOURCE_ANALYSIS,
             .msg = lit2str("return expression must be type 'type'"),
             .args = ORERR_ARGS(error_arg_node(return_type_expression)),
@@ -293,7 +293,7 @@ static bool get_nearest_jmp_scope_in_func_or_error(
 
         if (scope->type == SCOPE_TYPE_CONDITION) {
             stan_error(analyzer, OR_ERROR(
-                .tag = "sem.nojmp.condition",
+                .tag = "sem.invalid-jmp.condition",
                 .level = ERROR_SOURCE_ANALYSIS,
                 .msg = lit2str("jmp expressions cannot leave their condition's scopes"),
                 .args = ORERR_ARGS(error_arg_node(jmp_node), error_arg_node(scope->creator)),
@@ -308,7 +308,7 @@ static bool get_nearest_jmp_scope_in_func_or_error(
     if (search_type == SCOPE_TYPE_FUNCDEF) {
         // i think this is only for parsing expression files
         stan_error(analyzer, OR_ERROR(
-            .tag = "sem.nofunction.return",
+            .tag = "sem.invalid-return.outside-function",
             .level = ERROR_SOURCE_ANALYSIS,
             .msg = lit2str("cannot find function to return from"),
             .args = ORERR_ARGS(error_arg_node(jmp_node)),
@@ -317,7 +317,7 @@ static bool get_nearest_jmp_scope_in_func_or_error(
     } else {
         if (label.length != 0) {
             stan_error(analyzer, OR_ERROR(
-                .tag = "sem.nolabel",
+                .tag = "sem.invalid-label.jmp",
                 .level = ERROR_SOURCE_ANALYSIS,
                 .msg = lit2str("cannot find jmp label '$0.$'"),
                 .args = ORERR_ARGS(error_arg_token(jmp_node->identifier)),
@@ -325,7 +325,7 @@ static bool get_nearest_jmp_scope_in_func_or_error(
             ));
         } else {
             stan_error(analyzer, OR_ERROR(
-                .tag = "sem.jmp.no-valid-scope",
+                .tag = "sem.invalid-scope.jmp",
                 .level = ERROR_SOURCE_ANALYSIS,
                 .msg = lit2str("no valid scope to jmp out of"),
                 .args = ORERR_ARGS(error_arg_node(jmp_node)),
@@ -1127,7 +1127,7 @@ static matched_value_t stan_pattern_match_or_error(analyzer_t *analyzer, ast_nod
     case MATCH_TYPE_POINTER: {
         if (td->kind != TYPE_POINTER) {
             stan_error(analyzer, OR_ERROR(
-                .tag = "sem.nomatch.ptr",
+                .tag = "sem.no-match.ptr",
                 .level = ERROR_SOURCE_ANALYSIS,
                 .msg = lit2str("cannot match to pointer type"),
                 .args = ORERR_ARGS(error_arg_node(arg), error_arg_node(an_decl_type(decl))),
@@ -1142,7 +1142,7 @@ static matched_value_t stan_pattern_match_or_error(analyzer_t *analyzer, ast_nod
     case MATCH_TYPE_ARRAY_TYPE: {
         if (td->kind != TYPE_ARRAY) {
             stan_error(analyzer, OR_ERROR(
-                .tag = "sem.nomatch.arr-type",
+                .tag = "sem.no-match.arr-type",
                 .level = ERROR_SOURCE_ANALYSIS,
                 .msg = lit2str("cannot match to array type"),
                 .args = ORERR_ARGS(error_arg_node(arg), error_arg_node(an_decl_type(decl))),
@@ -1157,7 +1157,7 @@ static matched_value_t stan_pattern_match_or_error(analyzer_t *analyzer, ast_nod
     case MATCH_TYPE_ARRAY_SIZE: {
         if (td->kind != TYPE_ARRAY || expected->next->kind != MATCH_TYPE_IDENTIFIER) {
             stan_error(analyzer, OR_ERROR(
-                .tag = "sem.nomatch.arr-size",
+                .tag = "sem.no-match.arr-size",
                 .level = ERROR_SOURCE_ANALYSIS,
                 .msg = lit2str("cannot match to array size"),
                 .args = ORERR_ARGS(error_arg_node(arg), error_arg_node(an_decl_type(decl))),
@@ -1183,7 +1183,7 @@ static matched_value_t stan_pattern_match_or_error(analyzer_t *analyzer, ast_nod
         size_t arg_index = expected->index;
         if (td->kind != TYPE_FUNCTION || arg_index >= td->as.function.argument_types.count) {
             stan_error(analyzer, OR_ERROR(
-                .tag = "sem.nomatch.sig-arg",
+                .tag = "sem.no-match.sig-arg",
                 .level = ERROR_SOURCE_ANALYSIS,
                 .msg = lit2str("cannot match to argument in signature"),
                 .args = ORERR_ARGS(error_arg_node(arg), error_arg_node(an_decl_type(decl))),
@@ -1201,7 +1201,7 @@ static matched_value_t stan_pattern_match_or_error(analyzer_t *analyzer, ast_nod
         size_t arg_index = expected->index;
         if (td->kind != TYPE_STRUCT || arg_index >= td->as.struct_.params.count) {
             stan_error(analyzer, OR_ERROR(
-                .tag = "sem.nomatch.struct-param",
+                .tag = "sem.no-match.struct-param",
                 .level = ERROR_SOURCE_ANALYSIS,
                 .msg = lit2str("cannot match to struct parameter"),
                 .args = ORERR_ARGS(error_arg_node(arg), error_arg_node(an_decl_type(decl))),
@@ -1218,7 +1218,7 @@ static matched_value_t stan_pattern_match_or_error(analyzer_t *analyzer, ast_nod
 
         if (expected->next->kind != MATCH_TYPE_IDENTIFIER) {
             stan_error(analyzer, OR_ERROR(
-                .tag = "sem.nomatch.expected-value",
+                .tag = "sem.no-match.expected-value|skip",
                 .level = ERROR_SOURCE_ANALYSIS,
                 .msg = lit2str("expected '$2.$' for struct parameter but got '$3.$'"),
                 .args = ORERR_ARGS(error_arg_node(arg), error_arg_node(an_decl_type(decl)),
@@ -1237,7 +1237,7 @@ static matched_value_t stan_pattern_match_or_error(analyzer_t *analyzer, ast_nod
     case MATCH_TYPE_SIG_RET: {
         if (td->kind != TYPE_FUNCTION) {
             stan_error(analyzer, OR_ERROR(
-                .tag = "sem.nomatch.sig-return",
+                .tag = "sem.no-match.sig-return",
                 .level = ERROR_SOURCE_ANALYSIS,
                 .msg = lit2str("cannot match to return in signature"),
                 .args = ORERR_ARGS(error_arg_node(arg), error_arg_node(an_decl_type(decl))),
@@ -1303,7 +1303,7 @@ static void stan_circular_dependency_error(analyzer_t *analyzer, ast_t *ast, ast
     }
 
     stan_error(analyzer, OR_ERROR(
-        .tag = "sem.circ-dep",
+        .tag = "sem.circ-dep.constant",
         .level = ERROR_SOURCE_ANALYSIS,
         .msg = lit2str("attempting to retrieve a constant with recursive compile-time dependencies"),
         .args = ORERR_ARGS(error_arg_node(def), error_arg_ptr(deps)),
@@ -1418,7 +1418,7 @@ size_t stan_struct_is_building(analyzer_t *analyzer, ortype_t struct_type) {
 static size_t stan_declaration_is_recursive(analyzer_t *analyzer, ast_node_t *decl) {
     for (size_t i = analyzer->pending_dependencies.count; i > 0; --i) {
         ast_node_t *dep = analyzer->pending_dependencies.items[i-1];
-        if (dep->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION) break; break;
+        if (dep->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION) break;
         if (dep->node_type == AST_NODE_TYPE_EXPRESSION_STRUCT) break;
         if (dep == decl) return i-1;
     }
@@ -1456,15 +1456,11 @@ static ast_node_t *stan_realize_inferred_funcdefcall_or_errornull(analyzer_t *an
         ast_node_t *call_arg = call->children.items[i-inferred_arg_start+arg_call_start];
 
         if (decl->type_decl_patterns.count > 0) {
+            // this shouldn't happen because their definitions should not be allowed
+            // to define params with with default values
             if (an_is_none(call_arg)) {
+                UNREACHABLE();
                 had_error = true;
-                stan_error(analyzer, OR_ERROR(
-                    .tag = "sem.call.arg-required",
-                    .level = ERROR_SOURCE_ANALYSIS,
-                    .msg = lit2str("inferred call argument must not be omitted"),
-                    .args = ORERR_ARGS(error_arg_node(call_arg)),
-                    .show_code_lines = ORERR_LINES(0),
-                ));
                 continue;
             }
 
@@ -1510,26 +1506,11 @@ static ast_node_t *stan_realize_inferred_funcdefcall_or_errornull(analyzer_t *an
                 MUST(param->node_type == AST_NODE_TYPE_DECLARATION_DEFINITION);
                 an_decl_expr(param) = arg;
 
-                param->is_mutable = false;
-                declare_definition(analyzer, inferred_state.scope, param);
-                resolve_declaration_definition(analyzer, analyzer->ast, inferred_state, param);
-
-                if (TYPE_IS_INVALID(param->value_type)) {
+                if (!arg->expr_val.is_concrete) {
                     had_error = true;
-                    break;
-                }
-
-                if (arg->expr_val.is_concrete) {
-                    matched_value_t value = {
-                        .type = arg->value_type,
-                        .word = arg->expr_val.word,
-                    };
-
-                    array_push(&matched_values, value);
-                } else {
-                    had_error = true;
+                    INVALIDATE(param);
                     stan_error(analyzer, OR_ERROR(
-                        .tag = "sem.noconst.call-arg",
+                        .tag = "sem.expected-constant.inferred-call-arg",
                         .level = ERROR_SOURCE_ANALYSIS,
                         .msg = lit2str("call argument '$1.$' must be a constant"),
                         .args = ORERR_ARGS(error_arg_node(arg), error_arg_token(param->identifier)),
@@ -1537,41 +1518,59 @@ static ast_node_t *stan_realize_inferred_funcdefcall_or_errornull(analyzer_t *an
                     ));
                     break;
                 }
+
+                param->is_mutable = false;
+                declare_definition(analyzer, inferred_state.scope, param);
+                resolve_declaration_definition(analyzer, analyzer->ast, inferred_state, param);
+
+                matched_value_t value = {
+                    .type = arg->value_type,
+                    .word = arg->expr_val.word,
+                };
+
+                array_push(&matched_values, value);
+
+                if (TYPE_IS_INVALID(param->value_type)) {
+                    had_error = true;
+                    break;
+                }
             }
         }
 
-        result = find_realized_node_or_null_by_inferred_values(analyzer->ast, inferred_funcdef->realized_copies, matched_values);
-        unless(result) {
-            // todo: instead of copying the the definition wholesale,
-            // i remove the parameters i've already copied, copy the function
-            // then i add back in the old parameters to the original
-            // that prevents more unnecessary allocations
-            result = ast_node_copy(analyzer->ast->arena, inferred_funcdef);
+        if (!had_error) {
+            result = find_realized_node_or_null_by_inferred_values(analyzer->ast, inferred_funcdef->realized_copies, matched_values);
+            unless(result) {
+                // todo: instead of copying the the definition wholesale,
+                // i remove the parameters i've already copied, copy the function
+                // then i add back in the old parameters to the original
+                // that prevents more unnecessary allocations
+                result = ast_node_copy(analyzer->ast->arena, inferred_funcdef);
 
-            // extract compile time params and respective call args
-            for (size_t i = an_func_def_arg_end(result); i > an_func_def_arg_start(result); --i) {
-                ast_node_t *param = result->children.items[i-1];
-                if (param->is_compile_time_param) {
-                    size_t arg_index = i-1-an_func_def_arg_start(result) + an_call_arg_start(call);
-                    array_remove(&result->children, i-1);
-                    array_remove(&call->children, arg_index);
+                // extract compile time params and respective call args
+                for (size_t i = an_func_def_arg_end(result); i > an_func_def_arg_start(result); --i) {
+                    ast_node_t *param = result->children.items[i-1];
+                    if (param->is_compile_time_param) {
+                        size_t arg_index = i-1-an_func_def_arg_start(result) + an_call_arg_start(call);
+                        array_remove(&result->children, i-1);
+                        array_remove(&call->children, arg_index);
+                    }
                 }
-            }
 
-            matched_values_t matched_values_ = {.allocator=analyzer->ast->arena};
-            for (size_t i = 0; i < matched_values.count; ++i) array_push(&matched_values_, matched_values.items[i]);
+                matched_values_t matched_values_ = {.allocator=analyzer->ast->arena};
+                for (size_t i = 0; i < matched_values.count; ++i) array_push(&matched_values_, matched_values.items[i]);
 
-            inferred_copy_t copy = {
-                .key = matched_values_,
-                .copy = result,
-            };
+                inferred_copy_t copy = {
+                    .key = matched_values_,
+                    .copy = result,
+                };
 
-            array_push(&inferred_funcdef->realized_copies, copy);
+                array_push(&inferred_funcdef->realized_copies, copy);
 
-            resolve_funcdef(analyzer, analyzer->ast, inferred_state, result);
+                resolve_funcdef(analyzer, analyzer->ast, inferred_state, result);
 
-            if (TYPE_IS_INVALID(result->value_type)) {
-                had_error = true;
+                if (TYPE_IS_INVALID(result->value_type)) {
+                    had_error = true;
+                }
             }
         }
     }
@@ -1746,7 +1745,7 @@ static void resolve_struct(analyzer_t *analyzer, ast_t *ast, analysis_state_t st
             ast_node_t *init_expr = an_decl_expr(decl);
             unless (init_expr->expr_val.is_concrete) {
                 stan_error(analyzer, OR_ERROR(
-                    .tag = "sem.noconst.struct-fields",
+                    .tag = "sem.expected-const.struct-fields",
                     .level = ERROR_SOURCE_ANALYSIS,
                     .msg = lit2str("initial expression for fields must be compile-time constants"),
                     .args = ORERR_ARGS(error_arg_node(init_expr)),
@@ -1874,7 +1873,7 @@ static void patch_call_argument_gaps(analyzer_t *analyzer, ast_t *ast, ast_node_
                 if (!found_param) {
                     is_invalid = true;
                     stan_error(analyzer, OR_ERROR(
-                        .tag = "sem.nolabel.call-args",
+                        .tag = "sem.unknown-label.call-args",
                         .level = ERROR_SOURCE_ANALYSIS,
                         .msg = lit2str("cannot find argument '$0.$' for function"),
                         .args = ORERR_ARGS(error_arg_token(arg_or_null->label)),
@@ -1883,12 +1882,12 @@ static void patch_call_argument_gaps(analyzer_t *analyzer, ast_t *ast, ast_node_
                     break;
                 }
 
-                if (next_param_index < param_index) {
+                if (next_param_index < i) {
                     is_invalid = true;
                     struct_field_t next_field = arg_defaults.items[next_param_index];
                     struct_field_t field = arg_defaults.items[param_index];
                     stan_error(analyzer, OR_ERROR(
-                        .tag = "sem.noorder.call-args",
+                        .tag = "sem.out-of-order.call-args",
                         .level = ERROR_SOURCE_ANALYSIS,
                         .msg = lit2str("arguments must be in function parameter order but got argument '$1.$' after argument '$2.$'"),
                         .args = ORERR_ARGS(error_arg_node(arg_or_null), error_arg_str(ast, next_field.name), error_arg_str(ast, field.name)),
@@ -1908,7 +1907,7 @@ static void patch_call_argument_gaps(analyzer_t *analyzer, ast_t *ast, ast_node_
         #define error_arg_must_be_provided(index, n) do {\
             struct_field_t param_field = arg_defaults.items[index]; \
             stan_error(analyzer, OR_ERROR(\
-                .tag = "sem.requires-default.func-arg."#n,\
+                .tag = "sem.expected-expression.call-arg",\
                 .level = ERROR_SOURCE_ANALYSIS,\
                 .msg = lit2str("function argument '$1.$' has no default value and must be provided"),\
                 .args = ORERR_ARGS(error_arg_node(call), error_arg_str(ast, param_field.name)),\
@@ -1953,7 +1952,7 @@ static void patch_call_argument_gaps(analyzer_t *analyzer, ast_t *ast, ast_node_
     if (arg_index < arg_count) {
         struct_field_t field = arg_defaults.items[param_index];
         stan_error(analyzer, OR_ERROR(
-            .tag = "sem.extra-args.call-args",
+            .tag = "sem.arg-overflow.call-args",
             .level = ERROR_SOURCE_ANALYSIS,
             .msg = lit2str("there are extra arguments after '$1.$'"),
             .args = ORERR_ARGS(error_arg_node(call->children.items[arg_start+arg_index]), error_arg_str(ast, field.name)),
@@ -2114,7 +2113,7 @@ static void stan_realize_parameterized_struct(analyzer_t *analyzer, analysis_sta
         if (!arg->expr_val.is_concrete) {
             is_invalid = true;
             stan_error(analyzer, OR_ERROR(
-                .tag = "sem.noconst.struct-args",
+                .tag = "sem.missing-const.struct-args",
                 .level = ERROR_SOURCE_ANALYSIS,
                 .msg = lit2str("parameterized struct arugments must be compile-time constants"),
                 .args = ORERR_ARGS(error_arg_node(arg)),
@@ -2218,7 +2217,7 @@ static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
         if (!callee->expr_val.is_concrete) {
             if (arg_count != callee_td->as.function.argument_types.count) {
                 stan_error(analyzer, OR_ERROR(
-                    .tag = "sem.all-args-required.nonconst-funcs",
+                    .tag = "sem.all-args-required.nonconst-call",
                     .level = ERROR_SOURCE_ANALYSIS,
                     .msg = lit2str("for calls on non-constant functions, all arguments are required; got '$1.$' arguments instead of '$2.$'"),
                     .args = ORERR_ARGS(error_arg_node(call), error_arg_sz(arg_count), error_arg_sz(callee_td->as.function.argument_types.count)),
@@ -2232,7 +2231,7 @@ static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
                 ast_node_t *arg = call->children.items[argi];
                 if (arg->label.view.length > 0) {
                     stan_error(analyzer, OR_ERROR(
-                        .tag = "sem.nolabel.nonconst-func",
+                        .tag = "sem.invalid-label.nonconst-call",
                         .level = ERROR_SOURCE_ANALYSIS,
                         .msg = lit2str("cannot use labels on arguments for calls on non-constant functions"),
                         .args = ORERR_ARGS(error_arg_token(arg->label)),
@@ -2243,7 +2242,7 @@ static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
 
                 if (an_is_none(arg)) {
                     stan_error(analyzer, OR_ERROR(
-                        .tag = "sem.args-required.nonconst.func",
+                        .tag = "sem.args-required.nonconst-call",
                         .level = ERROR_SOURCE_ANALYSIS,
                         .msg = lit2str("cannot omit arguments for a call on a non-constant function"),
                         .args = ORERR_ARGS(error_arg_node(arg)),
@@ -2269,7 +2268,7 @@ static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
             // im not sure if this is possible
             unless (callee->expr_val.is_concrete) {
                 stan_error(analyzer, OR_ERROR(
-                    .tag = "sem.noconst.inferred-func-decl-callee",
+                    .tag = "sem.noconst.inferred-func-decl-callee|skip",
                     .level = ERROR_SOURCE_ANALYSIS,
                     .msg = lit2str("callee is an inferred function declaration and must be a constant"),
                     .args = ORERR_ARGS(error_arg_node(callee)),
@@ -2367,7 +2366,7 @@ static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
     } else {
         unless (TYPE_IS_INVALID(callee_type)) {
             stan_error(analyzer, OR_ERROR(
-                .tag = "sem.nocallable.call",
+                .tag = "sem.invalid-callable.call",
                 .level = ERROR_SOURCE_ANALYSIS,
                 .msg = lit2str("expected a function or parameterized struct but got '$0.type$' instead"),
                 .args = ORERR_ARGS(error_arg_node(callee)),
@@ -2451,7 +2450,7 @@ static bool resolve_directive_argument_or_error(analyzer_t *analyzer, ast_t *ast
     if (!ortypeid_eq(expected_type, arg->value_type)) {
         if (!TYPE_IS_INVALID(arg->value_type)) {
             stan_error(analyzer, OR_ERROR(
-                .tag = "sem.type-mismatch.directive",
+                .tag = "sem.type-mismatch.directive-arg",
                 .level = ERROR_SOURCE_ANALYSIS,
                 .msg = lit2str("'$4.$' argument $3.$ requires a '$1.$' but got '$2.$'"),
                 .args = ORERR_ARGS(error_arg_node(arg), error_arg_type(expected_type), error_arg_type(arg->value_type), error_arg_sz(arg_zero_based_pos + 1), error_arg_node(directive)),
@@ -2463,7 +2462,7 @@ static bool resolve_directive_argument_or_error(analyzer_t *analyzer, ast_t *ast
 
     if (arg_must_be_compile_time && !arg->expr_val.is_concrete) {
         stan_error(analyzer, OR_ERROR(
-            .tag = "sem.noconst.directive",
+            .tag = "sem.expected-constant.directive",
             .level = ERROR_SOURCE_ANALYSIS,
             .msg = lit2str("'$2.$' argument $1.$ must be a constant"),
             .args = ORERR_ARGS(error_arg_node(arg), error_arg_sz(arg_zero_based_pos+1), error_arg_node(directive)),
@@ -2481,6 +2480,17 @@ static ast_node_t *stan_load_module_or_errornull(analyzer_t *analyzer, ast_t *as
 
     ast_node_t *result = NULL;
     Nob_String_Builder sb = {0};
+
+    if (!nob_file_exists(s.cstr)) {
+        stan_error(analyzer, OR_ERROR(
+            .tag = "sem.unknown-module.directive-load",
+            .level = ERROR_SOURCE_ANALYSIS,
+            .msg = lit2str("cannot find module: '$1.$'"),
+            .args = ORERR_ARGS(error_arg_node(arg_ref)),
+            .show_code_lines = ORERR_LINES(0),
+        ));
+        nob_return_defer(NULL);
+    }
     
     orstring_t moduleid = ast_generate_moduleid(s, tmp->allocator);
 
@@ -2491,14 +2501,8 @@ static ast_node_t *stan_load_module_or_errornull(analyzer_t *analyzer, ast_t *as
 
     orstring_t source;
     if (!nob_read_entire_file(s.cstr, &sb)) {
-        stan_error(analyzer, OR_ERROR(
-            .tag = "sem.nomodule.loadmodule",
-            .level = ERROR_SOURCE_ANALYSIS,
-            .msg = lit2str("cannot find module: '$1.$'"),
-            .args = ORERR_ARGS(error_arg_node(arg_ref)),
-            .show_code_lines = ORERR_LINES(0),
-        ));
-        nob_return_defer(NULL);
+        // it must exist!! if it doesn't then ill write an error for it
+        UNREACHABLE();
     }
 
     source = cstrn2string(sb.items, sb.count, ast->arena);
@@ -2523,7 +2527,7 @@ bool check_dir_or_intr_params_or_error(analyzer_t *analyzer, analysis_state_t st
         if (count < expected_arg_count) {
             orstring_t directive_name = sv2string(call->identifier.view, ast->arena);
             stan_error(analyzer, OR_ERROR(
-                .tag = "sem.directive.not-enough-args",
+                .tag = "sem.not-enough-args.directive-call",
                 .level = ERROR_SOURCE_ANALYSIS,
                 .msg = lit2str("'$1.$' requires at least $2.$ arguments but got $3.$"),
                 .args = ORERR_ARGS(error_arg_node(call), error_arg_str(ast, directive_name),
@@ -2537,7 +2541,7 @@ bool check_dir_or_intr_params_or_error(analyzer_t *analyzer, analysis_state_t st
         if (count != expected_arg_count) {
             orstring_t directive_name = sv2string(call->identifier.view, ast->arena);
             stan_error(analyzer, OR_ERROR(
-                .tag = "sem.directive.not-enough-args",
+                .tag = "sem.arg-count-mismatch.directive-call",
                 .level = ERROR_SOURCE_ANALYSIS,
                 .msg = lit2str("'$1.$' requires exactly $2.$ arguments but got $3.$"),
                 .args = ORERR_ARGS(error_arg_node(call), error_arg_str(ast, directive_name),
@@ -2587,7 +2591,7 @@ void resolve_expression(
                 if (!ast_find_intrinsic_funcname(ast->directives, directive_name, &fn)) {
                     orstring_t directive_name = sv2string(expr->identifier.view, ast->arena);
                     stan_error(analyzer, OR_ERROR(
-                        .tag = "sem.nodirecive.directivecall",
+                        .tag = "sem.invalid-name.directive-call",
                         .level = ERROR_SOURCE_ANALYSIS,
                         .msg = lit2str("'$1.$' is not a valid directive"),
                         .args = ORERR_ARGS(error_arg_node(expr), error_arg_str(ast, directive_name)),
@@ -2676,7 +2680,7 @@ void resolve_expression(
                     orstring_t abslibpath;
                     if (!core_abspath(libpath, tmp->allocator, &abslibpath)) {
                         stan_error(analyzer, OR_ERROR(
-                            .tag = "sem.inarg.fficall-libpath",
+                            .tag = "sem.invalid-arg.fficall-libpath",
                             .level = ERROR_SOURCE_ANALYSIS,
                             .msg = lit2str("'$1.$' cannot get library absolute path"),
                             .args = ORERR_ARGS(error_arg_node(expr->children.items[0]), error_arg_str(ast, libpath)),
@@ -2734,7 +2738,7 @@ void resolve_expression(
 
                         if (arg_count != ffi->arg_types.count) {
                             stan_error(analyzer, OR_ERROR(
-                                .tag = "sem.fficall-mismatch.arg",
+                                .tag = "sem.arg-count-mismatch.fiicall-call",
                                 .level = ERROR_SOURCE_ANALYSIS,
                                 .msg = lit2str("this fficall has '$1.$' argument(s) but the first fficall analyzed uses '$2.$'"),
                                 .args = ORERR_ARGS(error_arg_node(expr), error_arg_sz(arg_count), error_arg_sz(ffi->arg_types.count),
@@ -2751,7 +2755,7 @@ void resolve_expression(
                             if (!ortypeid_eq(expected, actual)) {
                                 match = false;
                                 stan_error(analyzer, OR_ERROR(
-                                    .tag = "sem.fficall-mismatch.arg-type-mismatch",
+                                    .tag = "sem.type-mismatch.fficall-arg",
                                     .level = ERROR_SOURCE_ANALYSIS,
                                     .msg = lit2str("this fficall uses a '$1.$' type for argument '$2.$' but the first fficall analyzed uses '$3.$' for the same argument"),
                                     .args = ORERR_ARGS(error_arg_node(expr), error_arg_type(actual), error_arg_sz(i+1), error_arg_type(expected),
@@ -2779,7 +2783,7 @@ void resolve_expression(
                     orintrinsic_fn_t in = {0};
                     if (!ast_find_intrinsic_funcname(ast->intrinsics, string2sv(fn_name), &in)) {
                         stan_error(analyzer, OR_ERROR(
-                            .tag = "sem.nodirecive.directivecall",
+                            .tag = "sem.unknown-name.icall-function",
                             .level = ERROR_SOURCE_ANALYSIS,
                             .msg = lit2str("'$1.$' is not a valid intrinsic function name"),
                             .args = ORERR_ARGS(error_arg_node(expr), error_arg_str(ast, fn_name)),

@@ -1,0 +1,7 @@
+main :: () -> void {
+    x := (a: int, b: int) -> int {
+        return a = b;
+    };
+
+    x();
+};

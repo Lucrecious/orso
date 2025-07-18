@@ -1,0 +1,8 @@
+main :: () -> void {
+    arr_t :: struct(u: int) { arr: [u]int; };
+    T :: (a: arr_t(!u)) {
+        return;
+    };
+
+    T(10);
+};

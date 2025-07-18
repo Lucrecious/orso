@@ -1,0 +1,8 @@
+main :: () -> void {
+    foo :: (a: int) -> void {
+        return;
+    };
+
+
+    foo(b:10);
+};

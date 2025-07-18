@@ -1,0 +1,5 @@
+y := false;
+x := { if y then return; true; };
+
+main :: () -> void {
+};

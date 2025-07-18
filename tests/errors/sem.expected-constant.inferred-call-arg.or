@@ -1,0 +1,8 @@
+main :: () -> void {
+    T :: (!t: int) -> int {
+        return t;
+    };
+
+    x := 10;
+    T(x);
+};

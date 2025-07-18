@@ -1,0 +1,3 @@
+main :: () -> void {
+    @icall 5;
+};

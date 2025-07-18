@@ -1,0 +1,4 @@
+main :: () -> void {
+    @fficall "asdasd.a", "decl", void, "something";
+    @fficall "asdasd.a", "decl", int, "something";
+};

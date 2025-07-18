@@ -1,0 +1,5 @@
+main :: () -> void {
+    t := int;
+    T := (int) -> t;
+    T;
+};

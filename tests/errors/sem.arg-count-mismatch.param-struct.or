@@ -1,0 +1,7 @@
+main :: () -> void {
+    arr :: struct(t: int) {
+        a := t;
+    };
+
+    arr();
+};

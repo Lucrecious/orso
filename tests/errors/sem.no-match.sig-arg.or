@@ -1,0 +1,7 @@
+main :: () -> void {
+    T :: (a: (!u) -> void) {
+        return;
+    };
+
+    T(10);
+};
