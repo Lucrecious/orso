@@ -2469,7 +2469,6 @@ cgen_t make_cgen(ast_t *ast, arena_t *arena, cgen_state_t state) {
 void cgen_declare_global_decls(cgen_t *cgen, ast_nodes_t *decls) {
     for (size_t i = 0; i < decls->count; ++i) {
         ast_node_t *decl = decls->items[i];
-        if (decl->is_intrinsic) continue;
         if (an_is_constant(decl)) continue;
 
         cgen_var_t var = cgen_user_var(cgen, string2sv(decl->ccode_var_name), decl->value_type, true);

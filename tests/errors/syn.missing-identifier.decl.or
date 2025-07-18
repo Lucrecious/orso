@@ -1,0 +1,4 @@
+main :: () -> void {
+    arr :: struct(:int) {};
+    arr;
+};

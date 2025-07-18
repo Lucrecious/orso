@@ -1,4 +1,4 @@
 main :: () -> void {
-    x := int.6;
+    @asdads x := 0;
     x;
 };

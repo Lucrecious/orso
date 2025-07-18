@@ -1,0 +1,4 @@
+main :: () -> void {
+    array_t :: struct(size := 10) {
+    };
+};

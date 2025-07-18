@@ -196,8 +196,8 @@ static error_tags_t get_all_error_tags() {
     return tags;
 }
 
-static void log_error_tag_location(error_tag_t tag) {
-    nob_log(NOB_INFO, "%s:%zu:%zu: %s", tag.file, tag.line+1, tag.column, tag.tag);
+static void log_error_tag_location(error_tag_t tag, bool is_skipping) {
+    nob_log(NOB_INFO, "%s%s:%zu:%zu: %s", is_skipping ? "SKIPPED -- " : "", tag.file, tag.line+1, tag.column, tag.tag);
 }
 
 int main(int argc, char *argv[]) {
@@ -216,9 +216,24 @@ int main(int argc, char *argv[]) {
         size_t i;
         for (i = 0; i < tags.count; ++i) {
             error_tag_t tag = tags.items[i];
+            
+            bool is_skipping = false;
+            {
+                string_view_t sv = {
+                    .data = tag.tag,
+                    .length = strlen(tag.tag),
+                };
+
+                if (sv_ends_with(sv, "|skip")) {
+                    is_skipping = true;
+                }
+            }
+
             cstr_t filepath = nob_temp_sprintf("./tests/errors/%s.or", tag.tag);
 
-            log_error_tag_location(tag);
+            log_error_tag_location(tag, is_skipping);
+
+            if (is_skipping) continue;
 
             Nob_String_Builder sb = {0};
             bool success = nob_read_entire_file(filepath, &sb);

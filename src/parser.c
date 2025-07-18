@@ -419,7 +419,6 @@ ast_node_t *ast_node_new(arena_t *arena, ast_node_type_t node_type, token_t star
     node->is_global = false;
     node->is_mutable = false;
     node->is_exported = false;
-    node->is_intrinsic = false;
     node->identifier = nil_token;
     node->label = nil_token;
     node->ref_decl = &nil_node;
@@ -607,7 +606,6 @@ ast_node_t *ast_node_copy(arena_t *arena, ast_node_t *node) {
     copy->is_exported = node->is_exported;
     copy->is_free_number = node->is_free_number;
     copy->is_global = node->is_global;
-    copy->is_intrinsic = node->is_intrinsic;
     copy->is_mutable = node->is_mutable;
 
     ASSERT(copy->jmp_nodes.count == 0, "need to convert references to other nodes to relative ones");
@@ -1776,7 +1774,7 @@ static ast_node_t *parse_for(parser_t *parser) {
     return for_;
 }
 
-static bool is_incoming_function_signature(parser_t *parser) {
+static bool has_matching_parenthesis(parser_t *parser, bool *is_function_signature) {
     token_t parenthesis_open = parser->previous;
     ASSERT(parenthesis_open.type == TOKEN_PARENTHESIS_OPEN, "must be starting to open a parenthesis");
 
@@ -1795,7 +1793,7 @@ static bool is_incoming_function_signature(parser_t *parser) {
             parenthesis_level++;
         }
 
-        if (parenthesis_level <= 0) {
+        if (parenthesis_level == 0) {
             break;
         }
 
@@ -1804,7 +1802,9 @@ static bool is_incoming_function_signature(parser_t *parser) {
 
     next = lexer_next_token(&look_ahead_lexer);
 
-    return next.type == TOKEN_ARROW_RIGHT || next.type == TOKEN_BRACE_OPEN;
+    *is_function_signature = (next.type == TOKEN_ARROW_RIGHT || next.type == TOKEN_BRACE_OPEN);
+
+    return parenthesis_level == 0;
 }
 
 static bool is_incoming_decl_def(parser_t* parser) {
@@ -1878,7 +1878,7 @@ static void parse_function_signature(parser_t *parser, ast_node_t *func_sig) {
 
         unless (consume(parser, TOKEN_PARENTHESIS_CLOSE)) {
             parser_error(parser, OR_ERROR(
-                .tag = "syn.missing-rparen.signature-arg",
+                .tag = "syn.missing-rparen.signature-arg|skip",
                 .level = ERROR_SOURCE_PARSER,
                 .msg = lit2str("expected ')' after the function signature arguments"),
                 .args = ORERR_ARGS(error_arg_token(parser->current)),
@@ -1914,7 +1914,7 @@ static ast_node_t *parse_array_type(parser_t *parser) {
 
     unless (consume(parser, TOKEN_BRACKET_CLOSE)) {
         parser_error(parser, OR_ERROR(
-            .tag = "syn.norsquare.arr-type",
+            .tag = "syn.missing-rsquare.arr-type",
             .level = ERROR_SOURCE_PARSER,
             .msg = lit2str("expected ']' after the size expression in type"),
             .args = ORERR_ARGS(error_arg_token(parser->current)),
@@ -1933,7 +1933,7 @@ static ast_node_t *parse_item_access(parser_t *parser) {
 
     unless (consume(parser, TOKEN_BRACKET_CLOSE)) {
         parser_error(parser, OR_ERROR(
-            .tag = "syn.norsquare.arr-size",
+            .tag = "syn.missing-rsquare.arr-size",
             .level = ERROR_SOURCE_PARSER,
             .msg = lit2str("expected ']' after the size expression in item access"),
             .args = ORERR_ARGS(error_arg_token(parser->current)),
@@ -1947,7 +1947,18 @@ static ast_node_t *parse_item_access(parser_t *parser) {
 
 static ast_node_t *parse_grouping_or_function_signature_or_definition(parser_t *parser) {
     ast_node_type_t node_type;
-    if (is_incoming_function_signature(parser)) {
+    bool is_function_signature;
+    if (!has_matching_parenthesis(parser, &is_function_signature)) {
+        parser_error(parser, OR_ERROR(
+            .tag = "syn.missing-rparen.open-paren",
+            .level = ERROR_SOURCE_PARSER,
+            .msg = lit2str("expected matching ')' for '('"),
+            .args = ORERR_ARGS(error_arg_token(parser->current)),
+            .show_code_lines = ORERR_LINES(0),
+        ));
+    }
+
+    if (is_function_signature) {
         node_type = AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE;
     } else  {
         node_type = AST_NODE_TYPE_EXPRESSION_GROUPING;
@@ -1969,7 +1980,7 @@ static ast_node_t *parse_grouping_or_function_signature_or_definition(parser_t *
                 ast_node_t *parameter = expr->children.items[i];
                 if (parameter->node_type != AST_NODE_TYPE_DECLARATION_STATEMENT) {
                     parser_error(parser, OR_ERROR(
-                        .tag = "syn.noexpr.func-sig",
+                        .tag = "syn.missing-expr.func-sig-param",
                         .level = ERROR_SOURCE_PARSER,
                         .msg = lit2str("only expressions are allowed in function signature"),
                         .args = ORERR_ARGS(error_arg_node(parameter)),
@@ -1986,7 +1997,7 @@ static ast_node_t *parse_grouping_or_function_signature_or_definition(parser_t *
 
         unless (consume(parser, TOKEN_PARENTHESIS_CLOSE)) {
             parser_error(parser, OR_ERROR(
-                .tag = "syn.norparen.group",
+                .tag = "syn.missing-rparen.group",
                 .level = ERROR_SOURCE_PARSER,
                 .msg = lit2str("expected ')' for group"),
                 .args = ORERR_ARGS(error_arg_token(parser->current)),
@@ -2041,7 +2052,7 @@ static ast_node_t *parse_inferred_type_decl(parser_t *parser) {
     unless (consume(parser, TOKEN_IDENTIFIER)) {
         identifier = nil_token;
         parser_error(parser, OR_ERROR(
-            .tag = "syn.noidentifier.inferred-type-decl",
+            .tag = "syn.missing-ident.inferred-type-decl",
             .level = ERROR_SOURCE_PARSER,
             .msg = lit2str("expected identifier after '!'"),
             .args = ORERR_ARGS(error_arg_token(parser->current)),
@@ -2073,7 +2084,7 @@ static ast_node_t *parse_directive(parser_t *parser) {
     if (use_bracket) {
         unless (consume(parser, TOKEN_PARENTHESIS_CLOSE)) {
             parser_error(parser, OR_ERROR(
-                .tag = "syn.norparen.directive-call-args",
+                .tag = "syn.missing-rparen.directive-call-args",
                 .level = ERROR_SOURCE_PARSER,
                 .msg = lit2str("expected ')' after the directive call arguments"),
                 .args = ORERR_ARGS(error_arg_token(parser->current)),
@@ -2121,7 +2132,7 @@ static ast_node_t *parse_struct_def(parser_t *parser) {
             if (struct_->param_end > 0) {
                 if (!consume(parser, TOKEN_COMMA)) {
                     parser_error(parser, OR_ERROR(
-                        .tag = "syn.nocomma.struct-params",
+                        .tag = "syn.missing-comma.struct-params",
                         .level = ERROR_SOURCE_PARSER,
                         .msg = lit2str("expected ',' after param"),
                         .args = ORERR_ARGS(error_arg_token(parser->current)),
@@ -2137,7 +2148,7 @@ static ast_node_t *parse_struct_def(parser_t *parser) {
 
             if (decl->has_default_value) {
                 parser_error(parser, OR_ERROR(
-                    .tag = "syn.default.param-struct",
+                    .tag = "syn.expected-no-default.param-struct",
                     .level = ERROR_SOURCE_PARSER,
                     .msg = lit2str("struct parameters cannot use default values"),
                     .args = ORERR_ARGS(error_arg_node(an_decl_expr(decl))),
@@ -2149,7 +2160,7 @@ static ast_node_t *parse_struct_def(parser_t *parser) {
 
     unless (consume(parser, TOKEN_BRACE_OPEN)) {
         parser_error(parser, OR_ERROR(
-            .tag = "syn.nolbrace.struct",
+            .tag = "syn.missing-lbrace.struct-def",
             .level = ERROR_SOURCE_PARSER,
             .msg = lit2str("expected '{' after struct keyword"),
             .args = ORERR_ARGS(error_arg_token(parser->current)),
@@ -2164,7 +2175,7 @@ static ast_node_t *parse_struct_def(parser_t *parser) {
 
         unless(consume(parser, TOKEN_SEMICOLON)) {
             parser_error(parser, OR_ERROR(
-                .tag = "syn.nosemicolon.struct-field",
+                .tag = "syn.missing-semicolon.struct-field",
                 .level = ERROR_SOURCE_PARSER,
                 .msg = lit2str("expected ';' after struct field" ),
                 .args = ORERR_ARGS(error_arg_token(parser->current)),
@@ -2175,7 +2186,7 @@ static ast_node_t *parse_struct_def(parser_t *parser) {
 
     unless(consume(parser, TOKEN_BRACE_CLOSE)) {
         parser_error(parser, OR_ERROR(
-            .tag = "syn.norbrace.struct",
+            .tag = "syn.missing-rbrace.struct-def",
             .level = ERROR_SOURCE_PARSER,
             .msg = lit2str("expected '}' to close struct"),
             .args = ORERR_ARGS(error_arg_token(parser->current)),
@@ -2227,7 +2238,7 @@ static ast_node_t *parse_dot(parser_t *parser) {
 
             unless (consume(parser, TOKEN_BRACE_CLOSE)) {
                 parser_error(parser, OR_ERROR(
-                    .tag = "syn.norbrace.init-list",
+                    .tag = "syn.missing-rbrace.init-list",
                     .level = ERROR_SOURCE_PARSER,
                     .msg = lit2str("expected '}' after an initialization list"),
                     .args = ORERR_ARGS(error_arg_token(parser->current)),
@@ -2239,24 +2250,26 @@ static ast_node_t *parse_dot(parser_t *parser) {
         ast_end_list_initializer(initiailizer, parser->previous);
 
         return initiailizer;
-    } else {
-        token_t start = parser->previous;
-        unless (consume(parser, TOKEN_IDENTIFIER)) {
-            parser_error(parser, OR_ERROR(
-                .tag = "syn.noidentifier.dot-access",
-                .level = ERROR_SOURCE_PARSER,
-                .msg = lit2str("expected an identifier after '.'"),
-                .args = ORERR_ARGS(error_arg_token(parser->current)),
-                .show_code_lines = ORERR_LINES(0),
-            ));
-        }
+    }
+
+    if (match(parser, TOKEN_IDENTIFIER)) {
         token_t identifier = parser->previous;
 
-        ast_node_t *dot_expression = ast_dot_access(parser->ast, &nil_node, identifier, start);
+        ast_node_t *dot_expression = ast_dot_access(parser->ast, &nil_node, identifier, start_dot);
         dot_expression->end = parser->current;
 
         return dot_expression;
     }
+    
+    parser_error(parser, OR_ERROR(
+        .tag = "syn.expected-ident-or-open-brace.post-dot",
+        .level = ERROR_SOURCE_PARSER,
+        .msg = lit2str("expected an identifier or open brace after '.'"),
+        .args = ORERR_ARGS(error_arg_token(parser->current)),
+        .show_code_lines = ORERR_LINES(0),
+    ));
+
+    return &nil_node;
 }
 
 parse_rule_t rules[] = {
@@ -2342,7 +2355,7 @@ static ast_node_t *parse_precedence(parser_t *parser, prec_t precedence) {
 
     if (prefix_rule == NULL) {
         parser_error(parser, OR_ERROR(
-            .tag = "syn.noexpr.prec",
+            .tag = "syn.expected-expr-token.expr",
             .level = ERROR_SOURCE_PARSER,
             .msg = lit2str("expected expression"),
             .args = ORERR_ARGS(error_arg_token(parser->current)),
@@ -2363,7 +2376,7 @@ static ast_node_t *parse_precedence(parser_t *parser, prec_t precedence) {
         ParseFn infix_rule = parser_get_rule(parser->previous.type)->infix;
         if (!infix_rule) {
             parser_error(parser, OR_ERROR(
-                .tag = "syn.inop.infix",
+                .tag = "syn.invalid-op.op",
                 .level = ERROR_SOURCE_PARSER,
                 .msg = lit2str("token '$0.$' is not an infix operator"),
                 .args = ORERR_ARGS(error_arg_token(parser->previous)),
@@ -2424,6 +2437,11 @@ static ast_node_t *parse_precedence(parser_t *parser, prec_t precedence) {
                 break;
             }
 
+            case AST_NODE_TYPE_NONE: {
+                left_operand = right_operand;
+                break;
+            }
+
             default: UNREACHABLE();
         }
     }
@@ -2452,27 +2470,22 @@ static ast_node_t *parse_statement(parser_t *parser) {
 }
 
 static ast_node_t *parse_decl_def(parser_t *parser) {
-    bool is_intrinsic = false;
     {
         while (match(parser, TOKEN_DIRECTIVE)) {
-            if (sv_eq(parser->previous.view, lit2sv("@intrinsic"))) {
-                is_intrinsic = true;
-            } else {
-                parser_error(parser, OR_ERROR(
-                    .tag = "syn.unknown-directive.decldef",
-                    .level = ERROR_SOURCE_PARSER,
-                    .msg = lit2str("unknown declaration directive"),
-                    .args = ORERR_ARGS(error_arg_token(parser->previous)),
-                    .show_code_lines = ORERR_LINES(0),
-                ));
-                parser->panic_mode = false;
-            }
+            parser_error(parser, OR_ERROR(
+                .tag = "syn.unknown-directive.decl-def",
+                .level = ERROR_SOURCE_PARSER,
+                .msg = lit2str("unknown declaration directive"),
+                .args = ORERR_ARGS(error_arg_token(parser->previous)),
+                .show_code_lines = ORERR_LINES(0),
+            ));
+            parser->panic_mode = false;
         }
     }
 
     unless (consume(parser, TOKEN_IDENTIFIER)) {
         parser_error(parser, OR_ERROR(
-            .tag = "syn.noidentifier.decl",
+            .tag = "syn.missing-identifier.decl",
             .level = ERROR_SOURCE_PARSER,
             .msg = lit2str("expected indentifier for variable or constant"),
             .args = ORERR_ARGS(error_arg_token(parser->current)),
@@ -2484,7 +2497,7 @@ static ast_node_t *parse_decl_def(parser_t *parser) {
 
     unless (consume(parser, TOKEN_COLON)) {
         parser_error(parser, OR_ERROR(
-            .tag = "syn.nocolon.decl-identifier",
+            .tag = "syn.missing-colon.post-decl-ident",
             .level = ERROR_SOURCE_PARSER,
             .msg = lit2str("expected ':' after declaration identifier"),
             .args = ORERR_ARGS(error_arg_token(identifier)),
@@ -2535,7 +2548,6 @@ static ast_node_t *parse_decl_def(parser_t *parser) {
 
     ast_node_t *decldef = ast_decldef(parser->ast, identifier, type_expr, init_expr);
     decldef->is_mutable = is_mutable;
-    decldef->is_intrinsic = is_intrinsic;
     decldef->has_default_value = has_default_value;
     return decldef;
 }
@@ -2559,7 +2571,7 @@ static void parse_into_module(parser_t *parser, ast_node_t *module) {
 
         if (decldef->node_type == AST_NODE_TYPE_DECLARATION_STATEMENT) {
             parser_error(parser, OR_ERROR(
-                .tag = "syn.nodecl.module",
+                .tag = "syn.expected-decl.module",
                 .level = ERROR_SOURCE_PARSER,
                 .msg = lit2str("expected declaration, not a statement, in module scope"),
                 .args = ORERR_ARGS(error_arg_node(decldef)),
@@ -2569,7 +2581,7 @@ static void parse_into_module(parser_t *parser, ast_node_t *module) {
 
         unless (consume(parser, TOKEN_SEMICOLON)) {
             parser_error(parser, OR_ERROR(
-                .tag = "syn.semicolon.module-decl",
+                .tag = "syn.missing-semicolon.module-decl",
                 .level = ERROR_SOURCE_PARSER,
                 .msg = lit2str("expected ';' after declaration in module"),
                 .args = ORERR_ARGS(error_arg_token(parser->current)),

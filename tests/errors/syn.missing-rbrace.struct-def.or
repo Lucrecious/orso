@@ -1,0 +1,5 @@
+main :: () -> void {
+    array_t :: struct {
+        x := 10;
+    ;
+};
