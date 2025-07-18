@@ -1,10 +1,25 @@
-orso :: @load "./lib/orso.or";
+da :: @load "./lib/dynarr.or";
+or_ :: @load "./lib/orso.or";
+
 
 main :: () -> void {
-    c := orso.compiler_t.{};
-    c.root_source = "probe.or";
-    c.build_dir = "./build/";
-    c.output_name = "probe";
+    oc := or_.compiler_t.{};
+    oc.src = "./examples/gol.or";
 
-    orso.build(&c);
+    da.push(&oc.cflags, "-framework");
+    da.push(&oc.cflags, "IOKit");
+    
+    da.push(&oc.cflags, "-framework");
+    da.push(&oc.cflags, "Cocoa");
+    
+    da.push(&oc.cflags, "-framework");
+    da.push(&oc.cflags, "OpenGL");
+
+    success := or_.build(&oc);
+
+    if success {
+        cmd := or_.cmd_t.{};
+        da.push(&cmd, "./build/or.out");
+        or_.shell_run(cmd);
+    };
 };

@@ -1,0 +1,3 @@
+main :: () -> void {
+    if true x;
+};

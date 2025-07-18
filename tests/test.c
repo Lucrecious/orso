@@ -196,6 +196,10 @@ static error_tags_t get_all_error_tags() {
     return tags;
 }
 
+static void log_error_tag_location(error_tag_t tag) {
+    nob_log(NOB_INFO, "%s:%zu:%zu: %s", tag.file, tag.line+1, tag.column, tag.tag);
+}
+
 int main(int argc, char *argv[]) {
     nob_shift(argv, argc);
 
@@ -209,16 +213,31 @@ int main(int argc, char *argv[]) {
     if (strcmp(command, "errors") == 0) {
         error_tags_t tags = get_all_error_tags();
         nob_log(NOB_INFO, "error tag count: %zu", tags.count);
-        for (size_t i = 0; i < tags.count; ++i) {
+        size_t i;
+        for (i = 0; i < tags.count; ++i) {
             error_tag_t tag = tags.items[i];
-            nob_log(NOB_INFO, "%s:%zu:%zu: %s", tag.file, tag.line+1, tag.column, tag.tag);
-
             cstr_t filepath = nob_temp_sprintf("./tests/errors/%s.or", tag.tag);
+
+            log_error_tag_location(tag);
 
             Nob_String_Builder sb = {0};
             bool success = nob_read_entire_file(filepath, &sb);
             if (!success) {
                 nob_log(NOB_ERROR, "could not run test for error: '%s'", tag.tag);
+                nob_log(NOB_INFO, "create test file? y/n");
+
+                static const orstring_t error_template = lit2str("main :: () -> void {\n};\n");
+
+                char response;
+                scanf(" %c", &response);
+                if (response == 'y' || response == 'Y') {
+                    success = nob_write_entire_file(filepath, error_template.cstr, error_template.length);
+                    if (success) {
+                        nob_log(NOB_INFO, "test file %s was created successfully", filepath);
+                    } else {
+                        nob_log(NOB_ERROR, "unable to create test file %s", filepath);
+                    }
+                }
                 break;
             }
 
@@ -237,6 +256,9 @@ int main(int argc, char *argv[]) {
             success = false;
             if (ast->errors.count != 1) {
                 nob_log(NOB_ERROR, "expected 1 error but got '%zu' instead", ast->errors.count);
+                if (ast->errors.count > 0) {
+                    print_errors(ast);
+                }
                 goto loop_end;
             }
 
@@ -255,6 +277,7 @@ int main(int argc, char *argv[]) {
             if (!success) break;
         }
 
+        nob_log(NOB_INFO, "error tag tests: %zu/%zu", i, tags.count);
     } else if (strcmp(command, "test") == 0) {
         NOB_TODO("test");
     }

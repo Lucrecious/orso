@@ -1327,7 +1327,7 @@ static ast_node_t *parse_jmp(parser_t *parser) {
         if (match(parser, TOKEN_COLON)) {
             unless (consume(parser, TOKEN_IDENTIFIER)) {
                 parser_error(parser, OR_ERROR(
-                    .tag = "syn.nocolon.jmp",
+                    .tag = "syn.missing-colon.break-or-continue",
                     .level = ERROR_SOURCE_PARSER,
                     .msg = lit2str("expected a jmp label after ':'"),
                     .args = ORERR_ARGS(error_arg_token(parser->previous)),
@@ -1399,7 +1399,7 @@ static token_t parse_label_or_nil(parser_t *parser) {
     return label;
 }
 
-static void parse_arguments(parser_t *parser, ast_node_t *parent) {
+static void parse_call_arguments(parser_t *parser, ast_node_t *parent) {
     unless (check(parser, TOKEN_PARENTHESIS_CLOSE)) {
         do {
             token_t label = parse_label_or_nil(parser);
@@ -1417,7 +1417,7 @@ static void parse_arguments(parser_t *parser, ast_node_t *parent) {
 
     unless (consume(parser, TOKEN_PARENTHESIS_CLOSE)) {
         parser_error(parser, OR_ERROR(
-            .tag = "syn.norparen.args",
+            .tag = "syn.missing-rparen.call-args",
             .level = ERROR_SOURCE_PARSER,
             .msg = lit2str("expected close parenthesis"),
             .args = ORERR_ARGS(error_arg_token(parser->current)),
@@ -1431,7 +1431,7 @@ static ast_node_t *parse_builtin_call(parser_t *parser) {
 
     unless (consume(parser, TOKEN_PARENTHESIS_OPEN)) {
         parser_error(parser, OR_ERROR(
-            .tag = "syn.nolparen.builtin-call",
+            .tag = "syn.missing-lparen.builtin-call",
             .level = ERROR_SOURCE_PARSER,
             .msg = lit2str("expected open parenthesis after builtin function name"),
             .args = ORERR_ARGS(error_arg_token(parser->current)),
@@ -1441,7 +1441,7 @@ static ast_node_t *parse_builtin_call(parser_t *parser) {
 
     ast_node_t *n = ast_call_begin(parser->ast, AST_NODE_TYPE_EXPRESSION_BUILTIN_CALL, identifier);
     n->identifier = identifier;
-    parse_arguments(parser, n);
+    parse_call_arguments(parser, n);
     ast_call_end(n, parser->previous);
 
     return n;
@@ -1472,7 +1472,7 @@ static ast_node_t *convert_function_definition(parser_t *parser, ast_node_t *lef
         ast_node_t *parameter = left_operand->children.items[i];
         if (parameter->node_type != AST_NODE_TYPE_DECLARATION_DEFINITION) {
             parser_error(parser, OR_ERROR(
-                .tag = "syn.nodecl.params",
+                .tag = "syn.expected-decl.function-params",
                 .level = ERROR_SOURCE_PARSER,
                 .msg = lit2str("only declarations are allowed as function parameters"),
                 .args = ORERR_ARGS(error_arg_node(parameter)),
@@ -1526,7 +1526,7 @@ static ast_node_t *parse_block(parser_t *parser) {
 
         unless (consume(parser, TOKEN_SEMICOLON)) {
             parser_error(parser, OR_ERROR(
-                .tag = "syn.nosemicolon.decl-or-state",
+                .tag = "syn.missing-semicolon.block-decl-or-state",
                 .level = ERROR_SOURCE_PARSER,
                 .msg = lit2str("expected ';' after declaration or statement"),
                 .args = ORERR_ARGS(error_arg_token(parser->current)),
@@ -1539,7 +1539,7 @@ static ast_node_t *parse_block(parser_t *parser) {
 
     unless (consume(parser, TOKEN_BRACE_CLOSE)) {
         parser_error(parser, OR_ERROR(
-            .tag = "syn.norbrace.block",
+            .tag = "syn.missing-rbrace.block",
             .level = ERROR_SOURCE_PARSER,
             .msg = lit2str("expected '}' to close block"),
             .args = ORERR_ARGS(error_arg_token(parser->current)),
@@ -1560,7 +1560,7 @@ static ast_node_t *parse_do(parser_t *parser) {
     if (match(parser, TOKEN_COLON)) {
         unless (consume(parser, TOKEN_IDENTIFIER)) {
             parser_error(parser, OR_ERROR(
-                .tag = "syn.noidentifier.do-label",
+                .tag = "syn.missing-ident.do-label",
                 .level = ERROR_SOURCE_PARSER,
                 .msg = lit2str("expected identifier after ':' on a do expression"),
                 .args = ORERR_ARGS(error_arg_token(parser->current)),
@@ -1606,25 +1606,17 @@ static ast_node_t *parse_branch(parser_t *parser) {
     while (true) {
         last_decl = parse_decl(parser);
 
-        if (check(parser, TOKEN_BRACE_OPEN) || (check(parser, TOKEN_DO) || check(parser, TOKEN_THEN))) break;
-
-        unless (consume(parser, TOKEN_SEMICOLON)) {
-            parser_error(parser, OR_ERROR(
-                .tag = "syn.nosemicolon.init-expr-branches",
-                .level = ERROR_SOURCE_PARSER,
-                .msg = lit2str("expected ';' after initial '$1.kind$' expressions"),
-                .args = ORERR_ARGS(error_arg_token(parser->current), error_arg_token(start_token)),
-                .show_code_lines = ORERR_LINES(0),
-            ));
+        if (consume(parser, TOKEN_SEMICOLON)) {
+            ast_block_decl(decl_block, last_decl);
+            continue;
         }
-
-        ast_block_decl(decl_block, last_decl);
+        break;
     }
 
     condition = last_decl;
     if (last_decl->node_type != AST_NODE_TYPE_DECLARATION_STATEMENT) {
         parser_error(parser, OR_ERROR(
-            .tag = "syn.noexpr.branch-condition",
+            .tag = "syn.missing-expr.branch-condition",
             .level = ERROR_SOURCE_PARSER,
             .msg = lit2str("expected expression as the condition for '$0.kind$' branch"),
             .args = ORERR_ARGS(error_arg_token(start_token), error_arg_node(last_decl)),
@@ -1641,7 +1633,7 @@ static ast_node_t *parse_branch(parser_t *parser) {
         if (branch_type == BRANCH_TYPE_WHILE) {
             unless (consume(parser, TOKEN_DO)) {
                 parser_error(parser, OR_ERROR(
-                    .tag = "syn.insyn.branch-while-condition",
+                    .tag = "syn.expected-do-or-open-brace.branch-while-post-condition",
                     .level = ERROR_SOURCE_PARSER,
                     .msg = lit2str("expected 'do' or '{' after $0.kind$ condition"),
                     .args = ORERR_ARGS(error_arg_token(start_token), error_arg_token(parser->current)),
@@ -1651,7 +1643,7 @@ static ast_node_t *parse_branch(parser_t *parser) {
         } else {
             unless (consume(parser, TOKEN_THEN)) {
                 parser_error(parser, OR_ERROR(
-                    .tag = "syn.insyn.branch-then-condition",
+                    .tag = "syn.expected-then-or-open-brace.branch-if-post-condition",
                     .level = ERROR_SOURCE_PARSER,
                     .msg = lit2str("expected 'then' or '{' after $0.kind$ condition"),
                     .args = ORERR_ARGS(error_arg_token(start_token), error_arg_token(parser->current)),
@@ -1714,7 +1706,7 @@ static ast_node_t *parse_for(parser_t *parser) {
         decl = parse_decl(parser);
         unless (consume(parser, TOKEN_SEMICOLON)) {
             parser_error(parser, OR_ERROR(
-                .tag = "syn.semicolon.for-init-decl",
+                .tag = "syn.missing-semicolon.for-init-decl",
                 .level = ERROR_SOURCE_PARSER,
                 .msg = lit2str("expected ';' after the first declaration in a for expression"),
                 .args = ORERR_ARGS(error_arg_token(parser->current)),
@@ -1731,7 +1723,7 @@ static ast_node_t *parse_for(parser_t *parser) {
         cond = parse_expression(parser);
         unless(consume(parser, TOKEN_SEMICOLON)) {
             parser_error(parser, OR_ERROR(
-                .tag = "syn.nosemicolon.for-condition",
+                .tag = "syn.missing-semicolon.for-condition",
                 .level = ERROR_SOURCE_PARSER,
                 .msg = lit2str("expected ';' after the condition in a for expression"),
                 .args = ORERR_ARGS(error_arg_token(parser->current)),
@@ -1759,7 +1751,7 @@ static ast_node_t *parse_for(parser_t *parser) {
         loop = parse_block(parser);
     } else {
         parser_error(parser, OR_ERROR(
-            .tag = "syn.insyn.for-begin",
+            .tag = "syn.expected-do-or-open-brace.for-post-header",
             .level = ERROR_SOURCE_PARSER,
             .msg = lit2str("expected 'do' or '{' to open 'for' expression"),
             .args = ORERR_ARGS(error_arg_token(parser->current)),
@@ -1784,7 +1776,7 @@ static ast_node_t *parse_for(parser_t *parser) {
     return for_;
 }
 
-static bool is_incoming_function_signature(parser_t* parser) {
+static bool is_incoming_function_signature(parser_t *parser) {
     token_t parenthesis_open = parser->previous;
     ASSERT(parenthesis_open.type == TOKEN_PARENTHESIS_OPEN, "must be starting to open a parenthesis");
 
@@ -1833,7 +1825,7 @@ static bool is_incoming_decl_def(parser_t* parser) {
 static ast_node_t *parse_decl_def(parser_t *parser);
 
 static void parse_parameters(parser_t *parser, ast_nodes_t *children) {
-    until (check(parser, TOKEN_PARENTHESIS_CLOSE)) {
+    while (true) {
         bool is_compile_time_param = match(parser, TOKEN_BANG);
         token_t bang = parser->previous;
 
@@ -1842,7 +1834,7 @@ static void parse_parameters(parser_t *parser, ast_nodes_t *children) {
 
         if (decl->node_type == AST_NODE_TYPE_DECLARATION_DEFINITION && decl->has_default_value && is_compile_time_param) {
             parser_error(parser, OR_ERROR(
-                .tag = "syn.default.constparam",
+                .tag = "syn.invalid-default.compile-time-param",
                 .level = ERROR_SOURCE_PARSER,
                 .msg = lit2str("compile-time param '$1.$' cannot have a default value"),
                 .args = ORERR_ARGS(error_arg_node(an_decl_expr(decl)), error_arg_token(decl->identifier)),
@@ -1854,7 +1846,7 @@ static void parse_parameters(parser_t *parser, ast_nodes_t *children) {
             ast_node_t *expr = an_expression(decl);
             if (expr->node_type != AST_NODE_TYPE_EXPRESSION_DEF_VALUE) {
                 parser_error(parser, OR_ERROR(
-                    .tag = "syn.noidentifier.infer-decl",
+                    .tag = "syn.missing-ident.compile-time-param",
                     .level = ERROR_SOURCE_PARSER,
                     .msg = lit2str("expected identifier after '!'"),
                     .args = ORERR_ARGS(error_arg_node(decl)), 
@@ -1881,16 +1873,18 @@ static void parse_function_signature(parser_t *parser, ast_node_t *func_sig) {
     array_push(&func_sig->children, &nil_node);
     array_push(&func_sig->children, &nil_node);
 
-    parse_parameters(parser, &func_sig->children);
+    if (!consume(parser, TOKEN_PARENTHESIS_CLOSE)) {
+        parse_parameters(parser, &func_sig->children);
 
-    unless (consume(parser, TOKEN_PARENTHESIS_CLOSE)) {
-        parser_error(parser, OR_ERROR(
-            .tag = "syn.norparen.sig-argERROR_PARSER_EXPECTED_CLOSE_PARENTHESIS",
-            .level = ERROR_SOURCE_PARSER,
-            .msg = lit2str("expected ')' after the function signature arguments"),
-            .args = ORERR_ARGS(error_arg_token(parser->current)),
-            .show_code_lines = ORERR_LINES(0),
-        ));
+        unless (consume(parser, TOKEN_PARENTHESIS_CLOSE)) {
+            parser_error(parser, OR_ERROR(
+                .tag = "syn.missing-rparen.signature-arg",
+                .level = ERROR_SOURCE_PARSER,
+                .msg = lit2str("expected ')' after the function signature arguments"),
+                .args = ORERR_ARGS(error_arg_token(parser->current)),
+                .show_code_lines = ORERR_LINES(0),
+            ));
+        }
     }
 
     if (match(parser, TOKEN_ARROW_RIGHT)) {
@@ -1899,7 +1893,7 @@ static void parse_function_signature(parser_t *parser, ast_node_t *func_sig) {
         an_func_def_return(func_sig) = parse_expression(parser);
         parser->inside_type_context = inside_type_context;
     } else {
-        an_func_def_return(func_sig) = ast_nil(parser->ast, ortypeid(TYPE_VOID), token_implicit_at_end(func_sig->end));
+        an_func_def_return(func_sig) = ast_implicit_expr(parser->ast, ortypeid(TYPE_TYPE), ORWORDT(ortypeid(TYPE_VOID)), token_implicit_at_end(func_sig->end));
     }
 }
 
@@ -2012,7 +2006,7 @@ static ast_node_t *parse_call(parser_t *parser) {
     ast_node_t *call = ast_call_begin(parser->ast, AST_NODE_TYPE_EXPRESSION_CALL, parser->previous);
     an_callee(call) = ast_nil(parser->ast, ortypeid(TYPE_VOID), token_implicit_at_end(parser->previous));
     MUST(call->children.count == 1);
-    parse_arguments(parser, call);
+    parse_call_arguments(parser, call);
 
     ast_call_end(call, parser->previous);
 

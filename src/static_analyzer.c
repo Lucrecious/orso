@@ -4846,7 +4846,7 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
 
     if (!decl->is_mutable) {
         decl->expr_val = init_expr->expr_val;
-        if (!decl->expr_val.is_concrete) {
+        if (!decl->expr_val.is_concrete && !TYPE_IS_INVALID(decl->value_type)) {
             stan_error(analyzer, OR_ERROR(
                 .tag = "sem.noconst.const-decl",
                 .level = ERROR_SOURCE_ANALYSIS,
