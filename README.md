@@ -6,9 +6,11 @@ It maintains a simple and terse syntax making it easy to learn.
 ## Who is this language for?
 It's for my personal projects! 
 
-I would recommend to *not* use this language for anything other than maybe a little bit of recreational programming.
+I would recommend to *not* use this language for anything other than maybe a little bit of recreational programming (and even then, only when this is somewhat stable).
 
-It might be col for education though. Aside from the dynamic FFI library (libffi, which hasn't been integrated yet), everything, including its arbitrary compile-time expression evaluation, is handwritten by me. In terms of code volume, the goal is to keep it under ~25K lines of code, which is similar to Lua's LoC.
+orso language is heavily inspired by Jai, so if you're looking for a far more powerful, stable and complete language, wait for that to be released.
+
+This might be cool for education though. Aside from the dynamic FFI library (libffi, which hasn't been integrated yet), everything, including its arbitrary compile-time expression evaluation, is handwritten by me. In terms of code volume, the goal is to keep it under ~25K lines of code, which is similar to Lua's LoC.
 
 The project implements a register-based virtual machine, a transpiler from my AST representation to C99, a static analyzer (type analysis, compile-time evaluation, and other semantic analysis), and more. For beginners, I think it's a great project to learn from since it's such a small language relative to others.
 
