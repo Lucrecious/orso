@@ -2482,11 +2482,12 @@ static ast_node_t *stan_load_module_or_errornull(analyzer_t *analyzer, ast_t *as
     Nob_String_Builder sb = {0};
 
     if (!nob_file_exists(s.cstr)) {
+        
         stan_error(analyzer, OR_ERROR(
             .tag = "sem.unknown-module.directive-load",
             .level = ERROR_SOURCE_ANALYSIS,
             .msg = lit2str("cannot find module: '$1.$'"),
-            .args = ORERR_ARGS(error_arg_node(arg_ref)),
+            .args = ORERR_ARGS(error_arg_node(arg_ref), error_arg_str(ast, sv2string(module_path, ast->arena))),
             .show_code_lines = ORERR_LINES(0),
         ));
         nob_return_defer(NULL);
@@ -2667,10 +2668,14 @@ void resolve_expression(
                     orstring_t module_path = ast_orstr2str(&ast->type_set, module_path_node->expr_val.word.as.p);
 
                     ast_node_t *module = stan_load_module_or_errornull(analyzer, ast, module_path_node, string2sv(module_path));
-                    expr->expr_val = ast_node_val_word(ORWORDP(module));
-                    expr->value_type = ortypeid(TYPE_MODULE);
+                    if (module) {
+                        expr->expr_val = ast_node_val_word(ORWORDP(module));
+                        expr->value_type = ortypeid(TYPE_MODULE);
 
-                    array_push(&owning_module->module_deps, module);
+                        array_push(&owning_module->module_deps, module);
+                    } else {
+                        INVALIDATE(expr);
+                    }
                 } else if (sv_eq(expr->identifier.view, lit2sv("@fficall"))) {
                     tmp_arena_t *tmp = allocator_borrow();
                     ortype_t fficall_return_type = ortypeid(TYPE_INVALID);
@@ -3996,20 +4001,6 @@ void resolve_expression(
             }
 
             case TYPE_MODULE: {
-                if (!lhs->expr_val.is_concrete) {
-                    // todo: remove
-                    UNREACHABLE();
-                    stan_error(analyzer, OR_ERROR(
-                        .tag = "sem.expected-constnat.module|skip",
-                        .level = ERROR_SOURCE_ANALYSIS,
-                        .msg = lit2str("expected a constant module"),
-                        .args = ORERR_ARGS(error_arg_node(lhs)),
-                        .show_code_lines = ORERR_LINES(0),
-                    ));
-                    INVALIDATE(expr);
-                    break;
-                }
-
                 ast_node_t *module = (ast_node_t*)lhs->expr_val.word.as.p;
                 scope_t *found_scope;
                 ast_node_t *defval = get_defval_or_null_by_identifier_and_error(analyzer, ast, &module->defined_scope, expr, &found_scope);

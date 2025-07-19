@@ -1,6 +1,10 @@
+da :: @load "dynarr.or";
+
 main :: () -> void {
-    x := int;
-    () -> x {
-        return 10;
-    };
+    arr := da.dynarr_t(int).{};
+    for i := 0; i < 5; ++i do
+        da.push(&arr, i*2);
+    
+    for i := 0; i < 5; ++i do
+        @icall "printint", *da.at(&arr, i);
 };
