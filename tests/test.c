@@ -235,6 +235,7 @@ int main(int argc, char *argv[]) {
         error_tags_t tags = get_all_error_tags();
         nob_log(NOB_INFO, "error tag count: %zu", tags.count);
         size_t i;
+        size_t skipped = 0;
         for (i = 0; i < tags.count; ++i) {
             error_tag_t tag = tags.items[i];
             
@@ -247,6 +248,7 @@ int main(int argc, char *argv[]) {
 
                 if (sv_ends_with(sv, "|skip")) {
                     is_skipping = true;
+                    ++skipped;
                 }
             }
 
@@ -306,6 +308,7 @@ int main(int argc, char *argv[]) {
         }
 
         nob_log(NOB_INFO, "error tag tests: %zu/%zu", i, tags.count);
+        nob_log(NOB_INFO, "error tag skipped: %zu", skipped);
     } else if (strcmp(command, "test") == 0) {
         NOB_TODO("test");
     }

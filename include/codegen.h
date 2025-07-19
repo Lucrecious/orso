@@ -173,7 +173,7 @@ static void emit_reg_to_reg(function_t *function, texloc_t loc, reg_t reg_dst, r
 static void emit_addr_to_reg(gen_t *gen, function_t *function, texloc_t loc, reg_mov_size_t mov_size, reg_t reg_dest, reg_t reg_src, size_t offset) {
     if (offset > ORIN_UINTARG_MAX) {
         gen_error(gen, OR_ERROR(
-            .tag = "codegen.memory.offset-too-large",
+            .tag = "codegen.memory.offset-too-large|skip",
             .level = ERROR_SOURCE_CODEGEN,
             .msg = lit2str("index $0.$ is too large for constant access"),
             .args = ORERR_ARGS(error_arg_sz(offset))
@@ -210,7 +210,7 @@ static void emit_addr_to_reg(gen_t *gen, function_t *function, texloc_t loc, reg
 static void emit_reg_to_addr(gen_t *gen, function_t *function, texloc_t loc, reg_mov_size_t mov_size, reg_t reg_dest, reg_t reg_src, size_t offset) {
     if (offset > ORIN_UINTARG_MAX) {
         gen_error(gen, OR_ERROR(
-            .tag = "codegen.mem.offset-too-large.2",
+            .tag = "codegen.mem.offset-too-large.2|skip",
             .level = ERROR_SOURCE_CODEGEN,
             .msg = lit2str("index $0.$ is too large for constant access"),
             .args = ORERR_ARGS(error_arg_sz(offset))
@@ -311,7 +311,7 @@ static void emit_push_reg(gen_t *gen, texloc_t loc, function_t *function, reg_t 
 
     if (size_bytes > ORIN_UINTARG_MAX) {
         gen_error(gen, OR_ERROR(
-            .tag = "codegen.mem.offset-too-large.3",
+            .tag = "codegen.mem.offset-too-large.3|skip",
             .level = ERROR_SOURCE_CODEGEN,
             .msg = lit2str("index $0.$ is too large for constant access"),
             .args = ORERR_ARGS(error_arg_sz(size_bytes))
@@ -323,7 +323,7 @@ static void emit_push_reg(gen_t *gen, texloc_t loc, function_t *function, reg_t 
     if (gen->stack_size > ORIN_UINTARG_MAX && !gen->breached_stack_limit) {
         gen->breached_stack_limit = true;
         gen_error(gen, OR_ERROR(
-            .tag = "codegen.mem.stackoverflow",
+            .tag = "codegen.mem.stackoverflow|skip",
             .level = ERROR_SOURCE_CODEGEN,
             .msg = lit2str("index $0.$ is too large for constant access"),
             .args = ORERR_ARGS(error_arg_sz(size_bytes))
@@ -828,7 +828,7 @@ static void gen_patch_jmp(gen_t *gen, function_t *function, size_t index) {
     size_t amount = function->code.count - index;
     if (amount > ORIN_UINTARG_MAX) {
         gen_error(gen, OR_ERROR(
-            .tag = "codegen.jmp.too-large.2",
+            .tag = "codegen.jmp.too-large.2|skip",
             .level = ERROR_SOURCE_CODEGEN,
             .msg = lit2str("jmp amount $0.$ is too large"),
             .args = ORERR_ARGS(error_arg_sz(amount))
@@ -844,7 +844,7 @@ static void add_constant(gen_t *gen, function_t *function, texloc_t loc, void *d
     size_t index = memarr_push(function->memory, data, size);
     if (index > ORIN_UINTARG_MAX) {
         gen_error(gen, OR_ERROR(
-            .tag = "codegen.mem.offset-too-large.4",
+            .tag = "codegen.mem.offset-too-large.4|skip",
             .level = ERROR_SOURCE_CODEGEN,
             .msg = lit2str("index $0.$ is too large for constant access"),
             .args = ORERR_ARGS(error_arg_sz(index))
@@ -1408,7 +1408,7 @@ static void gen_block_decls(gen_t *gen, function_t *function, ast_node_t *block,
 static void gen_global_addr(gen_t *gen, texloc_t loc, function_t *function, size_t index, reg_t reg_dest) {
     if (index > ORIN_UINTARG_MAX) {
         gen_error(gen, OR_ERROR(
-            .tag = "codegen.mem.offset-too-large.5",
+            .tag = "codegen.mem.offset-too-large.5|skip",
             .level = ERROR_SOURCE_CODEGEN,
             .msg = lit2str("index $0.$ for global address is too large"),
             .args = ORERR_ARGS(error_arg_sz(index))
@@ -1456,7 +1456,7 @@ static void gen_loop(gen_t *gen, function_t *function, texloc_t location, size_t
     size_t amount = function->code.count - loop_index;
     if (amount > ORIN_UINTARG_MAX) {
         gen_error(gen, OR_ERROR(
-            .tag = "codegen.jmp.too-large",
+            .tag = "codegen.jmp.too-large|skip",
             .level = ERROR_SOURCE_CODEGEN,
             .msg = lit2str("jmp amount $0.$ is too large"),
             .args = ORERR_ARGS(error_arg_sz(amount))
