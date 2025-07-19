@@ -4,15 +4,13 @@ Orso is a small, portable, statically-typed, expression-based language with powe
 It maintains a simple and terse syntax making it easy to learn.
 
 ## Who is this language for?
-Me.
+It's for my personal projects! 
 
-Realistically, I will be the only programmer to seriously use this programming language, so I am building it to cater specifically to my needs. As such, it's very opinionated - if you like programming in a similar style as me, there's a chance you might enjoy orso, otherwise, you'll probably hate it.
+I would recommend to *not* use this language for anything other than maybe a little bit of recreational programming.
 
-orso takes inspiration from a few different languages, mainly, Jai, Odin and C.
+It might be col for education though. Aside from the dynamic FFI library (libffi, which hasn't been integrated yet), everything, including its arbitrary compile-time expression evaluation, is handwritten by me. In terms of code volume, the goal is to keep it under ~25K lines of code, which is similar to Lua's LoC.
 
-It's also nice for education. Aside from the dynamic FFI library (libffi, which hasn't been integrated yet), everything, including its arbitrary compile-time expression evaluation, is handwritten by me. In terms of code volume, the goal is to keep it under ~25K lines of code, which iirc is similar to Lua's LoC.
-
-The project implements a register-based virtual machine, a transpiler from my AST representation to C99, a static analyzer (type analysis, compile-time evaluation, and other semantic analysis), and more. For beginners, I think it's a great project to learn from since it's such a small language relative to others - it's harder to get lost in the codebase.
+The project implements a register-based virtual machine, a transpiler from my AST representation to C99, a static analyzer (type analysis, compile-time evaluation, and other semantic analysis), and more. For beginners, I think it's a great project to learn from since it's such a small language relative to others.
 
 ## Key Features
 - Statically typed 
