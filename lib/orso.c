@@ -85,10 +85,22 @@ static bool load_file(orstring_t in, orstring_t *source, arena_t *arena) {
 ast_t *orbuild_ast(orstring_t source, arena_t *arena, orstring_t file_path) {
     ast_t *ast = arena_alloc(arena, sizeof(ast_t));
     ast_init(ast, arena);
+
+    tmp_arena_t *tmp = allocator_borrow();
+
+    {
+        
+        orstring_t exe_dir = path_get_executable_dir(tmp->allocator);
+        orstring_t std_path = path_combine(string2sv(exe_dir), lit2sv("std"), ast->arena);
+        array_push(&ast->search_paths, std_path);
+    }
+
     ast->vm = vm_default(arena);
 
     {
-        orstring_t core_path = lit2str("./bin/core.or");
+
+        orstring_t exe_path = path_get_executable_dir(tmp->allocator);
+        orstring_t core_path = path_combine(string2sv(exe_path),  lit2sv("std"ORFILE_SEP"core.or"), tmp->allocator);
         Nob_String_Builder sb = {0};
         bool success = nob_read_entire_file(core_path.cstr, &sb);
         if (!success) abort();
@@ -103,18 +115,18 @@ ast_t *orbuild_ast(orstring_t source, arena_t *arena, orstring_t file_path) {
         ast->core_module_or_null = core;
     }
     
-    tmp_arena_t *tmp = allocator_borrow();
     {
         ast_node_t *program = parse_source_into_module(ast, file_path, string2sv(source));
 
         orstring_t programid = ast_generate_moduleid(file_path, tmp->allocator);
         ast_add_module(ast, program, programid);
     }
-    allocator_return(tmp);
 
     if (ast->errors.count == 0) {
         resolve_ast(ast);
     }
+
+    allocator_return(tmp);
 
     return ast;
 }
@@ -185,7 +197,7 @@ bool orbuild(void *compiler_) {
         return_defer(false);
     }
 
-    orstring_t output_file_path = string_path_combine(compiler->build_dir, compiler->output_name, &arena);
+    orstring_t output_file_path = path_combine(string2sv(compiler->build_dir), string2sv(compiler->output_name), &arena);
     {
         strings_t cflags = {
             .items = compiler->cflags,

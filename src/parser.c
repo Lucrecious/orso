@@ -366,6 +366,8 @@ void ast_init(ast_t *ast, arena_t *arena) {
     ast->moduleid2node = table_new(s2n, ast->arena);
     ast->ffis = table_new(s2fis, ast->arena);
 
+    ast->search_paths = (strings_t){.allocator=ast->arena};
+
     ast->global_decls_in_resolution_order = (ast_nodes_t){.allocator=ast->arena};
 
     ast->directives = (orintrinsic_fns_t){.allocator=ast->arena};
@@ -1026,7 +1028,7 @@ static void ast_call_end(ast_node_t *call, token_t end) {
 }
 
 static void parser_init(parser_t *parser, ast_t *ast, orstring_t file_path, string_view_t source) {
-    lexer_init(&parser->lexer, file_path, source);
+    lexer_init(&parser->lexer, string_copy(file_path, ast->arena), source);
     parser->ast = ast;
     parser->had_error = false;
     parser->panic_mode = false;

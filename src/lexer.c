@@ -48,8 +48,8 @@ static token_t error_token(lexer_t *lexer, string_view_t message_view) {
     return token;
 }
 
-void lexer_init(lexer_t *lexer, orstring_t file_path, string_view_t code) {
-    lexer->file_path = file_path;
+void lexer_init(lexer_t *lexer, orstring_t file_path_no_copy, string_view_t code) {
+    lexer->file_path = file_path_no_copy;
     lexer->source = code;
     lexer->line = 0;
     lexer->start = (char*)code.data;

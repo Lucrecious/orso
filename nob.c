@@ -120,7 +120,12 @@ int main(int argc, char **argv) {
     }
     
 
-    nob_copy_file("./lib/core.or", "./bin/core.or");
+    bool success = mkdir_if_not_exists("./bin/std");
+    MUST(success);
+
+    nob_copy_file("./lib/core.or", "./bin/std/core.or");
+    nob_copy_file("./lib/dynarr.or", "./bin/std/dynarr.or");
+    nob_copy_file("./lib/orso.or", "./bin/std/orso.or");
 
     arena_free(&allocator);
 

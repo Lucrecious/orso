@@ -451,6 +451,8 @@ typedef struct ast_t {
     orintrinsic_fns_t directives;
     orintrinsic_fns_t intrinsics;
 
+    strings_t search_paths;
+
     ast_node_t *core_module_or_null;
     table_t(s2n) *moduleid2node;
 

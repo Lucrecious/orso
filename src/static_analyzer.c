@@ -2474,15 +2474,32 @@ static bool resolve_directive_argument_or_error(analyzer_t *analyzer, ast_t *ast
     return true;
 }
 
-static ast_node_t *stan_load_module_or_errornull(analyzer_t *analyzer, ast_t *ast, ast_node_t *arg_ref, string_view_t module_path) {
+static bool stan_module_exists(ast_t *ast, orstring_t path, orstring_t *absolute_path, arena_t *arena) {
+    orstring_t p = path;
+    if (path_is_relative(string2sv(path))) {
+        for (size_t i = 0; i < ast->search_paths.count; ++i) {
+            orstring_t dir = ast->search_paths.items[i];
+            orstring_t p_ = path_combine(string2sv(dir), string2sv(path), arena);
+
+            if (nob_file_exists(p_.cstr)) {
+                p = p_;
+                break;
+            }
+        }
+    }
+
+    if (core_abspath(p, arena, absolute_path)) return true;
+    return false;
+}
+
+ast_node_t *stan_load_module_or_errornull(analyzer_t *analyzer, ast_t *ast, ast_node_t *arg_ref, string_view_t module_path) {
     tmp_arena_t *tmp = allocator_borrow();
     orstring_t s = sv2string(module_path, tmp->allocator);
 
     ast_node_t *result = NULL;
     Nob_String_Builder sb = {0};
 
-    if (!nob_file_exists(s.cstr)) {
-        
+    if (!stan_module_exists(ast, s, &s, tmp->allocator)) {
         stan_error(analyzer, OR_ERROR(
             .tag = "sem.unknown-module.directive-load",
             .level = ERROR_SOURCE_ANALYSIS,

@@ -35,13 +35,18 @@ struct string_builder_t {
 #define string_eq(a, b) cstr_eq(a.cstr, b.cstr)
 #define STRING_EMPTY (string_t){.cstr="", .length=0}
 
+#ifdef _WIN32
+#define ORFILE_SEP "\\"
+#else
+#define ORFILE_SEP "/"
+#endif
+
 bool sv_eq(string_view_t a, string_view_t b);
 orstring_t cstrn2string(orcstr_t cstr, size_t n, arena_t *allocator);
 orstring_t cstr2string(orcstr_t cstr, arena_t *allocator);
 orstring_t string_format(orcstr_t format, arena_t *allocator, ...);
 strings_t string_split(orcstr_t cstr, orcstr_t delimiters, arena_t *allocator);
 orstring_t string_copy(orstring_t s, arena_t *allocator);
-orstring_t string_path_combine(orstring_t a, orstring_t b, arena_t *arena);
 
 size_t string2size(orstring_t s);
 
@@ -61,6 +66,11 @@ void sb_add_cstr(string_builder_t *sb, orcstr_t cstr);
 void sb_add_format(string_builder_t *sb, orcstr_t format, ...);
 orstring_t sb_render(string_builder_t *builder, arena_t *allocator);
 orstring_t bytes2alphanum(char *s, size_t length, arena_t *arena);
+
+bool path_is_relative(string_view_t s);
+orstring_t path_combine(string_view_t a, string_view_t b, arena_t *arena);
+orstring_t path_get_executable_dir(arena_t *arena);
+
 bool core_abspath(orstring_t relpath, arena_t *arena, orstring_t *result);
 bool core_fileid(orstring_t absolute_path, string_builder_t *result);
 
@@ -82,6 +92,7 @@ bool sv_eq(string_view_t a, string_view_t b) {
 
 orstring_t cstrn2string(const orcstr_t cstr, size_t n, arena_t *allocator) {
     char *new_cstr = (char*)arena_alloc(allocator, (n + 1)*sizeof(char));
+
     memcpy(new_cstr, cstr, n);
     new_cstr[n] = '\0';
     orstring_t s = { .cstr = new_cstr, .length = n };
@@ -111,28 +122,6 @@ orstring_t string_format(const orcstr_t format, arena_t *allocator, ...) {
 
 	return (orstring_t){ .cstr = buffer, .length = (size_t)(size < 0 ? 0 : size - 1) };
 }
-
-#if WIN_32_
-#define FS '\\'
-#else
-#define FS '/'
-#endif
-orstring_t string_path_combine(orstring_t a, orstring_t b, arena_t *arena) {
-    string_view_t asv = string2sv(a);
-    while (asv.length > 0 && asv.data[asv.length-1] == FS) {
-        --asv.length;
-    }
-
-    string_view_t bsv = string2sv(b);
-    while (bsv.length > 0 && (bsv.data[0] == FS || bsv.data[0] == '.')) {
-        --bsv.length;
-        ++bsv.data;
-    }
-
-    orstring_t result = string_format("%.*s/%.*s", arena, asv.length, asv.data, bsv.length, bsv.data);
-    return result;
-}
-#undef FS
 
 strings_t string_split(orcstr_t cstr, orcstr_t delimiters, arena_t *allocator) {
     tmp_arena_t *tmp = allocator_borrow();
@@ -393,6 +382,53 @@ bool core_fileid(orstring_t absolute_path, string_builder_t *result) {
 
 #endif
 
+bool path_is_relative(string_view_t s) {
+    if (s.length == 0) return true;
+
+#ifdef _WIN32
+    if (s.data[1] == ':' && 
+        ((s.data[0] >= 'A' && s.data[0] <= 'Z') || 
+         (s.data[0] >= 'a' && s.data[0] <= 'z'))) {
+        return 1;
+    }
+#else
+    if (sv_starts_with(s, "/")) return false;
+    return true;
+#endif
+}
+
+orstring_t path_combine(string_view_t a, string_view_t b, arena_t *arena) {
+    while (sv_ends_with(a, ORFILE_SEP)) --a.length;
+
+    if (sv_starts_with(b, "."ORFILE_SEP)) {
+        b.data += 2;
+        b.length -= 2;
+    }
+
+    orstring_t path = string_format("%.*s"ORFILE_SEP"%.*s", arena, a.length, a.data, b.length, b.data);
+    return path;
+}
+
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
+
+orstring_t path_get_executable_dir(arena_t *arena) {
+    static char path[256];
+    uint32_t count = 256;
+    int result = _NSGetExecutablePath(path, &count);
+    MUST(result == 0);
+
+    string_view_t sv = {
+        .data = path,
+        .length = count,
+    };
+
+    while (!sv_ends_with(sv, ORFILE_SEP)) --sv.length;
+
+    orstring_t exe_path = sv2string(sv, arena);
+    return exe_path;
+}
+#endif
 
 oru64 cstrn_to_u64(const char* text, size_t length) {
     oru64 integer = 0;
