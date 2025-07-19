@@ -1,0 +1,9 @@
+main :: () -> void {
+    x := do {
+        x := true;
+        if x then break 10;
+        true;
+    };
+    
+    x;
+};

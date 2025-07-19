@@ -1,0 +1,4 @@
+main :: () -> void {
+    x := [2]int.{};
+    x[true];
+};

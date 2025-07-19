@@ -1,0 +1,4 @@
+main :: () -> void {
+    x := (u: !t) -> t { return u; };
+    x;
+};

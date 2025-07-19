@@ -2830,7 +2830,7 @@ void resolve_expression(
 
             if (!type_expr->expr_val.is_concrete) {
                 stan_error(analyzer, OR_ERROR(
-                    .tag = "sem.noconst.arr-type",
+                    .tag = "sem.expected-const.arr-type",
                     .level = ERROR_SOURCE_ANALYSIS,
                     .msg = lit2str("expected array type to be a constant"),
                     .args = ORERR_ARGS(error_arg_node(type_expr)),
@@ -2852,7 +2852,7 @@ void resolve_expression(
                 typedata_t *td = ast_type2td(ast, size_expr->value_type);
                 if (td->kind != TYPE_NUMBER) {
                     stan_error(analyzer, OR_ERROR(
-                        .tag = "sem.nonumber.arr-size",
+                        .tag = "sem.expected-integer.arr-size",
                         .level = ERROR_SOURCE_ANALYSIS,
                         .msg = lit2str("array size must be signed or unsigned integer but got '$1.$'"),
                         .args = ORERR_ARGS(error_arg_node(size_expr), error_arg_type(size_expr->value_type)),
@@ -2864,7 +2864,7 @@ void resolve_expression(
                 
                 if (td->as.num == NUM_TYPE_FLOAT) {
                     stan_error(analyzer, OR_ERROR(
-                        .tag = "sem.float.arr-size",
+                        .tag = "sem.cannot-be-float.arr-size",
                         .level = ERROR_SOURCE_ANALYSIS,
                         .msg = lit2str("array size must be signed or unsigned integer but got '$1.$'"),
                         .args = ORERR_ARGS(error_arg_node(size_expr), error_arg_type(size_expr->value_type)),
@@ -2876,7 +2876,7 @@ void resolve_expression(
                 
                 if (!size_expr->expr_val.is_concrete) {
                     stan_error(analyzer, OR_ERROR(
-                        .tag = "sem.noconst.arr-size",
+                        .tag = "sem.expected-constant.arr-size",
                         .level = ERROR_SOURCE_ANALYSIS,
                         .msg = lit2str("array size must constant"),
                         .args = ORERR_ARGS(error_arg_node(size_expr)),
@@ -2888,7 +2888,7 @@ void resolve_expression(
 
                 if (td->as.num == NUM_TYPE_SIGNED && size_expr->expr_val.word.as.s <= 0) {
                     stan_error(analyzer, OR_ERROR(
-                        .tag = "sem.nopos.arr-size",
+                        .tag = "sem.must-be-positive.arr-size",
                         .level = ERROR_SOURCE_ANALYSIS,
                         .msg = lit2str("array size must be a positve integer"),
                         .args = ORERR_ARGS(error_arg_node(size_expr)),
@@ -2941,7 +2941,7 @@ void resolve_expression(
             {
                 if (accessee_td->kind != TYPE_ARRAY && accessee_td->kind != TYPE_POINTER) {
                     stan_error(analyzer, OR_ERROR(
-                        .tag = "sem.inarg.accessee-type",
+                        .tag = "sem.invalid-type.accessee-type",
                         .level = ERROR_SOURCE_ANALYSIS,
                         .msg = lit2str("invalid accessee type: '$1.$'"),
                         .args = ORERR_ARGS(error_arg_node(accessee), error_arg_type(accessee->value_type)),
@@ -2958,7 +2958,7 @@ void resolve_expression(
 
                     if (ptr_inner_td->kind != TYPE_ARRAY) {
                         stan_error(analyzer, OR_ERROR(
-                            .tag = "sem.noptr-to-array.accessee-type",
+                            .tag = "sem.expected-ptr.accessee-type",
                             .level = ERROR_SOURCE_ANALYSIS,
                             .msg = lit2str("expected pointer to array type but got '$1.$'"),
                             .args = ORERR_ARGS(error_arg_node(accessee), error_arg_type(accessee->value_type)),
@@ -2986,7 +2986,7 @@ void resolve_expression(
                 typedata_t *td = ast_type2td(ast, accessor->value_type);
                 unless (td->kind == TYPE_NUMBER && td->as.num != NUM_TYPE_FLOAT) {
                     stan_error(analyzer, OR_ERROR(
-                        .tag = "sem.noint.accessor",
+                        .tag = "sem.expected-integer.accessor",
                         .level = ERROR_SOURCE_ANALYSIS,
                         .msg = lit2str("expected signed or unsigned integer but got '$1.$'"),
                         .args = ORERR_ARGS(error_arg_node(accessor), error_arg_type(accessor->value_type)),
@@ -3016,7 +3016,7 @@ void resolve_expression(
             // inferred type decls are forward scanned and converted to value_defs, and so if they are present anywhere
             // else they are an error
             stan_error(analyzer, OR_ERROR(
-                .tag = "sem.inferred-def.outside-funcdef",
+                .tag = "sem.invalid-inferred.decl",
                 .level = ERROR_SOURCE_ANALYSIS,
                 .msg = lit2str("inferred type declarations are only allowed inside function definition parameters"),
                 .args = ORERR_ARGS(error_arg_node(expr)),
@@ -3035,7 +3035,7 @@ void resolve_expression(
                     an_list_lhs(expr) = type_expr;
                 } else {
                     stan_error(analyzer, OR_ERROR(
-                        .tag = "sem.noinfer.init-list",
+                        .tag = "sem.expected-implicit-type.init-list",
                         .level = ERROR_SOURCE_ANALYSIS,
                         .msg = lit2str("no implicit type can be inferred for initializer list"),
                         .args = ORERR_ARGS(error_arg_node(expr)),
@@ -3053,7 +3053,7 @@ void resolve_expression(
             case TYPE_TYPE: {
                 if (!type_expr->expr_val.is_concrete) {
                     stan_error(analyzer, OR_ERROR(
-                        .tag = "sem.noconst.init-list",
+                        .tag = "sem.expected_constant.init-list",
                         .level = ERROR_SOURCE_ANALYSIS,
                         .msg = lit2str("expected constant for initializer list"),
                         .args = ORERR_ARGS(error_arg_node(type_expr)),
@@ -3113,7 +3113,7 @@ void resolve_expression(
                         if (!ortypeid_eq(arg->value_type, array_type)) {
                             size_t arg_index = i - an_list_start(expr);
                             stan_error(analyzer, OR_ERROR(
-                                .tag = "sem.type-mismatch.arr-ele",
+                                .tag = "sem.type-mismatch.arr-item",
                                 .level = ERROR_SOURCE_ANALYSIS,
                                 .msg = lit2str("array expects '$1.$' type elements but item $3.$ is '$2.$'"),
                                 .args = ORERR_ARGS(error_arg_node(arg),
@@ -3130,7 +3130,7 @@ void resolve_expression(
 
                     if (init_type_td->as.arr.count < arg_count) {
                         stan_error(analyzer, OR_ERROR(
-                            .tag = "sem.no-many-args.init-list",
+                            .tag = "sem.too-many-args.array-init-list",
                             .level = ERROR_SOURCE_ANALYSIS,
                             .msg = lit2str("array has length of $1.$ but is initialized with $2.$"),
                             .args = ORERR_ARGS(error_arg_node(expr),
@@ -3179,7 +3179,7 @@ void resolve_expression(
                             if (current_field_index >= init_type_td->as.struct_.fields.count) {
                                 is_invalid = true;
                                 stan_error(analyzer, OR_ERROR(
-                                    .tag = "sem.too-many-args.init-list.2",
+                                    .tag = "sem.too-many-args.struct-init-list",
                                     .level = ERROR_SOURCE_ANALYSIS,
                                     .msg = lit2str("too many arguments; expected no more than '$1.$' but initializer is` at argument '$2.$'"),
                                     .args = ORERR_ARGS(error_arg_node(arg),
@@ -3199,7 +3199,7 @@ void resolve_expression(
                                     if (!success) {
                                         is_invalid = true;
                                         stan_error(analyzer, OR_ERROR(
-                                            .tag = "sem.nomember.struct-init",
+                                            .tag = "sem.unknown-field.struct-init",
                                             .level = ERROR_SOURCE_ANALYSIS,
                                             .msg = lit2str("cannot find field '$0.$' in struct"),
                                             .args = ORERR_ARGS(error_arg_token(arg->label)),
@@ -3211,7 +3211,7 @@ void resolve_expression(
                                     if (field_index < current_field_index) {
                                         is_invalid = true;
                                         stan_error(analyzer, OR_ERROR(
-                                            .tag = "sem.noorder.struct-init",
+                                            .tag = "sem.out-of-order.struct-init-field",
                                             .level = ERROR_SOURCE_ANALYSIS,
                                             .msg = lit2str("field '$0.$' is argument '$1.$' but is placed after argument '$2.$'"),
                                             .args = ORERR_ARGS(error_arg_token(arg->label), error_arg_sz(field_index), error_arg_sz(current_field_index-1)),
@@ -3258,7 +3258,7 @@ void resolve_expression(
                             if (!ortypeid_eq(arg->value_type, field.type)) {
                                 is_invalid = true;
                                 stan_error(analyzer, OR_ERROR(
-                                    .tag = "sem.type-mismatch.struct-init",
+                                    .tag = "sem.type-mismatch.struct-init-field",
                                     .level = ERROR_SOURCE_ANALYSIS,
                                     .msg = lit2str("setting struct field requires explicit cast from '$1.$' to '$2.$'"),
                                     .args = ORERR_ARGS(error_arg_node(arg),
@@ -3321,10 +3321,10 @@ void resolve_expression(
                     } else if (arg_count == 1) {
                         ast_node_t *arg = expr->children.items[an_list_start(expr)];
                         resolve_expression(analyzer, ast, state, ortypeid(TYPE_UNRESOLVED), arg, true);
-                        *expr = *cast_implicitly_if_necessary(ast, init_type, arg);
+                        arg = cast_implicitly_if_necessary(ast, init_type, arg);
                         if (!TYPE_IS_INVALID(expr->value_type) && !ortypeid_eq(arg->value_type, expr->value_type)) {
                             stan_error(analyzer, OR_ERROR(
-                                .tag = "sem.type-mismatch.type-init",
+                                .tag = "sem.type-mismatch.primitive-init",
                                 .level = ERROR_SOURCE_ANALYSIS,
                                 .msg = lit2str("initialization list item requires explicit cast from '$1.$' to '$2.$'"),
                                 .args = ORERR_ARGS(error_arg_node(arg),
@@ -3361,7 +3361,7 @@ void resolve_expression(
             default: {
                 unless (TYPE_IS_INVALID(type_expr->value_type)) {
                     stan_error(analyzer, OR_ERROR(
-                        .tag = "sem.inexpr.init-list",
+                        .tag = "sem.invalid-expr.init-list",
                         .level = ERROR_SOURCE_ANALYSIS,
                         .msg = lit2str("invalid expression for initialization list"),
                         .args = ORERR_ARGS(error_arg_node(type_expr)),
@@ -3420,7 +3420,7 @@ void resolve_expression(
 
             if (right_td->kind == TYPE_POINTER && left_td->kind == TYPE_NUMBER && left->is_free_number && td_is_s_or_u_int(left_td)) {
                 stan_error(analyzer, OR_ERROR(
-                    .tag = "sem.nonumber-on-right.ptr-arith",
+                    .tag = "sem.nonumber-on-right.ptr-arith|skip",
                     .level = ERROR_SOURCE_ANALYSIS,
                     .msg = lit2str("number must be on right-hand-side for pointer arithmetic"),
                     .args = ORERR_ARGS(error_arg_node(an_lhs(expr))),
@@ -3443,7 +3443,7 @@ void resolve_expression(
 
                 if (expr->operator.type != TOKEN_PLUS && expr->operator.type != TOKEN_MINUS) {
                     stan_error(analyzer, OR_ERROR(
-                        .tag = "sem.inop.ptr-arith",
+                        .tag = "sem.inop.ptr-arith|skip",
                         .level = ERROR_SOURCE_ANALYSIS,
                         .msg = lit2str("only '-' and '+' are allowed in pointer arithmetic but got '$0.kind$'"),
                         .args = ORERR_ARGS(error_arg_token(expr->operator)),
@@ -3462,7 +3462,7 @@ void resolve_expression(
 
                 if (right_td->kind == TYPE_POINTER && expr->operator.type != TOKEN_MINUS) {
                     stan_error(analyzer, OR_ERROR(
-                        .tag = "sem.noadd.ptr-arith",
+                        .tag = "sem.noadd.ptr-arith|skip",
                         .level = ERROR_SOURCE_ANALYSIS,
                         .msg = lit2str("cannot add pointer types"),
                         .args = ORERR_ARGS(error_arg_node(expr)),
@@ -3471,9 +3471,11 @@ void resolve_expression(
                     INVALIDATE(expr);
                 }
             } else if (operator_is_arithmetic(expr->operator.type)) {
+                expr->value_type = left->value_type;
+
                 unless (left_td->capabilities&TYPE_CAP_ARITHMETIC) {
                     stan_error(analyzer, OR_ERROR(
-                        .tag = "sem.noarith.arith",
+                        .tag = "sem.invalid-type.bin-arith",
                         .level = ERROR_SOURCE_ANALYSIS,
                         .msg = lit2str("invalid arithmetic type: '$1.$'"),
                         .args = ORERR_ARGS(error_arg_node(left), error_arg_type(left->value_type)),
@@ -3484,7 +3486,7 @@ void resolve_expression(
 
                 unless (ortypeid_eq(left->value_type, right->value_type)) {
                     stan_error(analyzer, OR_ERROR(
-                        .tag = "sem.type-mismatch.arith",
+                        .tag = "sem.type-mismatch.bin-arith",
                         .level = ERROR_SOURCE_ANALYSIS,
                         .msg = lit2str("operation requires explicit cast for types '$1.$' and '$2.$'"),
                         .args = ORERR_ARGS(error_arg_node(expr), error_arg_type(left->value_type), error_arg_type(right->value_type)),
@@ -3494,8 +3496,7 @@ void resolve_expression(
                     break;
                 }
 
-                expr->value_type = left->value_type;
-                if (left->expr_val.is_concrete && right->expr_val.is_concrete) {
+                if (!TYPE_IS_INVALID(expr->value_type) && left->expr_val.is_concrete && right->expr_val.is_concrete) {
                     typedata_t *exprtd = ast_type2td(ast, expr->value_type);
                     orword_t result;
                     void *result_addr;
@@ -3520,7 +3521,7 @@ void resolve_expression(
                 // everything is equatable but they need to be the same type
                 unless (ortypeid_eq(left->value_type, right->value_type)) {
                     stan_error(analyzer, OR_ERROR(
-                        .tag = "sem.nocompare.compare",
+                        .tag = "sem.type-mismatch.bin-compare",
                         .level = ERROR_SOURCE_ANALYSIS,
                         .msg = lit2str("operation requires explicit cast for types '$1.$' and '$2.$'"),
                         .args = ORERR_ARGS(error_arg_node(expr), error_arg_type(left->value_type), error_arg_type(right->value_type)),
@@ -3579,7 +3580,7 @@ void resolve_expression(
                 unless (left_td->capabilities&TYPE_CAP_ORDERABLE) {
                     // may be impossible in the end
                     stan_error(analyzer, OR_ERROR(
-                        .tag = "sem.noorder.compare",
+                        .tag = "sem.invalid-type.bin-order",
                         .level = ERROR_SOURCE_ANALYSIS,
                         .msg = lit2str("'$1.$' is not a valid type for comparison"),
                         .args = ORERR_ARGS(error_arg_node(left), error_arg_type(left->value_type)),
@@ -3590,7 +3591,7 @@ void resolve_expression(
 
                 unless (ortypeid_eq(left->value_type, right->value_type)) {
                     stan_error(analyzer, OR_ERROR(
-                        .tag = "sem.noorder.order",
+                        .tag = "sem.type-mismatch.bin-order",
                         .level = ERROR_SOURCE_ANALYSIS,
                         .msg = lit2str("operation requires explicit cast for types '$1.$' and '$2.$'"),
                         .args = ORERR_ARGS(error_arg_node(expr), error_arg_type(left->value_type), error_arg_type(right->value_type)),
@@ -3609,7 +3610,7 @@ void resolve_expression(
             } else if (operator_is_logical(expr->operator.type)) {
                 unless (left_td->capabilities&TYPE_CAP_LOGICAL) {
                     stan_error(analyzer, OR_ERROR(
-                        .tag = "sem.inarg.logical",
+                        .tag = "sem.invalid-type.bin-logical",
                         .level = ERROR_SOURCE_ANALYSIS,
                         .msg = lit2str("'$1.$' is not a valid type for logical operations"),
                         .args = ORERR_ARGS(error_arg_node(left), error_arg_type(left->value_type)),
@@ -3621,7 +3622,7 @@ void resolve_expression(
 
                 unless (ortypeid_eq(left->value_type, right->value_type)) {
                     stan_error(analyzer, OR_ERROR(
-                        .tag = "sem.needscast.logical",
+                        .tag = "sem.type-mismach.bin-logical|skip",
                         .level = ERROR_SOURCE_ANALYSIS,
                         .msg = lit2str("operation requires explicit cast for types '$1.$' and '$2.$'"),
                         .args = ORERR_ARGS(error_arg_node(expr), error_arg_type(left->value_type), error_arg_type(right->value_type)),
@@ -3681,8 +3682,9 @@ void resolve_expression(
                             ortype_t ptr_type = type_set_fetch_pointer(&ast->type_set, op->lvalue_node->value_type);
                             expr->value_type = ptr_type;
                         } else {
+                            UNREACHABLE();
                             stan_error(analyzer, OR_ERROR(
-                                .tag = "sem.noaddr.const",
+                                .tag = "sem.expected-variable.address-op|skip",
                                 .level = ERROR_SOURCE_ANALYSIS,
                                 .msg = lit2str("cannot take the address of constant"),
                                 .args = ORERR_ARGS(error_arg_node(expr)),
@@ -3707,7 +3709,7 @@ void resolve_expression(
 
                     default: {
                         stan_error(analyzer, OR_ERROR(
-                            .tag = "sem.inarg.address",
+                            .tag = "sem.expected-lvalue.address-op",
                             .level = ERROR_SOURCE_ANALYSIS,
                             .msg = lit2str("only lvalues can have their address taken"),
                             .args = ORERR_ARGS(error_arg_node(an_operand(expr))),
@@ -3726,7 +3728,7 @@ void resolve_expression(
                 case TOKEN_STAR: {
                     if (operand_td->kind != TYPE_POINTER) {
                         stan_error(analyzer, OR_ERROR(
-                            .tag = "sem.noptr.deref",
+                            .tag = "sem.expected-ptr.deref-op",
                             .level = ERROR_SOURCE_ANALYSIS,
                             .msg = lit2str("expected pointer for dereference but got '$1.$'"),
                             .args = ORERR_ARGS(error_arg_node(an_operand(expr)), error_arg_type(an_operand(expr)->value_type)),
@@ -3738,7 +3740,7 @@ void resolve_expression(
 
                     if (TYPE_IS_VOID(operand_td->as.ptr.type)) {
                         stan_error(analyzer, OR_ERROR(
-                            .tag = "sem.void.deref",
+                            .tag = "sem.type-mismatch.void-deref-op",
                             .level = ERROR_SOURCE_ANALYSIS,
                             .msg = lit2str("cannot dereference a void pointer"),
                             .args = ORERR_ARGS(error_arg_node(an_operand(expr))),
@@ -3756,7 +3758,7 @@ void resolve_expression(
                 case TOKEN_NOT: {
                     if (operand_td->kind != TYPE_BOOL) {
                         stan_error(analyzer, OR_ERROR(
-                            .tag = "sem.nobool.not",
+                            .tag = "sem.expected-bool.not-op",
                             .level = ERROR_SOURCE_ANALYSIS,
                             .msg = lit2str("expected a 'bool' for 'not' unary but got '$1.$' instead"),
                             .args = ORERR_ARGS(error_arg_node(an_operand(expr)), error_arg_type(an_operand(expr)->value_type)),
@@ -3779,7 +3781,7 @@ void resolve_expression(
                 case TOKEN_MINUS: {
                     if ((operand_td->capabilities&TYPE_CAP_ARITHMETIC) == 0) {
                         stan_error(analyzer, OR_ERROR(
-                            .tag = "sem.noarith.minus",
+                            .tag = "sem.type-invalid.minus-op",
                             .level = ERROR_SOURCE_ANALYSIS,
                             .msg = lit2str("the '-' unary expects a type with arithmetic capabilities"),
                             .args = ORERR_ARGS(error_arg_node(an_operand(expr))),
@@ -3791,7 +3793,7 @@ void resolve_expression(
 
                     if (operand_td->as.num == NUM_TYPE_UNSIGNED) {
                         stan_error(analyzer, OR_ERROR(
-                            .tag = "sem.nosigned.minus",
+                            .tag = "sem.expected-signed-or-float.minus-op",
                             .level = ERROR_SOURCE_ANALYSIS,
                             .msg = lit2str("an unsigned number cannot be negated"),
                             .args = ORERR_ARGS(error_arg_node(an_operand(expr))),
@@ -3851,6 +3853,7 @@ void resolve_expression(
 
             if (!decl->is_mutable) {
                 expr->expr_val = decl->expr_val;
+                expr->lvalue_node = &nil_node;
             }
             break;
         }
@@ -3870,7 +3873,7 @@ void resolve_expression(
 
             if (TYPE_IS_UNRESOLVED(lhs_type)) {
                 stan_error(analyzer, OR_ERROR(
-                    .tag = "sem.noinfer.dot-access",
+                    .tag = "sem.no-implicit-type.dot-access",
                     .level = ERROR_SOURCE_ANALYSIS,
                     .msg = lit2str("no implicit type can be inferred for '.' access"),
                     .args = ORERR_ARGS(error_arg_node(expr)),
@@ -3904,7 +3907,7 @@ void resolve_expression(
 
                 unless (success) {
                     stan_error(analyzer, OR_ERROR(
-                        .tag = "sem.nomember.dot-access",
+                        .tag = "sem.unknown-field.dot-access",
                         .level = ERROR_SOURCE_ANALYSIS,
                         .msg = lit2str("cannot find '$0.$' in '$1.$'"),
                         .args = ORERR_ARGS(error_arg_token(expr->identifier), error_arg_type(lhs_type)),
@@ -3942,7 +3945,7 @@ void resolve_expression(
             case TYPE_TYPE: {
                 if (!lhs->expr_val.is_concrete) {
                     stan_error(analyzer, OR_ERROR(
-                        .tag = "sem.noconst.dot-access-type",
+                        .tag = "sem.expected-constant.dot-access-type",
                         .level = ERROR_SOURCE_ANALYSIS,
                         .msg = lit2str("'.' access on types requires a compile-time value"),
                         .args = ORERR_ARGS(error_arg_node(expr)),
@@ -3956,7 +3959,7 @@ void resolve_expression(
                 typedata_t *td = ast_type2td(ast, struct_type);
                 if (td->kind != TYPE_STRUCT) {
                     stan_error(analyzer, OR_ERROR(
-                        .tag = "sem.nostructtype.dot-access",
+                        .tag = "sem.expected-struct-type.dot-access",
                         .level = ERROR_SOURCE_ANALYSIS,
                         .msg = lit2str("'.' access on types requires a struct definition type"),
                         .args = ORERR_ARGS(error_arg_node(expr)),
@@ -3977,7 +3980,7 @@ void resolve_expression(
 
                 unless (success) {
                     stan_error(analyzer, OR_ERROR(
-                        .tag = "sem.member.struct-access",
+                        .tag = "sem.unknown-field.struct-constant-access",
                         .level = ERROR_SOURCE_ANALYSIS,
                         .msg = lit2str("cannot find '$0.$' in '$1.$'"),
                         .args = ORERR_ARGS(error_arg_token(expr->identifier), error_arg_type(lhs_type)),
@@ -3997,7 +4000,7 @@ void resolve_expression(
                     // todo: remove
                     UNREACHABLE();
                     stan_error(analyzer, OR_ERROR(
-                        .tag = "sem.noconst.module",
+                        .tag = "sem.expected-constnat.module|skip",
                         .level = ERROR_SOURCE_ANALYSIS,
                         .msg = lit2str("expected a constant module"),
                         .args = ORERR_ARGS(error_arg_node(lhs)),
@@ -4024,7 +4027,7 @@ void resolve_expression(
 
             default: {
                 stan_error(analyzer, OR_ERROR(
-                    .tag = "sem.inarg.dot-access",
+                    .tag = "sem.invalid-type.dot-access",
                     .level = ERROR_SOURCE_ANALYSIS,
                     .msg = lit2str("invalid '.' access expression, only structs, struct types, or modules"),
                     .args = ORERR_ARGS(error_arg_node(expr)),
@@ -4043,7 +4046,7 @@ void resolve_expression(
             ast_node_t *lvalue_node = lhs->lvalue_node;
             if (an_is_none(lvalue_node)) {
                 stan_error(analyzer, OR_ERROR(
-                    .tag = "sem.nolvalue.assignment",
+                    .tag = "sem.expected-lvalue.lhs-assignment",
                     .level = ERROR_SOURCE_ANALYSIS,
                     .msg = lit2str("an lvalue is expected for the left-hand-side of an assignment"),
                     .args = ORERR_ARGS(error_arg_node(lhs)),
@@ -4067,7 +4070,7 @@ void resolve_expression(
                 if ((td->capabilities & TYPE_CAP_ARITHMETIC) == 0) {
                     unless (TYPE_IS_INVALID(lhs->value_type)) {
                         stan_error(analyzer, OR_ERROR(
-                            .tag = "sem.noarith.compound-assign",
+                            .tag = "sem.type-invalid.compound-arith-assign",
                             .level = ERROR_SOURCE_ANALYSIS,
                             .msg = lit2str("type '$1.$' does not have arithmetic capabilities"),
                             .args = ORERR_ARGS(error_arg_node(lhs), error_arg_type(lhs->value_type)),
@@ -4191,7 +4194,7 @@ void resolve_expression(
 
                 if (!TYPE_IS_INVALID(an_condition(expr)->value_type) && !ortypeid_eq(an_condition(expr)->value_type, ortypeid(TYPE_BOOL))) {
                     stan_error(analyzer, OR_ERROR(
-                        .tag = "sem.nobool.condition",
+                        .tag = "sem.expected-bool.branch-condition",
                         .level = ERROR_SOURCE_ANALYSIS,
                         .msg = lit2str("'$0.kind$' condition must be a 'bool' but got '$1.$'"),
                         .args = ORERR_ARGS(error_arg_token(expr->start), error_arg_type(an_condition(expr)->value_type)),
@@ -4293,7 +4296,7 @@ void resolve_expression(
                     if (success) {
                         if (found_scope->creator->branch_type == BRANCH_TYPE_DO && expr->start.type == TOKEN_CONTINUE) {
                             stan_error(analyzer, OR_ERROR(
-                                .tag = "sem.incontinue.branch",
+                                .tag = "sem.invalid-continue.if-branch",
                                 .level = ERROR_SOURCE_ANALYSIS,
                                 .msg = lit2str("'continue' expression is only valid in 'for' or 'while/until' expressions"),
                                 .args = ORERR_ARGS(error_arg_node(expr), error_arg_node(found_scope->creator)),
@@ -4370,7 +4373,7 @@ void resolve_expression(
 
                 unless (count == 1) {
                     stan_error(analyzer, OR_ERROR(
-                        .tag = "sem.inarg.typeof",
+                        .tag = "sem.arg-overflow.typeof",
                         .level = ERROR_SOURCE_ANALYSIS,
                         .msg = lit2str("'typeof' builtin requires exactly 1 argument but got $1.$ instead"),
                         .args = ORERR_ARGS(error_arg_node(expr), error_arg_sz(count)),
@@ -4395,7 +4398,7 @@ void resolve_expression(
 
                 unless (count == 1) {
                     stan_error(analyzer, OR_ERROR(
-                        .tag = "sem.inarg.sizeof",
+                        .tag = "sem.arg-overflow.sizeof",
                         .level = ERROR_SOURCE_ANALYSIS,
                         .msg = lit2str("'sizeof' builtin requires exactly 1 argument but got $1.$ instead"),
                         .args = ORERR_ARGS(error_arg_node(expr), error_arg_sz(count)),
@@ -4425,7 +4428,7 @@ void resolve_expression(
 
                 unless (count == 1) {
                     stan_error(analyzer, OR_ERROR(
-                        .tag = "sem.inarg.len",
+                        .tag = "sem.arg-count-mismatch.len",
                         .level = ERROR_SOURCE_ANALYSIS,
                         .msg = lit2str("'len' builtin requires exactly 1 argument but got $1.$ instead"),
                         .args = ORERR_ARGS(error_arg_node(expr), error_arg_sz(count)),
@@ -4443,7 +4446,7 @@ void resolve_expression(
                 if (argtd->kind != TYPE_ARRAY) {
                     unless (TYPE_IS_INVALID(arg_type)) {
                         stan_error(analyzer, OR_ERROR(
-                            .tag = "sem.too-many-args.len",
+                            .tag = "sem.invalid-type.len",
                             .level = ERROR_SOURCE_ANALYSIS,
                             .msg = lit2str("'len' builtin takes 1 array argument but got '$1.$' instead"),
                             .args = ORERR_ARGS(error_arg_node(arg), error_arg_type(arg->value_type)),
@@ -4490,7 +4493,7 @@ void resolve_expression(
                     }
                 } else {
                     stan_error(analyzer, OR_ERROR(
-                        .tag = "sem.nocast.cast",
+                        .tag = "sem.invalid-type.cast",
                         .level = ERROR_SOURCE_ANALYSIS,
                         .msg = lit2str("cannot cast type '$1.$' to type '$2.$'"),
                         .args = ORERR_ARGS(error_arg_node(expr), error_arg_type(cast_expr->value_type), error_arg_type(type_expr->expr_val.word.as.t)),
@@ -4500,7 +4503,7 @@ void resolve_expression(
 
             } else {
                 stan_error(analyzer, OR_ERROR(
-                    .tag = "sem.noconst.cast-type",
+                    .tag = "sem.expected-constant.cast-type",
                     .level = ERROR_SOURCE_ANALYSIS,
                     .msg = lit2str("type expression for cast must be a type constant"),
                     .args = ORERR_ARGS(error_arg_node(type_expr)),
@@ -4740,7 +4743,7 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
         if (!decl_type->expr_val.is_concrete) {
             unless (TYPE_IS_INVALID(decl_type->value_type)) {
                 stan_error(analyzer, OR_ERROR(
-                    .tag = "sem.noconst.type-decl",
+                    .tag = "sem.expected_constant.type-decl",
                     .level = ERROR_SOURCE_ANALYSIS,
                     .msg = lit2str("expected type expression to be a constant"),
                     .args = ORERR_ARGS(error_arg_node(decl_type)),
@@ -4755,7 +4758,7 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
                 } else {
                     unless (TYPE_IS_INVALID(decl_type->value_type)) {
                         stan_error(analyzer, OR_ERROR(
-                            .tag = "sem.noexpr.decl",
+                            .tag = "sem.invalid-type.decl-type",
                             .level = ERROR_SOURCE_ANALYSIS,
                             .msg = lit2str("expected type expression for declaration"),
                             .args = ORERR_ARGS(error_arg_node(decl_type)),
@@ -4793,9 +4796,9 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
     }
 
     if (TYPE_IS_UNRESOLVED(init_expr->value_type) && TYPE_IS_UNRESOLVED(decl->value_type)) {
-        // ASSERT(false, "don't thing this is possible??");
+        UNREACHABLE();
         stan_error(analyzer, OR_ERROR(
-            .tag = "sem.noinfer.nil",
+            .tag = "sem.noinfer.nil|skip",
             .level = ERROR_SOURCE_ANALYSIS,
             .msg = lit2str("cannot infer nil value"),
             .args = ORERR_ARGS(error_arg_node(decl)),
@@ -4816,7 +4819,7 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
 
     if (TYPE_IS_VOID(decl->value_type)) {
         stan_error(analyzer, OR_ERROR(
-            .tag = "sem.void.decl",
+            .tag = "sem.invalid-void.decl-type",
             .level = ERROR_SOURCE_ANALYSIS,
             .msg = lit2str("cannot store void expressions"),
             .args = ORERR_ARGS(error_arg_node(decl_type)),
@@ -4833,7 +4836,7 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
 
         ast_node_t *casted_expr = cast_implicitly_if_necessary(ast, declared_type, decl_expr);
         unless (ortypeid_eq(declared_type, casted_expr->value_type)) {
-            unless (TYPE_IS_INVALID(decl_expr->value_type)) {
+            if (!TYPE_IS_INVALID(declared_type) && !TYPE_IS_INVALID(casted_expr->value_type)) {
                 stan_error(analyzer, OR_ERROR(
                     .tag = "sem.type-mismatch.decl-and-type",
                     .level = ERROR_SOURCE_ANALYSIS,
@@ -4852,7 +4855,7 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
         decl->expr_val = init_expr->expr_val;
         if (!decl->expr_val.is_concrete && !TYPE_IS_INVALID(decl->value_type)) {
             stan_error(analyzer, OR_ERROR(
-                .tag = "sem.noconst.const-decl",
+                .tag = "sem.expected-constant.decl-init",
                 .level = ERROR_SOURCE_ANALYSIS,
                 .msg = lit2str("expected constant expression for compile-time value declaration"),
                 .args = ORERR_ARGS(error_arg_node(init_expr)),
@@ -4872,7 +4875,7 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
         if (TYPE_IS_INFERRED_FUNCTION(decl->value_type)) {
             if (decl->is_mutable) {
                 stan_error(analyzer, OR_ERROR(
-                    .tag = "sem.noconst.inferred-funcdef",
+                    .tag = "sem.invalid-assignment.inferred-funcdef-into-mutable",
                     .level = ERROR_SOURCE_ANALYSIS,
                     .msg = lit2str("an inferred function definition cannot be set to an immutable variable"),
                     .args = ORERR_ARGS(error_arg_node(decl)),
@@ -4975,7 +4978,7 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
 
         if (passed_local_fold_scope && decl->is_mutable) {
             stan_error(analyzer, OR_ERROR(
-                .tag = "sem.noscope.run",
+                .tag = "sem.invalid-scope-access.run-directive",
                 .level = ERROR_SOURCE_ANALYSIS,
                 .msg = lit2str("declaration for '$2.$' does not exist in the same run scope it's being used in"),
                 .args = ORERR_ARGS(error_arg_node(def), error_arg_node(decl),
@@ -4987,7 +4990,7 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
 
         if (passed_local_mutable_access_barrier && decl->is_mutable && (*search_scope)->type != SCOPE_TYPE_MODULE) {
             stan_error(analyzer, OR_ERROR(
-                .tag = "sem.noscope-local.run",
+                .tag = "sem.invalid-scope.local-decl",
                 .level = ERROR_SOURCE_ANALYSIS,
                 .msg = lit2str("declaration for '$2.$' does not exist in the same local scope it's being used in"),
                 .args = ORERR_ARGS(error_arg_node(def), error_arg_node(decl),
@@ -5016,7 +5019,7 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
 
     unless (decl) {
         stan_error(analyzer, OR_ERROR(
-            .tag = "sem.nodef",
+            .tag = "sem.undefined-def.defval",
             .level = ERROR_SOURCE_ANALYSIS,
             .msg = lit2str("reference to undefined declaration '$1.$'"),
             .args = ORERR_ARGS(error_arg_node(def), error_arg_token(def->identifier)),
@@ -5157,15 +5160,15 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
         }
     }
 
-    ortype_t return_type = ortypeid(TYPE_VOID);
+    ortype_t return_type = ortypeid(TYPE_INVALID);
     {
         resolve_expression(analyzer, ast, state, ortypeid(TYPE_UNRESOLVED), an_func_def_return(funcdef), true);
     }
 
     ast_node_t *ret_expr = an_func_def_return(funcdef);
-    if (ret_expr->is_mutable) {
+    if (!ret_expr->expr_val.is_concrete) {
         stan_error(analyzer, OR_ERROR(
-            .tag = "sem.noconst.return-type",
+            .tag = "sem.expected-constant.func-return-type",
             .level = ERROR_SOURCE_ANALYSIS,
             .msg = lit2str("return expression must be a constant expression"),
             .args = ORERR_ARGS(error_arg_node(ret_expr)),
@@ -5173,7 +5176,7 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
         ));
     } else unless (TYPE_IS_TYPE(ret_expr->value_type)) {
         stan_error(analyzer, OR_ERROR(
-            .tag = "sem.notype.return-type",
+            .tag = "sem.type-mismatch.func-return-type",
             .level = ERROR_SOURCE_ANALYSIS,
             .msg = lit2str("return expression must be a type but got '$1.$' instead"),
             .args = ORERR_ARGS(error_arg_node(ret_expr), error_arg_type(an_func_def_return(funcdef)->value_type)),
@@ -5226,7 +5229,7 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
     ast_node_t *funcblock = an_func_def_block(funcdef);
     unless (TYPE_IS_UNREACHABLE(funcblock->value_type) || TYPE_IS_VOID(return_type)) {
         stan_error(analyzer, OR_ERROR(
-            .tag = "sem.noreturn-all-branches.funcdef",
+            .tag = "sem.expected-return-all-branches.funcdef",
             .level = ERROR_SOURCE_ANALYSIS,
             .msg = lit2str("function does not return on all branches"),
             .args = ORERR_ARGS(error_arg_node(funcdef)),
@@ -5299,7 +5302,7 @@ size_t resolve_declarations_until_unreachable(analyzer_t *analyzer, ast_t *ast, 
         }
 
         if (i == declarations.count-1 && declaration->node_type == AST_NODE_TYPE_DECLARATION_STATEMENT) {
-            resolve_expression(analyzer, ast, state, ortypeid(TYPE_UNRESOLVED), an_expression(declaration), is_last_statement_consumed);
+            // resolve_expression(analyzer, ast, state, ortypeid(TYPE_UNRESOLVED), an_expression(declaration), is_last_statement_consumed);
             resolve_declaration_statement(analyzer, ast, state, declaration, is_last_statement_consumed);
         } else {
             resolve_declaration(analyzer, ast, state, declarations.items[i]);

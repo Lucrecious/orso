@@ -1,0 +1,5 @@
+main :: () -> void {
+    x := false;
+    y := true;
+    x < y;
+};

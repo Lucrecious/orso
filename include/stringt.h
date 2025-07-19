@@ -364,6 +364,7 @@ bool core_fileid(string_t absolute_path, string_builder_t *result) {
 bool core_abspath(orstring_t relpath, arena_t *arena, orstring_t *result) {
     char resolved_path[PATH_MAX];
     if (realpath(relpath.cstr, resolved_path) == NULL) {
+        *result = lit2str("");
         return false;
     }
 

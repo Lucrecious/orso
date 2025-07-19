@@ -1,0 +1,6 @@
+main :: () -> void {
+    () -> int {
+        x := true;
+        if x then return 10 else return true;
+    };
+};

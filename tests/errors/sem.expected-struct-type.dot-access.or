@@ -1,0 +1,4 @@
+main :: () -> void {
+    foo_t :: int;
+    foo_t.name;
+};

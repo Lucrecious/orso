@@ -369,9 +369,6 @@ ortype_t type_set_fetch_anonymous_incomplete_struct(type_table_t *set) {
     typedata_t *typeinfo = type_copy_new(set, &struct_type);
     typeinfo->as.struct_.status = STRUCT_STATUS_INCOMPLETE;
     ortype_t type = add_type_no_track(set, typeinfo);
-    if (type.i == 32) {
-        printf("");
-    }
     return type;
 }
 
@@ -387,10 +384,6 @@ void type_set_complete_struct(type_table_t *set, ortype_t incomplete_type, struc
 
     fields = fields_copy(fields, set->allocator);
     consts = fields_copy(consts, set->allocator);
-
-    if (incomplete_type.i == 32) {
-        printf("");
-    }
 
     incomplete_struct_type_init(set, fields, consts, td);
     td->as.struct_.status = STRUCT_STATUS_COMPLETE;
