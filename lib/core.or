@@ -1,5 +1,3 @@
-# core lib
-
 str8_t :: struct {
     cstr := (&char).{};
     length := 0;

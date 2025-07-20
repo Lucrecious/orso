@@ -155,7 +155,7 @@ orstring_t type_to_string_toplevel(typedatas_t types, ortype_t type, arena_t *al
     } else if (type_is_pointer(types, type)) {
         sb_add_char(&sb, '&');
 
-        orstring_t type_string = type_to_string_toplevel(types, type_info->as.ptr.type, allocator, false);
+        orstring_t type_string = type_to_string_toplevel(types, type_info->as.ptr.type, allocator, true);
         sb_add_cstr(&sb, type_string.cstr);
     } else {
         orcstr_t type_name;

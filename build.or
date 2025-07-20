@@ -1,5 +1,5 @@
-da :: @load "./lib/dynarr.or";
-or_ :: @load "./lib/orso.or";
+da :: @load "dynarr.or";
+or_ :: @load "orso.or";
 
 
 main :: () -> void {

@@ -1,4 +1,4 @@
-da :: @load "./lib/dynarr.or";
+da :: @load "dynarr.or";
 
 cmd_t :: da.dynarr_t(str8_t);
 
