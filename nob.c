@@ -124,7 +124,9 @@ int main(int argc, char **argv) {
     MUST(success);
 
     nob_copy_file("./lib/core.or", "./bin/std/core.or");
+    nob_copy_file("./lib/arena.or", "./bin/std/arena.or");
     nob_copy_file("./lib/dynarr.or", "./bin/std/dynarr.or");
+    nob_copy_file("./lib/memory.or", "./bin/std/memory.or");
     nob_copy_file("./lib/orso.or", "./bin/std/orso.or");
 
     arena_free(&allocator);

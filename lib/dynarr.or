@@ -1,3 +1,5 @@
+mem :: @load "memory.or";
+
 dynarr_t :: struct(u: type) {
     items := (&u).{};
     count := 0;
@@ -7,7 +9,7 @@ dynarr_t :: struct(u: type) {
 push :: (arr: &dynarr_t(u), item: !u) -> void {
     if arr.count >= arr.capacity {
         new_cap := if arr.capacity == 0 then 8 else arr.capacity*2;
-        arr.items = (@icall "realloc", arr.items as &void, sizeof(u)*(arr.capacity as size_t), sizeof(u)*(new_cap as size_t)) as &u;
+        arr.items = mem.realloc(arr.items as &void, (sizeof(u) as sint)*new_cap) as &u;
         arr.capacity = new_cap;
     };
 
@@ -23,6 +25,6 @@ at :: (arr: &dynarr_t(!u), index := 0) -> &u {
 };
 
 free :: (arr: &dynarr_t(!u)) -> void {
-    @icall "realloc", arr.items as &void, sizeof(u)*(arr.capacity as size_t), 0sz;
+    @icall mem.realloc(arr.items as &void, 0);
     *arr = .{};
 };

@@ -188,10 +188,9 @@ static void __orrealloc(struct vm_t *vm, void *args_reverse_order, void *result)
 
     size_t offset = 0;
     size_t new_cap = *(size_t*)orso_icall_arg(args_reverse_order, &offset, ORWORD_SIZE);
-    size_t old_cap = *(size_t*)orso_icall_arg(args_reverse_order, &offset, ORWORD_SIZE);
     void *ptr = *(void**)orso_icall_arg(args_reverse_order, &offset, ORWORD_SIZE);
 
-    void *new_ptr = orrealloc(ptr, old_cap, new_cap);
+    void *new_ptr = orrealloc(ptr, new_cap);
     
     *(void**)(result) = new_ptr;
 }
@@ -269,8 +268,65 @@ static void __orbuild(struct vm_t *vm, void *args_reverse_order, void *result) {
     *(bool*)result = success;
 }
 
+static void __orreserve(struct vm_t *vm, void *args_reverse_order, void *result) {
+    NOB_UNUSED(vm);
+
+    size_t offset = 0;
+    size_t memsize = *(size_t*)orso_icall_arg(args_reverse_order, &offset, ORWORD_SIZE);
+
+    void *ptr = orreserve(memsize);
+    
+    *(void**)(result) = ptr;
+}
+
+static void __ormarkro(struct vm_t *vm, void *args_reverse_order, void *result) {
+    NOB_UNUSED(vm);
+
+    size_t offset = 0;
+    size_t size = *(size_t*)orso_icall_arg(args_reverse_order, &offset, ORWORD_SIZE);
+    void *ptr = *(void**)orso_icall_arg(args_reverse_order, &offset, ORWORD_SIZE);
+
+    bool success = ormarkro(ptr, size);
+    
+    *(bool*)(result) = success;
+}
+
+static void __ormarkrw(struct vm_t *vm, void *args_reverse_order, void *result) {
+    NOB_UNUSED(vm);
+
+    size_t offset = 0;
+    size_t size = *(size_t*)orso_icall_arg(args_reverse_order, &offset, ORWORD_SIZE);
+    void *ptr = *(void**)orso_icall_arg(args_reverse_order, &offset, ORWORD_SIZE);
+
+    bool success = ormarkrw(ptr, size);
+    
+    *(bool*)(result) = success;
+}
+
+static void __orfree(struct vm_t *vm, void *args_reverse_order, void *result) {
+    NOB_UNUSED(vm);
+
+    size_t offset = 0;
+    size_t size = *(size_t*)orso_icall_arg(args_reverse_order, &offset, ORWORD_SIZE);
+    void *ptr = *(void**)orso_icall_arg(args_reverse_order, &offset, ORWORD_SIZE);
+
+    bool success = orfree(ptr, size);
+    
+    *(bool*)(result) = success;
+}
+
+static void __orpagesize(struct vm_t *vm, void *args_reverse_order, void *result) {
+    NOB_UNUSED(vm);
+    NOB_UNUSED(args_reverse_order);
+
+    size_t size = orpagesize();
+    
+    *(size_t*)(result) = size;
+}
+
 
 void intrinsics_init(ast_t *ast, orintrinsic_fns_t *fns) {
+    ortype_t voidptr = type_set_fetch_pointer(&ast->type_set, ortypeid(TYPE_VOID));
     {
         // realloc
         {
@@ -279,9 +335,7 @@ void intrinsics_init(ast_t *ast, orintrinsic_fns_t *fns) {
             fn.has_varargs = false;
             fn.arg_types = (types_t){.allocator=ast->arena};
 
-            ortype_t voidptr = type_set_fetch_pointer(&ast->type_set, ortypeid(TYPE_VOID));
             array_push(&fn.arg_types, voidptr);
-            array_push(&fn.arg_types, ast->type_set.size_t_);
             array_push(&fn.arg_types, ast->type_set.size_t_);
 
             fn.ret_type = voidptr;
@@ -298,7 +352,6 @@ void intrinsics_init(ast_t *ast, orintrinsic_fns_t *fns) {
             fn.has_varargs = false;
             fn.arg_types = (types_t){.allocator=ast->arena};
 
-            ortype_t voidptr = type_set_fetch_pointer(&ast->type_set, ortypeid(TYPE_VOID));
             array_push(&fn.arg_types, ast->type_set.int_);
 
             fn.ret_type = voidptr;
@@ -337,12 +390,92 @@ void intrinsics_init(ast_t *ast, orintrinsic_fns_t *fns) {
             array_push(&fn.arg_types, ast->type_set.type_);
             array_push(&fn.arg_types, ast->type_set.type_);
 
-            ortype_t voidptr = type_set_fetch_pointer(&ast->type_set, ortypeid(TYPE_VOID));
             array_push(&fn.arg_types, voidptr);
 
             fn.ret_type = ast->type_set.bool_;
 
             fn.fnptr = __orbuild;
+
+            array_push(fns, fn);
+        }
+
+        // reserve
+        {
+            orintrinsic_fn_t fn = {0};
+            fn.name = lit2str("reserve");
+            fn.has_varargs = false;
+
+            fn.arg_types = (types_t){.allocator=ast->arena};
+            array_push(&fn.arg_types, ast->type_set.size_t_);
+
+            fn.ret_type = voidptr;
+
+            fn.fnptr = __orreserve;
+
+            array_push(fns, fn);
+        }
+
+        // markro
+        {
+            orintrinsic_fn_t fn = {0};
+            fn.name = lit2str("markro");
+            fn.has_varargs = false;
+
+            fn.arg_types = (types_t){.allocator=ast->arena};
+            array_push(&fn.arg_types, voidptr);
+            array_push(&fn.arg_types, ast->type_set.size_t_);
+
+            fn.ret_type = ast->type_set.bool_;
+
+            fn.fnptr = __ormarkro;
+
+            array_push(fns, fn);
+        }
+
+        // markrw
+        {
+            orintrinsic_fn_t fn = {0};
+            fn.name = lit2str("markrw");
+            fn.has_varargs = false;
+
+            fn.arg_types = (types_t){.allocator=ast->arena};
+            array_push(&fn.arg_types, voidptr);
+            array_push(&fn.arg_types, ast->type_set.size_t_);
+
+            fn.ret_type = ast->type_set.bool_;
+
+            fn.fnptr = __ormarkrw;
+
+            array_push(fns, fn);
+        }
+
+        // free
+        {
+            orintrinsic_fn_t fn = {0};
+            fn.name = lit2str("free");
+            fn.has_varargs = false;
+
+            fn.arg_types = (types_t){.allocator=ast->arena};
+            array_push(&fn.arg_types, voidptr);
+            array_push(&fn.arg_types, ast->type_set.size_t_);
+
+            fn.ret_type = ast->type_set.bool_;
+
+            fn.fnptr = __orfree;
+
+            array_push(fns, fn);
+        }
+
+        // pagesize
+        {
+            orintrinsic_fn_t fn = {0};
+            fn.name = lit2str("pagesize");
+            fn.has_varargs = false;
+
+            fn.arg_types = (types_t){.allocator=ast->arena};
+            fn.ret_type = ast->type_set.size_t_;
+
+            fn.fnptr = __orpagesize;
 
             array_push(fns, fn);
         }

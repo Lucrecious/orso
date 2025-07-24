@@ -1,0 +1,29 @@
+reserve :: (amount: sint) -> &void {
+    ptr := @icall "reserve", amount as size_t;
+    return ptr;
+};
+
+markro :: (ptr: &void, amount: sint) -> bool {
+    success := @icall "markro", ptr, amount as size_t;
+    return success;
+};
+
+markrw :: (ptr: &void, amount: sint) -> bool {
+    success := @icall "markrw", ptr, amount as size_t;
+    return success;
+};
+
+free :: (ptr: &void, amount: sint) -> bool {
+    success := @icall "free", ptr, amount as size_t;
+    return success;
+};
+
+pagesize :: () -> sint {
+    size := @icall "pagesize";
+    return size as sint;
+};
+
+realloc :: (ptr := (&void).{}, new_size: sint) -> &void {
+    ptr = @icall "realloc", ptr, new_size as size_t;
+    return ptr;
+};

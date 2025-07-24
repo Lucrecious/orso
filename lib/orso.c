@@ -316,8 +316,8 @@ defer:
     return result;
 }
 
-void *orrealloc(void *ptr, size_t old_size, size_t new_size) {
-    NOB_UNUSED(old_size);
+void *orrealloc(void *ptr, size_t new_size) {
+    printf("%p\n", ptr);
     ptr = realloc(ptr, new_size);
     return ptr;
 }
@@ -341,3 +341,37 @@ bool orshell_run(void *cmds, size_t count) {
 
     return success;
 }
+
+#ifdef _WIN32
+#else
+
+#include <time.h>
+#include <unistd.h>
+#include <sys/mman.h>
+
+void *orreserve(size_t size) {
+    void *addr = mmap(NULL, size, PROT_NONE, MAP_PRIVATE|MAP_ANONYMOUS,-1, 0);
+    return addr;
+}
+
+bool ormarkro(void *addr, size_t size) {
+    bool success = (oru8)(mprotect(addr, size, PROT_READ) == 0);
+    return success;
+}
+
+bool ormarkrw(void *addr, size_t size) {
+    bool success = (bool)(mprotect(addr, size, PROT_READ|PROT_WRITE) == 0);
+    return success;
+}
+
+bool orfree(void *addr, size_t size) {
+    bool success = (bool)(munmap(addr, size) == 0);
+    return success;
+}
+
+size_t orpagesize(void) {
+    size_t pagesize = (size_t)getpagesize();
+    return pagesize;
+}
+
+#endif

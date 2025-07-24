@@ -16,11 +16,15 @@ struct orso_compiler_t {
 bool orbuild(void *compiler);
 bool orinterpret(orstring_t input_file_path);
 
-void *orrealloc(void *ptr, size_t old_size, size_t new_size);
+void *orrealloc(void *ptr, size_t new_size);
 void orprintint(orint num);
 
 bool orshell_run(void *cmds, size_t count);
 
-
+void *orreserve(size_t size);
+bool ormarkro(void *addr, size_t size);
+bool ormarkrw(void *addr, size_t size);
+bool orfree(void *addr, size_t size);
+size_t orpagesize(void);
 
 #endif

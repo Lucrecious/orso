@@ -1,0 +1,33 @@
+mem :: @load "memory.or";
+
+arena_t :: struct {
+    start := (&void).{};
+    count := 0pd;
+    capacity := 0pd;
+};
+
+make :: (size: sint) -> arena_t {
+    arena := arena_t.{
+        start: mem.reserve(size),
+        count: 0,
+        capacity: size as ptrdiff_t,
+    };
+    return arena;
+};
+
+allocn :: (arena: &arena_t, n: sint) -> &void {
+    if arena.count + n > arena.capacity then return .{};
+
+    ptr := arena.start + arena.count;
+    mem.markrw(ptr, n);
+    arena.count += n;
+    return ptr;
+};
+
+alloc :: (arena: &arena_t, !t: type) -> &t {
+    return allocn(arena, sizeof(t) as sint);
+};
+
+free :: (arena: &arena_t) -> void {
+    mem.free(arena.start, arena.capacity);
+};

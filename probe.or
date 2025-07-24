@@ -1,4 +1,12 @@
+ar :: @load "arena.or";
+
+printsint :: (a: sint) -> void {
+    @icall "printint", a as int;
+};
+
 main :: () -> void {
-    x := 10;
-    typeof(10) == sint;
+    arena := ar.make(100_000);
+    x := ar.alloc(&arena, sint);
+    *x = 42;
+    printsint(*x);
 };
