@@ -95,6 +95,8 @@ if (sv_eq(identifier, lit2sv(#name))) {\
     RETURN_IF_TYPE(u64, t->u64_)
     RETURN_IF_TYPE(s64, t->s64_)
 
+    RETURN_IF_TYPE(sint, t->sint_);
+
     RETURN_IF_TYPE(int, t->int_)
     RETURN_IF_TYPE(uint, t->uint_)
     RETURN_IF_TYPE(size_t, t->size_t_)
@@ -4181,25 +4183,6 @@ void resolve_expression(
                     resolve_expression(analyzer, ast, cond_state, ortypeid(TYPE_UNRESOLVED), an_condition(expr), true);
                 }
 
-                if (an_is_notnone(an_for_incr(expr))) {
-                    resolve_expression(analyzer, ast, branch_state, ortypeid(TYPE_UNRESOLVED), an_for_incr(expr), false);
-                }
-
-                resolve_expression(analyzer, ast, branch_state, implicit_type, an_then(expr), is_consumed);
-
-                resolve_expression(analyzer, ast, branch_state, implicit_type, an_else(expr), is_consumed);
-
-                ortype_t branch_type = resolve_block_return_types_or_error(analyzer, expr);
-                expr->value_type = branch_type;
-
-                if (TYPE_IS_INVALID(branch_type)) {
-                    INVALIDATE(expr);
-                }
-
-                if (TYPE_IS_INVALID(an_then(expr)->value_type) || TYPE_IS_INVALID(an_else(expr)->value_type)) {
-                    INVALIDATE(expr);
-                }
-
                 if (!TYPE_IS_INVALID(an_condition(expr)->value_type) && !ortypeid_eq(an_condition(expr)->value_type, ortypeid(TYPE_BOOL))) {
                     stan_error(analyzer, OR_ERROR(
                         .tag = "sem.expected-bool.branch-condition",
@@ -4208,7 +4191,43 @@ void resolve_expression(
                         .args = ORERR_ARGS(error_arg_token(expr->start), error_arg_type(an_condition(expr)->value_type)),
                         .show_code_lines = ORERR_LINES(0),
                     ));
+                    INVALIDATE(expr);
+                    break;
                 }
+
+                ast_node_t *condition = an_condition(expr);
+                if (expr->branch_type == BRANCH_TYPE_IF && condition->expr_val.is_concrete) {
+                    bool condition_val = condition->expr_val.word.as.u;
+
+                    // prune unused branch
+                    if (condition_val) {
+                        *expr = *an_then(expr);
+                    } else {
+                        *expr = *an_else(expr);
+                    }
+
+                    resolve_expression(analyzer, ast, branch_state, ortypeid(TYPE_UNRESOLVED), expr, is_consumed);
+                } else {
+                    if (an_is_notnone(an_for_incr(expr))) {
+                        resolve_expression(analyzer, ast, branch_state, ortypeid(TYPE_UNRESOLVED), an_for_incr(expr), false);
+                    }
+
+                    resolve_expression(analyzer, ast, branch_state, implicit_type, an_then(expr), is_consumed);
+
+                    resolve_expression(analyzer, ast, branch_state, implicit_type, an_else(expr), is_consumed);
+
+                    ortype_t branch_type = resolve_block_return_types_or_error(analyzer, expr);
+                    expr->value_type = branch_type;
+
+                    if (TYPE_IS_INVALID(branch_type)) {
+                        INVALIDATE(expr);
+                    }
+
+                    if (TYPE_IS_INVALID(an_then(expr)->value_type) || TYPE_IS_INVALID(an_else(expr)->value_type)) {
+                        INVALIDATE(expr);
+                    }
+                }
+
                 break;
             }
 

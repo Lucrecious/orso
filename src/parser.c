@@ -740,11 +740,7 @@ void ast_struct_end(ast_node_t *struct_, token_t end) {
 
 static ast_node_t *ast_primaryu(ast_t *ast, oru64 value, ortype_t type, token_t token) {
     if (TYPE_IS_UNRESOLVED(type)) {
-        if (value < UINT_MAX) {
-            type = ast->type_set.uint_;
-        } else {
-            type = ast->type_set.u64_;
-        }
+        type = ast->type_set.u64_;
     }
 
     typedata_t *td = type2typedata(&ast->type_set.types, type);
@@ -786,11 +782,7 @@ static ast_node_t *ast_primaryu(ast_t *ast, oru64 value, ortype_t type, token_t 
 
 static ast_node_t *ast_primaryi(ast_t *ast, ors64 value, ortype_t type, token_t token) {
     if (TYPE_IS_UNRESOLVED(type)) {
-        if (value >= INT_MIN && value <= INT_MAX) {
-            type = ast->type_set.int_;
-        } else {
-            type = ast->type_set.s64_;
-        }
+        type = ast->type_set.sint_;
     }
 
     typedata_t *td = type2typedata(&ast->type_set.types, type);
@@ -1129,7 +1121,7 @@ static ast_node_t *parse_number(parser_t *parser) {
 
             ortype_t type = ortypeid(TYPE_UNRESOLVED);
             if (sv_ends_with(numsv, "s")) {
-                type = parser->ast->type_set.int_;
+                type = parser->ast->type_set.sint_;
             } else if (sv_ends_with(numsv, "u")) {
                 type = parser->ast->type_set.uint_;
             } else if (sv_ends_with(numsv, "s8")) {

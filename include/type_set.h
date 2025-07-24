@@ -33,6 +33,8 @@ struct type_table_t {
     ortype_t u64_;
     ortype_t s64_;
 
+    ortype_t sint_;
+
     ortype_t f32_;
     ortype_t f64_;
 

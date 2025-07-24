@@ -24,7 +24,8 @@ typedef int64_t ors64;
 typedef uint64_t oru64;
 typedef float orf32;
 typedef double orf64;
-typedef oru8 orbool;
+typedef bool orbool;
+typedef ors64 orsint;
 
 typedef int orint;
 typedef unsigned int oruint;

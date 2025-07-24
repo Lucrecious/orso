@@ -4,16 +4,16 @@ or_ :: @load "orso.or";
 
 main :: () -> void {
     oc := or_.compiler_t.{};
-    oc.src = "./examples/gol.or";
+    oc.src = "probe.or";
 
-    da.push(&oc.cflags, "-framework");
-    da.push(&oc.cflags, "IOKit");
+    #da.push(&oc.cflags, "-framework");
+    #da.push(&oc.cflags, "IOKit");
     
-    da.push(&oc.cflags, "-framework");
-    da.push(&oc.cflags, "Cocoa");
+    #da.push(&oc.cflags, "-framework");
+    #da.push(&oc.cflags, "Cocoa");
     
-    da.push(&oc.cflags, "-framework");
-    da.push(&oc.cflags, "OpenGL");
+    #da.push(&oc.cflags, "-framework");
+    #da.push(&oc.cflags, "OpenGL");
 
     success := or_.build(&oc);
 

@@ -171,6 +171,8 @@ void type_set_init(type_table_t *set, arena_t *allocator) {
     static typedata_t type_s64 = {.name=lit2str("ors64"), .kind=TYPE_NUMBER, .size=NUM_SIZE_64, .alignment=NUM_SIZE_64, .as.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_NUMBER)};
     static typedata_t type_u64 = {.name=lit2str("oru64"), .kind=TYPE_NUMBER, .size=NUM_SIZE_64, .alignment=NUM_SIZE_64, .as.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_NUMBER)};
 
+    static typedata_t type_sint = {.name=lit2str("orsint"), .kind=TYPE_NUMBER, .size=NUM_SIZE_64, .alignment=NUM_SIZE_64, .as.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_NUMBER)};
+
     static typedata_t type_int = {.name=lit2str("orint"), .kind=TYPE_NUMBER, .size=sizeof(int), .alignment=sizeof(int), .as.num = NUM_TYPE_SIGNED, .capabilities=(TYPE_CAP_NUMBER)};
     static typedata_t type_uint = {.name=lit2str("oruint"), .kind=TYPE_NUMBER, .size=sizeof(unsigned int), .alignment=sizeof(unsigned int), .as.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_NUMBER)};
     static typedata_t type_size_t = {.name=lit2str("size_t"), .kind=TYPE_NUMBER, .size=sizeof(size_t), .alignment=sizeof(size_t), .as.num = NUM_TYPE_UNSIGNED, .capabilities=(TYPE_CAP_NUMBER)};
@@ -252,6 +254,9 @@ void type_set_init(type_table_t *set, arena_t *allocator) {
 
     set->uint_ = ortypeid(set->types.count);
     array_push(&set->types, &type_uint);
+
+    set->sint_ = ortypeid(set->types.count);
+    array_push(&set->types, &type_sint);
 
     set->size_t_ = ortypeid(set->types.count);
     array_push(&set->types, &type_size_t);
