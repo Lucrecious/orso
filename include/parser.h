@@ -333,6 +333,16 @@ struct orintrinsic_fns_t {
     arena_t *allocator;
 };
 
+struct function_t;
+
+typedef struct functions_t functions_t;
+struct functions_t {
+    struct function_t **items;
+    size_t count;
+    size_t capacity;
+    arena_t *allocator;
+};
+
 // the ast node is pretty large and redundant right now on purpose
 // once the ast node is stable, it'll be compressed since many of these
 // fields are mutally exclusive
@@ -382,6 +392,7 @@ struct ast_node_t {
 
     ast_nodes_t owned_funcdefs;
     ast_nodes_t module_deps;
+    functions_t func_deps;
 
     token_t identifier;
     token_t label;
@@ -488,6 +499,7 @@ void ast_add_module(ast_t *ast, ast_node_t *module, orstring_t moduleid);
 ast_node_t *ast_implicit_expr(ast_t *ast, ortype_t type, orword_t value, token_t where);
 orword_t *ast_multiword_value(ast_t *ast, size_t size_words);
 orword_t ast_mem2word(ast_t *ast, void *data, ortype_t type);
+ast_node_t *parse_expression_string(ast_t *ast, orstring_t code, bool *had_error);
 
 bool ast_find_intrinsic_funcname(orintrinsic_fns_t fns, string_view_t name, orintrinsic_fn_t *fn);
 

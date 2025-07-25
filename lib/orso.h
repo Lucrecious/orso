@@ -18,6 +18,7 @@ bool orinterpret(orstring_t input_file_path);
 
 void *orrealloc(void *ptr, size_t new_size);
 void orprintint(orint num);
+void orprintln(orcstr_t s);
 
 bool orshell_run(void *cmds, size_t count);
 

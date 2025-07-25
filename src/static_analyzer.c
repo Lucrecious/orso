@@ -63,7 +63,8 @@ static void stan_error(analyzer_t *analyzer, error_t error) {
 static ast_node_t *get_defval_or_null_by_identifier_and_error(
         analyzer_t *analyzer,
         ast_t *ast,
-        scope_t *scope,
+        scope_t *look_scope,
+        scope_t *use_scope,
         ast_node_t *def,
         scope_t **found_scope);
 
@@ -2202,6 +2203,29 @@ defer:
     allocator_return(tmp);
 }
 
+static ast_node_t *stan_find_closest_funcdef_or_module_or_null(scope_t *scope) {
+    while (scope && (scope->type != SCOPE_TYPE_FUNCDEF && scope->type != SCOPE_TYPE_MODULE)) {
+        scope = scope->outer;
+    }
+
+    if (scope->creator) return scope->creator;
+    return NULL;
+}
+
+void collect_required_uncompiled_funcdefs(analyzer_t *analyzer, ast_t *ast, function_t *root_function) {
+    ast_node_t *funcdef;
+    bool success = table_get(fn2an, ast->fn2an, root_function, &funcdef);
+    ORUNUSED(success);
+    MUST(success);
+
+    array_push(&analyzer->run_required_uncompiled_funcdefs, funcdef);
+
+    for (size_t i = 0; i < funcdef->func_deps.count; ++i) {
+        function_t *function = funcdef->func_deps.items[i];
+        collect_required_uncompiled_funcdefs(analyzer, ast, function);
+    }
+}
+
 static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t state, ast_node_t *call, ortype_t implicit_type) {
     ast_node_t *callee = an_callee(call);
     resolve_expression(analyzer, ast, state, implicit_type, callee, true);
@@ -2300,6 +2324,15 @@ static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
                 size_t dep_start = stan_function_is_building(analyzer, function, &passed_through_fold);
                 if (dep_start < analyzer->pending_dependencies.count) {
                     stan_circular_dependency_error(analyzer, ast, callee, dep_start);
+                }
+
+                ast_node_t *dependendee = stan_find_closest_funcdef_or_module_or_null(state.scope);
+                MUST(dependendee);
+
+                array_push(&dependendee->func_deps, function);
+
+                if (passed_through_fold) {
+                    collect_required_uncompiled_funcdefs(analyzer, ast, function);
                 }
             }
 
@@ -2672,6 +2705,61 @@ void resolve_expression(
                     expr->expr_val = child->expr_val;
                 }
 
+            } else if (sv_eq(expr->identifier.view, lit2sv("@insert"))) {
+                if (expr->children.count != 1) {
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = "sem.arg-count-mismatch.insert",
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("the 'insert' directive only takes 1 argument but got $1.$ instead"),
+                        .args = ORERR_ARGS(error_arg_node(expr), error_arg_sz(expr->children.count)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
+                    INVALIDATE(expr);
+                    break;
+                }
+
+                ast_node_t *code_node = expr->children.items[0];
+                resolve_expression(analyzer, ast, state, ortypeid(TYPE_UNRESOLVED), code_node, is_consumed);
+                if (!code_node->expr_val.is_concrete) {
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = "sem.expected-constant.insert-arg",
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("the 'insert' directive requires a constant argument"),
+                        .args = ORERR_ARGS(error_arg_node(code_node)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
+                    INVALIDATE(expr);
+                    break;
+                }
+                
+                if (TYPE_IS_INVALID(code_node->value_type)) {
+                    INVALIDATE(expr);
+                    break;
+                }
+
+                if (!ortypeid_eq(code_node->value_type, ast->type_set.str8_t_)) {
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = "sem.type-mismatch.insert-arg",
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("the 'insert' directive requires a 'str8_t' argument but got '$1.$' instead"),
+                        .args = ORERR_ARGS(error_arg_node(code_node), error_arg_type(code_node->value_type)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
+                    INVALIDATE(expr);
+                    break;
+                }
+
+                orstring_t code = ast_orstr2str(&ast->type_set, code_node->expr_val.word.as.p);
+                bool had_error = false;
+                ast_node_t *new_expr = parse_expression_string(ast, code, &had_error);
+                if (had_error) {
+                    INVALIDATE(expr);
+                    break;
+                }
+
+                resolve_expression(analyzer, ast, state, ortypeid(TYPE_UNRESOLVED), new_expr, is_consumed);
+
+                *expr = *new_expr;
             } else {
                 size_t dir_arg_count = an_dir_arg_end(expr) - an_dir_arg_start(expr);
                 if (!check_dir_or_intr_params_or_error(analyzer, state, ast, expr, an_dir_arg_start(expr), dir_arg_count, fn, true)) {
@@ -3864,7 +3952,7 @@ void resolve_expression(
 
             scope_t *def_scope;
 
-            ast_node_t *decl = get_defval_or_null_by_identifier_and_error(analyzer, ast, state.scope, expr, &def_scope);
+            ast_node_t *decl = get_defval_or_null_by_identifier_and_error(analyzer, ast, state.scope, NULL, expr, &def_scope);
 
             if (decl == NULL) {
                 INVALIDATE(expr);
@@ -4022,7 +4110,7 @@ void resolve_expression(
             case TYPE_MODULE: {
                 ast_node_t *module = (ast_node_t*)lhs->expr_val.word.as.p;
                 scope_t *found_scope;
-                ast_node_t *defval = get_defval_or_null_by_identifier_and_error(analyzer, ast, &module->defined_scope, expr, &found_scope);
+                ast_node_t *defval = get_defval_or_null_by_identifier_and_error(analyzer, ast, &module->defined_scope, state.scope, expr, &found_scope);
                 if (defval == NULL) {
                     INVALIDATE(expr);
                     break;
@@ -4958,12 +5046,15 @@ static ast_node_t *get_builtin_decl(ast_t *ast, string_view_t identifier) {
 static ast_node_t *get_defval_or_null_by_identifier_and_error(
         analyzer_t *analyzer,
         ast_t *ast,
-        scope_t *scope,
+        scope_t *look_scope,
+        scope_t *use_scope,
         ast_node_t *def,
         scope_t **search_scope) { // TODO: consider removing search scope from params, check if it's actually used
 
     bool passed_local_mutable_access_barrier = false;
     bool passed_local_fold_scope = false;
+
+    if (!use_scope) use_scope = look_scope;
 
     // early return if looking at a built in type
     {
@@ -4975,7 +5066,7 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
     }
 
     orword_t def_slot;
-    *search_scope = scope;
+    *search_scope = look_scope;
 
     ast_node_t *decl = NULL;
 
@@ -5082,13 +5173,13 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
                 stan_circular_dependency_error(analyzer, ast, def, dep_start);
             }
 
-            if (passed_through_fold) {
-                ast_node_t *funcdef;
-                bool success = table_get(fn2an, ast->fn2an, function, &funcdef);
-                ORUNUSED(success);
-                MUST(success);
+            ast_node_t *owner_node = stan_find_closest_funcdef_or_module_or_null(use_scope);
+            MUST(owner_node);
 
-                array_push(&analyzer->run_required_uncompiled_funcdefs, funcdef);
+            array_push(&owner_node->func_deps, function);
+
+            if (passed_through_fold) {
+                collect_required_uncompiled_funcdefs(analyzer, ast, function);
             }
         }
         break;

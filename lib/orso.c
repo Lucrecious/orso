@@ -317,13 +317,16 @@ defer:
 }
 
 void *orrealloc(void *ptr, size_t new_size) {
-    printf("%p\n", ptr);
     ptr = realloc(ptr, new_size);
     return ptr;
 }
 
 void orprintint(orint num) {
     printf("%d\n", num);
+}
+
+void orprintln(orcstr_t s) {
+    printf("%s\n", s);
 }
 
 bool orshell_run(void *cmds, size_t count) {

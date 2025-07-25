@@ -77,6 +77,7 @@ struct orword_t {
 #define _orf64(lit) ((orf64)lit)
 #define _orint(lit) ((int)lit)
 #define _oruint(lit) ((oruint)lit)
+#define _orchar(lit) ((orchar)lit)
 
 #define orfn_t_(var_name, return_type, ...) return_type (*var_name)(__VA_ARGS__)
 

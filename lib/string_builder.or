@@ -1,0 +1,29 @@
+ar :: @load "arena.or";
+da :: @load "dynarr.or";
+
+string_builder_t :: da.dynarr_t(char);
+
+add :: (sb: &string_builder_t, s: str8_t) -> void {
+    for i := 0; i < s.length; ++i {
+        c := *(s.cstr + (i as ptrdiff_t));
+        da.push(sb, c);
+    };
+};
+
+render :: (sb: &string_builder_t, arena: &ar.arena_t) -> str8_t {
+    cstr := ar.allocn(arena, (sizeof(char) as sint)*(sb.count+1)) as &char;
+
+    for i := 0; i < sb.count; ++i {
+        c := *da.at(sb, i);
+        *(cstr + (i as ptrdiff_t)) = c;
+    };
+
+    *(cstr + (sb.count as ptrdiff_t)) = char.{};
+
+    result := str8_t.{
+        cstr: cstr,
+        length: sb.count,
+    };
+
+    return result;
+};

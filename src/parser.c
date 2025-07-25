@@ -138,6 +138,13 @@ static void directives_init(ast_t *ast, orintrinsic_fns_t *fns) {
         array_push(fns, fn);
     }
 
+    // insert
+    {
+        orintrinsic_fn_t fn = {0};
+        fn.name = lit2str("insert");
+        array_push(fns, fn);
+    }
+
     // load
     {
         orintrinsic_fn_t fn = {0};
@@ -324,9 +331,21 @@ static void __orpagesize(struct vm_t *vm, void *args_reverse_order, void *result
     *(size_t*)(result) = size;
 }
 
+static void __orprintln(struct vm_t *vm, void *args_reverse_order, void *result) {
+    NOB_UNUSED(vm);
+    NOB_UNUSED(args_reverse_order);
+    NOB_UNUSED(result);
+
+    size_t offset = 0;
+    orcstr_t cstr = *(char**)orso_icall_arg(args_reverse_order, &offset, ORWORD_SIZE);
+
+    orprintln(cstr);
+}
+
 
 void intrinsics_init(ast_t *ast, orintrinsic_fns_t *fns) {
     ortype_t voidptr = type_set_fetch_pointer(&ast->type_set, ortypeid(TYPE_VOID));
+    ortype_t charptr = type_set_fetch_pointer(&ast->type_set, ast->type_set.char_);
     {
         // realloc
         {
@@ -479,6 +498,21 @@ void intrinsics_init(ast_t *ast, orintrinsic_fns_t *fns) {
 
             array_push(fns, fn);
         }
+
+        // println
+        {
+            orintrinsic_fn_t fn = {0};
+            fn.name = lit2str("println");
+            fn.has_varargs = false;
+
+            fn.arg_types = (types_t){.allocator=ast->arena};
+            array_push(&fn.arg_types, charptr);
+            fn.ret_type = ast->type_set.void_;
+
+            fn.fnptr = __orprintln;
+
+            array_push(fns, fn);
+        }
     }
 }
 
@@ -574,6 +608,7 @@ ast_node_t *ast_node_new(arena_t *arena, ast_node_type_t node_type, token_t star
 
     node->children = (ast_nodes_t){.allocator=arena};
     node->owned_funcdefs = (ast_nodes_t){.allocator=arena};
+    node->func_deps = (functions_t){.allocator=arena};
     node->module_deps = (ast_nodes_t){.allocator=arena};
     node->realized_copies = (inferred_copies_t){.allocator=arena};
     node->type_decl_patterns = (type_patterns_t){.allocator=arena};
@@ -2588,6 +2623,19 @@ static ast_node_t *parse_expression(parser_t *parser) {
     parser->inside_type_context = inside_type_context;
 
     return expression_node;
+}
+
+ast_node_t *parse_expression_string(ast_t *ast, orstring_t code, bool *had_error) {
+    parser_t parser = {0};
+    parser_init(&parser, ast, lit2str("<@insert>"), string2sv(code));
+    
+    advance(&parser);
+
+    ast_node_t *expr = parse_expression(&parser);
+
+    *had_error = parser.had_error;
+
+    return expr;
 }
 
 static ast_node_t *parse_statement(parser_t *parser) {

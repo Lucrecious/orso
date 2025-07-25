@@ -2102,6 +2102,7 @@ static void gen_initializer_list(gen_t *gen, function_t *function, ast_node_t *l
             break;
         }
 
+        case TYPE_STRING:
         case TYPE_STRUCT: {
             size_t arg_pos_index = 0;
             size_t args_count = an_list_end(list) - an_list_start(list);

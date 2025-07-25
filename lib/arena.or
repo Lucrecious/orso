@@ -16,11 +16,11 @@ make :: (size: sint) -> arena_t {
 };
 
 allocn :: (arena: &arena_t, n: sint) -> &void {
-    if arena.count + n > arena.capacity then return .{};
+    if arena.count + (n as ptrdiff_t) > arena.capacity then return .{};
 
     ptr := arena.start + arena.count;
     mem.markrw(ptr, n);
-    arena.count += n;
+    arena.count += (n as ptrdiff_t);
     return ptr;
 };
 
@@ -29,5 +29,5 @@ alloc :: (arena: &arena_t, !t: type) -> &t {
 };
 
 free :: (arena: &arena_t) -> void {
-    mem.free(arena.start, arena.capacity);
+    mem.free(arena.start, arena.capacity as sint);
 };
