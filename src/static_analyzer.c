@@ -2719,15 +2719,20 @@ void resolve_expression(
                 }
 
                 ast_node_t *code_node = expr->children.items[0];
+                if (sv_starts_with(code_node->start.view, "code")) {
+                    printf("here\n");
+                }
                 resolve_expression(analyzer, ast, state, ortypeid(TYPE_UNRESOLVED), code_node, is_consumed);
                 if (!code_node->expr_val.is_concrete) {
-                    stan_error(analyzer, OR_ERROR(
-                        .tag = "sem.expected-constant.insert-arg",
-                        .level = ERROR_SOURCE_ANALYSIS,
-                        .msg = lit2str("the 'insert' directive requires a constant argument"),
-                        .args = ORERR_ARGS(error_arg_node(code_node)),
-                        .show_code_lines = ORERR_LINES(0),
-                    ));
+                    if (!TYPE_IS_INVALID(code_node->value_type)) {
+                        stan_error(analyzer, OR_ERROR(
+                            .tag = "sem.expected-constant.insert-arg",
+                            .level = ERROR_SOURCE_ANALYSIS,
+                            .msg = lit2str("the 'insert' directive requires a constant argument"),
+                            .args = ORERR_ARGS(error_arg_node(code_node)),
+                            .show_code_lines = ORERR_LINES(0),
+                        ));
+                    }
                     INVALIDATE(expr);
                     break;
                 }
@@ -2738,13 +2743,15 @@ void resolve_expression(
                 }
 
                 if (!ortypeid_eq(code_node->value_type, ast->type_set.str8_t_)) {
-                    stan_error(analyzer, OR_ERROR(
-                        .tag = "sem.type-mismatch.insert-arg",
-                        .level = ERROR_SOURCE_ANALYSIS,
-                        .msg = lit2str("the 'insert' directive requires a 'str8_t' argument but got '$1.$' instead"),
-                        .args = ORERR_ARGS(error_arg_node(code_node), error_arg_type(code_node->value_type)),
-                        .show_code_lines = ORERR_LINES(0),
-                    ));
+                    if (!TYPE_IS_INVALID(code_node->value_type)) {
+                        stan_error(analyzer, OR_ERROR(
+                            .tag = "sem.type-mismatch.insert-arg",
+                            .level = ERROR_SOURCE_ANALYSIS,
+                            .msg = lit2str("the 'insert' directive requires a 'str8_t' argument but got '$1.$' instead"),
+                            .args = ORERR_ARGS(error_arg_node(code_node), error_arg_type(code_node->value_type)),
+                            .show_code_lines = ORERR_LINES(0),
+                        ));
+                    }
                     INVALIDATE(expr);
                     break;
                 }
@@ -5069,6 +5076,8 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
     *search_scope = look_scope;
 
     ast_node_t *decl = NULL;
+    tmp_arena_t *tmp = allocator_borrow();
+    orstring_t identifier_ = sv2string(def->identifier.view, tmp->allocator);
 
     while (*search_scope) {
         bool is_function_scope = (*search_scope)->type == SCOPE_TYPE_FUNCDEF;
@@ -5080,15 +5089,11 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
         *search_scope = (*search_scope)->outer
 
         {
-            tmp_arena_t *tmp = allocator_borrow();
-            orstring_t identifier_ = sv2string(def->identifier.view, tmp->allocator);
 
             unless (table_get(s2w, (*search_scope)->definitions, identifier_, &def_slot)) {
                 NEXT_SCOPE();
                 continue;
             }
-
-            allocator_return(tmp);
         }
 
 
@@ -5120,6 +5125,8 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
         
         break;
     }
+
+    allocator_return(tmp);
     
     // check core module
     if (!decl && ast->core_module_or_null) {

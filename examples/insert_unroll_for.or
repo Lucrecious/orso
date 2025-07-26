@@ -17,7 +17,8 @@ unroll_for_loop :: (a: sint, b: sint, !code: str8_t) -> str8_t {
         ss.add_sint(&sb, i);
         ss.add(&sb, "; ");
         
-        ss.add(&sb, "@insert code; ");
+        ss.add(&sb, code);
+        ss.add(&sb, "; ");
     };
 
     ss.add(&sb, " }");

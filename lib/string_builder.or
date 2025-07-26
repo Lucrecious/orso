@@ -10,6 +10,39 @@ add :: (sb: &string_builder_t, s: str8_t) -> void {
     };
 };
 
+add_sint :: (sb: &string_builder_t, a: sint) -> void {
+    if a == 0 {
+        add(sb, "0");
+        return;
+    };
+
+    start := sb.count;
+
+    while a != 0 {
+        digit := a%10;
+        a /= 10;
+        if digit == 1 then add(sb, "1")
+        else if digit == 2 then add(sb, "2")
+        else if digit == 3 then add(sb, "3")
+        else if digit == 4 then add(sb, "4")
+        else if digit == 5 then add(sb, "5")
+        else if digit == 6 then add(sb, "6")
+        else if digit == 7 then add(sb, "7")
+        else if digit == 8 then add(sb, "8")
+        else if digit == 9 then add(sb, "9")
+        else add(sb, "0");
+    };
+
+    end := sb.count-1;
+    mid := start + (end - start + 1)/2;
+    for i := start; i < mid; ++i {
+        tmp := *da.at(sb, i);
+        i_ := sb.count-1-(i-start);
+        *da.at(sb, i) = *da.at(sb, i_);
+        *da.at(sb, i_) = tmp;
+    };
+};
+
 render :: (sb: &string_builder_t, arena: &ar.arena_t) -> str8_t {
     cstr := ar.allocn(arena, (sizeof(char) as sint)*(sb.count+1)) as &char;
 
