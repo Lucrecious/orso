@@ -2255,6 +2255,7 @@ static void cgen_struct(cgen_t *cgen, ortype_t type, bools_t *bools) {
     bools->items[type.i] = true;
 
     typedata_t *td = ast_type2td(cgen->ast, type);
+    if (td->is_intrinsic) return;
 
     switch (td->kind) {
     case TYPE_STRING:
@@ -2399,6 +2400,8 @@ static void cgen_generate_cnames_for_types(ast_t *ast) {
 static void cgen_typedefs(cgen_t *cgen, typedatas_t *tds) {
     for (size_t i = 0; i < tds->count; ++i) {
         typedata_t *td = tds->items[i];
+        if (td->is_intrinsic) continue;
+
         switch (td->kind) {
         case TYPE_ARRAY:  {
             // typedef <type> <typename>[<count>]

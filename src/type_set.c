@@ -351,7 +351,7 @@ static khint_t hash_type(typedata_t *type) {
 
         for (size_t i = 0; i < type->as.struct_.fields.count; i++) {
             orstring_t name = type->as.struct_.fields.items[i].name;
-            for (size_t i = 0; i < name.length; i++) {
+            for (size_t i = 0; i < (size_t)name.length; i++) {
                 ADD_HASH(hash, (oru32)name.cstr[i]);
             }
             

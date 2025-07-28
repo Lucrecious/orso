@@ -71,7 +71,7 @@ static bool streq___(const orstring_t a, const orstring_t b) {
 uint32_t fnv1_hash__(orstring_t s) {
 	uint32_t hash = 0x811C9DC5;
 
-	for (size_t i = 0; i < s.length; i++) {
+	for (size_t i = 0; i < (size_t)s.length; i++) {
 		hash *= 0x01000193;
 		hash ^= (uint32_t)(unsigned char)s.cstr[i];
 	}
@@ -363,8 +363,6 @@ static void __orprintstr8(struct vm_t *vm, void *args_reverse_order, void *resul
     typedata_t *str8td = type2typedata(&vm->types->types, vm->types->str8_t_);
     void *str8_arg = orso_icall_arg(args_reverse_order, &offset, str8td->size);
 
-    orstring_t test = ast_orstr2str(vm->types, str8_arg);
-
     orstring_t str8 = {0};
     extract_struct_from_binding(&vm->types->bindings[INTRINSIC_STRUCT_STRING], vm->types, str8_arg, &str8);
 
@@ -385,11 +383,16 @@ void intrinsics_init(ast_t *ast, orintrinsic_fns_t *fns) {
         {
             orstring_t t;
             struct_field_bind(string_binding, charptr, lit2str("cstr"), ((void*)&t.cstr)-((void*)&t));
-            struct_field_bind(string_binding, ast->type_set.size_t_, lit2str("length"), ((void*)&t.length)-((void*)&t));
+            struct_field_bind(string_binding, ast->type_set.sint_, lit2str("length"), ((void*)&t.length)-((void*)&t));
             end_struct_binding(string_binding, &ast->type_set);
 
             ast->type_set.str8_t_ = string_binding->type;
-            type2typedata(&ast->type_set.types, string_binding->type)->kind = TYPE_STRING;
+            
+            typedata_t *std = type2typedata(&ast->type_set.types, string_binding->type);
+            std->kind = TYPE_STRING;
+            std->name = string_binding->cname;
+            printf("TODO: remove is_intrinsic field possibly\n");
+            std->is_intrinsic = true;
         }
 
         // printstr8

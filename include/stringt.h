@@ -95,7 +95,7 @@ orstring_t cstrn2string(const orcstr_t cstr, size_t n, arena_t *allocator) {
 
     memcpy(new_cstr, cstr, n);
     new_cstr[n] = '\0';
-    orstring_t s = { .cstr = new_cstr, .length = n };
+    orstring_t s = { .cstr = new_cstr, .length = (orsint)n };
     return s;
 }
 
@@ -120,7 +120,7 @@ orstring_t string_format(const orcstr_t format, arena_t *allocator, ...) {
 
 	va_end(args_copy);
 
-	return (orstring_t){ .cstr = buffer, .length = (size_t)(size < 0 ? 0 : size - 1) };
+	return (orstring_t){ .cstr = buffer, .length = (size < 0 ? 0 : size - 1) };
 }
 
 strings_t string_split(orcstr_t cstr, orcstr_t delimiters, arena_t *allocator) {
@@ -161,7 +161,7 @@ strings_t string_split(orcstr_t cstr, orcstr_t delimiters, arena_t *allocator) {
 }
 
 orstring_t string_copy(orstring_t s, arena_t *allocator) {
-    char *copy = arena_alloc(allocator, sizeof(char)*(s.length+1));
+    char *copy = arena_alloc(allocator, sizeof(char)*((size_t)s.length+1));
     strncpy(copy, s.cstr, s.length);
     copy[s.length] = '\0';
 
@@ -175,7 +175,7 @@ size_t string2size(orstring_t s) {
 }
 
 string_view_t string2sv(orstring_t string) {
-    return (string_view_t){.data=string.cstr, .length=string.length};
+    return (string_view_t){.data=string.cstr, .length=(size_t)string.length};
 }
 
 orstring_t sv2string(string_view_t sv, arena_t *allocator) {
@@ -183,7 +183,7 @@ orstring_t sv2string(string_view_t sv, arena_t *allocator) {
     strncpy(s, sv.data, sv.length);
     s[sv.length] = '\0';
 
-    orstring_t result = {.cstr=s, .length=sv.length};
+    orstring_t result = {.cstr=s, .length=(orsint)sv.length};
     return result;
 }
 

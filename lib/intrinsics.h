@@ -35,7 +35,7 @@ typedef const char *orcstr_t;
 typedef struct orstring_t orstring_t;
 struct orstring_t {
     orcstr_t cstr;
-    size_t length;
+    orsint length;
 };
 
 typedef struct ortype_t ortype_t;

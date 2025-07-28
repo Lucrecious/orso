@@ -123,11 +123,11 @@ static orstring_t get_source_snippet(error_arg_t arg, arena_t *arena) {
 }
 
 static size_t find_next_char_index(orstring_t s, size_t starting_index, char target) {
-    for (size_t i = starting_index; i < s.length; ++i) {
+    for (size_t i = starting_index; i < (size_t)s.length; ++i) {
         if (s.cstr[i] == target) return i;
     }
 
-    return s.length;
+    return (size_t)s.length;
 }
 
 static orcstr_t tokentype2string(token_type_t token_type) {
@@ -211,7 +211,7 @@ static orstring_t error_format(orstring_t message_format, typedatas_t *tds, erro
     tmp_arena_t *tmp = allocator_borrow();
     string_builder_t sb = {.allocator=tmp->allocator};
 
-    for (size_t i = 0; i < message_format.length; ++i) {
+    for (size_t i = 0; i < (size_t)message_format.length; ++i) {
         char c = message_format.cstr[i];
         if (c != '$') {
             sb_add_char(&sb, c);
@@ -219,7 +219,7 @@ static orstring_t error_format(orstring_t message_format, typedatas_t *tds, erro
             ++i; // skip '$'
 
             size_t dot_index = find_next_char_index(message_format, i, '.');
-            ASSERT(dot_index < message_format.length, "must");
+            ASSERT(dot_index < (size_t)message_format.length, "must");
 
             string_view_t arg_index_sv = {.data=message_format.cstr+i, .length=dot_index-i};
             orstring_t arg_index_str = sv2string(arg_index_sv, tmp->allocator);
@@ -228,7 +228,7 @@ static orstring_t error_format(orstring_t message_format, typedatas_t *tds, erro
             i = dot_index + 1;
 
             size_t end_index = find_next_char_index(message_format, i, '$');
-            ASSERT(end_index < message_format.length, "must be surrounded by '$'s");
+            ASSERT(end_index < (size_t)message_format.length, "must be surrounded by '$'s");
             string_view_t field_sv = {.data=message_format.cstr+i, .length=end_index-i};
 
             i = end_index;

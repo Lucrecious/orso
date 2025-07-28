@@ -108,6 +108,8 @@ struct typedata_t {
     type_caps_t capabilities;
     size_t size; // not serialized
     size_t alignment; // not serialized
+
+    bool is_intrinsic;
     union {
         num_type_t num;
 

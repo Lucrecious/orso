@@ -1228,7 +1228,7 @@ static void gen_expr_val(gen_t *gen, texloc_t loc, function_t *function, ortype_
         if (td->kind == TYPE_STRING) {
             orstring_t s = ast_orstr2str(&gen->ast->type_set, word.as.p);
 
-            size_t val_bytes = sizeof(oru8)*(s.length + 1);
+            size_t val_bytes = sizeof(oru8)*((size_t)s.length + 1);
             size_t mem_index = memarr_push(function->memory, (void*)s.cstr, val_bytes);
             void *data = function->memory->data + mem_index;
 
