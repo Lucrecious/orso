@@ -2415,12 +2415,8 @@ static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
 orstring_t ast_orstr2str(type_table_t *type_set, void *start) {
     MUST(type2typedata(&type_set->types, type_set->str8_t_)->size > ORWORD_SIZE);
 
-    orword_t cstr = ast_struct_item_get(&type_set->types, type_set->str8_t_, lit2sv("cstr"), start);
-    orword_t length = ast_struct_item_get(&type_set->types, type_set->str8_t_, lit2sv("length"), start);
-    orstring_t s = {
-        .cstr = cstr.as.p,
-        .length = (size_t)length.as.u
-    };
+    orstring_t s = {0};
+    extract_struct_from_binding(&type_set->bindings[INTRINSIC_STRUCT_STRING], type_set, start, &s);
 
     return s;
 }
@@ -2481,7 +2477,7 @@ static void resolve_module(analyzer_t *analyzer, ast_t *ast, ast_node_t *module)
 }
 
 static bool resolve_directive_argument_or_error(analyzer_t *analyzer, ast_t *ast, analysis_state_t state, ast_node_t *directive, ast_node_t *arg, size_t arg_zero_based_pos, ortype_t expected_type, bool arg_must_be_compile_time) {
-    resolve_expression(analyzer, ast, state, ortypeid(TYPE_STRING), arg, true);
+    resolve_expression(analyzer, ast, state, ast->type_set.str8_t_, arg, true);
     if (!ortypeid_eq(expected_type, arg->value_type)) {
         if (!TYPE_IS_INVALID(arg->value_type)) {
             stan_error(analyzer, OR_ERROR(
@@ -2618,6 +2614,23 @@ bool check_dir_or_intr_params_or_error(analyzer_t *analyzer, analysis_state_t st
 
     return true;
 }
+
+static bool struct_fields_equal(type_table_t *set, ortype_t a, ortype_t b) {
+    typedata_t *atd = type2typedata(&set->types, a);
+    typedata_t *btd = type2typedata(&set->types, b);
+    if (!((atd->kind == TYPE_STRUCT || atd->kind == TYPE_STRING)
+        && (btd->kind == TYPE_STRUCT || btd->kind == TYPE_STRING))) return false;
+    if (atd->as.struct_.fields.count != btd->as.struct_.fields.count) return false;
+
+    for (size_t i = 0; i < atd->as.struct_.fields.count; ++i) {
+        ortype_t fielda_type = atd->as.struct_.fields.items[i].type;
+        ortype_t fieldb_type = btd->as.struct_.fields.items[i].type;
+        if (!ortypeid_eq(fielda_type, fieldb_type)) return false;
+    }
+
+    return true;
+}
+
 void resolve_expression(
         analyzer_t *analyzer,
         ast_t *ast,
@@ -2719,9 +2732,6 @@ void resolve_expression(
                 }
 
                 ast_node_t *code_node = expr->children.items[0];
-                if (sv_starts_with(code_node->start.view, "code")) {
-                    printf("here\n");
-                }
                 resolve_expression(analyzer, ast, state, ortypeid(TYPE_UNRESOLVED), code_node, is_consumed);
                 if (!code_node->expr_val.is_concrete) {
                     if (!TYPE_IS_INVALID(code_node->value_type)) {
@@ -2790,6 +2800,25 @@ void resolve_expression(
                     } else {
                         INVALIDATE(expr);
                     }
+                } else if (sv_eq(expr->identifier.view, lit2sv("@intrinsic"))) {
+                    orstring_t typename = ast_orstr2str(&ast->type_set, expr->children.items[0]->expr_val.word.as.p);
+                    ortype_t type = expr->children.items[1]->expr_val.word.as.t;
+
+                    bool found = false;
+                    for (size_t i = 0; i < INTRINSIC_STRUCT_COUNT; ++i) {
+                        struct_binding_t *binding = &ast->type_set.bindings[i];
+                        if (string_eq(binding->cname, typename)) {
+                            found = true;
+
+                            MUST(struct_fields_equal(&ast->type_set, type, binding->type));
+                            
+                            expr->value_type = ortypeid(TYPE_TYPE);
+                            expr->expr_val = ast_node_val_word(ORWORDT(binding->type));
+                            break;
+                        }
+                    }
+
+                    MUST(found);
                 } else if (sv_eq(expr->identifier.view, lit2sv("@fficall"))) {
                     tmp_arena_t *tmp = allocator_borrow();
                     ortype_t fficall_return_type = ortypeid(TYPE_INVALID);
@@ -5479,19 +5508,6 @@ bool resolve_ast(ast_t *ast) {
     analyzer_init(&analyzer, ast, ast->arena);
 
     resolve_module(&analyzer, ast, ast->core_module_or_null);
-
-    for (size_t i = 0; i < ast->core_module_or_null->children.count; ++i) {
-        ast_node_t *decl = ast->core_module_or_null->children.items[i];
-        if (sv_eq(decl->identifier.view, lit2sv("str8_t"))) {
-            typedata_t *decltd = ast_type2td(ast, decl->expr_val.word.as.t);
-            typedata_t *str8td = ast_type2td(ast, ast->type_set.str8_t_);
-            orstring_t name = str8td->name;
-            *str8td = *decltd;
-            str8td->name = name;
-            str8td->kind = TYPE_STRING;
-            break;
-        }
-    }
 
     ast_node_t *module;
     kh_foreach_value(ast->moduleid2node, module, {

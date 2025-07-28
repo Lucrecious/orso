@@ -134,6 +134,49 @@ static ortype_t add_type_no_track(type_table_t *set, typedata_t *type) {
     return ortypeid(set->types.count-1);
 }
 
+struct_binding_t begin_struct_binding(type_table_t *set, orstring_t cname) {
+    struct_binding_t sb = {0};
+    sb.cname = cname;
+    sb.type = type_set_fetch_anonymous_incomplete_struct(set);
+    sb.field_bindings = (struct_fields_t){.allocator=set->allocator};
+
+    return sb;
+}
+
+void struct_field_bind(struct_binding_t *sb, ortype_t type, orstring_t field_name_no_copy, size_t cfield_offset) {
+    struct_field_t field = {0};
+    field.name = field_name_no_copy;
+    field.offset = cfield_offset;
+    field.type = type;
+
+    array_push(&sb->field_bindings, field);
+}
+
+void end_struct_binding(struct_binding_t *sb, type_table_t *set) {
+    type_set_complete_struct(set, sb->type, sb->field_bindings, (struct_fields_t){0});
+}
+
+void extract_struct_from_binding(struct_binding_t *sb, type_table_t *set, void *vm_struct, void *cstruct) {
+    typedata_t *struct_td = type2typedata(&set->types, sb->type);
+
+    MUST(sb->field_bindings.count == struct_td->as.struct_.fields.count);
+
+    for (size_t i = 0; i < struct_td->as.struct_.fields.count; ++i) {
+        struct_field_t vmfield = struct_td->as.struct_.fields.items[i];
+        void *vm_start = vm_struct + vmfield.offset;
+
+        struct_field_t cfield = sb->field_bindings.items[i];
+        void *cstart = cstruct + cfield.offset;
+
+        MUST(ortypeid_eq(cfield.type, vmfield.type));
+
+        typedata_t *field_td = type2typedata(&set->types, cfield.type);
+        ASSERT(field_td->kind != TYPE_STRUCT, "not supported");
+
+        memcpy(cstart, vm_start, field_td->size);
+    }
+}
+
 void type_set_init(type_table_t *set, arena_t *allocator) {
     set->allocator = allocator;
     set->types2index = table_new(type2u64, allocator);
@@ -148,7 +191,6 @@ void type_set_init(type_table_t *set, arena_t *allocator) {
 
     static typedata_t type_void = {.name=lit2str("void"), .kind=TYPE_VOID, .size=0, .alignment=0, .capabilities=TYPE_CAP_NONE};
     static typedata_t type_bool = {.name=lit2str("orbool"), .kind=TYPE_BOOL, .size=sizeof(bool), .alignment=sizeof(bool), .capabilities=TYPE_CAP_LOGICAL};
-    static typedata_t type_str8 = {.name=lit2str("orstr8_t"), .kind=TYPE_STRING, .size=0, .alignment=0, .capabilities=TYPE_CAP_NONE};
     static typedata_t type_f32 = {.name=lit2str("orf32"), .kind=TYPE_NUMBER, .size=NUM_SIZE_32, .alignment=NUM_SIZE_32, .as.num = NUM_TYPE_FLOAT, .capabilities=TYPE_CAP_NUMBER};
     static typedata_t type_f64 = {.name=lit2str("orf64"), .kind=TYPE_NUMBER, .size=NUM_SIZE_64, .alignment=NUM_SIZE_64, .as.num = NUM_TYPE_FLOAT, .capabilities=TYPE_CAP_NUMBER};
 
@@ -203,9 +245,6 @@ void type_set_init(type_table_t *set, arena_t *allocator) {
 
     set->bool_ = ortypeid(set->types.count);
     array_push(&set->types, &type_bool);
-
-    set->str8_t_ = ortypeid(set->types.count);
-    array_push(&set->types, &type_str8);
 
     set->type_ = ortypeid(set->types.count);
     array_push(&set->types, &type_type);
@@ -272,7 +311,6 @@ void type_set_init(type_table_t *set, arena_t *allocator) {
     ASSERT(unreachable.i == TYPE_UNREACHABLE, "must be same as type unreachable");
     ASSERT(set->void_.i == TYPE_VOID, "must be same as type void");
     ASSERT(set->bool_.i == TYPE_BOOL, "must be same as type bool");
-    ASSERT(set->str8_t_.i == TYPE_STRING, "must be same as type string");
     ASSERT(set->type_.i == TYPE_TYPE, "must be same as type type");
 }
 

@@ -32,10 +32,10 @@ enum type_kind_t {
     // simple types (types that do not require type info)
     TYPE_VOID,             // no symbol
     TYPE_BOOL,             // true false
-    TYPE_STRING,           // "anything in here"
     TYPE_TYPE,             // s32, void, type, (int, int) -> int, etc
     
     // "complex" types
+    TYPE_STRING,           // "anything in here"
     TYPE_NUMBER,           // s8, u8, s16, u16, s32, u32, s64, u32, u64, f32, f64
     TYPE_FUNCTION,         // (type1, type2, ..., typen) -> return_type OR (foo := 0, bar := "") -> return_type
     TYPE_POINTER,          // &type

@@ -8,6 +8,19 @@
 
 declare_table(type2u64, typedata_t*, ortype_t);
 
+typedef struct struct_binding_t struct_binding_t;
+struct struct_binding_t {
+    orstring_t cname;
+    struct_fields_t field_bindings;
+    ortype_t type;
+};
+
+typedef enum intrinsic_struct_t intrinsic_struct_t;
+enum intrinsic_struct_t {
+    INTRINSIC_STRUCT_STRING,
+    INTRINSIC_STRUCT_COUNT,
+};
+
 typedef struct type_table_t type_table_t;
 struct type_table_t {
     typedatas_t types;
@@ -47,7 +60,15 @@ struct type_table_t {
     ortype_t str8_t_;
     ortype_t symbol_;
     ortype_t type_;
+
+    // bindings
+    struct_binding_t bindings[INTRINSIC_STRUCT_COUNT];
 };
+
+struct_binding_t begin_struct_binding(type_table_t *set, orstring_t cname);
+void struct_field_bind(struct_binding_t *sb, ortype_t type, orstring_t field_name_no_copy, size_t cfield_offset);
+void end_struct_binding(struct_binding_t *sb, type_table_t *set);
+void extract_struct_from_binding(struct_binding_t *sb, type_table_t *set, void *vm_struct, void *cstruct);
 
 void type_set_init(type_table_t *set, arena_t *allocator);
 

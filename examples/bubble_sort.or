@@ -1,0 +1,32 @@
+ar :: @load "arena.or";
+ss :: @load "string_builder.or";
+
+printsint :: (a: sint) -> void {
+    @icall "printint", a as int;
+};
+
+bubble_sort :: (arr: &[10]sint, !compare: str8_t) -> void {
+    while true {
+        TF := true;
+        for i := 1; i < len(*arr); ++i {
+            a := arr[i-1];
+            b := arr[i];
+            if not @insert compare {
+                t := arr[i];
+                arr[i] = arr[i-1];
+                arr[i-1] = t;
+                TF = false;
+            };
+        };
+        if TF then break;
+    };
+};
+
+main :: () -> void {
+    arr := [10]sint.{6, 3, 13, 70, 29, 100, 45, 62, 77, 10};
+    bubble_sort(&arr, "a < b");
+
+    for i := 0; i < len(arr); ++i {
+        printsint(arr[i]);
+    };
+};

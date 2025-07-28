@@ -156,6 +156,18 @@ static void directives_init(ast_t *ast, orintrinsic_fns_t *fns) {
         array_push(fns, fn);
     }
 
+    // intrinsic
+    {
+        orintrinsic_fn_t fn = {0};
+        fn.name = lit2str("intrinsic");
+        fn.has_varargs = false;
+        fn.arg_types = (types_t){.allocator=ast->arena};
+        array_push(&fn.arg_types, ast->type_set.str8_t_);
+        array_push(&fn.arg_types, ast->type_set.type_);
+
+        array_push(fns, fn);
+    }
+
     // fficall
     {
         orintrinsic_fn_t fn = {0};
@@ -342,11 +354,60 @@ static void __orprintln(struct vm_t *vm, void *args_reverse_order, void *result)
     orprintln(cstr);
 }
 
+static void __orprintstr8(struct vm_t *vm, void *args_reverse_order, void *result) {
+    NOB_UNUSED(vm);
+    NOB_UNUSED(args_reverse_order);
+    NOB_UNUSED(result);
+
+    size_t offset = 0;
+    typedata_t *str8td = type2typedata(&vm->types->types, vm->types->str8_t_);
+    void *str8_arg = orso_icall_arg(args_reverse_order, &offset, str8td->size);
+
+    orstring_t test = ast_orstr2str(vm->types, str8_arg);
+
+    orstring_t str8 = {0};
+    extract_struct_from_binding(&vm->types->bindings[INTRINSIC_STRUCT_STRING], vm->types, str8_arg, &str8);
+
+
+    orprintln(str8.cstr);
+}
+
 
 void intrinsics_init(ast_t *ast, orintrinsic_fns_t *fns) {
     ortype_t voidptr = type_set_fetch_pointer(&ast->type_set, ortypeid(TYPE_VOID));
     ortype_t charptr = type_set_fetch_pointer(&ast->type_set, ast->type_set.char_);
+
+    type_table_t *types = &ast->type_set;
     {
+        // str8_t
+        struct_binding_t *string_binding = &types->bindings[INTRINSIC_STRUCT_STRING];
+        *string_binding = begin_struct_binding(&ast->type_set, lit2str("orstring_t"));
+        {
+            orstring_t t;
+            struct_field_bind(string_binding, charptr, lit2str("cstr"), ((void*)&t.cstr)-((void*)&t));
+            struct_field_bind(string_binding, ast->type_set.size_t_, lit2str("length"), ((void*)&t.length)-((void*)&t));
+            end_struct_binding(string_binding, &ast->type_set);
+
+            ast->type_set.str8_t_ = string_binding->type;
+            type2typedata(&ast->type_set.types, string_binding->type)->kind = TYPE_STRING;
+        }
+
+        // printstr8
+        {
+            orintrinsic_fn_t fn = {0};
+            fn.name = lit2str("printstr8");
+            fn.has_varargs = false;
+            fn.arg_types = (types_t){.allocator=ast->arena};
+
+            array_push(&fn.arg_types, string_binding->type);
+
+            fn.ret_type = voidptr;
+
+            fn.fnptr = __orprintstr8;
+
+            array_push(fns, fn);
+        }
+
         // realloc
         {
             orintrinsic_fn_t fn = {0};
@@ -537,11 +598,11 @@ void ast_init(ast_t *ast, arena_t *arena) {
 
     ast->global_decls_in_resolution_order = (ast_nodes_t){.allocator=ast->arena};
 
-    ast->directives = (orintrinsic_fns_t){.allocator=ast->arena};
-    directives_init(ast, &ast->directives);
-
     ast->intrinsics = (orintrinsic_fns_t){.allocator=ast->arena};
     intrinsics_init(ast, &ast->intrinsics);
+
+    ast->directives = (orintrinsic_fns_t){.allocator=ast->arena};
+    directives_init(ast, &ast->directives);
 
     ast->type_to_zero_word = table_new(t2w, ast->arena);
     ast->type_to_creation_node = table_new(type2ns, ast->arena);

@@ -1,33 +1,3 @@
-ar :: @load "arena.or";
-ss :: @load "string_builder.or";
-
-printsint :: (a: sint) -> void {
-    @icall "printint", a as int;
-};
-
-unroll_for_loop :: (a: sint, b: sint, !code: str8_t) -> str8_t {
-    sb := ss.string_builder_t.{};
-
-    ss.add(&sb, "{ ");
-
-    ss.add(&sb, "it: sint; ");
-
-    for i := a; i < b; ++i {
-        ss.add(&sb, "it = ");
-        ss.add_sint(&sb, i);
-        ss.add(&sb, "; ");
-        
-        ss.add(&sb, "@insert code; ");
-    };
-
-    ss.add(&sb, " }");
-
-    arena := ar.make(100_000);
-    result := ss.render(&sb, &arena);
-
-    return result;
-};
-
 main :: () -> void {
-    @insert @run unroll_for_loop(10, 20, "{ it *= 2; printsint(it); }");
+    @icall "printstr8", "hello world";
 };
