@@ -4640,9 +4640,9 @@ void resolve_expression(
 
             typedata_t *typetd = ast_type2td(ast, type_expr->value_type);
             if (typetd->kind == TYPE_TYPE && type_expr->expr_val.is_concrete) {
-                if (stan_can_cast(&ast->type_set.types, type_expr->expr_val.word.as.t, cast_expr->value_type)) {
-                    expr->value_type = type_expr->expr_val.word.as.t;
+                expr->value_type = type_expr->expr_val.word.as.t;
 
+                if (stan_can_cast(&ast->type_set.types, type_expr->expr_val.word.as.t, cast_expr->value_type)) {
                     if (cast_expr->expr_val.is_concrete) {
                         orword_t result = constant_fold_cast(ast, cast_expr->expr_val.word, expr->value_type, cast_expr->value_type);
                         expr->expr_val = ast_node_val_word(result);
@@ -4666,6 +4666,7 @@ void resolve_expression(
                     .args = ORERR_ARGS(error_arg_node(type_expr)),
                     .show_code_lines = ORERR_LINES(0),
                 ));
+                INVALIDATE(expr);
             }
             break;
         }

@@ -53,8 +53,23 @@ draw_line_v :: (a: vec2_t, b: vec2_t, color: color_t) -> void {
     @fficall "./vendor/raylib/src/libraylib.a", "cdecl", void, "DrawLineV", a, b, color;
 };
 
-draw_text :: (text: str8_t, pos: [2]int, size: int, color: color_t) -> void {
-    @fficall "./vendor/raylib/src/libraylib.a", "cdecl", void, "DrawText", text.cstr, pos[0], pos[1], size, color;
+draw_text :: (text: str8_t, pos: [2]sint, size: sint, color: color_t) -> void {
+    @fficall "./vendor/raylib/src/libraylib.a", "cdecl", void, "DrawText", text.cstr, pos[0] as int, pos[1] as int, size as int, color;
+};
+
+text_format :: (text: str8_t, value: sint) -> str8_t {
+    result := @fficall "./vendor/raylib/src/libraylib.a", "cdecl", &char, "TextFormat", text.cstr, value as int;
+    count := 0;
+    while *(result + (count as ptrdiff_t)) != char.{} do ++count;
+
+    return .{
+        result,
+        count,
+    };
+};
+
+measure_text :: (text: str8_t, font_size: sint) -> sint {
+    return (@fficall "./vendor/raylib/src/libraylib.a", "cdecl", int, "MeasureText", text.cstr, font_size as int) as sint;
 };
 
 clear_background :: (color: color_t) -> void {
@@ -92,4 +107,9 @@ is_mouse_button_down :: (button: sint) -> bool {
 get_mouse_position :: () -> [2]int {
     result :=  @fficall "./vendor/raylib/src/libraylib.a", "cdecl", [2]f32, "GetMousePosition";
     return .{result[0] as int, result[1] as int};
+};
+
+check_collision_point_poly :: (point: vec2_t, points: &vec2_t, count: sint) -> bool {
+    result :=  @fficall "./vendor/raylib/src/libraylib.a", "cdecl", bool, "CheckCollisionPointPoly", point, points, count as int;
+    return result;
 };
