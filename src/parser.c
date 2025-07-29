@@ -364,22 +364,18 @@ static void __orprintstr8(struct vm_t *vm, void *args_reverse_order, void *resul
     void *str8_arg = orso_icall_arg(args_reverse_order, &offset, str8td->size);
 
     orstring_t str8 = {0};
-    extract_struct_from_binding(&vm->types->bindings[INTRINSIC_STRUCT_STRING], vm->types, str8_arg, &str8);
-
+    extract_struct_from_binding(str8td->as.struct_.binding_or_null, vm->types, str8_arg, &str8);
 
     orprintln(str8.cstr);
 }
-
 
 void intrinsics_init(ast_t *ast, orintrinsic_fns_t *fns) {
     ortype_t voidptr = type_set_fetch_pointer(&ast->type_set, ortypeid(TYPE_VOID));
     ortype_t charptr = type_set_fetch_pointer(&ast->type_set, ast->type_set.char_);
 
-    type_table_t *types = &ast->type_set;
     {
         // str8_t
-        struct_binding_t *string_binding = &types->bindings[INTRINSIC_STRUCT_STRING];
-        *string_binding = begin_struct_binding(&ast->type_set, lit2str("orstring_t"));
+        struct_binding_t *string_binding = begin_struct_binding(&ast->type_set, lit2str("orstring_t"));
         {
             orstring_t t;
             struct_field_bind(string_binding, charptr, lit2str("cstr"), ((void*)&t.cstr)-((void*)&t));
@@ -391,8 +387,6 @@ void intrinsics_init(ast_t *ast, orintrinsic_fns_t *fns) {
             typedata_t *std = type2typedata(&ast->type_set.types, string_binding->type);
             std->kind = TYPE_STRING;
             std->name = string_binding->cname;
-            printf("TODO: remove is_intrinsic field possibly\n");
-            std->is_intrinsic = true;
         }
 
         // printstr8

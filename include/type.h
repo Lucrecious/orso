@@ -102,6 +102,19 @@ enum struct_status_t {
     STRUCT_STATUS_COMPLETE
 };
 
+typedef struct struct_binding_t struct_binding_t;
+struct struct_binding_t {
+    orstring_t cname;
+    struct_fields_t field_bindings;
+    ortype_t type;
+};
+
+typedef enum intrinsic_struct_t intrinsic_struct_t;
+enum intrinsic_struct_t {
+    INTRINSIC_STRUCT_STRING,
+    INTRINSIC_STRUCT_COUNT,
+};
+
 struct typedata_t {
     orstring_t name;
     type_kind_t kind;
@@ -109,7 +122,6 @@ struct typedata_t {
     size_t size; // not serialized
     size_t alignment; // not serialized
 
-    bool is_intrinsic;
     union {
         num_type_t num;
 
@@ -127,6 +139,8 @@ struct typedata_t {
             struct_fields_t constants;
 
             struct_status_t status;
+
+            struct_binding_t *binding_or_null;
         } struct_;
 
         struct {

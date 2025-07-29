@@ -2413,10 +2413,11 @@ static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
 }
 
 orstring_t ast_orstr2str(type_table_t *type_set, void *start) {
-    MUST(type2typedata(&type_set->types, type_set->str8_t_)->size > ORWORD_SIZE);
+    typedata_t *td = type2typedata(&type_set->types, type_set->str8_t_);
+    MUST(td->size > ORWORD_SIZE);
 
     orstring_t s = {0};
-    extract_struct_from_binding(&type_set->bindings[INTRINSIC_STRUCT_STRING], type_set, start, &s);
+    extract_struct_from_binding(td->as.struct_.binding_or_null, type_set, start, &s);
 
     return s;
 }
@@ -2805,8 +2806,8 @@ void resolve_expression(
                     ortype_t type = expr->children.items[1]->expr_val.word.as.t;
 
                     bool found = false;
-                    for (size_t i = 0; i < INTRINSIC_STRUCT_COUNT; ++i) {
-                        struct_binding_t *binding = &ast->type_set.bindings[i];
+                    for (size_t i = 0; i < ast->type_set.bindings.count; ++i) {
+                        struct_binding_t *binding = ast->type_set.bindings.items[i];
                         if (string_eq(binding->cname, typename)) {
                             found = true;
 

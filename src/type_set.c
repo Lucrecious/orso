@@ -47,6 +47,7 @@ void array_type_new(type_table_t *set, size_t size, ortype_t type, typedata_t *r
 
 void incomplete_struct_type_init(type_table_t *set, struct_fields_t fields, struct_fields_t constants, typedata_t *result) {
     result->kind = TYPE_STRUCT;
+    result->as.struct_.binding_or_null = NULL;
     result->as.struct_.constants = constants;
 
     size_t current_alignment = 0;
@@ -134,13 +135,16 @@ static ortype_t add_type_no_track(type_table_t *set, typedata_t *type) {
     return ortypeid(set->types.count-1);
 }
 
-struct_binding_t begin_struct_binding(type_table_t *set, orstring_t cname) {
-    struct_binding_t sb = {0};
-    sb.cname = cname;
-    sb.type = type_set_fetch_anonymous_incomplete_struct(set);
-    sb.field_bindings = (struct_fields_t){.allocator=set->allocator};
+struct_binding_t *begin_struct_binding(type_table_t *set, orstring_t cname) {
+    struct_binding_t *binding = arena_alloc(set->allocator, sizeof(struct_binding_t));
+    binding->cname = cname;
+    binding->field_bindings = (struct_fields_t){.allocator=set->allocator};
 
-    return sb;
+    ortype_t type = type_set_fetch_anonymous_incomplete_struct(set);
+    binding->type = type;
+    array_push(&set->bindings, binding);
+
+    return binding;
 }
 
 void struct_field_bind(struct_binding_t *sb, ortype_t type, orstring_t field_name_no_copy, size_t cfield_offset) {
@@ -154,26 +158,33 @@ void struct_field_bind(struct_binding_t *sb, ortype_t type, orstring_t field_nam
 
 void end_struct_binding(struct_binding_t *sb, type_table_t *set) {
     type_set_complete_struct(set, sb->type, sb->field_bindings, (struct_fields_t){0});
+    typedata_t *td = type2typedata(&set->types, sb->type);
+    td->as.struct_.binding_or_null = sb;
+
 }
 
-void extract_struct_from_binding(struct_binding_t *sb, type_table_t *set, void *vm_struct, void *cstruct) {
-    typedata_t *struct_td = type2typedata(&set->types, sb->type);
+void extract_struct_from_binding(struct_binding_t *binding, type_table_t *set, void *vm_struct, void *cstruct) {
+    MUST(binding);
 
-    MUST(sb->field_bindings.count == struct_td->as.struct_.fields.count);
+    typedata_t *struct_td = type2typedata(&set->types, binding->type);
+
+    MUST(binding->field_bindings.count == struct_td->as.struct_.fields.count);
 
     for (size_t i = 0; i < struct_td->as.struct_.fields.count; ++i) {
         struct_field_t vmfield = struct_td->as.struct_.fields.items[i];
         void *vm_start = vm_struct + vmfield.offset;
 
-        struct_field_t cfield = sb->field_bindings.items[i];
+        struct_field_t cfield = binding->field_bindings.items[i];
         void *cstart = cstruct + cfield.offset;
 
         MUST(ortypeid_eq(cfield.type, vmfield.type));
 
         typedata_t *field_td = type2typedata(&set->types, cfield.type);
-        ASSERT(field_td->kind != TYPE_STRUCT, "not supported");
-
-        memcpy(cstart, vm_start, field_td->size);
+        if (field_td->kind == TYPE_STRING || field_td->kind == TYPE_STRUCT) {
+            extract_struct_from_binding(field_td->as.struct_.binding_or_null, set, vm_start, cstart);
+        } else {
+            memcpy(cstart, vm_start, field_td->size);
+        }
     }
 }
 
@@ -181,6 +192,8 @@ void type_set_init(type_table_t *set, arena_t *allocator) {
     set->allocator = allocator;
     set->types2index = table_new(type2u64, allocator);
     set->types = (typedatas_t){.allocator=allocator};
+
+    set->bindings = (struct_bindings_t){.allocator=allocator};
 
     static typedata_t type_invalid = {.name=lit2str("<invalid>"), .kind=TYPE_INVALID, .size=0, .alignment=0};
     static typedata_t type_unresolved = {.name=lit2str("<unresolved>"), .kind=TYPE_UNRESOLVED, .size=0, .alignment=0};

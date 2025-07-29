@@ -2255,11 +2255,11 @@ static void cgen_struct(cgen_t *cgen, ortype_t type, bools_t *bools) {
     bools->items[type.i] = true;
 
     typedata_t *td = ast_type2td(cgen->ast, type);
-    if (td->is_intrinsic) return;
-
     switch (td->kind) {
     case TYPE_STRING:
     case TYPE_STRUCT: {
+        if (td->as.struct_.binding_or_null != NULL) return;
+
         for (size_t i = 0; i < td->as.struct_.fields.count; ++i) {
             struct_field_t field = td->as.struct_.fields.items[i];
             cgen_struct(cgen, field.type, bools);
@@ -2400,7 +2400,6 @@ static void cgen_generate_cnames_for_types(ast_t *ast) {
 static void cgen_typedefs(cgen_t *cgen, typedatas_t *tds) {
     for (size_t i = 0; i < tds->count; ++i) {
         typedata_t *td = tds->items[i];
-        if (td->is_intrinsic) continue;
 
         switch (td->kind) {
         case TYPE_ARRAY:  {
@@ -2419,8 +2418,9 @@ static void cgen_typedefs(cgen_t *cgen, typedatas_t *tds) {
 
         case TYPE_STRING:
         case TYPE_STRUCT: {
-            // typedef struct <struct_name> <struct_name>
+            if (td->as.struct_.binding_or_null != NULL) continue;
 
+            // typedef struct <struct_name> <struct_name>
             sb_add_format(&cgen->sb, "typedef struct %s %s;\n", td->name.cstr, td->name.cstr);
             break;
         }
