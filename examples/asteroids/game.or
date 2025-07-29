@@ -190,6 +190,7 @@ destroy_asteroid :: (index: sint) -> void {
 
 main :: () -> void {
     rl.init_window(SCREEN_X, SCREEN_Y, "Asteroids");
+    rl.init_audio_device();
 
     rl.set_target_fps(60);
 
@@ -206,6 +207,9 @@ main :: () -> void {
     };
 
     mode := START;
+
+    shoot_sound := rl.load_sound("./examples/asteroids/shoot.wav");
+    explode_sound := rl.load_sound("./examples/asteroids/explosion.wav");
 
     while not rl.window_should_close() {
         rl.begin_drawing();
@@ -231,6 +235,7 @@ main :: () -> void {
 
             if rl.is_mouse_button_pressed(rl.mouse_button_right) {
                 shoot_missle(player.position, dir);
+                rl.play_sound(shoot_sound);
             };
 
             timer_update(&timer, rl.get_frame_time());
@@ -296,6 +301,7 @@ main :: () -> void {
                 corners := asteroid_corners(asteroid);
 
                 if rl.check_collision_point_poly(missle.position, &corners as &void as &vec2f_t, 4) {
+                    rl.play_sound(explode_sound);
                     destroy_asteroid(j);
                     despawn_missle(i);
                     --i;

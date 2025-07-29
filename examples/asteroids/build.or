@@ -1,0 +1,25 @@
+da :: @load "dynarr.or";
+or_ :: @load "orso.or";
+
+
+main :: () -> void {
+    oc := or_.compiler_t.{};
+    oc.src = "examples/asteroids/game.or";
+
+    or_.push(&oc.linker_flags, "-framework");
+    or_.push(&oc.linker_flags, "IOKit");
+    
+    or_.push(&oc.linker_flags, "-framework");
+    or_.push(&oc.linker_flags, "Cocoa");
+    
+    or_.push(&oc.linker_flags, "-framework");
+    or_.push(&oc.linker_flags, "OpenGL");
+
+    success := or_.build(&oc);
+
+    if success {
+        cmd := or_.cmd_t.{};
+        da.push(&cmd, "./build/or.out");
+        or_.shell_run(cmd);
+    };
+};

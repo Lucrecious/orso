@@ -10,6 +10,20 @@ color_t :: struct {
     a := 0u8;
 };
 
+audio_stream_t :: struct {
+    buffer := (&void).{};
+    processor := (&void).{};
+
+    sample_rate := uint.{};
+    sample_size := uint.{};
+    channels := uint.{};
+};
+
+sound_t :: struct {
+    stream := audio_stream_t.{};
+    frame_count := uint.{};
+};
+
 white :: color_t.{255, 255, 255, 255};
 raywhite :: color_t.{245, 245, 245, 255};
 black :: color_t.{0, 0, 0, 255};
@@ -31,6 +45,19 @@ close_window :: () -> void {
 
 window_should_close :: () -> bool {
     return @fficall "./vendor/raylib/src/libraylib.a", "cdecl", bool, "WindowShouldClose";
+};
+
+init_audio_device :: () {
+    @fficall "./vendor/raylib/src/libraylib.a", "cdecl", void, "InitAudioDevice";
+};
+
+load_sound :: (path: str8_t) -> sound_t {
+    result := @fficall "./vendor/raylib/src/libraylib.a", "cdecl", sound_t, "LoadSound", path.cstr;
+    return result;
+};
+
+play_sound :: (sound: sound_t) {
+    @fficall "./vendor/raylib/src/libraylib.a", "cdecl", void, "PlaySound", sound;
 };
 
 begin_drawing :: () -> void {
