@@ -1,4 +1,5 @@
 da :: @load "dynarr.or";
+mem :: @load "memory.or";
 
 cmd_t :: da.dynarr_t(str8_t);
 
@@ -7,15 +8,43 @@ shell_run :: (cmd: cmd_t) -> bool {
     return success;
 };
 
-compiler_t :: struct {
+str8s_t :: @intrinsic "orstr8s_t", struct {
+    items := (&str8_t).{};
+    count := 0;
+    capacity := 0;
+};
+
+compiler_t :: @intrinsic "orso_compiler_t", struct {
     src := "";
     build_dir := "./build";
     output_name := "or.out";
 
-    cflags := da.dynarr_t(str8_t).{};
+    cflags := (str8s_t).{};
+
+    linker_flags := (str8s_t).{};
+};
+
+_push_str :: (strs: &str8s_t, s: str8_t) -> void {
+    if strs.count >= strs.capacity {
+        new_cap := strs.capacity;
+        while new_cap < strs.count do
+            new_cap = if new_cap == 0 then 8 else new_cap*2;
+        
+        strs.items = mem.realloc(strs.items, new_cap) as &str8_t;
+        strs.capacity = new_cap;
+    };
+
+    *(strs.items + (strs.count as ptrdiff_t)) = s;
+    ++strs.count;
 };
 
 build :: (compiler: &compiler_t) -> bool {
-    success := @icall "build", compiler_t, da.dynarr_t(str8_t), compiler as &void;
+    success := @icall "build", compiler;
     return success;
+};
+
+destroy :: (compiler: &compiler_t) -> void {
+    mem.realloc(compiler.cflags.items, 0);
+    mem.realloc(compiler.linker_flags.items, 0);
+    *compiler = .{};
 };

@@ -2004,9 +2004,6 @@ void cgen_icall(cgen_t *cgen, ast_node_t *icall, cgen_var_t var) {
         sb_add_format(&cgen->sb, "%s(", name.cstr);
 
         size_t start = 1;
-        if (string_eq(icall->intrinsic_fn.name, lit2str("build"))) {
-            start = 3;
-        }
         for (size_t i = start; i < icall->children.count; ++i) {
             ast_node_t *arg = icall->children.items[i];
 

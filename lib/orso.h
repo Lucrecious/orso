@@ -3,17 +3,24 @@
 
 #include "intrinsics.h"
 
+typedef struct orstr8s_t orstr8s_t;
+struct orstr8s_t {
+    orstring_t *items;
+    orsint count;
+    orsint capacity;
+};
+
 typedef struct orso_compiler_t orso_compiler_t;
 struct orso_compiler_t {
-    orstring_t root_source;
+    orstring_t src;
     orstring_t build_dir;
     orstring_t output_name;
 
-    orstring_t *cflags;
-    size_t cflags_count;
+    orstr8s_t cflags;
+    orstr8s_t linker_flags;
 };
 
-bool orbuild(void *compiler);
+bool orbuild(orso_compiler_t *compiler);
 bool orinterpret(orstring_t input_file_path);
 
 void *orrealloc(void *ptr, size_t new_size);

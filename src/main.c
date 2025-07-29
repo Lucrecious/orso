@@ -51,7 +51,7 @@ int main(int argc, char **argv) {
             {
                 orso_compiler_t compiler = {0};
                 compiler.build_dir = lit2str("./build/");
-                compiler.root_source = sinput;
+                compiler.src = sinput;
                 compiler.output_name = soutput;
                 orbuild(&compiler);
             }

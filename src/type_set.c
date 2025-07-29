@@ -160,7 +160,7 @@ void end_struct_binding(struct_binding_t *sb, type_table_t *set) {
     type_set_complete_struct(set, sb->type, sb->field_bindings, (struct_fields_t){0});
     typedata_t *td = type2typedata(&set->types, sb->type);
     td->as.struct_.binding_or_null = sb;
-
+    td->name = sb->cname;
 }
 
 void extract_struct_from_binding(struct_binding_t *binding, type_table_t *set, void *vm_struct, void *cstruct) {

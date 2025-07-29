@@ -2616,17 +2616,20 @@ bool check_dir_or_intr_params_or_error(analyzer_t *analyzer, analysis_state_t st
     return true;
 }
 
-static bool struct_fields_equal(type_table_t *set, ortype_t a, ortype_t b) {
-    typedata_t *atd = type2typedata(&set->types, a);
-    typedata_t *btd = type2typedata(&set->types, b);
-    if (!((atd->kind == TYPE_STRUCT || atd->kind == TYPE_STRING)
-        && (btd->kind == TYPE_STRUCT || btd->kind == TYPE_STRING))) return false;
-    if (atd->as.struct_.fields.count != btd->as.struct_.fields.count) return false;
+static bool struct_fields_steal_default_values(type_table_t *set, ortype_t dst, ortype_t src) {
+    typedata_t *dsttd = type2typedata(&set->types, dst);
+    typedata_t *srctd = type2typedata(&set->types, src);
 
-    for (size_t i = 0; i < atd->as.struct_.fields.count; ++i) {
-        ortype_t fielda_type = atd->as.struct_.fields.items[i].type;
-        ortype_t fieldb_type = btd->as.struct_.fields.items[i].type;
-        if (!ortypeid_eq(fielda_type, fieldb_type)) return false;
+    if (!((dsttd->kind == TYPE_STRUCT || dsttd->kind == TYPE_STRING)
+        && (srctd->kind == TYPE_STRUCT || srctd->kind == TYPE_STRING))) return false;
+    if (dsttd->as.struct_.fields.count != srctd->as.struct_.fields.count) return false;
+
+    for (size_t i = 0; i < dsttd->as.struct_.fields.count; ++i) {
+        ortype_t fielddst_type = dsttd->as.struct_.fields.items[i].type;
+        ortype_t fieldsrc_type = srctd->as.struct_.fields.items[i].type;
+        if (!ortypeid_eq(fieldsrc_type, fielddst_type)) return false;
+
+        dsttd->as.struct_.fields.items[i].default_value = srctd->as.struct_.fields.items[i].default_value;
     }
 
     return true;
@@ -2805,13 +2808,15 @@ void resolve_expression(
                     orstring_t typename = ast_orstr2str(&ast->type_set, expr->children.items[0]->expr_val.word.as.p);
                     ortype_t type = expr->children.items[1]->expr_val.word.as.t;
 
+
                     bool found = false;
                     for (size_t i = 0; i < ast->type_set.bindings.count; ++i) {
                         struct_binding_t *binding = ast->type_set.bindings.items[i];
                         if (string_eq(binding->cname, typename)) {
                             found = true;
 
-                            MUST(struct_fields_equal(&ast->type_set, type, binding->type));
+                            bool success = struct_fields_steal_default_values(&ast->type_set, binding->type, type);
+                            MUST(success);
                             
                             expr->value_type = ortypeid(TYPE_TYPE);
                             expr->expr_val = ast_node_val_word(ORWORDT(binding->type));

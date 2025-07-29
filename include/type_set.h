@@ -52,9 +52,11 @@ struct type_table_t {
 
     ortype_t ptrdiff_t_;
 
-    ortype_t str8_t_;
     ortype_t symbol_;
     ortype_t type_;
+
+    ortype_t str8_t_;
+    ortype_t compiler;
 
     struct_bindings_t bindings;
 };

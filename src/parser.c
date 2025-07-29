@@ -246,43 +246,12 @@ static void __orshell_run(struct vm_t *vm, void *args_reverse_order, void *resul
 static void __orbuild(struct vm_t *vm, void *args_reverse_order, void *result) {
     size_t offset = 0;
     void *struct_ptr = *(void**)orso_icall_arg(args_reverse_order, &offset, ORWORD_SIZE);
-    ortype_t dynarr_type = *(ortype_t*)orso_icall_arg(args_reverse_order, &offset, ORWORD_SIZE);
-    ortype_t compiler_type = *(ortype_t*)orso_icall_arg(args_reverse_order, &offset, ORWORD_SIZE);
 
     orso_compiler_t compiler = {0};
-
-    orword_t src_word = ast_struct_item_get(&vm->types->types, compiler_type, lit2sv("src"), struct_ptr);
-    compiler.root_source = ast_orstr2str(vm->types, src_word.as.p);
-
-    orword_t build_dir_word = ast_struct_item_get(&vm->types->types, compiler_type, lit2sv("build_dir"), struct_ptr);
-    compiler.build_dir = ast_orstr2str(vm->types, build_dir_word.as.p);
-
-    orword_t output_name_word = ast_struct_item_get(&vm->types->types, compiler_type, lit2sv("output_name"), struct_ptr);
-    compiler.output_name = ast_orstr2str(vm->types, output_name_word.as.p);
-
-    {
-        void *cflags_dynarr_ptr = ast_struct_item_get(&vm->types->types, compiler_type, lit2sv("cflags"), struct_ptr).as.p;
-        void *items_ptr = ast_struct_item_get(&vm->types->types, dynarr_type, lit2sv("items"), cflags_dynarr_ptr).as.p;
-        orint count_ = (orint)ast_struct_item_get(&vm->types->types, dynarr_type, lit2sv("count"), cflags_dynarr_ptr).as.s;
-        size_t count = count_ < 0 ? 0 : (size_t)count_;
-
-        compiler.cflags = realloc(0, sizeof(orstring_t)*count);
-        compiler.cflags_count = count;
-        {
-            typedata_t *strtd = type2typedata(&vm->types->types, vm->types->str8_t_);
-            void *start = items_ptr;
-            for (size_t i = 0; i < count; ++i) {
-                orstring_t item = ast_orstr2str(vm->types, start);
-                start += strtd->size;
-                compiler.cflags[i] = item;
-            }
-        }
-    }
+    typedata_t *compilertd = type2typedata(&vm->types->types, vm->types->compiler);
+    extract_struct_from_binding(compilertd->as.struct_.binding_or_null, vm->types, struct_ptr, &compiler);
 
     bool success = orbuild(&compiler);
-
-    void *_1 = realloc(compiler.cflags, 0);
-    NOB_UNUSED(_1);
 
     *(bool*)result = success;
 }
@@ -373,21 +342,50 @@ void intrinsics_init(ast_t *ast, orintrinsic_fns_t *fns) {
     ortype_t voidptr = type_set_fetch_pointer(&ast->type_set, ortypeid(TYPE_VOID));
     ortype_t charptr = type_set_fetch_pointer(&ast->type_set, ast->type_set.char_);
 
+    #define offset(t, field_name) (((void*)(&(t).field_name)) - ((void*)&(t)))
+
     {
         // str8_t
         struct_binding_t *string_binding = begin_struct_binding(&ast->type_set, lit2str("orstring_t"));
         {
             orstring_t t;
-            struct_field_bind(string_binding, charptr, lit2str("cstr"), ((void*)&t.cstr)-((void*)&t));
-            struct_field_bind(string_binding, ast->type_set.sint_, lit2str("length"), ((void*)&t.length)-((void*)&t));
+            struct_field_bind(string_binding, charptr, lit2str("cstr"), offset(t, cstr));
+            struct_field_bind(string_binding, ast->type_set.sint_, lit2str("length"), offset(t, length));
             end_struct_binding(string_binding, &ast->type_set);
 
             ast->type_set.str8_t_ = string_binding->type;
             
             typedata_t *std = type2typedata(&ast->type_set.types, string_binding->type);
             std->kind = TYPE_STRING;
-            std->name = string_binding->cname;
         }
+
+        ortype_t str8_ptr = type_set_fetch_pointer(&ast->type_set, string_binding->type);
+
+        // str8s_t
+        struct_binding_t *str8s_binding = begin_struct_binding(&ast->type_set, lit2str("orstr8s_t"));
+        {
+            orstr8s_t t;
+            struct_field_bind(str8s_binding, str8_ptr, lit2str("items"), offset(t, items));
+            struct_field_bind(str8s_binding, ast->type_set.sint_, lit2str("count"), offset(t, count));
+            struct_field_bind(str8s_binding, ast->type_set.sint_, lit2str("capacity"), offset(t, capacity));
+            end_struct_binding(str8s_binding, &ast->type_set);
+        }
+
+        // compiler
+        struct_binding_t *compiler_binding = begin_struct_binding(&ast->type_set, lit2str("orso_compiler_t"));
+        {
+            orso_compiler_t t;
+            struct_field_bind(compiler_binding, string_binding->type, lit2str("src"), offset(t, src));
+            struct_field_bind(compiler_binding, string_binding->type, lit2str("build_dir"), offset(t, build_dir));
+            struct_field_bind(compiler_binding, string_binding->type, lit2str("output_name"), offset(t, output_name));
+            struct_field_bind(compiler_binding, str8s_binding->type, lit2str("cflags"), offset(t, cflags));
+            struct_field_bind(compiler_binding, str8s_binding->type, lit2str("linker_flags"), offset(t, linker_flags));
+            end_struct_binding(compiler_binding, &ast->type_set);
+
+            ast->type_set.compiler = compiler_binding->type;
+        }
+
+        ortype_t compiler_ptr = type_set_fetch_pointer(&ast->type_set, compiler_binding->type);
 
         // printstr8
         {
@@ -464,10 +462,7 @@ void intrinsics_init(ast_t *ast, orintrinsic_fns_t *fns) {
 
             fn.arg_types = (types_t){.allocator=ast->arena};
 
-            array_push(&fn.arg_types, ast->type_set.type_);
-            array_push(&fn.arg_types, ast->type_set.type_);
-
-            array_push(&fn.arg_types, voidptr);
+            array_push(&fn.arg_types, compiler_ptr);
 
             fn.ret_type = ast->type_set.bool_;
 
@@ -572,6 +567,8 @@ void intrinsics_init(ast_t *ast, orintrinsic_fns_t *fns) {
             array_push(fns, fn);
         }
     }
+
+    #undef offset
 }
 
 void ast_init(ast_t *ast, arena_t *arena) {
