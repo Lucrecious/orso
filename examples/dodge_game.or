@@ -1,0 +1,200 @@
+rl :: @load "./vendor/raylib.or";
+mt :: @load "math.or";
+
+vec2f_t :: rl.vec2_t;
+
+vec_len :: (v: vec2f_t) -> f32 {
+    x2 := v.x*v.x;
+    y2 := v.y*v.y;
+    length := mt.sqrtf(x2+y2);
+    return length;
+};
+
+vec_norm :: (v: vec2f_t) -> vec2f_t {
+    x2 := v.x*v.x;
+    y2 := v.y*v.y;
+    length := mt.sqrtf(x2+y2);
+
+    return .{v.x/length, v.y/length};
+};
+
+rotate :: (pos: vec2f_t, rads: f32, origin := vec2f_t.{}) -> vec2f_t {
+    cos_a := mt.cosf(rads);
+    sin_a := mt.sinf(rads);
+    dx := pos.x - origin.x;
+    dy := pos.y - origin.y;
+
+    new_x := dx*cos_a - dy*sin_a + origin.x;
+    new_y := dx*sin_a + dy*cos_a + origin.y;
+
+    return .{new_x, new_y};
+};
+
+draw_ship :: (pos: vec2f_t, size: f32, rad: f32) {
+    points := [3]vec2f_t.{
+        .{pos.x-size, pos.y},
+        .{pos.x+size, pos.y},
+        .{pos.x, pos.y-size*2},
+    };
+
+    for i := 0; i < len(points); ++i {
+        points[i] = rotate(points[i], rad, pos);
+    };
+
+    rl.draw_line_v(points[0], points[1], rl.red);
+    rl.draw_line_v(points[1], points[2], rl.red);
+    rl.draw_line_v(points[2], points[0], rl.red);
+};
+
+vec2_angle :: (value: vec2f_t) -> f32 {
+    return mt.atan2f(value.y, value.x);
+};
+
+entity_t :: struct {
+    position := vec2f_t.{};
+    velocity := vec2f_t.{};
+};
+
+missles := [10]entity_t.{};
+missle_count := 0;
+
+shoot_missle :: (position: vec2f_t, dir: vec2f_t) {
+    if missle_count >= len(missles) then return;
+    
+    missle := &missles[missle_count];
+    missle.velocity = vec_norm(dir)*.{300.0, 300.0};
+    missle.position = position;
+    ++missle_count;
+};
+
+despawn_missle :: (index: sint) {
+    if index >= missle_count then return;
+    missles[index] = missles[missle_count-1];
+    --missle_count;
+};
+
+draw_missle :: (missle: &entity_t) {
+    dir := vec_norm(missle.velocity);
+    rl.draw_line_v(missle.position-dir*.{3, 3}, missle.position+dir*.{3, 3}, rl.red);
+};
+
+SCREEN_X :: 800;
+SCREEN_Y :: 600;
+
+timer_t :: struct {
+    sec_left := 0.0;
+    wait_sec := 1.0;
+};
+
+rand_rangef :: (a: f32, b: f32) -> f32 {
+    r := mt.randf();
+    c := (b-a)*r + a;
+    return c;
+};
+
+timeout :: (timer: &timer_t) -> bool {
+    success := timer.sec_left < 0;
+    if success then timer.sec_left = timer.wait_sec;
+    return success;
+};
+
+timer_update :: (timer: &timer_t, dt: f32) {
+    timer.sec_left -= dt;
+};
+
+asteroids := [100]entity_t.{};
+asteroid_count := 0;
+
+spawn_asteroid :: () {
+    if asteroid_count >= len(asteroids) then return;
+
+    asteroid := &asteroids[asteroid_count];
+    ++asteroid_count;
+
+    incoming_dir := vec2f_t.{rand_rangef(-1, 1), rand_rangef(-1, 1)};
+
+    spawn_position := vec2f_t.{(SCREEN_X as f32)/2, (SCREEN_Y as f32)/2} + vec2f_t.{incoming_dir.x*(SCREEN_X as f32), incoming_dir.y*(SCREEN_Y as f32)};
+    asteroid.position = spawn_position;
+    asteroid.velocity = vec_norm(incoming_dir)*.{-1, -1}*.{100, 100};
+};
+
+draw_asteroid :: (asteroid: &entity_t) {
+    tl := asteroid.position + vec2f_t.{-16, -16};
+    tr := asteroid.position + vec2f_t.{16, -16};
+    bl := asteroid.position + vec2f_t.{-16, 16};
+    br := asteroid.position + vec2f_t.{16, 16};
+
+    rl.draw_line_v(tl, tr, rl.red);
+    rl.draw_line_v(tr, br, rl.red);
+    rl.draw_line_v(br, bl, rl.red);
+    rl.draw_line_v(bl, tl, rl.red);
+};
+
+main :: () -> void {
+    rl.init_window(SCREEN_X, SCREEN_Y, "Asteroids");
+
+    rl.set_target_fps(60);
+
+    player := entity_t.{};
+    player.position = .{100, 100};
+
+    PLAYER_ACC_PER_SEC :f32: 500.0;
+
+    timer := timer_t.{
+        sec_left: 3,
+        wait_sec: 3,
+    };
+
+    while not rl.window_should_close() {
+        rl.begin_drawing();
+
+        rl.clear_background(rl.black);
+
+        mp := rl.get_mouse_position();
+        dir := vec2f_t.{mp[0] as f32, mp[1] as f32} - player.position;
+        angle := vec2_angle(dir);
+
+        draw_ship(player.position, 8, angle+mt.PI/2);
+
+        dt := rl.get_frame_time();
+        dtv := vec2f_t.{dt, dt};
+
+        dir = vec_norm(dir);
+
+        if rl.is_mouse_button_down(rl.mouse_button_left) {
+            player.velocity += dtv*.{PLAYER_ACC_PER_SEC, PLAYER_ACC_PER_SEC}*dir;
+        };
+
+        if rl.is_mouse_button_pressed(rl.mouse_button_right) {
+            shoot_missle(player.position, dir);
+        };
+
+        timer_update(&timer, rl.get_frame_time());
+
+        if timeout(&timer) then
+            spawn_asteroid();
+
+        for i := 0; i < asteroid_count; ++i {
+            asteroid := &asteroids[i];
+            draw_asteroid(asteroid);
+            asteroid.position += dtv*asteroid.velocity;
+        };
+
+        for i := 0; i < missle_count; ++i {
+            missle := &missles[i];
+            draw_missle(missle);
+
+            missle.position += dtv*missle.velocity;
+
+            if missle.position.x < 0 or missle.position.y < 0
+            or missle.position.x > SCREEN_X as f32 or missle.position.y > SCREEN_Y as f32 then
+                despawn_missle(i);
+        };
+
+        player.position += dtv*player.velocity;
+
+        rl.end_drawing();
+    };
+
+    rl.close_window();
+};

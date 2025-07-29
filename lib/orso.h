@@ -27,6 +27,12 @@ void *orrealloc(void *ptr, size_t new_size);
 void orprintint(orint num);
 void orprintln(orcstr_t s);
 
+orf32 orsinf(orf32);
+orf32 orcosf(orf32);
+orf32 oratan2f(orf32, orf32);
+orf32 orsqrtf(orf32);
+orf32 orrandf();
+
 bool orshell_run(void *cmds, size_t count);
 
 void *orreserve(size_t size);

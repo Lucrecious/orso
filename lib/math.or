@@ -1,0 +1,21 @@
+PI :f32: 3.14159;
+
+sinf :: (value: f32) -> f32 {
+    return @icall "sinf", value;
+};
+
+cosf :: (value: f32) -> f32 {
+    return @icall "cosf", value;
+};
+
+atan2f :: (y: f32, x: f32) -> f32 {
+    return @icall "atan2f", y, x;
+};
+
+sqrtf :: (v: f32) -> f32 {
+    return @icall "sqrtf", v;
+};
+
+randf :: () -> f32 {
+    return @icall "randf";
+};

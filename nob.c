@@ -127,6 +127,7 @@ int main(int argc, char **argv) {
     nob_copy_file("./lib/arena.or", "./bin/std/arena.or");
     nob_copy_file("./lib/dynarr.or", "./bin/std/dynarr.or");
     nob_copy_file("./lib/memory.or", "./bin/std/memory.or");
+    nob_copy_file("./lib/math.or", "./bin/std/math.or");
     nob_copy_file("./lib/string_builder.or", "./bin/std/string_builder.or");
     nob_copy_file("./lib/orso.or", "./bin/std/orso.or");
 

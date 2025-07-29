@@ -21,8 +21,8 @@ mouse_button_left :: 0;
 mouse_button_right :: 1;
 mouse_button_middle :: 3;
 
-init_window :: (width: int, height: int, label: str8_t) -> void {
-    @fficall "./vendor/raylib/src/libraylib.a", "cdecl", void, "InitWindow", width, height, label.cstr;
+init_window :: (width: sint, height: sint, label: str8_t) -> void {
+    @fficall "./vendor/raylib/src/libraylib.a", "cdecl", void, "InitWindow", width as int, height as int, label.cstr;
 };
 
 close_window :: () -> void {
@@ -47,6 +47,10 @@ draw_rectanglev :: (pos: vec2_t, size: vec2_t, color: color_t) -> void {
 
 draw_rectangle :: (pos: [2]int, size: [2]int, color: color_t) -> void {
     @fficall "./vendor/raylib/src/libraylib.a", "cdecl", void, "DrawRectangle", pos[0], pos[1], size[0], size[1], color;
+};
+
+draw_line_v :: (a: vec2_t, b: vec2_t, color: color_t) -> void {
+    @fficall "./vendor/raylib/src/libraylib.a", "cdecl", void, "DrawLineV", a, b, color;
 };
 
 draw_text :: (text: str8_t, pos: [2]int, size: int, color: color_t) -> void {
@@ -77,8 +81,12 @@ get_sec_elapsed :: () -> f64 {
     return @fficall "./vendor/raylib/src/libraylib.a", "cdecl", f64, "GetTime";
 };
 
-is_mouse_button_pressed :: (button: int) -> bool {
-    return @fficall "./vendor/raylib/src/libraylib.a", "cdecl", bool, "IsMouseButtonPressed", button;
+is_mouse_button_pressed :: (button: sint) -> bool {
+    return @fficall "./vendor/raylib/src/libraylib.a", "cdecl", bool, "IsMouseButtonPressed", button as int;
+};
+
+is_mouse_button_down :: (button: sint) -> bool {
+    return @fficall "./vendor/raylib/src/libraylib.a", "cdecl", bool, "IsMouseButtonDown", button as int;
 };
 
 get_mouse_position :: () -> [2]int {

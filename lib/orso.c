@@ -194,7 +194,7 @@ bool orbuild(orso_compiler_t *compiler) {
 
     bool result = false;
 
-    if (!ast->resolved) {
+    if (ast->errors.count > 0) {
         print_errors(ast);
         return_defer(false);
     }
@@ -324,6 +324,26 @@ void orprintint(orint num) {
 
 void orprintln(orcstr_t s) {
     printf("%s\n", s);
+}
+
+orf32 orsinf(orf32 value) {
+    return sinf(value);
+}
+
+orf32 orcosf(orf32 value) {
+    return cosf(value);
+}
+
+orf32 oratan2f(orf32 y, orf32 x) {
+    return atan2f(y, x);
+}
+
+orf32 orsqrtf(orf32 v) {
+    return sqrtf(v);
+}
+
+orf32 orrandf() {
+    return (orf32)rand()/(orf32)(RAND_MAX);
 }
 
 bool orshell_run(void *cmds, size_t count) {

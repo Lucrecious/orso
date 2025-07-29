@@ -4,7 +4,7 @@ or_ :: @load "orso.or";
 
 main :: () -> void {
     oc := or_.compiler_t.{};
-    oc.src = "raylibtest.or";
+    oc.src = "examples/dodge_game.or";
 
     or_.push(&oc.linker_flags, "-framework");
     or_.push(&oc.linker_flags, "IOKit");

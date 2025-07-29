@@ -325,7 +325,6 @@ static void __orprintln(struct vm_t *vm, void *args_reverse_order, void *result)
 
 static void __orprintstr8(struct vm_t *vm, void *args_reverse_order, void *result) {
     NOB_UNUSED(vm);
-    NOB_UNUSED(args_reverse_order);
     NOB_UNUSED(result);
 
     size_t offset = 0;
@@ -336,6 +335,68 @@ static void __orprintstr8(struct vm_t *vm, void *args_reverse_order, void *resul
     extract_struct_from_binding(str8td->as.struct_.binding_or_null, vm->types, str8_arg, &str8);
 
     orprintln(str8.cstr);
+}
+
+static void __orsinf(struct vm_t *vm, void *args_reverse_order, void *result) {
+    NOB_UNUSED(vm);
+    NOB_UNUSED(result);
+
+    size_t offset = 0;
+    typedata_t *valuetd = type2typedata(&vm->types->types, vm->types->f32_);
+    orf32 value = *(orf32*)orso_icall_arg(args_reverse_order, &offset, valuetd->size);
+
+    value = orsinf(value);
+
+    *(orf32*)result = value;
+}
+
+static void __orcosf(struct vm_t *vm, void *args_reverse_order, void *result) {
+    NOB_UNUSED(vm);
+    NOB_UNUSED(result);
+
+    size_t offset = 0;
+    typedata_t *valuetd = type2typedata(&vm->types->types, vm->types->f32_);
+    orf32 value = *(orf32*)orso_icall_arg(args_reverse_order, &offset, valuetd->size);
+
+    value = orcosf(value);
+
+    *(orf32*)result = value;
+}
+
+static void __oratan2f(struct vm_t *vm, void *args_reverse_order, void *result) {
+    NOB_UNUSED(vm);
+    NOB_UNUSED(result);
+
+    size_t offset = 0;
+    typedata_t *valuetd = type2typedata(&vm->types->types, vm->types->f32_);
+    orf32 y = *(orf32*)orso_icall_arg(args_reverse_order, &offset, valuetd->size);
+    orf32 x = *(orf32*)orso_icall_arg(args_reverse_order, &offset, valuetd->size);
+
+    orf32 angle = oratan2f(y, x);
+
+    *(orf32*)result = angle;
+}
+
+static void __orsqrtf(struct vm_t *vm, void *args_reverse_order, void *result) {
+    NOB_UNUSED(vm);
+    NOB_UNUSED(result);
+
+    size_t offset = 0;
+    typedata_t *valuetd = type2typedata(&vm->types->types, vm->types->f32_);
+    orf32 value = *(orf32*)orso_icall_arg(args_reverse_order, &offset, valuetd->size);
+
+    value = orsqrtf(value);
+
+    *(orf32*)result = value;
+}
+
+static void __orrandf(struct vm_t *vm, void *args_reverse_order, void *result) {
+    NOB_UNUSED(vm);
+    NOB_UNUSED(args_reverse_order);
+
+    orf32 value = orrandf();
+
+    *(orf32*)result = value;
 }
 
 void intrinsics_init(ast_t *ast, orintrinsic_fns_t *fns) {
@@ -432,6 +493,85 @@ void intrinsics_init(ast_t *ast, orintrinsic_fns_t *fns) {
             fn.ret_type = voidptr;
 
             fn.fnptr = __orprintint;
+
+            array_push(fns, fn);
+        }
+
+        // sinf
+        {
+            orintrinsic_fn_t fn = {0};
+            fn.name = lit2str("sinf");
+            fn.has_varargs = false;
+            fn.arg_types = (types_t){.allocator=ast->arena};
+
+            array_push(&fn.arg_types, ast->type_set.f32_);
+
+            fn.ret_type = ast->type_set.f32_;
+
+            fn.fnptr = __orsinf;
+
+            array_push(fns, fn);
+        }
+
+        // cosf
+        {
+            orintrinsic_fn_t fn = {0};
+            fn.name = lit2str("cosf");
+            fn.has_varargs = false;
+            fn.arg_types = (types_t){.allocator=ast->arena};
+
+            array_push(&fn.arg_types, ast->type_set.f32_);
+
+            fn.ret_type = ast->type_set.f32_;
+
+            fn.fnptr = __orcosf;
+
+            array_push(fns, fn);
+        }
+
+        // sqrtf
+        {
+            orintrinsic_fn_t fn = {0};
+            fn.name = lit2str("sqrtf");
+            fn.has_varargs = false;
+            fn.arg_types = (types_t){.allocator=ast->arena};
+
+            array_push(&fn.arg_types, ast->type_set.f32_);
+
+            fn.ret_type = ast->type_set.f32_;
+
+            fn.fnptr = __orsqrtf;
+
+            array_push(fns, fn);
+        }
+
+        // randf
+        {
+            orintrinsic_fn_t fn = {0};
+            fn.name = lit2str("randf");
+            fn.has_varargs = false;
+            fn.arg_types = (types_t){.allocator=ast->arena};
+
+            fn.ret_type = ast->type_set.f32_;
+
+            fn.fnptr = __orrandf;
+
+            array_push(fns, fn);
+        }
+
+        // atan2f
+        {
+            orintrinsic_fn_t fn = {0};
+            fn.name = lit2str("atan2f");
+            fn.has_varargs = false;
+            fn.arg_types = (types_t){.allocator=ast->arena};
+
+            array_push(&fn.arg_types, ast->type_set.f32_);
+            array_push(&fn.arg_types, ast->type_set.f32_);
+
+            fn.ret_type = ast->type_set.f32_;
+
+            fn.fnptr = __oratan2f;
 
             array_push(fns, fn);
         }
