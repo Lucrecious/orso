@@ -131,7 +131,7 @@ ast_t *orbuild_ast(orstring_t source, arena_t *arena, orstring_t file_path) {
     return ast;
 }
 
-static bool generate_exe(ast_t *ast, orstr8s_t cflags, orstring_t output_path) {
+static bool generate_exe(ast_t *ast, orso_compiler_t *compiler, orstring_t output_path) {
     tmp_arena_t *tmp = allocator_borrow();
 
     strings_t sources = {0};
@@ -166,8 +166,12 @@ static bool generate_exe(ast_t *ast, orstr8s_t cflags, orstring_t output_path) {
 
         cc_flag(&cc, lit2str("-std=c99"));
 
-        for (orsint i = 0; i < cflags.count; ++i) {
-            cc_flag(&cc, cflags.items[i]);
+        for (orsint i = 0; i < compiler->cflags.count; ++i) {
+            cc_flag(&cc, compiler->cflags.items[i]);
+        }
+
+        for (orsint i = 0; i < compiler->linker_flags.count; ++i) {
+            cc_linker_flag(&cc, compiler->linker_flags.items[i]);
         }
 
         success = cc_build(&cc);
@@ -197,7 +201,7 @@ bool orbuild(orso_compiler_t *compiler) {
 
     orstring_t output_file_path = path_combine(string2sv(compiler->build_dir), string2sv(compiler->output_name), &arena);
     {
-        success = generate_exe(ast, compiler->cflags, output_file_path);
+        success = generate_exe(ast, compiler, output_file_path);
     }
     if (!success) {
         print_errors(ast);

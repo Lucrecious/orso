@@ -27,6 +27,7 @@ struct cc_t {
     strings_t include_dirs;
     strings_t no_warnings;
     strings_t flags;
+    strings_t linker_flags;
 };
 
 cc_t cc_make(cc_cc_t cc_cc, arena_t *arena);
@@ -54,6 +55,7 @@ cc_t cc_make(cc_cc_t cc_cc, arena_t *arena) {
         .sources = {.allocator=arena},
         .libpaths = {.allocator=arena},
         .flags = {.allocator=arena},
+        .linker_flags = {.allocator=arena},
         .include_dirs = {.allocator=arena},
         .no_warnings = {.allocator=arena},
         .output_path = lit2str("a.out"),
@@ -71,6 +73,10 @@ void cc_libpath(cc_t *cc, orstring_t libpath) {
 
 void cc_flag(cc_t *cc, orstring_t flag) {
     array_push(&cc->flags, string_copy(flag, cc->arena));
+}
+
+void cc_linker_flag(cc_t *cc, orstring_t flag) {
+    array_push(&cc->linker_flags, string_copy(flag, cc->arena));
 }
 
 void cc_include_dir(cc_t *cc, orstring_t dir) {
@@ -176,8 +182,8 @@ bool cc_build(cc_t *cc) {
                 cmd_append(&cmd, libpath.cstr);
             }
 
-            for (size_t i = 0; i < cc->flags.count; ++i) {
-                orstring_t flag = cc->flags.items[i];
+            for (size_t i = 0; i < cc->linker_flags.count; ++i) {
+                orstring_t flag = cc->linker_flags.items[i];
                 cmd_append(&cmd, flag.cstr);
             }
 

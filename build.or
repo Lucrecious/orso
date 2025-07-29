@@ -6,14 +6,14 @@ main :: () -> void {
     oc := or_.compiler_t.{};
     oc.src = "raylibtest.or";
 
-    or_.push(&oc.cflags, "-framework");
-    or_.push(&oc.cflags, "IOKit");
+    or_.push(&oc.linker_flags, "-framework");
+    or_.push(&oc.linker_flags, "IOKit");
     
-    or_.push(&oc.cflags, "-framework");
-    or_.push(&oc.cflags, "Cocoa");
+    or_.push(&oc.linker_flags, "-framework");
+    or_.push(&oc.linker_flags, "Cocoa");
     
-    or_.push(&oc.cflags, "-framework");
-    or_.push(&oc.cflags, "OpenGL");
+    or_.push(&oc.linker_flags, "-framework");
+    or_.push(&oc.linker_flags, "OpenGL");
 
     success := or_.build(&oc);
 
