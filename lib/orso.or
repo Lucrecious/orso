@@ -24,13 +24,13 @@ compiler_t :: @intrinsic "orso_compiler_t", struct {
     linker_flags := (str8s_t).{};
 };
 
-_push_str :: (strs: &str8s_t, s: str8_t) -> void {
+push :: (strs: &str8s_t, s: str8_t) -> void {
     if strs.count >= strs.capacity {
         new_cap := strs.capacity;
         while new_cap < strs.count do
             new_cap = if new_cap == 0 then 8 else new_cap*2;
         
-        strs.items = mem.realloc(strs.items, new_cap) as &str8_t;
+        strs.items = mem.realloc(strs.items, new_cap*(sizeof(str8_t) as sint)) as &str8_t;
         strs.capacity = new_cap;
     };
 

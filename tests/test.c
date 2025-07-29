@@ -8,8 +8,6 @@
 ast_t *orbuild_ast(orstring_t source, arena_t *arena, orstring_t file_path);
 void print_errors(ast_t *ast);
 
-typedef const char *cstr_t;
-
 void print_usage(void) {
     printf("usage :\n");
     printf("  test              - prints this usage text\n");
@@ -286,7 +284,7 @@ int main(int argc, char *argv[]) {
 
             arena_t arena = {0};
             orstring_t filepath_ = {
-                .cstr = filepath,
+                .cstr = (char*)filepath,
                 .length = strlen(filepath),
             };
             ast_t *ast = orbuild_ast(src, &arena, filepath_);

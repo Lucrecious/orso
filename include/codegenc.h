@@ -2369,6 +2369,8 @@ static void cgen_generate_cnames_for_types(ast_t *ast) {
         }
 
         case TYPE_STRUCT: {
+            if (td->name.length > 0) break;
+
             // struct_typeid<ortypeid>
 
             tmp_arena_t *tmp = allocator_borrow();

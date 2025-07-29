@@ -9,9 +9,11 @@
 #include <stdio.h>
 #include <string.h>
 
+typedef const char* cstr_t;
+
 typedef struct string_view_t string_view_t;
 struct string_view_t {
-    orcstr_t data;
+    cstr_t data;
     size_t length;
 };
 

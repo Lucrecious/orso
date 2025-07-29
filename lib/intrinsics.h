@@ -30,7 +30,7 @@ typedef ors64 orsint;
 typedef int orint;
 typedef unsigned int oruint;
 
-typedef const char *orcstr_t;
+typedef char *orcstr_t;
 
 typedef struct orstring_t orstring_t;
 struct orstring_t {
