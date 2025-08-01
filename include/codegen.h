@@ -59,21 +59,34 @@ static void emit_instruction(function_t *function, texloc_t location, instructio
     array_push(&function->locations, location);
 }
 
+static void emit_reg_to_reg(function_t *function, texloc_t loc, reg_t reg_dst, reg_t reg_src) {
+    instruction_t in = {0};
+    in.op = OP_MOV_REG_TO_REG;
+    in.as.mov_reg_to_reg.reg_destination = (byte)reg_dst;
+    in.as.mov_reg_to_reg.reg_source = (byte)reg_src;
+
+    emit_instruction(function, loc, in);
+}
+
 static void emit_binu_reg_im(function_t *function, texloc_t loc, reg_t reg_dest, reg_t reg_op, size_t immediate, char plus_or_minus) {
-    bool first_time = true;
-    while (immediate > 0) {
-        size_t op_amount = immediate < ORIN_UINTARG_MAX ? immediate : ORIN_UINTARG_MAX;
+    if (immediate == 0) {
+        emit_reg_to_reg(function, loc, reg_dest, reg_op);
+    } else {
+        bool first_time = true;
+        while (immediate > 0) {
+            size_t op_amount = immediate < ORIN_UINTARG_MAX ? immediate : ORIN_UINTARG_MAX;
 
-        instruction_t in = {0};
-        in.op = plus_or_minus == '-' ? OP_SUBU_IM : OP_ADDU_IM;
-        in.as.binu_reg_immediate.immediate = (oru32)op_amount;
-        in.as.binu_reg_immediate.reg_operand = (byte)(first_time ? reg_op : reg_dest);
-        in.as.binu_reg_immediate.reg_result = (byte)reg_dest;
+            instruction_t in = {0};
+            in.op = plus_or_minus == '-' ? OP_SUBU_IM : OP_ADDU_IM;
+            in.as.binu_reg_immediate.immediate = (oru32)op_amount;
+            in.as.binu_reg_immediate.reg_operand = (byte)(first_time ? reg_op : reg_dest);
+            in.as.binu_reg_immediate.reg_result = (byte)reg_dest;
 
-        emit_instruction(function, loc, in);
+            emit_instruction(function, loc, in);
 
-        immediate -= op_amount;
-        first_time = false;
+            immediate -= op_amount;
+            first_time = false;
+        }
     }
 }
 
@@ -160,15 +173,6 @@ enum reg_mov_size_t {
     REG_MOV_SIZE_WORD,
     REG_MOV_SIZE_MULTIWORD_ADDR,
 };
-
-static void emit_reg_to_reg(function_t *function, texloc_t loc, reg_t reg_dst, reg_t reg_src) {
-    instruction_t in = {0};
-    in.op = OP_MOV_REG_TO_REG;
-    in.as.mov_reg_to_reg.reg_destination = (byte)reg_dst;
-    in.as.mov_reg_to_reg.reg_source = (byte)reg_src;
-
-    emit_instruction(function, loc, in);
-}
 
 static void emit_addr_to_reg(gen_t *gen, function_t *function, texloc_t loc, reg_mov_size_t mov_size, reg_t reg_dest, reg_t reg_src, size_t offset) {
     if (offset > ORIN_UINTARG_MAX) {

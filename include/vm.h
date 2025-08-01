@@ -649,7 +649,7 @@ void vm_step(vm_t *vm) {
             call_frame.pc = 0;
 
             vm->call_frames[vm->call_frame_count] = vm->call_frame;
-            vm->call_frame_count++;
+            ++vm->call_frame_count;
             vm->call_frame = call_frame;
             break;
         }

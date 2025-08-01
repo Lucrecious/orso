@@ -273,7 +273,7 @@ defer:
     return result;
 }
 
-bool debug(orstring_t input_file_path) {
+bool ordebug(orstring_t input_file_path) {
     arena_t arena = {0};
 
     orstring_t source;
@@ -296,15 +296,20 @@ bool debug(orstring_t input_file_path) {
         goto defer;
     }
 
-    // function_t *main_or_null = find_main_or_null(ast,);
-    // if (main_or_null) {
-    //     debugger_t debugger = {0};
-    //     debugger_init(&debugger, &arena);
+    ast_node_t *module;
+    function_t *main_or_null;
+    kh_foreach_value(ast->moduleid2node, module, {
+        main_or_null = find_main_or_null(module);
+        if (main_or_null) break;
+    });
 
-    //     vm_set_entry_point(ast->vm, main_or_null);
-    //     while(debugger_step(&debugger, ast->vm));
-    // }
-    UNREACHABLE();
+    if (main_or_null) {
+        debugger_t debugger = {0};
+        debugger_init(&debugger, &arena);
+
+        vm_set_entry_point(ast->vm, main_or_null);
+        while(debugger_step(&debugger, ast->vm));
+    }
 
     return_defer(true);
 

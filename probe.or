@@ -1,3 +1,11 @@
-main :: () -> void {
-    @icall "printstr8", "hello world";
+io :: @load "io.or";
+
+foo :: () -> void {
+    ret := 4;
+    ret = 5;
+    if ret == 5 then io.println("hell oworld");
+};
+
+main :: () {
+    foo();
 };

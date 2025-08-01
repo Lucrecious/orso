@@ -65,16 +65,16 @@ int main(int argc, char **argv) {
             orcstr_t filename = shift(argv, argc);
             orstring_t file = {.cstr=filename, .length=strlen(filename)};
             orinterpret(file);
-        }// else if (strncmp(option, "dbg", 3) == 0) {
-        //     if (argc != 1) {
-        //         fprintf(stderr, "dbg option requires input odl file\n");
-        //         exit(1);
-        //     }
+        } else if (strncmp(option, "dbg", 3) == 0) {
+            if (argc != 1) {
+                fprintf(stderr, "dbg option requires input odl file\n");
+                exit(1);
+            }
 
-        //     cstr_t filename = shift(argv, argc);
-        //     string_t file = {.cstr=filename, .length=strlen(filename)};
-        //     debug(file);
-        // } else if (strncmp(option, "ast", 4) == 0) {
+            orcstr_t filename = shift(argv, argc);
+            orstring_t file = {.cstr=filename, .length=strlen(filename)};
+            ordebug(file);
+        }// else if (strncmp(option, "ast", 4) == 0) {
         //     if (argc > 2) {
         //         fprintf(stderr, "requires file to resolve");
         //         exit(1);

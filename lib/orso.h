@@ -22,6 +22,7 @@ struct orso_compiler_t {
 
 bool orbuild(orso_compiler_t *compiler);
 bool orinterpret(orstring_t input_file_path);
+bool ordebug(orstring_t input_file_path);
 
 void *orrealloc(void *ptr, size_t new_size);
 void orprintint(orint num);
