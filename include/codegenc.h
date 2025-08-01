@@ -337,10 +337,6 @@ static void cgen_cache_requires_tmp(typedatas_t *types, ast_node_t *expression) 
         }
     }
 
-    if (expression->expr_val.is_concrete) {
-        expression->requires_tmp_for_cgen = false;
-    }
-
     for (size_t i = 0; i < expression->children.count; ++i) {
         ast_node_t *child = expression->children.items[i];
         if (TYPE_IS_INFERRED_FUNCTION(child->value_type) && child->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION) {
@@ -354,6 +350,10 @@ static void cgen_cache_requires_tmp(typedatas_t *types, ast_node_t *expression) 
                 expression->requires_tmp_for_cgen = true;
             }
         }
+    }
+
+    if (expression->expr_val.is_concrete) {
+        expression->requires_tmp_for_cgen = false;
     }
 }
 
