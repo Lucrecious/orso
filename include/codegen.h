@@ -2418,12 +2418,13 @@ bool compile_expr_to_function(function_t *function, ast_t *ast, ast_node_t *expr
 }
 
 bool compile_program(vm_t *vm, ast_t *ast) {
+    vm->types = &ast->type_set;
+
     bool success = compile_modules(vm, ast);
 
     if (!success) return false;
 
     vm_global_init(vm);
-    vm->types = &ast->type_set;
     return true;
 }
 

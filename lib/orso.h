@@ -25,7 +25,7 @@ bool orinterpret(orstring_t input_file_path);
 
 void *orrealloc(void *ptr, size_t new_size);
 void orprintint(orint num);
-void orprintln(orcstr_t s);
+void orprintln(orstring_t s);
 
 orf32 orsinf(orf32);
 orf32 orcosf(orf32);

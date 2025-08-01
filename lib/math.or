@@ -1,7 +1,8 @@
 PI :f32: 3.14159;
 
 sinf :: (value: f32) -> f32 {
-    return @icall "sinf", value;
+    result := @icall "sinf", value;
+    return result;
 };
 
 cosf :: (value: f32) -> f32 {

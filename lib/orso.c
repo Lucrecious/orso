@@ -322,8 +322,8 @@ void orprintint(orint num) {
     printf("%d\n", num);
 }
 
-void orprintln(orcstr_t s) {
-    printf("%s\n", s);
+void orprintln(orstring_t s) {
+    printf("%s\n", s.cstr);
 }
 
 orf32 orsinf(orf32 value) {

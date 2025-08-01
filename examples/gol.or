@@ -3,8 +3,8 @@ rl :: @load "./vendor/raylib.or";
 GX :: 32;
 GY :: 32;
 board_t :: [GX][GY]bool;
-grid_size :: [2]int.{GX, GY};
-cell_size :: [2]int.{16, 16};
+grid_size :: [2]sint.{GX, GY};
+cell_size :: [2]sint.{16, 16};
 
 window_size :: grid_size * cell_size;
 
@@ -27,13 +27,13 @@ main :: () -> void {
             };
     };
 
-    mark  :: (board: &board_t, pos: [2]int, with := true) -> void {
+    mark  :: (board: &board_t, pos: [2]sint, with := true) -> void {
         if pos[0] >= 0 and pos[0] < len(*board) and pos[1] >= 0 and pos[1] < len(board[0]) {
             board[pos[0]][pos[1]] = with;
         };
     };
 
-    is_marked :: (board: &board_t, pos: [2]int) -> bool {
+    is_marked :: (board: &board_t, pos: [2]sint) -> bool {
         while pos[0] < 0 do pos[0] += len(*board);
         while pos[1] < 0 do pos[1] += len(board[0]);
 
@@ -44,7 +44,7 @@ main :: () -> void {
         return marked;
     };
 
-    count_neighbors :: (board: &board_t, x: int, y: int) -> int {
+    count_neighbors :: (board: &board_t, x: sint, y: sint) -> sint {
         nc := 0;
 
         for sx := x-1; sx < x+2; ++sx do

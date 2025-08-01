@@ -5501,6 +5501,10 @@ static void analyzer_init(analyzer_t *analyzer, ast_t *ast, arena_t *arena) {
 
     analyzer->had_error = false;
     analyzer->run_vm = ast->vm; //vm_default(arena);
+    analyzer->run_vm->types = &ast->type_set;
+    printf("TODO: set the typeset on vm in more unified place\n");
+
+
     analyzer->ast = ast;
 
     analyzer->arena = arena;

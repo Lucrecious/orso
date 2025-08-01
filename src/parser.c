@@ -314,17 +314,6 @@ static void __orpagesize(struct vm_t *vm, void *args_reverse_order, void *result
 
 static void __orprintln(struct vm_t *vm, void *args_reverse_order, void *result) {
     NOB_UNUSED(vm);
-    NOB_UNUSED(args_reverse_order);
-    NOB_UNUSED(result);
-
-    size_t offset = 0;
-    orcstr_t cstr = *(char**)orso_icall_arg(args_reverse_order, &offset, ORWORD_SIZE);
-
-    orprintln(cstr);
-}
-
-static void __orprintstr8(struct vm_t *vm, void *args_reverse_order, void *result) {
-    NOB_UNUSED(vm);
     NOB_UNUSED(result);
 
     size_t offset = 0;
@@ -334,7 +323,7 @@ static void __orprintstr8(struct vm_t *vm, void *args_reverse_order, void *resul
     orstring_t str8 = {0};
     extract_struct_from_binding(str8td->as.struct_.binding_or_null, vm->types, str8_arg, &str8);
 
-    orprintln(str8.cstr);
+    orprintln(str8);
 }
 
 static void __orsinf(struct vm_t *vm, void *args_reverse_order, void *result) {
@@ -347,7 +336,7 @@ static void __orsinf(struct vm_t *vm, void *args_reverse_order, void *result) {
 
     value = orsinf(value);
 
-    *(orf32*)result = value;
+    memcpy(result, &value, sizeof(orf32));
 }
 
 static void __orcosf(struct vm_t *vm, void *args_reverse_order, void *result) {
@@ -448,10 +437,10 @@ void intrinsics_init(ast_t *ast, orintrinsic_fns_t *fns) {
 
         ortype_t compiler_ptr = type_set_fetch_pointer(&ast->type_set, compiler_binding->type);
 
-        // printstr8
+        // printlin
         {
             orintrinsic_fn_t fn = {0};
-            fn.name = lit2str("printstr8");
+            fn.name = lit2str("println");
             fn.has_varargs = false;
             fn.arg_types = (types_t){.allocator=ast->arena};
 
@@ -459,7 +448,7 @@ void intrinsics_init(ast_t *ast, orintrinsic_fns_t *fns) {
 
             fn.ret_type = voidptr;
 
-            fn.fnptr = __orprintstr8;
+            fn.fnptr = __orprintln;
 
             array_push(fns, fn);
         }
@@ -688,21 +677,6 @@ void intrinsics_init(ast_t *ast, orintrinsic_fns_t *fns) {
             fn.ret_type = ast->type_set.size_t_;
 
             fn.fnptr = __orpagesize;
-
-            array_push(fns, fn);
-        }
-
-        // println
-        {
-            orintrinsic_fn_t fn = {0};
-            fn.name = lit2str("println");
-            fn.has_varargs = false;
-
-            fn.arg_types = (types_t){.allocator=ast->arena};
-            array_push(&fn.arg_types, charptr);
-            fn.ret_type = ast->type_set.void_;
-
-            fn.fnptr = __orprintln;
 
             array_push(fns, fn);
         }
