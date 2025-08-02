@@ -1,6 +1,7 @@
 main :: () -> void {
-    () -> int {
+    () -> sint {
         x := true;
         if x then return 10;
     };
 };
+

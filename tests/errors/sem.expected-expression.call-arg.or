@@ -1,5 +1,5 @@
 main :: () -> void {
-    add :: (a: int, b := 2) -> int {
+    add :: (a: sint, b := 2) -> sint {
         return b;
     };
 

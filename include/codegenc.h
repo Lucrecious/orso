@@ -1396,7 +1396,7 @@ static void cgen_while_or_for(cgen_t *cgen, ast_node_t *branch, cgen_var_t var) 
     orcstr_t while_or_until = branch->condition_negated ? "until" : "while";
     cgen_condition_and_open_block(cgen, branch, while_or_until);
 
-    cgen_then(cgen, branch, var);
+    cgen_then(cgen, branch, nil_cvar);
 
     cgen_add_indent(cgen);
     cgen_jmp_label(cgen, branch->ccode_continue_label);
@@ -1415,7 +1415,7 @@ static void cgen_while_or_for(cgen_t *cgen, ast_node_t *branch, cgen_var_t var) 
 
     ast_node_t *elze = an_else(branch);
     if (elze->node_type != AST_NODE_TYPE_EXPRESSION_NIL || has_var(var))
-        cgen_statement(cgen, elze, cgen_var_used(var), true);
+        cgen_statement(cgen, elze, var, true);
 
     cgen_end_branch(cgen);
 

@@ -1,11 +1,18 @@
-io :: @load "io.or";
+table_size :: 10;
 
-foo :: () -> void {
-    ret := 4;
-    ret = 5;
-    if ret == 5 then io.println("hell oworld");
+generate_sin_table :: () -> [table_size]f64 {
+    mt :: @load "math.or";
+    
+    sins := [table_size]f64.{};
+    
+    x := for i := 0; i < table_size; ++i do
+        sins[i] = mt.sinf((i as f32)*mt.PI/180)
+    then sins;
+
+    return x;
 };
 
 main :: () {
-    foo();
+    sins := @run generate_sin_table();
+    sins;
 };

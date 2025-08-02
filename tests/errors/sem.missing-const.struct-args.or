@@ -1,7 +1,8 @@
 main :: () -> void {
-    arr_t :: struct(t: int) {
+    arr_t :: struct(t: sint) {
         x := t;
     };
 
     arr_t({5;});
 };
+
