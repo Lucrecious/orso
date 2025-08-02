@@ -180,14 +180,6 @@ static bool cgen_binary_is_macro(token_type_t type, typedata_t *optd, orcstr_t *
 
     if (operator_is_arithmetic(type)) {
         switch (optd->kind) {
-        case TYPE_POINTER: {
-            switch (type) {
-                case TOKEN_MINUS: set_op("orsubptr", true);
-                case TOKEN_PLUS: set_op("oraddptr", true);
-                default: UNREACHABLE();
-            }
-            break;
-        }
         case TYPE_NUMBER: {
             switch ((num_size_t)optd->size) {
             case NUM_SIZE_8: {
@@ -1555,31 +1547,13 @@ static void cgen_return(cgen_t *cgen, ast_node_t *ret) {
     }
 }
 
-static void cgen_builtin_call(cgen_t *cgen, ast_node_t *bcall, cgen_var_t var) {
-    if (sv_eq(bcall->identifier.view, cstr2sv("sizeof"))) {
-        MUST(!bcall->requires_tmp_for_cgen);
-
-        if (has_var(var)) {
-            sb_add_format(&cgen->sb, "%s = ", cgen_var(cgen, var));
-        }
-
-        typedata_t *td = ast_type2td(cgen->ast, bcall->value_type);
-
-        ast_node_t *op = bcall->children.items[an_bcall_arg_start(bcall)];
-        typedata_t *optd = ast_type2td(cgen->ast, op->value_type);
-        if (optd->kind == TYPE_TYPE) {
-            MUST(op->expr_val.is_concrete);
-            optd = ast_type2td(cgen->ast, op->expr_val.word.as.t);
-        }
-        sb_add_format(&cgen->sb, "(%s)sizeof(%s)", td->name.cstr, optd->name.cstr);
-
-    } else {
-        UNREACHABLE();
-    }
-}
-
-static void cgen_call(cgen_t *cgen, ast_node_t *call, cgen_var_t var) {
+static void cgen_call(cgen_t *cgen, ast_node_t *call, cgen_var_t var, cstr_t builtin_func_name_or_null) {
     ast_node_t *callee = an_callee(call);
+
+    bool is_builtin_call = builtin_func_name_or_null != NULL;
+    
+    // cgen_call should only be called with a builtin function if the builtin function has arguments
+    MUST(!is_builtin_call || (is_builtin_call && (an_bcall_arg_end(call) - an_bcall_arg_start(call)) > 0));
 
     /*
     * the expressions (callee and arguments) need to be evaluated from left to right.
@@ -1592,15 +1566,18 @@ static void cgen_call(cgen_t *cgen, ast_node_t *call, cgen_var_t var) {
     * inline as much as can, but that would only be for aesthetic reasons, so fuck that.
     */
     if (call->requires_tmp_for_cgen) {
-        /*
-        * no matter what, the callee requires a tmp because either it itself requires a tmp
-        * or because an argument following it needs it. which is why we are in this if branch
-        */
-        cgen_var_t callee_tmp = cgen_next_tmpid(cgen, callee->value_type);
-        cgen_statement(cgen, callee, callee_tmp, false);
+        cgen_var_t callee_tmp;
+        if (!is_builtin_call) {
+            /*
+            * no matter what, the callee requires a tmp because either it itself requires a tmp
+            * or because an argument following it needs it. which is why we are in this if branch
+            */
+            callee_tmp = cgen_next_tmpid(cgen, callee->value_type);
+            cgen_statement(cgen, callee, callee_tmp, false);
+        }
 
-        size_t arg_start = an_call_arg_start(call);
-        size_t arg_end = an_call_arg_end(call);
+        size_t arg_start = is_builtin_call ? an_bcall_arg_start(call) : an_call_arg_start(call);
+        size_t arg_end = is_builtin_call ? an_bcall_arg_end(call) : an_call_arg_end(call);
 
         size_t start_inline_index = arg_end;
         for (size_t i = arg_end; i > arg_start; --i) {
@@ -1631,7 +1608,13 @@ static void cgen_call(cgen_t *cgen, ast_node_t *call, cgen_var_t var) {
             sb_add_format(&cgen->sb, "%s = ", cgen_var(cgen, var));
         }
 
-        sb_add_format(&cgen->sb, "%s(", cgen_var_name(cgen, callee_tmp));
+        if (is_builtin_call) {
+            MUST(builtin_func_name_or_null);
+
+            sb_add_format(&cgen->sb, "%s(", builtin_func_name_or_null);
+        } else {
+            sb_add_format(&cgen->sb, "%s(", cgen_var_name(cgen, callee_tmp));
+        }
 
         // tmps
         for (size_t i = 0; i < tmp_arg_var_count; ++i) {
@@ -1661,11 +1644,16 @@ static void cgen_call(cgen_t *cgen, ast_node_t *call, cgen_var_t var) {
 
         sb_add_cstr(&cgen->sb, "(");
 
-        cgen_expression(cgen, callee, nil_cvar);
+        if (is_builtin_call) {
+            sb_add_format(&cgen->sb, "%s", builtin_func_name_or_null);
+        } else {
+            cgen_expression(cgen, callee, nil_cvar);
+        }
         sb_add_cstr(&cgen->sb, "(");
 
-        size_t arg_start = an_call_arg_start(call);
-        for (size_t i = arg_start; i < an_call_arg_end(call); ++i) {
+        size_t arg_start = is_builtin_call ? an_bcall_arg_start(call) : an_call_arg_start(call);
+        size_t arg_end = is_builtin_call ? an_bcall_arg_end(call) : an_call_arg_end(call);
+        for (size_t i = arg_start; i < arg_end; ++i) {
             if (i != arg_start) {
                 sb_add_cstr(&cgen->sb, ", ");
             }
@@ -1674,6 +1662,33 @@ static void cgen_call(cgen_t *cgen, ast_node_t *call, cgen_var_t var) {
         }
 
         sb_add_cstr(&cgen->sb, "))");
+    }
+}
+
+static void cgen_builtin_call(cgen_t *cgen, ast_node_t *bcall, cgen_var_t var) {
+    if (sv_eq(bcall->identifier.view, cstr2sv("sizeof"))) {
+        MUST(!bcall->requires_tmp_for_cgen);
+
+        if (has_var(var)) {
+            sb_add_format(&cgen->sb, "%s = ", cgen_var(cgen, var));
+        }
+
+        typedata_t *td = ast_type2td(cgen->ast, bcall->value_type);
+
+        ast_node_t *op = bcall->children.items[an_bcall_arg_start(bcall)];
+        typedata_t *optd = ast_type2td(cgen->ast, op->value_type);
+        if (optd->kind == TYPE_TYPE) {
+            MUST(op->expr_val.is_concrete);
+            optd = ast_type2td(cgen->ast, op->expr_val.word.as.t);
+        }
+        sb_add_format(&cgen->sb, "(%s)sizeof(%s)", td->name.cstr, optd->name.cstr);
+
+    } else if (bcall->identifier.type == TOKEN_OFFSETPTR) {
+        cgen_call(cgen, bcall, var, "oroffsetptr");
+    } else if (bcall->identifier.type == TOKEN_PTRDIFF) {
+        cgen_call(cgen, bcall, var, "orptrdiff");
+    } else {
+        UNREACHABLE();
     }
 }
 
@@ -2100,7 +2115,7 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
         }
 
         case AST_NODE_TYPE_EXPRESSION_CALL: {
-            cgen_call(cgen, expression, var); 
+            cgen_call(cgen, expression, var, NULL); 
             break;
         }
 

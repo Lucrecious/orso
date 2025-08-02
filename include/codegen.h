@@ -921,24 +921,6 @@ static void gen_binary(gen_t *gen, function_t *function, ast_node_t *binary, val
         gen_expression(gen, function, rhs, rhs_val_dst);
 
         typedata_t *lhstd = type2typedata(&gen->ast->type_set.types, lhs->value_type);
-        typedata_t *rhstd = type2typedata(&gen->ast->type_set.types, rhs->value_type);
-        {
-            // do the implicit multiplication required for ptr arithmetic
-            if (lhstd->kind == TYPE_POINTER && ortypeid_eq(rhs->value_type, gen->ast->type_set.ptrdiff_t_)) {
-                emit_push_reg(gen, loc, function, REG_RESULT, REG_T, type2movsize(gen, rhs->value_type), 0);
-
-                typedata_t *lhsinnertd = type2typedata(&gen->ast->type_set.types, lhstd->as.ptr.type);
-
-                size_t factor_size = lhsinnertd->size > 0 ? lhsinnertd->size : sizeof(oru8);
-
-                val_dst_t factor_size_dst = emit_val_dst_reg_or_stack_point_reserve(gen, loc, function, gen->ast->type_set.size_t_, REG_RESULT);
-                gen_constant(gen, loc, function, &factor_size, gen->ast->type_set.size_t_, factor_size_dst);
-
-                emit_pop_to_reg(gen, loc, function, REG_T, rhs->value_type);
-
-                emit_bin_op(loc, function, TOKEN_STAR, rhstd, REG_T, REG_RESULT, REG_RESULT);
-            }
-        }
 
         if (is_type_kind_aggregate(lhstd->kind)) {
             MUST(operator_is_arithmetic(binary->operator.type) || operator_is_comparing(binary->operator.type));
@@ -1882,6 +1864,61 @@ static void gen_bcall(gen_t *gen, function_t *function, ast_node_t *call, val_ds
 
     case TOKEN_LEN: {
         UNREACHABLE(); // todo for slices
+        break;
+    }
+
+    case TOKEN_PTRDIFF:
+    case TOKEN_OFFSETPTR: {
+        ast_node_t *lhs = call->children.items[an_bcall_arg_start(call)];
+        val_dst_t lhs_val_dst = emit_val_dst_stack_reserve(gen, lhs->start.loc, function, lhs->value_type);
+        gen_expression(gen, function, lhs, lhs_val_dst);
+
+        ast_node_t *rhs = call->children.items[an_bcall_arg_start(call)+1];
+        val_dst_t rhs_val_dst = emit_val_dst_reg_or_stack_point_reserve(gen, rhs->start.loc, function, rhs->value_type, REG_RESULT);
+        gen_expression(gen, function, rhs, rhs_val_dst);
+
+        ortype_t lt = lhs->value_type;
+        ortype_t rt = rhs->value_type;
+
+        typedata_t *lhstd = type2typedata(&gen->ast->type_set.types, lt);
+        typedata_t *rhstd = type2typedata(&gen->ast->type_set.types, rt);
+        texloc_t loc = call->start.loc;
+
+        typedata_t *lhsinnertd = type2typedata(&gen->ast->type_set.types, lhstd->as.ptr.type);
+        size_t factor_size = lhsinnertd->size > 0 ? lhsinnertd->size : sizeof(oru8);
+
+        if (call->identifier.type == TOKEN_OFFSETPTR) {
+            emit_push_reg(gen, loc, function, REG_RESULT, REG_T, type2movsize(gen, rhs->value_type), 0);
+
+            val_dst_t factor_size_dst = emit_val_dst_reg_or_stack_point_reserve(gen, loc, function, gen->ast->type_set.size_t_, REG_RESULT);
+            gen_constant(gen, loc, function, &factor_size, gen->ast->type_set.size_t_, factor_size_dst);
+
+            emit_pop_to_reg(gen, loc, function, REG_T, rhs->value_type);
+
+            emit_bin_op(loc, function, TOKEN_STAR, rhstd, REG_T, REG_RESULT, REG_RESULT);
+        }
+
+        emit_pop_to_reg(gen, loc, function, REG_T, lhs->value_type);
+
+        token_type_t op = TOKEN_PLUS;
+        if (call->identifier.type == TOKEN_PTRDIFF) {
+            op = TOKEN_MINUS;
+        }
+
+        emit_bin_op(loc, function, op, lhstd, REG_T, REG_RESULT, REG_RESULT);
+
+        if (call->identifier.type == TOKEN_PTRDIFF) {
+            emit_push_reg(gen, loc, function, REG_RESULT, REG_T, type2movsize(gen, rhs->value_type), 0);
+
+            val_dst_t factor_size_dst = emit_val_dst_reg_or_stack_point_reserve(gen, loc, function, gen->ast->type_set.size_t_, REG_RESULT);
+            gen_constant(gen, loc, function, &factor_size, gen->ast->type_set.size_t_, factor_size_dst);
+
+            emit_pop_to_reg(gen, loc, function, REG_T, rhs->value_type);
+
+            emit_bin_op(loc, function, TOKEN_SLASH, ast_type2td(gen->ast, gen->ast->type_set.u64_), REG_T, REG_RESULT, REG_RESULT);
+        }
+
+        emit_reg_to_val_dst(gen, loc, function, call->value_type, val_dst, REG_RESULT, REG_T, REG_U, false);
         break;
     }
 

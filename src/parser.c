@@ -1479,8 +1479,6 @@ static ast_node_t *parse_number(parser_t *parser) {
                 type = parser->ast->type_set.u64_;
             } else if (sv_ends_with(numsv, "sz")) {
                 type = parser->ast->type_set.size_t_;
-            } else if (sv_ends_with(numsv, "pd")) {
-                type = parser->ast->type_set.ptrdiff_t_;
             } else if (sv_ends_with(numsv, "d")) {
                 type = parser->ast->type_set.f64_;
             } else if (sv_ends_with(numsv, "f")) {
@@ -2668,6 +2666,8 @@ parse_rule_t rules[] = {
     [TOKEN_TYPEOF]                  = { parse_builtin_call, NULL,               PREC_NONE },
     [TOKEN_SIZEOF]                  = { parse_builtin_call, NULL,               PREC_NONE },
     [TOKEN_LEN]                     = { parse_builtin_call, NULL,               PREC_NONE },
+    [TOKEN_OFFSETPTR]               = { parse_builtin_call, NULL,               PREC_NONE },
+    [TOKEN_PTRDIFF]                 = { parse_builtin_call, NULL,               PREC_NONE },
     [TOKEN_RETURN]                  = { parse_jmp,          NULL,               PREC_NONE },
     [TOKEN_BREAK]                   = { parse_jmp,          NULL,               PREC_NONE },
     [TOKEN_CONTINUE]                = { parse_jmp,          NULL,               PREC_NONE },

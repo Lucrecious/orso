@@ -50,8 +50,6 @@ struct type_table_t {
     ortype_t uint_;
     ortype_t size_t_;
 
-    ortype_t ptrdiff_t_;
-
     ortype_t symbol_;
     ortype_t type_;
 

@@ -170,8 +170,8 @@ struct orword_t {
 #define ormuld(a, b) (a * b)
 #define ordivd(a, b) ordiv(a, b)
 
-#define oraddptr(ptr, a) ((ptr) + (ors64)(a))
-#define orsubptr(ptr, a) ((ptr) - (ors64)(a))
+#define oroffsetptr(ptr, a) ((ptr) + (ors64)(a))
+#define orptrdiff(a, b) ((a) - (b))
 
 #define ormin(a, b) ((a) < (b) ? (a) : (b))
 #define ormax(a, b) ((a) > (b) ? (a) : (b))

@@ -201,6 +201,8 @@ static orcstr_t tokentype2string(token_type_t token_type) {
         case TOKEN_WHILE: return "while";
         case TOKEN_DO: return "do";
         case TOKEN_FOR: return "for";
+        case TOKEN_OFFSETPTR: return "offsetptr";
+        case TOKEN_PTRDIFF: return "ptrdiff";
 
         case TOKEN_SIZE: return "<size>";
     }

@@ -101,7 +101,6 @@ if (sv_eq(identifier, lit2sv(#name))) {\
     RETURN_IF_TYPE(int, t->int_)
     RETURN_IF_TYPE(uint, t->uint_)
     RETURN_IF_TYPE(size_t, t->size_t_)
-    RETURN_IF_TYPE(ptrdiff_t, t->ptrdiff_t_)
 
     RETURN_IF_TYPE(str8_t, t->str8_t_)
 
@@ -3573,63 +3572,8 @@ void resolve_expression(
             }
 
             typedata_t *left_td = ast_type2td(ast, left->value_type);
-            typedata_t *right_td = ast_type2td(ast, right->value_type);
 
-            #define td_is_s_or_u_int(td) ((td)->as.num == NUM_TYPE_SIGNED || (td)->as.num == NUM_TYPE_UNSIGNED)
-
-            if (right_td->kind == TYPE_POINTER && left_td->kind == TYPE_NUMBER && left->is_free_number && td_is_s_or_u_int(left_td)) {
-                stan_error(analyzer, OR_ERROR(
-                    .tag = "sem.nonumber-on-right.ptr-arith|skip",
-                    .level = ERROR_SOURCE_ANALYSIS,
-                    .msg = lit2str("number must be on right-hand-side for pointer arithmetic"),
-                    .args = ORERR_ARGS(error_arg_node(an_lhs(expr))),
-                    .show_code_lines = ORERR_LINES(0),
-                ));
-                INVALIDATE(expr);
-                break;
-            }
-
-            if (left_td->kind == TYPE_POINTER && right_td->kind == TYPE_NUMBER && right->is_free_number && td_is_s_or_u_int(right_td)) {
-                an_rhs(expr) = (right = cast_implicitly_if_necessary(ast, ast->type_set.ptrdiff_t_, right));
-            }
-
-            #undef td_is_s_or_u_int
-
-            if (
-                left_td->kind == TYPE_POINTER &&
-                ortypeid_eq(ast->type_set.ptrdiff_t_, right->value_type) &&
-                operator_is_arithmetic(expr->operator.type)) {
-
-                if (expr->operator.type != TOKEN_PLUS && expr->operator.type != TOKEN_MINUS) {
-                    stan_error(analyzer, OR_ERROR(
-                        .tag = "sem.inop.ptr-arith|skip",
-                        .level = ERROR_SOURCE_ANALYSIS,
-                        .msg = lit2str("only '-' and '+' are allowed in pointer arithmetic but got '$0.kind$'"),
-                        .args = ORERR_ARGS(error_arg_token(expr->operator)),
-                        .show_code_lines = ORERR_LINES(0),
-                    ));
-                    INVALIDATE(expr);
-                    break;
-                }
-
-                expr->value_type = right_td->kind == TYPE_POINTER ? ast->type_set.ptrdiff_t_ : left->value_type;
-            }  else if (
-                left_td->kind == TYPE_POINTER &&
-                right_td->kind == TYPE_POINTER &&
-                ortypeid_eq(left->value_type, right->value_type) &&
-                operator_is_arithmetic(expr->operator.type)) {
-
-                if (right_td->kind == TYPE_POINTER && expr->operator.type != TOKEN_MINUS) {
-                    stan_error(analyzer, OR_ERROR(
-                        .tag = "sem.noadd.ptr-arith|skip",
-                        .level = ERROR_SOURCE_ANALYSIS,
-                        .msg = lit2str("cannot add pointer types"),
-                        .args = ORERR_ARGS(error_arg_node(expr)),
-                        .show_code_lines = ORERR_LINES(0),
-                    ));
-                    INVALIDATE(expr);
-                }
-            } else if (operator_is_arithmetic(expr->operator.type)) {
+            if (operator_is_arithmetic(expr->operator.type)) {
                 expr->value_type = left->value_type;
 
                 unless (left_td->capabilities&TYPE_CAP_ARITHMETIC) {
@@ -4621,6 +4565,125 @@ void resolve_expression(
 
                 typedata_t *array_td = argtd;
                 expr->expr_val = ast_node_val_word(ORWORDU(array_td->as.arr.count));
+                break;
+            }
+
+            case TOKEN_OFFSETPTR: {
+                INVALIDATE(expr);
+
+                if (count != 2) {
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = "sem.arg-count-mismatch.offsetptr",
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("'offsetptr' builtin requires exactly 2 arguments but got $1.$ instead"),
+                        .args = ORERR_ARGS(error_arg_node(expr), error_arg_sz(count)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
+                    break;
+                }
+
+                ast_node_t *ptr = expr->children.items[arg_start];
+                resolve_expression(analyzer, ast, state, ortypeid(TYPE_UNRESOLVED), ptr, true);
+
+                ortype_t ptr_type = ptr->value_type;
+                typedata_t *ptrtd = ast_type2td(ast, ptr_type);
+                if (ptrtd->kind != TYPE_POINTER) {
+                    unless (TYPE_IS_INVALID(ptr_type)) {
+                        stan_error(analyzer, OR_ERROR(
+                            .tag = "sem.type-mismatch.offsetptr-arg1",
+                            .level = ERROR_SOURCE_ANALYSIS,
+                            .msg = lit2str("'offsetptr' builtin first argument must be a pointer but got '$1.$' instead"),
+                            .args = ORERR_ARGS(error_arg_node(ptr), error_arg_type(ptr->value_type)),
+                            .show_code_lines = ORERR_LINES(0),
+                        ));
+                    }
+                    break;
+                }
+
+                expr->value_type = ptr->value_type;
+
+                ast_node_t *offset = expr->children.items[arg_start+1];
+                resolve_expression(analyzer, ast, state, ortypeid(TYPE_UNRESOLVED), offset, true);
+
+                ortype_t offset_type = offset->value_type;
+                typedata_t *offsettd = ast_type2td(ast, offset_type);
+                if (offsettd->kind != TYPE_NUMBER || offsettd->as.num == NUM_TYPE_FLOAT) {
+                    unless (TYPE_IS_INVALID(ptr_type)) {
+                        stan_error(analyzer, OR_ERROR(
+                            .tag = "sem.type-mismatch.offsetptr-arg2",
+                            .level = ERROR_SOURCE_ANALYSIS,
+                            .msg = lit2str("'offsetptr' builtin second argument must be an integer but got '$1.$' instead"),
+                            .args = ORERR_ARGS(error_arg_node(ptr), error_arg_type(ptr->value_type)),
+                            .show_code_lines = ORERR_LINES(0),
+                        ));
+                    }
+                    break;
+                }
+                break;
+            }
+
+            case TOKEN_PTRDIFF: {
+                INVALIDATE(expr);
+
+                if (count != 2) {
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = "sem.arg-count-mismatch.ptrdiff",
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("'ptrdiff' builtin requires exactly 2 arguments but got $1.$ instead"),
+                        .args = ORERR_ARGS(error_arg_node(expr), error_arg_sz(count)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
+                    break;
+                }
+
+                ast_node_t *ptr1 = expr->children.items[arg_start];
+                resolve_expression(analyzer, ast, state, ortypeid(TYPE_UNRESOLVED), ptr1, true);
+
+                ortype_t ptr1_type = ptr1->value_type;
+                typedata_t *ptr1td = ast_type2td(ast, ptr1_type);
+                if (ptr1td->kind != TYPE_POINTER) {
+                    unless (TYPE_IS_INVALID(ptr1_type)) {
+                        stan_error(analyzer, OR_ERROR(
+                            .tag = "sem.type-mismatch.offsetptr-arg1",
+                            .level = ERROR_SOURCE_ANALYSIS,
+                            .msg = lit2str("'ptrdiff' builtin first argument must be a pointer but got '$1.$' instead"),
+                            .args = ORERR_ARGS(error_arg_node(ptr1), error_arg_type(ptr1->value_type)),
+                            .show_code_lines = ORERR_LINES(0),
+                        ));
+                    }
+                    break;
+                }
+
+                ast_node_t *ptr2 = expr->children.items[arg_start + 1];
+                resolve_expression(analyzer, ast, state, ortypeid(TYPE_UNRESOLVED), ptr2, true);
+
+                ortype_t ptr2_type = ptr2->value_type;
+                typedata_t *ptr2td = ast_type2td(ast, ptr2_type);
+                if (ptr2td->kind != TYPE_POINTER) {
+                    unless (TYPE_IS_INVALID(ptr2_type)) {
+                        stan_error(analyzer, OR_ERROR(
+                            .tag = "sem.type-mismatch.offsetptr-arg2",
+                            .level = ERROR_SOURCE_ANALYSIS,
+                            .msg = lit2str("'ptrdiff' builtin second argument must be a pointer but got '$1.$' instead"),
+                            .args = ORERR_ARGS(error_arg_node(ptr2), error_arg_type(ptr2->value_type)),
+                            .show_code_lines = ORERR_LINES(0),
+                        ));
+                    }
+                    break;
+                }
+
+                if (!ortypeid_eq(ptr1_type, ptr2_type)) {
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = "sem.type-mismatch.ptr-args",
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("'ptrdiff' builtin expects both arguments to be the same pointer types but got '$1.$' and '$2.$' instead"),
+                        .args = ORERR_ARGS(error_arg_node(ptr2), error_arg_type(ptr1->value_type), error_arg_type(ptr2->value_type)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
+                    break;
+                }
+
+                expr->value_type = ast->type_set.sint_;
                 break;
             }
 
