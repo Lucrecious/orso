@@ -1012,7 +1012,7 @@ static ast_node_t *cast_implicitly_if_necessary(ast_t *ast, ortype_t dst_type, a
                     switch(expr_num) {
                     case NUM_TYPE_SIGNED: if (w.as.s < INT16_MIN || w.as.s > INT16_MAX) return expr; break;
                     case NUM_TYPE_UNSIGNED: if (w.as.u > INT16_MAX) return expr; break;
-                    case NUM_TYPE_FLOAT: if (w.as.d < INT16_MIN || w.as.d > INT16_MAX || w.as.d != ((ors16)w.as.d)) return expr; break;
+                    case NUM_TYPE_FLOAT: if (w.as.d < (orf64)INT16_MIN || w.as.d > (orf64)INT16_MAX || w.as.d != (orf64)((ors16)w.as.d)) return expr; break;
                     }
                     break;
                 
@@ -1020,15 +1020,20 @@ static ast_node_t *cast_implicitly_if_necessary(ast_t *ast, ortype_t dst_type, a
                     switch(expr_num) {
                     case NUM_TYPE_SIGNED: if (w.as.s < INT32_MIN || w.as.s > INT32_MAX) return expr; break;
                     case NUM_TYPE_UNSIGNED: if (w.as.u > INT32_MAX)  return expr; break;
-                    case NUM_TYPE_FLOAT: if (w.as.d < INT32_MIN || w.as.d > INT32_MAX || w.as.d != ((ors32)w.as.d)) return expr; break;
+                    case NUM_TYPE_FLOAT: if (w.as.d < (orf64)INT32_MIN || w.as.d > (orf64)INT32_MAX || w.as.d != (orf64)((ors32)w.as.d)) return expr; break;
                     }
                     break;
                 
-                case NUM_SIZE_64: break;
+                case NUM_SIZE_64:
                     switch(expr_num) {
                     case NUM_TYPE_SIGNED: break;
                     case NUM_TYPE_UNSIGNED: if (w.as.u > INT64_MAX)  return expr; break;
-                    case NUM_TYPE_FLOAT: if (w.as.d < INT64_MIN || w.as.d > INT64_MAX || w.as.d != ((ors64)w.as.d)) return expr; break;
+                    case NUM_TYPE_FLOAT: {
+                        if (w.as.d < (orf64)INT64_MIN || w.as.d > (orf64)INT64_MAX || w.as.d != (orf64)((ors64)w.as.d)) {
+                            return expr;
+                        }
+                        break;
+                    }
                     }
                     break;
                 }
@@ -4002,6 +4007,7 @@ void resolve_expression(
             }
 
             expr->ref_decl = decl;
+            expr->is_free_number = decl->is_free_number;
 
             expr->value_type = decl->value_type;
 
@@ -4935,6 +4941,8 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
     if (TYPE_IS_UNRESOLVED(an_decl_expr(decl)->value_type) && decl->type_decl_patterns.count == 0) {
         resolve_expression(analyzer, ast, state, decl->value_type, init_expr, true);
     }
+
+    decl->is_free_number = init_expr;
 
     --analyzer->pending_dependencies.count;
     

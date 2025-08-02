@@ -1,18 +1,4 @@
-table_size :: 10;
-
-generate_sin_table :: () -> [table_size]f64 {
-    mt :: @load "math.or";
-    
-    sins := [table_size]f64.{};
-    
-    x := for i := 0; i < table_size; ++i do
-        sins[i] = mt.sinf((i as f32)*mt.PI/180)
-    then sins;
-
-    return x;
-};
-
+X :: 800;
 main :: () {
-    sins := @run generate_sin_table();
-    sins;
+    X*1.5;
 };
