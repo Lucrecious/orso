@@ -131,7 +131,69 @@ typedef struct {
     prec_t precedence;
 } parse_rule_t;
 
+#define c2i(lit) ast_sv2istring(ast, lit2sv(lit))
+
+static void intrinsic_struct_init(ast_t *ast) {
+    #define offset(t, field_name) (((void*)(&(t).field_name)) - ((void*)&(t)))
+
+    ortype_t charptr = type_set_fetch_pointer(&ast->type_set, ast->type_set.char_);
+
+    // str8_t
+    struct_binding_t *string_binding = begin_struct_binding(&ast->type_set, lit2str("orstring_t"));
+    {
+        orstring_t t;
+        struct_field_bind(string_binding, charptr, c2i("cstr"), offset(t, cstr));
+        struct_field_bind(string_binding, ast->type_set.sint_, c2i("length"), offset(t, length));
+        end_struct_binding(string_binding, &ast->type_set);
+
+        ast->type_set.str8_t_ = string_binding->type;
+        
+        typedata_t *std = type2typedata(&ast->type_set.types, string_binding->type);
+        std->kind = TYPE_STRING;
+    }
+
+    ortype_t str8_ptr = type_set_fetch_pointer(&ast->type_set, ast->type_set.str8_t_);
+
+    // str8s_t
+    struct_binding_t *str8s_binding = begin_struct_binding(&ast->type_set, lit2str("orstr8s_t"));
+    {
+        orstr8s_t t;
+        struct_field_bind(str8s_binding, str8_ptr, c2i("items"), offset(t, items));
+        struct_field_bind(str8s_binding, ast->type_set.sint_, c2i("count"), offset(t, count));
+        struct_field_bind(str8s_binding, ast->type_set.sint_, c2i("capacity"), offset(t, capacity));
+        end_struct_binding(str8s_binding, &ast->type_set);
+    }
+
+    // compiler
+    struct_binding_t *compiler_binding = begin_struct_binding(&ast->type_set, lit2str("orso_compiler_t"));
+    {
+        orso_compiler_t t;
+        struct_field_bind(compiler_binding, string_binding->type, c2i("src"), offset(t, src));
+        struct_field_bind(compiler_binding, string_binding->type, c2i("build_dir"), offset(t, build_dir));
+        struct_field_bind(compiler_binding, string_binding->type, c2i("output_name"), offset(t, output_name));
+        struct_field_bind(compiler_binding, str8s_binding->type, c2i("cflags"), offset(t, cflags));
+        struct_field_bind(compiler_binding, str8s_binding->type, c2i("linker_flags"), offset(t, linker_flags));
+        end_struct_binding(compiler_binding, &ast->type_set);
+
+        ast->type_set.compiler = compiler_binding->type;
+    }
+
+    // lib_t
+    struct_binding_t *lib_binding = begin_struct_binding(&ast->type_set, lit2str("orlib_t"));
+    {
+        orlib_t t;
+        struct_field_bind(lib_binding, ast->type_set.str8_t_, c2i("call_conv"), offset(t, call_conv));
+        struct_field_bind(lib_binding, ast->type_set.str8_t_, c2i("static_path"), offset(t, static_path));
+        struct_field_bind(lib_binding, ast->type_set.str8_t_, c2i("shared_path"), offset(t, shared_path));
+
+        end_struct_binding(lib_binding, &ast->type_set);
+
+        ast->type_set.lib_ = lib_binding->type;
+    }
+}
+
 static void directives_init(ast_t *ast, orintrinsic_fns_t *fns) {
+
     // run
     {
         orintrinsic_fn_t fn = {0};
@@ -176,8 +238,7 @@ static void directives_init(ast_t *ast, orintrinsic_fns_t *fns) {
         fn.has_varargs = true;
         fn.arg_types = (types_t){.allocator=ast->arena};
 
-        array_push(&fn.arg_types, ast->type_set.str8_t_);
-        array_push(&fn.arg_types, ast->type_set.str8_t_);
+        array_push(&fn.arg_types, ast->type_set.lib_);
         array_push(&fn.arg_types, ast->type_set.type_);
         array_push(&fn.arg_types, ast->type_set.str8_t_);
 
@@ -391,56 +452,8 @@ static void __orrandf(struct vm_t *vm, void *args_reverse_order, void *result) {
 
 void intrinsics_init(ast_t *ast, orintrinsic_fns_t *fns) {
     ortype_t voidptr = type_set_fetch_pointer(&ast->type_set, ortypeid(TYPE_VOID));
-    ortype_t charptr = type_set_fetch_pointer(&ast->type_set, ast->type_set.char_);
-
-    #define offset(t, field_name) (((void*)(&(t).field_name)) - ((void*)&(t)))
-
-    #define c2i(lit) ast_sv2istring(ast, lit2sv(lit))
 
     {
-        // str8_t
-        struct_binding_t *string_binding = begin_struct_binding(&ast->type_set, lit2str("orstring_t"));
-        {
-            orstring_t t;
-            struct_field_bind(string_binding, charptr, c2i("cstr"), offset(t, cstr));
-            struct_field_bind(string_binding, ast->type_set.sint_, c2i("length"), offset(t, length));
-            end_struct_binding(string_binding, &ast->type_set);
-
-            ast->type_set.str8_t_ = string_binding->type;
-            
-            typedata_t *std = type2typedata(&ast->type_set.types, string_binding->type);
-            std->kind = TYPE_STRING;
-        }
-
-        ortype_t str8_ptr = type_set_fetch_pointer(&ast->type_set, string_binding->type);
-
-        // str8s_t
-        struct_binding_t *str8s_binding = begin_struct_binding(&ast->type_set, lit2str("orstr8s_t"));
-        {
-            orstr8s_t t;
-            struct_field_bind(str8s_binding, str8_ptr, c2i("items"), offset(t, items));
-            struct_field_bind(str8s_binding, ast->type_set.sint_, c2i("count"), offset(t, count));
-            struct_field_bind(str8s_binding, ast->type_set.sint_, c2i("capacity"), offset(t, capacity));
-            end_struct_binding(str8s_binding, &ast->type_set);
-        }
-
-        // compiler
-        struct_binding_t *compiler_binding = begin_struct_binding(&ast->type_set, lit2str("orso_compiler_t"));
-        {
-            orso_compiler_t t;
-            struct_field_bind(compiler_binding, string_binding->type, c2i("src"), offset(t, src));
-            struct_field_bind(compiler_binding, string_binding->type, c2i("build_dir"), offset(t, build_dir));
-            struct_field_bind(compiler_binding, string_binding->type, c2i("output_name"), offset(t, output_name));
-            struct_field_bind(compiler_binding, str8s_binding->type, c2i("cflags"), offset(t, cflags));
-            struct_field_bind(compiler_binding, str8s_binding->type, c2i("linker_flags"), offset(t, linker_flags));
-            end_struct_binding(compiler_binding, &ast->type_set);
-
-            ast->type_set.compiler = compiler_binding->type;
-        }
-
-        #undef c2i
-
-        ortype_t compiler_ptr = type_set_fetch_pointer(&ast->type_set, compiler_binding->type);
 
         // printlin
         {
@@ -449,7 +462,7 @@ void intrinsics_init(ast_t *ast, orintrinsic_fns_t *fns) {
             fn.has_varargs = false;
             fn.arg_types = (types_t){.allocator=ast->arena};
 
-            array_push(&fn.arg_types, string_binding->type);
+            array_push(&fn.arg_types, ast->type_set.str8_t_);
 
             fn.ret_type = voidptr;
 
@@ -596,6 +609,7 @@ void intrinsics_init(ast_t *ast, orintrinsic_fns_t *fns) {
 
             fn.arg_types = (types_t){.allocator=ast->arena};
 
+            ortype_t compiler_ptr = type_set_fetch_pointer(&ast->type_set, ast->type_set.compiler);
             array_push(&fn.arg_types, compiler_ptr);
 
             fn.ret_type = ast->type_set.bool_;
@@ -713,6 +727,8 @@ void ast_init(ast_t *ast, arena_t *arena) {
     ast->search_paths = (strings_t){.allocator=ast->arena};
 
     ast->global_decls_in_resolution_order = (ast_nodes_t){.allocator=ast->arena};
+
+    intrinsic_struct_init(ast);
 
     ast->intrinsics = (orintrinsic_fns_t){.allocator=ast->arena};
     intrinsics_init(ast, &ast->intrinsics);

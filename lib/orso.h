@@ -20,6 +20,13 @@ struct orso_compiler_t {
     orstr8s_t linker_flags;
 };
 
+typedef struct orlib_t orlib_t;
+struct orlib_t {
+    orstring_t call_conv;
+    orstring_t static_path;
+    orstring_t shared_path;
+};
+
 bool orbuild(orso_compiler_t *compiler);
 bool orinterpret(orstring_t input_file_path);
 bool ordebug(orstring_t input_file_path);

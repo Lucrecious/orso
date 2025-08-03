@@ -35,57 +35,62 @@ mouse_button_left :: 0;
 mouse_button_right :: 1;
 mouse_button_middle :: 3;
 
+raylib :: (@load "dynlib.or").lib_t.{
+    call_conv: "cdecl",
+    static_path: "./vendor/raylib/src/libraylib.a"
+};
+
 init_window :: (width: sint, height: sint, label: str8_t) -> void {
-    @fficall "./vendor/raylib/src/libraylib.a", "cdecl", void, "InitWindow", width as int, height as int, label.cstr;
+    @fficall raylib, void, "InitWindow", width as int, height as int, label.cstr;
 };
 
 close_window :: () -> void {
-    @fficall "./vendor/raylib/src/libraylib.a", "cdecl", void, "CloseWindow";
+    @fficall raylib, void, "CloseWindow";
 };
 
 window_should_close :: () -> bool {
-    return @fficall "./vendor/raylib/src/libraylib.a", "cdecl", bool, "WindowShouldClose";
+    return @fficall raylib, bool, "WindowShouldClose";
 };
 
 init_audio_device :: () {
-    @fficall "./vendor/raylib/src/libraylib.a", "cdecl", void, "InitAudioDevice";
+    @fficall raylib, void, "InitAudioDevice";
 };
 
 load_sound :: (path: str8_t) -> sound_t {
-    result := @fficall "./vendor/raylib/src/libraylib.a", "cdecl", sound_t, "LoadSound", path.cstr;
+    result := @fficall raylib, sound_t, "LoadSound", path.cstr;
     return result;
 };
 
 play_sound :: (sound: sound_t) {
-    @fficall "./vendor/raylib/src/libraylib.a", "cdecl", void, "PlaySound", sound;
+    @fficall raylib, void, "PlaySound", sound;
 };
 
 begin_drawing :: () -> void {
-    @fficall "./vendor/raylib/src/libraylib.a", "cdecl", void, "BeginDrawing";
+    @fficall raylib, void, "BeginDrawing";
 };
 
 end_drawing :: () -> void {
-    @fficall "./vendor/raylib/src/libraylib.a", "cdecl", void, "EndDrawing";
+    @fficall raylib, void, "EndDrawing";
 };
 
 draw_rectanglev :: (pos: vec2_t, size: vec2_t, color: color_t) -> void {
-    @fficall "./vendor/raylib/src/libraylib.a", "cdecl", void, "DrawRectangleV", pos, size, color;
+    @fficall raylib, void, "DrawRectangleV", pos, size, color;
 };
 
 draw_rectangle :: (pos: [2]sint, size: [2]sint, color: color_t) -> void {
-    @fficall "./vendor/raylib/src/libraylib.a", "cdecl", void, "DrawRectangle", pos[0] as int, pos[1] as int, size[0] as int, size[1] as int, color;
+    @fficall raylib, void, "DrawRectangle", pos[0] as int, pos[1] as int, size[0] as int, size[1] as int, color;
 };
 
 draw_line_v :: (a: vec2_t, b: vec2_t, color: color_t) -> void {
-    @fficall "./vendor/raylib/src/libraylib.a", "cdecl", void, "DrawLineV", a, b, color;
+    @fficall raylib, void, "DrawLineV", a, b, color;
 };
 
 draw_text :: (text: str8_t, pos: [2]sint, size: sint, color: color_t) -> void {
-    @fficall "./vendor/raylib/src/libraylib.a", "cdecl", void, "DrawText", text.cstr, pos[0] as int, pos[1] as int, size as int, color;
+    @fficall raylib, void, "DrawText", text.cstr, pos[0] as int, pos[1] as int, size as int, color;
 };
 
 text_format :: (text: str8_t, value: sint) -> str8_t {
-    result := @fficall "./vendor/raylib/src/libraylib.a", "cdecl", &char, "TextFormat", text.cstr, value as int;
+    result := @fficall raylib, &char, "TextFormat", text.cstr, value as int;
     count := 0;
     while *offsetptr(result, count) != char.{} do ++count;
 
@@ -96,47 +101,47 @@ text_format :: (text: str8_t, value: sint) -> str8_t {
 };
 
 measure_text :: (text: str8_t, font_size: sint) -> sint {
-    return (@fficall "./vendor/raylib/src/libraylib.a", "cdecl", int, "MeasureText", text.cstr, font_size as int) as sint;
+    return (@fficall raylib, int, "MeasureText", text.cstr, font_size as int) as sint;
 };
 
 clear_background :: (color: color_t) -> void {
-    @fficall "./vendor/raylib/src/libraylib.a", "cdecl", void, "ClearBackground", color;
+    @fficall raylib, void, "ClearBackground", color;
 };
 
 draw_pixel :: (posx: int, posy: int, color: color_t) -> void {
-    @fficall "./vendor/raylib/src/libraylib.a", "cdecl", void, "DrawPixel", posx, posy, color;
+    @fficall raylib, void, "DrawPixel", posx, posy, color;
 };
 
 draw_fps :: (posx: int, posy: int) -> void {
-    @fficall "./vendor/raylib/src/libraylib.a", "cdecl", void, "DrawFPS", posx, posy;
+    @fficall raylib, void, "DrawFPS", posx, posy;
 };
 
 set_target_fps :: (fps: int) -> void {
-    @fficall "./vendor/raylib/src/libraylib.a", "cdecl", void, "SetTargetFPS", fps;
+    @fficall raylib, void, "SetTargetFPS", fps;
 };
 
 get_frame_time :: () -> f32 {
-    return @fficall "./vendor/raylib/src/libraylib.a", "cdecl", f32, "GetFrameTime";
+    return @fficall raylib, f32, "GetFrameTime";
 };
 
 get_sec_elapsed :: () -> f64 {
-    return @fficall "./vendor/raylib/src/libraylib.a", "cdecl", f64, "GetTime";
+    return @fficall raylib, f64, "GetTime";
 };
 
 is_mouse_button_pressed :: (button: sint) -> bool {
-    return @fficall "./vendor/raylib/src/libraylib.a", "cdecl", bool, "IsMouseButtonPressed", button as int;
+    return @fficall raylib, bool, "IsMouseButtonPressed", button as int;
 };
 
 is_mouse_button_down :: (button: sint) -> bool {
-    return @fficall "./vendor/raylib/src/libraylib.a", "cdecl", bool, "IsMouseButtonDown", button as int;
+    return @fficall raylib, bool, "IsMouseButtonDown", button as int;
 };
 
 get_mouse_position :: () -> [2]sint {
-    result :=  @fficall "./vendor/raylib/src/libraylib.a", "cdecl", [2]f32, "GetMousePosition";
+    result :=  @fficall raylib, [2]f32, "GetMousePosition";
     return .{result[0] as sint, result[1] as sint};
 };
 
 check_collision_point_poly :: (point: vec2_t, points: &vec2_t, count: sint) -> bool {
-    result :=  @fficall "./vendor/raylib/src/libraylib.a", "cdecl", bool, "CheckCollisionPointPoly", point, points, count as int;
+    result :=  @fficall raylib, bool, "CheckCollisionPointPoly", point, points, count as int;
     return result;
 };

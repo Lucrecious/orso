@@ -1,0 +1,5 @@
+lib_t :: @intrinsic "orlib_t", struct {
+    call_conv := "";
+    static_path := "";
+    shared_path := "";
+};

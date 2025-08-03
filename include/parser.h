@@ -173,11 +173,10 @@ extern ast_node_t nil_node;
 #define an_struct_end(n) ((n)->children.count)
 #define an_dot_lhs(n) ((n)->children.items[0])
 
-#define an_fficall_libpath(n) ((n)->children.items[0])
-#define an_fficall_callconv(n) ((n)->children.items[1])
-#define an_fficall_rettype(n) ((n)->children.items[2])
-#define an_fficall_funcname(n) ((n)->children.items[3])
-#define an_fficall_arg_start(n) (4)
+#define an_fficall_lib(n) ((n)->children.items[0])
+#define an_fficall_rettype(n) ((n)->children.items[1])
+#define an_fficall_funcname(n) ((n)->children.items[2])
+#define an_fficall_arg_start(n) (3)
 #define an_fficall_arg_end(n) ((n)->children.count)
 
 #define an_icall_funcname(n) ((n)->children.items[0])

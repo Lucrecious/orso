@@ -8,6 +8,7 @@
 #include "codegen.h"
 #include "tmp.h"
 #include "../nob.h"
+#include "orso.h"
 
 #include "intrinsics.h"
 
@@ -2724,7 +2725,7 @@ void resolve_expression(
                     expr->expr_val = child->expr_val;
                 }
 
-            } else if (string_eq(*expr->identifier, lit2str("@insert"))) {
+            } else if (string_eq(*expr->identifier, lit2str("insert"))) {
                 if (expr->children.count != 1) {
                     stan_error(analyzer, OR_ERROR(
                         .tag = "sem.arg-count-mismatch.insert",
@@ -2831,8 +2832,12 @@ void resolve_expression(
                     tmp_arena_t *tmp = allocator_borrow();
                     ortype_t fficall_return_type = ortypeid(TYPE_INVALID);
 
-                    ast_node_t *libpath_node = an_fficall_libpath(expr);
-                    orstring_t libpath = ast_orstr2str(&ast->type_set, libpath_node->expr_val.word.as.p);
+                    ast_node_t *lib_node = an_fficall_lib(expr);
+                    typedata_t *libtd = ast_type2td(ast, ast->type_set.lib_);
+
+                    orlib_t lib = {0};
+                    extract_struct_from_binding(libtd->as.struct_.binding_or_null, &ast->type_set, lib_node->expr_val.word.as.p, &lib);
+                    orstring_t libpath = lib.static_path;
                     orstring_t abslibpath;
                     if (!core_abspath(libpath, tmp->allocator, &abslibpath)) {
                         stan_error(analyzer, OR_ERROR(
@@ -2844,7 +2849,6 @@ void resolve_expression(
                         ));
                     }
 
-                    ast_node_t *callconv_node = an_fficall_callconv(expr);
                     ast_node_t *retarg_node = an_fficall_rettype(expr);
                     fficall_return_type = retarg_node->expr_val.word.as.t;
 
@@ -2869,7 +2873,7 @@ void resolve_expression(
                         ffi = make_ffi(ast);
                         ffi->funcname = string_copy(funcname, ast->arena);
                         ffi->libpath = string_copy(abslibpath, ast->arena);
-                        ffi->callconv = ast_orstr2str(&ast->type_set, callconv_node->expr_val.word.as.p);
+                        ffi->callconv = lib.call_conv;
                         ffi->return_type = fficall_return_type;
                         ffi->node = expr;
                         for (size_t i = 0; i < types.count; ++i) {
