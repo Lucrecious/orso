@@ -2641,6 +2641,23 @@ static bool struct_fields_steal_default_values(type_table_t *set, ortype_t dst, 
     return true;
 }
 
+static void add_tmp_decls(ast_node_t *expr, ast_nodes_t tmps) {
+    size_t old_count = expr->children.count;
+
+    for (size_t i = 0; i < tmps.count; ++i) {
+        array_push(&expr->children, &nil_node);
+    }
+
+    for (size_t i = 0; i < old_count; ++i) {
+        size_t i_ = old_count-i-1;
+        expr->children.items[expr->children.count-i-1] = expr->children.items[i_];
+    }
+
+    for (size_t i = 0; i < tmps.count; ++i) {
+        expr->children.items[i] = tmps.items[i];
+    }
+}
+
 void resolve_expression(
         analyzer_t *analyzer,
         ast_t *ast,
@@ -3773,10 +3790,6 @@ void resolve_expression(
         }
 
         case AST_NODE_TYPE_EXPRESSION_UNARY: {
-            if (expr->operator.type == TOKEN_AMPERSAND_AMPERSAND) {
-                UNREACHABLE(); // todo
-            }
-
             resolve_expression(analyzer, ast, state, implicit_type, an_operand(expr), true);
 
             if (TYPE_IS_INVALID(an_operand(expr)->value_type)) {
@@ -3784,7 +3797,97 @@ void resolve_expression(
                 break;
             }
 
-            if (expr->operator.type == TOKEN_AMPERSAND) {
+            if (expr->operator.type == TOKEN_AMPERSAND_AMPERSAND) {
+                /*
+                    converts:
+                    x := 5+3;
+                    print("% + % = %", &&5, &&3, &&x);
+
+                    to
+
+                    tmp1: sint;
+                    tmp2: sint;
+                    tmp3: sint;
+
+                    x := 10;
+
+                    print("% + % = %", { tmp1 = 5; &tmp1; }, { tmp2 = 3; &tmp2; }, {tmp3 = x; &tmp3; });
+                */
+                ast_node_t *op = an_operand(expr);
+
+                oristring_t tmpvarname = ast_next_tmp_name(ast);
+                ast_node_t *init_expr = ast_nil(ast, ortypeid(TYPE_UNRESOLVED), expr->start);
+                ast_node_t *ref_decl = ast_decldef(ast, tmpvarname,
+                    ast_implicit_expr(ast, ortypeid(TYPE_TYPE), ORWORDT(op->value_type), expr->start), init_expr, expr->start);
+                resolve_declaration(analyzer, ast, state, ref_decl);
+                ref_decl->is_mutable = true;
+                
+                {
+                    ast_node_t *funcdef_block_or_null = NULL;
+                    {
+                        scope_t *scope = state.scope;
+                        while (scope) {
+                            if (scope->type == SCOPE_TYPE_BLOCK || scope->type == SCOPE_TYPE_FUNC_DEF_BODY) {
+                                funcdef_block_or_null = scope->creator;
+                                MUST(funcdef_block_or_null);
+                                break;
+                            }
+
+                            scope = scope->outer;
+                        }
+                    }
+
+                    if (!funcdef_block_or_null) {
+                        stan_error(analyzer, OR_ERROR(
+                            .tag = "sem.not-in-funcdef.amp_amp",
+                            .level = ERROR_SOURCE_ANALYSIS,
+                            .msg = lit2str("'&&' can only be used inside block or function scopes"),
+                            .args = ORERR_ARGS(error_arg_node(expr)),
+                            .show_code_lines = ORERR_LINES(0),
+                        ));
+                        INVALIDATE(expr);
+                        break;
+                    }
+
+                    array_push(&funcdef_block_or_null->tmp_decls, ref_decl);
+                }
+
+                ast_node_t *block = ast_block_begin(ast, expr->start);
+
+                {
+                    ast_node_t *lhs = ast_def_value(ast, tmpvarname, expr->start);
+                    lhs->value_type = op->value_type;
+                    lhs->lvalue_node = lhs;
+                    lhs->ref_decl = ref_decl;
+
+                    ast_node_t *rhs = an_operand(expr);
+                    token_t implicit_equals = expr->operator;
+                    implicit_equals.type = TOKEN_EQUAL;
+
+                    ast_node_t *assign = ast_assignment(ast, lhs, rhs, implicit_equals);
+
+                    ast_block_decl(block, ast_statement(ast, assign));
+                }
+
+                {
+                    ast_node_t *op = ast_def_value(ast, tmpvarname, expr->start);
+                    op->value_type = an_operand(expr)->value_type;
+                    op->lvalue_node = op;
+                    op->ref_decl = ref_decl;
+
+                    token_t implicit_addr = expr->operator;
+                    implicit_addr.type = TOKEN_AMPERSAND;
+
+                    ast_node_t *address = ast_unary(ast, implicit_addr, op);
+
+                    ast_block_decl(block, ast_statement(ast, address));
+                }
+
+                ast_block_end(block, expr->end);
+
+                *expr = *block;
+                resolve_expression(analyzer, ast, state, ortypeid(TYPE_UNRESOLVED), expr, is_consumed);
+            } else if (expr->operator.type == TOKEN_AMPERSAND) {
                 ast_node_t *op = an_operand(expr);
 
                 if (TYPE_IS_TYPE(op->value_type) && op->expr_val.is_concrete) {
@@ -4247,6 +4350,9 @@ void resolve_expression(
 
             expr->last_statement = last_decl;
             expr->value_type = expr->last_statement->value_type;
+
+            add_tmp_decls(expr, expr->tmp_decls);
+            expr->tmp_decls.count = 0;
             break;
         }
 
@@ -5499,6 +5605,9 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
     }
 
     --analyzer->pending_dependencies.count;
+
+    add_tmp_decls(an_func_def_block(funcdef), funcdef->tmp_decls);
+    funcdef->tmp_decls.count = 0;
 
 defer:
     allocator_return(tmp);

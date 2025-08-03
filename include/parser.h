@@ -370,6 +370,7 @@ struct ast_node_t {
 
     ast_nodes_t owned_funcdefs;
     ast_nodes_t module_deps;
+    ast_nodes_t tmp_decls;
     functions_t func_deps;
 
     oristring_t identifier;
@@ -432,6 +433,8 @@ typedef struct ast_t {
 
     errors_t errors;
 
+    size_t tmp_counter;
+
     table_t(s2s) *strings;
     table_t(s2w) *builtins;
     table_t(p2s) *intrinsicfn2cname;
@@ -456,6 +459,7 @@ void ast_print_node(ast_t *ast, ast_node_t *node);
 void ast_print(ast_t *ast, const char *name);
 
 oristring_t ast_sv2istring(ast_t *ast, string_view_t view);
+oristring_t ast_next_tmp_name(ast_t *ast);
 
 bool parse_string_to_module(ast_t *ast, ast_node_t *module, orstring_t filepath, string_view_t source);
 ast_node_t *parse_source_into_module(ast_t *ast, orstring_t file_path, string_view_t source);
@@ -471,9 +475,11 @@ ast_node_t *ast_node_new(arena_t *arena, ast_node_type_t node_type, token_t star
 ast_node_t *ast_node_copy(arena_t *arena, ast_node_t *node);
 ast_node_t *ast_nil(ast_t *ast, ortype_t value_type, token_t token_location);
 ast_node_t *ast_decldef(ast_t *ast, oristring_t identifier, ast_node_t *type_expr, ast_node_t *init_expr, token_t start);
-ast_node_t *ast_def_value(ast_t *ast, token_t identifer);
+ast_node_t *ast_statement(ast_t *ast, ast_node_t *expr);
+ast_node_t *ast_def_value(ast_t *ast, oristring_t identifer, token_t start);
 ast_node_t *ast_inferred_type_decl(ast_t *ast, token_t squiggle_token, token_t identifer);
 ast_node_t *ast_cast(ast_t *ast, ast_node_t *expr_type, ast_node_t *expr);
+ast_node_t *ast_unary(ast_t *ast, token_t operator, ast_node_t *operand);
 ast_node_t *ast_begin_module(ast_t *ast);
 ast_node_t *ast_assignment(ast_t *ast, ast_node_t *lhs, ast_node_t *rhs, token_t equals);
 

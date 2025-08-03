@@ -85,6 +85,8 @@ bool core_fileid(orstring_t absolute_path, string_builder_t *result);
 #define str(lit) ((orstring_t){ .cstr = (lit), .length = (sizeof(lit)/sizeof(char) - sizeof(char)) })
 #define lit2str(lit) str(lit)
 #define lit2sv(lit) ((string_view_t){ .data = lit, .length = (sizeof(lit)/sizeof(char) - sizeof(char)) })
+#define SV(lit) lit2sv(lit)
+#define S(lit) lit2str(lit)
 
 #endif
 

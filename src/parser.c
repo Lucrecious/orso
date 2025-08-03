@@ -806,6 +806,7 @@ ast_node_t *ast_node_new(arena_t *arena, ast_node_type_t node_type, token_t star
     node->module_deps = (ast_nodes_t){.allocator=arena};
     node->realized_copies = (inferred_copies_t){.allocator=arena};
     node->type_decl_patterns = (type_patterns_t){.allocator=arena};
+    node->tmp_decls = (ast_nodes_t){.allocator=arena};
 
     switch (node_type) {
         case AST_NODE_TYPE_DECLARATION_DEFINITION: {
@@ -1065,6 +1066,20 @@ oristring_t ast_sv2istring(ast_t *ast, string_view_t view) {
     return is;
 }
 
+oristring_t ast_next_tmp_name(ast_t *ast) {
+    tmp_arena_t *tmp = allocator_borrow();
+
+    size_t next = ++ast->tmp_counter;
+    orstring_t tmpname = string_format("tmp%zu", tmp->allocator, next);
+
+    oristring_t result = ast_sv2istring(ast, string2sv(tmpname));
+
+    allocator_return(tmp);
+
+    return result;
+}
+
+
 ast_node_t *ast_decldef(ast_t *ast, oristring_t identifier, ast_node_t *type_expr, ast_node_t *init_expr, token_t start) {
     ast_node_t *definition_node = ast_node_new(ast->arena, AST_NODE_TYPE_DECLARATION_DEFINITION, start);
     definition_node->identifier = identifier;
@@ -1082,9 +1097,9 @@ ast_node_t *ast_nil(ast_t *ast, ortype_t value_type, token_t token_location) {
     return nil_node;
 }
 
-ast_node_t *ast_def_value(ast_t *ast, token_t identifier) {
-    ast_node_t *def_value = ast_node_new(ast->arena, AST_NODE_TYPE_EXPRESSION_DEF_VALUE, identifier);
-    def_value->identifier = ast_sv2istring(ast, identifier.view);
+ast_node_t *ast_def_value(ast_t *ast, oristring_t identifier, token_t start) {
+    ast_node_t *def_value = ast_node_new(ast->arena, AST_NODE_TYPE_EXPRESSION_DEF_VALUE, start);
+    def_value->identifier = identifier;
     return def_value;
 }
 
@@ -1249,7 +1264,7 @@ static ast_node_t *ast_primary_str(ast_t *ast, token_t where) {
     return primary;
 }
 
-static ast_node_t *ast_statement(ast_t *ast, ast_node_t *expr) {
+ast_node_t *ast_statement(ast_t *ast, ast_node_t *expr) {
     ast_node_t *statement_node = ast_node_new(ast->arena, AST_NODE_TYPE_DECLARATION_STATEMENT, expr->start);
     an_expression(statement_node) = expr;
     statement_node->end = expr->end;
@@ -1368,7 +1383,7 @@ static ast_node_t *ast_item_access(ast_t *ast, ast_node_t *accessee, ast_node_t 
     return item_access;
 }
 
-static ast_node_t *ast_unary(ast_t *ast, token_t operator, ast_node_t *operand) {
+ast_node_t *ast_unary(ast_t *ast, token_t operator, ast_node_t *operand) {
     ast_node_t *unary = ast_node_new(ast->arena, AST_NODE_TYPE_EXPRESSION_UNARY, operator);
     unary->operator = operator;
     unary->end = operand->end;
@@ -1880,7 +1895,7 @@ static ast_node_t *parse_assignment(parser_t *parser) {
 }
 
 static ast_node_t *parse_def_value(parser_t *parser) {
-    ast_node_t *def_value = ast_def_value(parser->ast, parser->previous);
+    ast_node_t *def_value = ast_def_value(parser->ast, ast_sv2istring(parser->ast, parser->previous.view), parser->previous);
     return def_value;
 }
 

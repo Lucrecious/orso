@@ -3,5 +3,8 @@ add :: (a: &sint, b: &sint) -> sint {
 };
 
 main :: () {
-    add(&&5, &&7);
+    {
+        x := add(&&5, &&3);
+        @icall "printint", x as int;
+    };
 };
