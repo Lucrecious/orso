@@ -47,7 +47,7 @@ enum type_kind_t {
 
 typedef struct struct_field_t struct_field_t;
 struct struct_field_t {
-    orstring_t name;
+    oristring_t name;
     ortype_t type;
     orword_t default_value;
 

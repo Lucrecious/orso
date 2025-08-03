@@ -34,8 +34,13 @@ struct string_builder_t {
 };
 
 #define cstr_eq(a, b) (strcmp(a, b) == 0)
-#define string_eq(a, b) cstr_eq(a.cstr, b.cstr)
+#define string_eq(a, b) cstr_eq((a).cstr, (b).cstr)
 #define STRING_EMPTY (string_t){.cstr="", .length=0}
+
+typedef orstring_t *oristring_t;
+
+extern orstring_t oremptystr;
+extern oristring_t oriemptystr;
 
 #ifdef _WIN32
 #define ORFILE_SEP "\\"
@@ -84,6 +89,9 @@ bool core_fileid(orstring_t absolute_path, string_builder_t *result);
 #endif
 
 #ifdef STRINGT_IMPLEMENTATION
+
+orstring_t oremptystr = lit2str("");
+oristring_t oriemptystr = &oremptystr;
 
 #include "tmp.h"
 

@@ -4,7 +4,7 @@ or_ :: @load "orso.or";
 
 main :: () -> void {
     oc := or_.compiler_t.{};
-    oc.src = "examples/gol.or";
+    oc.src = "examples/gol/gol.or";
 
     or_.push(&oc.linker_flags, "-framework");
     or_.push(&oc.linker_flags, "IOKit");

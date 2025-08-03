@@ -60,7 +60,7 @@ struct type_table_t {
 };
 
 struct_binding_t *begin_struct_binding(type_table_t *set, orstring_t cname);
-void struct_field_bind(struct_binding_t *sb, ortype_t type, orstring_t field_name_no_copy, size_t cfield_offset);
+void struct_field_bind(struct_binding_t *sb, ortype_t type, oristring_t field_name_no_copy, size_t cfield_offset);
 void end_struct_binding(struct_binding_t *sb, type_table_t *set);
 void extract_struct_from_binding(struct_binding_t *sb, type_table_t *set, void *vm_struct, void *cstruct);
 

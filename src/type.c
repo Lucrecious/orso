@@ -60,7 +60,7 @@ bool type_equal(typedata_t *a, typedata_t *b) {
                     return false;
                 }
 
-                if (string_eq(a->as.struct_.fields.items[i].name, b->as.struct_.fields.items[i].name)) {
+                if (string_eq(*a->as.struct_.fields.items[i].name, *b->as.struct_.fields.items[i].name)) {
                     return false;
                 }
             }
@@ -138,7 +138,7 @@ orstring_t type_to_string_toplevel(typedatas_t types, ortype_t type, arena_t *al
             sb_add_cstr(&sb, " { ");
 
             for (size_t i = 0; i < type_info->as.struct_.fields.count; i++) {
-                orstring_t name = type_info->as.struct_.fields.items[i].name;
+                orstring_t name = *type_info->as.struct_.fields.items[i].name;
 
                 sb_add_cstr(&sb, name.cstr);
                 sb_add_cstr(&sb, ": ");

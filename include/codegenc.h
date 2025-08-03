@@ -287,7 +287,7 @@ static void cgen_cache_requires_tmp(typedatas_t *types, ast_node_t *expression) 
         }
 
         case AST_NODE_TYPE_EXPRESSION_DIRECTIVE: {
-            if (sv_eq(expression->identifier.view, lit2sv("@fficall"))) {
+            if (string_eq(*expression->identifier, lit2str("fficall"))) {
                 expression->requires_tmp_for_cgen = true;
             } else {
                 expression->requires_tmp_for_cgen = false;
@@ -375,7 +375,7 @@ static orstring_t cgen_get_function_name(cgen_t *cgen, function_t *function) {
 
 static orstring_t cgen_get_instrinsic_fn_name(ast_t *ast, orintrinsic_fn_t fn, arena_t *arena) {
     UNUSED(ast);
-    orstring_t name = string_format("or%s", arena, fn.name.cstr);
+    orstring_t name = string_format("or%s", arena, fn.name->cstr);
     return name;
 }
 
@@ -506,9 +506,9 @@ static void cgen_constant(cgen_t *cgen, orword_t word, ortype_t type) {
                 typedata_t *fieldtd = ast_type2td(cgen->ast, field.type);
                 void *item_data_addr = data_addr + field.offset;
 
-                sb_add_format(&cgen->sb, ".%s = ", field.name.cstr);
+                sb_add_format(&cgen->sb, ".%s = ", field.name->cstr);
 
-                if (typedata->kind == TYPE_STRING && string_eq(field.name, lit2str("cstr"))) {
+                if (typedata->kind == TYPE_STRING && string_eq(*field.name, lit2str("cstr"))) {
                     // todo: needs better conversion, use hexadecimal instead
                     orcstr_t cstr = *((char**)item_data_addr);
                     sb_add_format(&cgen->sb, "\"%s\"", cstr);
@@ -564,7 +564,7 @@ static void cgen_declaration(cgen_t *cgen, ast_node_t *declaration) {
             if (declaration->is_global) {
                 identifier = string2sv(declaration->ccode_var_name);
             } else {
-                identifier = declaration->identifier.view;
+                identifier = string2sv(*declaration->identifier);
             }
             cgen_var_t var = cgen_user_var(cgen, identifier, declaration->value_type, declaration->is_global);
             cgen_statement(cgen, an_decl_expr(declaration), var, true);
@@ -637,8 +637,8 @@ static void cgen_aggregate_arith_binary(cgen_t *cgen, token_type_t op, ortype_t 
 
             lhs_lvalue->count = reset_length_lhs;
             rhs_lvalue->count = reset_length_rhs;
-            sb_add_format(lhs_lvalue, ".%s", field.name.cstr);
-            sb_add_format(rhs_lvalue, ".%s", field.name.cstr);
+            sb_add_format(lhs_lvalue, ".%s", field.name->cstr);
+            sb_add_format(rhs_lvalue, ".%s", field.name->cstr);
             cgen_aggregate_arith_binary(cgen, op, field.type, lhs_lvalue, rhs_lvalue);
         }
 
@@ -1021,7 +1021,7 @@ static void cgen_lvalue(cgen_t *cgen, ast_node_t *lvalue, cgen_var_t var) {
         if (lvalue->ref_decl->is_global) {
             identifier = string2sv(lvalue->ref_decl->ccode_var_name);
         } else {
-            identifier = lvalue->identifier.view;
+            identifier = string2sv(*lvalue->identifier);
         }
 
         cgen_var_t lvalue_var = cgen_user_var(cgen, identifier, lvalue->value_type, lvalue->ref_decl->is_global);
@@ -1488,7 +1488,7 @@ static void cgen_def_value(cgen_t *cgen, ast_node_t *def_value, cgen_var_t var) 
     if (def_value->ref_decl->is_global) {
         identifier = string2sv(def_value->ref_decl->ccode_var_name);
     } else {
-        identifier = def_value->identifier.view;
+        identifier = string2sv(*def_value->identifier);
     }
 
     cgen_var_t defname = cgen_user_var(cgen, identifier, def_value->value_type, def_value->ref_decl->is_global);
@@ -1666,7 +1666,7 @@ static void cgen_call(cgen_t *cgen, ast_node_t *call, cgen_var_t var, cstr_t bui
 }
 
 static void cgen_builtin_call(cgen_t *cgen, ast_node_t *bcall, cgen_var_t var) {
-    if (sv_eq(bcall->identifier.view, cstr2sv("sizeof"))) {
+    if (string_eq(*bcall->identifier, lit2str("sizeof"))) {
         MUST(!bcall->requires_tmp_for_cgen);
 
         if (has_var(var)) {
@@ -1683,9 +1683,9 @@ static void cgen_builtin_call(cgen_t *cgen, ast_node_t *bcall, cgen_var_t var) {
         }
         sb_add_format(&cgen->sb, "(%s)sizeof(%s)", td->name.cstr, optd->name.cstr);
 
-    } else if (bcall->identifier.type == TOKEN_OFFSETPTR) {
+    } else if (bcall->operator.type == TOKEN_OFFSETPTR) {
         cgen_call(cgen, bcall, var, "oroffsetptr");
-    } else if (bcall->identifier.type == TOKEN_PTRDIFF) {
+    } else if (bcall->operator.type == TOKEN_PTRDIFF) {
         cgen_call(cgen, bcall, var, "orptrdiff");
     } else {
         UNREACHABLE();
@@ -1887,7 +1887,7 @@ static void cgen_initializer_list(cgen_t *cgen, ast_node_t *list, cgen_var_t var
 
             struct_field_t field = list_td->as.struct_.fields.items[i];
             cgen_var_t var = tmp_vars[i];
-            sb_add_format(&cgen->sb, ".%s = %s", field.name.cstr, cgen_var_name(cgen, var));
+            sb_add_format(&cgen->sb, ".%s = %s", field.name->cstr, cgen_var_name(cgen, var));
         }
 
         if (last_field_requires_tmp > 0) {
@@ -1901,7 +1901,7 @@ static void cgen_initializer_list(cgen_t *cgen, ast_node_t *list, cgen_var_t var
 
             struct_field_t field = list_td->as.struct_.fields.items[i];
 
-            sb_add_format(&cgen->sb, ".%s = ", field.name.cstr);
+            sb_add_format(&cgen->sb, ".%s = ", field.name->cstr);
 
             ast_node_t *arg = NULL;
             if (arg_pos < list_count && (arg = list->children.items[an_list_start(list) + arg_pos])->arg_index == i) {
@@ -1943,7 +1943,7 @@ static void cgen_dot_access(cgen_t *cgen, ast_node_t *dot, cgen_var_t var) {
 
         cgen_expression(cgen, lhs, nil_cvar);
 
-        sb_add_format(&cgen->sb, "%s%.*s", operator, dot->identifier.view.length, dot->identifier.view.data);
+        sb_add_format(&cgen->sb, "%s%s", operator, *dot->identifier);
     } else {
         cgen_var_t lhs_var = cgen_next_tmpid(cgen, lhs->value_type);
         cgen_statement(cgen, lhs, lhs_var, false);
@@ -1954,7 +1954,7 @@ static void cgen_dot_access(cgen_t *cgen, ast_node_t *dot, cgen_var_t var) {
             sb_add_format(&cgen->sb, "%s = ", cgen_var(cgen, var));
         }
 
-        sb_add_format(&cgen->sb, "(%s%s)%s%.*s", "", cgen_var_name(cgen, lhs_var), operator, dot->identifier.view.length, dot->identifier.view.data);
+        sb_add_format(&cgen->sb, "(%s%s)%s%s", "", cgen_var_name(cgen, lhs_var), operator, dot->identifier->cstr);
     }
 }
 
@@ -2142,9 +2142,9 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
         case AST_NODE_TYPE_EXPRESSION_STRUCT: break;
 
         case AST_NODE_TYPE_EXPRESSION_DIRECTIVE: {
-            if (sv_eq(expression->identifier.view, lit2sv("@fficall"))) {
+            if (string_eq(*expression->identifier, lit2str("fficall"))) {
                 cgen_fficall(cgen, expression, var);
-            } else if (sv_eq(expression->identifier.view, lit2sv("@icall"))) {
+            } else if (string_eq(*expression->identifier, lit2str("icall"))) {
                 cgen_icall(cgen, expression, var);
             } else {
                 UNREACHABLE();
@@ -2166,10 +2166,10 @@ static void cgen_generate_function_names(ast_t *ast, cgen_state_t state, ast_nod
         unless (table_get(p2n, state.functions, function, &funcdata)) {
             funcdata.type = funcdef->value_type;
 
-            if (function->name.length == 0) {
+            if (function->name_or_null == NULL || function->name_or_null->length == 0) {
                 funcdata.name = string_format("__oranonfn_%zu", ast->arena, ++(*state.tmp_count));
             } else {
-                funcdata.name = cgen_function_name(state, string2sv(function->name), ast->arena);
+                funcdata.name = cgen_function_name(state, string2sv(*function->name_or_null), ast->arena);
             }
 
             table_put(p2n, state.functions, function, funcdata);
@@ -2243,7 +2243,7 @@ static void cgen_function_definitions(cgen_t *cgen, ast_node_t *module) {
             if (TYPE_IS_VOID(arg_type)) {
                 sb_add_cstr(&cgen->sb, "void");
             } else {
-                cgen_var_t var = cgen_user_var(cgen, arg->identifier.view, arg_type, false);
+                cgen_var_t var = cgen_user_var(cgen, string2sv(*arg->identifier), arg_type, false);
                 sb_add_format(&cgen->sb, "%s", cgen_var(cgen, var));
             }
         }
@@ -2286,7 +2286,7 @@ static void cgen_struct(cgen_t *cgen, ortype_t type, bools_t *bools) {
             struct_field_t field = td->as.struct_.fields.items[i];
             typedata_t *fieldtd = ast_type2td(cgen->ast, field.type);
 
-            sb_add_format(&cgen->sb, "%s %s;\n", fieldtd->name.cstr, field.name.cstr);
+            sb_add_format(&cgen->sb, "%s %s;\n", fieldtd->name.cstr, field.name->cstr);
         }
 
         cgen_unindent(cgen);
@@ -2622,7 +2622,7 @@ static void cgen_generate_associated_h_filenames(ast_t *ast) {
 static void cgen_generate_global_names(ast_t *ast, cgen_state_t state) {
     for (size_t i = 0; i < ast->global_decls_in_resolution_order.count; ++i) {
         ast_node_t *decl = ast->global_decls_in_resolution_order.items[i];
-        orstring_t name = cgen_global_new_name(decl->identifier.view, state, ast->arena);
+        orstring_t name = cgen_global_new_name(string2sv(*decl->identifier), state, ast->arena);
         decl->ccode_var_name = name;
     }
 }

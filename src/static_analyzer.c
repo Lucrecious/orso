@@ -40,17 +40,18 @@ void scope_init(scope_t *scope, arena_t *allocator, scope_type_t type, scope_t *
     scope->definitions = table_new(s2w, allocator);
 }
 
-static void add_definition(scope_t *scope, arena_t *allocator, string_view_t identifier, ast_node_t *decl) {
-    table_put(s2w, scope->definitions, sv2string(identifier, allocator), ORWORDP(decl));
+static void add_definition(scope_t *scope, arena_t *allocator, oristring_t identifier, ast_node_t *decl) {
+    NOB_UNUSED(allocator);
+    table_put(s2w, scope->definitions, identifier, ORWORDP(decl));
 }
 
-static ast_node_t *add_builtin_definition(ast_t *ast, string_view_t identifier, ortype_t type, orword_t word) {
+static ast_node_t *add_builtin_definition(ast_t *ast, oristring_t identifier, ortype_t type, orword_t word) {
     ast_node_t *decl = ast_node_new(ast->arena, AST_NODE_TYPE_DECLARATION_DEFINITION, nil_token);
     decl->value_type = type;
     decl->expr_val = ast_node_val_word(word);
     decl->is_mutable = false;
 
-    table_put(s2w, ast->builtins, sv2string(identifier, ast->arena), ORWORDP(decl));
+    table_put(s2w, ast->builtins, identifier, ORWORDP(decl));
 
     return decl;
 }
@@ -68,9 +69,9 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
         ast_node_t *def,
         scope_t **found_scope);
 
-static bool is_builtin_type(type_table_t *t, string_view_t identifier, ortype_t *type) {
+static bool is_builtin_type(type_table_t *t, oristring_t identifier, ortype_t *type) {
 #define RETURN_IF_TYPE(name, t) \
-if (sv_eq(identifier, lit2sv(#name))) {\
+if (string_eq(*identifier, lit2str(#name))) {\
     *type = (t); \
     return true; \
 }
@@ -107,7 +108,7 @@ if (sv_eq(identifier, lit2sv(#name))) {\
 #undef RETURN_IF_TYPE
 
 #define RETURN_IF_TYPE(SYMBOL, TYPE_STRING, TYPE) \
-if (sv_eq(identifier, lit2sv(#TYPE_STRING))){\
+if (string_eq(*identifier, lit2str(#TYPE_STRING))){\
     *type = ortypeid(TYPE); \
     return true; \
 }
@@ -273,13 +274,13 @@ defer:
 
 static bool get_nearest_jmp_scope_in_func_or_error(
         analyzer_t *analyzer, ast_node_t *jmp_node, scope_t *scope,
-        scope_type_t search_type, string_view_t label, scope_t **found_scope) {
+        scope_type_t search_type, oristring_t label, scope_t **found_scope) {
     
-    bool check_label = label.length > 0;
+    bool check_label = label->length > 0;
     while (scope->outer) {
         if (scope->type == search_type) {
             if (check_label) {
-                if (sv_eq(label, scope->creator->identifier.view)) {
+                if (label == scope->creator->identifier) {
                     *found_scope = scope;
                     return true;
                 }
@@ -317,12 +318,12 @@ static bool get_nearest_jmp_scope_in_func_or_error(
             .show_code_lines = ORERR_LINES(0),
         ));
     } else {
-        if (label.length != 0) {
+        if (label->length != 0) {
             stan_error(analyzer, OR_ERROR(
                 .tag = "sem.invalid-label.jmp",
                 .level = ERROR_SOURCE_ANALYSIS,
                 .msg = lit2str("cannot find jmp label '$0.$'"),
-                .args = ORERR_ARGS(error_arg_token(jmp_node->identifier)),
+                .args = ORERR_ARGS(error_arg_str(analyzer->ast, *jmp_node->identifier)),
                 .show_code_lines = ORERR_LINES(0),
             ));
         } else {
@@ -1485,9 +1486,9 @@ static ast_node_t *stan_realize_inferred_funcdefcall_or_errornull(analyzer_t *an
                 continue;
             }
 
-            ast_node_t *implicit_type_decl = ast_implicit_expr(analyzer->ast, ortypeid(TYPE_TYPE), ORWORDT(matched_value.type), token_implicit_at_end(pattern.identifier));
-            ast_node_t *implicit_init_expr = ast_implicit_expr(analyzer->ast, matched_value.type, matched_value.word, token_implicit_at_end(pattern.identifier));
-            ast_node_t *implicit_constant_decl = ast_decldef(analyzer->ast, pattern.identifier, implicit_type_decl, implicit_init_expr);
+            ast_node_t *implicit_type_decl = ast_implicit_expr(analyzer->ast, ortypeid(TYPE_TYPE), ORWORDT(matched_value.type), token_implicit_at_end(call_arg->end));
+            ast_node_t *implicit_init_expr = ast_implicit_expr(analyzer->ast, matched_value.type, matched_value.word, token_implicit_at_end(call_arg->end));
+            ast_node_t *implicit_constant_decl = ast_decldef(analyzer->ast, pattern.identifier, implicit_type_decl, implicit_init_expr, token_implicit_at_start(call->start));
             implicit_constant_decl->is_mutable = false;
 
             declare_definition(analyzer, inferred_state.scope, implicit_constant_decl);
@@ -1520,7 +1521,7 @@ static ast_node_t *stan_realize_inferred_funcdefcall_or_errornull(analyzer_t *an
                         .tag = "sem.expected-constant.inferred-call-arg",
                         .level = ERROR_SOURCE_ANALYSIS,
                         .msg = lit2str("call argument '$1.$' must be a constant"),
-                        .args = ORERR_ARGS(error_arg_node(arg), error_arg_token(param->identifier)),
+                        .args = ORERR_ARGS(error_arg_node(arg), error_arg_str(analyzer->ast, *param->identifier)),
                         .show_code_lines = ORERR_LINES(0),
                     ));
                     break;
@@ -1686,7 +1687,7 @@ static void ast_copy_expr_val_to_memory(ast_t *ast, ortype_t type, orword_t src,
 
 static struct_field_t ast_struct_field_from_decl(ast_t *ast, ast_node_t *decl, arena_t *arena) {
     struct_field_t field = {0};
-    field.name = sv2string(decl->identifier.view, arena);
+    field.name = decl->identifier;
     field.type = decl->value_type;
 
     orword_t word = an_decl_expr(decl)->expr_val.word;
@@ -1832,10 +1833,10 @@ static void resolve_struct(analyzer_t *analyzer, ast_t *ast, analysis_state_t st
     allocator_return(tmp);
 }
 
-bool ast_find_field_by_name(struct_fields_t fields, string_view_t name, struct_field_t *field, size_t *index) {
+static bool ast_find_field_by_name(struct_fields_t fields, oristring_t name, struct_field_t *field, size_t *index) {
     for (size_t i = 0; i < fields.count; ++i) {
         struct_field_t field_ = fields.items[i];
-        if (sv_eq(string2sv(field_.name), name)) {
+        if (field_.name == name) {
             *field = field_;
             *index = i;
             return true;
@@ -1845,7 +1846,7 @@ bool ast_find_field_by_name(struct_fields_t fields, string_view_t name, struct_f
     return false;
 }
 
-bool ast_find_struct_field_by_name(ast_t *ast, ortype_t struct_type, string_view_t name, struct_field_t *field, size_t *index) {
+static bool ast_find_struct_field_by_name(ast_t *ast, ortype_t struct_type, oristring_t name, struct_field_t *field, size_t *index) {
     typedata_t *td = ast_type2td(ast, struct_type);
     MUST(td->kind == TYPE_STRUCT || td->kind == TYPE_STRING);
     return ast_find_field_by_name(td->as.struct_.fields, name, field, index);
@@ -1873,17 +1874,17 @@ static void patch_call_argument_gaps(analyzer_t *analyzer, ast_t *ast, ast_node_
             ++arg_index;
             arg_where = arg_or_null->start;
 
-            if (arg_or_null->label.view.length > 0) {
+            if (arg_or_null->label->length > 0) {
                 size_t next_param_index;
                 struct_field_t field;
-                bool found_param = ast_find_field_by_name(arg_defaults, arg_or_null->label.view, &field, &next_param_index);
+                bool found_param = ast_find_field_by_name(arg_defaults, arg_or_null->label, &field, &next_param_index);
                 if (!found_param) {
                     is_invalid = true;
                     stan_error(analyzer, OR_ERROR(
                         .tag = "sem.unknown-label.call-args",
                         .level = ERROR_SOURCE_ANALYSIS,
                         .msg = lit2str("cannot find argument '$0.$' for function"),
-                        .args = ORERR_ARGS(error_arg_token(arg_or_null->label)),
+                        .args = ORERR_ARGS(error_arg_str(ast, *arg_or_null->label)),
                         .show_code_lines = ORERR_LINES(0),
                     ));
                     break;
@@ -1897,7 +1898,7 @@ static void patch_call_argument_gaps(analyzer_t *analyzer, ast_t *ast, ast_node_
                         .tag = "sem.out-of-order.call-args",
                         .level = ERROR_SOURCE_ANALYSIS,
                         .msg = lit2str("arguments must be in function parameter order but got argument '$1.$' after argument '$2.$'"),
-                        .args = ORERR_ARGS(error_arg_node(arg_or_null), error_arg_str(ast, next_field.name), error_arg_str(ast, field.name)),
+                        .args = ORERR_ARGS(error_arg_node(arg_or_null), error_arg_str(ast, *next_field.name), error_arg_str(ast, *field.name)),
                         .show_code_lines = ORERR_LINES(0),
                     ));
                     break;
@@ -1917,7 +1918,7 @@ static void patch_call_argument_gaps(analyzer_t *analyzer, ast_t *ast, ast_node_
                 .tag = "sem.expected-expression.call-arg",\
                 .level = ERROR_SOURCE_ANALYSIS,\
                 .msg = lit2str("function argument '$1.$' has no default value and must be provided"),\
-                .args = ORERR_ARGS(error_arg_node(call), error_arg_str(ast, param_field.name)),\
+                .args = ORERR_ARGS(error_arg_node(call), error_arg_str(ast, *param_field.name)),\
                 .show_code_lines = ORERR_LINES(0),\
             ));\
         } while(false)
@@ -1962,7 +1963,7 @@ static void patch_call_argument_gaps(analyzer_t *analyzer, ast_t *ast, ast_node_
             .tag = "sem.arg-overflow.call-args",
             .level = ERROR_SOURCE_ANALYSIS,
             .msg = lit2str("there are extra arguments after '$1.$'"),
-            .args = ORERR_ARGS(error_arg_node(call->children.items[arg_start+arg_index]), error_arg_str(ast, field.name)),
+            .args = ORERR_ARGS(error_arg_node(call->children.items[arg_start+arg_index]), error_arg_str(ast, *field.name)),
             .show_code_lines = ORERR_LINES(0),
         ));
         return;
@@ -2012,7 +2013,7 @@ orstring_t parse_token_as_str8(string_view_t str, arena_t *arena) {
     return s;
 }
 
-orword_t ast_struct_item_get(typedatas_t *types, ortype_t struct_type, string_view_t field_name, void *struct_) {
+orword_t ast_struct_item_get(typedatas_t *types, ortype_t struct_type, oristring_t field_name, void *struct_) {
     typedata_t *td = type2typedata(types, struct_type);
     MUST(td->kind == TYPE_STRING || td->kind == TYPE_STRUCT);
 
@@ -2025,7 +2026,7 @@ orword_t ast_struct_item_get(typedatas_t *types, ortype_t struct_type, string_vi
     return ret;
 }
 
-void ast_struct_item_set(ast_t *ast, ortype_t struct_type, string_view_t field_name, orword_t *struct_, orword_t value) {
+void ast_struct_item_set(ast_t *ast, ortype_t struct_type, oristring_t field_name, orword_t *struct_, orword_t value) {
     typedata_t *td = ast_type2td(ast, struct_type);
     MUST(td->kind == TYPE_STRING || td->kind == TYPE_STRUCT);
 
@@ -2107,7 +2108,7 @@ static void stan_realize_parameterized_struct(analyzer_t *analyzer, analysis_sta
                     .level = ERROR_SOURCE_ANALYSIS,
                     .msg = lit2str("parameterized struct arguments require exact type matches; struct parameter '$1.$' is type '$2.$' but argument is '$3.$'"),
                     .args = ORERR_ARGS(error_arg_node(arg),
-                            error_arg_token(param->identifier),
+                            error_arg_str(analyzer->ast, *param->identifier),
                             error_arg_type(param->value_type), error_arg_type(arg->value_type)),
                     .show_code_lines = ORERR_LINES(0),
                 ));
@@ -2259,12 +2260,12 @@ static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
             for (size_t i = 0; i < arg_count; ++i) {
                 size_t argi = arg_start + i;
                 ast_node_t *arg = call->children.items[argi];
-                if (arg->label.view.length > 0) {
+                if (arg->label->length > 0) {
                     stan_error(analyzer, OR_ERROR(
                         .tag = "sem.invalid-label.nonconst-call",
                         .level = ERROR_SOURCE_ANALYSIS,
                         .msg = lit2str("cannot use labels on arguments for calls on non-constant functions"),
-                        .args = ORERR_ARGS(error_arg_token(arg->label)),
+                        .args = ORERR_ARGS(error_arg_str(ast, *arg->label)),
                         .show_code_lines = ORERR_LINES(0),
                     ));
                     return;
@@ -2579,7 +2580,7 @@ bool check_dir_or_intr_params_or_error(analyzer_t *analyzer, analysis_state_t st
     size_t expected_arg_count = fn.arg_types.count;
     if (fn.has_varargs) {
         if (count < expected_arg_count) {
-            orstring_t directive_name = sv2string(call->identifier.view, ast->arena);
+            orstring_t directive_name = *call->identifier;
             stan_error(analyzer, OR_ERROR(
                 .tag = "sem.not-enough-args.directive-call",
                 .level = ERROR_SOURCE_ANALYSIS,
@@ -2593,7 +2594,7 @@ bool check_dir_or_intr_params_or_error(analyzer_t *analyzer, analysis_state_t st
         }
     } else {
         if (count != expected_arg_count) {
-            orstring_t directive_name = sv2string(call->identifier.view, ast->arena);
+            orstring_t directive_name = *call->identifier;
             stan_error(analyzer, OR_ERROR(
                 .tag = "sem.arg-count-mismatch.directive-call",
                 .level = ERROR_SOURCE_ANALYSIS,
@@ -2659,16 +2660,13 @@ void resolve_expression(
         case AST_NODE_TYPE_EXPRESSION_DIRECTIVE: {
             orintrinsic_fn_t fn = {0};
             {
-                string_view_t directive_name = expr->identifier.view;
-                directive_name.data += 1;
-                --directive_name.length;
+                oristring_t directive_name = expr->identifier;
                 if (!ast_find_intrinsic_funcname(ast->directives, directive_name, &fn)) {
-                    orstring_t directive_name = sv2string(expr->identifier.view, ast->arena);
                     stan_error(analyzer, OR_ERROR(
                         .tag = "sem.invalid-name.directive-call",
                         .level = ERROR_SOURCE_ANALYSIS,
                         .msg = lit2str("'$1.$' is not a valid directive"),
-                        .args = ORERR_ARGS(error_arg_node(expr), error_arg_str(ast, directive_name)),
+                        .args = ORERR_ARGS(error_arg_node(expr), error_arg_str(ast, *directive_name)),
                         .show_code_lines = ORERR_LINES(0),
                     ));
                     INVALIDATE(expr);
@@ -2676,7 +2674,7 @@ void resolve_expression(
                 }
             }
 
-            if (sv_eq(expr->identifier.view, lit2sv("@run"))) {
+            if (string_eq(*expr->identifier, lit2str("run"))) {
                 scope_t scope = {0};
                 scope_init(&scope, analyzer->ast->arena, SCOPE_TYPE_FOLD_DIRECTIVE, state.scope, expr);
                 analysis_state_t new_state = state;
@@ -2726,7 +2724,7 @@ void resolve_expression(
                     expr->expr_val = child->expr_val;
                 }
 
-            } else if (sv_eq(expr->identifier.view, lit2sv("@insert"))) {
+            } else if (string_eq(*expr->identifier, lit2str("@insert"))) {
                 if (expr->children.count != 1) {
                     stan_error(analyzer, OR_ERROR(
                         .tag = "sem.arg-count-mismatch.insert",
@@ -2792,7 +2790,7 @@ void resolve_expression(
                     break;
                 }
 
-                if (sv_eq(expr->identifier.view, lit2sv("@load"))) {
+                if (string_eq(*expr->identifier, lit2str("load"))) {
                     ast_node_t *owning_module = stan_find_owning_module_or_null(state.scope);
                     MUST(owning_module);
 
@@ -2808,7 +2806,7 @@ void resolve_expression(
                     } else {
                         INVALIDATE(expr);
                     }
-                } else if (sv_eq(expr->identifier.view, lit2sv("@intrinsic"))) {
+                } else if (string_eq(*expr->identifier, lit2str("intrinsic"))) {
                     orstring_t typename = ast_orstr2str(&ast->type_set, expr->children.items[0]->expr_val.word.as.p);
                     ortype_t type = expr->children.items[1]->expr_val.word.as.t;
 
@@ -2829,7 +2827,7 @@ void resolve_expression(
                     }
 
                     MUST(found);
-                } else if (sv_eq(expr->identifier.view, lit2sv("@fficall"))) {
+                } else if (string_eq(*expr->identifier, lit2str("fficall"))) {
                     tmp_arena_t *tmp = allocator_borrow();
                     ortype_t fficall_return_type = ortypeid(TYPE_INVALID);
 
@@ -2934,12 +2932,13 @@ void resolve_expression(
                     allocator_return(tmp);
 
                     expr->value_type = fficall_return_type;
-                } else if (sv_eq(expr->identifier.view, lit2sv("@icall"))) {
+                } else if (string_eq(*expr->identifier, lit2str("icall"))) {
                     ast_node_t *function_name_node = expr->children.items[0];
                     orstring_t fn_name = ast_orstr2str(&ast->type_set, function_name_node->expr_val.word.as.p);
+                    oristring_t ifn_name = ast_sv2istring(ast, string2sv(fn_name));
 
                     orintrinsic_fn_t in = {0};
-                    if (!ast_find_intrinsic_funcname(ast->intrinsics, string2sv(fn_name), &in)) {
+                    if (!ast_find_intrinsic_funcname(ast->intrinsics, ifn_name, &in)) {
                         stan_error(analyzer, OR_ERROR(
                             .tag = "sem.unknown-name.icall-function",
                             .level = ERROR_SOURCE_ANALYSIS,
@@ -3350,17 +3349,17 @@ void resolve_expression(
 
                             if (an_is_notnone(arg)) {
                                 array_push(&arg_indices, i);
-                                if (arg->label.view.length > 0) {
+                                if (arg->label->length > 0) {
                                     struct_field_t field;
                                     size_t field_index;
-                                    bool success = ast_find_struct_field_by_name(ast, init_type, arg->label.view, &field, &field_index);
+                                    bool success = ast_find_struct_field_by_name(ast, init_type, arg->label, &field, &field_index);
                                     if (!success) {
                                         is_invalid = true;
                                         stan_error(analyzer, OR_ERROR(
                                             .tag = "sem.unknown-field.struct-init",
                                             .level = ERROR_SOURCE_ANALYSIS,
                                             .msg = lit2str("cannot find field '$0.$' in struct"),
-                                            .args = ORERR_ARGS(error_arg_token(arg->label)),
+                                            .args = ORERR_ARGS(error_arg_str(ast, *arg->label)),
                                             .show_code_lines = ORERR_LINES(0),
                                         ));
                                         break;
@@ -3372,7 +3371,7 @@ void resolve_expression(
                                             .tag = "sem.out-of-order.struct-init-field",
                                             .level = ERROR_SOURCE_ANALYSIS,
                                             .msg = lit2str("field '$0.$' is argument '$1.$' but is placed after argument '$2.$'"),
-                                            .args = ORERR_ARGS(error_arg_token(arg->label), error_arg_sz(field_index), error_arg_sz(current_field_index-1)),
+                                            .args = ORERR_ARGS(error_arg_str(ast, *arg->label), error_arg_sz(field_index), error_arg_sz(current_field_index-1)),
                                             .show_code_lines = ORERR_LINES(0),
                                         ));
                                         break;
@@ -3547,8 +3546,14 @@ void resolve_expression(
                 }
 
                 orstring_t value = parse_token_as_str8(expr->start.view, ast->arena);
-                ast_struct_item_set(ast, expr->value_type, lit2sv("cstr"), &expr->expr_val.word, ORWORDP((void*)value.cstr));
-                ast_struct_item_set(ast, expr->value_type, lit2sv("length"), &expr->expr_val.word, ORWORDI((ors64)value.length));
+
+                // todo: make better/faster
+                {
+                    oristring_t icstr = ast_sv2istring(ast, lit2sv("cstr"));
+                    oristring_t ilength = ast_sv2istring(ast, lit2sv("length"));
+                    ast_struct_item_set(ast, expr->value_type, icstr, &expr->expr_val.word, ORWORDP((void*)value.cstr));
+                    ast_struct_item_set(ast, expr->value_type, ilength, &expr->expr_val.word, ORWORDI((ors64)value.length));
+                }
             } else {
                 INVALIDATE(expr);
             }
@@ -4011,14 +4016,14 @@ void resolve_expression(
 
                 struct_field_t field = {0};
                 size_t field_index;
-                bool success = ast_find_struct_field_by_name(ast, lhs_type, expr->identifier.view, &field, &field_index);
+                bool success = ast_find_struct_field_by_name(ast, lhs_type, expr->identifier, &field, &field_index);
 
                 unless (success) {
                     stan_error(analyzer, OR_ERROR(
                         .tag = "sem.unknown-field.dot-access",
                         .level = ERROR_SOURCE_ANALYSIS,
                         .msg = lit2str("cannot find '$0.$' in '$1.$'"),
-                        .args = ORERR_ARGS(error_arg_token(expr->identifier), error_arg_type(lhs_type)),
+                        .args = ORERR_ARGS(error_arg_str(ast, *expr->identifier), error_arg_type(lhs_type)),
                         .show_code_lines = ORERR_LINES(0),
                     ));
                     INVALIDATE(expr);
@@ -4084,14 +4089,14 @@ void resolve_expression(
 
                 struct_field_t field = {0};
                 size_t field_index;
-                bool success = ast_find_field_by_name(td->as.struct_.constants, expr->identifier.view, &field, &field_index);
+                bool success = ast_find_field_by_name(td->as.struct_.constants, expr->identifier, &field, &field_index);
 
                 unless (success) {
                     stan_error(analyzer, OR_ERROR(
                         .tag = "sem.unknown-field.struct-constant-access",
                         .level = ERROR_SOURCE_ANALYSIS,
                         .msg = lit2str("cannot find '$0.$' in '$1.$'"),
-                        .args = ORERR_ARGS(error_arg_token(expr->identifier), error_arg_type(lhs_type)),
+                        .args = ORERR_ARGS(error_arg_str(ast, *expr->identifier), error_arg_type(lhs_type)),
                         .show_code_lines = ORERR_LINES(0),
                     ));
                     INVALIDATE(expr);
@@ -4381,7 +4386,7 @@ void resolve_expression(
             switch (expr->start.type) {
                 case TOKEN_RETURN: {
                     scope_t *func_def_scope = NULL;
-                    bool success = get_nearest_jmp_scope_in_func_or_error(analyzer, expr, state.scope, SCOPE_TYPE_FUNCDEF, lit2sv(""), &func_def_scope);
+                    bool success = get_nearest_jmp_scope_in_func_or_error(analyzer, expr, state.scope, SCOPE_TYPE_FUNCDEF, oriemptystr, &func_def_scope);
 
                     ortype_t implicit_type = ortypeid(TYPE_UNRESOLVED);
                     unless (success) {
@@ -4403,7 +4408,7 @@ void resolve_expression(
                     resolve_expression(analyzer, ast, state, ortypeid(TYPE_UNRESOLVED), an_expression(expr), true);
 
                     scope_t *found_scope = NULL;
-                    bool success = get_nearest_jmp_scope_in_func_or_error(analyzer, expr, state.scope, SCOPE_TYPE_JMPABLE, expr->identifier.view, &found_scope);
+                    bool success = get_nearest_jmp_scope_in_func_or_error(analyzer, expr, state.scope, SCOPE_TYPE_JMPABLE, expr->identifier, &found_scope);
                     if (success) {
                         if (found_scope->creator->branch_type == BRANCH_TYPE_DO && expr->start.type == TOKEN_CONTINUE) {
                             stan_error(analyzer, OR_ERROR(
@@ -4478,7 +4483,7 @@ void resolve_expression(
             size_t arg_start = an_bcall_arg_start(expr);
             size_t arg_end = an_bcall_arg_end(expr);
             size_t count = arg_end - arg_start;
-            switch (expr->identifier.type) {
+            switch (expr->operator.type) {
             case TOKEN_TYPEOF: {
                 expr->value_type = ortypeid(TYPE_TYPE);
 
@@ -4758,7 +4763,7 @@ static void declare_definition(analyzer_t *analyzer, scope_t *scope, ast_node_t 
     orword_t def_word;
     
     tmp_arena_t *tmp = allocator_borrow();
-    orstring_t identifier = sv2string(definition->identifier.view, tmp->allocator);
+    oristring_t identifier = definition->identifier;
 
     bool defined_through_some_recursive_definition = false;
     if (table_get(s2w, scope->definitions, identifier, &def_word)) {
@@ -4768,7 +4773,7 @@ static void declare_definition(analyzer_t *analyzer, scope_t *scope, ast_node_t 
                 .tag = "sem.overload.decl",
                 .level = ERROR_SOURCE_ANALYSIS,
                 .msg = lit2str("cannot have declarations with the same identifier '$0.$'"),
-                .args = ORERR_ARGS(error_arg_token(definition->identifier), error_arg_node(previous_decl)),
+                .args = ORERR_ARGS(error_arg_str(analyzer->ast, *definition->identifier), error_arg_node(previous_decl)),
                 .show_code_lines = ORERR_LINES(0, 1),
             ));
 
@@ -4786,7 +4791,7 @@ static void declare_definition(analyzer_t *analyzer, scope_t *scope, ast_node_t 
     }
 
     if (!defined_through_some_recursive_definition) {
-        add_definition(scope, analyzer->ast->arena, string2sv(identifier), definition);
+        add_definition(scope, analyzer->ast->arena, identifier, definition);
     }
 
     allocator_return(tmp);
@@ -5075,7 +5080,7 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
                     .level = ERROR_SOURCE_ANALYSIS,
                     .msg = lit2str("declaration '$1.$' is delcared as a '$2.$' but got '$3.$' as its initial expression type"),
                     .args = ORERR_ARGS(error_arg_node(decl),
-                        error_arg_token(decl->identifier), error_arg_type(decl->value_type), error_arg_type(init_expr->value_type)),
+                        error_arg_str(ast, *decl->identifier), error_arg_type(decl->value_type), error_arg_type(init_expr->value_type)),
                     .show_code_lines = ORERR_LINES(0),
                 ));
             }
@@ -5098,9 +5103,8 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
             typedata_t *td = ast_type2td(ast, init_expr->value_type);
             if (td->kind == TYPE_FUNCTION) {
                 function_t *fn = decl->expr_val.word.as.p;
-                if (fn->name.length == 0) {
-                    // todo: give function proper arena?? figure out memory model better??
-                    fn->name = sv2string(decl->identifier.view, fn->code.allocator);
+                if (fn->name_or_null) {
+                    fn->name_or_null = decl->identifier;
                 }
             }
         }
@@ -5121,13 +5125,12 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
 
 }
 
-static ast_node_t *get_builtin_decl(ast_t *ast, string_view_t identifier) {
+static ast_node_t *get_builtin_decl(ast_t *ast, oristring_t identifier) {
     tmp_arena_t *tmp = allocator_borrow();
-    orstring_t identifier_ = sv2string(identifier, tmp->allocator);
 
     ast_node_t *decl;
     orword_t def_slot;
-    unless (table_get(s2w, ast->builtins, identifier_, &def_slot)) {
+    unless (table_get(s2w, ast->builtins, identifier, &def_slot)) {
         ortype_t type;
         // native_function_t *function;
         bool has_value = false;
@@ -5176,7 +5179,7 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
 
     // early return if looking at a built in type
     {
-        ast_node_t *decl = get_builtin_decl(ast, def->identifier.view);
+        ast_node_t *decl = get_builtin_decl(ast, def->identifier);
         if (decl) {
             search_scope = NULL;
             return decl;
@@ -5188,7 +5191,7 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
 
     ast_node_t *decl = NULL;
     tmp_arena_t *tmp = allocator_borrow();
-    orstring_t identifier_ = sv2string(def->identifier.view, tmp->allocator);
+    oristring_t identifier = def->identifier;
 
     while (*search_scope) {
         bool is_function_scope = (*search_scope)->type == SCOPE_TYPE_FUNCDEF;
@@ -5201,7 +5204,7 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
 
         {
 
-            unless (table_get(s2w, (*search_scope)->definitions, identifier_, &def_slot)) {
+            unless (table_get(s2w, (*search_scope)->definitions, identifier, &def_slot)) {
                 NEXT_SCOPE();
                 continue;
             }
@@ -5216,7 +5219,7 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
                 .level = ERROR_SOURCE_ANALYSIS,
                 .msg = lit2str("declaration for '$2.$' does not exist in the same run scope it's being used in"),
                 .args = ORERR_ARGS(error_arg_node(def), error_arg_node(decl),
-                    error_arg_token(decl->identifier)),
+                    error_arg_str(analyzer->ast, *decl->identifier)),
                 .show_code_lines = ORERR_LINES(0, 1),
             ));
             return NULL;
@@ -5228,7 +5231,7 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
                 .level = ERROR_SOURCE_ANALYSIS,
                 .msg = lit2str("declaration for '$2.$' does not exist in the same local scope it's being used in"),
                 .args = ORERR_ARGS(error_arg_node(def), error_arg_node(decl),
-                    error_arg_token(decl->identifier)),
+                    error_arg_str(analyzer->ast, *decl->identifier)),
                 .show_code_lines = ORERR_LINES(0, 1),
             ));
             return NULL;
@@ -5246,7 +5249,7 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
 
         for (size_t i = 0; i < module->children.count; ++i) {
             ast_node_t *module_decl = module->children.items[i];
-            if (sv_eq(def->identifier.view, module_decl->identifier.view)) {
+            if (def->identifier == module_decl->identifier) {
                 decl = module_decl;
                 break;
             }
@@ -5258,7 +5261,7 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
             .tag = "sem.undefined-def.defval",
             .level = ERROR_SOURCE_ANALYSIS,
             .msg = lit2str("reference to undefined declaration '$1.$'"),
-            .args = ORERR_ARGS(error_arg_node(def), error_arg_token(def->identifier)),
+            .args = ORERR_ARGS(error_arg_node(def), error_arg_str(analyzer->ast, *def->identifier)),
             .show_code_lines = ORERR_LINES(0),
         ));
         return NULL;
@@ -5608,7 +5611,7 @@ bool resolve_ast(ast_t *ast) {
 function_t *find_main_or_null(ast_node_t *module) {
     for (size_t i = 0; i < module->children.count; ++i) {
         ast_node_t *decl = module->children.items[i];
-        if (sv_eq(decl->identifier.view, lit2sv("main"))) {
+        if (string_eq(*decl->identifier, lit2str("main"))) {
             return decl->expr_val.word.as.p;
         }
     }

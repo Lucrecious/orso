@@ -83,7 +83,7 @@ struct_fields_t fields_copy(struct_fields_t fields, arena_t *arena) {
     
     for (size_t i = 0; i < fields.count; ++i) {
         struct_field_t field = fields.items[i];
-        field.name = string_copy(field.name, arena);
+        field.name = field.name;
         array_push(&copy, field);
     }
 
@@ -147,9 +147,9 @@ struct_binding_t *begin_struct_binding(type_table_t *set, orstring_t cname) {
     return binding;
 }
 
-void struct_field_bind(struct_binding_t *sb, ortype_t type, orstring_t field_name_no_copy, size_t cfield_offset) {
+void struct_field_bind(struct_binding_t *sb, ortype_t type, oristring_t field_name, size_t cfield_offset) {
     struct_field_t field = {0};
-    field.name = field_name_no_copy;
+    field.name = field_name;
     field.offset = cfield_offset;
     field.type = type;
 
@@ -359,7 +359,7 @@ static khint_t hash_type(typedata_t *type) {
         ADD_HASH(hash, (oru32)type->as.struct_.fields.count);
 
         for (size_t i = 0; i < type->as.struct_.fields.count; i++) {
-            orstring_t name = type->as.struct_.fields.items[i].name;
+            orstring_t name = *type->as.struct_.fields.items[i].name;
             for (size_t i = 0; i < (size_t)name.length; i++) {
                 ADD_HASH(hash, (oru32)name.cstr[i]);
             }

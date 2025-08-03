@@ -1,3 +1,4 @@
 main :: () -> void {
-    @icall "printint", 42;
+    io :: @load "io.or";
+    io.println("Hello world!");
 };

@@ -79,7 +79,8 @@ uint32_t fnv1_hash__(orstring_t s) {
 	return hash;
 }
 
-implement_table(s2w, orstring_t, orword_t, fnv1_hash__, streq___)
+implement_table(s2s, orstring_t, oristring_t, fnv1_hash__, streq___)
+implement_table(s2w, oristring_t, orword_t, hashptr_, hasheq_)
 implement_table(s2n, orstring_t, ast_node_t*, fnv1_hash__, streq___)
 implement_table(s2fis, orstring_t, ffi_t*, fnv1_hash__, streq___)
 
@@ -134,21 +135,21 @@ static void directives_init(ast_t *ast, orintrinsic_fns_t *fns) {
     // run
     {
         orintrinsic_fn_t fn = {0};
-        fn.name = lit2str("run");
+        fn.name = ast_sv2istring(ast, lit2sv("run"));
         array_push(fns, fn);
     }
 
     // insert
     {
         orintrinsic_fn_t fn = {0};
-        fn.name = lit2str("insert");
+        fn.name = ast_sv2istring(ast, lit2sv("insert"));
         array_push(fns, fn);
     }
 
     // load
     {
         orintrinsic_fn_t fn = {0};
-        fn.name = lit2str("load");
+        fn.name = ast_sv2istring(ast, lit2sv("load"));
         fn.has_varargs = false;
         fn.arg_types = (types_t){.allocator=ast->arena};
         array_push(&fn.arg_types, ast->type_set.str8_t_);
@@ -159,7 +160,7 @@ static void directives_init(ast_t *ast, orintrinsic_fns_t *fns) {
     // intrinsic
     {
         orintrinsic_fn_t fn = {0};
-        fn.name = lit2str("intrinsic");
+        fn.name = ast_sv2istring(ast, lit2sv("intrinsic"));
         fn.has_varargs = false;
         fn.arg_types = (types_t){.allocator=ast->arena};
         array_push(&fn.arg_types, ast->type_set.str8_t_);
@@ -171,7 +172,7 @@ static void directives_init(ast_t *ast, orintrinsic_fns_t *fns) {
     // fficall
     {
         orintrinsic_fn_t fn = {0};
-        fn.name = lit2str("fficall");
+        fn.name = ast_sv2istring(ast, lit2sv("fficall"));
         fn.has_varargs = true;
         fn.arg_types = (types_t){.allocator=ast->arena};
 
@@ -186,7 +187,7 @@ static void directives_init(ast_t *ast, orintrinsic_fns_t *fns) {
     // icall
     {
         orintrinsic_fn_t fn = {0};
-        fn.name = lit2str("icall");
+        fn.name = ast_sv2istring(ast, lit2sv("icall"));
         fn.has_varargs = true;
         fn.arg_types = (types_t){.allocator=ast->arena};
 
@@ -394,13 +395,15 @@ void intrinsics_init(ast_t *ast, orintrinsic_fns_t *fns) {
 
     #define offset(t, field_name) (((void*)(&(t).field_name)) - ((void*)&(t)))
 
+    #define c2i(lit) ast_sv2istring(ast, lit2sv(lit))
+
     {
         // str8_t
         struct_binding_t *string_binding = begin_struct_binding(&ast->type_set, lit2str("orstring_t"));
         {
             orstring_t t;
-            struct_field_bind(string_binding, charptr, lit2str("cstr"), offset(t, cstr));
-            struct_field_bind(string_binding, ast->type_set.sint_, lit2str("length"), offset(t, length));
+            struct_field_bind(string_binding, charptr, c2i("cstr"), offset(t, cstr));
+            struct_field_bind(string_binding, ast->type_set.sint_, c2i("length"), offset(t, length));
             end_struct_binding(string_binding, &ast->type_set);
 
             ast->type_set.str8_t_ = string_binding->type;
@@ -415,9 +418,9 @@ void intrinsics_init(ast_t *ast, orintrinsic_fns_t *fns) {
         struct_binding_t *str8s_binding = begin_struct_binding(&ast->type_set, lit2str("orstr8s_t"));
         {
             orstr8s_t t;
-            struct_field_bind(str8s_binding, str8_ptr, lit2str("items"), offset(t, items));
-            struct_field_bind(str8s_binding, ast->type_set.sint_, lit2str("count"), offset(t, count));
-            struct_field_bind(str8s_binding, ast->type_set.sint_, lit2str("capacity"), offset(t, capacity));
+            struct_field_bind(str8s_binding, str8_ptr, c2i("items"), offset(t, items));
+            struct_field_bind(str8s_binding, ast->type_set.sint_, c2i("count"), offset(t, count));
+            struct_field_bind(str8s_binding, ast->type_set.sint_, c2i("capacity"), offset(t, capacity));
             end_struct_binding(str8s_binding, &ast->type_set);
         }
 
@@ -425,22 +428,24 @@ void intrinsics_init(ast_t *ast, orintrinsic_fns_t *fns) {
         struct_binding_t *compiler_binding = begin_struct_binding(&ast->type_set, lit2str("orso_compiler_t"));
         {
             orso_compiler_t t;
-            struct_field_bind(compiler_binding, string_binding->type, lit2str("src"), offset(t, src));
-            struct_field_bind(compiler_binding, string_binding->type, lit2str("build_dir"), offset(t, build_dir));
-            struct_field_bind(compiler_binding, string_binding->type, lit2str("output_name"), offset(t, output_name));
-            struct_field_bind(compiler_binding, str8s_binding->type, lit2str("cflags"), offset(t, cflags));
-            struct_field_bind(compiler_binding, str8s_binding->type, lit2str("linker_flags"), offset(t, linker_flags));
+            struct_field_bind(compiler_binding, string_binding->type, c2i("src"), offset(t, src));
+            struct_field_bind(compiler_binding, string_binding->type, c2i("build_dir"), offset(t, build_dir));
+            struct_field_bind(compiler_binding, string_binding->type, c2i("output_name"), offset(t, output_name));
+            struct_field_bind(compiler_binding, str8s_binding->type, c2i("cflags"), offset(t, cflags));
+            struct_field_bind(compiler_binding, str8s_binding->type, c2i("linker_flags"), offset(t, linker_flags));
             end_struct_binding(compiler_binding, &ast->type_set);
 
             ast->type_set.compiler = compiler_binding->type;
         }
+
+        #undef c2i
 
         ortype_t compiler_ptr = type_set_fetch_pointer(&ast->type_set, compiler_binding->type);
 
         // printlin
         {
             orintrinsic_fn_t fn = {0};
-            fn.name = lit2str("println");
+            fn.name = ast_sv2istring(ast, lit2sv("println"));
             fn.has_varargs = false;
             fn.arg_types = (types_t){.allocator=ast->arena};
 
@@ -456,7 +461,7 @@ void intrinsics_init(ast_t *ast, orintrinsic_fns_t *fns) {
         // realloc
         {
             orintrinsic_fn_t fn = {0};
-            fn.name = lit2str("realloc");
+            fn.name = ast_sv2istring(ast, lit2sv("realloc"));
             fn.has_varargs = false;
             fn.arg_types = (types_t){.allocator=ast->arena};
 
@@ -473,7 +478,7 @@ void intrinsics_init(ast_t *ast, orintrinsic_fns_t *fns) {
         // printint
         {
             orintrinsic_fn_t fn = {0};
-            fn.name = lit2str("printint");
+            fn.name = ast_sv2istring(ast, lit2sv("printint"));
             fn.has_varargs = false;
             fn.arg_types = (types_t){.allocator=ast->arena};
 
@@ -489,7 +494,7 @@ void intrinsics_init(ast_t *ast, orintrinsic_fns_t *fns) {
         // sinf
         {
             orintrinsic_fn_t fn = {0};
-            fn.name = lit2str("sinf");
+            fn.name = ast_sv2istring(ast, lit2sv("sinf"));
             fn.has_varargs = false;
             fn.arg_types = (types_t){.allocator=ast->arena};
 
@@ -505,7 +510,7 @@ void intrinsics_init(ast_t *ast, orintrinsic_fns_t *fns) {
         // cosf
         {
             orintrinsic_fn_t fn = {0};
-            fn.name = lit2str("cosf");
+            fn.name = ast_sv2istring(ast, lit2sv("cosf"));
             fn.has_varargs = false;
             fn.arg_types = (types_t){.allocator=ast->arena};
 
@@ -521,7 +526,7 @@ void intrinsics_init(ast_t *ast, orintrinsic_fns_t *fns) {
         // sqrtf
         {
             orintrinsic_fn_t fn = {0};
-            fn.name = lit2str("sqrtf");
+            fn.name = ast_sv2istring(ast, lit2sv("sqrtf"));
             fn.has_varargs = false;
             fn.arg_types = (types_t){.allocator=ast->arena};
 
@@ -537,7 +542,7 @@ void intrinsics_init(ast_t *ast, orintrinsic_fns_t *fns) {
         // randf
         {
             orintrinsic_fn_t fn = {0};
-            fn.name = lit2str("randf");
+            fn.name = ast_sv2istring(ast, lit2sv("randf"));
             fn.has_varargs = false;
             fn.arg_types = (types_t){.allocator=ast->arena};
 
@@ -551,7 +556,7 @@ void intrinsics_init(ast_t *ast, orintrinsic_fns_t *fns) {
         // atan2f
         {
             orintrinsic_fn_t fn = {0};
-            fn.name = lit2str("atan2f");
+            fn.name = ast_sv2istring(ast, lit2sv("atan2f"));
             fn.has_varargs = false;
             fn.arg_types = (types_t){.allocator=ast->arena};
 
@@ -568,7 +573,7 @@ void intrinsics_init(ast_t *ast, orintrinsic_fns_t *fns) {
         // shell_run
         {
             orintrinsic_fn_t fn = {0};
-            fn.name = lit2str("shell_run");
+            fn.name = ast_sv2istring(ast, lit2sv("shell_run"));
             fn.has_varargs = false;
             fn.arg_types = (types_t){.allocator=ast->arena};
 
@@ -586,7 +591,7 @@ void intrinsics_init(ast_t *ast, orintrinsic_fns_t *fns) {
         // compiler_build
         {
             orintrinsic_fn_t fn = {0};
-            fn.name = lit2str("build");
+            fn.name = ast_sv2istring(ast, lit2sv("build"));
             fn.has_varargs = false;
 
             fn.arg_types = (types_t){.allocator=ast->arena};
@@ -603,7 +608,7 @@ void intrinsics_init(ast_t *ast, orintrinsic_fns_t *fns) {
         // reserve
         {
             orintrinsic_fn_t fn = {0};
-            fn.name = lit2str("reserve");
+            fn.name = ast_sv2istring(ast, lit2sv("reserve"));
             fn.has_varargs = false;
 
             fn.arg_types = (types_t){.allocator=ast->arena};
@@ -619,7 +624,7 @@ void intrinsics_init(ast_t *ast, orintrinsic_fns_t *fns) {
         // markro
         {
             orintrinsic_fn_t fn = {0};
-            fn.name = lit2str("markro");
+            fn.name = ast_sv2istring(ast, lit2sv("markro"));
             fn.has_varargs = false;
 
             fn.arg_types = (types_t){.allocator=ast->arena};
@@ -636,7 +641,7 @@ void intrinsics_init(ast_t *ast, orintrinsic_fns_t *fns) {
         // markrw
         {
             orintrinsic_fn_t fn = {0};
-            fn.name = lit2str("markrw");
+            fn.name = ast_sv2istring(ast, lit2sv("markrw"));
             fn.has_varargs = false;
 
             fn.arg_types = (types_t){.allocator=ast->arena};
@@ -653,7 +658,7 @@ void intrinsics_init(ast_t *ast, orintrinsic_fns_t *fns) {
         // free
         {
             orintrinsic_fn_t fn = {0};
-            fn.name = lit2str("free");
+            fn.name = ast_sv2istring(ast, lit2sv("free"));
             fn.has_varargs = false;
 
             fn.arg_types = (types_t){.allocator=ast->arena};
@@ -670,7 +675,7 @@ void intrinsics_init(ast_t *ast, orintrinsic_fns_t *fns) {
         // pagesize
         {
             orintrinsic_fn_t fn = {0};
-            fn.name = lit2str("pagesize");
+            fn.name = ast_sv2istring(ast, lit2sv("pagesize"));
             fn.has_varargs = false;
 
             fn.arg_types = (types_t){.allocator=ast->arena};
@@ -695,6 +700,9 @@ void ast_init(ast_t *ast, arena_t *arena) {
     memarr_init(&ast->multiword_data, megabytes(0.5));
 
     ast->errors = (errors_t){.allocator=arena};
+
+    ast->strings = table_new(s2s, ast->arena);
+    table_put(s2s, ast->strings, *oriemptystr, oriemptystr);
 
     ast->builtins = table_new(s2w, ast->arena);
     ast->intrinsicfn2cname = table_new(p2s, ast->arena);
@@ -730,7 +738,8 @@ ast_node_t nil_node = {
     .ccode_break_label = lit2str(""),
     .ccode_continue_label = lit2str(""),
     .ccode_var_name = lit2str(""),
-    .identifier = nil_token,
+    .identifier = &oremptystr,
+    .label = &oremptystr,
     .last_statement = &nil_node,
 };
 
@@ -757,8 +766,8 @@ ast_node_t *ast_node_new(arena_t *arena, ast_node_type_t node_type, token_t star
     node->is_global = false;
     node->is_mutable = false;
     node->is_exported = false;
-    node->identifier = nil_token;
-    node->label = nil_token;
+    node->identifier = oriemptystr;
+    node->label = oriemptystr;;
     node->ref_decl = &nil_node;
     node->arg_index = 0;
     node->value_offset = 0;
@@ -915,7 +924,7 @@ ast_node_t *ast_node_copy(arena_t *arena, ast_node_t *node) {
     if (node->defined_scope.creator) {
         scope_init(&copy->defined_scope, arena, node->defined_scope.type, node->defined_scope.outer, copy);
 
-        orstring_t name;
+        oristring_t name;
         orword_t word;
         int _a;
         kh_foreach(node->defined_scope.definitions, name, word, {
@@ -1022,13 +1031,29 @@ ast_node_t *ast_implicit_expr(ast_t *ast, ortype_t type, orword_t value, token_t
     return expr;
 }
 
-ast_node_t *ast_decldef(ast_t *ast, token_t identifier, ast_node_t *type_expr, ast_node_t *init_expr) {
-    ast_node_t *definition_node = ast_node_new(ast->arena, AST_NODE_TYPE_DECLARATION_DEFINITION, identifier);
+oristring_t ast_sv2istring(ast_t *ast, string_view_t view) {
+    tmp_arena_t *tmp = allocator_borrow();
+    orstring_t s = sv2string(view, tmp->allocator);
+
+    oristring_t is;
+    if (!table_get(s2s, ast->strings, s, &is)) {
+        orstring_t *i = arena_alloc(ast->arena, sizeof(orstring_t));
+        *i = sv2string(view, ast->arena);
+        is = i;
+
+        table_put(s2s, ast->strings, *i, i);
+    }
+
+    allocator_return(tmp);
+
+    return is;
+}
+
+ast_node_t *ast_decldef(ast_t *ast, oristring_t identifier, ast_node_t *type_expr, ast_node_t *init_expr, token_t start) {
+    ast_node_t *definition_node = ast_node_new(ast->arena, AST_NODE_TYPE_DECLARATION_DEFINITION, start);
     definition_node->identifier = identifier;
     an_decl_type(definition_node) = type_expr;
     an_decl_expr(definition_node) = init_expr;
-
-    definition_node->start = identifier;
     definition_node->end = init_expr->end;
 
     return definition_node;
@@ -1043,7 +1068,7 @@ ast_node_t *ast_nil(ast_t *ast, ortype_t value_type, token_t token_location) {
 
 ast_node_t *ast_def_value(ast_t *ast, token_t identifier) {
     ast_node_t *def_value = ast_node_new(ast->arena, AST_NODE_TYPE_EXPRESSION_DEF_VALUE, identifier);
-    def_value->identifier = identifier;
+    def_value->identifier = ast_sv2istring(ast, identifier.view);
     return def_value;
 }
 
@@ -1218,7 +1243,7 @@ static ast_node_t *ast_statement(ast_t *ast, ast_node_t *expr) {
 static ast_node_t *ast_break(ast_t *ast, ast_node_t *expr, token_t label, token_t jmp_token) {
     ast_node_t *break_ = ast_node_new(ast->arena, AST_NODE_TYPE_EXPRESSION_JMP, jmp_token);
     an_expression(break_) = expr;
-    break_->identifier = label;
+    break_->identifier = ast_sv2istring(ast, label.view);
     break_->end = expr->end;
     return break_;
 }
@@ -1226,7 +1251,7 @@ static ast_node_t *ast_break(ast_t *ast, ast_node_t *expr, token_t label, token_
 static ast_node_t *ast_continue(ast_t *ast, token_t label, token_t jmp_token) {
     ast_node_t *continue_ = ast_node_new(ast->arena, AST_NODE_TYPE_EXPRESSION_JMP, jmp_token);
     an_expression(continue_) = ast_nil(ast, ortypeid(TYPE_VOID), token_implicit_at_end(label));
-    continue_->identifier = label;
+    continue_->identifier = ast_sv2istring(ast, label.view);
     continue_->end = label;
     return continue_;
 }
@@ -1285,7 +1310,7 @@ static ast_node_t *ast_ifthen(ast_t *ast, ast_node_t *cond, bool cond_negated, a
 static ast_node_t *ast_do(ast_t *ast, token_t label, ast_node_t *expr, token_t do_token) {
     ast_node_t *do_ = ast_node_new(ast->arena, AST_NODE_TYPE_EXPRESSION_BRANCHING, do_token);
     do_->branch_type = BRANCH_TYPE_DO;
-    do_->identifier = label;
+    do_->identifier = ast_sv2istring(ast, label.view);
     an_expression(do_) = expr;
     do_->end = expr->end;
     return do_;
@@ -1294,7 +1319,7 @@ static ast_node_t *ast_do(ast_t *ast, token_t label, ast_node_t *expr, token_t d
 ast_node_t *ast_inferred_type_decl(ast_t *ast, token_t squiggle_token, token_t identifer) {
     ast_node_t *inferred_type_decl = ast_node_new(ast->arena, AST_NODE_TYPE_EXPR_INFERRED_TYPE_DECL, squiggle_token);
     inferred_type_decl->end = identifer;
-    inferred_type_decl->identifier = identifer;
+    inferred_type_decl->identifier = ast_sv2istring(ast, identifer.view);
     inferred_type_decl->is_mutable = false;
     inferred_type_decl->value_type = ortypeid(TYPE_UNRESOLVED);
 
@@ -1708,15 +1733,16 @@ static ast_node_t *parse_literal(parser_t *parser) {
     }
 }
 
-static token_t parse_label_or_nil(parser_t *parser) {
-    token_t label = nil_token;
+static oristring_t parse_label_or_nil(parser_t *parser) {
+    oristring_t label = oriemptystr;
+
     if (check(parser, TOKEN_IDENTIFIER)) {
         lexer_t lookahead = parser->lexer;
         token_t maybe_colon = lexer_next_token(&lookahead);
         if (maybe_colon.type == TOKEN_COLON) {
             bool success = consume(parser, TOKEN_IDENTIFIER);
 
-            label = parser->previous;
+            label = ast_sv2istring(parser->ast, parser->previous.view);
 
             success &= consume(parser, TOKEN_COLON);
             MUST(success);
@@ -1729,7 +1755,7 @@ static token_t parse_label_or_nil(parser_t *parser) {
 static void parse_call_arguments(parser_t *parser, ast_node_t *parent) {
     unless (check(parser, TOKEN_PARENTHESIS_CLOSE)) {
         do {
-            token_t label = parse_label_or_nil(parser);
+            oristring_t label = parse_label_or_nil(parser);
             if (check_expression(parser)) {
                 ast_node_t *argument = parse_expression(parser);
                 argument->label = label;
@@ -1767,7 +1793,8 @@ static ast_node_t *parse_builtin_call(parser_t *parser) {
     }
 
     ast_node_t *n = ast_call_begin(parser->ast, AST_NODE_TYPE_EXPRESSION_BUILTIN_CALL, identifier);
-    n->identifier = identifier;
+    n->identifier = ast_sv2istring(parser->ast, identifier.view);
+    n->operator = identifier;
     parse_call_arguments(parser, n);
     ast_call_end(n, parser->previous);
 
@@ -2166,7 +2193,7 @@ static void parse_parameters(parser_t *parser, ast_nodes_t *children) {
                 .tag = "syn.invalid-default.compile-time-param",
                 .level = ERROR_SOURCE_PARSER,
                 .msg = lit2str("compile-time param '$1.$' cannot have a default value"),
-                .args = ORERR_ARGS(error_arg_node(an_decl_expr(decl)), error_arg_token(decl->identifier)),
+                .args = ORERR_ARGS(error_arg_node(an_decl_expr(decl)), error_arg_str(parser->ast, *decl->identifier)),
                 .show_code_lines = ORERR_LINES(0),
             ));
         }
@@ -2397,7 +2424,12 @@ static ast_node_t *parse_directive(parser_t *parser) {
     bool use_bracket = false;
 
     ast_node_t *directive = ast_call_begin(parser->ast, AST_NODE_TYPE_EXPRESSION_DIRECTIVE, parser->previous);
-    directive->identifier = parser->previous;
+    string_view_t dirv = parser->previous.view;
+    {
+        dirv.data += 1;
+        --dirv.length;
+    }
+    directive->identifier = ast_sv2istring(parser->ast, dirv);
 
     if (match(parser, TOKEN_PARENTHESIS_OPEN)) {
         use_bracket = true;
@@ -2538,7 +2570,7 @@ static void ast_end_list_initializer(ast_node_t *initializer, token_t close_brac
 }
 ast_node_t *ast_dot_access(ast_t *ast, ast_node_t *lhs, token_t identifier, token_t start) {
     ast_node_t *dot_access = ast_node_new(ast->arena, AST_NODE_TYPE_EXPRESSION_DOT_ACCESS, start);
-    dot_access->identifier = identifier;
+    dot_access->identifier = ast_sv2istring(ast, identifier.view);
     dot_access->end = identifier;
     an_dot_lhs(dot_access) = lhs;
 
@@ -2557,7 +2589,7 @@ static ast_node_t *parse_dot(parser_t *parser) {
                     ast_node_t *none = &nil_node;
                     array_push(&initiailizer->children, none);
                 } else {
-                    token_t label = parse_label_or_nil(parser);
+                    oristring_t label = parse_label_or_nil(parser);
                     ast_node_t *argument = parse_expression(parser);
                     argument->label = label;
 
@@ -2891,7 +2923,8 @@ static ast_node_t *parse_decl_def(parser_t *parser) {
 
     ASSERT(init_expr, "should be set by now");
 
-    ast_node_t *decldef = ast_decldef(parser->ast, identifier, type_expr, init_expr);
+    oristring_t ident = ast_sv2istring(parser->ast, identifier.view);
+    ast_node_t *decldef = ast_decldef(parser->ast, ident, type_expr, init_expr, identifier);
     decldef->is_mutable = is_mutable;
     decldef->has_default_value = has_default_value;
     return decldef;
@@ -3030,11 +3063,10 @@ orword_t ast_mem2word(ast_t *ast, void *data, ortype_t type) {
     }
 }
 
-bool ast_find_intrinsic_funcname(orintrinsic_fns_t fns, string_view_t name, orintrinsic_fn_t *fn) {
+bool ast_find_intrinsic_funcname(orintrinsic_fns_t fns, oristring_t name, orintrinsic_fn_t *fn) {
     for (size_t i = 0; i < fns.count; ++i) {
         orintrinsic_fn_t *f = &fns.items[i];
-        string_view_t fname = string2sv(f->name);
-        if (sv_eq(fname, name)) {
+        if (name == f->name) {
             *fn = *f;
             return true;
         }
@@ -3106,7 +3138,7 @@ static void ast_print_ast_node(typedatas_t types, ast_node_t *node, oru32 level)
 
         case AST_NODE_TYPE_EXPR_INFERRED_TYPE_DECL: {
             print_indent(level);
-            orstring_t label = string_format("inferred type decl: %.*s = %s", tmp->allocator, node->identifier.view.length, node->identifier.view.data, type_to_string(types, node->expr_val.word.as.t, tmp->allocator));
+            orstring_t label = string_format("inferred type decl: %s = %s", tmp->allocator, node->identifier->cstr, type_to_string(types, node->expr_val.word.as.t, tmp->allocator));
             print_line("%s", label.cstr);
             break;
         }
@@ -3148,7 +3180,7 @@ static void ast_print_ast_node(typedatas_t types, ast_node_t *node, oru32 level)
 
         case AST_NODE_TYPE_EXPRESSION_DIRECTIVE: {
             print_indent(level);
-            print_line("directive(%.*s): %s", node->identifier.view.length, node->identifier.view.data, type2cstr(node));
+            print_line("directive(%s): %s", node->identifier->cstr, type2cstr(node));
 
             print_indent(level + 1);
             print_line("args");
@@ -3200,7 +3232,7 @@ static void ast_print_ast_node(typedatas_t types, ast_node_t *node, oru32 level)
         }
         case AST_NODE_TYPE_EXPRESSION_DEF_VALUE: {
             print_indent(level);
-            print_line("def value (%.*s): %s", node->identifier.view.length, node->identifier.view.data, type2cstr(node));
+            print_line("def value (%s): %s", node->identifier->cstr, type2cstr(node));
             break;
         }
         case AST_NODE_TYPE_EXPRESSION_ASSIGNMENT: {
@@ -3304,7 +3336,7 @@ static void ast_print_ast_node(typedatas_t types, ast_node_t *node, oru32 level)
         }
         case AST_NODE_TYPE_EXPRESSION_BUILTIN_CALL: {
             print_indent(level);
-            print_line("builtin-call(%.*s): %s", node->identifier.view.length, node->identifier.view.data, type2cstr(node));
+            print_line("builtin-call(%.*s): %s", node->identifier->cstr, type2cstr(node));
             
             print_indent(level+1);
             print_line("arguments");
@@ -3369,11 +3401,11 @@ static void ast_print_ast_node(typedatas_t types, ast_node_t *node, oru32 level)
 
         case AST_NODE_TYPE_EXPRESSION_JMP: {
             print_indent(level);
-            string_view_t label = node->identifier.view;
-            if (node->identifier.view.length == 0) {
-                label = lit2sv("<none>");
+            orstring_t label = *node->identifier;;
+            if (node->identifier->length == 0) {
+                label = lit2str("<none>");
             }
-            print_line("%.*s:%.*s", node->start.view.length, node->start.view.data, label.length, label.data);
+            print_line("%.*s:%s", node->start.view.length, node->start.view.data, label.cstr);
 
             ast_print_ast_node(types, an_operand(node), level + 1);
             break;
@@ -3388,13 +3420,13 @@ static void ast_print_ast_node(typedatas_t types, ast_node_t *node, oru32 level)
             ast_print_ast_node(types, an_lhs(node), level+2);
 
             print_indent(level + 1);
-            print_line("accessor (%.*s)", node->identifier.view.length, node->identifier.view.data);
+            print_line("accessor (%s)", node->identifier->cstr);
             break;
         }
 
         case AST_NODE_TYPE_DECLARATION_DEFINITION: {
             print_indent(level);
-            print_line("declaration (%.*s): %s", node->identifier.view.length, node->identifier.view.data, type2cstr(node));
+            print_line("declaration (%s): %s", node->identifier->cstr, type2cstr(node));
 
             if (an_decl_type(node) != AST_NODE_TYPE_NONE) {
                 print_indent(level+1);

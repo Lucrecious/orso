@@ -34,7 +34,7 @@ push :: (strs: &str8s_t, s: str8_t) -> void {
         strs.capacity = new_cap;
     };
 
-    *(strs.items + (strs.count as ptrdiff_t)) = s;
+    *offsetptr(strs.items, strs.count) = s;
     ++strs.count;
 };
 

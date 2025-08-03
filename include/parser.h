@@ -57,7 +57,8 @@ struct ffi_t {
     ast_node_t *node;
 };
 
-declare_table(s2w, orstring_t, orword_t)
+declare_table(s2s, orstring_t, oristring_t)
+declare_table(s2w, oristring_t, orword_t)
 declare_table(s2n, orstring_t, ast_node_t*)
 declare_table(s2fis, orstring_t, ffi_t*)
 
@@ -127,28 +128,6 @@ case AST_NODE_TYPE_EXPRESSION_UNARY: \
 case AST_NODE_TYPE_EXPRESSION_INITIALIZER_LIST: \
 case AST_NODE_TYPE_EXPRESSION_DIRECTIVE: \
 case AST_NODE_TYPE_EXPRESSION_DOT_ACCESS
-
-typedef struct ast_struct_t {
-    ast_nodes_t declarations;
-} ast_struct_t;
-
-typedef struct ast_call_t {
-    ast_node_t *callee;
-    ast_nodes_t arguments;
-} ast_call_t;
-
-typedef struct ast_member_access_t {
-    ast_node_t *lhs;
-
-    token_t identifier;
-    ast_node_t *referencing_declaration;
-} ast_member_access_t;
-
-typedef struct ast_type_initializer_t ast_type_initializer_t;
-struct ast_type_initializer_t {
-    ast_node_t *type;
-    ast_nodes_t arguments;
-};
 
 extern ast_node_t nil_node;
 
@@ -264,7 +243,7 @@ struct type_path_t {
 typedef struct type_pattern_t type_pattern_t;
 struct type_pattern_t {
     type_path_t *expected;
-    token_t identifier;
+    oristring_t identifier;
 };
 
 typedef struct inferred_copy_t inferred_copy_t;
@@ -316,7 +295,7 @@ struct val_dst_t {
 
 typedef struct orintrinsic_fn_t orintrinsic_fn_t;
 struct orintrinsic_fn_t {
-    orstring_t name;
+    oristring_t name;
     ortype_t ret_type;
     types_t arg_types;
 
@@ -394,8 +373,8 @@ struct ast_node_t {
     ast_nodes_t module_deps;
     functions_t func_deps;
 
-    token_t identifier;
-    token_t label;
+    oristring_t identifier;
+    oristring_t label;
 
     ast_node_t *jmp_out_scope_node;
     ast_nodes_t jmp_nodes;
@@ -454,6 +433,7 @@ typedef struct ast_t {
 
     errors_t errors;
 
+    table_t(s2s) *strings;
     table_t(s2w) *builtins;
     table_t(p2s) *intrinsicfn2cname;
     table_t(fn2an) *fn2an;
@@ -476,6 +456,8 @@ typedef struct ast_t {
 void ast_print_node(ast_t *ast, ast_node_t *node);
 void ast_print(ast_t *ast, const char *name);
 
+oristring_t ast_sv2istring(ast_t *ast, string_view_t view);
+
 bool parse_string_to_module(ast_t *ast, ast_node_t *module, orstring_t filepath, string_view_t source);
 ast_node_t *parse_source_into_module(ast_t *ast, orstring_t file_path, string_view_t source);
 token_type_t parser_opeq2op(token_type_t type);
@@ -489,7 +471,7 @@ void scope_init(scope_t *scope, arena_t *allocator, scope_type_t type, scope_t *
 ast_node_t *ast_node_new(arena_t *arena, ast_node_type_t node_type, token_t start);
 ast_node_t *ast_node_copy(arena_t *arena, ast_node_t *node);
 ast_node_t *ast_nil(ast_t *ast, ortype_t value_type, token_t token_location);
-ast_node_t *ast_decldef(ast_t *ast, token_t identifier, ast_node_t *type_expr, ast_node_t *init_expr);
+ast_node_t *ast_decldef(ast_t *ast, oristring_t identifier, ast_node_t *type_expr, ast_node_t *init_expr, token_t start);
 ast_node_t *ast_def_value(ast_t *ast, token_t identifer);
 ast_node_t *ast_inferred_type_decl(ast_t *ast, token_t squiggle_token, token_t identifer);
 ast_node_t *ast_cast(ast_t *ast, ast_node_t *expr_type, ast_node_t *expr);
@@ -507,7 +489,7 @@ orword_t *ast_multiword_value(ast_t *ast, size_t size_words);
 orword_t ast_mem2word(ast_t *ast, void *data, ortype_t type);
 ast_node_t *parse_expression_string(ast_t *ast, orstring_t code, bool *had_error);
 
-bool ast_find_intrinsic_funcname(orintrinsic_fns_t fns, string_view_t name, orintrinsic_fn_t *fn);
+bool ast_find_intrinsic_funcname(orintrinsic_fns_t fns, oristring_t name, orintrinsic_fn_t *fn);
 
 bool ast_node_type_is_expression(ast_node_type_t node_type);
 

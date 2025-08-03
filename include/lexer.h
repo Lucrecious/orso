@@ -92,6 +92,7 @@ struct token_t {
     .type = TOKEN_ERROR\
 }
 
+
 #define token_end_loc(token) ((texloc_t){\
     .filepath = ((token)->loc.filepath), \
     .line = ((token)->loc.line), \

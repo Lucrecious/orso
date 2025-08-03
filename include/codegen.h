@@ -1218,7 +1218,11 @@ static void gen_expr_val(gen_t *gen, texloc_t loc, function_t *function, ortype_
             size_t mem_index = memarr_push(function->memory, (void*)s.cstr, val_bytes);
             void *data = function->memory->data + mem_index;
 
-            ast_struct_item_set(gen->ast, type, lit2sv("cstr"), &word, ORWORDP(data));
+            {
+                // todo: make faster
+                oristring_t icstr = ast_sv2istring(gen->ast, lit2sv("cstr"));
+                ast_struct_item_set(gen->ast, type, icstr, &word, ORWORDP(data));
+            }
         }
 
         gen_constant(gen, loc, function, word.as.p, type, val_dst);
@@ -1346,7 +1350,7 @@ static size_t gen_global_decldef(gen_t *gen, ast_node_t *decldef) {
     memset(data, 0, td->size);
     size_t global_index = memarr_push(gen->program_memory, &data, td->size);
 
-    ASSERT(decldef->identifier.view.length != 0, "cannot be an implicit def");
+    ASSERT(decldef->identifier->length != 0, "cannot be an implicit def");
 
     table_put(ptr2sz, gen->decl2index, decldef, global_index);
 
@@ -1848,7 +1852,7 @@ static void gen_bcall(gen_t *gen, function_t *function, ast_node_t *call, val_ds
         gen_expression(gen, function, arg, val_dst);
     }
 
-    switch (call->identifier.type) {
+    switch (call->operator.type) {
     case TOKEN_TYPEOF: {
         ast_node_val_t val = call->children.items[arg1_index]->expr_val;
         gen_expr_val_node(gen, function, call, val, val_dst);
@@ -1887,7 +1891,7 @@ static void gen_bcall(gen_t *gen, function_t *function, ast_node_t *call, val_ds
         typedata_t *lhsinnertd = type2typedata(&gen->ast->type_set.types, lhstd->as.ptr.type);
         size_t factor_size = lhsinnertd->size > 0 ? lhsinnertd->size : sizeof(oru8);
 
-        if (call->identifier.type == TOKEN_OFFSETPTR) {
+        if (call->operator.type == TOKEN_OFFSETPTR) {
             emit_push_reg(gen, loc, function, REG_RESULT, REG_T, type2movsize(gen, rhs->value_type), 0);
 
             val_dst_t factor_size_dst = emit_val_dst_reg_or_stack_point_reserve(gen, loc, function, gen->ast->type_set.size_t_, REG_RESULT);
@@ -1901,13 +1905,13 @@ static void gen_bcall(gen_t *gen, function_t *function, ast_node_t *call, val_ds
         emit_pop_to_reg(gen, loc, function, REG_T, lhs->value_type);
 
         token_type_t op = TOKEN_PLUS;
-        if (call->identifier.type == TOKEN_PTRDIFF) {
+        if (call->operator.type == TOKEN_PTRDIFF) {
             op = TOKEN_MINUS;
         }
 
         emit_bin_op(loc, function, op, lhstd, REG_T, REG_RESULT, REG_RESULT);
 
-        if (call->identifier.type == TOKEN_PTRDIFF) {
+        if (call->operator.type == TOKEN_PTRDIFF) {
             emit_push_reg(gen, loc, function, REG_RESULT, REG_T, type2movsize(gen, rhs->value_type), 0);
 
             val_dst_t factor_size_dst = emit_val_dst_reg_or_stack_point_reserve(gen, loc, function, gen->ast->type_set.size_t_, REG_RESULT);
@@ -2175,10 +2179,10 @@ static void gen_initializer_list(gen_t *gen, function_t *function, ast_node_t *l
 }
 
 static void gen_directive(gen_t *gen, function_t *function, ast_node_t *dir, val_dst_t val_dst) {
-    if (sv_eq(dir->identifier.view, lit2sv("@fficall"))) {
+    if (string_eq(*dir->identifier, lit2str("fficall"))) {
         // todo
         UNREACHABLE();
-    } else if (sv_eq(dir->identifier.view, lit2sv("@icall"))) {
+    } else if (string_eq(*dir->identifier, lit2str("icall"))) {
         gen_intrinsic_call(gen, function, dir, val_dst);
     } else {
         // all other cases should be handled at compile-time

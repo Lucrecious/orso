@@ -204,7 +204,7 @@ struct instruction_t {
 
 typedef struct function_t function_t;
 struct function_t {
-    orstring_t name;
+    oristring_t name_or_null;
     struct {
         texloc_t *items;
         size_t count;
@@ -272,7 +272,7 @@ function_t *new_function(memarr_t *memory, arena_t *arena) {
 }
 
 void function_init(function_t *function, memarr_t *memory, arena_t *arena) {
-    function->name = lit2str("");
+    function->name_or_null = NULL;
     function->memory = memory;
     function->locations.allocator = arena;
     function->code.allocator = arena;

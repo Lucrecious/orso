@@ -87,7 +87,7 @@ draw_text :: (text: str8_t, pos: [2]sint, size: sint, color: color_t) -> void {
 text_format :: (text: str8_t, value: sint) -> str8_t {
     result := @fficall "./vendor/raylib/src/libraylib.a", "cdecl", &char, "TextFormat", text.cstr, value as int;
     count := 0;
-    while *(result + (count as ptrdiff_t)) != char.{} do ++count;
+    while *offsetptr(result, count) != char.{} do ++count;
 
     return .{
         result,
