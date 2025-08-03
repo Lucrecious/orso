@@ -1238,16 +1238,16 @@ static ast_node_t *ast_return(ast_t *ast, ast_node_t *expr, token_t jmp_token) {
     return return_;
 }
 
-static ast_node_t *ast_block_begin(ast_t *ast, token_t start) {
+ast_node_t *ast_block_begin(ast_t *ast, token_t start) {
     ast_node_t *block = ast_node_new(ast->arena, AST_NODE_TYPE_EXPRESSION_BLOCK, start);
     return block;
 }
 
-static void ast_block_decl(ast_node_t *block, ast_node_t *decl) {
+void ast_block_decl(ast_node_t *block, ast_node_t *decl) {
     array_push(&block->children, decl);
 }
 
-static void ast_block_end(ast_node_t *block, token_t end) {
+void ast_block_end(ast_node_t *block, token_t end) {
     block->end = end;
 
     if (block->children.count == 0) {
@@ -1774,7 +1774,7 @@ static ast_node_t *parse_builtin_call(parser_t *parser) {
     return n;
 }
 
-static ast_node_t *ast_assignment(ast_t *ast, ast_node_t *lhs, ast_node_t *rhs, token_t equals) {
+ast_node_t *ast_assignment(ast_t *ast, ast_node_t *lhs, ast_node_t *rhs, token_t equals) {
     ast_node_t *assignment = ast_binary(ast, equals, lhs, rhs);
     assignment->node_type = AST_NODE_TYPE_EXPRESSION_ASSIGNMENT;
     return assignment;
@@ -2632,6 +2632,7 @@ parse_rule_t rules[] = {
     [TOKEN_SEMICOLON]               = { NULL,               NULL,               PREC_NONE },
     [TOKEN_BAR]                     = { NULL,               parse_binary,       PREC_BITWISE_OR },
     [TOKEN_AMPERSAND]               = { parse_unary,        NULL,               PREC_UNARY },
+    [TOKEN_AMPERSAND_AMPERSAND]     = { parse_unary,        NULL,               PREC_UNARY },
     [TOKEN_SQUIGGLE]                = { NULL,               NULL,               PREC_NONE },
     [TOKEN_PLUS_PLUS]               = { parse_unary,        NULL,               PREC_NONE },
     [TOKEN_MINUS_MINUS]             = { parse_unary,        NULL,               PREC_NONE },

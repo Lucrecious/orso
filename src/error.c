@@ -133,6 +133,7 @@ static size_t find_next_char_index(orstring_t s, size_t starting_index, char tar
 static orcstr_t tokentype2string(token_type_t token_type) {
     switch (token_type) {
         case TOKEN_AMPERSAND: return "&";
+        case TOKEN_AMPERSAND_AMPERSAND: return "&&";
         case TOKEN_AND: return "and";
         case TOKEN_ANNOTATION: return "<annotation>";
         case TOKEN_ARROW_RIGHT: return "->";

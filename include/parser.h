@@ -494,6 +494,12 @@ ast_node_t *ast_def_value(ast_t *ast, token_t identifer);
 ast_node_t *ast_inferred_type_decl(ast_t *ast, token_t squiggle_token, token_t identifer);
 ast_node_t *ast_cast(ast_t *ast, ast_node_t *expr_type, ast_node_t *expr);
 ast_node_t *ast_begin_module(ast_t *ast);
+ast_node_t *ast_assignment(ast_t *ast, ast_node_t *lhs, ast_node_t *rhs, token_t equals);
+
+ast_node_t *ast_block_begin(ast_t *ast, token_t start);
+void ast_block_decl(ast_node_t *block, ast_node_t *decl);
+void ast_block_end(ast_node_t *block, token_t end);
+
 void ast_end_module(ast_node_t *module);
 void ast_add_module(ast_t *ast, ast_node_t *module, orstring_t moduleid);
 ast_node_t *ast_implicit_expr(ast_t *ast, ortype_t type, orword_t value, token_t where);

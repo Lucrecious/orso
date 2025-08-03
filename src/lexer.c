@@ -447,7 +447,9 @@ token_t _lexer_next_token(lexer_t *lexer) {
         case ':': return create_token(lexer, TOKEN_COLON);
         case ';': return create_token(lexer, TOKEN_SEMICOLON);
         case '|': return create_token(lexer, TOKEN_BAR);
-        case '&': return create_token(lexer, TOKEN_AMPERSAND);
+        case '&':
+            if (match(lexer, '&')) return create_token(lexer, TOKEN_AMPERSAND_AMPERSAND);
+            return create_token(lexer, TOKEN_AMPERSAND);
         case '+': {
             if (match(lexer, '+')) return create_token(lexer, TOKEN_PLUS_PLUS);
             if (match(lexer, '=')) return create_token(lexer, TOKEN_PLUS_EQUAL);

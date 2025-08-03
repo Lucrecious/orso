@@ -3764,6 +3764,10 @@ void resolve_expression(
         }
 
         case AST_NODE_TYPE_EXPRESSION_UNARY: {
+            if (expr->operator.type == TOKEN_AMPERSAND_AMPERSAND) {
+                UNREACHABLE(); // todo
+            }
+
             resolve_expression(analyzer, ast, state, implicit_type, an_operand(expr), true);
 
             if (TYPE_IS_INVALID(an_operand(expr)->value_type)) {
