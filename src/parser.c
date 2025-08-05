@@ -450,10 +450,41 @@ static void __orrandf(struct vm_t *vm, void *args_reverse_order, void *result) {
     *(orf32*)result = value;
 }
 
+static void __orassert(struct vm_t *vm, void *args_reverse_order, void *result) {
+    NOB_UNUSED(vm);
+    NOB_UNUSED(result);
+
+    size_t offset = 0;
+    typedata_t *str8td = type2typedata(&vm->types->types, vm->types->str8_t_);
+    void *str8_arg = orso_icall_arg(args_reverse_order, &offset, str8td->size);
+    bool test = *(bool*)orso_icall_arg(args_reverse_order, &offset, sizeof(bool));
+
+    orstring_t str8 = {0};
+    extract_struct_from_binding(str8td->as.struct_.binding_or_null, vm->types, str8_arg, &str8);
+
+    orassert(test, str8);
+}
+
 void intrinsics_init(ast_t *ast, orintrinsic_fns_t *fns) {
     ortype_t voidptr = type_set_fetch_pointer(&ast->type_set, ortypeid(TYPE_VOID));
 
     {
+        // assert
+        {
+            orintrinsic_fn_t fn = {};
+            fn.name = ast_sv2istring(ast, lit2sv("assert"));
+            fn.has_varargs = false;
+            fn.arg_types = (types_t){.allocator=ast->arena};
+
+            array_push(&fn.arg_types, ast->type_set.bool_);
+            array_push(&fn.arg_types, ast->type_set.str8_t_);
+
+            fn.ret_type = ast->type_set.void_;
+
+            fn.fnptr = __orassert;
+
+            array_push(fns, fn);
+        }
 
         // printlin
         {

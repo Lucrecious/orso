@@ -273,6 +273,16 @@ defer:
     return result;
 }
 
+void orassert(bool test, orstring_t message) {
+    if (test) return;
+    if (message.length == 0) {
+        printf("assert failed\n");
+    } else {
+        printf("assert failed: %s\n", message.cstr);
+    }
+    abort();
+}
+
 bool ordebug(orstring_t input_file_path) {
     arena_t arena = {0};
 

@@ -1,10 +1,47 @@
-add :: (a: &sint, b: &sint) -> sint {
-    return *a + *b;
+
+
+assert :: (test := false, message := "") {
+    @icall "assert", test, message;
 };
 
+# ideal:
+# assert :: !(!test: ast.node_t, message := "") {
+#     if @insert test then return;
+#     loc := test.start;
+#     (@load "io.or").println("%:%:%:", loc.filename, loc.line+1, loc.column+1, message);
+# };
+
 main :: () {
-    {
-        x := add(&&5, &&3);
-        @icall "printint", x as int;
-    };
+    x := 11;
+    assert(x < 4);
 };
+
+# slice_t :: struct(u: type) [
+#     data := (&u).{};
+#     count := 0;
+# ];
+
+# slice :: !(arr: &[!n]!u, start := 0, end := n) -> slice_t(u) {
+#     assert(start >= 0 and end <= n and end >= start);
+#     s := slice_t.{};
+#     s.data = arr as &void as &u;
+#     s.data = offsetptr(s.data, start);
+#     s.count = end-start;
+#     return s;
+# };
+
+# slice_at :: @subscript (s: slice_t(!u), index: sint) -> &u {
+#     assert(index < s.count);
+#     item := offsetptr(s.data, index);
+#     return item;
+# };
+
+# main :: () {
+#     arr := [4]sint.{1, 2, 3, 4};
+
+#     s := slice(&arr);
+
+#     x := s[2]
+
+#     (@load "io.or").println(if x == 3 then "yes" else "no");
+# };

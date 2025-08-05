@@ -30,6 +30,7 @@ struct orlib_t {
 bool orbuild(orso_compiler_t *compiler);
 bool orinterpret(orstring_t input_file_path);
 bool ordebug(orstring_t input_file_path);
+void orassert(bool test, orstring_t message);
 
 void *orrealloc(void *ptr, size_t new_size);
 void orprintint(orint num);
