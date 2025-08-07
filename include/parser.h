@@ -45,6 +45,7 @@ typedef enum scope_type_t {
     SCOPE_TYPE_TYPE_CONTEXT             = 1 << 7,
     SCOPE_TYPE_FOLD_DIRECTIVE           = 1 << 8,
     SCOPE_TYPE_INFERRED_PARAMS          = 1 << 9,
+    SCOPE_TYPE_MACRO                    = 1 << 10,
 } scope_type_t;
 
 typedef struct ffi_t ffi_t;
@@ -347,6 +348,7 @@ struct ast_node_t {
     bool is_consumed;
     bool is_compile_time_param;
     bool is_free_number;
+    bool is_macro;
 
     ast_node_t *ref_decl;
     type_patterns_t type_decl_patterns;
@@ -477,12 +479,14 @@ ast_node_t *ast_nil(ast_t *ast, ortype_t value_type, token_t token_location);
 ast_node_t *ast_decldef(ast_t *ast, oristring_t identifier, ast_node_t *type_expr, ast_node_t *init_expr, token_t start);
 ast_node_t *ast_statement(ast_t *ast, ast_node_t *expr);
 ast_node_t *ast_def_value(ast_t *ast, oristring_t identifer, token_t start);
-ast_node_t *ast_inferred_type_decl(ast_t *ast, token_t squiggle_token, token_t identifer);
+ast_node_t *ast_inferred_type_decl(ast_t *ast, token_t squiggle_token, oristring_t identifer, token_t end);
 ast_node_t *ast_cast(ast_t *ast, ast_node_t *expr_type, ast_node_t *expr);
 ast_node_t *ast_unary(ast_t *ast, token_t operator, ast_node_t *operand);
 ast_node_t *ast_begin_module(ast_t *ast);
 ast_node_t *ast_assignment(ast_t *ast, ast_node_t *lhs, ast_node_t *rhs, token_t equals);
 
+
+ast_node_t *ast_do(ast_t *ast, oristring_t label, ast_node_t *expr, token_t do_token);
 ast_node_t *ast_block_begin(ast_t *ast, token_t start);
 void ast_block_decl(ast_node_t *block, ast_node_t *decl);
 void ast_block_end(ast_node_t *block, token_t end);

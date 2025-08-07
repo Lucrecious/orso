@@ -1,25 +1,23 @@
-
-
 assert :: (test := false, message := "") {
     @icall "assert", test, message;
 };
 
-# ideal:
-# assert :: !(!test: ast.node_t, message := "") {
-#     if @insert test then return;
-#     loc := test.start;
-#     (@load "io.or").println("%:%:%:", loc.filename, loc.line+1, loc.column+1, message);
-# };
-
-main :: () {
-    x := 11;
-    assert(x < 4);
+slice_t :: struct(u: type) {
+    data := (&u).{};
+    count := 0;
 };
 
-# slice_t :: struct(u: type) [
-#     data := (&u).{};
-#     count := 0;
-# ];
+main :: () {
+    z := 10;
+    add :: !(a: sint, b: sint) -> sint {
+        return a + b;
+    };
+
+    x := 11;
+    y := add(x, 8);
+    @icall "printint", y as int;
+};
+
 
 # slice :: !(arr: &[!n]!u, start := 0, end := n) -> slice_t(u) {
 #     assert(start >= 0 and end <= n and end >= start);

@@ -273,13 +273,14 @@ defer:
     return result;
 }
 
+// todo(luca.duran): maybe split up this function better so it does the two seprate things more clearly
 static bool get_nearest_jmp_scope_in_func_or_error(
         analyzer_t *analyzer, ast_node_t *jmp_node, scope_t *scope,
-        scope_type_t search_type, oristring_t label, scope_t **found_scope) {
+        scope_type_t search_type, bool or_macro, oristring_t label, scope_t **found_scope) {
     
     bool check_label = label->length > 0;
     while (scope->outer) {
-        if (scope->type == search_type) {
+        if (scope->type == search_type || (or_macro && scope->type == SCOPE_TYPE_MACRO)) {
             if (check_label) {
                 if (label == scope->creator->identifier) {
                     *found_scope = scope;
@@ -310,7 +311,6 @@ static bool get_nearest_jmp_scope_in_func_or_error(
     }
 
     if (search_type == SCOPE_TYPE_FUNCDEF) {
-        // i think this is only for parsing expression files
         stan_error(analyzer, OR_ERROR(
             .tag = "sem.invalid-return.outside-function",
             .level = ERROR_SOURCE_ANALYSIS,
@@ -955,11 +955,8 @@ static orword_t constant_fold_cast(ast_t *ast, orword_t in, ortype_t dst, ortype
 }
 
 static ast_node_t *ast_implicit_cast(ast_t *ast, ast_node_t *expr, ortype_t dst_type) {
-    ast_node_t *inferred_type = ast_inferred_type_decl(ast, token_implicit_at_start(expr->start), token_implicit_at_start(expr->start));
-    inferred_type->value_type = ortypeid(TYPE_TYPE);
-    inferred_type->expr_val = ast_node_val_word(ORWORDT(dst_type));
-
-    ast_node_t *cast = ast_cast(ast, inferred_type, expr);
+    ast_node_t *implicit_type = ast_implicit_expr(ast, ortypeid(TYPE_TYPE), ORWORDT(dst_type), expr->start);
+    ast_node_t *cast = ast_cast(ast, implicit_type, expr);
     cast->value_type = dst_type;
 
     if (expr->expr_val.is_concrete) {
@@ -970,6 +967,7 @@ static ast_node_t *ast_implicit_cast(ast_t *ast, ast_node_t *expr, ortype_t dst_
 
     return cast;
 }
+
 bool type_size_is_platform_specific(type_table_t *type_table, ortype_t type) {
     #define IS(t) ortypeid_eq(type, type_table->t##_)
     if (IS(s8) || IS(s16) || IS(s32) || IS(s64) ||
@@ -1443,17 +1441,7 @@ void resolve_expression(
         ast_node_t *expr,
         bool is_consumed);
 
-static ast_node_t *stan_realize_inferred_funcdefcall_or_errornull(analyzer_t *analyzer, analysis_state_t call_state, ast_node_t *call, ast_node_t *inferred_funcdef) {
-    tmp_arena_t *tmp = allocator_borrow();
-    matched_values_t matched_values = {.allocator=tmp->allocator};
-
-    // todo: im pretty sure i can reuse the scope over and over if i clear it
-    // that way im not allocating that much more...
-    analysis_state_t inferred_state = call_state;
-    scope_t inferred_scope = {0};
-    scope_init(&inferred_scope, tmp->allocator, SCOPE_TYPE_INFERRED_PARAMS, inferred_funcdef->defined_scope.outer, call);
-    inferred_state.scope = &inferred_scope;
-
+static bool declare_compile_time_and_inferred_decls(analyzer_t *analyzer, analysis_state_t decl_state, analysis_state_t call_state, ast_node_t *call, ast_node_t *inferred_funcdef, matched_values_t *matched_values) {
     bool had_error = false;
 
     size_t inferred_arg_start = an_func_def_arg_start(inferred_funcdef);
@@ -1480,7 +1468,7 @@ static ast_node_t *stan_realize_inferred_funcdefcall_or_errornull(analyzer_t *an
             type_pattern_t pattern = decl->type_decl_patterns.items[t];
             
             matched_value_t matched_value = stan_pattern_match_or_error(analyzer, decl, pattern.expected, call_arg->value_type, call_arg);
-            array_push(&matched_values, matched_value);
+            array_push(matched_values, matched_value);
 
             if (TYPE_IS_INVALID(matched_value.type)) {
                 had_error = true;
@@ -1492,95 +1480,104 @@ static ast_node_t *stan_realize_inferred_funcdefcall_or_errornull(analyzer_t *an
             ast_node_t *implicit_constant_decl = ast_decldef(analyzer->ast, pattern.identifier, implicit_type_decl, implicit_init_expr, token_implicit_at_start(call->start));
             implicit_constant_decl->is_mutable = false;
 
-            declare_definition(analyzer, inferred_state.scope, implicit_constant_decl);
+            declare_definition(analyzer, decl_state.scope, implicit_constant_decl);
 
-            resolve_declaration_definition(analyzer, analyzer->ast, inferred_state, implicit_constant_decl);
+            resolve_declaration_definition(analyzer, analyzer->ast, decl_state, implicit_constant_decl);
         }
     }
 
+    if (had_error) {
+        return false;
+    }
+
+    // resolve compile time params
+    for (size_t i = an_func_def_arg_end(inferred_funcdef); i > an_func_def_arg_start(inferred_funcdef); --i) {
+        ast_node_t *param = inferred_funcdef->children.items[i-1];
+        if (param->is_compile_time_param) {
+            size_t arg_index = i-1-an_func_def_arg_start(inferred_funcdef) + an_call_arg_start(inferred_funcdef);
+            ast_node_t *arg = call->children.items[arg_index];
+            if (TYPE_IS_UNRESOLVED(arg->value_type)) {
+                resolve_expression(analyzer, analyzer->ast, call_state, param->value_type, arg, true);
+            }
+
+            // todo: instead of copying the parameter, i can resolve the actual parameter, and then unresolve it after
+            param = ast_node_copy(analyzer->ast->arena, param);
+            MUST(param->node_type == AST_NODE_TYPE_DECLARATION_DEFINITION);
+            an_decl_expr(param) = arg;
+
+            if (!arg->expr_val.is_concrete) {
+                had_error = true;
+                INVALIDATE(param);
+                stan_error(analyzer, OR_ERROR(
+                    .tag = "sem.expected-constant.inferred-call-arg",
+                    .level = ERROR_SOURCE_ANALYSIS,
+                    .msg = lit2str("call argument '$1.$' must be a constant"),
+                    .args = ORERR_ARGS(error_arg_node(arg), error_arg_str(analyzer->ast, *param->identifier)),
+                    .show_code_lines = ORERR_LINES(0),
+                ));
+                break;
+            }
+
+            param->is_mutable = false;
+            declare_definition(analyzer, decl_state.scope, param);
+            resolve_declaration_definition(analyzer, analyzer->ast, decl_state, param);
+
+            matched_value_t value = {
+                .type = arg->value_type,
+                .word = arg->expr_val.word,
+            };
+
+            array_push(matched_values, value);
+
+            if (TYPE_IS_INVALID(param->value_type)) {
+                had_error = true;
+                break;
+            }
+        }
+    }
+
+    return matched_values;
+}
+
+static ast_node_t *stan_realize_inferred_funcdefcall_or_errornull(analyzer_t *analyzer, analysis_state_t state, ast_node_t *call, ast_node_t *inferred_funcdef, matched_values_t matched_values) {
     ast_node_t *result = NULL;
-    unless (had_error) {
-        // resolve compile time params
-        for (size_t i = an_func_def_arg_end(inferred_funcdef); i > an_func_def_arg_start(inferred_funcdef); --i) {
-            ast_node_t *param = inferred_funcdef->children.items[i-1];
+
+    tmp_arena_t *tmp = allocator_borrow();
+
+    bool had_error = false;
+
+    result = find_realized_node_or_null_by_inferred_values(analyzer->ast, inferred_funcdef->realized_copies, matched_values);
+    unless(result) {
+        // todo: instead of copying the the definition wholesale,
+        // i remove the parameters i've already copied, copy the function
+        // then i add back in the old parameters to the original
+        // that prevents more unnecessary allocations
+        result = ast_node_copy(analyzer->ast->arena, inferred_funcdef);
+
+        // extract compile time params and respective call args
+        for (size_t i = an_func_def_arg_end(result); i > an_func_def_arg_start(result); --i) {
+            ast_node_t *param = result->children.items[i-1];
             if (param->is_compile_time_param) {
-                size_t arg_index = i-1-an_func_def_arg_start(inferred_funcdef) + an_call_arg_start(inferred_funcdef);
-                ast_node_t *arg = call->children.items[arg_index];
-                if (TYPE_IS_UNRESOLVED(arg->value_type)) {
-                    resolve_expression(analyzer, analyzer->ast, call_state, param->value_type, arg, true);
-                }
-
-                // todo: instead of copying the parameter, i can resolve the actual parameter, and then unresolve it after
-                param = ast_node_copy(analyzer->ast->arena, param);
-                MUST(param->node_type == AST_NODE_TYPE_DECLARATION_DEFINITION);
-                an_decl_expr(param) = arg;
-
-                if (!arg->expr_val.is_concrete) {
-                    had_error = true;
-                    INVALIDATE(param);
-                    stan_error(analyzer, OR_ERROR(
-                        .tag = "sem.expected-constant.inferred-call-arg",
-                        .level = ERROR_SOURCE_ANALYSIS,
-                        .msg = lit2str("call argument '$1.$' must be a constant"),
-                        .args = ORERR_ARGS(error_arg_node(arg), error_arg_str(analyzer->ast, *param->identifier)),
-                        .show_code_lines = ORERR_LINES(0),
-                    ));
-                    break;
-                }
-
-                param->is_mutable = false;
-                declare_definition(analyzer, inferred_state.scope, param);
-                resolve_declaration_definition(analyzer, analyzer->ast, inferred_state, param);
-
-                matched_value_t value = {
-                    .type = arg->value_type,
-                    .word = arg->expr_val.word,
-                };
-
-                array_push(&matched_values, value);
-
-                if (TYPE_IS_INVALID(param->value_type)) {
-                    had_error = true;
-                    break;
-                }
+                size_t arg_index = i-1-an_func_def_arg_start(result) + an_call_arg_start(call);
+                array_remove(&result->children, i-1);
+                array_remove(&call->children, arg_index);
             }
         }
 
-        if (!had_error) {
-            result = find_realized_node_or_null_by_inferred_values(analyzer->ast, inferred_funcdef->realized_copies, matched_values);
-            unless(result) {
-                // todo: instead of copying the the definition wholesale,
-                // i remove the parameters i've already copied, copy the function
-                // then i add back in the old parameters to the original
-                // that prevents more unnecessary allocations
-                result = ast_node_copy(analyzer->ast->arena, inferred_funcdef);
+        matched_values_t matched_values_ = {.allocator=analyzer->ast->arena};
+        for (size_t i = 0; i < matched_values.count; ++i) array_push(&matched_values_, matched_values.items[i]);
 
-                // extract compile time params and respective call args
-                for (size_t i = an_func_def_arg_end(result); i > an_func_def_arg_start(result); --i) {
-                    ast_node_t *param = result->children.items[i-1];
-                    if (param->is_compile_time_param) {
-                        size_t arg_index = i-1-an_func_def_arg_start(result) + an_call_arg_start(call);
-                        array_remove(&result->children, i-1);
-                        array_remove(&call->children, arg_index);
-                    }
-                }
+        inferred_copy_t copy = {
+            .key = matched_values_,
+            .copy = result,
+        };
 
-                matched_values_t matched_values_ = {.allocator=analyzer->ast->arena};
-                for (size_t i = 0; i < matched_values.count; ++i) array_push(&matched_values_, matched_values.items[i]);
+        array_push(&inferred_funcdef->realized_copies, copy);
 
-                inferred_copy_t copy = {
-                    .key = matched_values_,
-                    .copy = result,
-                };
+        resolve_funcdef(analyzer, analyzer->ast, state, result);
 
-                array_push(&inferred_funcdef->realized_copies, copy);
-
-                resolve_funcdef(analyzer, analyzer->ast, inferred_state, result);
-
-                if (TYPE_IS_INVALID(result->value_type)) {
-                    had_error = true;
-                }
-            }
+        if (TYPE_IS_INVALID(result->value_type)) {
+            had_error = true;
         }
     }
 
@@ -1953,10 +1950,9 @@ static void patch_call_argument_gaps(analyzer_t *analyzer, ast_t *ast, ast_node_
         #undef error_arg_must_be_provided
     }
 
-
-    allocator_return(tmp);
-
-    if (is_invalid) return;
+    if (is_invalid) {
+        goto defer;
+    }
 
     if (arg_index < arg_count) {
         struct_field_t field = arg_defaults.items[param_index];
@@ -1967,7 +1963,7 @@ static void patch_call_argument_gaps(analyzer_t *analyzer, ast_t *ast, ast_node_
             .args = ORERR_ARGS(error_arg_node(call->children.items[arg_start+arg_index]), error_arg_str(ast, *field.name)),
             .show_code_lines = ORERR_LINES(0),
         ));
-        return;
+        goto defer;
     }
 
     size_t arg_diff = arg_defaults.count - arg_count;
@@ -1981,6 +1977,9 @@ static void patch_call_argument_gaps(analyzer_t *analyzer, ast_t *ast, ast_node_
     for (size_t i = arg_start; i < arg_end; ++i) {
         call->children.items[i] = new_args.items[i-arg_start];
     }
+
+defer:
+    allocator_return(tmp);
 }
 
 typedef struct ast_inferred_function_t ast_inferred_function_t;
@@ -2288,13 +2287,15 @@ static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
             if (callee_td->kind == TYPE_INFERRED_FUNCTION) {
                 ast_inferred_function_t *inferred_decl = callee->expr_val.word.as.p;
                 patch_call_argument_gaps(analyzer, ast, call, inferred_decl->arg_defaults, inferred_decl->has_defaults);
-            } else {
+ ;           } else {
                 function_t *function = (function_t*)callee->expr_val.word.as.p;
                 patch_call_argument_gaps(analyzer, ast, call, function->arg_defaults, function->has_defaults);
             }
             arg_end = an_call_arg_end(call);
             arg_count = arg_end-arg_start;
         }
+
+        ast_node_t *macro_funcdef_or_null = NULL;
 
         if (callee_td->kind == TYPE_INFERRED_FUNCTION) {
             // im not sure if this is possible
@@ -2312,7 +2313,84 @@ static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
 
             ast_inferred_function_t *inferred_funcdef = (ast_inferred_function_t*)callee->expr_val.word.as.p;
 
-            ast_node_t *realized_funcdef = stan_realize_inferred_funcdefcall_or_errornull(analyzer, state, call, inferred_funcdef->funcdef);
+            ast_node_t *realized_funcdef = NULL;
+            {
+                analysis_state_t funcdef_defined_scope = state;
+                ast_node_t *funcdef_node = inferred_funcdef->funcdef;
+                scope_t inferred_scope = {0};
+                scope_init(&inferred_scope, analyzer->ast->arena, SCOPE_TYPE_INFERRED_PARAMS, funcdef_node->defined_scope.outer, call);
+                funcdef_defined_scope.scope = &inferred_scope;
+
+                tmp_arena_t *tmp = allocator_borrow();
+
+                if (funcdef_node->is_macro) {
+                    macro_funcdef_or_null = ast_node_copy(ast->arena, funcdef_node);
+                    funcdef_node = macro_funcdef_or_null;
+                }
+
+                matched_values_t matched_values = {.allocator=tmp->allocator};
+                bool success = declare_compile_time_and_inferred_decls(analyzer, funcdef_defined_scope, state, call, funcdef_node, &matched_values);
+                if (success) {
+                    if (macro_funcdef_or_null != NULL) {
+                        /* transforms something like this
+                            add :: !(a: sint, b: sint) -> sint {
+                                return a + b;
+                            }
+                            
+                            add(10, 4)
+                        */
+
+                        /* to something like this
+                            do:<tmpname> {
+                                a: sint = 10;
+                                b: sint = 4;
+                                {
+                                    break:<tmpname> a + b;
+                                };
+                            };
+                        */
+
+                        ast_node_t *macro_call = ast_block_begin(ast, call->start);
+                        size_t arg_count = an_call_arg_end(call) - an_call_arg_start(call);
+                        for (size_t i = 0; i < arg_count; ++i) {
+                            ast_node_t *param = macro_funcdef_or_null->children.items[i + an_func_def_arg_start(call)];
+                            if (param->is_compile_time_param) continue;
+
+                            ast_node_t *arg = call->children.items[i + an_call_arg_start(call)];
+                            an_decl_expr(param) = arg;
+
+                            resolve_expression(analyzer, ast, state, param->value_type, arg, true);
+                            resolve_declaration_definition(analyzer, ast, funcdef_defined_scope, param);
+
+                            ast_block_decl(macro_call, param);
+                        }
+
+                        {
+                            ast_node_t *funcdef_block = an_func_def_block(macro_funcdef_or_null);
+
+                            oristring_t label = ast_next_tmp_name(ast);
+                            ast_node_t *do_body = ast_do(ast, label, funcdef_block, call->start);
+
+                            ast_block_decl(macro_call, ast_statement(ast, do_body));
+                        }
+
+                        ast_block_end(macro_call, call->end);
+
+                        bool is_consumed = call->is_consumed;
+                        *call = *macro_call;
+
+                        funcdef_defined_scope.scope->type = SCOPE_TYPE_MACRO;
+                        funcdef_defined_scope.scope->creator = an_expression(call->children.items[call->children.count-1]);
+                        resolve_expression(analyzer, ast, funcdef_defined_scope, ortypeid(TYPE_UNRESOLVED), call, is_consumed);
+                    } else {
+                        realized_funcdef = stan_realize_inferred_funcdefcall_or_errornull(analyzer, funcdef_defined_scope, call, funcdef_node, matched_values);
+                    }
+                }
+
+                allocator_return(tmp);
+            }
+
+            if (macro_funcdef_or_null) return;
 
             unless (realized_funcdef) {
                 INVALIDATE(call);
@@ -2399,7 +2477,9 @@ static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
             }
         }
 
-        check_call_on_func_or_error(analyzer, ast, call);
+        bool error = check_call_on_func_or_error(analyzer, ast, call);
+        if (error) return;
+
     } else if (callee_td->kind == TYPE_PARAM_STRUCT) {
         MUST(callee->expr_val.is_concrete);
         stan_realize_parameterized_struct(analyzer, state, call);
@@ -4495,18 +4575,37 @@ void resolve_expression(
         case AST_NODE_TYPE_EXPRESSION_JMP: {
             switch (expr->start.type) {
                 case TOKEN_RETURN: {
-                    scope_t *func_def_scope = NULL;
-                    bool success = get_nearest_jmp_scope_in_func_or_error(analyzer, expr, state.scope, SCOPE_TYPE_FUNCDEF, oriemptystr, &func_def_scope);
+                    scope_t *func_def_or_macro_scope = NULL;
+                    get_nearest_jmp_scope_in_func_or_error(analyzer, expr, state.scope, SCOPE_TYPE_FUNCDEF, true, expr->identifier, &func_def_or_macro_scope);
 
-                    ortype_t implicit_type = ortypeid(TYPE_UNRESOLVED);
-                    unless (success) {
-                        INVALIDATE(expr);
-                    } else {
+                    switch(func_def_or_macro_scope->type) {
+                    case SCOPE_TYPE_MACRO: {
+                        scope_t *macro_scope = func_def_or_macro_scope;
+                        MUST(macro_scope->creator->node_type == AST_NODE_TYPE_EXPRESSION_BRANCHING
+                            && macro_scope->creator->branch_type == BRANCH_TYPE_DO);
+                        
+                        oristring_t label = macro_scope->creator->identifier;
+                        expr->start.type = TOKEN_BREAK;
+                        expr->identifier = label;
+
+                        resolve_expression(analyzer, ast, state, implicit_type, expr, is_consumed);
+                        break;
+                    }
+
+                    case SCOPE_TYPE_FUNCDEF: {
+                        scope_t *func_def_scope = func_def_or_macro_scope;
                         expr->jmp_out_scope_node = func_def_scope->creator;
                         array_push(&func_def_scope->creator->jmp_nodes, expr);
 
                         typedata_t *sig = ast_type2td(ast, func_def_scope->creator->value_type);
                         implicit_type = sig->as.function.return_type;
+                        break;
+                    }
+
+                    default: {
+                        INVALIDATE(expr);
+                        break;
+                    }
                     }
 
                     resolve_expression(analyzer, ast, state, implicit_type, an_expression(expr), true);
@@ -4518,7 +4617,7 @@ void resolve_expression(
                     resolve_expression(analyzer, ast, state, ortypeid(TYPE_UNRESOLVED), an_expression(expr), true);
 
                     scope_t *found_scope = NULL;
-                    bool success = get_nearest_jmp_scope_in_func_or_error(analyzer, expr, state.scope, SCOPE_TYPE_JMPABLE, expr->identifier, &found_scope);
+                    bool success = get_nearest_jmp_scope_in_func_or_error(analyzer, expr, state.scope, SCOPE_TYPE_JMPABLE, false, expr->identifier, &found_scope);
                     if (success) {
                         if (found_scope->creator->branch_type == BRANCH_TYPE_DO && expr->start.type == TOKEN_CONTINUE) {
                             stan_error(analyzer, OR_ERROR(
@@ -5305,10 +5404,12 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
 
     while (*search_scope) {
         bool is_function_scope = (*search_scope)->type == SCOPE_TYPE_FUNCDEF;
+        bool is_macro_scope = (*search_scope)->type == SCOPE_TYPE_MACRO;
         bool is_fold_scope = (*search_scope)->type == SCOPE_TYPE_FOLD_DIRECTIVE;
 
     #define NEXT_SCOPE() \
         if (is_function_scope) { passed_local_mutable_access_barrier = true; }\
+        if (is_macro_scope) { passed_local_mutable_access_barrier = true; }\
         if (is_fold_scope) { passed_local_fold_scope = true; } \
         *search_scope = (*search_scope)->outer
 
@@ -5339,7 +5440,7 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
             stan_error(analyzer, OR_ERROR(
                 .tag = "sem.invalid-scope.local-decl",
                 .level = ERROR_SOURCE_ANALYSIS,
-                .msg = lit2str("declaration for '$2.$' does not exist in the same local scope it's being used in"),
+                .msg = lit2str("declaration for '$2.$' does not exist in the same function scope it's being used in"),
                 .args = ORERR_ARGS(error_arg_node(def), error_arg_node(decl),
                     error_arg_str(analyzer->ast, *decl->identifier)),
                 .show_code_lines = ORERR_LINES(0, 1),
@@ -5486,7 +5587,7 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
     }
 
     // dip out if it's inferred function, we'll resolve this when its called...
-    if (is_inferred_function) {
+    if (is_inferred_function || funcdef->is_macro) {
         ortype_t function_type = ortypeid(TYPE_INFERRED_FUNCTION);
         funcdef->value_type = function_type;
         ast_inferred_function_t *inferred_func = ast_inferred_function_from_funcdef(ast, funcdef, ast->arena);

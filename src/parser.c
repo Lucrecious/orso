@@ -813,6 +813,7 @@ ast_node_t *ast_node_new(arena_t *arena, ast_node_type_t node_type, token_t star
     node->is_global = false;
     node->is_mutable = false;
     node->is_exported = false;
+    node->is_macro = false;
     node->identifier = oriemptystr;
     node->label = oriemptystr;;
     node->ref_decl = &nil_node;
@@ -1003,6 +1004,7 @@ ast_node_t *ast_node_copy(arena_t *arena, ast_node_t *node) {
     copy->is_free_number = node->is_free_number;
     copy->is_global = node->is_global;
     copy->is_mutable = node->is_mutable;
+    copy->is_macro = node->is_macro;
 
     ASSERT(copy->jmp_nodes.count == 0, "need to convert references to other nodes to relative ones");
     ASSERT(copy->jmp_out_scope_node == &nil_node, "need to convert references to other nodes to relative ones");
@@ -1369,19 +1371,19 @@ static ast_node_t *ast_ifthen(ast_t *ast, ast_node_t *cond, bool cond_negated, a
     return ifthen;
 }
 
-static ast_node_t *ast_do(ast_t *ast, token_t label, ast_node_t *expr, token_t do_token) {
+ast_node_t *ast_do(ast_t *ast, oristring_t label, ast_node_t *expr, token_t do_token) {
     ast_node_t *do_ = ast_node_new(ast->arena, AST_NODE_TYPE_EXPRESSION_BRANCHING, do_token);
     do_->branch_type = BRANCH_TYPE_DO;
-    do_->identifier = ast_sv2istring(ast, label.view);
+    do_->identifier = label;
     an_expression(do_) = expr;
     do_->end = expr->end;
     return do_;
 }
 
-ast_node_t *ast_inferred_type_decl(ast_t *ast, token_t squiggle_token, token_t identifer) {
+ast_node_t *ast_inferred_type_decl(ast_t *ast, token_t squiggle_token, oristring_t identifer, token_t end) {
     ast_node_t *inferred_type_decl = ast_node_new(ast->arena, AST_NODE_TYPE_EXPR_INFERRED_TYPE_DECL, squiggle_token);
-    inferred_type_decl->end = identifer;
-    inferred_type_decl->identifier = ast_sv2istring(ast, identifer.view);
+    inferred_type_decl->end = end;
+    inferred_type_decl->identifier = identifer;
     inferred_type_decl->is_mutable = false;
     inferred_type_decl->value_type = ortypeid(TYPE_UNRESOLVED);
 
@@ -1988,7 +1990,7 @@ static ast_node_t *parse_do(parser_t *parser) {
 
     ast_node_t *expr = parse_expression(parser);
 
-    ast_node_t *do_ = ast_do(parser->ast, label, expr, do_token);
+    ast_node_t *do_ = ast_do(parser->ast, ast_sv2istring(parser->ast, label.view), expr, do_token);
 
     return do_;
 }
@@ -2466,20 +2468,30 @@ static ast_node_t *parse_unary(parser_t *parser) {
 static ast_node_t *parse_inferred_type_decl(parser_t *parser) {
     token_t first_token = parser->previous;
 
-    token_t identifier = parser->current;
-    unless (consume(parser, TOKEN_IDENTIFIER)) {
-        identifier = nil_token;
+    ast_node_t *expr = parse_expression(parser);
+    switch (expr->node_type) {
+    case AST_NODE_TYPE_EXPRESSION_DEF_VALUE: {
+        expr = ast_inferred_type_decl(parser->ast, first_token, expr->identifier, expr->end);
+        break;
+    }
+
+    case AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION: {
+        expr->is_macro = true;
+        break;
+    }
+
+    default: {
         parser_error(parser, OR_ERROR(
-            .tag = "syn.missing-ident.inferred-type-decl",
+            .tag = "syn.expects-def-val-or-funcdef.bang.",
             .level = ERROR_SOURCE_PARSER,
-            .msg = lit2str("expected identifier after '!'"),
+            .msg = lit2str("expected either an identifier or funcdef after '!'"),
             .args = ORERR_ARGS(error_arg_token(parser->current)),
             .show_code_lines = ORERR_LINES(0),
         ));
+        break;
     }
-
-    ast_node_t *inferred_type_decl = ast_inferred_type_decl(parser->ast, first_token, identifier);
-    return inferred_type_decl;
+    }
+    return expr;
 }
 
 static ast_node_t *parse_directive(parser_t *parser) {
