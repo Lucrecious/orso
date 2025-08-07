@@ -7,36 +7,33 @@ slice_t :: struct(u: type) {
     count := 0;
 };
 
-main :: () {
-    z := 10;
-    add :: !(a: !u, b: u) -> u {
-        return a + b + ^z;
-    };
-
-    x := 11;
-    y := add(x, 8);
-
-    @icall "printint", y as int;
-
-    # add(5.4, 3.0);
-    # @icall "printint", y as int;
+slice :: !(arr: &[!n]!u, start := 0, end := n) -> slice_t(u) {
+    assert(start >= 0 and end <= n and end >= start, "slice out of range");
+    s := slice_t(u).{};
+    s.data = arr as &void as &u;
+    s.data = offsetptr(s.data, start);
+    s.count = end-start;
+    return s;
 };
 
+slice_at :: (s: &slice_t(!u), index: sint) -> &u {
+    assert(index < s.count);
+    item := offsetptr(s.data, index);
+    return item;
+};
 
-# slice :: !(arr: &[!n]!u, start := 0, end := n) -> slice_t(u) {
-#     assert(start >= 0 and end <= n and end >= start);
-#     s := slice_t.{};
-#     s.data = arr as &void as &u;
-#     s.data = offsetptr(s.data, start);
-#     s.count = end-start;
-#     return s;
-# };
+main :: () {
+    x := 10;
+    arr1 := slice(&&[5]sint.{1, 2, 3, 4, 5},,x);
+    arr1;
 
-# slice_at :: @subscript (s: slice_t(!u), index: sint) -> &u {
-#     assert(index < s.count);
-#     item := offsetptr(s.data, index);
-#     return item;
-# };
+    # x := *slice_at(&arr, 4);
+    # @icall "printint", x as int;
+
+    # for i := 0; i < arr.count; ++i {
+    #     @icall "printint", *da.at(&arr, i) as int;
+    # };
+};
 
 # main :: () {
 #     arr := [4]sint.{1, 2, 3, 4};

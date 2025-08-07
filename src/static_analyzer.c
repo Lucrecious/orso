@@ -1544,8 +1544,6 @@ static bool declare_compile_time_and_inferred_decls(analyzer_t *analyzer, analys
 static ast_node_t *stan_realize_inferred_funcdefcall_or_errornull(analyzer_t *analyzer, analysis_state_t state, ast_node_t *call, ast_node_t *inferred_funcdef, matched_values_t matched_values) {
     ast_node_t *result = NULL;
 
-    tmp_arena_t *tmp = allocator_borrow();
-
     bool had_error = false;
 
     result = find_realized_node_or_null_by_inferred_values(analyzer->ast, inferred_funcdef->realized_copies, matched_values);
@@ -1582,8 +1580,6 @@ static ast_node_t *stan_realize_inferred_funcdefcall_or_errornull(analyzer_t *an
             had_error = true;
         }
     }
-
-    allocator_return(tmp);
 
     if (had_error) return NULL;
 
@@ -2289,7 +2285,7 @@ static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
             if (callee_td->kind == TYPE_INFERRED_FUNCTION) {
                 ast_inferred_function_t *inferred_decl = callee->expr_val.word.as.p;
                 patch_call_argument_gaps(analyzer, ast, call, inferred_decl->arg_defaults, inferred_decl->has_defaults);
- ;           } else {
+            } else {
                 function_t *function = (function_t*)callee->expr_val.word.as.p;
                 patch_call_argument_gaps(analyzer, ast, call, function->arg_defaults, function->has_defaults);
             }
@@ -2359,13 +2355,20 @@ static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
                             if (param->is_compile_time_param) continue;
 
                             ast_node_t *arg = call->children.items[i + an_call_arg_start(call)];
-                            an_decl_expr(param) = arg;
+                            // arg being none means param must have a default value
+                            if (!an_is_none(arg)) {
+                                an_decl_expr(param) = arg;
+                                resolve_expression(analyzer, ast, state, param->value_type, arg, true);
+                            } else {
+                                arg = an_decl_expr(param);
+                                MUST(param->has_default_value);
+                                resolve_expression(analyzer, ast, funcdef_defined_scope, param->value_type, arg, true);
+                            }
 
                             if (arg->expr_val.is_concrete) {
                                 param->is_mutable = false;
                             }
 
-                            resolve_expression(analyzer, ast, state, param->value_type, arg, true);
                             resolve_declaration_definition(analyzer, ast, funcdef_defined_scope, param);
 
                             ast_block_decl(macro_call, param);
@@ -4582,10 +4585,10 @@ void resolve_expression(
 
                         expr->value_type = check_type;
                     } else {
-                        expr->value_type = ortypeid(TYPE_UNREACHABLE);
+                        expr->value_type = ortypeid(TYPE_VOID);
                     }
                 } else {
-                    expr->value_type = ortypeid(TYPE_UNREACHABLE);
+                    expr->value_type = ortypeid(TYPE_VOID);
                 }
 
                 allocator_return(tmp);
@@ -4994,7 +4997,6 @@ void resolve_expression(
 static void declare_definition(analyzer_t *analyzer, scope_t *scope, ast_node_t *definition) {
     orword_t def_word;
     
-    tmp_arena_t *tmp = allocator_borrow();
     oristring_t identifier = definition->identifier;
 
     bool defined_through_some_recursive_definition = false;
@@ -5008,8 +5010,6 @@ static void declare_definition(analyzer_t *analyzer, scope_t *scope, ast_node_t 
                 .args = ORERR_ARGS(error_arg_str(analyzer->ast, *definition->identifier), error_arg_node(previous_decl)),
                 .show_code_lines = ORERR_LINES(0, 1),
             ));
-
-            allocator_return(tmp);
             return;
         }
 
@@ -5025,8 +5025,6 @@ static void declare_definition(analyzer_t *analyzer, scope_t *scope, ast_node_t 
     if (!defined_through_some_recursive_definition) {
         add_definition(scope, analyzer->ast->arena, identifier, definition);
     }
-
-    allocator_return(tmp);
 }
 
 static type_path_t *new_type_path(match_type_t kind, type_path_t *next, arena_t *arena) {

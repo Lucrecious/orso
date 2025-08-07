@@ -1056,7 +1056,7 @@ static void cgen_lvalue(cgen_t *cgen, ast_node_t *lvalue, cgen_var_t var) {
             orcstr_t op = lhstd->kind == TYPE_POINTER ? "->" : ".";
             sb_add_cstr(&cgen->sb, op);
 
-            sb_add_format(&cgen->sb, "%s)", field.name);
+            sb_add_format(&cgen->sb, "%s)", field.name->cstr);
 
         } else {
             cgen_var_t lhsvar = cgen_next_tmpid(cgen, lhs->value_type);
@@ -1071,7 +1071,7 @@ static void cgen_lvalue(cgen_t *cgen, ast_node_t *lvalue, cgen_var_t var) {
                 sb_add_format(&cgen->sb, "%s = ", cgen_lvar(cgen, var));
             }
             
-            sb_add_format(&cgen->sb, "(&(%s%s)->%s)", deref, cgen_var_name(cgen, lhsvar), field.name);
+            sb_add_format(&cgen->sb, "(&(%s%s)->%s)", deref, cgen_var_name(cgen, lhsvar), field.name->cstr);
         }
         break;
     }
@@ -1943,7 +1943,7 @@ static void cgen_dot_access(cgen_t *cgen, ast_node_t *dot, cgen_var_t var) {
 
         cgen_expression(cgen, lhs, nil_cvar);
 
-        sb_add_format(&cgen->sb, "%s%s", operator, *dot->identifier);
+        sb_add_format(&cgen->sb, "%s%s", operator, dot->identifier->cstr);
     } else {
         cgen_var_t lhs_var = cgen_next_tmpid(cgen, lhs->value_type);
         cgen_statement(cgen, lhs, lhs_var, false);
