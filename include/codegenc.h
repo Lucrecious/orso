@@ -69,16 +69,18 @@ static orstring_t cgen_global_new_name(string_view_t name, cgen_state_t state, a
     return new_name;
 }
 
+static orstring_t cgen_local_new_name(string_view_t name, cgen_state_t state, arena_t *arena) {
+    size_t tmpid = ++(*state.tmp_count);
+    orstring_t new_name = string_format("%.*s_%zu_", arena, name.length, name.data, tmpid);
+    return new_name;
+}
+
 static cgen_var_t cgen_user_var(cgen_t *cgen, string_view_t name, ortype_t type, bool is_global) {
     cgen_var_t var = {0};
     var.type = type;
     var.is_new = true;
 
-    if (is_global) {
-        var.name = sv2string(name, cgen->tmp_arena);
-    } else {
-        var.name = string_format("%.*s_", cgen->tmp_arena, (int)name.length, name.data);
-    }
+    var.name = sv2string(name, cgen->tmp_arena);
 
     return var;
 }
@@ -560,12 +562,11 @@ static void cgen_declaration(cgen_t *cgen, ast_node_t *declaration) {
             // skip over the constants since they are inlined
             if (!declaration->is_mutable) break;
 
-            string_view_t identifier;
-            if (declaration->is_global) {
-                identifier = string2sv(declaration->ccode_var_name);
-            } else {
-                identifier = string2sv(*declaration->identifier);
+            if (!declaration->is_global) {
+                declaration->ccode_var_name = cgen_local_new_name(string2sv(*declaration->identifier), cgen->state, cgen->ast->arena);
             }
+
+            string_view_t identifier = string2sv(declaration->ccode_var_name);
             cgen_var_t var = cgen_user_var(cgen, identifier, declaration->value_type, declaration->is_global);
             cgen_statement(cgen, an_decl_expr(declaration), var, true);
             break;
@@ -1016,14 +1017,7 @@ static void cgen_lvalue(cgen_t *cgen, ast_node_t *lvalue, cgen_var_t var) {
             sb_add_format(&cgen->sb, "%s = ", cgen_lvar(cgen, var));
         }
 
-        // todo: use ccode_var_name for all variables actually
-        string_view_t identifier;
-        if (lvalue->ref_decl->is_global) {
-            identifier = string2sv(lvalue->ref_decl->ccode_var_name);
-        } else {
-            identifier = string2sv(*lvalue->identifier);
-        }
-
+        string_view_t identifier = string2sv(lvalue->ref_decl->ccode_var_name);
         cgen_var_t lvalue_var = cgen_user_var(cgen, identifier, lvalue->value_type, lvalue->ref_decl->is_global);
         sb_add_format(&cgen->sb, "(&%s)", cgen_var_name(cgen, lvalue_var));
         break;
@@ -1484,12 +1478,7 @@ static void cgen_def_value(cgen_t *cgen, ast_node_t *def_value, cgen_var_t var) 
         sb_add_format(&cgen->sb, "%s = ", cgen_var(cgen, var));
     }
 
-    string_view_t identifier;
-    if (def_value->ref_decl->is_global) {
-        identifier = string2sv(def_value->ref_decl->ccode_var_name);
-    } else {
-        identifier = string2sv(*def_value->identifier);
-    }
+    string_view_t identifier = string2sv(def_value->ref_decl->ccode_var_name);
 
     cgen_var_t defname = cgen_user_var(cgen, identifier, def_value->value_type, def_value->ref_decl->is_global);
     sb_add_format(&cgen->sb, "%s", cgen_var_name(cgen, defname));
@@ -2240,12 +2229,10 @@ static void cgen_function_definitions(cgen_t *cgen, ast_node_t *module) {
 
             ast_node_t *arg = funcdef->children.items[i];
             ortype_t arg_type = arg->value_type;
-            if (TYPE_IS_VOID(arg_type)) {
-                sb_add_cstr(&cgen->sb, "void");
-            } else {
-                cgen_var_t var = cgen_user_var(cgen, string2sv(*arg->identifier), arg_type, false);
-                sb_add_format(&cgen->sb, "%s", cgen_var(cgen, var));
-            }
+
+            arg->ccode_var_name = cgen_local_new_name(string2sv(*arg->identifier), cgen->state, cgen->ast->arena);
+            cgen_var_t var = cgen_user_var(cgen, string2sv(arg->ccode_var_name), arg_type, false);
+            sb_add_format(&cgen->sb, "%s", cgen_var(cgen, var));
         }
 
         sb_add_cstr(&cgen->sb, ") {\n");

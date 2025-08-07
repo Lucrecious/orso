@@ -23,9 +23,9 @@ slice_at :: (s: &slice_t(!u), index: sint) -> &u {
 };
 
 main :: () {
-    x := 10;
-    arr1 := slice(&&[5]sint.{1, 2, 3, 4, 5},,x);
-    arr1;
+    x := 3;
+    arr := slice(&&[5]sint.{1, 2, 3, 4, 5},,x);
+    arr;
 
     # x := *slice_at(&arr, 4);
     # @icall "printint", x as int;
