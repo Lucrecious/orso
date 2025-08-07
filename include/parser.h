@@ -338,6 +338,7 @@ struct ast_node_t {
     bool condition_negated;
 
     scope_t defined_scope;
+    scope_t *call_scope;
 
     // todo: to optimize for space consider merging these into a flag enum
     bool is_global;
@@ -349,6 +350,7 @@ struct ast_node_t {
     bool is_compile_time_param;
     bool is_free_number;
     bool is_macro;
+    bool is_in_outer_function_scope;
 
     ast_node_t *ref_decl;
     type_patterns_t type_decl_patterns;

@@ -9,13 +9,17 @@ slice_t :: struct(u: type) {
 
 main :: () {
     z := 10;
-    add :: !(a: sint, b: sint) -> sint {
-        return a + b;
+    add :: !(a: !u, b: u) -> u {
+        return a + b + ^z;
     };
 
     x := 11;
     y := add(x, 8);
+
     @icall "printint", y as int;
+
+    # add(5.4, 3.0);
+    # @icall "printint", y as int;
 };
 
 

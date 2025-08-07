@@ -310,6 +310,8 @@ static bool get_nearest_jmp_scope_in_func_or_error(
         scope = scope->outer;
     }
 
+    // todo(luca.duran): put these outside of the function... weird function ngl
+    // similar to todo above
     if (search_type == SCOPE_TYPE_FUNCDEF) {
         stan_error(analyzer, OR_ERROR(
             .tag = "sem.invalid-return.outside-function",
@@ -2359,6 +2361,10 @@ static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
                             ast_node_t *arg = call->children.items[i + an_call_arg_start(call)];
                             an_decl_expr(param) = arg;
 
+                            if (arg->expr_val.is_concrete) {
+                                param->is_mutable = false;
+                            }
+
                             resolve_expression(analyzer, ast, state, param->value_type, arg, true);
                             resolve_declaration_definition(analyzer, ast, funcdef_defined_scope, param);
 
@@ -2381,6 +2387,7 @@ static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
 
                         funcdef_defined_scope.scope->type = SCOPE_TYPE_MACRO;
                         funcdef_defined_scope.scope->creator = an_expression(call->children.items[call->children.count-1]);
+                        funcdef_defined_scope.scope->creator->call_scope = state.scope;
                         resolve_expression(analyzer, ast, funcdef_defined_scope, ortypeid(TYPE_UNRESOLVED), call, is_consumed);
                     } else {
                         realized_funcdef = stan_realize_inferred_funcdefcall_or_errornull(analyzer, funcdef_defined_scope, call, funcdef_node, matched_values);
@@ -4137,9 +4144,25 @@ void resolve_expression(
         case AST_NODE_TYPE_EXPRESSION_DEF_VALUE: {
             expr->lvalue_node = expr;
 
-            scope_t *def_scope;
+            scope_t *search_scope = state.scope;
+            if (expr->is_in_outer_function_scope) {
+                bool success = get_nearest_jmp_scope_in_func_or_error(analyzer, expr, state.scope, SCOPE_TYPE_MACRO, false, oriemptystr, &search_scope);
+                search_scope = search_scope->creator->call_scope;
+                if (!success) {
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = "sem.invalid-hat-usage.outside-macro",
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("'^' can only be used for accessing call-site variables from within a macro"),
+                        .args = ORERR_ARGS(error_arg_node(expr)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
+                    INVALIDATE(expr);
+                    break;
+                }
+            }
 
-            ast_node_t *decl = get_defval_or_null_by_identifier_and_error(analyzer, ast, state.scope, NULL, expr, &def_scope);
+            scope_t *def_scope;
+            ast_node_t *decl = get_defval_or_null_by_identifier_and_error(analyzer, ast, search_scope, NULL, expr, &def_scope);
 
             if (decl == NULL) {
                 INVALIDATE(expr);

@@ -460,6 +460,7 @@ token_t _lexer_next_token(lexer_t *lexer) {
         case '<': return create_token(lexer, match(lexer, '=') ? TOKEN_LESS_EQUAL :
                                             (match(lexer, '<') ? TOKEN_LESS_LESS : TOKEN_LESS));
         case '>': return create_token(lexer, match(lexer, '=') ? TOKEN_GREATER_EQUAL : TOKEN_GREATER);
+        case '^': return create_token(lexer, TOKEN_HAT);
         
         case '"': return string(lexer);
         case '\'': return symbol(lexer);

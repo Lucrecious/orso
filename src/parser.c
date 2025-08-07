@@ -820,6 +820,7 @@ ast_node_t *ast_node_new(arena_t *arena, ast_node_type_t node_type, token_t star
     node->arg_index = 0;
     node->value_offset = 0;
     node->is_compile_time_param = false;
+    node->is_in_outer_function_scope = false;
 
     node->jmp_nodes.allocator = arena;
     node->jmp_out_scope_node = &nil_node;
@@ -831,6 +832,8 @@ ast_node_t *ast_node_new(arena_t *arena, ast_node_type_t node_type, token_t star
     node->last_statement = &nil_node;
 
     node->filepath = lit2str("");
+
+    node->call_scope = NULL;
 
     node->children = (ast_nodes_t){.allocator=arena};
     node->owned_funcdefs = (ast_nodes_t){.allocator=arena};
@@ -1005,6 +1008,9 @@ ast_node_t *ast_node_copy(arena_t *arena, ast_node_t *node) {
     copy->is_global = node->is_global;
     copy->is_mutable = node->is_mutable;
     copy->is_macro = node->is_macro;
+    copy->is_in_outer_function_scope = node->is_in_outer_function_scope;
+
+    copy->call_scope = node->call_scope;
 
     ASSERT(copy->jmp_nodes.count == 0, "need to convert references to other nodes to relative ones");
     ASSERT(copy->jmp_out_scope_node == &nil_node, "need to convert references to other nodes to relative ones");
@@ -1928,7 +1934,21 @@ static ast_node_t *parse_assignment(parser_t *parser) {
 }
 
 static ast_node_t *parse_def_value(parser_t *parser) {
+    bool in_outer_function_scope = false;
+    if (parser->previous.type == TOKEN_HAT) {
+        in_outer_function_scope = true;
+        if (!consume(parser, TOKEN_IDENTIFIER)) {
+            parser_error(parser, OR_ERROR(
+                .tag = "syn.expected-identifier.hat",
+                .level = ERROR_SOURCE_PARSER,
+                .msg = lit2str("expected identifier after '^'"),
+                .args = ORERR_ARGS(error_arg_token(parser->current)),
+                .show_code_lines = ORERR_LINES(0),
+            ));
+        }
+    }
     ast_node_t *def_value = ast_def_value(parser->ast, ast_sv2istring(parser->ast, parser->previous.view), parser->previous);
+    def_value->is_in_outer_function_scope = in_outer_function_scope;
     return def_value;
 }
 
@@ -2751,6 +2771,7 @@ parse_rule_t rules[] = {
     [TOKEN_ARROW_RIGHT]             = { NULL,               NULL,               PREC_NONE },
     [TOKEN_DIRECTIVE]               = { parse_directive,    NULL,               PREC_NONE },
     [TOKEN_IDENTIFIER]              = { parse_def_value,    NULL,               PREC_NONE },
+    [TOKEN_HAT]                     = { parse_def_value,    NULL,               PREC_NONE },
     [TOKEN_STRING]                  = { parse_literal,      NULL,               PREC_NONE },
     [TOKEN_SYMBOL]                  = { parse_literal,      NULL,               PREC_NONE },
     [TOKEN_INTEGER]                 = { parse_number,       NULL,               PREC_NONE },
