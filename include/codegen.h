@@ -1096,6 +1096,55 @@ static void gen_item_access_array_addr(gen_t *gen, function_t *function, texloc_
     emit_reg_to_val_dst(gen, loc, function, gen->ast->type_set.u64_, val_dst, REG_RESULT, REG_T, REG_U, false);
 }
 
+static void gen_call(gen_t *gen, function_t *function, ast_node_t *call, val_dst_t val_dst) {
+    texloc_t loc = call->start.loc;
+
+    typedata_t *call_td = ast_type2td(gen->ast,  call->value_type);
+    size_t clean_stack_point = gen_stack_point(gen);
+    if (call_td->size > ORWORD_SIZE) {
+        emit_reserve_stack_space(gen, loc, function, call_td->size);
+    }
+
+    // store stack frame
+    emit_push_reg(gen, loc, function, REG_STACK_FRAME, REG_T, REG_MOV_SIZE_WORD, 0);
+
+    // place arguments on stack for call
+    size_t argument_size_words = 0;
+    for (size_t i = an_call_arg_start(call); i < an_call_arg_end(call); ++i) {
+        ast_node_t *arg = call->children.items[i];
+        typedata_t *td = type2typedata(&gen->ast->type_set.types, arg->value_type);
+        {
+            val_dst_t dst = emit_val_dst_stack_reserve(gen, loc, function, arg->value_type);
+            gen_expression(gen, function, arg, dst);
+        }
+        argument_size_words += orb2w(td->size);
+    }
+
+    // prepare callee for call by putting it in the result register
+    {
+        ast_node_t *callee = an_callee(call);
+        val_dst_t dst = emit_val_dst_reg_or_stack_point_reserve(gen, loc, function, callee->value_type, REG_RESULT);
+        gen_expression(gen, function, callee, dst);
+    }
+
+    // replace stack frame
+    emit_binu_reg_im(function, loc, REG_STACK_FRAME, REG_STACK_BOTTOM, argument_size_words*ORWORD_SIZE, '+');
+
+    emit_call(function, REG_RESULT, loc);
+
+    // call consumes arguments
+    gen->stack_size -= argument_size_words*ORWORD_SIZE;
+
+    // restore stack frame
+    emit_pop_to_reg(gen, loc, function, REG_STACK_FRAME, gen->ast->type_set.u64_);
+
+    emit_reg_to_val_dst(gen,loc, function, call->value_type, val_dst, REG_RESULT, REG_T, REG_U, false);
+
+    if (call_td->size > ORWORD_SIZE) {
+        gen_pop_until_stack_point(gen, function, loc, clean_stack_point, true);
+    }
+}
+
 static void gen_lvalue(gen_t *gen, function_t *function, ast_node_t *lvalue, val_dst_t val_dst) {
     // special case if no lvalue
     // generate the expression, put it on the stack, and take the address of the stack position
@@ -1130,7 +1179,6 @@ static void gen_lvalue(gen_t *gen, function_t *function, ast_node_t *lvalue, val
     case AST_NODE_TYPE_EXPRESSION_ARRAY_ITEM_ACCESS: {
         ast_node_t *accessee = an_item_accessee(lvalue);
         typedata_t *accessee_td = ast_type2td(gen->ast, accessee->value_type);
-        ortype_t accessee_type;
         switch (accessee_td->kind) {
         case TYPE_POINTER: {
             // gen address
@@ -1138,7 +1186,10 @@ static void gen_lvalue(gen_t *gen, function_t *function, ast_node_t *lvalue, val
                 val_dst_t dst = emit_val_dst_reg_or_stack_point_reserve(gen, loc, function, accessee->value_type, REG_RESULT);
                 gen_expression(gen, function, accessee, dst);
             }
-            accessee_type = accessee_td->as.ptr.type;
+            ortype_t accessee_type = accessee_type = accessee_td->as.ptr.type;
+
+            ast_node_t *accessor = an_item_accessor(lvalue);
+            gen_item_access_array_addr(gen, function, loc, val_dst, REG_RESULT, accessor, accessee_type);
             break;
         }
 
@@ -1148,15 +1199,20 @@ static void gen_lvalue(gen_t *gen, function_t *function, ast_node_t *lvalue, val
                 val_dst_t dst = emit_val_dst_reg_or_stack_point_reserve(gen, loc, function, gen->ast->type_set.u64_, REG_RESULT);
                 gen_lvalue(gen, function, inner_lvalue, dst);
             }
-            accessee_type = inner_lvalue->value_type;
+            ortype_t accessee_type = inner_lvalue->value_type;
+
+            ast_node_t *accessor = an_item_accessor(lvalue);
+            gen_item_access_array_addr(gen, function, loc, val_dst, REG_RESULT, accessor, accessee_type);
             break;
         }
 
-        default: UNREACHABLE(); break;
+        default: {
+            MUST(lvalue->subscript_call_or_null);
+            val_dst_t dst = emit_val_dst_reg_or_stack_point_reserve(gen, loc, function, gen->ast->type_set.u64_, REG_RESULT);
+            gen_call(gen, function, lvalue->subscript_call_or_null, dst);
+            break;
         }
-
-        ast_node_t *accessor = an_item_accessor(lvalue);
-        gen_item_access_array_addr(gen, function, loc, val_dst, REG_RESULT, accessor, accessee_type);
+        }
         break;
     }
 
@@ -1641,7 +1697,6 @@ static void gen_assignment(gen_t *gen, function_t *function, ast_node_t *assignm
     }
 }
 
-
 static void gen_jmp_expr(gen_t *gen, function_t *function, ast_node_t *jmp_expr) {
     val_dst_t val_dst = jmp_expr->jmp_out_scope_node->vm_val_dst;
     switch (jmp_expr->start.type) {
@@ -1664,6 +1719,7 @@ static void gen_jmp_expr(gen_t *gen, function_t *function, ast_node_t *jmp_expr)
     switch (jmp_expr->start.type) {
         case TOKEN_CONTINUE:
         case TOKEN_BREAK: {
+            emit_popn_bytes(gen, function, jmp_expr->jmp_out_scope_node->vm_clean_stack_size, token_end_loc(&jmp_expr->end), false);
             jmp_expr->vm_jmp_index = gen_jmp(function, token_end_loc(&jmp_expr->end));
             break;
         }
@@ -1793,55 +1849,6 @@ static void gen_intrinsic_call(gen_t *gen, function_t *function, ast_node_t *ica
 
     case VAL_DST_VOID: break;
     case VAL_DST_STACK_POINT: break;
-    }
-}
-
-static void gen_call(gen_t *gen, function_t *function, ast_node_t *call, val_dst_t val_dst) {
-    texloc_t loc = call->start.loc;
-
-    typedata_t *call_td = ast_type2td(gen->ast,  call->value_type);
-    size_t clean_stack_point = gen_stack_point(gen);
-    if (call_td->size > ORWORD_SIZE) {
-        emit_reserve_stack_space(gen, loc, function, call_td->size);
-    }
-
-    // store stack frame
-    emit_push_reg(gen, loc, function, REG_STACK_FRAME, REG_T, REG_MOV_SIZE_WORD, 0);
-
-    // place arguments on stack for call
-    size_t argument_size_words = 0;
-    for (size_t i = an_call_arg_start(call); i < an_call_arg_end(call); ++i) {
-        ast_node_t *arg = call->children.items[i];
-        typedata_t *td = type2typedata(&gen->ast->type_set.types, arg->value_type);
-        {
-            val_dst_t dst = emit_val_dst_stack_reserve(gen, loc, function, arg->value_type);
-            gen_expression(gen, function, arg, dst);
-        }
-        argument_size_words += orb2w(td->size);
-    }
-
-    // prepare callee for call by putting it in the result register
-    {
-        ast_node_t *callee = an_callee(call);
-        val_dst_t dst = emit_val_dst_reg_or_stack_point_reserve(gen, loc, function, callee->value_type, REG_RESULT);
-        gen_expression(gen, function, callee, dst);
-    }
-
-    // replace stack frame
-    emit_binu_reg_im(function, loc, REG_STACK_FRAME, REG_STACK_BOTTOM, argument_size_words*ORWORD_SIZE, '+');
-
-    emit_call(function, REG_RESULT, loc);
-
-    // call consumes arguments
-    gen->stack_size -= argument_size_words*ORWORD_SIZE;
-
-    // restore stack frame
-    emit_pop_to_reg(gen, loc, function, REG_STACK_FRAME, gen->ast->type_set.u64_);
-
-    emit_reg_to_val_dst(gen,loc, function, call->value_type, val_dst, REG_RESULT, REG_T, REG_U, false);
-
-    if (call_td->size > ORWORD_SIZE) {
-        gen_pop_until_stack_point(gen, function, loc, clean_stack_point, true);
     }
 }
 
@@ -2063,21 +2070,22 @@ static void gen_item_access(gen_t *gen, function_t *function, ast_node_t *item_a
     
 
     if (an_is_notnone(item_access->lvalue_node)) {
-        ASSERT(accessee_td->kind == TYPE_ARRAY || accessee_td->kind == TYPE_POINTER, "only array type for now");
-
-        {
-            val_dst_t dst = emit_val_dst_reg_or_stack_point_reserve(gen, loc, function, gen->ast->type_set.u64_, REG_RESULT);
-            gen_lvalue(gen, function, item_access->lvalue_node, dst);
+        ast_node_t *lvalue = item_access->lvalue_node;
+        val_dst_t dst = emit_val_dst_reg_or_stack_point_reserve(gen, loc, function, gen->ast->type_set.u64_, REG_RESULT);
+        if (lvalue->subscript_call_or_null) {
+            gen_call(gen, function, lvalue->subscript_call_or_null, dst);
+        } else {
+            gen_lvalue(gen, function, lvalue, dst);
         }
 
         emit_reg_to_val_dst(gen, loc, function, item_access->value_type, val_dst, REG_RESULT, REG_T, REG_U, true);
     } else {
-        MUST(false); // todo
+        MUST(false); // todo: doesn't use val dst yet
 
         ASSERT(accessee_td->kind == TYPE_ARRAY, "only array type for now");
 
         typedata_t *item_access_td = ast_type2td(gen->ast, item_access->value_type);
-        size_t result_stack_point = gen->stack_size + orb2w(item_access_td->size)*ORWORD_SIZE;
+        size_t result_stack_point = gen->stack_size + orb2w2b(item_access_td->size);
 
         {
             val_dst_t dst = emit_val_dst_stack_reserve(gen, loc, function, accessee->value_type);

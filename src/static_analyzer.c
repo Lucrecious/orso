@@ -3446,8 +3446,13 @@ void resolve_expression(
                 }
 
 
+                
                 expr->subscript_call_or_null = subscript_call;
-                expr->value_type = subscript_call->value_type;
+
+                {
+                    typedata_t *td = ast_type2td(analyzer->ast, subscript_call->value_type);
+                    expr->value_type = td->as.function.return_type;
+                }
 
             defer_item_access:
                 allocator_return(tmp);

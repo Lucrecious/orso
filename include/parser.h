@@ -390,6 +390,7 @@ struct ast_node_t {
     inferred_copies_t realized_copies;
 
     size_t vm_jmp_index;
+    size_t vm_clean_stack_size;
     val_dst_t vm_val_dst;
     orstring_t ccode_break_label;
     orstring_t ccode_continue_label;
