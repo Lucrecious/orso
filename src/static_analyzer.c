@@ -2768,7 +2768,58 @@ static typedata_t *ptr_inner_td(ast_t *ast, typedata_t *td) {
     return ast_type2td(ast, td->as.ptr.type);
 }
 
-static ast_nodes_t find_subscript_decl_candidates(analyzer_t *analyzer, scope_t *scope, ast_node_t *accessee, ast_node_t *accessor, arena_t *arena) {
+bool check_subscript_function_or_error(analyzer_t *analyzer, ast_node_t *funcdef) {
+    ortype_t type = funcdef->value_type;
+    typedata_t *td = ast_type2td(analyzer->ast, type);
+
+    if (td->as.function.argument_types.count != 2) {
+        stan_error(analyzer, OR_ERROR(
+            .tag = "sem.arg-mismatch.subscript-func-arg-count",
+            .level = ERROR_SOURCE_ANALYSIS,
+            .msg = lit2str("subscript function requires 2 arguments but got '$1.$' instead"),
+            .args = ORERR_ARGS(error_arg_node(funcdef), error_arg_sz(td->as.function.argument_types.count)),
+            .show_code_lines = ORERR_LINES(0),
+        ));
+
+        return false;
+    }
+
+    ast_node_t *param1 = funcdef->children.items[an_func_def_arg_start(funcdef)];
+    ortype_t param1_type = td->as.function.argument_types.items[0];
+    typedata_t *param1td = ast_type2td(analyzer->ast, param1_type);
+    if (param1td->kind != TYPE_POINTER) {
+        stan_error(analyzer, OR_ERROR(
+            .tag = "sem.expected-ptr.subscript-fn-arg1",
+            .level = ERROR_SOURCE_ANALYSIS,
+            .msg = lit2str("subscript function requires 1 argument to be a pointer type but got '$1.$' instead"),
+            .args = ORERR_ARGS(error_arg_node(param1),error_arg_type(param1_type)),
+            .show_code_lines = ORERR_LINES(0),
+        ));
+
+        return false;
+    }
+
+    ast_node_t *ret_node = an_func_def_return(funcdef);
+    ortype_t ret_type = td->as.function.return_type;
+    typedata_t *rettd = ast_type2td(analyzer->ast, ret_type);
+    if (rettd->kind != TYPE_POINTER) {
+        stan_error(analyzer, OR_ERROR(
+            .tag = "sem.expected-ptr.subscript-fn-retrun",
+            .level = ERROR_SOURCE_ANALYSIS,
+            .msg = lit2str("subscript function requires return to be a pointer type but got '$1.$' instead"),
+            .args = ORERR_ARGS(error_arg_node(ret_node),error_arg_type(ret_type)),
+            .show_code_lines = ORERR_LINES(0),
+        ));
+
+        return false;
+    }
+
+    return true;
+}
+
+static ast_nodes_t find_subscript_decl_candidates(analyzer_t *analyzer, scope_t *scope, ast_node_t *accessee, ast_node_t *accessor, arena_t *arena, bool *resolved_at_call_site) {
+    *resolved_at_call_site = false;
+
     ast_nodes_t candidates = (ast_nodes_t){.allocator=arena};
     if (!scope) return candidates;
 
@@ -2778,9 +2829,15 @@ static ast_nodes_t find_subscript_decl_candidates(analyzer_t *analyzer, scope_t 
         switch (td->kind) {
         case TYPE_FUNCTION: {
             MUST(td->as.function.argument_types.count == 2);
-            bool match_accessee = ortypeid_eq(td->as.function.argument_types.items[0], accessee->value_type);
+            ortype_t accessee_type = td->as.function.argument_types.items[0];
+            typedata_t *ptrtd = ast_type2td(analyzer->ast, accessee_type);
+            MUST(ptrtd->kind == TYPE_POINTER);
+            accessee_type = ptrtd->as.ptr.type;
+
+            bool match_accessee = ortypeid_eq(accessee_type, accessee->value_type);
             bool match_accessor = ortypeid_eq(td->as.function.argument_types.items[1], accessor->value_type);
             if (match_accessee && match_accessor) {
+                *resolved_at_call_site = false;
                 array_push(&candidates, decl);
             }
             break;
@@ -2794,7 +2851,8 @@ static ast_nodes_t find_subscript_decl_candidates(analyzer_t *analyzer, scope_t 
             bool success = true;
             for (size_t i = 0; i < accessee_param->type_decl_patterns.count; ++i) {
                 type_pattern_t pattern = accessee_param->type_decl_patterns.items[i];
-                matched_value_t value = stan_pattern_match_or_error(analyzer, accessee_param, pattern.expected, accessee->value_type, accessee, true);
+                ortype_t ptr_type = type_set_fetch_pointer(&analyzer->ast->type_set, accessee->value_type);
+                matched_value_t value = stan_pattern_match_or_error(analyzer, accessee_param, pattern.expected, ptr_type, accessee, true);
                 if (TYPE_IS_INVALID(value.type)) {
                     success = false;
                 }
@@ -2810,6 +2868,7 @@ static ast_nodes_t find_subscript_decl_candidates(analyzer_t *analyzer, scope_t 
             }
 
             if (success) {
+                *resolved_at_call_site = true;
                 array_push(&candidates, funcdef);
             }
             break;
@@ -2820,7 +2879,7 @@ static ast_nodes_t find_subscript_decl_candidates(analyzer_t *analyzer, scope_t 
     }
 
     if (candidates.count == 0) {
-        return find_subscript_decl_candidates(analyzer, scope->outer, accessee, accessor, arena);
+        return find_subscript_decl_candidates(analyzer, scope->outer, accessee, accessor, arena, resolved_at_call_site);
     }
 
     return candidates;
@@ -3278,7 +3337,7 @@ void resolve_expression(
             }
 
             typedata_t *accessee_td = ast_type2td(ast, accessee->value_type);
-            if (an_is_notnone(accessee->lvalue_node) || accessee_td->kind == TYPE_POINTER) {
+            if (an_is_notnone(accessee->lvalue_node)) {
                 expr->lvalue_node = expr;
             }
 
@@ -3314,7 +3373,21 @@ void resolve_expression(
                 }
             } else {
                 tmp_arena_t *tmp = allocator_borrow();
-                ast_nodes_t subscript_decls = find_subscript_decl_candidates(analyzer, state.scope, accessee, accessor, tmp->allocator);
+
+                if (an_is_none(accessee->lvalue_node)) {
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = "sem.expected-lvalue.accessee",
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("accessee must be an lvalue"),
+                        .args = ORERR_ARGS(error_arg_node(accessee)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
+                    INVALIDATE(expr);
+                    goto defer_item_access;
+                }
+
+                bool resolved_at_call_site;
+                ast_nodes_t subscript_decls = find_subscript_decl_candidates(analyzer, state.scope, accessee, accessor, tmp->allocator, &resolved_at_call_site);
 
                 if (subscript_decls.count < 1) {
                     stan_error(analyzer, OR_ERROR(
@@ -3338,12 +3411,40 @@ void resolve_expression(
                 ast_node_t *callee = ast_implicit_expr(analyzer->ast, subscript_decl->value_type, subscript_decl->expr_val.word, accessee->start);
                 ast_node_t *subscript_call = ast_call_begin(analyzer->ast, callee, accessee->start);
                 
-                array_push(&subscript_call->children, accessee);
+                token_t op = token_implicit_at_start(accessee->start);
+                if (an_is_notnone(accessee->lvalue_node)) {
+                    op.type = TOKEN_AMPERSAND;
+                } else {
+                    op.type = TOKEN_AMPERSAND_AMPERSAND;
+                }
+                
+                array_push(&subscript_call->children, ast_unary(ast, op, accessee));
                 array_push(&subscript_call->children, accessor);
 
                 ast_call_end(subscript_call, accessor->end);
 
                 resolve_expression(analyzer, analyzer->ast, state, ortypeid(TYPE_UNRESOLVED), subscript_call, is_consumed);
+
+                if (TYPE_IS_INVALID(subscript_call->value_type)) {
+                    INVALIDATE(expr);
+                    goto defer_item_access;
+                }
+
+                if (resolved_at_call_site) {
+                    callee = an_callee(subscript_call);
+                    MUST(callee->expr_val.is_concrete);
+                    function_t *fn = (function_t*)callee->expr_val.word.as.p;
+                    ast_node_t *funcdef;
+                    bool found = table_get(fn2an, ast->fn2an, fn, &funcdef);
+                    MUST(found);
+
+                    bool success = check_subscript_function_or_error(analyzer, funcdef);
+                    if (!success) {
+                        INVALIDATE(expr);
+                        goto defer_item_access;
+                    }
+                }
+
 
                 expr->subscript_call_or_null = subscript_call;
                 expr->value_type = subscript_call->value_type;
@@ -5884,30 +5985,20 @@ static void resolve_subscript_definitions(analyzer_t *analyzer, analysis_state_t
             ));
         } else {
             ast_node_t *funcdef;
-            size_t arg_count;
             if (td->kind == TYPE_INFERRED_FUNCTION) {
                 ast_inferred_function_t *fn = (ast_inferred_function_t*)decl->expr_val.word.as.p;
                 funcdef = fn->funcdef;
-                arg_count = fn->arg_defaults.count;
             } else if (td->kind == TYPE_FUNCTION) {
                 function_t *fn = (function_t*)decl->expr_val.word.as.p;
                 bool success = table_get(fn2an, analyzer->ast->fn2an, fn, &funcdef);
                 MUST(success);
-                arg_count = td->as.function.argument_types.count;
+
+                success = check_subscript_function_or_error(analyzer, funcdef);
+                if (!success) {
+                    INVALIDATE(decl);
+                }
             } else {
                 UNREACHABLE();
-            }
-
-            if (arg_count != 2) {
-                invalid = true;
-
-                stan_error(analyzer, OR_ERROR(
-                    .tag = "sem.arg-mismatch.subscript-func-arg-count",
-                    .level = ERROR_SOURCE_ANALYSIS,
-                    .msg = lit2str("subscript function requires 2 arguments but got '$1.$' instead"),
-                    .args = ORERR_ARGS(error_arg_node(an_decl_expr(decl)), error_arg_sz(td->as.function.argument_types.count)),
-                    .show_code_lines = ORERR_LINES(0),
-                ));
             }
         }
 

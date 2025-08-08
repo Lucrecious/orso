@@ -16,7 +16,7 @@ slice :: !(arr: &[!n]!u, start := 0, end := n) -> slice_t(u) {
     return s;
 };
 
-@subscript slice_at :: (s: slice_t(!u), index: sint) -> &u {
+@subscript slice_at :: (s: &slice_t(!u), index: sint) -> &u {
     assert(index >= 0 and index < s.count);
     item := offsetptr(s.data, index);
     return item;
