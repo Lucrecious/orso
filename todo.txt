@@ -1,10 +1,10 @@
 Bugs:
     - circular dependencies across module global variables produces wrong and bugged out error message
 Roadmap to 0.5v
+- enums
+- switch expression
+    - keep it simple
 - remove unless and until, leave only if and while
-- strings
-    - implemented in core, with regular string syntactic sugar
-    - warning that only memory is compared
 - Make sure main works properly
     - main function is not properly type checked
     - main is always () -> void. by default programs ends in 0 error code, unless 'exit(n: num)' is used with another code
@@ -14,34 +14,24 @@ Roadmap to 0.5v
     - cover all errors
 - type list exposed as a module
 - ffi
-- compiler as module
-- switch expression
-    - keep it simple
 - cmd with proper commands
 - update tests to use a custom assert instead or printing
-- enums
 - single line short hand function body with =>
+- syntax highlighter for vscode vim
+- compile-time macros
+    - @if - compile-time if/else
+    - @assert
+
+- write clox in orso
 
 #Roadmap to 1.0v:
 - inferred function are first-class citizens at compile-time
 - paramterized structs are first-class citizens at compile-time
-- #insert-like directive
-- strings - better encoding
 - parameterized structs can be inferred
-- syntax highlighter for vscode vim
 - debug compile-time functions and native code
 - finalize spec, and make consistent (arguments and params in particular could be unified)
 - fuzz testing
 - all error tested
-- switch expression
-    - add some optimization strategies 
 - strings
     - string library
-- compile-time macros
-    - @if - compile-time if/else
-    - @assert, @inline
-- custom replacing macros (ast only, function-like)
 - expose ast to language as module
-- allow custom compile-time directives 
-- finish cmd commands
-    - with build templates

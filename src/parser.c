@@ -807,6 +807,7 @@ ast_node_t *ast_node_new(arena_t *arena, ast_node_type_t node_type, token_t star
     node->ccode_continue_label = lit2str("");
     node->ccode_var_name = lit2str("");
     node->ffi_or_null = NULL;
+    node->subscript_call_or_null = NULL;
 
     node->param_end = 0;
 
@@ -821,6 +822,7 @@ ast_node_t *ast_node_new(arena_t *arena, ast_node_type_t node_type, token_t star
     node->value_offset = 0;
     node->is_compile_time_param = false;
     node->is_in_outer_function_scope = false;
+    node->is_subscript_function = false;
 
     node->jmp_nodes.allocator = arena;
     node->jmp_out_scope_node = &nil_node;
@@ -973,6 +975,9 @@ ast_node_t *ast_node_copy(arena_t *arena, ast_node_t *node) {
     copy->ccode_continue_label = node->ccode_continue_label;
     copy->ccode_var_name = node->ccode_var_name;
 
+    copy->subscript_call_or_null = NULL;
+    MUST(node->subscript_call_or_null == NULL);
+
     if (node->defined_scope.creator) {
         scope_init(&copy->defined_scope, arena, node->defined_scope.type, node->defined_scope.outer, copy);
 
@@ -1009,6 +1014,7 @@ ast_node_t *ast_node_copy(arena_t *arena, ast_node_t *node) {
     copy->is_mutable = node->is_mutable;
     copy->is_macro = node->is_macro;
     copy->is_in_outer_function_scope = node->is_in_outer_function_scope;
+    copy->is_subscript_function = node->is_subscript_function;
 
     copy->call_scope = node->call_scope;
 
@@ -1442,12 +1448,21 @@ static ast_node_t *ast_for(ast_t *ast, ast_node_t *decl, ast_node_t *cond, ast_n
     return n;
 }
 
-static ast_node_t *ast_call_begin(ast_t *ast, ast_node_type_t type, token_t start) {
+ast_node_t *ast_call_begin(ast_t *ast, ast_node_t *callee_or_null, token_t start) {
+    ast_node_type_t type;
+    if (callee_or_null) {
+        type = AST_NODE_TYPE_EXPRESSION_CALL;
+    } else {
+        type = AST_NODE_TYPE_EXPRESSION_BUILTIN_CALL;
+    }
+
     ast_node_t *call = ast_node_new(ast->arena, type, start);
+    if (callee_or_null) an_callee(call) = callee_or_null;
+
     return call;
 }
 
-static void ast_call_end(ast_node_t *call, token_t end) {
+void ast_call_end(ast_node_t *call, token_t end) {
     call->end = end;
 }
 
@@ -1862,7 +1877,7 @@ static ast_node_t *parse_builtin_call(parser_t *parser) {
         ));
     }
 
-    ast_node_t *n = ast_call_begin(parser->ast, AST_NODE_TYPE_EXPRESSION_BUILTIN_CALL, identifier);
+    ast_node_t *n = ast_call_begin(parser->ast, NULL, identifier);
     n->identifier = ast_sv2istring(parser->ast, identifier.view);
     n->operator = identifier;
     parse_call_arguments(parser, n);
@@ -2454,8 +2469,8 @@ static ast_node_t *parse_grouping_or_function_signature_or_definition(parser_t *
 }
 
 static ast_node_t *parse_call(parser_t *parser) {
-    ast_node_t *call = ast_call_begin(parser->ast, AST_NODE_TYPE_EXPRESSION_CALL, parser->previous);
-    an_callee(call) = ast_nil(parser->ast, ortypeid(TYPE_VOID), token_implicit_at_end(parser->previous));
+    ast_node_t *callee = ast_nil(parser->ast, ortypeid(TYPE_VOID), token_implicit_at_end(parser->previous));
+    ast_node_t *call = ast_call_begin(parser->ast, callee, parser->previous);
     MUST(call->children.count == 1);
     parse_call_arguments(parser, call);
 
@@ -2517,7 +2532,7 @@ static ast_node_t *parse_inferred_type_decl(parser_t *parser) {
 static ast_node_t *parse_directive(parser_t *parser) {
     bool use_bracket = false;
 
-    ast_node_t *directive = ast_call_begin(parser->ast, AST_NODE_TYPE_EXPRESSION_DIRECTIVE, parser->previous);
+    ast_node_t *directive = ast_node_new(parser->ast->arena, AST_NODE_TYPE_EXPRESSION_DIRECTIVE, parser->previous);
     string_view_t dirv = parser->previous.view;
     {
         dirv.data += 1;
@@ -2548,7 +2563,7 @@ static ast_node_t *parse_directive(parser_t *parser) {
         }
     }
 
-    ast_call_end(directive, parser->previous);
+    directive->end = parser->previous;
 
     return directive;
 }
@@ -2942,16 +2957,22 @@ static ast_node_t *parse_statement(parser_t *parser) {
 }
 
 static ast_node_t *parse_decl_def(parser_t *parser) {
+    bool is_subscript_function = false;
     {
         while (match(parser, TOKEN_DIRECTIVE)) {
-            parser_error(parser, OR_ERROR(
-                .tag = "syn.unknown-directive.decl-def",
-                .level = ERROR_SOURCE_PARSER,
-                .msg = lit2str("unknown declaration directive"),
-                .args = ORERR_ARGS(error_arg_token(parser->previous)),
-                .show_code_lines = ORERR_LINES(0),
-            ));
-            parser->panic_mode = false;
+            token_t dir_token = parser->previous;
+            if (sv_eq(dir_token.view, SV("@subscript"))) {
+                is_subscript_function = true;
+            } else {
+                parser_error(parser, OR_ERROR(
+                    .tag = "syn.unknown-directive.decl-def",
+                    .level = ERROR_SOURCE_PARSER,
+                    .msg = lit2str("unknown declaration directive"),
+                    .args = ORERR_ARGS(error_arg_token(parser->previous)),
+                    .show_code_lines = ORERR_LINES(0),
+                ));
+                parser->panic_mode = false;
+            }
         }
     }
 
@@ -3021,6 +3042,7 @@ static ast_node_t *parse_decl_def(parser_t *parser) {
     oristring_t ident = ast_sv2istring(parser->ast, identifier.view);
     ast_node_t *decldef = ast_decldef(parser->ast, ident, type_expr, init_expr, identifier);
     decldef->is_mutable = is_mutable;
+    decldef->is_subscript_function = is_subscript_function;
     decldef->has_default_value = has_default_value;
     return decldef;
 }

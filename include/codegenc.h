@@ -76,6 +76,8 @@ static orstring_t cgen_local_new_name(string_view_t name, cgen_state_t state, ar
 }
 
 static cgen_var_t cgen_user_var(cgen_t *cgen, string_view_t name, ortype_t type, bool is_global) {
+    UNUSED(is_global);
+
     cgen_var_t var = {0};
     var.type = type;
     var.is_new = true;

@@ -67,6 +67,7 @@ typedef struct scope_t {
     ast_node_t *creator;
     
     table_t(s2w) *definitions;
+    ast_nodes_t subscript_decls;
     scope_type_t type;
     struct scope_t *outer;
 } scope_t;
@@ -344,6 +345,7 @@ struct ast_node_t {
     bool is_global;
     bool has_default_value;
     bool is_mutable;
+    bool is_subscript_function;
     bool is_intrinsic;
     bool is_exported;
     bool is_consumed;
@@ -376,6 +378,8 @@ struct ast_node_t {
     ast_nodes_t module_deps;
     ast_nodes_t tmp_decls;
     functions_t func_deps;
+
+    ast_node_t *subscript_call_or_null;
 
     oristring_t identifier;
     oristring_t label;
@@ -487,6 +491,8 @@ ast_node_t *ast_unary(ast_t *ast, token_t operator, ast_node_t *operand);
 ast_node_t *ast_begin_module(ast_t *ast);
 ast_node_t *ast_assignment(ast_t *ast, ast_node_t *lhs, ast_node_t *rhs, token_t equals);
 
+ast_node_t *ast_call_begin(ast_t *ast, ast_node_t *callee_or_null, token_t start);
+void ast_call_end(ast_node_t *call, token_t end);
 
 ast_node_t *ast_do(ast_t *ast, oristring_t label, ast_node_t *expr, token_t do_token);
 ast_node_t *ast_block_begin(ast_t *ast, token_t start);

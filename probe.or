@@ -16,22 +16,20 @@ slice :: !(arr: &[!n]!u, start := 0, end := n) -> slice_t(u) {
     return s;
 };
 
-slice_at :: (s: &slice_t(!u), index: sint) -> &u {
-    assert(index < s.count);
+@subscript slice_at :: (s: slice_t(!u), index: sint) -> &u {
+    assert(index >= 0 and index < s.count);
     item := offsetptr(s.data, index);
     return item;
 };
 
 main :: () {
     x := 3;
-    arr := slice(&&[5]sint.{1, 2, 3, 4, 5},,x);
-    arr;
+    arr := slice(&&[5]sint.{1, 2, 3, 4, 5});
 
-    # x := *slice_at(&arr, 4);
-    # @icall "printint", x as int;
-
+    arr[2];
     # for i := 0; i < arr.count; ++i {
-    #     @icall "printint", *da.at(&arr, i) as int;
+    #     thing := arr[i];
+    #     @icall "printint", thing as int;
     # };
 };
 

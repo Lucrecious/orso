@@ -39,6 +39,7 @@ void scope_init(scope_t *scope, arena_t *allocator, scope_type_t type, scope_t *
     scope->creator = creator_expression;
     scope->type = type;
     scope->definitions = table_new(s2w, allocator);
+    scope->subscript_decls = (ast_nodes_t){.allocator=allocator};
 }
 
 static void add_definition(scope_t *scope, arena_t *allocator, oristring_t identifier, ast_node_t *decl) {
@@ -1126,7 +1127,7 @@ bool ast_word_eq(type_table_t *type_set, ortype_t type, orword_t a, orword_t b) 
     return same;
 }
 
-static matched_value_t stan_pattern_match_or_error(analyzer_t *analyzer, ast_node_t *decl, type_path_t *expected, ortype_t actual, ast_node_t *arg) {
+static matched_value_t stan_pattern_match_or_error(analyzer_t *analyzer, ast_node_t *decl, type_path_t *expected, ortype_t actual, ast_node_t *arg, bool test_only) {
     if (TYPE_IS_INVALID(actual)) {
         return (matched_value_t){.type=ortypeid(TYPE_INVALID)};
     }
@@ -1135,43 +1136,49 @@ static matched_value_t stan_pattern_match_or_error(analyzer_t *analyzer, ast_nod
     switch (expected->kind) {
     case MATCH_TYPE_POINTER: {
         if (td->kind != TYPE_POINTER) {
-            stan_error(analyzer, OR_ERROR(
-                .tag = "sem.no-match.ptr",
-                .level = ERROR_SOURCE_ANALYSIS,
-                .msg = lit2str("cannot match to pointer type"),
-                .args = ORERR_ARGS(error_arg_node(arg), error_arg_node(an_decl_type(decl))),
-                .show_code_lines = ORERR_LINES(0, 1),
-            ));
+            if (!test_only) {
+                stan_error(analyzer, OR_ERROR(
+                    .tag = "sem.no-match.ptr",
+                    .level = ERROR_SOURCE_ANALYSIS,
+                    .msg = lit2str("cannot match to pointer type"),
+                    .args = ORERR_ARGS(error_arg_node(arg), error_arg_node(an_decl_type(decl))),
+                    .show_code_lines = ORERR_LINES(0, 1),
+                ));
+            }
             return (matched_value_t){.type=ortypeid(TYPE_INVALID)};
         }
 
-        return stan_pattern_match_or_error(analyzer, decl, expected->next, td->as.ptr.type, arg);
+        return stan_pattern_match_or_error(analyzer, decl, expected->next, td->as.ptr.type, arg, test_only);
     }
 
     case MATCH_TYPE_ARRAY_TYPE: {
         if (td->kind != TYPE_ARRAY) {
-            stan_error(analyzer, OR_ERROR(
-                .tag = "sem.no-match.arr-type",
-                .level = ERROR_SOURCE_ANALYSIS,
-                .msg = lit2str("cannot match to array type"),
-                .args = ORERR_ARGS(error_arg_node(arg), error_arg_node(an_decl_type(decl))),
-                .show_code_lines = ORERR_LINES(0, 1),
-            ));
+            if (!test_only) {
+                stan_error(analyzer, OR_ERROR(
+                    .tag = "sem.no-match.arr-type",
+                    .level = ERROR_SOURCE_ANALYSIS,
+                    .msg = lit2str("cannot match to array type"),
+                    .args = ORERR_ARGS(error_arg_node(arg), error_arg_node(an_decl_type(decl))),
+                    .show_code_lines = ORERR_LINES(0, 1),
+                ));
+            }
             return (matched_value_t){.type=ortypeid(TYPE_INVALID)};
         }
 
-        return stan_pattern_match_or_error(analyzer, decl, expected->next, td->as.arr.type, arg);
+        return stan_pattern_match_or_error(analyzer, decl, expected->next, td->as.arr.type, arg, test_only);
     }
 
     case MATCH_TYPE_ARRAY_SIZE: {
         if (td->kind != TYPE_ARRAY || expected->next->kind != MATCH_TYPE_IDENTIFIER) {
-            stan_error(analyzer, OR_ERROR(
-                .tag = "sem.no-match.arr-size",
-                .level = ERROR_SOURCE_ANALYSIS,
-                .msg = lit2str("cannot match to array size"),
-                .args = ORERR_ARGS(error_arg_node(arg), error_arg_node(an_decl_type(decl))),
-                .show_code_lines = ORERR_LINES(0, 1),
-            ));
+            if (!test_only) {
+                stan_error(analyzer, OR_ERROR(
+                    .tag = "sem.no-match.arr-size",
+                    .level = ERROR_SOURCE_ANALYSIS,
+                    .msg = lit2str("cannot match to array size"),
+                    .args = ORERR_ARGS(error_arg_node(arg), error_arg_node(an_decl_type(decl))),
+                    .show_code_lines = ORERR_LINES(0, 1),
+                ));
+            }
             return (matched_value_t){.type=ortypeid(TYPE_INVALID)};
         }
 
@@ -1191,49 +1198,55 @@ static matched_value_t stan_pattern_match_or_error(analyzer_t *analyzer, ast_nod
     case MATCH_TYPE_SIG_ARG: {
         size_t arg_index = expected->index;
         if (td->kind != TYPE_FUNCTION || arg_index >= td->as.function.argument_types.count) {
-            stan_error(analyzer, OR_ERROR(
-                .tag = "sem.no-match.sig-arg",
-                .level = ERROR_SOURCE_ANALYSIS,
-                .msg = lit2str("cannot match to argument in signature"),
-                .args = ORERR_ARGS(error_arg_node(arg), error_arg_node(an_decl_type(decl))),
-                .show_code_lines = ORERR_LINES(0, 1),
-            ));
+            if (!test_only) {
+                stan_error(analyzer, OR_ERROR(
+                    .tag = "sem.no-match.sig-arg",
+                    .level = ERROR_SOURCE_ANALYSIS,
+                    .msg = lit2str("cannot match to argument in signature"),
+                    .args = ORERR_ARGS(error_arg_node(arg), error_arg_node(an_decl_type(decl))),
+                    .show_code_lines = ORERR_LINES(0, 1),
+                ));
+            }
             return (matched_value_t){.type=ortypeid(TYPE_INVALID)};
         }
 
         ortype_t arg_type = td->as.function.argument_types.items[arg_index];
 
-        return stan_pattern_match_or_error(analyzer, decl, expected->next, arg_type, arg);
+        return stan_pattern_match_or_error(analyzer, decl, expected->next, arg_type, arg, test_only);
     }
 
     case MATCH_TYPE_STRUCT_PARAM: {
         size_t arg_index = expected->index;
         if (td->kind != TYPE_STRUCT || arg_index >= td->as.struct_.params.count) {
-            stan_error(analyzer, OR_ERROR(
-                .tag = "sem.no-match.struct-param",
-                .level = ERROR_SOURCE_ANALYSIS,
-                .msg = lit2str("cannot match to struct parameter"),
-                .args = ORERR_ARGS(error_arg_node(arg), error_arg_node(an_decl_type(decl))),
-                .show_code_lines = ORERR_LINES(0, 1),
-            ));
+            if (!test_only) {
+                stan_error(analyzer, OR_ERROR(
+                    .tag = "sem.no-match.struct-param",
+                    .level = ERROR_SOURCE_ANALYSIS,
+                    .msg = lit2str("cannot match to struct parameter"),
+                    .args = ORERR_ARGS(error_arg_node(arg), error_arg_node(an_decl_type(decl))),
+                    .show_code_lines = ORERR_LINES(0, 1),
+                ));
+            }
             return (matched_value_t){.type=ortypeid(TYPE_INVALID)};
         }
 
         ortype_t param_type = td->as.struct_.params.items[arg_index].type;
         orword_t arg_word = td->as.struct_.params.items[arg_index].default_value;
         if (TYPE_IS_TYPE(param_type)) {
-            return stan_pattern_match_or_error(analyzer, decl, expected->next, arg_word.as.t, arg);
+            return stan_pattern_match_or_error(analyzer, decl, expected->next, arg_word.as.t, arg, test_only);
         }
 
         if (expected->next->kind != MATCH_TYPE_IDENTIFIER) {
-            stan_error(analyzer, OR_ERROR(
-                .tag = "sem.no-match.expected-value|skip",
-                .level = ERROR_SOURCE_ANALYSIS,
-                .msg = lit2str("expected '$2.$' for struct parameter but got '$3.$'"),
-                .args = ORERR_ARGS(error_arg_node(arg), error_arg_node(an_decl_type(decl)),
-                        error_arg_type(param_type), error_arg_type(actual)),
-                .show_code_lines = ORERR_LINES(0, 1),
-            ));
+            if (!test_only) {
+                stan_error(analyzer, OR_ERROR(
+                    .tag = "sem.no-match.expected-value|skip",
+                    .level = ERROR_SOURCE_ANALYSIS,
+                    .msg = lit2str("expected '$2.$' for struct parameter but got '$3.$'"),
+                    .args = ORERR_ARGS(error_arg_node(arg), error_arg_node(an_decl_type(decl)),
+                            error_arg_type(param_type), error_arg_type(actual)),
+                    .show_code_lines = ORERR_LINES(0, 1),
+                ));
+            }
             return (matched_value_t){.type=ortypeid(TYPE_INVALID)};
         }
 
@@ -1245,19 +1258,21 @@ static matched_value_t stan_pattern_match_or_error(analyzer_t *analyzer, ast_nod
 
     case MATCH_TYPE_SIG_RET: {
         if (td->kind != TYPE_FUNCTION) {
-            stan_error(analyzer, OR_ERROR(
-                .tag = "sem.no-match.sig-return",
-                .level = ERROR_SOURCE_ANALYSIS,
-                .msg = lit2str("cannot match to return in signature"),
-                .args = ORERR_ARGS(error_arg_node(arg), error_arg_node(an_decl_type(decl))),
-                .show_code_lines = ORERR_LINES(0, 1),
-            ));
+            if (!test_only) {
+                stan_error(analyzer, OR_ERROR(
+                    .tag = "sem.no-match.sig-return",
+                    .level = ERROR_SOURCE_ANALYSIS,
+                    .msg = lit2str("cannot match to return in signature"),
+                    .args = ORERR_ARGS(error_arg_node(arg), error_arg_node(an_decl_type(decl))),
+                    .show_code_lines = ORERR_LINES(0, 1),
+                ));
+            }
             return (matched_value_t){.type=ortypeid(TYPE_INVALID)};
         }
 
         ortype_t ret_type = td->as.function.return_type;
 
-        return stan_pattern_match_or_error(analyzer, decl, expected->next, ret_type, arg);
+        return stan_pattern_match_or_error(analyzer, decl, expected->next, ret_type, arg, test_only);
     }
     }
 }
@@ -1469,7 +1484,7 @@ static bool declare_compile_time_and_inferred_decls(analyzer_t *analyzer, analys
         for (size_t t = 0; t < decl->type_decl_patterns.count; ++t)  {
             type_pattern_t pattern = decl->type_decl_patterns.items[t];
             
-            matched_value_t matched_value = stan_pattern_match_or_error(analyzer, decl, pattern.expected, call_arg->value_type, call_arg);
+            matched_value_t matched_value = stan_pattern_match_or_error(analyzer, decl, pattern.expected, call_arg->value_type, call_arg, false);
             array_push(matched_values, matched_value);
 
             if (TYPE_IS_INVALID(matched_value.type)) {
@@ -2748,6 +2763,69 @@ static void add_tmp_decls(ast_node_t *expr, ast_nodes_t tmps) {
     }
 }
 
+static typedata_t *ptr_inner_td(ast_t *ast, typedata_t *td) {
+    MUST(td->kind == TYPE_POINTER);
+    return ast_type2td(ast, td->as.ptr.type);
+}
+
+static ast_nodes_t find_subscript_decl_candidates(analyzer_t *analyzer, scope_t *scope, ast_node_t *accessee, ast_node_t *accessor, arena_t *arena) {
+    ast_nodes_t candidates = (ast_nodes_t){.allocator=arena};
+    if (!scope) return candidates;
+
+    for (size_t i = 0; i < scope->subscript_decls.count; ++i) {
+        ast_node_t *decl = scope->subscript_decls.items[i];
+        typedata_t *td = ast_type2td(analyzer->ast, decl->value_type);
+        switch (td->kind) {
+        case TYPE_FUNCTION: {
+            MUST(td->as.function.argument_types.count == 2);
+            bool match_accessee = ortypeid_eq(td->as.function.argument_types.items[0], accessee->value_type);
+            bool match_accessor = ortypeid_eq(td->as.function.argument_types.items[1], accessor->value_type);
+            if (match_accessee && match_accessor) {
+                array_push(&candidates, decl);
+            }
+            break;
+        }
+
+        case TYPE_INFERRED_FUNCTION: {
+            ast_inferred_function_t *fn = (ast_inferred_function_t*)decl->expr_val.word.as.p;
+            ast_node_t *funcdef = fn->funcdef;
+            ast_node_t *accessee_param = funcdef->children.items[an_func_def_arg_start(funcdef)];
+
+            bool success = true;
+            for (size_t i = 0; i < accessee_param->type_decl_patterns.count; ++i) {
+                type_pattern_t pattern = accessee_param->type_decl_patterns.items[i];
+                matched_value_t value = stan_pattern_match_or_error(analyzer, accessee_param, pattern.expected, accessee->value_type, accessee, true);
+                if (TYPE_IS_INVALID(value.type)) {
+                    success = false;
+                }
+            }
+
+            ast_node_t *accessor_param = funcdef->children.items[an_func_def_arg_start(funcdef)+1];
+            for (size_t i = 0; i < accessor_param->type_decl_patterns.count; ++i) {
+                type_pattern_t pattern = accessor_param->type_decl_patterns.items[i];
+                matched_value_t value = stan_pattern_match_or_error(analyzer, accessor_param, pattern.expected, accessor->value_type, accessor, true);
+                if (TYPE_IS_INVALID(value.type)) {
+                    success = false;
+                }
+            }
+
+            if (success) {
+                array_push(&candidates, funcdef);
+            }
+            break;
+        }
+
+        default: UNREACHABLE(); break;
+        }
+    }
+
+    if (candidates.count == 0) {
+        return find_subscript_decl_candidates(analyzer, scope->outer, accessee, accessor, arena);
+    }
+
+    return candidates;
+}
+
 void resolve_expression(
         analyzer_t *analyzer,
         ast_t *ast,
@@ -3000,7 +3078,7 @@ void resolve_expression(
                                         error_arg_node(ffi->node)),
                                 .show_code_lines = ORERR_LINES(0, 3),
                             ));
-                            goto defer;
+                            goto defer_dir;
                         }
 
                         if (arg_count != ffi->arg_types.count) {
@@ -3012,7 +3090,7 @@ void resolve_expression(
                                         error_arg_node(ffi->node)),
                                 .show_code_lines = ORERR_LINES(0, 3),
                             ));
-                            goto defer;
+                            goto defer_dir;
                         }
 
                         bool match = true;
@@ -3033,13 +3111,13 @@ void resolve_expression(
                         }
 
                         if (!match) {
-                            goto defer;
+                            goto defer_dir;
                         }
                     }
 
                     expr->ffi_or_null = ffi;
 
-                defer:
+                defer_dir:
                     allocator_return(tmp);
 
                     expr->value_type = fficall_return_type;
@@ -3204,74 +3282,75 @@ void resolve_expression(
                 expr->lvalue_node = expr;
             }
 
-            ortype_t item_type = ortypeid(TYPE_INVALID);
-            // accessee
-            {
-                if (accessee_td->kind != TYPE_ARRAY && accessee_td->kind != TYPE_POINTER) {
+            typedata_t *ptr_innertd = NULL;
+            if (accessee_td->kind == TYPE_ARRAY || (accessee_td->kind == TYPE_POINTER && (ptr_innertd = ptr_inner_td(ast, accessee_td))->kind == TYPE_ARRAY)) {
+                ortype_t item_type = ortypeid(TYPE_INVALID);
+                if (accessee_td->kind == TYPE_ARRAY) {
+                    item_type = accessee_td->as.arr.type;
+                } else {
+                    item_type = ptr_innertd->as.arr.type;
+                }
+
+                expr->value_type = item_type;
+
+                // accessor
+                {
+                    typedata_t *td = ast_type2td(ast, accessor->value_type);
+                    unless (td->kind == TYPE_NUMBER && td->as.num != NUM_TYPE_FLOAT) {
+                        stan_error(analyzer, OR_ERROR(
+                            .tag = "sem.expected-integer.accessor",
+                            .level = ERROR_SOURCE_ANALYSIS,
+                            .msg = lit2str("expected signed or unsigned integer but got '$1.$'"),
+                            .args = ORERR_ARGS(error_arg_node(accessor), error_arg_type(accessor->value_type)),
+                            .show_code_lines = ORERR_LINES(0),
+                        ));
+                        break;
+                    }
+                }
+
+                if (accessee->expr_val.is_concrete && accessor->expr_val.is_concrete) {
+                    // todo
+                    // UNREACHABLE();
+                }
+            } else {
+                tmp_arena_t *tmp = allocator_borrow();
+                ast_nodes_t subscript_decls = find_subscript_decl_candidates(analyzer, state.scope, accessee, accessor, tmp->allocator);
+
+                if (subscript_decls.count < 1) {
                     stan_error(analyzer, OR_ERROR(
-                        .tag = "sem.invalid-type.accessee-type",
+                        .tag = "sem.no-subscript-fn.accessee-type",
                         .level = ERROR_SOURCE_ANALYSIS,
-                        .msg = lit2str("invalid accessee type: '$1.$'"),
+                        .msg = lit2str("accessor must be array or ptr to an array or have an associated subscript function"),
                         .args = ORERR_ARGS(error_arg_node(accessee), error_arg_type(accessee->value_type)),
                         .show_code_lines = ORERR_LINES(0),
                     ));
                     INVALIDATE(expr);
-                    break;
+                    goto defer_item_access;
                 }
 
-                switch (accessee_td->kind) {
-                case TYPE_POINTER: {
-                    ortype_t ptr_inner = accessee_td->as.ptr.type;
-                    typedata_t *ptr_inner_td = ast_type2td(ast, ptr_inner);
-
-                    if (ptr_inner_td->kind != TYPE_ARRAY) {
-                        stan_error(analyzer, OR_ERROR(
-                            .tag = "sem.expected-ptr.accessee-type",
-                            .level = ERROR_SOURCE_ANALYSIS,
-                            .msg = lit2str("expected pointer to array type but got '$1.$'"),
-                            .args = ORERR_ARGS(error_arg_node(accessee), error_arg_type(accessee->value_type)),
-                            .show_code_lines = ORERR_LINES(0),
-                        ));
-                        INVALIDATE(expr);
-                        break;
-                    }
-
-                    item_type = ptr_inner_td->as.arr.type;
-                    break;
+                if (subscript_decls.count > 1) {
+                    UNREACHABLE(); // todo
+                    goto defer_item_access;
                 }
 
-                case TYPE_ARRAY: {
-                    item_type = accessee_td->as.arr.type;
-                    break;
-                }
+                ast_node_t *subscript_decl = subscript_decls.items[0];
 
-                default: UNREACHABLE(); break;
-                }
+                ast_node_t *callee = ast_implicit_expr(analyzer->ast, subscript_decl->value_type, subscript_decl->expr_val.word, accessee->start);
+                ast_node_t *subscript_call = ast_call_begin(analyzer->ast, callee, accessee->start);
+                
+                array_push(&subscript_call->children, accessee);
+                array_push(&subscript_call->children, accessor);
+
+                ast_call_end(subscript_call, accessor->end);
+
+                resolve_expression(analyzer, analyzer->ast, state, ortypeid(TYPE_UNRESOLVED), subscript_call, is_consumed);
+
+                expr->subscript_call_or_null = subscript_call;
+                expr->value_type = subscript_call->value_type;
+
+            defer_item_access:
+                allocator_return(tmp);
             }
-
-            // accessor
-            {
-                typedata_t *td = ast_type2td(ast, accessor->value_type);
-                unless (td->kind == TYPE_NUMBER && td->as.num != NUM_TYPE_FLOAT) {
-                    stan_error(analyzer, OR_ERROR(
-                        .tag = "sem.expected-integer.accessor",
-                        .level = ERROR_SOURCE_ANALYSIS,
-                        .msg = lit2str("expected signed or unsigned integer but got '$1.$'"),
-                        .args = ORERR_ARGS(error_arg_node(accessor), error_arg_type(accessor->value_type)),
-                        .show_code_lines = ORERR_LINES(0),
-                    ));
-                    INVALIDATE(expr);
-                    break;
-                }
-            }
-
-            expr->value_type = item_type;
-
-            if (accessee->expr_val.is_concrete && accessor->expr_val.is_concrete) {
-                // todo
-                // UNREACHABLE();
-            }
-
             break;
         }
 
@@ -5013,7 +5092,6 @@ static void declare_definition(analyzer_t *analyzer, scope_t *scope, ast_node_t 
             return;
         }
 
-        // i feel so fucking smart for thinking of this
         // it's possible for the same definition to be defined
         // through recursive calls (when structs try to resolve themselves)
         // it's easy to just check if this is the exact same definition 
@@ -5024,6 +5102,20 @@ static void declare_definition(analyzer_t *analyzer, scope_t *scope, ast_node_t 
 
     if (!defined_through_some_recursive_definition) {
         add_definition(scope, analyzer->ast->arena, identifier, definition);
+
+        if (definition->is_subscript_function) {
+            if (definition->is_mutable) {
+                stan_error(analyzer, OR_ERROR(
+                    .tag = "sem.expected-constant.subscript-decl",
+                    .level = ERROR_SOURCE_ANALYSIS,
+                    .msg = lit2str("subscript declaration requires a constant value"),
+                    .args = ORERR_ARGS(error_arg_node(an_decl_expr(definition))),
+                    .show_code_lines = ORERR_LINES(0),
+                ));
+            } else {
+                array_push(&scope->subscript_decls, definition);
+            }
+        }
     }
 }
 
@@ -5767,7 +5859,67 @@ static void resolve_declaration(
     }
 }
 
+static void resolve_subscript_definitions(analyzer_t *analyzer, analysis_state_t state) {
+    for (size_t i = state.scope->subscript_decls.count; i > 0; --i) {
+        ast_node_t *decl = state.scope->subscript_decls.items[i-1];
+        resolve_declaration_definition(analyzer, analyzer->ast, state, decl);
+
+        if (TYPE_IS_INVALID(decl->value_type)) {
+            array_remove(&state.scope->subscript_decls, i-1);
+            continue;
+        }
+
+        typedata_t *td = ast_type2td(analyzer->ast, decl->value_type);
+            
+        bool invalid = false;
+        if (td->kind != TYPE_FUNCTION && td->kind != TYPE_INFERRED_FUNCTION) {
+            invalid = true;
+
+            stan_error(analyzer, OR_ERROR(
+                .tag = "sem.expected-function.subscript-decl",
+                .level = ERROR_SOURCE_ANALYSIS,
+                .msg = lit2str("subscript declaration requires a function definition"),
+                .args = ORERR_ARGS(error_arg_node(an_decl_expr(decl))),
+                .show_code_lines = ORERR_LINES(0),
+            ));
+        } else {
+            ast_node_t *funcdef;
+            size_t arg_count;
+            if (td->kind == TYPE_INFERRED_FUNCTION) {
+                ast_inferred_function_t *fn = (ast_inferred_function_t*)decl->expr_val.word.as.p;
+                funcdef = fn->funcdef;
+                arg_count = fn->arg_defaults.count;
+            } else if (td->kind == TYPE_FUNCTION) {
+                function_t *fn = (function_t*)decl->expr_val.word.as.p;
+                bool success = table_get(fn2an, analyzer->ast->fn2an, fn, &funcdef);
+                MUST(success);
+                arg_count = td->as.function.argument_types.count;
+            } else {
+                UNREACHABLE();
+            }
+
+            if (arg_count != 2) {
+                invalid = true;
+
+                stan_error(analyzer, OR_ERROR(
+                    .tag = "sem.arg-mismatch.subscript-func-arg-count",
+                    .level = ERROR_SOURCE_ANALYSIS,
+                    .msg = lit2str("subscript function requires 2 arguments but got '$1.$' instead"),
+                    .args = ORERR_ARGS(error_arg_node(an_decl_expr(decl)), error_arg_sz(td->as.function.argument_types.count)),
+                    .show_code_lines = ORERR_LINES(0),
+                ));
+            }
+        }
+
+        if (invalid) {
+            array_remove(&state.scope->subscript_decls, i-1);
+        }
+    }
+}
+
 size_t resolve_declarations_until_unreachable(analyzer_t *analyzer, ast_t *ast, analysis_state_t state, ast_nodes_t declarations, bool is_last_statement_consumed) {
+    resolve_subscript_definitions(analyzer, state);
+
     size_t last_decl = declarations.count;
     for (size_t i = 0; i < declarations.count; i++) {
         ast_node_t *declaration = declarations.items[i];
