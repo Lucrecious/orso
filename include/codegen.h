@@ -1548,10 +1548,13 @@ static void gen_branching(gen_t *gen, function_t *function, ast_node_t *branch, 
     }
 
     branch->vm_val_dst = val_dst;
+    branch->vm_clean_stack_size = clean_stack_point;
 
     switch (branch->branch_type) {
         case BRANCH_TYPE_DO: {
             gen_expression(gen, function, an_expression(branch), val_dst);
+
+            gen_pop_until_stack_point(gen, function, loc, clean_stack_point, true);
             gen_patch_jmps(gen, function, branch, TOKEN_BREAK);
             break;
         }
@@ -1566,6 +1569,8 @@ static void gen_branching(gen_t *gen, function_t *function, ast_node_t *branch, 
             gen_expression(gen, function, an_else(branch), val_dst);
 
             gen_patch_jmp(gen, function, else_index);
+
+            gen_pop_until_stack_point(gen, function, loc, clean_stack_point, true);
             break;
         }
 
@@ -1588,13 +1593,16 @@ static void gen_branching(gen_t *gen, function_t *function, ast_node_t *branch, 
             gen_patch_jmp(gen, function, then_index);
 
             gen_expression(gen, function, an_else(branch), val_dst);
+
+            gen_pop_until_stack_point(gen, function, loc, clean_stack_point, true);
+
             gen_patch_jmps(gen, function, branch, TOKEN_BREAK);
             gen_patch_jmp(gen, function, else_index);
             break;
         }
     }
 
-    gen_pop_until_stack_point(gen, function, loc, clean_stack_point, true);
+    // gen_pop_until_stack_point(gen, function, loc, clean_stack_point, true);
 }
 
 static void gen_assignment(gen_t *gen, function_t *function, ast_node_t *assignment, val_dst_t val_dst) {
@@ -1719,7 +1727,7 @@ static void gen_jmp_expr(gen_t *gen, function_t *function, ast_node_t *jmp_expr)
     switch (jmp_expr->start.type) {
         case TOKEN_CONTINUE:
         case TOKEN_BREAK: {
-            emit_popn_bytes(gen, function, jmp_expr->jmp_out_scope_node->vm_clean_stack_size, token_end_loc(&jmp_expr->end), false);
+            gen_pop_until_stack_point(gen, function, token_end_loc(&jmp_expr->end), jmp_expr->jmp_out_scope_node->vm_clean_stack_size, false);
             jmp_expr->vm_jmp_index = gen_jmp(function, token_end_loc(&jmp_expr->end));
             break;
         }
