@@ -1179,39 +1179,42 @@ static void gen_lvalue(gen_t *gen, function_t *function, ast_node_t *lvalue, val
     case AST_NODE_TYPE_EXPRESSION_ARRAY_ITEM_ACCESS: {
         ast_node_t *accessee = an_item_accessee(lvalue);
         typedata_t *accessee_td = ast_type2td(gen->ast, accessee->value_type);
-        switch (accessee_td->kind) {
-        case TYPE_POINTER: {
-            // gen address
-            {
-                val_dst_t dst = emit_val_dst_reg_or_stack_point_reserve(gen, loc, function, accessee->value_type, REG_RESULT);
-                gen_expression(gen, function, accessee, dst);
-            }
-            ortype_t accessee_type = accessee_type = accessee_td->as.ptr.type;
-
-            ast_node_t *accessor = an_item_accessor(lvalue);
-            gen_item_access_array_addr(gen, function, loc, val_dst, REG_RESULT, accessor, accessee_type);
-            break;
-        }
-
-        case TYPE_ARRAY: {
-            ast_node_t *inner_lvalue = accessee->lvalue_node;
-            {
-                val_dst_t dst = emit_val_dst_reg_or_stack_point_reserve(gen, loc, function, gen->ast->type_set.u64_, REG_RESULT);
-                gen_lvalue(gen, function, inner_lvalue, dst);
-            }
-            ortype_t accessee_type = inner_lvalue->value_type;
-
-            ast_node_t *accessor = an_item_accessor(lvalue);
-            gen_item_access_array_addr(gen, function, loc, val_dst, REG_RESULT, accessor, accessee_type);
-            break;
-        }
-
-        default: {
+        if (lvalue->subscript_call_or_null) {
             MUST(lvalue->subscript_call_or_null);
-            val_dst_t dst = emit_val_dst_reg_or_stack_point_reserve(gen, loc, function, gen->ast->type_set.u64_, REG_RESULT);
-            gen_call(gen, function, lvalue->subscript_call_or_null, dst);
-            break;
-        }
+            gen_call(gen, function, lvalue->subscript_call_or_null, val_dst);
+        } else {
+            switch (accessee_td->kind) {
+            case TYPE_POINTER: {
+                // gen address
+                {
+                    val_dst_t dst = emit_val_dst_reg_or_stack_point_reserve(gen, loc, function, accessee->value_type, REG_RESULT);
+                    gen_expression(gen, function, accessee, dst);
+                }
+                ortype_t accessee_type = accessee_type = accessee_td->as.ptr.type;
+
+                ast_node_t *accessor = an_item_accessor(lvalue);
+                gen_item_access_array_addr(gen, function, loc, val_dst, REG_RESULT, accessor, accessee_type);
+                break;
+            }
+
+            case TYPE_ARRAY: {
+                ast_node_t *inner_lvalue = accessee->lvalue_node;
+                {
+                    val_dst_t dst = emit_val_dst_reg_or_stack_point_reserve(gen, loc, function, gen->ast->type_set.u64_, REG_RESULT);
+                    gen_lvalue(gen, function, inner_lvalue, dst);
+                }
+                ortype_t accessee_type = inner_lvalue->value_type;
+
+                ast_node_t *accessor = an_item_accessor(lvalue);
+                gen_item_access_array_addr(gen, function, loc, val_dst, REG_RESULT, accessor, accessee_type);
+                break;
+            }
+
+            default: {
+                UNREACHABLE();
+                break;
+            }
+            }
         }
         break;
     }

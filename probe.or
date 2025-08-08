@@ -25,10 +25,9 @@ slice :: !(arr: &[!n]!u, start := 0, end := n as sint) -> slice_t(u) {
 main :: () {
     x := 3;
     arr := slice(&&[5]sint.{1, 2, 3, 4, 5}, 1, 4);
-    y := arr[0];
-    arr[0] = 5;
-    # y := *slice_at(&arr, 2);
-    @icall "printint", y as int;
+    arr[1] = 5;
+    z := arr[1];
+    @icall "printint", z as int;
     
     # for i := 0; i < arr.count; ++i {
     #     thing := arr[i];
