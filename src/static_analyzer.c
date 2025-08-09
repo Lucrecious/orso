@@ -3631,15 +3631,17 @@ void resolve_expression(
 
                             if (current_field_index >= init_type_td->as.struct_.fields.count) {
                                 is_invalid = true;
-                                stan_error(analyzer, OR_ERROR(
-                                    .tag = "sem.too-many-args.struct-init-list",
-                                    .level = ERROR_SOURCE_ANALYSIS,
-                                    .msg = lit2str("too many arguments; expected no more than '$1.$' but initializer is` at argument '$2.$'"),
-                                    .args = ORERR_ARGS(error_arg_node(arg),
-                                                    error_arg_sz(init_type_td->as.struct_.fields.count),
-                                                    error_arg_sz(current_field_index+1)),
-                                    .show_code_lines = ORERR_LINES(0),
-                                ));
+                                if (init_type_td->as.struct_.status == STRUCT_STATUS_COMPLETE) {
+                                    stan_error(analyzer, OR_ERROR(
+                                        .tag = "sem.too-many-args.struct-init-list",
+                                        .level = ERROR_SOURCE_ANALYSIS,
+                                        .msg = lit2str("too many arguments; expected no more than '$1.$' but initializer is` at argument '$2.$'"),
+                                        .args = ORERR_ARGS(error_arg_node(arg),
+                                                        error_arg_sz(init_type_td->as.struct_.fields.count),
+                                                        error_arg_sz(current_field_index+1)),
+                                        .show_code_lines = ORERR_LINES(0),
+                                    ));
+                                }
                                 break;
                             }
 
@@ -5394,6 +5396,10 @@ static void forward_scan_inferred_types(ast_node_t *decl, ast_node_t *decl_type,
 static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, analysis_state_t state, ast_node_t *decl) {
     if (TYPE_IS_RESOLVED(decl->value_type)) return;
 
+    if (!decl->is_mutable) {
+        decl->expr_val = ast_node_val_word(ORWORDU(0));
+    }
+
     array_push(&analyzer->pending_dependencies, decl);
 
     ast_node_t *decl_type = an_decl_type(decl);
@@ -5518,7 +5524,9 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
     }
 
     if (!decl->is_mutable) {
-        decl->expr_val = init_expr->expr_val;
+        if (init_expr->expr_val.is_concrete) {
+            decl->expr_val = init_expr->expr_val;
+        }
         if (!decl->expr_val.is_concrete && !TYPE_IS_INVALID(decl->value_type)) {
             stan_error(analyzer, OR_ERROR(
                 .tag = "sem.expected-constant.decl-init",

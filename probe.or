@@ -1,47 +1,32 @@
-assert :: (test := false, message := "") {
-    @icall "assert", test, message;
+animal_t :: struct {
+    var := 0;
+    none :: animal_t.{0};
+    dog :: animal_t.{1};
+    cat :: animal_t.{2};
 };
 
-slice_t :: struct(u: type) {
-    data := (&u).{};
-    count := 0;
+main :: () -> void {
+    animal_t.none.var;
 };
 
-slice :: !(arr: &[!n]!u, start := 0, end := n as sint) -> slice_t(u) {
-    assert(start >= 0 and end <= n and end >= start, "slice out of range");
-    s := slice_t(u).{};
-    s.data = arr as &void as &u;
-    s.data = offsetptr(s.data, start);
-    s.count = end-start;
-    return s;
-};
-
-@subscript slice_at :: (s: &slice_t(!u), index: sint) -> &u {
-    assert(index >= 0 and index < s.count, "index out of range");
-    item := offsetptr(s.data, index);
-    return item;
-};
-
-main :: () {
-    x := 3;
-    arr := slice(&&[5]sint.{1, 2, 3, 4, 5}, 1, 4);
-    arr[1] = 5;
-    z := arr[1];
-    @icall "printint", z as int;
-
-    
-    # for i := 0; i < arr.count; ++i {
-    #     thing := arr[i];
-    #     @icall "printint", thing as int;
-    # };
-};
-
-# main :: () {
-#     arr := [4]sint.{1, 2, 3, 4};
-
-#     s := slice(&arr);
-
-#     x := s[2]
-
-#     (@load "io.or").println(if x == 3 then "yes" else "no");
+# slice_t :: struct(u: type) {
+#     data := (&u).{};
+#     count := 0;
 # };
+
+# slice :: !(arr: &[!n]!u, start := 0, end := n as sint) -> slice_t(u) {
+#     assert(start >= 0 and end <= n and end >= start, "slice out of range");
+#     s := slice_t(u).{};
+#     s.data = arr as &void as &u;
+#     s.data = offsetptr(s.data, start);
+#     s.count = end-start;
+#     return s;
+# };
+
+# @subscript slice_at :: (s: &slice_t(!u), index: sint) -> &u {
+#     assert(index >= 0 and index < s.count, "index out of range");
+#     item := offsetptr(s.data, index);
+#     return item;
+# };
+
+# vec_t :: [2]f64;
