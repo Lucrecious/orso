@@ -299,6 +299,19 @@ static void cgen_cache_requires_tmp(typedatas_t *types, ast_node_t *expression) 
             break;
         }
 
+        case AST_NODE_TYPE_EXPRESSION_ARRAY_ITEM_ACCESS: {
+            if (expression->subscript_call_or_null) {
+                cgen_cache_requires_tmp(types, expression->subscript_call_or_null);
+                // todo: actually check for cache.
+                // cgen_cache_requires_tmp(types, expression->subscript_call_or_null);
+                expression->subscript_call_or_null->requires_tmp_for_cgen = true;
+                expression->requires_tmp_for_cgen = true;
+            } else {
+                expression->requires_tmp_for_cgen = false;
+            }
+            break;
+        }
+
         case AST_NODE_TYPE_EXPRESSION_BRANCHING:
         case AST_NODE_TYPE_EXPRESSION_JMP:
         case AST_NODE_TYPE_EXPRESSION_BLOCK: {
@@ -1708,6 +1721,21 @@ static void cgen_cast(cgen_t *cgen, ast_node_t *cast, cgen_var_t var) {
         sb_add_cstr(&cgen->sb, ")");
     }
 }
+    
+static void cgen_subscript_call(cgen_t *cgen, ast_node_t *subscript_call, cgen_var_t var) {
+    MUST(subscript_call->requires_tmp_for_cgen);
+
+    cgen_var_t tmp_var = cgen_next_tmpid(cgen, subscript_call->value_type);
+    cgen_statement(cgen, subscript_call, tmp_var, false);
+
+    cgen_add_indent(cgen);
+
+    if (has_var(var)) {
+        sb_add_format(&cgen->sb, "%s = ", cgen_var(cgen, var));
+    }
+
+    sb_add_format(&cgen->sb, "*(%s)", cgen_var_name(cgen, tmp_var));
+}
 
 static void cgen_item_access(cgen_t *cgen, ast_node_t *item_access, cgen_var_t var) {
     ast_node_t *accessee = an_item_accessee(item_access);
@@ -2116,7 +2144,11 @@ static void cgen_expression(cgen_t *cgen, ast_node_t *expression, cgen_var_t var
         }
 
         case AST_NODE_TYPE_EXPRESSION_ARRAY_ITEM_ACCESS: {
-            cgen_item_access(cgen, expression, var);
+            if (expression->subscript_call_or_null) {
+                cgen_subscript_call(cgen, expression->subscript_call_or_null, var);
+            } else {
+                cgen_item_access(cgen, expression, var);
+            }
             break;
         }
         

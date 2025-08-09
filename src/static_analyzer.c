@@ -4597,7 +4597,7 @@ void resolve_expression(
                 stan_error(analyzer, OR_ERROR(
                     .tag = "sem.type-mismatch.decl-and-type",
                     .level = ERROR_SOURCE_ANALYSIS,
-                    .msg = lit2str("value is of type '$1.$' while definition is of type '$2.$'"),
+                    .msg = lit2str("rvalue is a '$1.$' while lvalue is a '$2.$'"),
                     .args = ORERR_ARGS(error_arg_node(expr), error_arg_type(rhs_type), error_arg_type(lvalue_node->value_type)),
                     .show_code_lines = ORERR_LINES(0),
                 ));
