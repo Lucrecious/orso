@@ -897,6 +897,29 @@ static void cgen_unary(cgen_t *cgen, ast_node_t *unary, cgen_var_t var) {
     default: UNREACHABLE(); break;
     }
 }
+    
+static void cgen_subscript_call(cgen_t *cgen, ast_node_t *subscript_call, cgen_var_t var) {
+    if (!subscript_call->requires_tmp_for_cgen) {
+        if (has_var(var)) {
+            sb_add_format(&cgen->sb, "%s = ", cgen_var(cgen, var));
+        }
+
+        sb_add_cstr(&cgen->sb, "*(");
+        cgen_expression(cgen, subscript_call, nil_cvar);
+        sb_add_cstr(&cgen->sb, ")");
+    } else {
+        cgen_var_t tmp_var = cgen_next_tmpid(cgen, subscript_call->value_type);
+        cgen_statement(cgen, subscript_call, tmp_var, false);
+
+        cgen_add_indent(cgen);
+
+        if (has_var(var)) {
+            sb_add_format(&cgen->sb, "%s = ", cgen_var(cgen, var));
+        }
+
+        sb_add_format(&cgen->sb, "*(%s)", cgen_var_name(cgen, tmp_var));
+    }
+}
 
 static void cgen_lvalue(cgen_t *cgen, ast_node_t *lvalue, cgen_var_t var) {
     switch (lvalue->node_type) {
@@ -926,98 +949,102 @@ static void cgen_lvalue(cgen_t *cgen, ast_node_t *lvalue, cgen_var_t var) {
     }
 
     case AST_NODE_TYPE_EXPRESSION_ARRAY_ITEM_ACCESS: {
-        ast_node_t *accessee = an_item_accessee(lvalue);
-        typedata_t *accessee_td = ast_type2td(cgen->ast, accessee->value_type);
-
-        ast_node_t *accessor = an_item_accessor(lvalue);
-
-        unless (lvalue->requires_tmp_for_cgen) {
-            if (has_var(var)) {
-                sb_add_format(&cgen->sb, "%s = ", cgen_lvar(cgen, var));
-            }
-
-            switch (accessee_td->kind) {
-            case TYPE_ARRAY: {
-                break;
-            }
-
-            case TYPE_POINTER: {
-                sb_add_cstr(&cgen->sb, "(");
-                break;
-            }
-
-            default: UNREACHABLE(); break;
-            }
-
-            cgen_lvalue(cgen, accessee->lvalue_node, nil_cvar);
-
-            switch (accessee_td->kind) {
-            case TYPE_ARRAY: {
-                sb_add_cstr(&cgen->sb, "->arr");
-                break;
-            }
-
-            case TYPE_POINTER: {
-                sb_add_cstr(&cgen->sb, ")->arr");
-                break;
-            }
-
-            default: UNREACHABLE(); break;
-            }
-
-            sb_add_cstr(&cgen->sb, " + (");
-
-            cgen_expression(cgen, accessor, nil_cvar);
-
-            sb_add_cstr(&cgen->sb, ")");
+        if (lvalue->subscript_call_or_null) {
+            cgen_subscript_call(cgen, lvalue->subscript_call_or_null, var);
         } else {
+            ast_node_t *accessee = an_item_accessee(lvalue);
+            typedata_t *accessee_td = ast_type2td(cgen->ast, accessee->value_type);
 
-            bool is_pointer = false;
-            switch (accessee_td->kind) {
-            case TYPE_ARRAY: {
-                is_pointer = false;
-                break;
-            }
+            ast_node_t *accessor = an_item_accessor(lvalue);
 
-            case TYPE_POINTER: {
-                is_pointer = true;
-                break;
-            }
+            unless (lvalue->requires_tmp_for_cgen) {
+                if (has_var(var)) {
+                    sb_add_format(&cgen->sb, "%s = ", cgen_lvar(cgen, var));
+                }
 
-            default: UNREACHABLE(); break;
-            }
+                switch (accessee_td->kind) {
+                case TYPE_ARRAY: {
+                    break;
+                }
 
-            cgen_var_t lvalue_var;
-            if (is_pointer) {
-                lvalue_var = cgen_next_tmpid(cgen, accessee->value_type);
-                cgen_expression(cgen, accessee, lvalue_var);
-                cgen_semicolon_nl(cgen);
+                case TYPE_POINTER: {
+                    sb_add_cstr(&cgen->sb, "(");
+                    break;
+                }
 
-                cgen_var_t ptr_var = lvalue_var;
-                lvalue_var = cgen_next_tmpid(cgen, lvalue->value_type);
+                default: UNREACHABLE(); break;
+                }
+
+                cgen_lvalue(cgen, accessee->lvalue_node, nil_cvar);
+
+                switch (accessee_td->kind) {
+                case TYPE_ARRAY: {
+                    sb_add_cstr(&cgen->sb, "->arr");
+                    break;
+                }
+
+                case TYPE_POINTER: {
+                    sb_add_cstr(&cgen->sb, ")->arr");
+                    break;
+                }
+
+                default: UNREACHABLE(); break;
+                }
+
+                sb_add_cstr(&cgen->sb, " + (");
+
+                cgen_expression(cgen, accessor, nil_cvar);
+
+                sb_add_cstr(&cgen->sb, ")");
+            } else {
+
+                bool is_pointer = false;
+                switch (accessee_td->kind) {
+                case TYPE_ARRAY: {
+                    is_pointer = false;
+                    break;
+                }
+
+                case TYPE_POINTER: {
+                    is_pointer = true;
+                    break;
+                }
+
+                default: UNREACHABLE(); break;
+                }
+
+                cgen_var_t lvalue_var;
+                if (is_pointer) {
+                    lvalue_var = cgen_next_tmpid(cgen, accessee->value_type);
+                    cgen_expression(cgen, accessee, lvalue_var);
+                    cgen_semicolon_nl(cgen);
+
+                    cgen_var_t ptr_var = lvalue_var;
+                    lvalue_var = cgen_next_tmpid(cgen, lvalue->value_type);
+
+                    cgen_add_indent(cgen);
+                    sb_add_format(&cgen->sb, "%s = %s->arr", cgen_lvar(cgen, lvalue_var), cgen_var_name(cgen, ptr_var));
+
+                    cgen_semicolon_nl(cgen);
+                } else {
+                    lvalue_var = cgen_next_tmpid(cgen, lvalue->value_type);
+                    cgen_lvalue(cgen, accessee->lvalue_node, lvalue_var);
+                    sb_add_cstr(&cgen->sb, "->arr");
+
+                    cgen_semicolon_nl(cgen);
+                }
+
+                cgen_var_t key_var = cgen_next_tmpid(cgen, accessor->value_type);
+                cgen_statement(cgen, accessor, key_var, true);
 
                 cgen_add_indent(cgen);
-                sb_add_format(&cgen->sb, "%s = %s->arr", cgen_lvar(cgen, lvalue_var), cgen_var_name(cgen, ptr_var));
 
-                cgen_semicolon_nl(cgen);
-            } else {
-                lvalue_var = cgen_next_tmpid(cgen, lvalue->value_type);
-                cgen_lvalue(cgen, accessee->lvalue_node, lvalue_var);
-                sb_add_cstr(&cgen->sb, "->arr");
+                if (has_var(var)) {
+                    sb_add_format(&cgen->sb, "%s = ", cgen_lvar(cgen, var));
+                }
 
-                cgen_semicolon_nl(cgen);
+                sb_add_format(&cgen->sb, "%s + %s", cgen_var_name(cgen, lvalue_var), cgen_var_name(cgen, key_var));
             }
-
-            cgen_var_t key_var = cgen_next_tmpid(cgen, accessor->value_type);
-            cgen_statement(cgen, accessor, key_var, true);
-
-            cgen_add_indent(cgen);
-
-            if (has_var(var)) {
-                sb_add_format(&cgen->sb, "%s = ", cgen_lvar(cgen, var));
-            }
-
-            sb_add_format(&cgen->sb, "%s + %s", cgen_var_name(cgen, lvalue_var), cgen_var_name(cgen, key_var));
         }
         break;
     }
@@ -1716,29 +1743,6 @@ static void cgen_cast(cgen_t *cgen, ast_node_t *cast, cgen_var_t var) {
         cgen_expression(cgen, castee, nil_cvar);
 
         sb_add_cstr(&cgen->sb, ")");
-    }
-}
-    
-static void cgen_subscript_call(cgen_t *cgen, ast_node_t *subscript_call, cgen_var_t var) {
-    if (!subscript_call->requires_tmp_for_cgen) {
-        if (has_var(var)) {
-            sb_add_format(&cgen->sb, "%s = ", cgen_var(cgen, var));
-        }
-
-        sb_add_cstr(&cgen->sb, "*(");
-        cgen_expression(cgen, subscript_call, nil_cvar);
-        sb_add_cstr(&cgen->sb, ")");
-    } else {
-        cgen_var_t tmp_var = cgen_next_tmpid(cgen, subscript_call->value_type);
-        cgen_statement(cgen, subscript_call, tmp_var, false);
-
-        cgen_add_indent(cgen);
-
-        if (has_var(var)) {
-            sb_add_format(&cgen->sb, "%s = ", cgen_var(cgen, var));
-        }
-
-        sb_add_format(&cgen->sb, "*(%s)", cgen_var_name(cgen, tmp_var));
     }
 }
 
