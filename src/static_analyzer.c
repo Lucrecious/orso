@@ -1731,19 +1731,34 @@ static void resolve_struct(analyzer_t *analyzer, ast_t *ast, analysis_state_t st
         return;
     }
 
-    // forward declare struct constants
-    for (size_t i = an_struct_start(struct_def); i < an_struct_end(struct_def); ++i) {
-        ast_node_t *decl = struct_def->children.items[i];
-        if (decl->is_mutable) continue;
-
-        declare_definition(analyzer, new_state.scope, decl);
-    }
-
     ortype_t struct_type;
     if (TYPE_IS_UNRESOLVED(struct_def->value_type)) {
-        struct_type = type_set_fetch_anonymous_incomplete_struct(&ast->type_set);
+        tmp_arena_t *tmp = allocator_borrow();
+        struct_fields_t consts = {.allocator=tmp->allocator};
+
+        // forward declare struct constants
+        for (size_t i = an_struct_start(struct_def); i < an_struct_end(struct_def); ++i) {
+            ast_node_t *decl = struct_def->children.items[i];
+            if (decl->is_mutable) continue;
+
+            declare_definition(analyzer, new_state.scope, decl);
+
+            struct_field_t field = {
+                .name = decl->identifier,
+                .offset = 0,
+                .type = ortypeid(TYPE_UNRESOLVED),
+                .default_value = ORWORDU(0),
+            };
+            array_push(&consts, field);
+        }
+
+        struct_type = type_set_fetch_anonymous_incomplete_struct(&ast->type_set, consts);
         struct_def->value_type = ortypeid(TYPE_TYPE);
         struct_def->expr_val = ast_node_val_word(ORWORDT(struct_type));
+
+        table_put(t2n, ast->t2n, struct_type, struct_def);
+
+        allocator_return(tmp);
     } else {
         struct_type = struct_def->expr_val.word.as.t;
     }
@@ -1779,19 +1794,6 @@ static void resolve_struct(analyzer_t *analyzer, ast_t *ast, analysis_state_t st
         }
     }
 
-    for (size_t i = an_struct_start(struct_def); i < an_struct_end(struct_def); ++i) {
-        ast_node_t *decl = struct_def->children.items[i];
-        if (decl->is_mutable) continue;
-
-        if (TYPE_IS_UNRESOLVED(decl->value_type)) {
-            resolve_declaration_definition(analyzer, ast, new_state, decl);
-
-            if (TYPE_IS_INVALID(decl->value_type)) {
-                invalid_type = true;
-            }
-        }
-    }
-
     --analyzer->pending_dependencies.count;
 
     if (td->as.struct_.status != STRUCT_STATUS_INCOMPLETE) {
@@ -1807,11 +1809,12 @@ static void resolve_struct(analyzer_t *analyzer, ast_t *ast, analysis_state_t st
     tmp_arena_t *tmp = allocator_borrow();
 
     struct_fields_t fields = {.allocator=tmp->allocator};
-    struct_fields_t consts = {.allocator=tmp->allocator};
 
     bool has_error = false;
     for (size_t i = an_struct_start(struct_def); i < an_struct_end(struct_def); ++i) {
         ast_node_t *decl = struct_def->children.items[i];
+        if (!decl->is_mutable) continue;
+
         struct_field_t field = ast_struct_field_from_decl(ast, decl, ast->arena);
 
         if (TYPE_IS_INVALID(decl->value_type)) {
@@ -1827,18 +1830,14 @@ static void resolve_struct(analyzer_t *analyzer, ast_t *ast, analysis_state_t st
 
         --analyzer->pending_dependencies.count;
 
-        if (decl->is_mutable) {
-            array_push(&fields, field);
-        } else {
-            array_push(&consts, field);
-        }
+        array_push(&fields, field);
     }
 
     if (has_error) {
         type_set_invalid_struct(&ast->type_set, struct_type);
         INVALIDATE(struct_def);
     }  else {
-        type_set_complete_struct(&ast->type_set, struct_type, fields, consts);
+        type_set_complete_struct(&ast->type_set, struct_type, fields);
     }
 
     allocator_return(tmp);
@@ -4482,11 +4481,6 @@ void resolve_expression(
                     break;
                 }
 
-                if (!retry_resolve_possible_struct_or_error(analyzer, lhs, struct_type)) {
-                    INVALIDATE(expr);
-                    break;
-                }
-
                 struct_field_t field = {0};
                 size_t field_index;
                 bool success = ast_find_field_by_name(td->as.struct_.constants, expr->identifier, &field, &field_index);
@@ -4501,6 +4495,37 @@ void resolve_expression(
                     ));
                     INVALIDATE(expr);
                     break;
+                }
+
+                if (TYPE_IS_UNRESOLVED(field.type)) {
+                    ast_node_t *struct_def;
+                    bool success = table_get(t2n, ast->t2n, struct_type, &struct_def);
+                    MUST(success);
+
+                    ast_node_t *c = NULL;
+                    for (size_t i = an_struct_start(struct_def); i < an_struct_end(struct_def); ++i) {
+                        ast_node_t *decl = struct_def->children.items[i];
+                        if (decl->is_mutable) continue;
+                        if (decl->identifier != field.name) continue;
+                        c = decl;
+                        break;;
+                    }
+
+                    MUST(c);
+
+                    {
+                        analysis_state_t new_state = state;
+                        new_state.scope = &struct_def->defined_scope;
+                        resolve_declaration(analyzer, ast, new_state, c);
+
+                        field = (struct_field_t) {
+                            .name = field.name,
+                            .type = c->value_type,
+                            .default_value = c->expr_val.word,
+                        };
+
+                        type_set_set_unresolved_struct_construct(&ast->type_set, struct_type, field);
+                    }
                 }
 
                 expr->value_type = field.type;

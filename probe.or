@@ -6,7 +6,9 @@ animal_t :: struct {
 };
 
 main :: () -> void {
-    animal_t.none.var;
+    a := animal_t.cat;
+    @icall "printint", a.var as int;
+    # animal_t.none.var;
 };
 
 # slice_t :: struct(u: type) {

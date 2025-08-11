@@ -61,6 +61,7 @@ static int type_equal_(ortype_t a, ortype_t b) {
 }
 
 implement_table(t2w, ortype_t, orword_t, type_hash, type_equal_)
+implement_table(t2n, ortype_t, ast_node_t*, type_hash, type_equal_)
 implement_table(type2ns, ortype_t, ast_node_and_scope_t, type_hash, type_equal_)
 implement_table(fn2an, void*, ast_node_t*, hashptr_, hasheq_);
 
@@ -754,6 +755,7 @@ void ast_init(ast_t *ast, arena_t *arena) {
     ast->fn2an = table_new(fn2an, ast->arena);
     ast->moduleid2node = table_new(s2n, ast->arena);
     ast->ffis = table_new(s2fis, ast->arena);
+    ast->t2n = table_new(t2n, ast->arena);
 
     ast->search_paths = (strings_t){.allocator=ast->arena};
 
@@ -768,7 +770,6 @@ void ast_init(ast_t *ast, arena_t *arena) {
     directives_init(ast, &ast->directives);
 
     ast->type_to_zero_word = table_new(t2w, ast->arena);
-    ast->type_to_creation_node = table_new(type2ns, ast->arena);
 }
 
 ast_node_t nil_node = {

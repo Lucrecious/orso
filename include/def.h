@@ -87,7 +87,7 @@ FORCE_INLINE oru32 maxu32(oru32 a, oru32 b) {
 #else
 
   #define ASSERT(condition, message)
-  #define MUST(condition)
+  #define MUST(condition) 
 
   // Tell the compiler that this part of the code will never be reached.
   #if defined( _MSC_VER )

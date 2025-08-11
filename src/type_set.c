@@ -140,7 +140,7 @@ struct_binding_t *begin_struct_binding(type_table_t *set, orstring_t cname) {
     binding->cname = cname;
     binding->field_bindings = (struct_fields_t){.allocator=set->allocator};
 
-    ortype_t type = type_set_fetch_anonymous_incomplete_struct(set);
+    ortype_t type = type_set_fetch_anonymous_incomplete_struct(set, (struct_fields_t){0});
     binding->type = type;
     array_push(&set->bindings, binding);
 
@@ -157,7 +157,7 @@ void struct_field_bind(struct_binding_t *sb, ortype_t type, oristring_t field_na
 }
 
 void end_struct_binding(struct_binding_t *sb, type_table_t *set) {
-    type_set_complete_struct(set, sb->type, sb->field_bindings, (struct_fields_t){0});
+    type_set_complete_struct(set, sb->type, sb->field_bindings);
     typedata_t *td = type2typedata(&set->types, sb->type);
     td->as.struct_.binding_or_null = sb;
     td->name = sb->cname;
@@ -414,12 +414,15 @@ ortype_t type_set_fetch_array(type_table_t *set, ortype_t value_type, size_t siz
     return type;
 }
 
-ortype_t type_set_fetch_anonymous_incomplete_struct(type_table_t *set) {
+ortype_t type_set_fetch_anonymous_incomplete_struct(type_table_t *set, struct_fields_t consts_resolved_or_unresolved) {
     typedata_t struct_type = {0};
     incomplete_struct_type_init(set, (struct_fields_t){0}, (struct_fields_t){0}, &struct_type);
 
+    consts_resolved_or_unresolved = fields_copy(consts_resolved_or_unresolved, set->allocator);
+
     typedata_t *typeinfo = type_copy_new(set, &struct_type);
     typeinfo->as.struct_.status = STRUCT_STATUS_INCOMPLETE;
+    typeinfo->as.struct_.constants = consts_resolved_or_unresolved;
     ortype_t type = add_type_no_track(set, typeinfo);
     return type;
 }
@@ -430,15 +433,33 @@ void type_set_invalid_struct(type_table_t *set, ortype_t incomplete_type) {
     td->as.struct_.status = STRUCT_STATUS_INVALID;
 }
 
-void type_set_complete_struct(type_table_t *set, ortype_t incomplete_type, struct_fields_t fields, struct_fields_t consts) {
+void type_set_complete_struct(type_table_t *set, ortype_t incomplete_type, struct_fields_t fields) {
     typedata_t *td = type2typedata(&set->types, incomplete_type);
     MUST(td->kind == TYPE_STRUCT && td->as.struct_.status == STRUCT_STATUS_INCOMPLETE);
 
     fields = fields_copy(fields, set->allocator);
-    consts = fields_copy(consts, set->allocator);
+    struct_fields_t consts = td->as.struct_.constants;
 
     incomplete_struct_type_init(set, fields, consts, td);
     td->as.struct_.status = STRUCT_STATUS_COMPLETE;
+}
+
+void type_set_set_unresolved_struct_construct(type_table_t *set, ortype_t struct_type, struct_field_t field) {
+    typedata_t *td = type2typedata(&set->types, struct_type);
+    MUST(td->kind == TYPE_STRUCT);
+
+    struct_field_t *dst = NULL;
+    for (size_t i = 0; i < td->as.struct_.constants.count; ++i) {
+        struct_field_t *fld = &td->as.struct_.constants.items[i];
+        if (fld->name == field.name) {
+            dst = fld;
+            break;
+        }
+    }
+
+    MUST(dst);
+
+    *dst = field;
 }
 
 void type_set_attach_params_to_struct_type(type_table_t *set, ortype_t struct_type, struct_fields_t params) {

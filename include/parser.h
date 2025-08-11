@@ -399,6 +399,7 @@ struct ast_node_t {
 };
 
 declare_table(t2w, ortype_t, orword_t)
+declare_table(t2n, ortype_t, ast_node_t*)
 
 typedef struct ast_node_and_scope_t {
     ast_node_t *node;
@@ -449,6 +450,7 @@ typedef struct ast_t {
     table_t(p2s) *intrinsicfn2cname;
     table_t(fn2an) *fn2an;
     table_t(s2fis) *ffis;
+    table_t(t2n) *t2n;
 
     orintrinsic_fns_t directives;
     orintrinsic_fns_t intrinsics;
@@ -461,7 +463,6 @@ typedef struct ast_t {
     ast_nodes_t global_decls_in_resolution_order;
 
     table_t(t2w) *type_to_zero_word;
-    table_t(type2ns) *type_to_creation_node;
 } ast_t;
 
 void ast_print_node(ast_t *ast, ast_node_t *node);
