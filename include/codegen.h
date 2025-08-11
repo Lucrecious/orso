@@ -2390,6 +2390,7 @@ static void gen_expression(gen_t *gen, function_t *function, ast_node_t *express
 
         // should be resolved at compile time
         case AST_NODE_TYPE_EXPR_INFERRED_TYPE_DECL: UNREACHABLE(); break;
+        case AST_NODE_TYPE_EXPRESSION_ENUM:
         case AST_NODE_TYPE_EXPRESSION_STRUCT:
         case AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE:
         case AST_NODE_TYPE_DECLARATION_STATEMENT:

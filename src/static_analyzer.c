@@ -1713,6 +1713,91 @@ static struct_field_t ast_struct_field_from_decl(ast_t *ast, ast_node_t *decl, a
     return field;
 }
 
+typedef struct struct_value_t struct_value_t;
+struct struct_value_t {
+    ortype_t struct_type;
+    orword_t word;
+};
+static struct_value_t ast_struct_value(ast_t *ast, ortype_t type) {
+    struct_value_t v = {
+        .struct_type = type,
+    };
+
+    typedata_t *td = ast_type2td(ast, type);
+    if (td->size > ORWORD_SIZE) {
+        v.word.as.p = ast_multiword_value(ast, td->size);
+    } else {
+        v.word = ORWORDU(0);
+    }
+
+    return v;
+}
+
+static void ast_struct_value_append(ast_t *ast, struct_value_t *value, size_t field_index, orword_t word) {
+    typedata_t *td = ast_type2td(ast, value->struct_type);
+    MUST(td->kind == TYPE_STRUCT || td->kind == TYPE_STRING);
+    MUST(field_index < td->as.struct_.fields.count);
+
+    struct_field_t field = td->as.struct_.fields.items[field_index];
+
+    void *dst;
+    if (td->size > ORWORD_SIZE) {
+        dst = value->word.as.p + field.offset;
+    } else {
+        dst = ((void*)&value->word) + field.offset;
+    }
+
+    ast_copy_expr_val_to_memory(ast, field.type, word, dst); 
+}
+
+static void resolve_enum(analyzer_t *analyzer, ast_t *ast, analysis_state_t state, ast_node_t *enum_def) {
+    tmp_arena_t *tmp = allocator_borrow();
+
+    struct_fields_t consts = {.allocator=tmp->allocator};
+    for (size_t i = an_enum_start(enum_def); i < an_enum_end(enum_def); ++i) {
+        ast_node_t *def = enum_def->children.items[i];
+        struct_field_t field = {
+            .name=def->identifier,
+            .type=ortypeid(TYPE_UNRESOLVED)
+        };
+
+        array_push(&consts, field);
+    }
+
+    ortype_t struct_type = type_set_fetch_anonymous_incomplete_struct(&ast->type_set, consts);
+
+    struct_fields_t fields = {.allocator=tmp->allocator};
+    {
+        struct_field_t val = {
+            .name = ast_sv2istring(ast, SV("val")),
+            .type = ast->type_set.sint_,
+            .default_value = ORWORDU(0),
+        };
+
+        array_push(&fields, val);
+
+        type_set_complete_struct(&ast->type_set, struct_type, fields);
+    }
+
+    for (size_t i = an_enum_start(enum_def); i < an_enum_end(enum_def); ++i) {
+        struct_value_t value = ast_struct_value(ast, struct_type);
+        ast_struct_value_append(ast, &value, 0, ORWORDU(i));
+
+        struct_field_t val = {
+            .name = enum_def->children.items[i]->identifier,
+            .type = struct_type,
+            .default_value = value.word,
+        };
+
+        type_set_set_unresolved_struct_const(&ast->type_set, struct_type, val);
+    }
+
+    allocator_return(tmp);
+
+    enum_def->value_type = ortypeid(TYPE_TYPE);
+    enum_def->expr_val = ast_node_val_word(ORWORDT(struct_type));
+}
+
 static void resolve_struct(analyzer_t *analyzer, ast_t *ast, analysis_state_t state, ast_node_t *struct_def) {
     analysis_state_t new_state = state;
     if (struct_def->defined_scope.creator == struct_def) {
@@ -3862,7 +3947,9 @@ void resolve_expression(
             resolve_expression(analyzer, ast, state, implicit_type, left, true);
 
             ast_node_t *right = an_rhs(expr);
-            resolve_expression(analyzer, ast, state, implicit_type, right, true);
+            {
+                resolve_expression(analyzer, ast, state, left->value_type, right, true);
+            }
 
             an_lhs(expr) = (left = cast_implicitly_if_necessary(ast, right->value_type, left));
             an_rhs(expr) = (right = cast_implicitly_if_necessary(ast, left->value_type, right));
@@ -4371,11 +4458,31 @@ void resolve_expression(
         }
 
         case AST_NODE_TYPE_EXPRESSION_DOT_ACCESS: {
-            ortype_t lhs_type = implicit_type;
+            ortype_t lhs_type = ortypeid(TYPE_INVALID);
+
             ast_node_t *lhs = an_dot_lhs(expr);
             if (an_is_notnone(lhs)) {
                 resolve_expression(analyzer, ast, state, implicit_type, lhs, true);
                 lhs_type = lhs->value_type;
+            } else {
+                if (TYPE_IS_RESOLVED(implicit_type) && !TYPE_IS_INVALID(implicit_type)) {
+                    ast_node_t *type_expr = ast_implicit_expr(ast, ortypeid(TYPE_TYPE), ORWORDT(implicit_type), token_implicit_at_start(expr->start));
+                    an_dot_lhs(expr) = type_expr;
+                    lhs = type_expr;
+                    lhs_type = ortypeid(TYPE_TYPE);
+                } else {
+                    if (!TYPE_IS_INVALID(lhs_type)) {
+                        stan_error(analyzer, OR_ERROR(
+                            .tag = "sem.no-implicit-type.dot-access",
+                            .level = ERROR_SOURCE_ANALYSIS,
+                            .msg = lit2str("no implicit type can be inferred for '.' access"),
+                            .args = ORERR_ARGS(error_arg_node(expr)),
+                            .show_code_lines = ORERR_LINES(0),
+                        ));
+                    }
+                    INVALIDATE(expr);
+                    break;
+                }
             }
 
             if (TYPE_IS_INVALID(lhs_type)) {
@@ -4384,15 +4491,6 @@ void resolve_expression(
             }
 
             if (TYPE_IS_UNRESOLVED(lhs_type)) {
-                stan_error(analyzer, OR_ERROR(
-                    .tag = "sem.no-implicit-type.dot-access",
-                    .level = ERROR_SOURCE_ANALYSIS,
-                    .msg = lit2str("no implicit type can be inferred for '.' access"),
-                    .args = ORERR_ARGS(error_arg_node(expr)),
-                    .show_code_lines = ORERR_LINES(0),
-                ));
-                INVALIDATE(expr);
-                break;
             }
 
             typedata_t *lhstd = ast_type2td(ast, lhs_type);
@@ -4524,7 +4622,7 @@ void resolve_expression(
                             .default_value = c->expr_val.word,
                         };
 
-                        type_set_set_unresolved_struct_construct(&ast->type_set, struct_type, field);
+                        type_set_set_unresolved_struct_const(&ast->type_set, struct_type, field);
                     }
                 }
 
@@ -4895,6 +4993,11 @@ void resolve_expression(
 
         case AST_NODE_TYPE_EXPRESSION_STRUCT: {
             resolve_struct(analyzer, ast, state, expr);
+            break;
+        }
+
+        case AST_NODE_TYPE_EXPRESSION_ENUM: {
+            resolve_enum(analyzer, ast, state, expr);
             break;
         }
         
@@ -5279,6 +5382,7 @@ static void forward_scan_inferred_types(ast_node_t *decl, ast_node_t *decl_type,
         case AST_NODE_TYPE_EXPRESSION_BRANCHING:
         case AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION:
         case AST_NODE_TYPE_EXPRESSION_NIL:
+        case AST_NODE_TYPE_EXPRESSION_ENUM:
         case AST_NODE_TYPE_EXPRESSION_STRUCT:
         case AST_NODE_TYPE_EXPRESSION_INITIALIZER_LIST:
         case AST_NODE_TYPE_EXPRESSION_DIRECTIVE:

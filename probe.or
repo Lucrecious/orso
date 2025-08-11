@@ -1,14 +1,12 @@
-animal_t :: struct {
-    var := 0;
-    none :: animal_t.{0};
-    dog :: animal_t.{1};
-    cat :: animal_t.{2};
+button :: (toggle: enum { on; off; }) -> bool {
+    if toggle == .on then return true;
+    return false;
 };
 
+
 main :: () -> void {
-    a := animal_t.cat;
-    @icall "printint", a.var as int;
-    # animal_t.none.var;
+    if button(.on) then (@load "io.or").println("yes")
+    else (@load "io.or").println("no");
 };
 
 # slice_t :: struct(u: type) {

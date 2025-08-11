@@ -102,6 +102,7 @@ typedef enum ast_node_type_t {
     AST_NODE_TYPE_EXPRESSION_BRANCHING,
     AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION,
     AST_NODE_TYPE_EXPRESSION_STRUCT,
+    AST_NODE_TYPE_EXPRESSION_ENUM,
     AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE,
     AST_NODE_TYPE_EXPRESSION_INITIALIZER_LIST,
     AST_NODE_TYPE_EXPRESSION_DIRECTIVE,
@@ -119,6 +120,7 @@ case AST_NODE_TYPE_EXPRESSION_DEF_VALUE: \
 case AST_NODE_TYPE_EXPRESSION_NIL: \
 case AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION: \
 case AST_NODE_TYPE_EXPRESSION_STRUCT: \
+case AST_NODE_TYPE_EXPRESSION_ENUM: \
 case AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE: \
 case AST_NODE_TYPE_EXPRESSION_GROUPING: \
 case AST_NODE_TYPE_EXPRESSION_ARRAY_TYPE: \
@@ -173,6 +175,8 @@ extern ast_node_t nil_node;
 #define an_struct_param_end(n) ((n)->param_end)
 #define an_struct_start(n) ((n)->param_end)
 #define an_struct_end(n) ((n)->children.count)
+#define an_enum_start(n) (0)
+#define an_enum_end(n) ((n)->children.count)
 #define an_dot_lhs(n) ((n)->children.items[0])
 
 #define an_fficall_lib(n) ((n)->children.items[0])

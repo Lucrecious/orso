@@ -84,7 +84,7 @@ ortype_t type_set_fetch_array(type_table_t *set, ortype_t value_type, size_t siz
 ortype_t type_set_fetch_anonymous_incomplete_struct(type_table_t *set, struct_fields_t consts);
 void type_set_invalid_struct(type_table_t *set, ortype_t incomplete_type);
 void type_set_complete_struct(type_table_t *set, ortype_t incomplete_struct, struct_fields_t fields);
-void type_set_set_unresolved_struct_construct(type_table_t *set, ortype_t struct_type, struct_field_t field);
+void type_set_set_unresolved_struct_const(type_table_t *set, ortype_t struct_type, struct_field_t field);
 
 void type_set_attach_params_to_struct_type(type_table_t *set, ortype_t struct_type, struct_fields_t params);
 

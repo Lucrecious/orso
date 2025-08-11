@@ -193,6 +193,7 @@ static orcstr_t tokentype2string(token_type_t token_type) {
         case TOKEN_STAR_EQUAL: return "*=";
         case TOKEN_STRING: return "<string>";
         case TOKEN_STRUCT: return "struct";
+        case TOKEN_ENUM: return "enum";
         case TOKEN_SYMBOL: return "<symbol>";
         case TOKEN_THEN: return "then";
         case TOKEN_TRUE: return "true";

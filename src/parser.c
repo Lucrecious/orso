@@ -936,6 +936,7 @@ ast_node_t *ast_node_new(arena_t *arena, ast_node_type_t node_type, token_t star
             break;
         }
 
+        case AST_NODE_TYPE_EXPRESSION_ENUM: break;
         case AST_NODE_TYPE_EXPRESSION_STRUCT: break;
 
         case AST_NODE_TYPE_EXPRESSION_DIRECTIVE: break;
@@ -1175,6 +1176,20 @@ void ast_struct_add_decl(ast_node_t *struct_, ast_node_t *decl) {
 
 void ast_struct_end(ast_node_t *struct_, token_t end) {
     struct_->end = end;
+}
+
+ast_node_t *ast_enum_begin(ast_t *ast, token_t start) {
+    ast_node_t *enum_ = ast_node_new(ast->arena, AST_NODE_TYPE_EXPRESSION_ENUM, start);
+    enum_->start = start;
+    return enum_;
+}
+
+void ast_enum_add_decl(ast_node_t *enum_, ast_node_t *decl) {
+    array_push(&enum_->children, decl);
+}
+
+void ast_enum_end(ast_node_t *enum_, token_t end) {
+    enum_->end = end;
 }
 
 static ast_node_t *ast_primaryu(ast_t *ast, oru64 value, ortype_t type, token_t token) {
@@ -2591,6 +2606,52 @@ static ast_node_t *parse_cast(parser_t *parser) {
     return cast_node;
 }
 
+static ast_node_t *parse_enum_def(parser_t *parser) {
+    token_t enum_keyword = parser->previous;
+
+    if (!consume(parser, TOKEN_BRACE_OPEN)) {
+        parser_error(parser, OR_ERROR(
+            .tag = "syn.missing-lbrace.enum-def",
+            .level = ERROR_SOURCE_PARSER,
+            .msg = lit2str("expected '{' after enum keyword"),
+            .args = ORERR_ARGS(error_arg_token(parser->current)),
+            .show_code_lines = ORERR_LINES(0),
+        ));
+    }
+
+    ast_node_t *enum_ = ast_enum_begin(parser->ast, enum_keyword);
+
+    while (match(parser, TOKEN_IDENTIFIER)) {
+        ast_node_t *def = parse_def_value(parser);
+
+        if (!consume(parser, TOKEN_SEMICOLON)) {
+            parser_error(parser, OR_ERROR(
+                .tag = "syn.missing-semicolin.enum-decl-def",
+                .level = ERROR_SOURCE_PARSER,
+                .msg = lit2str("expected ';' after enum declaration"),
+                .args = ORERR_ARGS(error_arg_token(parser->current)),
+                .show_code_lines = ORERR_LINES(0),
+            ));
+        }
+
+        ast_enum_add_decl(enum_, def);
+    }
+
+    if (!consume(parser, TOKEN_BRACE_CLOSE)) {
+        parser_error(parser, OR_ERROR(
+            .tag = "syn.missing-rbrace.enum-def",
+            .level = ERROR_SOURCE_PARSER,
+            .msg = lit2str("expected '}' to close enum def"),
+            .args = ORERR_ARGS(error_arg_token(parser->current)),
+            .show_code_lines = ORERR_LINES(0),
+        ));
+    }
+
+    ast_enum_end(enum_, parser->previous);
+
+    return enum_;
+}
+
 static ast_node_t *parse_struct_def(parser_t *parser) {
     token_t struct_keyword = parser->previous;
 
@@ -2794,6 +2855,7 @@ parse_rule_t rules[] = {
     [TOKEN_FLOAT]                   = { parse_number,       NULL,               PREC_NONE },
     [TOKEN_ANNOTATION]              = { NULL,               NULL,               PREC_NONE },
     [TOKEN_STRUCT]                  = { parse_struct_def,   NULL,               PREC_NONE },
+    [TOKEN_ENUM]                    = { parse_enum_def,     NULL,               PREC_NONE },
     [TOKEN_NOT]                     = { parse_unary,        NULL,               PREC_NONE },
     [TOKEN_AND]                     = { NULL,               parse_binary,       PREC_AND },
     [TOKEN_OR]                      = { NULL,               parse_binary,       PREC_OR },
@@ -3492,6 +3554,20 @@ static void ast_print_ast_node(typedatas_t types, ast_node_t *node, oru32 level)
             ast_print_ast_node(types, an_func_def_block(node), level + 2);
             break;
         }
+
+        case AST_NODE_TYPE_EXPRESSION_ENUM: {
+            print_indent(level);
+            print_line("enum: %s", type2cstr(node));
+
+            print_indent(level + 1);
+            print_line("values");
+            for (size_t i = an_enum_start(node); i < an_enum_end(node); ++i) {
+                ast_node_t *declaration = node->children.items[i];
+                ast_print_ast_node(types, declaration, level + 2);
+            }
+            break;
+        }
+
         case AST_NODE_TYPE_EXPRESSION_STRUCT: {
             print_indent(level);
             print_line("struct: %s", type2cstr(node));

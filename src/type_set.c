@@ -444,7 +444,7 @@ void type_set_complete_struct(type_table_t *set, ortype_t incomplete_type, struc
     td->as.struct_.status = STRUCT_STATUS_COMPLETE;
 }
 
-void type_set_set_unresolved_struct_construct(type_table_t *set, ortype_t struct_type, struct_field_t field) {
+void type_set_set_unresolved_struct_const(type_table_t *set, ortype_t struct_type, struct_field_t field) {
     typedata_t *td = type2typedata(&set->types, struct_type);
     MUST(td->kind == TYPE_STRUCT);
 
