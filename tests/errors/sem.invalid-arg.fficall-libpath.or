@@ -1,3 +1,9 @@
+dl :: @load "dynlib.or";
+
 main :: () -> void {
-    @fficall "asdasd.a", "decl", void, "something";
+    lib :: dl.lib_t.{
+        "decl",
+        "asdasda.a",
+    };
+    @fficall lib, void, "something";
 };

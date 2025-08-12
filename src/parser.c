@@ -2533,7 +2533,7 @@ static ast_node_t *parse_inferred_type_decl(parser_t *parser) {
 
     default: {
         parser_error(parser, OR_ERROR(
-            .tag = "syn.expects-def-val-or-funcdef.bang.",
+            .tag = "syn.expects-def-val-or-funcdef.bang",
             .level = ERROR_SOURCE_PARSER,
             .msg = lit2str("expected either an identifier or funcdef after '!'"),
             .args = ORERR_ARGS(error_arg_token(parser->current)),
@@ -2622,7 +2622,13 @@ static ast_node_t *parse_enum_def(parser_t *parser) {
     ast_node_t *enum_ = ast_enum_begin(parser->ast, enum_keyword);
 
     while (match(parser, TOKEN_IDENTIFIER)) {
-        ast_node_t *def = parse_def_value(parser);
+        token_t start = parser->previous;
+        oristring_t identifier = ast_sv2istring(parser->ast, parser->previous.view);
+
+        ast_node_t *init_expr = &nil_node;
+        if (match(parser, TOKEN_EQUAL)) {
+            init_expr = parse_expression(parser);
+        }
 
         if (!consume(parser, TOKEN_SEMICOLON)) {
             parser_error(parser, OR_ERROR(
@@ -2634,7 +2640,10 @@ static ast_node_t *parse_enum_def(parser_t *parser) {
             ));
         }
 
-        ast_enum_add_decl(enum_, def);
+
+        ast_node_t *decl = ast_decldef(parser->ast, identifier, &nil_node, init_expr, start);
+        decl->is_mutable = false;
+        ast_enum_add_decl(enum_, decl);
     }
 
     if (!consume(parser, TOKEN_BRACE_CLOSE)) {

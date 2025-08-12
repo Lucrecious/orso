@@ -1,32 +1,9 @@
-button :: (toggle: enum { on; off; }) -> bool {
-    if toggle == .on then return true;
-    return false;
+test_t :: enum {
+    a; b; c;
 };
-
 
 main :: () -> void {
-    if button(.on) then (@load "io.or").println("yes")
-    else (@load "io.or").println("no");
+    a := test_t.a;
+    b := test_t.b;
+    a == b;
 };
-
-# slice_t :: struct(u: type) {
-#     data := (&u).{};
-#     count := 0;
-# };
-
-# slice :: !(arr: &[!n]!u, start := 0, end := n as sint) -> slice_t(u) {
-#     assert(start >= 0 and end <= n and end >= start, "slice out of range");
-#     s := slice_t(u).{};
-#     s.data = arr as &void as &u;
-#     s.data = offsetptr(s.data, start);
-#     s.count = end-start;
-#     return s;
-# };
-
-# @subscript slice_at :: (s: &slice_t(!u), index: sint) -> &u {
-#     assert(index >= 0 and index < s.count, "index out of range");
-#     item := offsetptr(s.data, index);
-#     return item;
-# };
-
-# vec_t :: [2]f64;

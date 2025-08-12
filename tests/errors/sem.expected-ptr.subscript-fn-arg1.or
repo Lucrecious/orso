@@ -1,0 +1,7 @@
+main :: () -> void {
+    @subscript get :: (a: int, index: sint) -> &int {
+        return &a;
+    };
+
+    get;
+};

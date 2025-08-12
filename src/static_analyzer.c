@@ -1553,7 +1553,7 @@ static bool declare_compile_time_and_inferred_decls(analyzer_t *analyzer, analys
         }
     }
 
-    return matched_values;
+    return !had_error;
 }
 
 static ast_node_t *stan_realize_inferred_funcdefcall_or_errornull(analyzer_t *analyzer, analysis_state_t state, ast_node_t *call, ast_node_t *inferred_funcdef, matched_values_t matched_values) {
@@ -1755,9 +1755,9 @@ static void resolve_enum(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
 
     struct_fields_t consts = {.allocator=tmp->allocator};
     for (size_t i = an_enum_start(enum_def); i < an_enum_end(enum_def); ++i) {
-        ast_node_t *def = enum_def->children.items[i];
+        ast_node_t *decl = enum_def->children.items[i];
         struct_field_t field = {
-            .name=def->identifier,
+            .name=decl->identifier,
             .type=ortypeid(TYPE_UNRESOLVED)
         };
 
@@ -1766,11 +1766,13 @@ static void resolve_enum(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
 
     ortype_t struct_type = type_set_fetch_anonymous_incomplete_struct(&ast->type_set, consts);
 
+    ortype_t enum_type = ast->type_set.sint_;
+
     struct_fields_t fields = {.allocator=tmp->allocator};
     {
         struct_field_t val = {
             .name = ast_sv2istring(ast, SV("val")),
-            .type = ast->type_set.sint_,
+            .type = enum_type,
             .default_value = ORWORDU(0),
         };
 
@@ -1779,17 +1781,62 @@ static void resolve_enum(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
         type_set_complete_struct(&ast->type_set, struct_type, fields);
     }
 
+    orsint current = 0;
     for (size_t i = an_enum_start(enum_def); i < an_enum_end(enum_def); ++i) {
+        ast_node_t *decl = enum_def->children.items[i];
+
+        ast_node_t *expr = an_decl_expr(decl);
+
+        orword_t word;
+        if (an_is_none(an_decl_expr(decl))) {
+            word = ORWORDI(current);
+        } else {
+            array_push(&analyzer->pending_dependencies, decl);
+
+            resolve_expression(analyzer, ast, state, enum_type, expr, true);
+
+            --analyzer->pending_dependencies.count;
+
+            if (!expr->expr_val.is_concrete) {
+                stan_error(analyzer, OR_ERROR(
+                    .tag = "sem.expected-const.enum-decl",
+                    .level = ERROR_SOURCE_ANALYSIS,
+                    .msg = lit2str("initial expression for enum decls must be compile-time constants"),
+                    .args = ORERR_ARGS(error_arg_node(expr)),
+                    .show_code_lines = ORERR_LINES(0),
+                ));
+                expr->expr_val = ast_node_val_word(ORWORDU(0));
+            }
+
+            if (!ortypeid_eq(expr->value_type, enum_type) && !TYPE_IS_INVALID(expr->value_type)) {
+                stan_error(analyzer, OR_ERROR(
+                    .tag = "sem.type-mismatch.enum-decl",
+                    .level = ERROR_SOURCE_ANALYSIS,
+                    .msg = lit2str("enum is declared with '$1.$' underlying type but declaration is '$2.'"),
+                    .args = ORERR_ARGS(error_arg_node(expr), error_arg_type(enum_type), error_arg_type(expr->value_type)),
+                    .show_code_lines = ORERR_LINES(0),
+                ));
+            }
+
+            word = expr->expr_val.word;
+
+            // todo: whenever this gets removed
+            MUST(ortypeid_eq(enum_type, ast->type_set.sint_));
+            current = word.as.s;
+        }
+
         struct_value_t value = ast_struct_value(ast, struct_type);
-        ast_struct_value_append(ast, &value, 0, ORWORDU(i));
+        ast_struct_value_append(ast, &value, 0, word);
 
         struct_field_t val = {
-            .name = enum_def->children.items[i]->identifier,
+            .name = decl->identifier,
             .type = struct_type,
             .default_value = value.word,
         };
 
         type_set_set_unresolved_struct_const(&ast->type_set, struct_type, val);
+
+        ++current;
     }
 
     allocator_return(tmp);
@@ -1808,9 +1855,6 @@ static void resolve_struct(analyzer_t *analyzer, ast_t *ast, analysis_state_t st
     }
 
     if (struct_def->param_end > 0) {
-        scope_init(&struct_def->defined_scope, analyzer->ast->arena, SCOPE_TYPE_INFERRED_PARAMS, state.scope, struct_def);
-        new_state.scope = &struct_def->defined_scope;
-
         struct_def->value_type = ortypeid(TYPE_PARAM_STRUCT);
         struct_def->expr_val = ast_node_val_word(ORWORDP(struct_def));
         return;
@@ -4543,8 +4587,7 @@ void resolve_expression(
                         start = &lhs->expr_val.word;
                     }
 
-                    typedata_t *fieldtd = ast_type2td(ast, field.type);
-                    start += fieldtd->size;
+                    start += field.offset;
 
                     orword_t result = ast_mem2word(ast, start, field.type);
                     expr->expr_val = ast_node_val_word(result);
@@ -4912,36 +4955,38 @@ void resolve_expression(
             switch (expr->start.type) {
                 case TOKEN_RETURN: {
                     scope_t *func_def_or_macro_scope = NULL;
-                    get_nearest_jmp_scope_in_func_or_error(analyzer, expr, state.scope, SCOPE_TYPE_FUNCDEF, true, expr->identifier, &func_def_or_macro_scope);
+                    bool success = get_nearest_jmp_scope_in_func_or_error(analyzer, expr, state.scope, SCOPE_TYPE_FUNCDEF, true, expr->identifier, &func_def_or_macro_scope);
 
-                    switch(func_def_or_macro_scope->type) {
-                    case SCOPE_TYPE_MACRO: {
-                        scope_t *macro_scope = func_def_or_macro_scope;
-                        MUST(macro_scope->creator->node_type == AST_NODE_TYPE_EXPRESSION_BRANCHING
-                            && macro_scope->creator->branch_type == BRANCH_TYPE_DO);
-                        
-                        oristring_t label = macro_scope->creator->identifier;
-                        expr->start.type = TOKEN_BREAK;
-                        expr->identifier = label;
+                    if (success) {
+                        switch(func_def_or_macro_scope->type) {
+                        case SCOPE_TYPE_MACRO: {
+                            scope_t *macro_scope = func_def_or_macro_scope;
+                            MUST(macro_scope->creator->node_type == AST_NODE_TYPE_EXPRESSION_BRANCHING
+                                && macro_scope->creator->branch_type == BRANCH_TYPE_DO);
+                            
+                            oristring_t label = macro_scope->creator->identifier;
+                            expr->start.type = TOKEN_BREAK;
+                            expr->identifier = label;
 
-                        resolve_expression(analyzer, ast, state, implicit_type, expr, is_consumed);
-                        break;
-                    }
+                            resolve_expression(analyzer, ast, state, implicit_type, expr, is_consumed);
+                            break;
+                        }
 
-                    case SCOPE_TYPE_FUNCDEF: {
-                        scope_t *func_def_scope = func_def_or_macro_scope;
-                        expr->jmp_out_scope_node = func_def_scope->creator;
-                        array_push(&func_def_scope->creator->jmp_nodes, expr);
+                        case SCOPE_TYPE_FUNCDEF: {
+                            scope_t *func_def_scope = func_def_or_macro_scope;
+                            expr->jmp_out_scope_node = func_def_scope->creator;
+                            array_push(&func_def_scope->creator->jmp_nodes, expr);
 
-                        typedata_t *sig = ast_type2td(ast, func_def_scope->creator->value_type);
-                        implicit_type = sig->as.function.return_type;
-                        break;
-                    }
+                            typedata_t *sig = ast_type2td(ast, func_def_scope->creator->value_type);
+                            implicit_type = sig->as.function.return_type;
+                            break;
+                        }
 
-                    default: {
-                        INVALIDATE(expr);
-                        break;
-                    }
+                        default: {
+                            INVALIDATE(expr);
+                            break;
+                        }
+                        }
                     }
 
                     resolve_expression(analyzer, ast, state, implicit_type, an_expression(expr), true);

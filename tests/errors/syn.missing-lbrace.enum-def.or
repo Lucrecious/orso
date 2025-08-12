@@ -1,0 +1,3 @@
+main :: () -> void {
+    enum foo;
+};

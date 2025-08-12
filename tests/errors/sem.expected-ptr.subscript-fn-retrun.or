@@ -1,0 +1,6 @@
+main :: () -> void {
+    @subscript foo :: (a: &sint, index: sint) -> sint {
+        return 0;
+    };
+    foo;
+};
