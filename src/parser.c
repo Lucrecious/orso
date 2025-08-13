@@ -770,6 +770,20 @@ void ast_init(ast_t *ast, arena_t *arena) {
     directives_init(ast, &ast->directives);
 
     ast->type_to_zero_word = table_new(t2w, ast->arena);
+    {
+        #define istr(name) ast_sv2istring(ast, SV(#name))
+
+        oristring_t ind2name[4][4] = {
+            { istr(x), istr(r), istr(u), istr(i) },
+            { istr(y), istr(g), istr(v), istr(j) },
+            { istr(z), istr(b), istr(m), istr(k) },
+            { istr(w), istr(a), istr(n), istr(l) }
+        };
+
+        #undef istr
+
+        memcpy(ast->arrayind2name, ind2name, 4*4*sizeof(oristring_t));
+    }
 }
 
 ast_node_t nil_node = {
@@ -1436,7 +1450,7 @@ static ast_node_t *ast_array_type(ast_t *ast, ast_node_t *size_expr, ast_node_t 
     return array_size;
 }
 
-static ast_node_t *ast_item_access(ast_t *ast, ast_node_t *accessee, ast_node_t *accessor) {
+ast_node_t *ast_item_access(ast_t *ast, ast_node_t *accessee, ast_node_t *accessor) {
     ast_node_t *item_access = ast_node_new(ast->arena, AST_NODE_TYPE_EXPRESSION_ARRAY_ITEM_ACCESS, accessee->start);
     an_item_accessee(item_access) = accessee;
     an_item_accessor(item_access) = accessor;

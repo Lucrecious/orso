@@ -4688,6 +4688,54 @@ void resolve_expression(
                 break;
             }
 
+            case TYPE_ARRAY: {
+                size_t index = 5;
+                for (size_t ind = 0; ind < 4; ++ind) {
+                    for (size_t n = 0; n < 4; ++n) {
+                        oristring_t name = ast->arrayind2name[ind][n];
+                        if (name == expr->identifier) {
+                            index = ind;
+                            break;
+                        }
+                    }
+
+                    if (index < 5) break;
+                }
+
+                if (index == 5) {
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = "sem.missing-array-name.dot-access",
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("'$1.$' is not a name for an array index"),
+                        .args = ORERR_ARGS(error_arg_node(expr), error_arg_str(ast, *expr->identifier)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
+                    expr->value_type = lhstd->as.arr.type;
+                    break;
+                }
+
+                if (index >= lhstd->as.arr.count) {
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = "sem.named-index-overflow.dot-access",
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("'$1.$' accesses index '$2.$' but array has count '$3.$'"),
+                        .args = ORERR_ARGS(error_arg_node(expr),
+                                error_arg_str(ast, *expr->identifier), error_arg_sz(index), error_arg_sz(lhstd->as.arr.count)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
+                    expr->value_type = lhstd->as.arr.type;
+                    break;
+                }
+
+                *expr = *ast_item_access(ast, lhs, ast_implicit_expr(ast, ast->type_set.sint_, ORWORDI((orsint)index), expr->end));
+                resolve_expression(analyzer, ast, state, implicit_type, expr, is_consumed);
+
+                if (an_is_notnone(lhs->lvalue_node)) {
+                    expr->lvalue_node = expr;
+                }
+                break;
+            }
+
             default: {
                 stan_error(analyzer, OR_ERROR(
                     .tag = "sem.invalid-type.dot-access",

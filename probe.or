@@ -1,9 +1,5 @@
-sinf :: (v: f32) -> f32 {
-    return @icall "sinf", v;
-};
-
 main :: () -> void {
-    x := sinf(5.0);
-    (@load "io.or").println("here2");
-    if x < 0 then (@load "io.or").println("here");
+    vec := [2]int.{1, 2};
+    vec.x = 10;
+    @icall "printint", vec.u;
 };

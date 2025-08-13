@@ -467,6 +467,8 @@ typedef struct ast_t {
     ast_nodes_t global_decls_in_resolution_order;
 
     table_t(t2w) *type_to_zero_word;
+
+    oristring_t arrayind2name[4][4];
 } ast_t;
 
 void ast_print_node(ast_t *ast, ast_node_t *node);
@@ -496,6 +498,7 @@ ast_node_t *ast_cast(ast_t *ast, ast_node_t *expr_type, ast_node_t *expr);
 ast_node_t *ast_unary(ast_t *ast, token_t operator, ast_node_t *operand);
 ast_node_t *ast_begin_module(ast_t *ast);
 ast_node_t *ast_assignment(ast_t *ast, ast_node_t *lhs, ast_node_t *rhs, token_t equals);
+ast_node_t *ast_item_access(ast_t *ast, ast_node_t *accessee, ast_node_t *accessor);
 
 ast_node_t *ast_call_begin(ast_t *ast, ast_node_t *callee_or_null, token_t start);
 void ast_call_end(ast_node_t *call, token_t end);
