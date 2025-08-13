@@ -1,0 +1,4 @@
+main :: () -> void {
+    @subscript x :: 4;
+    x;
+};

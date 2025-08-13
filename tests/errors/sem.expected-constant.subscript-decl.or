@@ -1,0 +1,5 @@
+main :: () -> void {
+    x := 10;
+    @subscript y := x;;
+    y;
+};

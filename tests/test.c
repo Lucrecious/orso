@@ -4,6 +4,8 @@
 #include "orso.h"
 #include "parser.h"
 
+#include <unistd.h>
+
 // from orso.c
 ast_t *orbuild_ast(orstring_t source, arena_t *arena, orstring_t file_path);
 void print_errors(ast_t *ast);
@@ -235,6 +237,8 @@ int main(int argc, char *argv[]) {
         size_t i;
         size_t skipped = 0;
         for (i = 0; i < tags.count; ++i) {
+            nob_temp_reset();
+
             error_tag_t tag = tags.items[i];
             
             bool is_skipping = false;
@@ -301,6 +305,8 @@ int main(int argc, char *argv[]) {
             }
 
             arena_free(&arena);
+
+            nob_sb_free(sb);
 
             if (!success) break;
         }

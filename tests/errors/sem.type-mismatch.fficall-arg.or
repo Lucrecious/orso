@@ -1,4 +1,9 @@
 main :: () -> void {
-    @fficall "asdasd.a", "decl", void, "something", 5;
-    @fficall "asdasd.a", "decl", void, "something", true;
+    lib :: (@load "dynlib.or").lib_t.{
+        "decl",
+        "asdasda.a",
+    };
+
+    @fficall lib, void, "something", 5;
+    @fficall lib, void, "something", true;
 };

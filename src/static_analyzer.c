@@ -321,7 +321,7 @@ static bool get_nearest_jmp_scope_in_func_or_error(
             .args = ORERR_ARGS(error_arg_node(jmp_node)),
             .show_code_lines = ORERR_LINES(0),
         ));
-    } else {
+    } else if (search_type == SCOPE_TYPE_JMPABLE) {
         if (label->length != 0) {
             stan_error(analyzer, OR_ERROR(
                 .tag = "sem.invalid-label.jmp",
@@ -4515,15 +4515,13 @@ void resolve_expression(
                     lhs = type_expr;
                     lhs_type = ortypeid(TYPE_TYPE);
                 } else {
-                    if (!TYPE_IS_INVALID(lhs_type)) {
-                        stan_error(analyzer, OR_ERROR(
-                            .tag = "sem.no-implicit-type.dot-access",
-                            .level = ERROR_SOURCE_ANALYSIS,
-                            .msg = lit2str("no implicit type can be inferred for '.' access"),
-                            .args = ORERR_ARGS(error_arg_node(expr)),
-                            .show_code_lines = ORERR_LINES(0),
-                        ));
-                    }
+                    stan_error(analyzer, OR_ERROR(
+                        .tag = "sem.no-implicit-type.dot-access",
+                        .level = ERROR_SOURCE_ANALYSIS,
+                        .msg = lit2str("no implicit type can be inferred for '.' access"),
+                        .args = ORERR_ARGS(error_arg_node(expr)),
+                        .show_code_lines = ORERR_LINES(0),
+                    ));
                     INVALIDATE(expr);
                     break;
                 }
@@ -5701,7 +5699,8 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
         if (init_expr->expr_val.is_concrete) {
             decl->expr_val = init_expr->expr_val;
         }
-        if (!decl->expr_val.is_concrete && !TYPE_IS_INVALID(decl->value_type)) {
+
+        if (!init_expr->expr_val.is_concrete && !TYPE_IS_INVALID(init_expr->value_type)) {
             stan_error(analyzer, OR_ERROR(
                 .tag = "sem.expected-constant.decl-init",
                 .level = ERROR_SOURCE_ANALYSIS,

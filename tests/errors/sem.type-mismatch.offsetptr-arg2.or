@@ -1,0 +1,4 @@
+main :: () -> void {
+    x := 10;
+    offsetptr(&x, true);
+};

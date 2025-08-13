@@ -1,0 +1,7 @@
+main :: () -> void {
+    @subscript index :: (u: &sint, index: sint) -> &sint {
+        return u;
+    };
+
+    1[3];
+};

@@ -1,0 +1,5 @@
+main :: () -> void {
+    x := 9;
+    y := true;
+    ptrdiff(&x, &y);
+};
