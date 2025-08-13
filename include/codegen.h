@@ -1853,7 +1853,7 @@ static void gen_intrinsic_call(gen_t *gen, function_t *function, ast_node_t *ica
         if (td->size > ORWORD_SIZE) {
             emit_return_addr_to_reg(function, loc, REG_RESULT);
         } else {
-            emit_pop_to_reg(gen, loc, function, val_dst.reg, icall->value_type);
+            emit_pop_to_reg(gen, loc, function, REG_RESULT, icall->value_type);
         }
         break;
     }

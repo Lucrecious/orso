@@ -1,9 +1,9 @@
-test_t :: enum {
-    a; b; c;
+sinf :: (v: f32) -> f32 {
+    return @icall "sinf", v;
 };
 
 main :: () -> void {
-    a := test_t.a;
-    b := test_t.b;
-    a == b;
+    x := sinf(5.0);
+    (@load "io.or").println("here2");
+    if x < 0 then (@load "io.or").println("here");
 };
