@@ -45,7 +45,6 @@ typedef enum scope_type_t {
     SCOPE_TYPE_TYPE_CONTEXT             = 1 << 7,
     SCOPE_TYPE_FOLD_DIRECTIVE           = 1 << 8,
     SCOPE_TYPE_INFERRED_PARAMS          = 1 << 9,
-    SCOPE_TYPE_MACRO                    = 1 << 10,
 } scope_type_t;
 
 typedef struct ffi_t ffi_t;
@@ -343,7 +342,7 @@ struct ast_node_t {
     bool condition_negated;
 
     scope_t defined_scope;
-    scope_t *call_scope;
+    scope_t *call_scope_or_null;
 
     // todo: to optimize for space consider merging these into a flag enum
     bool is_global;
@@ -499,6 +498,8 @@ ast_node_t *ast_unary(ast_t *ast, token_t operator, ast_node_t *operand);
 ast_node_t *ast_begin_module(ast_t *ast);
 ast_node_t *ast_assignment(ast_t *ast, ast_node_t *lhs, ast_node_t *rhs, token_t equals);
 ast_node_t *ast_item_access(ast_t *ast, ast_node_t *accessee, ast_node_t *accessor);
+ast_node_t *ast_begin_list_initializer(ast_t *ast, token_t open_bracket);
+void ast_end_list_initializer(ast_node_t *initializer, token_t close_bracket);
 
 ast_node_t *ast_call_begin(ast_t *ast, ast_node_t *callee_or_null, token_t start);
 void ast_call_end(ast_node_t *call, token_t end);

@@ -54,6 +54,7 @@ struct type_table_t {
     ortype_t type_;
 
     ortype_t str8_t_;
+    ortype_t any_t_;
     ortype_t compiler;
     ortype_t lib_;
 

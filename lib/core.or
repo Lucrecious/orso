@@ -3,6 +3,11 @@ str8_t :: @intrinsic "orstring_t", struct {
     length := 0;
 };
 
+any_t :: @intrinsic "orany_t", struct {
+    type := void;
+    data := (&void).{};
+};
+
 assert :: (test := false, message := "") {
     @icall "assert", test, message;
 };

@@ -277,11 +277,11 @@ defer:
 // todo(luca.duran): maybe split up this function better so it does the two seprate things more clearly
 static bool get_nearest_jmp_scope_in_func_or_error(
         analyzer_t *analyzer, ast_node_t *jmp_node, scope_t *scope,
-        scope_type_t search_type, bool or_macro, oristring_t label, scope_t **found_scope) {
+        scope_type_t search_type, oristring_t label, scope_t **found_scope) {
     
     bool check_label = label->length > 0;
     while (scope->outer) {
-        if (scope->type == search_type || (or_macro && scope->type == SCOPE_TYPE_MACRO)) {
+        if (scope->type == search_type) {
             if (check_label) {
                 if (label == scope->creator->identifier) {
                     *found_scope = scope;
@@ -981,10 +981,43 @@ bool type_size_is_platform_specific(type_table_t *type_table, ortype_t type) {
     return true;
 }
 
-static ast_node_t *cast_implicitly_if_necessary(ast_t *ast, ortype_t dst_type, ast_node_t *expr) {
+void resolve_expression(
+        analyzer_t *analyzer,
+        ast_t *ast,
+        analysis_state_t state,
+        ortype_t implicit_type,
+        ast_node_t *expr,
+        bool is_consumed);
+
+static ast_node_t *cast_implicitly_if_necessary(analyzer_t *analyzer, ast_t *ast, analysis_state_t state, ortype_t dst_type, ast_node_t *expr, bool is_consumed) {
     ASSERT(TYPE_IS_RESOLVED(expr->value_type), "expression must be resolved already");
 
     if (ortypeid_eq(dst_type, expr->value_type)) return expr;
+
+    if (ortypeid_eq(dst_type, ast->type_set.any_t_)) {
+        ast_node_t *list = ast_begin_list_initializer(ast, token_implicit_at_start(expr->start));
+        an_list_lhs(list) = ast_implicit_expr(ast, ast->type_set.type_, ORWORDT(ast->type_set.any_t_), token_implicit_at_start(expr->start));
+
+        // type
+        {
+            ast_node_t *type = ast_implicit_expr(ast, ast->type_set.type_, ORWORDT(expr->value_type), token_implicit_at_start(expr->start));
+            array_push(&list->children, type);
+        }
+
+        // data
+        {
+            token_t amp = token_implicit_at_start(expr->start);
+            amp.type = TOKEN_AMPERSAND_AMPERSAND;
+            ast_node_t *data = ast_unary(ast, amp, expr);
+            array_push(&list->children, data);
+        }
+
+        ast_end_list_initializer(list, token_implicit_at_end(expr->end));
+
+        resolve_expression(analyzer, ast, state, ortypeid(TYPE_UNRESOLVED), list, is_consumed);
+
+        return list;
+    }
 
     unless (stan_can_cast(&ast->type_set.types, dst_type, expr->value_type)) return expr;
 
@@ -1450,14 +1483,6 @@ static size_t stan_declaration_is_recursive(analyzer_t *analyzer, ast_node_t *de
     return analyzer->pending_dependencies.count;
 }
 
-void resolve_expression(
-        analyzer_t *analyzer,
-        ast_t *ast,
-        analysis_state_t state,
-        ortype_t implicit_type,
-        ast_node_t *expr,
-        bool is_consumed);
-
 static bool declare_compile_time_and_inferred_decls(analyzer_t *analyzer, analysis_state_t decl_state, analysis_state_t call_state, ast_node_t *call, ast_node_t *inferred_funcdef, matched_values_t *matched_values) {
     bool had_error = false;
 
@@ -1556,12 +1581,22 @@ static bool declare_compile_time_and_inferred_decls(analyzer_t *analyzer, analys
     return !had_error;
 }
 
-static ast_node_t *stan_realize_inferred_funcdefcall_or_errornull(analyzer_t *analyzer, analysis_state_t state, ast_node_t *call, ast_node_t *inferred_funcdef, matched_values_t matched_values) {
+static ast_node_t *stan_realize_inferred_funcdefcall_or_errornull(
+        analyzer_t *analyzer,
+        analysis_state_t def_state,
+        analysis_state_t callsite_state,
+        ast_node_t *call,
+        ast_node_t *inferred_funcdef,
+        matched_values_t matched_values,
+        bool is_macro) {
     ast_node_t *result = NULL;
 
     bool had_error = false;
 
-    result = find_realized_node_or_null_by_inferred_values(analyzer->ast, inferred_funcdef->realized_copies, matched_values);
+    if (!is_macro) {
+        result = find_realized_node_or_null_by_inferred_values(analyzer->ast, inferred_funcdef->realized_copies, matched_values);
+    }
+
     unless(result) {
         // todo: instead of copying the the definition wholesale,
         // i remove the parameters i've already copied, copy the function
@@ -1572,24 +1607,44 @@ static ast_node_t *stan_realize_inferred_funcdefcall_or_errornull(analyzer_t *an
         // extract compile time params and respective call args
         for (size_t i = an_func_def_arg_end(result); i > an_func_def_arg_start(result); --i) {
             ast_node_t *param = result->children.items[i-1];
+            size_t arg_index = i-1-an_func_def_arg_start(result) + an_call_arg_start(call);
             if (param->is_compile_time_param) {
-                size_t arg_index = i-1-an_func_def_arg_start(result) + an_call_arg_start(call);
+                array_remove(&result->children, i-1);
+                array_remove(&call->children, arg_index);
+            }
+
+            ast_node_t *arg = call->children.items[arg_index];
+            resolve_expression(analyzer, analyzer->ast, callsite_state, param->value_type, arg, true);
+            if (is_macro && arg->expr_val.is_concrete) {
+                param->is_compile_time_param = true;
+
+                an_decl_expr(param) = arg;
+                param->is_mutable = false;
+                declare_definition(analyzer, def_state.scope, param);
+                resolve_declaration(analyzer, analyzer->ast, def_state, param);
+
                 array_remove(&result->children, i-1);
                 array_remove(&call->children, arg_index);
             }
         }
 
-        matched_values_t matched_values_ = {.allocator=analyzer->ast->arena};
-        for (size_t i = 0; i < matched_values.count; ++i) array_push(&matched_values_, matched_values.items[i]);
+        if (is_macro) {
+            result->is_macro = false;
+            result->call_scope_or_null = callsite_state.scope;
+        } else {
 
-        inferred_copy_t copy = {
-            .key = matched_values_,
-            .copy = result,
-        };
+            matched_values_t matched_values_ = {.allocator=analyzer->ast->arena};
+            for (size_t i = 0; i < matched_values.count; ++i) array_push(&matched_values_, matched_values.items[i]);
 
-        array_push(&inferred_funcdef->realized_copies, copy);
+            inferred_copy_t copy = {
+                .key = matched_values_,
+                .copy = result,
+            };
+            array_push(&inferred_funcdef->realized_copies, copy);
+        }
+        
 
-        resolve_funcdef(analyzer, analyzer->ast, state, result);
+        resolve_funcdef(analyzer, analyzer->ast, def_state, result);
 
         if (TYPE_IS_INVALID(result->value_type)) {
             had_error = true;
@@ -2436,8 +2491,6 @@ static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
             arg_count = arg_end-arg_start;
         }
 
-        ast_node_t *macro_funcdef_or_null = NULL;
-
         if (callee_td->kind == TYPE_INFERRED_FUNCTION) {
             // im not sure if this is possible
             unless (callee->expr_val.is_concrete) {
@@ -2455,6 +2508,7 @@ static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
             ast_inferred_function_t *inferred_funcdef = (ast_inferred_function_t*)callee->expr_val.word.as.p;
 
             ast_node_t *realized_funcdef = NULL;
+            bool is_macro = false;
             {
                 analysis_state_t funcdef_defined_scope = state;
                 ast_node_t *funcdef_node = inferred_funcdef->funcdef;
@@ -2464,15 +2518,14 @@ static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
 
                 tmp_arena_t *tmp = allocator_borrow();
 
-                if (funcdef_node->is_macro) {
-                    macro_funcdef_or_null = ast_node_copy(ast->arena, funcdef_node);
-                    funcdef_node = macro_funcdef_or_null;
-                }
+                is_macro = funcdef_node->is_macro;
 
                 matched_values_t matched_values = {.allocator=tmp->allocator};
                 bool success = declare_compile_time_and_inferred_decls(analyzer, funcdef_defined_scope, state, call, funcdef_node, &matched_values);
                 if (success) {
-                    if (macro_funcdef_or_null != NULL) {
+                    if (funcdef_node->is_macro) {
+                        realized_funcdef = stan_realize_inferred_funcdefcall_or_errornull(analyzer, funcdef_defined_scope, state, call, funcdef_node, matched_values, true);
+                        
                         /* transforms something like this
                             add :: !(a: sint, b: sint) -> sint {
                                 return a + b;
@@ -2482,10 +2535,11 @@ static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
                         */
 
                         /* to something like this
-                            do:<tmpname> {
+                            {
                                 a: sint = 10;
                                 b: sint = 4;
-                                {
+
+                                do:<tmpname> {
                                     break:<tmpname> a + b;
                                 };
                             };
@@ -2494,7 +2548,7 @@ static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
                         ast_node_t *macro_call = ast_block_begin(ast, call->start);
                         size_t arg_count = an_call_arg_end(call) - an_call_arg_start(call);
                         for (size_t i = 0; i < arg_count; ++i) {
-                            ast_node_t *param = macro_funcdef_or_null->children.items[i + an_func_def_arg_start(call)];
+                            ast_node_t *param = realized_funcdef->children.items[an_func_def_arg_start(realized_funcdef)+i];
                             if (param->is_compile_time_param) continue;
 
                             ast_node_t *arg = call->children.items[i + an_call_arg_start(call)];
@@ -2518,10 +2572,20 @@ static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
                         }
 
                         {
-                            ast_node_t *funcdef_block = an_func_def_block(macro_funcdef_or_null);
 
                             oristring_t label = ast_next_tmp_name(ast);
+
+                            ast_node_t *funcdef_block = an_func_def_block(realized_funcdef);
                             ast_node_t *do_body = ast_do(ast, label, funcdef_block, call->start);
+
+                            for (size_t i = 0; i < realized_funcdef->jmp_nodes.count; ++i) {
+                                ast_node_t *ret = realized_funcdef->jmp_nodes.items[i];
+                                ret->start.type = TOKEN_BREAK;
+                                ret->label = label;
+                                ret->jmp_out_scope_node = do_body;
+                            }
+
+                            do_body->jmp_nodes = realized_funcdef->jmp_nodes;
 
                             ast_block_decl(macro_call, ast_statement(ast, do_body));
                         }
@@ -2531,19 +2595,16 @@ static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
                         bool is_consumed = call->is_consumed;
                         *call = *macro_call;
 
-                        funcdef_defined_scope.scope->type = SCOPE_TYPE_MACRO;
-                        funcdef_defined_scope.scope->creator = an_expression(call->children.items[call->children.count-1]);
-                        funcdef_defined_scope.scope->creator->call_scope = state.scope;
-                        resolve_expression(analyzer, ast, funcdef_defined_scope, ortypeid(TYPE_UNRESOLVED), call, is_consumed);
+                        resolve_expression(analyzer, ast, state, ortypeid(TYPE_UNRESOLVED), call, is_consumed);
                     } else {
-                        realized_funcdef = stan_realize_inferred_funcdefcall_or_errornull(analyzer, funcdef_defined_scope, call, funcdef_node, matched_values);
+                        realized_funcdef = stan_realize_inferred_funcdefcall_or_errornull(analyzer, funcdef_defined_scope, state, call, funcdef_node, matched_values, false);
                     }
                 }
 
                 allocator_return(tmp);
             }
 
-            if (macro_funcdef_or_null) return;
+            if (is_macro) return;
 
             unless (realized_funcdef) {
                 INVALIDATE(call);
@@ -2625,7 +2686,7 @@ static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
             size_t i_= i - an_call_arg_start(expr);
 
             if (i_ < callee_td->as.function.argument_types.count) {
-                arg = cast_implicitly_if_necessary(ast, callee_td->as.function.argument_types.items[i_], arg);
+                arg = cast_implicitly_if_necessary(analyzer, ast, state, callee_td->as.function.argument_types.items[i_], arg, true);
                 call->children.items[i] = arg;
             }
         }
@@ -3181,25 +3242,40 @@ void resolve_expression(
                     }
                 } else if (string_eq(*expr->identifier, lit2str("intrinsic"))) {
                     orstring_t typename = ast_orstr2str(&ast->type_set, expr->children.items[0]->expr_val.word.as.p);
-                    ortype_t type = expr->children.items[1]->expr_val.word.as.t;
 
+                    typedata_t *typeargtd = ast_type2td(ast, expr->children.items[1]->value_type);
+                    switch (typeargtd->kind) {
+                    case TYPE_TYPE: {
+                        ortype_t type = expr->children.items[1]->expr_val.word.as.t;
 
-                    bool found = false;
-                    for (size_t i = 0; i < ast->type_set.bindings.count; ++i) {
-                        struct_binding_t *binding = ast->type_set.bindings.items[i];
-                        if (string_eq(binding->cname, typename)) {
-                            found = true;
+                        bool found = false;
+                        for (size_t i = 0; i < ast->type_set.bindings.count; ++i) {
+                            struct_binding_t *binding = ast->type_set.bindings.items[i];
+                            if (string_eq(binding->cname, typename)) {
+                                found = true;
 
-                            bool success = struct_fields_steal_default_values(&ast->type_set, binding->type, type);
-                            MUST(success);
-                            
-                            expr->value_type = ortypeid(TYPE_TYPE);
-                            expr->expr_val = ast_node_val_word(ORWORDT(binding->type));
-                            break;
+                                bool success = struct_fields_steal_default_values(&ast->type_set, binding->type, type);
+                                MUST(success);
+                                
+                                expr->value_type = ortypeid(TYPE_TYPE);
+                                expr->expr_val = ast_node_val_word(ORWORDT(binding->type));
+                                break;
+                            }
                         }
+
+                        MUST(found);
+                        break;
                     }
 
-                    MUST(found);
+                    case TYPE_PARAM_STRUCT: {
+                        ast_node_t *param_struct = expr->children.items[1];
+                        expr->value_type = param_struct->value_type;
+                        expr->expr_val = param_struct->expr_val;
+                        break;
+                    }
+
+                    default: UNREACHABLE(); break;
+                    }
                 } else if (string_eq(*expr->identifier, lit2str("fficall"))) {
                     tmp_arena_t *tmp = allocator_borrow();
                     ortype_t fficall_return_type = ortypeid(TYPE_INVALID);
@@ -3684,7 +3760,7 @@ void resolve_expression(
                             expr->children.items[i] = arg;
                         }
 
-                        arg = cast_implicitly_if_necessary(ast, array_type, arg);
+                        arg = cast_implicitly_if_necessary(analyzer, ast, state, array_type, arg, true);
                         expr->children.items[i] = arg;
 
                         if (!arg->expr_val.is_concrete) {
@@ -3832,7 +3908,7 @@ void resolve_expression(
                             ast_node_t *arg = expr->children.items[arg_index];
                             resolve_expression(analyzer, ast, state, field.type, arg, true);
 
-                            arg = cast_implicitly_if_necessary(ast, field.type, arg);
+                            arg = cast_implicitly_if_necessary(analyzer, ast, state, field.type, arg, true);
                             expr->children.items[arg_index] = arg;
 
                             arg->arg_index = i;
@@ -3904,7 +3980,7 @@ void resolve_expression(
                     } else if (arg_count == 1) {
                         ast_node_t *arg = expr->children.items[an_list_start(expr)];
                         resolve_expression(analyzer, ast, state, ortypeid(TYPE_UNRESOLVED), arg, true);
-                        arg = cast_implicitly_if_necessary(ast, init_type, arg);
+                        arg = cast_implicitly_if_necessary(analyzer, ast, state, init_type, arg, true);
                         if (!TYPE_IS_INVALID(expr->value_type) && !ortypeid_eq(arg->value_type, expr->value_type)) {
                             stan_error(analyzer, OR_ERROR(
                                 .tag = "sem.type-mismatch.primitive-init",
@@ -3995,8 +4071,8 @@ void resolve_expression(
                 resolve_expression(analyzer, ast, state, left->value_type, right, true);
             }
 
-            an_lhs(expr) = (left = cast_implicitly_if_necessary(ast, right->value_type, left));
-            an_rhs(expr) = (right = cast_implicitly_if_necessary(ast, left->value_type, right));
+            an_lhs(expr) = (left = cast_implicitly_if_necessary(analyzer, ast, state, right->value_type, left, true));
+            an_rhs(expr) = (right = cast_implicitly_if_necessary(analyzer, ast, state, left->value_type, right, true));
 
 
             if (TYPE_IS_INVALID(left->value_type) || TYPE_IS_INVALID(right->value_type)) {
@@ -4466,9 +4542,8 @@ void resolve_expression(
 
             scope_t *search_scope = state.scope;
             if (expr->is_in_outer_function_scope) {
-                bool success = get_nearest_jmp_scope_in_func_or_error(analyzer, expr, state.scope, SCOPE_TYPE_MACRO, false, oriemptystr, &search_scope);
-                search_scope = search_scope->creator->call_scope;
-                if (!success) {
+                bool success = get_nearest_jmp_scope_in_func_or_error(analyzer, expr, state.scope, SCOPE_TYPE_FUNCDEF, oriemptystr, &search_scope);
+                if (!success || search_scope->creator->call_scope_or_null == NULL) {
                     stan_error(analyzer, OR_ERROR(
                         .tag = "sem.invalid-hat-usage.outside-macro",
                         .level = ERROR_SOURCE_ANALYSIS,
@@ -4479,6 +4554,8 @@ void resolve_expression(
                     INVALIDATE(expr);
                     break;
                 }
+
+                search_scope = search_scope->creator->call_scope_or_null;
             }
 
             scope_t *def_scope;
@@ -4801,7 +4878,7 @@ void resolve_expression(
                 break;
             }
 
-            rhs = cast_implicitly_if_necessary(ast, lhs->value_type, rhs);
+            rhs = cast_implicitly_if_necessary(analyzer, ast, state, lhs->value_type, rhs, true);
             an_rhs(expr) = rhs;
 
             expr->value_type = lvalue_node->value_type;
@@ -5001,38 +5078,15 @@ void resolve_expression(
             switch (expr->start.type) {
                 case TOKEN_RETURN: {
                     scope_t *func_def_or_macro_scope = NULL;
-                    bool success = get_nearest_jmp_scope_in_func_or_error(analyzer, expr, state.scope, SCOPE_TYPE_FUNCDEF, true, expr->identifier, &func_def_or_macro_scope);
+                    bool success = get_nearest_jmp_scope_in_func_or_error(analyzer, expr, state.scope, SCOPE_TYPE_FUNCDEF, expr->identifier, &func_def_or_macro_scope);
 
                     if (success) {
-                        switch(func_def_or_macro_scope->type) {
-                        case SCOPE_TYPE_MACRO: {
-                            scope_t *macro_scope = func_def_or_macro_scope;
-                            MUST(macro_scope->creator->node_type == AST_NODE_TYPE_EXPRESSION_BRANCHING
-                                && macro_scope->creator->branch_type == BRANCH_TYPE_DO);
-                            
-                            oristring_t label = macro_scope->creator->identifier;
-                            expr->start.type = TOKEN_BREAK;
-                            expr->identifier = label;
+                        scope_t *func_def_scope = func_def_or_macro_scope;
+                        expr->jmp_out_scope_node = func_def_scope->creator;
+                        array_push(&func_def_scope->creator->jmp_nodes, expr);
 
-                            resolve_expression(analyzer, ast, state, implicit_type, expr, is_consumed);
-                            break;
-                        }
-
-                        case SCOPE_TYPE_FUNCDEF: {
-                            scope_t *func_def_scope = func_def_or_macro_scope;
-                            expr->jmp_out_scope_node = func_def_scope->creator;
-                            array_push(&func_def_scope->creator->jmp_nodes, expr);
-
-                            typedata_t *sig = ast_type2td(ast, func_def_scope->creator->value_type);
-                            implicit_type = sig->as.function.return_type;
-                            break;
-                        }
-
-                        default: {
-                            INVALIDATE(expr);
-                            break;
-                        }
-                        }
+                        typedata_t *sig = ast_type2td(ast, func_def_scope->creator->value_type);
+                        implicit_type = sig->as.function.return_type;
                     }
 
                     resolve_expression(analyzer, ast, state, implicit_type, an_expression(expr), true);
@@ -5044,7 +5098,7 @@ void resolve_expression(
                     resolve_expression(analyzer, ast, state, ortypeid(TYPE_UNRESOLVED), an_expression(expr), true);
 
                     scope_t *found_scope = NULL;
-                    bool success = get_nearest_jmp_scope_in_func_or_error(analyzer, expr, state.scope, SCOPE_TYPE_JMPABLE, false, expr->identifier, &found_scope);
+                    bool success = get_nearest_jmp_scope_in_func_or_error(analyzer, expr, state.scope, SCOPE_TYPE_JMPABLE, expr->identifier, &found_scope);
                     if (success) {
                         if (found_scope->creator->branch_type == BRANCH_TYPE_DO && expr->start.type == TOKEN_CONTINUE) {
                             stan_error(analyzer, OR_ERROR(
@@ -5726,7 +5780,7 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
         ast_node_t *decl_expr = an_decl_expr(decl);
         ortype_t declared_type = decl->value_type;
 
-        ast_node_t *casted_expr = cast_implicitly_if_necessary(ast, declared_type, decl_expr);
+        ast_node_t *casted_expr = cast_implicitly_if_necessary(analyzer, ast, state, declared_type, decl_expr, true);
         unless (ortypeid_eq(declared_type, casted_expr->value_type)) {
             if (!TYPE_IS_INVALID(declared_type) && !TYPE_IS_INVALID(casted_expr->value_type)) {
                 stan_error(analyzer, OR_ERROR(
@@ -5852,12 +5906,10 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
 
     while (*search_scope) {
         bool is_function_scope = (*search_scope)->type == SCOPE_TYPE_FUNCDEF;
-        bool is_macro_scope = (*search_scope)->type == SCOPE_TYPE_MACRO;
         bool is_fold_scope = (*search_scope)->type == SCOPE_TYPE_FOLD_DIRECTIVE;
 
     #define NEXT_SCOPE() \
         if (is_function_scope) { passed_local_mutable_access_barrier = true; }\
-        if (is_macro_scope) { passed_local_mutable_access_barrier = true; }\
         if (is_fold_scope) { passed_local_fold_scope = true; } \
         *search_scope = (*search_scope)->outer
 
@@ -5987,8 +6039,8 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
 static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t state, ast_node_t *funcdef) {
     ASSERT(funcdef->node_type == AST_NODE_TYPE_EXPRESSION_FUNCTION_DEFINITION, "must be function declaration at this point");
 
-    // todo: is it possible to do this at parse time?
-    {
+    // only do this for non-macros
+    if (funcdef->call_scope_or_null == NULL) {
         ast_node_t *module = stan_find_owning_module_or_null(state.scope);
         MUST(module);
         array_push(&module->owned_funcdefs, funcdef);
@@ -6032,10 +6084,14 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
                 is_inferred_function = true;
             }
         }
+
+        if (funcdef->is_macro) {
+            is_inferred_function = true;
+        }
     }
 
     // dip out if it's inferred function, we'll resolve this when its called...
-    if (is_inferred_function || funcdef->is_macro) {
+    if (is_inferred_function) {
         ortype_t function_type = ortypeid(TYPE_INFERRED_FUNCTION);
         funcdef->value_type = function_type;
         ast_inferred_function_t *inferred_func = ast_inferred_function_from_funcdef(ast, funcdef, ast->arena);
@@ -6113,7 +6169,11 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
     }
 
     array_push(&analyzer->pending_dependencies, funcdef);
-    table_put(fn2an, ast->fn2an, function, funcdef);
+
+    // don't put macros in this
+    if (funcdef->call_scope_or_null == NULL) {
+        table_put(fn2an, ast->fn2an, function, funcdef);
+    }
 
     {
         analysis_state_t new_state = state;

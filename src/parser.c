@@ -138,6 +138,7 @@ static void intrinsic_struct_init(ast_t *ast) {
     #define offset(t, field_name) (((void*)(&(t).field_name)) - ((void*)&(t)))
 
     ortype_t charptr = type_set_fetch_pointer(&ast->type_set, ast->type_set.char_);
+    ortype_t voidptr = type_set_fetch_pointer(&ast->type_set, ast->type_set.void_);
 
     // str8_t
     struct_binding_t *string_binding = begin_struct_binding(&ast->type_set, lit2str("orstring_t"));
@@ -151,6 +152,17 @@ static void intrinsic_struct_init(ast_t *ast) {
         
         typedata_t *std = type2typedata(&ast->type_set.types, string_binding->type);
         std->kind = TYPE_STRING;
+    }
+
+    // any_t
+    struct_binding_t *any_binding = begin_struct_binding(&ast->type_set, S("orany_t"));
+    {
+        orany_t t;
+        struct_field_bind(any_binding, ast->type_set.type_, c2i("type"), offset(t, type));
+        struct_field_bind(any_binding, voidptr, c2i("data"), offset(t, data));
+        end_struct_binding(any_binding, &ast->type_set);
+
+        ast->type_set.any_t_ = any_binding->type;
     }
 
     ortype_t str8_ptr = type_set_fetch_pointer(&ast->type_set, ast->type_set.str8_t_);
@@ -850,7 +862,7 @@ ast_node_t *ast_node_new(arena_t *arena, ast_node_type_t node_type, token_t star
 
     node->filepath = lit2str("");
 
-    node->call_scope = NULL;
+    node->call_scope_or_null = NULL;
 
     node->children = (ast_nodes_t){.allocator=arena};
     node->owned_funcdefs = (ast_nodes_t){.allocator=arena};
@@ -1032,7 +1044,7 @@ ast_node_t *ast_node_copy(arena_t *arena, ast_node_t *node) {
     copy->is_in_outer_function_scope = node->is_in_outer_function_scope;
     copy->is_subscript_function = node->is_subscript_function;
 
-    copy->call_scope = node->call_scope;
+    copy->call_scope_or_null = node->call_scope_or_null;
 
     ASSERT(copy->jmp_nodes.count == 0, "need to convert references to other nodes to relative ones");
     ASSERT(copy->jmp_out_scope_node == &nil_node, "need to convert references to other nodes to relative ones");
@@ -2754,12 +2766,12 @@ static ast_node_t *parse_struct_def(parser_t *parser) {
     return struct_;
 }
 
-static ast_node_t *ast_begin_list_initializer(ast_t *ast, token_t open_bracket) {
+ast_node_t *ast_begin_list_initializer(ast_t *ast, token_t open_bracket) {
     ast_node_t *initializer = ast_node_new(ast->arena, AST_NODE_TYPE_EXPRESSION_INITIALIZER_LIST, open_bracket);
     return initializer;
 }
 
-static void ast_end_list_initializer(ast_node_t *initializer, token_t close_bracket) {
+void ast_end_list_initializer(ast_node_t *initializer, token_t close_bracket) {
     initializer->end = close_bracket;
 }
 ast_node_t *ast_dot_access(ast_t *ast, ast_node_t *lhs, token_t identifier, token_t start) {

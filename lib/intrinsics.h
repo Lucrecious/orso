@@ -43,6 +43,12 @@ struct ortype_t {
     oru64 i;
 };
 
+typedef struct orany_t orany_t;
+struct orany_t {
+    ortype_t type;
+    void *data;
+};
+
 typedef struct orword_t orword_t;
 struct orword_t {
     union {
