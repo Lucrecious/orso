@@ -23,14 +23,10 @@ print_ :: (args: slice_t(any_t)) -> void {
     };
 };
 
-print :: !(args: [!n]any_t) -> void {
+print :: !(args: [!]any_t) -> void {
     print_(slice(&args));
 };
 
 main :: () -> void {
-    x: [!][!]sint = .{.{1, 2}, .{3, 4}};
-
-    anys :: [!]any_t;
-
-    print(anys.{1, 2, "something"});
+    print(.{1, 2, "something"});
 };

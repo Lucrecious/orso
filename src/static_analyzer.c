@@ -1613,25 +1613,44 @@ static ast_node_t *stan_realize_inferred_funcdefcall_or_errornull(
                 array_remove(&call->children, arg_index);
             }
 
+            ast_node_t *decl_type = an_decl_type(param);
+            ortype_t implicit_type = ortypeid(TYPE_UNRESOLVED);
+            if (an_is_notnone(decl_type)) {
+                resolve_expression(analyzer, analyzer->ast, def_state, ortypeid(TYPE_TYPE), decl_type, false);
+                if (!TYPE_IS_INVALID(decl_type->value_type)
+                        && ortypeid_eq(ortypeid(TYPE_TYPE), decl_type->value_type)
+                        && decl_type->expr_val.is_concrete) {
+                    implicit_type = decl_type->expr_val.word.as.t;
+                }
+            }
+
             ast_node_t *arg = call->children.items[arg_index];
             if (an_is_none(arg)) {
                 MUST(param->has_default_value);
                 arg = an_decl_expr(param);
-                resolve_expression(analyzer, analyzer->ast, def_state, param->value_type, arg, true);
+                resolve_expression(analyzer, analyzer->ast, def_state, implicit_type, arg, true);
             } else {
-                resolve_expression(analyzer, analyzer->ast, callsite_state, param->value_type, arg, true);
+                resolve_expression(analyzer, analyzer->ast, callsite_state, implicit_type, arg, true);
             }
 
-            if (is_macro && arg->expr_val.is_concrete) {
-                param->is_compile_time_param = true;
-
+            if (is_macro) {
                 an_decl_expr(param) = arg;
-                param->is_mutable = false;
-                declare_definition(analyzer, def_state.scope, param);
-                resolve_declaration(analyzer, analyzer->ast, def_state, param);
+
+                if (arg->expr_val.is_concrete) {
+                    param->is_compile_time_param = true;
+                    param->is_mutable = false;
+                    declare_definition(analyzer, def_state.scope, param);
+                    resolve_declaration(analyzer, analyzer->ast, def_state, param);
+                }
 
                 array_remove(&result->children, i-1);
                 array_remove(&call->children, arg_index);
+
+                if (!arg->expr_val.is_concrete) {
+                    ast_node_t *body = an_func_def_block(result);
+                    MUST(body->node_type == AST_NODE_TYPE_EXPRESSION_BLOCK);
+                    array_insert(&body->children, 0, param);
+                }
             }
         }
 
@@ -2552,57 +2571,59 @@ static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
                             };
                         */
 
-                        ast_node_t *macro_call = ast_block_begin(ast, call->start);
-                        size_t arg_count = an_call_arg_end(call) - an_call_arg_start(call);
-                        for (size_t i = 0; i < arg_count; ++i) {
-                            ast_node_t *param = realized_funcdef->children.items[an_func_def_arg_start(realized_funcdef)+i];
-                            if (param->is_compile_time_param) continue;
+                        if (realized_funcdef) {
+                            ast_node_t *macro_call = ast_block_begin(ast, call->start);
+                            size_t arg_count = an_call_arg_end(call) - an_call_arg_start(call);
+                            for (size_t i = 0; i < arg_count; ++i) {
+                                ast_node_t *param = realized_funcdef->children.items[an_func_def_arg_start(realized_funcdef)+i];
+                                if (param->is_compile_time_param) continue;
 
-                            ast_node_t *arg = call->children.items[i + an_call_arg_start(call)];
-                            // arg being none means param must have a default value
-                            if (!an_is_none(arg)) {
-                                an_decl_expr(param) = arg;
-                                resolve_expression(analyzer, ast, state, param->value_type, arg, true);
-                            } else {
-                                arg = an_decl_expr(param);
-                                MUST(param->has_default_value);
-                                resolve_expression(analyzer, ast, funcdef_defined_scope, param->value_type, arg, true);
+                                ast_node_t *arg = call->children.items[i + an_call_arg_start(call)];
+                                // arg being none means param must have a default value
+                                if (!an_is_none(arg)) {
+                                    an_decl_expr(param) = arg;
+                                    resolve_expression(analyzer, ast, state, param->value_type, arg, true);
+                                } else {
+                                    arg = an_decl_expr(param);
+                                    MUST(param->has_default_value);
+                                    resolve_expression(analyzer, ast, funcdef_defined_scope, param->value_type, arg, true);
+                                }
+
+                                if (arg->expr_val.is_concrete) {
+                                    param->is_mutable = false;
+                                }
+
+                                resolve_declaration_definition(analyzer, ast, funcdef_defined_scope, param);
+
+                                ast_block_decl(macro_call, param);
                             }
 
-                            if (arg->expr_val.is_concrete) {
-                                param->is_mutable = false;
+                            {
+
+                                oristring_t label = ast_next_tmp_name(ast);
+
+                                ast_node_t *funcdef_block = an_func_def_block(realized_funcdef);
+                                ast_node_t *do_body = ast_do(ast, label, funcdef_block, call->start);
+
+                                for (size_t i = 0; i < realized_funcdef->jmp_nodes.count; ++i) {
+                                    ast_node_t *ret = realized_funcdef->jmp_nodes.items[i];
+                                    ret->start.type = TOKEN_BREAK;
+                                    ret->label = label;
+                                    ret->jmp_out_scope_node = do_body;
+                                }
+
+                                do_body->jmp_nodes = realized_funcdef->jmp_nodes;
+
+                                ast_block_decl(macro_call, ast_statement(ast, do_body));
                             }
 
-                            resolve_declaration_definition(analyzer, ast, funcdef_defined_scope, param);
+                            ast_block_end(macro_call, call->end);
 
-                            ast_block_decl(macro_call, param);
+                            bool is_consumed = call->is_consumed;
+                            *call = *macro_call;
+
+                            resolve_expression(analyzer, ast, state, ortypeid(TYPE_UNRESOLVED), call, is_consumed);
                         }
-
-                        {
-
-                            oristring_t label = ast_next_tmp_name(ast);
-
-                            ast_node_t *funcdef_block = an_func_def_block(realized_funcdef);
-                            ast_node_t *do_body = ast_do(ast, label, funcdef_block, call->start);
-
-                            for (size_t i = 0; i < realized_funcdef->jmp_nodes.count; ++i) {
-                                ast_node_t *ret = realized_funcdef->jmp_nodes.items[i];
-                                ret->start.type = TOKEN_BREAK;
-                                ret->label = label;
-                                ret->jmp_out_scope_node = do_body;
-                            }
-
-                            do_body->jmp_nodes = realized_funcdef->jmp_nodes;
-
-                            ast_block_decl(macro_call, ast_statement(ast, do_body));
-                        }
-
-                        ast_block_end(macro_call, call->end);
-
-                        bool is_consumed = call->is_consumed;
-                        *call = *macro_call;
-
-                        resolve_expression(analyzer, ast, state, ortypeid(TYPE_UNRESOLVED), call, is_consumed);
                     } else {
                         realized_funcdef = stan_realize_inferred_funcdefcall_or_errornull(analyzer, funcdef_defined_scope, state, call, funcdef_node, matched_values, false);
                     }
