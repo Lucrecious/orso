@@ -1614,7 +1614,14 @@ static ast_node_t *stan_realize_inferred_funcdefcall_or_errornull(
             }
 
             ast_node_t *arg = call->children.items[arg_index];
-            resolve_expression(analyzer, analyzer->ast, callsite_state, param->value_type, arg, true);
+            if (an_is_none(arg)) {
+                MUST(param->has_default_value);
+                arg = an_decl_expr(param);
+                resolve_expression(analyzer, analyzer->ast, def_state, param->value_type, arg, true);
+            } else {
+                resolve_expression(analyzer, analyzer->ast, callsite_state, param->value_type, arg, true);
+            }
+
             if (is_macro && arg->expr_val.is_concrete) {
                 param->is_compile_time_param = true;
 
@@ -3449,6 +3456,7 @@ void resolve_expression(
                 break;
             }
 
+            bool size_is_inferred = false;
             ast_node_t *size_expr = an_array_size_expr(expr);
             if (an_is_notnone(size_expr)) {
                 resolve_expression(analyzer, ast, state, ortypeid(TYPE_UNRESOLVED), size_expr, true);
@@ -3495,7 +3503,8 @@ void resolve_expression(
                     break;
                 }
 
-                if (td->as.num == NUM_TYPE_SIGNED && size_expr->expr_val.word.as.s <= 0) {
+                if ((td->as.num == NUM_TYPE_SIGNED && size_expr->expr_val.word.as.s <= 0)
+                || (td->as.num == NUM_TYPE_UNSIGNED && size_expr->expr_val.word.as.u == 0)) {
                     stan_error(analyzer, OR_ERROR(
                         .tag = "sem.must-be-positive.arr-size",
                         .level = ERROR_SOURCE_ANALYSIS,
@@ -3507,7 +3516,7 @@ void resolve_expression(
                     break;
                 }
             } else {
-                MUST(false); // todo: error maybe or inferred idk
+                size_is_inferred = true;
             }
 
             ortype_t array_value_type = type_expr->expr_val.word.as.t;
@@ -3516,7 +3525,12 @@ void resolve_expression(
                 break;
             }
 
-            ortype_t array_type = type_set_fetch_array(&ast->type_set, array_value_type, size_expr->expr_val.word.as.u);
+            ortype_t array_type;
+            if (size_is_inferred) {
+                array_type = type_set_fetch_array(&ast->type_set, array_value_type, 0);
+            } else {
+                array_type = type_set_fetch_array(&ast->type_set, array_value_type, size_expr->expr_val.word.as.u);
+            }
 
             expr->value_type = ortypeid(TYPE_TYPE);
             expr->expr_val = ast_node_val_word(ORWORDT(array_type));
@@ -3726,12 +3740,7 @@ void resolve_expression(
 
                 switch (init_type_td->kind) {
                 case TYPE_ARRAY: {
-                    ortype_t arg_implicit_type;
-                    {
-                        ortype_t t = type_expr->expr_val.word.as.t;
-                        typedata_t *td = ast_type2td(ast, t);
-                        arg_implicit_type = td->as.arr.type;
-                    }
+                    ortype_t arg_implicit_type = init_type_td->as.arr.type;
 
                     bool invalid_arg = false;
                     for (size_t i = an_list_start(expr); i < an_list_end(expr); ++i) {
@@ -3744,11 +3753,79 @@ void resolve_expression(
                         }
                     }
 
+                    ortype_t array_type = init_type_td->as.arr.type;
+                    size_t arg_count = an_list_end(expr) - an_list_start(expr);
+                    {
+                        if (init_type_td->as.arr.count == 0 && arg_count == 0) {
+                            stan_error(analyzer, OR_ERROR(
+                                .tag = "sem.zero-size.inferred-array-count",
+                                .level = ERROR_SOURCE_ANALYSIS,
+                                .msg = lit2str("inferred arrays must contain at least 1 element"),
+                                .args = ORERR_ARGS(error_arg_node(expr)),
+                                .show_code_lines = ORERR_LINES(0),
+                            ));
+                            INVALIDATE(expr);
+                            break;
+                        }
+
+                        typedata_t *td = ast_type2td(ast, array_type);
+
+                        // inner items are inferred sized arrays
+                        if (td->kind == TYPE_ARRAY && td->as.arr.count == 0) {
+                            size_t inferred_sizes = 0;
+                            bool inconsistent_sizes = false;
+                            for (size_t i = 0; i < arg_count; ++i) {
+                                ast_node_t *arg = expr->children.items[an_list_start(expr)+i];
+                                ortype_t arg_type = arg->value_type;
+                                if (TYPE_IS_INVALID(arg_type)) continue;
+
+                                typedata_t *argtd = ast_type2td(ast, arg_type);
+
+                                // to be caught later
+                                if (argtd->kind != TYPE_ARRAY) continue;
+                                if (!ortypeid_eq(argtd->as.arr.type, td->as.arr.type)) continue;
+
+                                if (i == 0) {
+                                    inferred_sizes = argtd->as.arr.count;
+                                } else {
+                                    if (inferred_sizes != argtd->as.arr.count) {
+                                        inconsistent_sizes = true;
+                                        break;
+                                    }
+                                }
+                            }
+
+                            if (inconsistent_sizes) {
+                                stan_error(analyzer, OR_ERROR(
+                                    .tag = "sem.inconsistent-sizes.inferred-array-item-counts",
+                                    .level = ERROR_SOURCE_ANALYSIS,
+                                    .msg = lit2str("inner array item counts have inconsistent sizing"),
+                                    .args = ORERR_ARGS(error_arg_node(expr)),
+                                    .show_code_lines = ORERR_LINES(0),
+                                ));
+                                INVALIDATE(expr);
+                                break;
+                            }
+
+                            if (inferred_sizes > 0) {
+                                array_type = type_set_fetch_array(&ast->type_set, td->as.arr.type, inferred_sizes);
+                            }
+                        }
+
+                        if (init_type_td->as.arr.count == 0) {
+                            init_type = type_set_fetch_array(&ast->type_set, array_type, arg_count);
+                            init_type_td = ast_type2td(ast, init_type);
+                            expr->value_type = init_type;
+                        } else {
+                            init_type = type_set_fetch_array(&ast->type_set, array_type, init_type_td->as.arr.count);
+                            init_type_td = ast_type2td(ast, init_type);
+                            expr->value_type = init_type;
+                        }
+                    }
+
                     if (invalid_arg) {
                         break;
                     }
-
-                    ortype_t array_type = init_type_td->as.arr.type;
 
                     bool is_constant = true;
 
@@ -3782,8 +3859,6 @@ void resolve_expression(
                     }
 
                     if (invalid_arg) break;
-
-                    size_t arg_count = an_list_end(expr) - an_list_start(expr);
 
                     if (init_type_td->as.arr.count < arg_count) {
                         stan_error(analyzer, OR_ERROR(
@@ -5667,6 +5742,25 @@ static void forward_scan_inferred_types(ast_node_t *decl, ast_node_t *decl_type,
     }
 }
 
+static bool same_type_minus_inferred_array_sizes(ast_t *ast, ortype_t declared_type, ortype_t expr_type) {
+    typedata_t *decltd = ast_type2td(ast, declared_type);
+    typedata_t *declexprtd = ast_type2td(ast, expr_type);
+
+    if (declexprtd->kind == TYPE_ARRAY && declexprtd->kind == TYPE_ARRAY) {
+        if (decltd->as.arr.count == 0) {
+            return same_type_minus_inferred_array_sizes(ast, decltd->as.arr.type, declexprtd->as.arr.type);
+        }
+
+        if (declexprtd->as.arr.count != decltd->as.arr.count) return false;
+
+        return same_type_minus_inferred_array_sizes(ast, decltd->as.arr.type, declexprtd->as.arr.type);
+    }
+
+    if (ortypeid_nq(declared_type, expr_type)) return false;
+
+    return true;
+}
+
 static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, analysis_state_t state, ast_node_t *decl) {
     if (TYPE_IS_RESOLVED(decl->value_type)) return;
 
@@ -5757,10 +5851,15 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
         decl_type->expr_val.word.as.t = init_expr->value_type;
         decl->value_type = init_expr->value_type;
     } else if (TYPE_IS_UNRESOLVED(init_expr->value_type) && TYPE_IS_RESOLVED(decl->value_type)) {
-        init_expr->value_type = decl_type->expr_val.word.as.t;
-        init_expr->expr_val = zero_value(ast, init_expr->value_type);
-    
-        decl->value_type = init_expr->value_type;
+        typedata_t *decltd = ast_type2td(ast, decl_type->expr_val.word.as.t);
+        if (decltd->kind == TYPE_ARRAY && decltd->as.arr.count == 0) {
+        } else {
+            init_expr->value_type = decl_type->expr_val.word.as.t;
+
+            init_expr->expr_val = zero_value(ast, init_expr->value_type);
+        
+            decl->value_type = init_expr->value_type;
+        }
     }
 
     if (TYPE_IS_VOID(decl->value_type)) {
@@ -5781,6 +5880,16 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
         ortype_t declared_type = decl->value_type;
 
         ast_node_t *casted_expr = cast_implicitly_if_necessary(analyzer, ast, state, declared_type, decl_expr, true);
+
+        // array size is inferred
+        {
+            if (same_type_minus_inferred_array_sizes(ast, declared_type, casted_expr->value_type)) {
+                declared_type = casted_expr->value_type;
+                decl_expr->value_type = declared_type;
+                decl->value_type = declared_type;
+            }
+        }
+
         unless (ortypeid_eq(declared_type, casted_expr->value_type)) {
             if (!TYPE_IS_INVALID(declared_type) && !TYPE_IS_INVALID(casted_expr->value_type)) {
                 stan_error(analyzer, OR_ERROR(

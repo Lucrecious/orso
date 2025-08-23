@@ -59,6 +59,7 @@ void incomplete_struct_type_init(type_table_t *set, struct_fields_t fields, stru
         size_t offset = td_align(current_size, fieldtd->alignment);
 
         fields.items[i].offset = offset;
+        fields.items[i].default_value = fieldtd->default_value;
 
         current_size = offset + fieldtd->size;
         current_alignment = current_alignment < fieldtd->alignment ? fieldtd->alignment : current_alignment;
@@ -161,6 +162,45 @@ void end_struct_binding(struct_binding_t *sb, type_table_t *set) {
     typedata_t *td = type2typedata(&set->types, sb->type);
     td->as.struct_.binding_or_null = sb;
     td->name = sb->cname;
+}
+
+void export_struct_to_vm(struct_binding_t *binding, type_table_t *set, void *vm_struct_dst, void *cstruct_src) {
+    MUST(binding);
+
+    typedata_t *struct_td = type2typedata(&set->types, binding->type);
+
+    MUST(binding->field_bindings.count == struct_td->as.struct_.fields.count);
+
+    for (size_t i = 0; i < struct_td->as.struct_.fields.count; ++i) {
+        struct_field_t vmfield = struct_td->as.struct_.fields.items[i];
+        void *vm_start = vm_struct_dst + vmfield.offset;
+
+        struct_field_t cfield = binding->field_bindings.items[i];
+        void *cstart = cstruct_src + cfield.offset;
+
+        MUST(ortypeid_eq(cfield.type, vmfield.type));
+
+        typedata_t *field_td = type2typedata(&set->types, cfield.type);
+        if (field_td->kind == TYPE_STRING || field_td->kind == TYPE_STRUCT) {
+            export_struct_to_vm(field_td->as.struct_.binding_or_null, set, vm_start, cstart);
+        } else {
+            memcpy(vm_start, cstart, field_td->size);
+        }
+    }
+}
+
+void export_fields_to_vm_struct(type_table_t *set, struct_fields_t fields, void *dst) {
+    for (size_t i = 0; i < fields.count; ++i) {
+        struct_field_t field = fields.items[i];
+        void *dst_ = dst + field.offset;
+
+        typedata_t *td = type2typedata(&set->types, field.type);
+        if (td->size > ORWORD_SIZE) {
+            memcpy(dst_, field.default_value.as.p, td->size);
+        } else {
+            memcpy(dst_, &field.default_value, td->size);
+        }
+    }
 }
 
 void extract_struct_from_binding(struct_binding_t *binding, type_table_t *set, void *vm_struct, void *cstruct) {
@@ -399,6 +439,7 @@ ortype_t type_set_fetch_pointer(type_table_t* set, ortype_t inner_type) {
     return type;
 }
 
+// size == 0 means the array size is inferred
 ortype_t type_set_fetch_array(type_table_t *set, ortype_t value_type, size_t size) {
     typedata_t array_type;
     array_type_new(set, size, value_type, &array_type);
@@ -410,6 +451,27 @@ ortype_t type_set_fetch_array(type_table_t *set, ortype_t value_type, size_t siz
 
     typedata_t *type_info = type_copy_new(set, &array_type);
     type = track_type(set, type_info);
+
+    {
+        void *data;
+        if (type_info->size > ORWORD_SIZE) {
+            data = arena_alloc(set->allocator, type_info->size);
+            type_info->default_value = ORWORDP(data);
+        } else {
+            data = &type_info->default_value;
+        }
+
+        typedata_t *td = type2typedata(&set->types, value_type);
+
+        for (size_t i = 0; i < size; ++i) {
+            void *dst = data + i*td->size;
+            if (td->size > ORWORD_SIZE) {
+                memcpy(dst, td->default_value.as.p, td->size);
+            } else {
+                memcpy(dst, &td->default_value, td->size);
+            }
+        }
+    }
 
     return type;
 }
@@ -442,6 +504,16 @@ void type_set_complete_struct(type_table_t *set, ortype_t incomplete_type, struc
 
     incomplete_struct_type_init(set, fields, consts, td);
     td->as.struct_.status = STRUCT_STATUS_COMPLETE;
+
+    void *data;
+    if (td->size > ORWORD_SIZE) {
+        data = arena_alloc(set->allocator, td->size);
+        td->default_value.as.p = data;
+    } else {
+        data = &td->default_value;
+    }
+    
+    export_fields_to_vm_struct(set, td->as.struct_.fields, data);
 }
 
 void type_set_set_unresolved_struct_const(type_table_t *set, ortype_t struct_type, struct_field_t field) {

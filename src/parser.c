@@ -152,6 +152,14 @@ static void intrinsic_struct_init(ast_t *ast) {
         
         typedata_t *std = type2typedata(&ast->type_set.types, string_binding->type);
         std->kind = TYPE_STRING;
+
+        void *export = ast_multiword_value(ast, std->size);
+        orstring_t zero = {
+            .cstr = "",
+            .length = 0,
+        };
+        export_struct_to_vm(string_binding, &ast->type_set, export, &zero);
+        std->default_value = ORWORDP(export);
     }
 
     // any_t
@@ -2403,10 +2411,17 @@ static ast_node_t *parse_function_definition(parser_t *parser) {
 }
 
 static ast_node_t *parse_array_type(parser_t *parser) {
-    ast_node_t *size_expr = &nil_node;
+    ast_node_t *size_expr; {
+        lexer_t lookahead = parser->lexer;
+        bool is_bang = lookahead.previous_token.type == TOKEN_BANG;
+        bool after_is_close = lexer_next_token(&lookahead).type == TOKEN_BRACKET_CLOSE;
 
-    if (true || !check(parser, TOKEN_BRACKET_CLOSE)) {
-        size_expr = parse_expression(parser);
+        if (is_bang && after_is_close) {
+            size_expr = &nil_node;
+            consume(parser, TOKEN_BANG);
+        } else {
+            size_expr = parse_expression(parser);
+        }
     }
 
     unless (consume(parser, TOKEN_BRACKET_CLOSE)) {
@@ -3293,15 +3308,8 @@ bool ast_find_intrinsic_funcname(orintrinsic_fns_t fns, oristring_t name, orintr
 ast_node_val_t zero_value(ast_t *ast, ortype_t type) {
     if (TYPE_IS_UNRESOLVED(type)) return ast_node_val_word(ORWORDU(0));
 
-    typedata_t *type_info = ast->type_set.types.items[type.i];
-    orword_t value = {0};
-    if (type_info->size > ORWORD_SIZE) {
-        typedata_t *td = type2typedata(&ast->type_set.types, type);
-        orword_t *data = ast_multiword_value(ast, orb2w(td->size));
-        value = ORWORDP(data);
-    }
-
-    ast_node_val_t val = ast_node_val_word(value);
+    typedata_t *td = type2typedata(&ast->type_set.types, type);
+    ast_node_val_t val = ast_node_val_word(td->default_value);
     return val;
 }
 

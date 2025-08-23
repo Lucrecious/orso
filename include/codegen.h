@@ -844,30 +844,29 @@ static void gen_patch_jmp(gen_t *gen, function_t *function, size_t index) {
     instruction->as.jmp.amount = (oru32)amount;
 }
 
-static void add_constant(gen_t *gen, function_t *function, texloc_t loc, void *data, size_t size, reg_t reg_destination_ptr) {
-    size_t index = memarr_push(function->memory, data, size);
-    if (index > ORIN_UINTARG_MAX) {
-        gen_error(gen, OR_ERROR(
-            .tag = "codegen.mem.offset-too-large.4|skip",
-            .level = ERROR_SOURCE_CODEGEN,
-            .msg = lit2str("index $0.$ is too large for constant access"),
-            .args = ORERR_ARGS(error_arg_sz(index))
-        ));
-        return;
-    }
-
-    instruction_t in = {0};
-    in.op = OP_LOAD_ADDR;
-    in.as.load_addr.memaddr = (oru32)index;
-    in.as.load_addr.reg_dest = (byte)reg_destination_ptr;
-
-    emit_instruction(function, loc, in);
-}
-
 static void gen_constant(gen_t *gen, texloc_t loc, function_t *function, void *data, ortype_t type, val_dst_t val_dst) {
     typedata_t *td = type2typedata(&gen->ast->type_set.types, type);
 
-    add_constant(gen, function, loc, data, td->size, REG_RESULT);
+    {
+        
+        size_t index = memarr_push(function->memory, data, td->size);
+        if (index > ORIN_UINTARG_MAX) {
+            gen_error(gen, OR_ERROR(
+                .tag = "codegen.mem.offset-too-large.4|skip",
+                .level = ERROR_SOURCE_CODEGEN,
+                .msg = lit2str("index $0.$ is too large for constant access"),
+                .args = ORERR_ARGS(error_arg_sz(index))
+            ));
+            return;
+        }
+
+        instruction_t in = {0};
+        in.op = OP_LOAD_ADDR;
+        in.as.load_addr.memaddr = (oru32)index;
+        in.as.load_addr.reg_dest = (byte)REG_RESULT;
+
+        emit_instruction(function, loc, in);
+    }
 
     emit_reg_to_val_dst(gen, loc, function, type, val_dst, REG_RESULT, REG_T, REG_U, true);
 }

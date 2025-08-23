@@ -121,6 +121,7 @@ struct typedata_t {
     type_caps_t capabilities;
     size_t size; // not serialized
     size_t alignment; // not serialized
+    orword_t default_value;
 
     union {
         num_type_t num;

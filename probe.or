@@ -1,33 +1,36 @@
-# slice_t :: struct(u: type) {
-#     count := 0;
-#     data := (&u).{};
-# };
+slice_t :: struct(u: type) {
+    count := 0;
+    data := (&u).{};
+};
 
-# slice :: !(arr: &[!n]!u, start := 0, end := n) -> slice_t(u) {
-#     assert(start >= 0 and end <= n);
-#     return .{
-#         count = end-start,
-#         data = offsetptr(arr as &void as &u, start),
-#     };
-# };
+slice :: !(arr: &[!n]!u, start := 0, end := n) -> slice_t(u) {
+    assert(start >= 0 and end <= n);
+    return .{
+        count: (end as sint) - start,
+        data: offsetptr(arr as &void as &u, start),
+    };
+};
 
-# print_ :: (args: slice_t(any_t)) -> void {
-#     @icall "printint", args.count as int;
-# };
+print_ :: (args: slice_t(any_t)) -> void {
+    for i := 0; i < args.count; ++i {
+        arg := *offsetptr(args.data, i);
+        if arg.type == sint {
+            @icall "printint", *(arg.data as &sint) as int;
+        } else if arg.type == str8_t {
+            @icall "println", *(arg.data as &str8_t);
+        };
 
-# print :: (args: [!n]any_t) -> void {
-#     print_(slice(&args));
-# };
+    };
+};
 
-# main :: () -> void {
-#     print([3]any_t.{1, 2, "something"});
-# };
-
-add :: !(a: sint, b: sint) -> sint {
-    return a + b;
+print :: !(args: [!n]any_t) -> void {
+    print_(slice(&args));
 };
 
 main :: () -> void {
-    x := add(5, 6) as int;
-    @icall "printint", x;
+    x: [!][!]sint = .{.{1, 2}, .{3, 4}};
+
+    anys :: [!]any_t;
+
+    print(anys.{1, 2, "something"});
 };
