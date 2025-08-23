@@ -4877,7 +4877,7 @@ void resolve_expression(
 
                 if (index == 5) {
                     stan_error(analyzer, OR_ERROR(
-                        .tag = "sem.missing-array-name.dot-access",
+                        .tag = "sem.invalid-array-index-name.dot-access",
                         .level = ERROR_SOURCE_ANALYSIS,
                         .msg = lit2str("'$1.$' is not a name for an array index"),
                         .args = ORERR_ARGS(error_arg_node(expr), error_arg_str(ast, *expr->identifier)),

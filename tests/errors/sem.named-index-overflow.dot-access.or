@@ -1,0 +1,4 @@
+main :: () -> void {
+    vec := [2]sint.{1, 2};
+    vec.z;
+};
