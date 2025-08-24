@@ -1,11 +1,14 @@
 println_args :: (args: slice_t(any_t)) {
     for i := 0; i < args.count; ++i {
         arg := *offsetptr(args.data, i);
-        if arg.type == sint {
-            @icall "printint", from_any(arg, sint) as int;
-        } else if arg.type == str8_t {
-            @icall "println", from_any(arg, str8_t);
-        } else assert();
+        if arg.type == int then
+            @icall "printint", from_any(arg, int)
+        else if arg.type == sint then
+            @icall "printint", from_any(arg, sint) as int
+        else if arg.type == str8_t then
+            @icall "println", from_any(arg, str8_t)
+        else
+            assert();
     };
 };
 

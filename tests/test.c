@@ -19,9 +19,19 @@ void print_usage(void) {
 }
 
 static bool test(cstr_t test_file_path) {
-    nob_temp_reset();
+    {
+        size_t len = strlen(test_file_path);
 
-    printf("TEST ---- %s ----\n", test_file_path);
+        printf("---------------");
+        for (size_t i = 0; i < len; ++i) printf("-");
+        printf("\n");
+
+        printf("TEST ---- %s ----\n", test_file_path);
+
+        printf("---------------");
+        for (size_t i = 0; i < len; ++i) printf("-");
+        printf("\n");
+    }
 
     orso_compiler_t compiler = {0};
     compiler.build_dir = S("./tmp/");
@@ -61,6 +71,9 @@ static bool test(cstr_t test_file_path) {
     if (success) {
         cstr_t compare_file = nob_temp_sprintf("%s.out", test_file_path);
         if (!nob_file_exists(compare_file)) {
+            nob_cmd_append(&cmd, "cat", "./tmp/tmp.c.out");
+            success = nob_cmd_run_sync_and_reset(&cmd);
+
             printf("Compare file for %s does not yet exist, do you want to create it from the output? y/n\n", compare_file);
             char response;
             scanf(" %c", &response);
@@ -315,21 +328,31 @@ int main(int argc, char *argv[]) {
         nob_log(NOB_INFO, "error tag skipped: %zu", skipped);
     } else if (strcmp(command, "test") == 0) {
         Nob_File_Paths paths = {0};
-        cstr_t test_dir = "./tests/features/";
+        cstr_t test_dir = "./tests/correctness/";
         bool success = nob_read_entire_dir(test_dir, &paths);
         if (!success) {
             printf("cannot read %s directory", test_dir);
+            nob_da_free(paths);
             return 1;
         }
 
+        // todo: deep copy paths into arena, so it's not on temp buffer
+
+        size_t test_count = 0;
+        size_t tests_passed = 0;
         for (size_t i = 0; i < paths.count; ++i) {
-            nob_temp_reset();
             cstr_t file = paths.items[i];
             if (sv_ends_with(cstr2sv(file), ".or")) {
+                ++test_count;
                 cstr_t path = nob_temp_sprintf("%s%s", test_dir, file);
-                test(path);
+                if (test(path)) {
+                    ++tests_passed;
+                }
             }
         }
+
+        nob_da_free(paths);
+        printf("%zu/%zu tests passed", tests_passed, test_count);
     }
 
     return 0;

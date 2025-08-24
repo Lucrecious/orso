@@ -1,6 +1,6 @@
 main :: () -> void {
     array :: [4]int.{1, 2, 3, 4};
-    third :: array[2];
+    third :: array[3];
 
     (@load "io.or").println(.{third});
 };

@@ -3565,6 +3565,9 @@ void resolve_expression(
             ast_node_t *accessor = an_item_accessor(expr);
             resolve_expression(analyzer, ast, state, ortypeid(TYPE_UNRESOLVED), accessor, true);
 
+            accessor = cast_implicitly_if_necessary(analyzer, ast, state, ast->type_set.sint_, accessor, true);
+            an_item_accessor(expr) = accessor;
+
             if (TYPE_IS_INVALID(accessee->value_type)) {
                 INVALIDATE(expr);
                 break;
@@ -3575,6 +3578,7 @@ void resolve_expression(
                 break;
             }
 
+            size_t array_count = 0;
             typedata_t *accessee_td = ast_type2td(ast, accessee->value_type);
             if (an_is_notnone(accessee->lvalue_node)) {
                 expr->lvalue_node = expr;
@@ -3585,16 +3589,18 @@ void resolve_expression(
                 ortype_t item_type = ortypeid(TYPE_INVALID);
                 if (accessee_td->kind == TYPE_ARRAY) {
                     item_type = accessee_td->as.arr.type;
+                    array_count = accessee_td->as.arr.count;
                 } else {
                     item_type = ptr_innertd->as.arr.type;
+                    array_count = ptr_innertd->as.arr.count;
                 }
 
                 expr->value_type = item_type;
 
                 // accessor
                 {
-                    typedata_t *td = ast_type2td(ast, accessor->value_type);
-                    unless (td->kind == TYPE_NUMBER && td->as.num != NUM_TYPE_FLOAT) {
+                    // todo: accept all integer types 
+                    if (ortypeid_nq(accessor->value_type, ast->type_set.sint_)) {
                         stan_error(analyzer, OR_ERROR(
                             .tag = "sem.expected-integer.accessor",
                             .level = ERROR_SOURCE_ANALYSIS,
@@ -3607,8 +3613,38 @@ void resolve_expression(
                 }
 
                 if (accessee->expr_val.is_concrete && accessor->expr_val.is_concrete) {
-                    // todo
-                    // UNREACHABLE();
+                    MUST(accessee_td->kind == TYPE_ARRAY);
+
+                    size_t index = (size_t)accessor->expr_val.word.as.s;
+                    if (index < array_count) {
+                        void *data;
+                        if (accessee_td->size > ORWORD_SIZE) {
+                            data = accessee->expr_val.word.as.p;
+                        } else {
+                            data = &accessee->expr_val.word;
+                        }
+
+                        typedata_t *itemtd = ast_type2td(ast, item_type);
+                        data += index*itemtd->size;
+
+                        orword_t value;
+                        if (itemtd->size > ORWORD_SIZE) {
+                            value = ORWORDP(data);
+                        } else {
+                            memcpy(&value, data, itemtd->size);
+                        }
+
+                        expr->expr_val = ast_node_val_word(value);
+
+                    } else {
+                        stan_error(analyzer, OR_ERROR(
+                            .tag = "sem.index-overflow.item-access",
+                            .level = ERROR_SOURCE_ANALYSIS,
+                            .msg = lit2str("array count '$1.$' is overflowed by index '$2.$'"),
+                            .args = ORERR_ARGS(error_arg_node(accessee), error_arg_sz(array_count), error_arg_sz(index)),
+                            .show_code_lines = ORERR_LINES(0),
+                        ));
+                    }
                 }
             } else {
                 tmp_arena_t *tmp = allocator_borrow();
