@@ -1,6 +1,11 @@
-main :: () -> void {
-    foo :: () -> void {
-    };
+# slice_get :: @subscript (s: slice_t(!u), index: sint) -> &u {
+#     assert(index >= 0 and index < s.count);
+#     return offsetptr(s.data, index);
+# };
 
-    foo();
+
+
+main :: () -> void {
+    arr := [!]sint.{1, 2, 3, 4};
+    (@load "io.or").println(.{arr[2]});
 };

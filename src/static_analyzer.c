@@ -2885,7 +2885,13 @@ ast_node_t *stan_load_module_or_errornull(analyzer_t *analyzer, ast_t *ast, ast_
 
     source = cstrn2string(sb.items, sb.count, ast->arena);
 
+    size_t before_error_count = ast->errors.count;
     module = parse_source_into_module(ast, s, string2sv(source));
+    size_t after_error_count = ast->errors.count;
+
+    if (after_error_count > before_error_count) {
+        nob_return_defer(NULL);
+    }
 
     ast_add_module(ast, module, moduleid);
 

@@ -247,7 +247,7 @@ bool orinterpret(orstring_t input_file_path) {
 
     bool result = false;
 
-    if (!ast->resolved) {
+    if (ast->errors.count > 0) {
         print_errors(ast);
         return_defer(false);
     }
