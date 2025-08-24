@@ -19,68 +19,68 @@ void print_usage(void) {
 }
 
 static bool test(cstr_t test_file_path) {
-    Nob_String_View test_file_path_sv_ = nob_sv_from_cstr(test_file_path);
-    string_view_t test_file_path_sv = {
-        .data = test_file_path_sv_.data,
-        .length = test_file_path_sv_.count
+    nob_temp_reset();
+
+    printf("TEST ---- %s ----\n", test_file_path);
+
+    orso_compiler_t compiler = {0};
+    compiler.build_dir = S("./tmp/");
+    compiler.output_name = S("tmp");
+    compiler.src = (orstring_t) {
+        .cstr = (char*)test_file_path,
+        .length = strlen(test_file_path),
     };
-    string_view_t filename = sv_filename(test_file_path_sv);
 
-    cstr_t native_results_path = nob_temp_sprintf(".tmp/%.*s.result.native", filename.length, filename.data);
-    cstr_t interp_results_path = nob_temp_sprintf(".tmp/%.*s.result.interp", filename.length, filename.data);
-    cstr_t executable_file_path = nob_temp_sprintf(".tmp/%.*s.out", filename.length, filename.data);
-    
-    Nob_Fd nativefd = nob_fd_open_for_write(native_results_path);
-    Nob_Fd interpfd = nob_fd_open_for_write(interp_results_path);
-
-    int result = true;
-
-    if (nativefd == NOB_INVALID_FD || interpfd == NOB_INVALID_FD) nob_return_defer(1);
+    bool success = orbuild(&compiler);
+    if (!success) goto defer;
 
     Nob_Cmd cmd = {0};
 
-    nob_cmd_append(&cmd, "./bin/orso", "build", test_file_path, executable_file_path);
+    nob_cmd_append(&cmd, "./tmp/tmp");
 
-    if (!nob_cmd_run_sync_and_reset(&cmd)) {
-        nob_log(NOB_ERROR, "Failed to build test %s", test_file_path);
-        nob_return_defer(false);
-    }
+    Nob_Fd fdout = nob_fd_open_for_write("./tmp/tmp.c.out");
+    if (fdout == NOB_INVALID_FD) return false;
 
-    nob_log(NOB_INFO, "---- Executable path: %s", executable_file_path);
-
-    cstr_t call_test = nob_temp_sprintf("./%s", executable_file_path);
-    nob_cmd_append(&cmd, call_test);
-    if (!nob_cmd_run_sync_redirect_and_reset(&cmd, (Nob_Cmd_Redirect){
-        .fdout = &nativefd,
-    })) {
-        nob_log(NOB_ERROR, "Failed to run native program %s", executable_file_path);
-        nob_return_defer(false);
-    }
-
-    nob_log(NOB_INFO, "---- Native output file: %s", native_results_path);
+    success = nob_cmd_run_sync_redirect_and_reset(&cmd, (Nob_Cmd_Redirect){
+        .fdout = &fdout,
+    });
+    if (!success) goto defer;
 
     nob_cmd_append(&cmd, "./bin/orso", "run", test_file_path);
 
-    if (!nob_cmd_run_sync_redirect_and_reset(&cmd, (Nob_Cmd_Redirect){
-        .fdout=&interpfd,
-    })) {
-        nob_log(NOB_ERROR, "Failed to run interpreter program %s", executable_file_path);
-        nob_return_defer(false);
-    }
+    fdout = nob_fd_open_for_write("./tmp/tmp.or.out");
+    if (fdout == NOB_INVALID_FD) goto defer;
 
-    nob_log(NOB_INFO, "---- Interpreter output file: %s", interp_results_path);
+    success = nob_cmd_run_sync_redirect_and_reset(&cmd, (Nob_Cmd_Redirect){
+        .fdout = &fdout
+    });
+    if (!success) goto defer;
 
-    nob_cmd_append(&cmd, "diff", native_results_path, interp_results_path);
+    nob_cmd_append(&cmd, "diff", "./tmp/tmp.c.out", "./tmp/tmp.or.out");
+    success = nob_cmd_run_sync_and_reset(&cmd);
+    if (success) {
+        cstr_t compare_file = nob_temp_sprintf("%s.out", test_file_path);
+        if (!nob_file_exists(compare_file)) {
+            printf("Compare file for %s does not yet exist, do you want to create it from the output? y/n\n", compare_file);
+            char response;
+            scanf(" %c", &response);
 
-    if (!nob_cmd_run_sync_and_reset(&cmd)) {
-        nob_log(NOB_ERROR, "diff failed.", executable_file_path);
-        nob_return_defer(false);
+            if (response == 'y') {
+                nob_copy_file("./tmp/tmp.c.out", compare_file);
+            }
+        }
+
+        if (!nob_file_exists(compare_file)) {
+            printf("No output file to compare against.\n");
+        } else {
+            nob_cmd_append(&cmd, "diff", "./tmp/tmp.c.out", compare_file);
+            success = nob_cmd_run_sync_and_reset(&cmd);
+        }
     }
 
 defer:
-    nob_fd_close(nativefd);
-    nob_fd_close(interpfd);
-    return result;
+    printf("\n\n");
+    return success;
 }
 
 typedef struct cstrs_t cstrs_t;
@@ -314,7 +314,22 @@ int main(int argc, char *argv[]) {
         nob_log(NOB_INFO, "error tag tests: %zu/%zu", i, tags.count);
         nob_log(NOB_INFO, "error tag skipped: %zu", skipped);
     } else if (strcmp(command, "test") == 0) {
-        NOB_TODO("test");
+        Nob_File_Paths paths = {0};
+        cstr_t test_dir = "./tests/features/";
+        bool success = nob_read_entire_dir(test_dir, &paths);
+        if (!success) {
+            printf("cannot read %s directory", test_dir);
+            return 1;
+        }
+
+        for (size_t i = 0; i < paths.count; ++i) {
+            nob_temp_reset();
+            cstr_t file = paths.items[i];
+            if (sv_ends_with(cstr2sv(file), ".or")) {
+                cstr_t path = nob_temp_sprintf("%s%s", test_dir, file);
+                test(path);
+            }
+        }
     }
 
     return 0;

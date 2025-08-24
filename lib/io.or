@@ -1,3 +1,14 @@
-println :: (text: str8_t) {
-    @icall "println", text;
+println_args :: (args: slice_t(any_t)) {
+    for i := 0; i < args.count; ++i {
+        arg := *offsetptr(args.data, i);
+        if arg.type == sint {
+            @icall "printint", from_any(arg, sint) as int;
+        } else if arg.type == str8_t {
+            @icall "println", from_any(arg, str8_t);
+        } else assert();
+    };
+};
+
+println :: !(args: [!]any_t) -> void {
+    println_args(slice(&args));
 };

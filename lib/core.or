@@ -8,6 +8,25 @@ any_t :: @intrinsic "orany_t", struct {
     data := (&void).{};
 };
 
+from_any :: (a: any_t, !u: type) -> u {
+    assert(a.type == u);
+    data := *(a.data as &u);
+    return data;
+};
+
 assert :: (test := false, message := "") {
     @icall "assert", test, message;
+};
+
+slice_t :: struct(u: type) {
+    count := 0;
+    data := (&u).{};
+};
+
+slice :: !(arr: &[!n]!u, start := 0, end := n) -> slice_t(u) {
+    assert(start >= 0 and end <= n);
+    return .{
+        count: (end as sint) - start,
+        data: offsetptr(arr as &void as &u, start),
+    };
 };

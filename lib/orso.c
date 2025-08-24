@@ -132,12 +132,16 @@ ast_t *orbuild_ast(orstring_t source, arena_t *arena, orstring_t file_path) {
 }
 
 static bool generate_exe(ast_t *ast, orso_compiler_t *compiler, orstring_t output_path) {
-    tmp_arena_t *tmp = allocator_borrow();
 
     strings_t sources = {0};
     strings_t libs = {0};
 
-    bool success = compile_ast_to_c(ast, lit2str("./build/"), &sources, &libs, tmp->allocator);
+    bool success = nob_mkdir_if_not_exists(compiler->build_dir.cstr);
+    if (!success) return false;
+
+    tmp_arena_t *tmp = allocator_borrow();
+
+    success = compile_ast_to_c(ast, compiler->build_dir, &sources, &libs, tmp->allocator);
 
     if (success) {
         cc_t cc = cc_make(CC_GCC, tmp->allocator);
