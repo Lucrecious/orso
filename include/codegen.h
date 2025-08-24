@@ -2083,7 +2083,7 @@ static void gen_item_access(gen_t *gen, function_t *function, ast_node_t *item_a
         ast_node_t *lvalue = item_access->lvalue_node;
         val_dst_t dst = emit_val_dst_reg_or_stack_point_reserve(gen, loc, function, gen->ast->type_set.u64_, REG_RESULT);
         if (lvalue->subscript_call_or_null) {
-            gen_call(gen, function, lvalue->subscript_call_or_null, dst);
+            gen_expression(gen, function, lvalue->subscript_call_or_null, dst);
         } else {
             gen_lvalue(gen, function, lvalue, dst);
         }

@@ -1,11 +1,13 @@
-# slice_get :: @subscript (s: slice_t(!u), index: sint) -> &u {
-#     assert(index >= 0 and index < s.count);
-#     return offsetptr(s.data, index);
-# };
+@subscript slice_get :: !(s: &slice_t(!u), index: sint) -> &u {
+    assert(index >= 0 and index < s.count);
+    return offsetptr(s.data, index);
+};
 
 
 
 main :: () -> void {
     arr := [!]sint.{1, 2, 3, 4};
-    (@load "io.or").println(.{arr[2]});
+    s := slice(&arr);
+
+    (@load "io.or").println(.{s[2]});
 };

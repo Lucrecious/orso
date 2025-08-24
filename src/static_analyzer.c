@@ -3712,15 +3712,16 @@ void resolve_expression(
                 }
 
                 if (resolved_at_call_site) {
-                    callee = an_callee(subscript_call);
-                    MUST(callee->expr_val.is_concrete);
-                    function_t *fn = (function_t*)callee->expr_val.word.as.p;
-                    ast_node_t *funcdef;
-                    bool found = table_get(fn2an, ast->fn2an, fn, &funcdef);
-                    MUST(found);
-
-                    bool success = check_subscript_function_or_error(analyzer, funcdef);
+                    typedata_t *calltd = ast_type2td(ast, subscript_call->value_type);
+                    bool success = calltd->kind == TYPE_POINTER;
                     if (!success) {
+                        stan_error(analyzer, OR_ERROR(
+                            .tag = "sem.type-mismatch.subscript-ret",
+                            .level = ERROR_SOURCE_ANALYSIS,
+                            .msg = lit2str("resolved call must return a pointer type but got '$1.$' instead"),
+                            .args = ORERR_ARGS(error_arg_node(expr), error_arg_type(subscript_call->value_type)),
+                            .show_code_lines = ORERR_LINES(0),
+                        ));
                         INVALIDATE(expr);
                         goto defer_item_access;
                     }
