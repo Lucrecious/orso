@@ -1762,8 +1762,8 @@ void gen_funcdef(ast_t *ast, vm_t *vm, ast_node_t *funcdef) {
     function_t *function = (function_t*)funcdef->expr_val.word.as.p;
     if (function_is_compiled(function)) return;
 
-    tmp_arena_t *tmp = allocator_borrow();
-    gen_t gen = make_gen(ast, vm->program_mem, tmp->allocator, vm->arena);
+    arena_t *tmp = allocator_borrow();
+    gen_t gen = make_gen(ast, vm->program_mem, tmp, vm->arena);
 
     for (size_t i = an_func_def_arg_start(funcdef); i < an_func_def_arg_end(funcdef); ++i) {
         ast_node_t *arg = funcdef->children.items[i];

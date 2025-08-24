@@ -1130,8 +1130,8 @@ ast_node_t *ast_implicit_expr(ast_t *ast, ortype_t type, orword_t value, token_t
 }
 
 oristring_t ast_sv2istring(ast_t *ast, string_view_t view) {
-    tmp_arena_t *tmp = allocator_borrow();
-    orstring_t s = sv2string(view, tmp->allocator);
+    arena_t *tmp = allocator_borrow();
+    orstring_t s = sv2string(view, tmp);
 
     oristring_t is;
     if (!table_get(s2s, ast->strings, s, &is)) {
@@ -1148,10 +1148,10 @@ oristring_t ast_sv2istring(ast_t *ast, string_view_t view) {
 }
 
 oristring_t ast_next_tmp_name(ast_t *ast) {
-    tmp_arena_t *tmp = allocator_borrow();
+    arena_t *tmp = allocator_borrow();
 
     size_t next = ++ast->tmp_counter;
-    orstring_t tmpname = string_format("tmp%zu", tmp->allocator, next);
+    orstring_t tmpname = string_format("tmp%zu", tmp, next);
 
     oristring_t result = ast_sv2istring(ast, string2sv(tmpname));
 
@@ -3331,13 +3331,13 @@ static void print_line(const orcstr_t format, ...) {
 }
 
 static void ast_print_ast_node(typedatas_t types, ast_node_t *node, oru32 level) {
-    tmp_arena_t *tmp = allocator_borrow();
+    arena_t *tmp = allocator_borrow();
 
-    #define type2cstr(node) (type_to_string(types, node->value_type, tmp->allocator).cstr)
+    #define type2cstr(node) (type_to_string(types, node->value_type, tmp).cstr)
 
     switch (node->node_type) {
         case AST_NODE_TYPE_EXPRESSION_BINARY: {
-            orstring_t label = string_format("binary (%.*s): %s", tmp->allocator, node->operator.view.length, node->operator.view.data, type2cstr(node));
+            orstring_t label = string_format("binary (%.*s): %s", tmp, node->operator.view.length, node->operator.view.data, type2cstr(node));
 
             print_indent(level);
             print_line("%s", label.cstr);
@@ -3354,14 +3354,14 @@ static void ast_print_ast_node(typedatas_t types, ast_node_t *node, oru32 level)
 
         case AST_NODE_TYPE_EXPRESSION_NIL: {
             print_indent(level);
-            orstring_t label = string_format("nil: %s", tmp->allocator, type2cstr(node));
+            orstring_t label = string_format("nil: %s", tmp, type2cstr(node));
             print_line("%s", label.cstr);
             break;
         }
 
         case AST_NODE_TYPE_EXPR_INFERRED_TYPE_DECL: {
             print_indent(level);
-            orstring_t label = string_format("inferred type decl: %s = %s", tmp->allocator, node->identifier->cstr, type_to_string(types, node->expr_val.word.as.t, tmp->allocator));
+            orstring_t label = string_format("inferred type decl: %s = %s", tmp, node->identifier->cstr, type_to_string(types, node->expr_val.word.as.t, tmp));
             print_line("%s", label.cstr);
             break;
         }

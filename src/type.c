@@ -105,9 +105,9 @@ bool type_in_list(types_t list, ortype_t find) {
 }
 
 orstring_t type_to_string_toplevel(typedatas_t types, ortype_t type, arena_t *allocator, bool is_toplevel) {
-    tmp_arena_t *tmp_arena = allocator_borrow();
+    arena_t *tmp = allocator_borrow();
 
-    string_builder_t sb = {.allocator = tmp_arena->allocator};
+    string_builder_t sb = {.allocator = tmp};
 
     typedata_t *type_info = type2typedata(&types, type);
 
@@ -190,7 +190,7 @@ orstring_t type_to_string_toplevel(typedatas_t types, ortype_t type, arena_t *al
 
     orstring_t string = sb_render(&sb, allocator);
 
-    allocator_return(tmp_arena);
+    allocator_return(tmp);
 
     return string;
 }

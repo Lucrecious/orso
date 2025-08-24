@@ -54,8 +54,8 @@
 static void myerror(ast_t *ast, error_t error) {
     UNUSED(ast);
 
-    tmp_arena_t *tmp = allocator_borrow();
-    orstring_t error_str = error2richstring(ast, error, tmp->allocator);
+    arena_t *tmp = allocator_borrow();
+    orstring_t error_str = error2richstring(ast, error, tmp);
     fprintf(stderr, "%s", error_str.cstr);
     allocator_return(tmp);
 }
@@ -86,11 +86,11 @@ ast_t *orbuild_ast(orstring_t source, arena_t *arena, orstring_t file_path) {
     ast_t *ast = arena_alloc(arena, sizeof(ast_t));
     ast_init(ast, arena);
 
-    tmp_arena_t *tmp = allocator_borrow();
+    arena_t *tmp = allocator_borrow();
 
     {
         
-        orstring_t exe_dir = path_get_executable_dir(tmp->allocator);
+        orstring_t exe_dir = path_get_executable_dir(tmp);
         orstring_t std_path = path_combine(string2sv(exe_dir), lit2sv("std"), ast->arena);
         array_push(&ast->search_paths, std_path);
     }
@@ -99,8 +99,8 @@ ast_t *orbuild_ast(orstring_t source, arena_t *arena, orstring_t file_path) {
 
     {
 
-        orstring_t exe_path = path_get_executable_dir(tmp->allocator);
-        orstring_t core_path = path_combine(string2sv(exe_path),  lit2sv("std"ORFILE_SEP"core.or"), tmp->allocator);
+        orstring_t exe_path = path_get_executable_dir(tmp);
+        orstring_t core_path = path_combine(string2sv(exe_path),  lit2sv("std"ORFILE_SEP"core.or"), tmp);
         Nob_String_Builder sb = {0};
         bool success = nob_read_entire_file(core_path.cstr, &sb);
         if (!success) abort();
@@ -118,7 +118,7 @@ ast_t *orbuild_ast(orstring_t source, arena_t *arena, orstring_t file_path) {
     {
         ast_node_t *program = parse_source_into_module(ast, file_path, string2sv(source));
 
-        orstring_t programid = ast_generate_moduleid(file_path, tmp->allocator);
+        orstring_t programid = ast_generate_moduleid(file_path, tmp);
         ast_add_module(ast, program, programid);
     }
 
@@ -139,14 +139,14 @@ static bool generate_exe(ast_t *ast, orso_compiler_t *compiler, orstring_t outpu
     bool success = nob_mkdir_if_not_exists(compiler->build_dir.cstr);
     if (!success) return false;
 
-    tmp_arena_t *tmp = allocator_borrow();
+    arena_t *tmp = allocator_borrow();
 
-    success = compile_ast_to_c(ast, compiler->build_dir, &sources, &libs, tmp->allocator);
+    success = compile_ast_to_c(ast, compiler->build_dir, &sources, &libs, tmp);
 
     if (success) {
-        cc_t cc = cc_make(CC_GCC, tmp->allocator);
+        cc_t cc = cc_make(CC_GCC, tmp);
         cc.output_type = CC_EXE;
-        cc.output_path = string_copy(output_path, tmp->allocator);
+        cc.output_path = string_copy(output_path, tmp);
 
         for (size_t i = 0; i < sources.count; ++i) {
             orstring_t src = sources.items[i];

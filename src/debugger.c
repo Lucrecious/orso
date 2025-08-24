@@ -207,7 +207,7 @@ static void show_line(vm_t *vm, size_t bytecode_around) {
 
     if (low == high && high < function->code.count) ++high;
 
-    tmp_arena_t *tmp_arena = allocator_borrow();
+    arena_t *tmp = allocator_borrow();
 
     for (size_t i = low; i < high; ++i) {
         if (i == pc) {
@@ -215,11 +215,11 @@ static void show_line(vm_t *vm, size_t bytecode_around) {
         }
 
         texloc_t location = function->locations.items[i];
-        orstring_t as_string = disassemble_instruction(function->code.items[i], tmp_arena->allocator);
+        orstring_t as_string = disassemble_instruction(function->code.items[i], tmp);
         printf("%04zu:%04zu: %s\n", location.line+1, location.column+1, as_string.cstr);
     }
 
-    allocator_return(tmp_arena);
+    allocator_return(tmp);
 }
 
 static bool try_vm_step(vm_t *vm) {

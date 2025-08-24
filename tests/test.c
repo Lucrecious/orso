@@ -352,7 +352,7 @@ int main(int argc, char *argv[]) {
         }
 
         nob_da_free(paths);
-        printf("%zu/%zu tests passed", tests_passed, test_count);
+        printf("%zu/%zu tests passed\n", tests_passed, test_count);
     }
 
     return 0;

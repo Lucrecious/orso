@@ -192,8 +192,8 @@ static bool fold_funcsig_or_error(analyzer_t *analyzer, ast_t *ast, ast_node_t *
 
     bool hit_error = false;
 
-    tmp_arena_t *tmp = allocator_borrow();
-    types_t parameter_types = {.allocator=tmp->allocator};
+    arena_t *tmp = allocator_borrow();
+    types_t parameter_types = {.allocator=tmp};
 
     bool type_is_inferred = false;
 
@@ -348,9 +348,9 @@ ortype_t resolve_block_return_types_or_error(analyzer_t *analyzer, ast_node_t *b
             ast_node_t *then = an_then(block);
             ast_node_t *else_ = an_else(block);
 
-            tmp_arena_t *tmp = allocator_borrow();
-            types_t types = {.allocator=tmp->allocator};
-            ast_nodes_t nodes = {.allocator=tmp->allocator};
+            arena_t *tmp = allocator_borrow();
+            types_t types = {.allocator=tmp};
+            ast_nodes_t nodes = {.allocator=tmp};
             
             if (block->branch_type == BRANCH_TYPE_IF) {
                 unless (TYPE_IS_UNREACHABLE(then->value_type)) {
@@ -1136,9 +1136,9 @@ static ast_node_t *cast_implicitly_if_necessary(analyzer_t *analyzer, ast_t *ast
 }
 
 static bool stan_run(analyzer_t *analyzer, vm_t *vm, ast_node_t *expr, orword_t *out_result) {
-    tmp_arena_t *tmp = allocator_borrow();
+    arena_t *tmp = allocator_borrow();
 
-    function_t *function = new_function(vm->program_mem, tmp->allocator);
+    function_t *function = new_function(vm->program_mem, tmp);
     compile_expr_to_function(function, analyzer->ast, expr, vm->program_mem, vm->arena);
 
     vm_fresh_run(analyzer->run_vm, function);
@@ -1613,7 +1613,10 @@ static ast_node_t *stan_realize_inferred_funcdefcall_or_errornull(
             if (param->is_compile_time_param || is_macro) {
                 array_remove(&result->children, i-1);
                 array_remove(&call->children, arg_index);
-                an_decl_expr(param) = arg;
+
+                if (an_is_notnone(arg)) {
+                    an_decl_expr(param) = arg;
+                }
             }
 
             ast_node_t *decl_type = an_decl_type(param);
@@ -1637,10 +1640,12 @@ static ast_node_t *stan_realize_inferred_funcdefcall_or_errornull(
 
             if (param->is_compile_time_param || is_macro) {
                 if (arg->expr_val.is_concrete) {
-                    param->is_compile_time_param = true;
                     param->is_mutable = false;
-                    declare_definition(analyzer, def_state.scope, param);
-                    resolve_declaration(analyzer, analyzer->ast, def_state, param);
+                    if (!param->is_compile_time_param) {
+                        param->is_compile_time_param = true;
+                        declare_definition(analyzer, def_state.scope, param);
+                        resolve_declaration(analyzer, analyzer->ast, def_state, param);
+                    }
                 } else {
                     ast_node_t *body = an_func_def_block(result);
                     MUST(body->node_type == AST_NODE_TYPE_EXPRESSION_BLOCK);
@@ -1827,9 +1832,9 @@ static void ast_struct_value_append(ast_t *ast, struct_value_t *value, size_t fi
 }
 
 static void resolve_enum(analyzer_t *analyzer, ast_t *ast, analysis_state_t state, ast_node_t *enum_def) {
-    tmp_arena_t *tmp = allocator_borrow();
+    arena_t *tmp = allocator_borrow();
 
-    struct_fields_t consts = {.allocator=tmp->allocator};
+    struct_fields_t consts = {.allocator=tmp};
     for (size_t i = an_enum_start(enum_def); i < an_enum_end(enum_def); ++i) {
         ast_node_t *decl = enum_def->children.items[i];
         struct_field_t field = {
@@ -1844,7 +1849,7 @@ static void resolve_enum(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
 
     ortype_t enum_type = ast->type_set.sint_;
 
-    struct_fields_t fields = {.allocator=tmp->allocator};
+    struct_fields_t fields = {.allocator=tmp};
     {
         struct_field_t val = {
             .name = ast_sv2istring(ast, SV("val")),
@@ -1938,8 +1943,8 @@ static void resolve_struct(analyzer_t *analyzer, ast_t *ast, analysis_state_t st
 
     ortype_t struct_type;
     if (TYPE_IS_UNRESOLVED(struct_def->value_type)) {
-        tmp_arena_t *tmp = allocator_borrow();
-        struct_fields_t consts = {.allocator=tmp->allocator};
+        arena_t *tmp = allocator_borrow();
+        struct_fields_t consts = {.allocator=tmp};
 
         // forward declare struct constants
         for (size_t i = an_struct_start(struct_def); i < an_struct_end(struct_def); ++i) {
@@ -2011,9 +2016,9 @@ static void resolve_struct(analyzer_t *analyzer, ast_t *ast, analysis_state_t st
         return;
     }
 
-    tmp_arena_t *tmp = allocator_borrow();
+    arena_t *tmp = allocator_borrow();
 
-    struct_fields_t fields = {.allocator=tmp->allocator};
+    struct_fields_t fields = {.allocator=tmp};
 
     bool has_error = false;
     for (size_t i = an_struct_start(struct_def); i < an_struct_end(struct_def); ++i) {
@@ -2069,8 +2074,8 @@ static bool ast_find_struct_field_by_name(ast_t *ast, ortype_t struct_type, oris
 
 static void patch_call_argument_gaps(analyzer_t *analyzer, ast_t *ast, ast_node_t *call, struct_fields_t arg_defaults, bools_t has_defaults) {
     ast_node_t *callee = an_callee(call);
-    tmp_arena_t *tmp = allocator_borrow();
-    ast_nodes_t new_args = {.allocator=tmp->allocator};
+    arena_t *tmp = allocator_borrow();
+    ast_nodes_t new_args = {.allocator=tmp};
 
     size_t arg_start = an_call_arg_start(call);
     size_t arg_end = an_call_arg_end(call);
@@ -2287,13 +2292,13 @@ static void stan_realize_parameterized_struct(analyzer_t *analyzer, analysis_sta
     }
 
 
-    tmp_arena_t *tmp = allocator_borrow();
-    matched_values_t values = {.allocator=tmp->allocator};
+    arena_t *tmp = allocator_borrow();
+    matched_values_t values = {.allocator=tmp};
 
     scope_t inferred_scope = {0};
     scope_init(&inferred_scope, analyzer->ast->arena, SCOPE_TYPE_INFERRED_PARAMS, param_struct->defined_scope.outer, param_struct_call);
 
-    ast_nodes_t params = {.allocator=tmp->allocator};
+    ast_nodes_t params = {.allocator=tmp};
     for (size_t i = an_struct_param_start(param_struct); i < an_struct_param_end(param_struct); ++i) {
         ast_node_t *p = ast_node_copy(analyzer->ast->arena, param_struct->children.items[i]);
 
@@ -2398,7 +2403,7 @@ static void stan_realize_parameterized_struct(analyzer_t *analyzer, analysis_sta
         if (!TYPE_IS_INVALID(realized_struct->value_type)) {
             ortype_t struct_type = realized_struct->expr_val.word.as.t;
 
-            struct_fields_t params = {.allocator=tmp->allocator};
+            struct_fields_t params = {.allocator=tmp};
             for (size_t i = 0; i < values.count; ++i) {
                 struct_field_t field = {0};
                 field.type = values.items[i].type;
@@ -2537,11 +2542,11 @@ static void resolve_call(analyzer_t *analyzer, ast_t *ast, analysis_state_t stat
                 scope_init(&inferred_scope, analyzer->ast->arena, SCOPE_TYPE_INFERRED_PARAMS, funcdef_node->defined_scope.outer, call);
                 funcdef_defined_scope.scope = &inferred_scope;
 
-                tmp_arena_t *tmp = allocator_borrow();
+                arena_t *tmp = allocator_borrow();
 
                 is_macro = funcdef_node->is_macro;
 
-                matched_values_t matched_values = {.allocator=tmp->allocator};
+                matched_values_t matched_values = {.allocator=tmp};
                 bool success = declare_compile_time_and_inferred_decls(analyzer, funcdef_defined_scope, state, call, funcdef_node, &matched_values);
                 if (success) {
                     if (funcdef_node->is_macro) {
@@ -2758,13 +2763,13 @@ static ffi_t *make_ffi(ast_t *ast) {
 
 
 orstring_t ast_generate_moduleid(orstring_t file_path, arena_t *arena) {
-    tmp_arena_t *tmp = allocator_borrow();
+    arena_t *tmp = allocator_borrow();
 
     orstring_t absolute_path;
-    bool success = core_abspath(file_path, tmp->allocator, &absolute_path);
+    bool success = core_abspath(file_path, tmp, &absolute_path);
     MUST(success);
 
-    string_builder_t sb = {.allocator=tmp->allocator};
+    string_builder_t sb = {.allocator=tmp};
     success = core_fileid(absolute_path, &sb);
     MUST(success);
 
@@ -2848,13 +2853,13 @@ static bool stan_module_exists(ast_t *ast, orstring_t path, orstring_t *absolute
 }
 
 ast_node_t *stan_load_module_or_errornull(analyzer_t *analyzer, ast_t *ast, ast_node_t *arg_ref, string_view_t module_path) {
-    tmp_arena_t *tmp = allocator_borrow();
-    orstring_t s = sv2string(module_path, tmp->allocator);
+    arena_t *tmp = allocator_borrow();
+    orstring_t s = sv2string(module_path, tmp);
 
     ast_node_t *result = NULL;
     Nob_String_Builder sb = {0};
 
-    if (!stan_module_exists(ast, s, &s, tmp->allocator)) {
+    if (!stan_module_exists(ast, s, &s, tmp)) {
         stan_error(analyzer, OR_ERROR(
             .tag = "sem.unknown-module.directive-load",
             .level = ERROR_SOURCE_ANALYSIS,
@@ -2865,7 +2870,7 @@ ast_node_t *stan_load_module_or_errornull(analyzer_t *analyzer, ast_t *ast, ast_
         nob_return_defer(NULL);
     }
     
-    orstring_t moduleid = ast_generate_moduleid(s, tmp->allocator);
+    orstring_t moduleid = ast_generate_moduleid(s, tmp);
 
     ast_node_t *module;
     if (table_get(s2n, ast->moduleid2node, moduleid, &module)) {
@@ -3300,7 +3305,7 @@ void resolve_expression(
                     default: UNREACHABLE(); break;
                     }
                 } else if (string_eq(*expr->identifier, lit2str("fficall"))) {
-                    tmp_arena_t *tmp = allocator_borrow();
+                    arena_t *tmp = allocator_borrow();
                     ortype_t fficall_return_type = ortypeid(TYPE_INVALID);
 
                     ast_node_t *lib_node = an_fficall_lib(expr);
@@ -3310,7 +3315,7 @@ void resolve_expression(
                     extract_struct_from_binding(libtd->as.struct_.binding_or_null, &ast->type_set, lib_node->expr_val.word.as.p, &lib);
                     orstring_t libpath = lib.static_path;
                     orstring_t abslibpath;
-                    if (!core_abspath(libpath, tmp->allocator, &abslibpath)) {
+                    if (!core_abspath(libpath, tmp, &abslibpath)) {
                         stan_error(analyzer, OR_ERROR(
                             .tag = "sem.invalid-arg.fficall-libpath",
                             .level = ERROR_SOURCE_ANALYSIS,
@@ -3327,7 +3332,7 @@ void resolve_expression(
 
                     size_t arg_count = an_fficall_arg_end(expr) - an_fficall_arg_start(expr);
 
-                    types_t types = {.allocator=tmp->allocator};
+                    types_t types = {.allocator=tmp};
 
                     for (size_t i = an_fficall_arg_start(expr); i < an_fficall_arg_end(expr); ++i) {
                         ast_node_t *arg = expr->children.items[i];
@@ -3338,7 +3343,7 @@ void resolve_expression(
                     }
 
                     orstring_t funcname = ast_orstr2str(&ast->type_set, funcname_node->expr_val.word.as.p);
-                    orstring_t key = string_format("%s:%s", tmp->allocator, abslibpath.cstr, funcname.cstr);
+                    orstring_t key = string_format("%s:%s", tmp, abslibpath.cstr, funcname.cstr);
                     ffi_t *ffi;
                     if (!table_get(s2fis, ast->ffis, key, &ffi)) {
                         ffi = make_ffi(ast);
@@ -3642,7 +3647,7 @@ void resolve_expression(
                     }
                 }
             } else {
-                tmp_arena_t *tmp = allocator_borrow();
+                arena_t *tmp = allocator_borrow();
 
                 if (an_is_none(accessee->lvalue_node)) {
                     stan_error(analyzer, OR_ERROR(
@@ -3657,7 +3662,7 @@ void resolve_expression(
                 }
 
                 bool resolved_at_call_site;
-                ast_nodes_t subscript_decls = find_subscript_decl_candidates(analyzer, state.scope, accessee, accessor, tmp->allocator, &resolved_at_call_site);
+                ast_nodes_t subscript_decls = find_subscript_decl_candidates(analyzer, state.scope, accessee, accessor, tmp, &resolved_at_call_site);
 
                 if (subscript_decls.count < 1) {
                     stan_error(analyzer, OR_ERROR(
@@ -3949,12 +3954,12 @@ void resolve_expression(
 
                 case TYPE_STRING:
                 case TYPE_STRUCT: {
-                    tmp_arena_t *tmp = allocator_borrow();
+                    arena_t *tmp = allocator_borrow();
 
                     bool is_invalid = false;
 
-                    sizes_t used_field_indices = {.allocator=tmp->allocator};
-                    sizes_t arg_indices = {.allocator=tmp->allocator};
+                    sizes_t used_field_indices = {.allocator=tmp};
+                    sizes_t arg_indices = {.allocator=tmp};
                     {
                         size_t current_field_index = 0;
                         for (size_t i = an_list_start(expr); i < an_list_end(expr); ++i) {
@@ -5148,9 +5153,9 @@ void resolve_expression(
                 ast_node_t *do_block = an_expression(expr);
                 resolve_expression(analyzer, ast, branch_state, implicit_type, do_block, is_consumed);
 
-                tmp_arena_t *tmp = allocator_borrow();
-                ast_nodes_t nodes = {.allocator=tmp->allocator};
-                types_t types = {.allocator=tmp->allocator};
+                arena_t *tmp = allocator_borrow();
+                ast_nodes_t nodes = {.allocator=tmp};
+                types_t types = {.allocator=tmp};
 
                 unless (TYPE_IS_UNREACHABLE(do_block->value_type)) {
                     array_push(&nodes, do_block);
@@ -5690,7 +5695,7 @@ static void forward_scan_inferred_types(ast_node_t *decl, ast_node_t *decl_type,
         }
 
         case AST_NODE_TYPE_EXPRESSION_CALL: {
-            tmp_arena_t *tmp = allocator_borrow();
+            arena_t *tmp = allocator_borrow();
 
             size_t arg_count = an_call_arg_end(decl_type) - an_call_arg_start(decl_type);
 
@@ -5698,7 +5703,7 @@ static void forward_scan_inferred_types(ast_node_t *decl, ast_node_t *decl_type,
                 size_t arg_index = i;
                 ast_node_t *arg = decl_type->children.items[i + an_call_arg_start(decl_type)];
 
-                type_patterns_t pat = (type_patterns_t){.allocator=tmp->allocator};
+                type_patterns_t pat = (type_patterns_t){.allocator=tmp};
 
                 forward_scan_inferred_types(decl, arg, arena, &pat);
 
@@ -5717,10 +5722,10 @@ static void forward_scan_inferred_types(ast_node_t *decl, ast_node_t *decl_type,
         }
 
         case AST_NODE_TYPE_EXPRESSION_ARRAY_TYPE: {
-            tmp_arena_t *tmp = allocator_borrow();
+            arena_t *tmp = allocator_borrow();
 
             {
-                type_patterns_t array_type_patterns = {.allocator=tmp->allocator};
+                type_patterns_t array_type_patterns = {.allocator=tmp};
                 forward_scan_inferred_types(decl, an_array_type_expr(decl_type), arena, &array_type_patterns);
                 for (size_t i = 0; i < array_type_patterns.count; ++i) {
                     type_path_t *current = array_type_patterns.items[i].expected;
@@ -5732,7 +5737,7 @@ static void forward_scan_inferred_types(ast_node_t *decl, ast_node_t *decl_type,
             }
 
             {
-                type_patterns_t array_size_patterns = {.allocator=tmp->allocator};
+                type_patterns_t array_size_patterns = {.allocator=tmp};
                 if (an_is_notnone(an_array_size_expr(decl_type))) {
                     forward_scan_inferred_types(decl, an_array_size_expr(decl_type), arena, &array_size_patterns);
                 }
@@ -5751,11 +5756,11 @@ static void forward_scan_inferred_types(ast_node_t *decl, ast_node_t *decl_type,
         }
 
         case AST_NODE_TYPE_EXPRESSION_FUNCTION_SIGNATURE: {
-            tmp_arena_t *tmp = allocator_borrow();
+            arena_t *tmp = allocator_borrow();
 
             for (size_t i = an_func_def_arg_start(decl_type); i < an_func_def_arg_end(decl_type); ++i) {
                 ast_node_t *type_expr = decl_type->children.items[i];
-                type_patterns_t pats = {.allocator=tmp->allocator};
+                type_patterns_t pats = {.allocator=tmp};
                 forward_scan_inferred_types(decl, type_expr, arena, &pats);
 
                 for (size_t j = 0; j < pats.count; ++j) {
@@ -5770,7 +5775,7 @@ static void forward_scan_inferred_types(ast_node_t *decl, ast_node_t *decl_type,
 
             {
                 ast_node_t *ret = an_func_def_return(decl_type);
-                type_patterns_t pats = {.allocator=tmp->allocator};
+                type_patterns_t pats = {.allocator=tmp};
                 forward_scan_inferred_types(decl, ret, arena, &pats);
 
                 for (size_t i = 0; i < pats.count; ++i) {
@@ -6000,7 +6005,7 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
 }
 
 static ast_node_t *get_builtin_decl(ast_t *ast, oristring_t identifier) {
-    tmp_arena_t *tmp = allocator_borrow();
+    arena_t *tmp = allocator_borrow();
 
     ast_node_t *decl;
     orword_t def_slot;
@@ -6064,7 +6069,7 @@ static ast_node_t *get_defval_or_null_by_identifier_and_error(
     *search_scope = look_scope;
 
     ast_node_t *decl = NULL;
-    tmp_arena_t *tmp = allocator_borrow();
+    arena_t *tmp = allocator_borrow();
     oristring_t identifier = def->identifier;
 
     while (*search_scope) {
@@ -6211,14 +6216,14 @@ static void resolve_funcdef(analyzer_t *analyzer, ast_t *ast, analysis_state_t s
 
     scope_init(&funcdef->defined_scope, ast->arena, SCOPE_TYPE_FUNCDEF, state.scope, funcdef);
     
-    tmp_arena_t *tmp = allocator_borrow();
-    types_t parameter_types = {.allocator=tmp->allocator};
+    arena_t *tmp = allocator_borrow();
+    types_t parameter_types = {.allocator=tmp};
 
     // forward scan paramters
     {
-        tmp_arena_t *tmp = allocator_borrow();
+        arena_t *tmp = allocator_borrow();
 
-        ast_nodes_t parameters = {.allocator=tmp->allocator};
+        ast_nodes_t parameters = {.allocator=tmp};
         for (size_t i = an_func_def_arg_start(funcdef); i < an_func_def_arg_end(funcdef); ++i) {
             array_push(&parameters, funcdef->children.items[i]);
         }

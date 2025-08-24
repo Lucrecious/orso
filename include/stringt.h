@@ -136,8 +136,8 @@ orstring_t string_format(const orcstr_t format, arena_t *allocator, ...) {
 }
 
 strings_t string_split(orcstr_t cstr, orcstr_t delimiters, arena_t *allocator) {
-    tmp_arena_t *tmp = allocator_borrow();
-    string_builder_t sb = {.allocator=tmp->allocator};
+    arena_t *tmp = allocator_borrow();
+    string_builder_t sb = {.allocator=tmp};
 
     strings_t split = {.allocator=allocator};
 
@@ -285,9 +285,9 @@ void sb_add_format(string_builder_t *sb, orcstr_t format, ...) {
 		return;
 	}
 
-    tmp_arena_t *tmp = allocator_borrow();
+    arena_t *tmp = allocator_borrow();
 
-	char *buffer = arena_alloc(tmp->allocator, (size_t)(size + 1));
+	char *buffer = arena_alloc(tmp, (size_t)(size + 1));
 
 	va_start(args, format);
 	vsnprintf(buffer, (size_t)(size + 1), format, args);
@@ -311,9 +311,9 @@ char base64[64] = {
 };
 
 orstring_t bytes2alphanum(char *s, size_t length, arena_t *arena) {
-    tmp_arena_t *tmp = allocator_borrow();
+    arena_t *tmp = allocator_borrow();
     
-    string_builder_t sb = {.allocator=tmp->allocator};
+    string_builder_t sb = {.allocator=tmp};
 
     sb_add_char(&sb, 'x');
 

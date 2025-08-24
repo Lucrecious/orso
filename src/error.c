@@ -95,8 +95,8 @@ static orstring_t get_source_snippet(error_arg_t arg, arena_t *arena) {
     }
     }
 
-    tmp_arena_t *tmp_arena = allocator_borrow();
-    string_builder_t sb = {.allocator=tmp_arena->allocator};
+    arena_t *tmp = allocator_borrow();
+    string_builder_t sb = {.allocator=tmp};
 
     string_view_t source_line = get_line(source, view);
     sb_add_format(&sb, "%.*s\n", (int)source_line.length, source_line.data);
@@ -117,7 +117,7 @@ static orstring_t get_source_snippet(error_arg_t arg, arena_t *arena) {
 
     orstring_t result = sb_render(&sb, arena);
 
-    allocator_return(tmp_arena);
+    allocator_return(tmp);
 
     return result;
 }
@@ -213,8 +213,8 @@ static orcstr_t tokentype2string(token_type_t token_type) {
 
 
 static orstring_t error_format(orstring_t message_format, typedatas_t *tds, error_arg_t *args, arena_t *arena) {
-    tmp_arena_t *tmp = allocator_borrow();
-    string_builder_t sb = {.allocator=tmp->allocator};
+    arena_t *tmp = allocator_borrow();
+    string_builder_t sb = {.allocator=tmp};
 
     for (size_t i = 0; i < (size_t)message_format.length; ++i) {
         char c = message_format.cstr[i];
@@ -227,7 +227,7 @@ static orstring_t error_format(orstring_t message_format, typedatas_t *tds, erro
             ASSERT(dot_index < (size_t)message_format.length, "must");
 
             string_view_t arg_index_sv = {.data=message_format.cstr+i, .length=dot_index-i};
-            orstring_t arg_index_str = sv2string(arg_index_sv, tmp->allocator);
+            orstring_t arg_index_str = sv2string(arg_index_sv, tmp);
             size_t arg_index = string2size(arg_index_str);
 
             i = dot_index + 1;
@@ -269,8 +269,8 @@ static orstring_t error_format(orstring_t message_format, typedatas_t *tds, erro
                     break;
                 }
                 case ERROR_ARG_TYPE_TYPE: {
-                    tmp_arena_t *tmp = allocator_borrow();
-                    orstring_t s = type_to_string(*tds, arg.type_type, tmp->allocator);
+                    arena_t *tmp = allocator_borrow();
+                    orstring_t s = type_to_string(*tds, arg.type_type, tmp);
 
                     sb_add_format(&sb, "%s", s.cstr);
 
@@ -291,8 +291,8 @@ static orstring_t error_format(orstring_t message_format, typedatas_t *tds, erro
 
                 case ERROR_ARG_TYPE_NODE: {
                     if (arg.node_or_null) {
-                        tmp_arena_t *tmp = allocator_borrow();
-                        orstring_t s = type_to_string(*tds, arg.node_or_null->value_type, tmp->allocator);
+                        arena_t *tmp = allocator_borrow();
+                        orstring_t s = type_to_string(*tds, arg.node_or_null->value_type, tmp);
 
                         sb_add_format(&sb, "%s", s.cstr);
 
@@ -302,8 +302,8 @@ static orstring_t error_format(orstring_t message_format, typedatas_t *tds, erro
                 }
 
                 case ERROR_ARG_TYPE_TYPE: {
-                    tmp_arena_t *tmp = allocator_borrow();
-                    orstring_t s = type_to_string(*tds, arg.type_type, tmp->allocator);
+                    arena_t *tmp = allocator_borrow();
+                    orstring_t s = type_to_string(*tds, arg.type_type, tmp);
 
                     sb_add_format(&sb, "%s", s.cstr);
 
@@ -325,11 +325,11 @@ static orstring_t error_format(orstring_t message_format, typedatas_t *tds, erro
 }
 
 orstring_t error2richstring(ast_t *ast, error_t error, arena_t *arena) {
-    tmp_arena_t *tmp = allocator_borrow();
+    arena_t *tmp = allocator_borrow();
 
-    string_builder_t sb = {.allocator=tmp->allocator};
+    string_builder_t sb = {.allocator=tmp};
 
-    orstring_t message = error_format(error.msg, &ast->type_set.types, error.args, tmp->allocator);
+    orstring_t message = error_format(error.msg, &ast->type_set.types, error.args, tmp);
 
     orcstr_t error_level = "";
     switch (error.level) {
@@ -346,7 +346,7 @@ orstring_t error2richstring(ast_t *ast, error_t error, arena_t *arena) {
     for (size_t i = 0; i < error.show_line_count; ++i) {
         ors64 arg_index = error.show_code_lines[i];
         error_arg_t arg = error.args[arg_index];
-        orstring_t snippet = get_source_snippet(arg, tmp->allocator);
+        orstring_t snippet = get_source_snippet(arg, tmp);
 
         texloc_t loc = error_arg_loc(arg);
 
@@ -366,12 +366,12 @@ orstring_t error2richstring(ast_t *ast, error_t error, arena_t *arena) {
         for (size_t i = 0; i < deps->count; ++i) {
             ast_node_t *dep = deps->items[i];
 
-            orstring_t snippet = get_source_snippet(error_arg_node(dep), tmp->allocator);
+            orstring_t snippet = get_source_snippet(error_arg_node(dep), tmp);
             texloc_t loc = error_arg_loc(error_arg_node(dep));
 
             typedata_t *td = ast_type2td(ast, dep->value_type);
             if (td->kind == TYPE_FUNCTION) {
-                sb_add_format(&sb, "signature: %s\n", type_to_string(ast->type_set.types, dep->value_type, tmp->allocator).cstr);
+                sb_add_format(&sb, "signature: %s\n", type_to_string(ast->type_set.types, dep->value_type, tmp).cstr);
             }
 
             sb_add_format(&sb, "  %s:%llu:%llu:\n", loc.filepath.cstr, loc.line+1, loc.column+1);

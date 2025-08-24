@@ -807,9 +807,9 @@ static void cgen_binary(cgen_t *cgen, ast_node_t *binary, cgen_var_t var) {
                 }
                 sb_add_format(&cgen->sb, "%s(&%.*s, &%.*s, sizeof(%.*s))", memcmp, lhs.length, lhs.data, rhs.length, rhs.data, lhs.length, lhs.data);
             } else {
-                tmp_arena_t *tmp = allocator_borrow();
-                string_builder_t lhs_lvalue = {.allocator=tmp->allocator};
-                string_builder_t rhs_lvalue = {.allocator=tmp->allocator};
+                arena_t *tmp = allocator_borrow();
+                string_builder_t lhs_lvalue = {.allocator=tmp};
+                string_builder_t rhs_lvalue = {.allocator=tmp};
 
                 sb_add_format(&lhs_lvalue, "%s", cgen_var_name(cgen, lhs_var));
                 sb_add_format(&rhs_lvalue, "%s", cgen_var_name(cgen, rhs_var));
@@ -1182,9 +1182,9 @@ static void cgen_assignment(cgen_t *cgen, ast_node_t *assignment, cgen_var_t var
                 cgen_add_indent(cgen);
                 sb_add_format(&cgen->sb, "%s = ", cgen_var_name(cgen, rhs_var));
 
-                tmp_arena_t *tmp = allocator_borrow();
-                string_builder_t lhs_lvalue = {.allocator=tmp->allocator};
-                string_builder_t rhs_lvalue = {.allocator=tmp->allocator};
+                arena_t *tmp = allocator_borrow();
+                string_builder_t lhs_lvalue = {.allocator=tmp};
+                string_builder_t rhs_lvalue = {.allocator=tmp};
 
                 sb_add_format(&lhs_lvalue, "%s", cgen_var_name(cgen, lhs_var));
                 sb_add_format(&rhs_lvalue, "%s", cgen_var_name(cgen, rhs_var));
@@ -1806,7 +1806,7 @@ static void cgen_item_access(cgen_t *cgen, ast_node_t *item_access, cgen_var_t v
 }
 
 static void cgen_initializer_list(cgen_t *cgen, ast_node_t *list, cgen_var_t var) {
-    tmp_arena_t *tmp = allocator_borrow();
+    arena_t *tmp = allocator_borrow();
     ortype_t list_type = list->value_type;
     typedata_t *list_td = ast_type2td(cgen->ast, list_type);
 
@@ -1827,7 +1827,7 @@ static void cgen_initializer_list(cgen_t *cgen, ast_node_t *list, cgen_var_t var
         }
 
         size_t length = list_end - list_start;
-        cgen_var_t *tmp_vars = arena_alloc(tmp->allocator, sizeof(cgen_var_t)*length);
+        cgen_var_t *tmp_vars = arena_alloc(tmp, sizeof(cgen_var_t)*length);
 
         for (size_t i = list_start; i < last_requires_tmp_arg; ++i) {
             ast_node_t *arg = list->children.items[i];
@@ -1885,7 +1885,7 @@ static void cgen_initializer_list(cgen_t *cgen, ast_node_t *list, cgen_var_t var
 
         size_t arg_pos = 0;
 
-        cgen_var_t *tmp_vars = arena_alloc(tmp->allocator, sizeof(cgen_var_t)*last_field_requires_tmp);
+        cgen_var_t *tmp_vars = arena_alloc(tmp, sizeof(cgen_var_t)*last_field_requires_tmp);
 
         for (size_t i = 0; i < last_field_requires_tmp; ++i) {
             struct_field_t field = list_td->as.struct_.fields.items[i];
@@ -2020,8 +2020,8 @@ static void cgen_fficall(cgen_t *cgen, ast_node_t *fficall, cgen_var_t var) {
 
     {
         MUST(fficall->ffi_or_null);
-        tmp_arena_t *tmp = allocator_borrow();
-        sb_add_format(&cgen->sb, "%s(", ffi_cfuncname(fficall->ffi_or_null, tmp->allocator).cstr);
+        arena_t *tmp = allocator_borrow();
+        sb_add_format(&cgen->sb, "%s(", ffi_cfuncname(fficall->ffi_or_null, tmp).cstr);
 
         allocator_return(tmp);
     }
@@ -2038,8 +2038,8 @@ static void cgen_fficall(cgen_t *cgen, ast_node_t *fficall, cgen_var_t var) {
 
 void cgen_icall(cgen_t *cgen, ast_node_t *icall, cgen_var_t var) {
     if (!icall->requires_tmp_for_cgen) {
-        tmp_arena_t *tmp = allocator_borrow();
-        orstring_t name = cgen_get_instrinsic_fn_name(cgen->ast, icall->intrinsic_fn, tmp->allocator);
+        arena_t *tmp = allocator_borrow();
+        orstring_t name = cgen_get_instrinsic_fn_name(cgen->ast, icall->intrinsic_fn, tmp);
 
         if (has_var(var)) {
             sb_add_format(&cgen->sb, "%s = (", cgen_var(cgen, var));
@@ -2338,8 +2338,8 @@ static void cgen_struct(cgen_t *cgen, ortype_t type, bools_t *bools) {
 }
 
  static void cgen_structs(cgen_t *cgen) {
-    tmp_arena_t *tmp = allocator_borrow();
-    bools_t bools = {.allocator=tmp->allocator};
+    arena_t *tmp = allocator_borrow();
+    bools_t bools = {.allocator=tmp};
 
     for (size_t i = 0; i < cgen->ast->type_set.types.count; ++i) {
         array_push(&bools, false);
@@ -2378,8 +2378,8 @@ static void cgen_generate_cnames_for_types(ast_t *ast) {
         }
 
         case TYPE_FUNCTION: {
-            tmp_arena_t *tmp = allocator_borrow();
-            string_builder_t sb = {.allocator=tmp->allocator};
+            arena_t *tmp = allocator_borrow();
+            string_builder_t sb = {.allocator=tmp};
             // fn_<arg1_type>_<arg2_type>_..._<argn_type>_<ret_type>
 
             sb_add_cstr(&sb, "fn_");
@@ -2403,8 +2403,8 @@ static void cgen_generate_cnames_for_types(ast_t *ast) {
 
         case TYPE_ARRAY: {
             //arr_<size>_<type>
-            tmp_arena_t *tmp = allocator_borrow();
-            string_builder_t sb = {.allocator=tmp->allocator};
+            arena_t *tmp = allocator_borrow();
+            string_builder_t sb = {.allocator=tmp};
 
             
             sb_add_format(&sb, "arr_%zu_%s", td->as.arr.count, type2typedata(tds, td->as.arr.type)->name.cstr);
@@ -2419,8 +2419,8 @@ static void cgen_generate_cnames_for_types(ast_t *ast) {
 
             // struct_typeid<ortypeid>
 
-            tmp_arena_t *tmp = allocator_borrow();
-            string_builder_t sb = {.allocator=tmp->allocator};
+            arena_t *tmp = allocator_borrow();
+            string_builder_t sb = {.allocator=tmp};
 
             
             sb_add_format(&sb, "struct%zu", i);
@@ -2694,9 +2694,9 @@ static bool find_ffilib(ffilibs_t *libs, orstring_t libpath, ffilib_t **ffilib) 
 }
 
 static bool cgen_generate_ffi(ast_t *ast, cgen_t *cgen, cgen_t *cgenh, cgen_state_t cgen_state, orstring_t build_dir, strings_t *sources, strings_t *libpaths) {
-    tmp_arena_t *tmp = allocator_borrow();
+    arena_t *tmp = allocator_borrow();
 
-    ffilibs_t libs = {.allocator=tmp->allocator};
+    ffilibs_t libs = {.allocator=tmp};
     {
         orstring_t key;
         ffi_t *ffi;
@@ -2705,7 +2705,7 @@ static bool cgen_generate_ffi(ast_t *ast, cgen_t *cgen, cgen_t *cgenh, cgen_stat
             if (!find_ffilib(&libs, ffi->libpath, &fl)) {
                 ffilib_t flib = {0};
                 flib.libpath = ffi->libpath;
-                flib.ffis = (ffis_t){.allocator=tmp->allocator};
+                flib.ffis = (ffis_t){.allocator=tmp};
                 array_push(&libs, flib);
                 fl = &libs.items[libs.count-1];
 
@@ -2718,17 +2718,17 @@ static bool cgen_generate_ffi(ast_t *ast, cgen_t *cgen, cgen_t *cgenh, cgen_stat
 
     bool success = true;
 
-    strings_t ffihs = {.allocator=tmp->allocator};
+    strings_t ffihs = {.allocator=tmp};
 
     for (size_t i = 0; i < libs.count; ++i) {
-        *cgen = make_cgen(ast, tmp->allocator, cgen_state);
-        *cgenh = make_cgen(ast, tmp->allocator, cgen_state);
+        *cgen = make_cgen(ast, tmp, cgen_state);
+        *cgenh = make_cgen(ast, tmp, cgen_state);
 
         orstring_t libpath = libs.items[i].libpath;
         ffilib_t lib = libs.items[i];
 
         string_view_t filename = sv_no_ext(sv_filename(string2sv(libpath)));
-        orstring_t header_define = string_format("orffi%.*s_H_", tmp->allocator, filename.length, filename.data);
+        orstring_t header_define = string_format("orffi%.*s_H_", tmp, filename.length, filename.data);
 
         // h
         {
@@ -2739,7 +2739,7 @@ static bool cgen_generate_ffi(ast_t *ast, cgen_t *cgen, cgen_t *cgenh, cgen_stat
             for (size_t j = 0; j < lib.ffis.count; ++j) {
                 ffi_t *ffi = libs.items[i].ffis.items[j];
 
-                sb_add_format(&cgenh->sb, "%s %s(", cgen_type_name(cgenh, ffi->return_type), ffi_cfuncname(ffi, tmp->allocator).cstr);
+                sb_add_format(&cgenh->sb, "%s %s(", cgen_type_name(cgenh, ffi->return_type), ffi_cfuncname(ffi, tmp).cstr);
                 for (size_t i = 0; i < ffi->arg_types.count; ++i) {
                     if (i != 0) {
                         sb_add_cstr(&cgenh->sb, ", ");
@@ -2757,7 +2757,7 @@ static bool cgen_generate_ffi(ast_t *ast, cgen_t *cgen, cgen_t *cgenh, cgen_stat
 
         // c
         {
-            orstring_t orffih = string_format("orffi%.*s.h", tmp->allocator, filename.length, filename.data);
+            orstring_t orffih = string_format("orffi%.*s.h", tmp, filename.length, filename.data);
             array_push(&ffihs, orffih);
 
             cgen_add_include(cgen, orffih.cstr);
@@ -2777,7 +2777,7 @@ static bool cgen_generate_ffi(ast_t *ast, cgen_t *cgen, cgen_t *cgenh, cgen_stat
                 sb_add_cstr(&cgen->sb, ")");
                 cgen_semicolon_nl(cgen);
 
-                sb_add_format(&cgen->sb, "%s %s(", cgen_type_name(cgen, ffi->return_type), ffi_cfuncname(ffi, tmp->allocator).cstr);
+                sb_add_format(&cgen->sb, "%s %s(", cgen_type_name(cgen, ffi->return_type), ffi_cfuncname(ffi, tmp).cstr);
                 for (size_t i = 0; i < ffi->arg_types.count; ++i) {
                     if (i != 0) {
                         sb_add_cstr(&cgen->sb, ", ");
@@ -2813,8 +2813,8 @@ static bool cgen_generate_ffi(ast_t *ast, cgen_t *cgen, cgen_t *cgenh, cgen_stat
             }
         }
 
-        orstring_t orffic = string_format("%sorffi%.*s.c", tmp->allocator, build_dir.cstr, filename.length, filename.data);
-        orstring_t orffih = string_format("%sorffi%.*s.h", tmp->allocator, build_dir.cstr, filename.length, filename.data);
+        orstring_t orffic = string_format("%sorffi%.*s.c", tmp, build_dir.cstr, filename.length, filename.data);
+        orstring_t orffih = string_format("%sorffi%.*s.h", tmp, build_dir.cstr, filename.length, filename.data);
         array_push(sources, orffic);
 
         success &= write_entire_file(orffic.cstr, cgen->sb.items, cgen->sb.count);
@@ -2823,7 +2823,7 @@ static bool cgen_generate_ffi(ast_t *ast, cgen_t *cgen, cgen_t *cgenh, cgen_stat
 
     // orffi.h
     {
-        *cgenh = make_cgen(ast, tmp->allocator, cgen_state);
+        *cgenh = make_cgen(ast, tmp, cgen_state);
         cgen_begin_h(cgenh, lit2str("ORFFI_H_"));
 
         for (size_t i = 0; i < ffihs.count; ++i) {
@@ -2833,7 +2833,7 @@ static bool cgen_generate_ffi(ast_t *ast, cgen_t *cgen, cgen_t *cgenh, cgen_stat
 
         cgen_end_h(cgenh);
 
-        orstring_t h = string_format("%s"ORFFI_H_FILENAME, tmp->allocator, build_dir.cstr);
+        orstring_t h = string_format("%s"ORFFI_H_FILENAME, tmp, build_dir.cstr);
         success &= write_entire_file(h.cstr, cgenh->sb.items, cgenh->sb.count);
     }
 
@@ -2847,8 +2847,8 @@ bool compile_ast_to_c(ast_t *ast, orstring_t build_directory, strings_t *sources
 
     cgen_generate_associated_h_filenames(ast);
 
-    tmp_arena_t *tmp = allocator_borrow();
-    cgen_state_t cgen_state = make_cgen_state(tmp->allocator);
+    arena_t *tmp = allocator_borrow();
+    cgen_state_t cgen_state = make_cgen_state(tmp);
     cgen_generate_global_names(ast, cgen_state);
     cgen_cache_requires_tmp(&ast->type_set.types, ast->core_module_or_null);
     cgen_generate_function_names(ast, cgen_state, ast->core_module_or_null);
@@ -2869,17 +2869,17 @@ bool compile_ast_to_c(ast_t *ast, orstring_t build_directory, strings_t *sources
 
     // core
     {
-        cgen = make_cgen(ast, tmp->allocator, cgen_state);
-        cgenh = make_cgen(ast, tmp->allocator, cgen_state);
+        cgen = make_cgen(ast, tmp, cgen_state);
+        cgenh = make_cgen(ast, tmp, cgen_state);
 
-        orstring_t corec = cgen_generate_associated_c_from_h_filename(ast->core_module_or_null->ccode_associated_h, tmp->allocator);
+        orstring_t corec = cgen_generate_associated_c_from_h_filename(ast->core_module_or_null->ccode_associated_h, tmp);
 
         cgen_module(&cgen, &cgenh, true, ast->core_module_or_null, lit2str(ORCORE_MODULE_NAME));
 
-        corec = string_format("%s%s", tmp->allocator, build_directory.cstr, corec.cstr);
+        corec = string_format("%s%s", tmp, build_directory.cstr, corec.cstr);
         array_push(sources, corec);
 
-        orstring_t coreh = string_format("%s%s", tmp->allocator, build_directory.cstr, ast->core_module_or_null->ccode_associated_h.cstr);
+        orstring_t coreh = string_format("%s%s", tmp, build_directory.cstr, ast->core_module_or_null->ccode_associated_h.cstr);
 
         success &= write_entire_file(corec.cstr, cgen.sb.items, cgen.sb.count);
         success &= write_entire_file(coreh.cstr, cgenh.sb.items, cgenh.sb.count);
@@ -2892,15 +2892,15 @@ bool compile_ast_to_c(ast_t *ast, orstring_t build_directory, strings_t *sources
 
     // init func
     {
-        cgen = make_cgen(ast, tmp->allocator, cgen_state);
-        cgenh = make_cgen(ast, tmp->allocator, cgen_state);
+        cgen = make_cgen(ast, tmp, cgen_state);
+        cgenh = make_cgen(ast, tmp, cgen_state);
 
         cgen_init_function_file(&cgen, &cgenh, ast);
 
-        orstring_t init_funcc = string_format("%s%s", tmp->allocator, build_directory.cstr, "__orinit_func.c");
+        orstring_t init_funcc = string_format("%s%s", tmp, build_directory.cstr, "__orinit_func.c");
         array_push(sources, init_funcc);
 
-        orstring_t init_funch = string_format("%s%s", tmp->allocator, build_directory.cstr, "__orinit_func.h");
+        orstring_t init_funch = string_format("%s%s", tmp, build_directory.cstr, "__orinit_func.h");
 
         success &= write_entire_file(init_funcc.cstr, cgen.sb.items, cgen.sb.count);
         success &= write_entire_file(init_funch.cstr, cgenh.sb.items, cgenh.sb.count);
@@ -2912,8 +2912,8 @@ bool compile_ast_to_c(ast_t *ast, orstring_t build_directory, strings_t *sources
         ast_node_t *module;
 
         kh_foreach(ast->moduleid2node, moduleid, module, {
-            cgen = make_cgen(ast, tmp->allocator, cgen_state);
-            cgenh = make_cgen(ast, tmp->allocator, cgen_state);
+            cgen = make_cgen(ast, tmp, cgen_state);
+            cgenh = make_cgen(ast, tmp, cgen_state);
 
             cgen_module(&cgen, &cgenh, false, module, moduleid);
 
@@ -2925,10 +2925,10 @@ bool compile_ast_to_c(ast_t *ast, orstring_t build_directory, strings_t *sources
                 sb_add_format(&cgen.sb, "int main() { __orminit_(); %s(); }\n\n", funcname.cstr);
             }
 
-            orstring_t pathc = cgen_generate_associated_c_from_h_filename(module->ccode_associated_h, tmp->allocator);
-            pathc = string_format("%s%s", tmp->allocator, build_directory.cstr, pathc.cstr);
+            orstring_t pathc = cgen_generate_associated_c_from_h_filename(module->ccode_associated_h, tmp);
+            pathc = string_format("%s%s", tmp, build_directory.cstr, pathc.cstr);
 
-            orstring_t pathh = string_format("%s%s", tmp->allocator, build_directory.cstr, module->ccode_associated_h.cstr);;
+            orstring_t pathh = string_format("%s%s", tmp, build_directory.cstr, module->ccode_associated_h.cstr);;
 
             success &= write_entire_file(pathc.cstr, cgen.sb.items, cgen.sb.count);
             success &= write_entire_file(pathh.cstr, cgenh.sb.items, cgenh.sb.count);

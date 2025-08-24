@@ -3,14 +3,14 @@
 
 #include "arena.h"
 
-typedef struct tmp_arena_t tmp_arena_t;
-struct tmp_arena_t {
+typedef struct arena_link_t arena_link_t;
+struct arena_link_t {
     arena_t *allocator;
-    tmp_arena_t *next;
+    arena_link_t *next;
 };
 
-tmp_arena_t *allocator_borrow(void);
-void allocator_return(tmp_arena_t *allocator);
+arena_t *allocator_borrow(void);
+void allocator_return(arena_t *allocator);
 
 #endif
 
@@ -18,37 +18,40 @@ void allocator_return(tmp_arena_t *allocator);
 #include "arena.h"
 
 arena_t allocator = {0};
-tmp_arena_t *available_arenas = NULL;
+arena_link_t *available_arenas = NULL;
+arena_link_t *link_pool = NULL;
 
-tmp_arena_t *allocator_borrow(void) {
-    if (available_arenas== NULL) {
+arena_t *allocator_borrow(void) {
+    if (available_arenas == NULL) {
         arena_t *arena = (arena_t*)arena_alloc(&allocator, sizeof(arena_t));
         *arena =(arena_t){0};
 
-        tmp_arena_t *tmp_arena = (tmp_arena_t*)arena_alloc(&allocator, sizeof(tmp_arena_t));
-        *tmp_arena = (tmp_arena_t){0};
-        tmp_arena->allocator = arena;
+        arena_link_t *link = (arena_link_t*)arena_alloc(&allocator, sizeof(arena_link_t));
+        *link = (arena_link_t){0};
+        link->allocator = arena;
 
-        available_arenas = tmp_arena;
+        available_arenas = link;
     }
 
-    tmp_arena_t *tmp_arena = available_arenas;
-    available_arenas = tmp_arena->next;
+    arena_link_t *link = available_arenas;
+    available_arenas = link->next;
+    
+    link->next = link_pool;
+    link_pool = link;
 
-    tmp_arena->next =  NULL;
-    return tmp_arena;
+    arena_reset(link->allocator);
+    return link->allocator;
 }
 
-void allocator_return(tmp_arena_t *tmp_arena) {
-    arena_reset(tmp_arena->allocator);
-    tmp_arena->next = NULL;
+void allocator_return(arena_t *arena) {
+    MUST(link_pool);
 
-    if (available_arenas == NULL) {
-        available_arenas = tmp_arena;
-    } else {
-        tmp_arena->next = available_arenas;
-        available_arenas = tmp_arena;
-    }
+    arena_link_t *link = link_pool;
+    link_pool = link->next;
+
+    link->allocator = arena;
+    link->next = available_arenas;
+    available_arenas = link;
 }
 
 #undef TMP_IMPLEMENTATION
