@@ -1,6 +1,11 @@
-main :: () -> void {
-    array :: [4]int.{1, 2, 3, 4};
-    third :: array[2];
+foo :: (!t: type) -> t {
+    if t == int then return 1;
+    if t == f32 then return 1.5 as f32;
+    if t == bool then return true;
 
-    (@load "io.or").println(.{third});
+    return t.{};
+};
+
+main :: () -> void {
+    foo("hello world");
 };

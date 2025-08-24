@@ -1608,9 +1608,12 @@ static ast_node_t *stan_realize_inferred_funcdefcall_or_errornull(
         for (size_t i = an_func_def_arg_end(result); i > an_func_def_arg_start(result); --i) {
             ast_node_t *param = result->children.items[i-1];
             size_t arg_index = i-1-an_func_def_arg_start(result) + an_call_arg_start(call);
-            if (param->is_compile_time_param) {
+            ast_node_t *arg = call->children.items[arg_index];
+
+            if (param->is_compile_time_param || is_macro) {
                 array_remove(&result->children, i-1);
                 array_remove(&call->children, arg_index);
+                an_decl_expr(param) = arg;
             }
 
             ast_node_t *decl_type = an_decl_type(param);
@@ -1624,7 +1627,6 @@ static ast_node_t *stan_realize_inferred_funcdefcall_or_errornull(
                 }
             }
 
-            ast_node_t *arg = call->children.items[arg_index];
             if (an_is_none(arg)) {
                 MUST(param->has_default_value);
                 arg = an_decl_expr(param);
@@ -1633,20 +1635,13 @@ static ast_node_t *stan_realize_inferred_funcdefcall_or_errornull(
                 resolve_expression(analyzer, analyzer->ast, callsite_state, implicit_type, arg, true);
             }
 
-            if (is_macro) {
-                an_decl_expr(param) = arg;
-
+            if (param->is_compile_time_param || is_macro) {
                 if (arg->expr_val.is_concrete) {
                     param->is_compile_time_param = true;
                     param->is_mutable = false;
                     declare_definition(analyzer, def_state.scope, param);
                     resolve_declaration(analyzer, analyzer->ast, def_state, param);
-                }
-
-                array_remove(&result->children, i-1);
-                array_remove(&call->children, arg_index);
-
-                if (!arg->expr_val.is_concrete) {
+                } else {
                     ast_node_t *body = an_func_def_block(result);
                     MUST(body->node_type == AST_NODE_TYPE_EXPRESSION_BLOCK);
                     array_insert(&body->children, 0, param);
@@ -5957,6 +5952,8 @@ static void resolve_declaration_definition(analyzer_t *analyzer, ast_t *ast, ana
                         error_arg_str(ast, *decl->identifier), error_arg_type(decl->value_type), error_arg_type(init_expr->value_type)),
                     .show_code_lines = ORERR_LINES(0),
                 ));
+
+                INVALIDATE(decl);
             }
         }
 
