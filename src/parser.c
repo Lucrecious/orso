@@ -2307,7 +2307,7 @@ static bool has_matching_parenthesis(parser_t *parser, bool *is_function_signatu
 
     next = lexer_next_token(&look_ahead_lexer);
 
-    *is_function_signature = (next.type == TOKEN_ARROW_RIGHT || next.type == TOKEN_BRACE_OPEN);
+    *is_function_signature = next.type == TOKEN_ARROW_RIGHT;
 
     return parenthesis_level == 0;
 }
@@ -2392,13 +2392,19 @@ static void parse_function_signature(parser_t *parser, ast_node_t *func_sig) {
         }
     }
 
-    if (match(parser, TOKEN_ARROW_RIGHT)) {
+    if (consume(parser, TOKEN_ARROW_RIGHT)) {
         bool inside_type_context = parser->inside_type_context;
         parser->inside_type_context = true;
         an_func_def_return(func_sig) = parse_expression(parser);
         parser->inside_type_context = inside_type_context;
     } else {
-        an_func_def_return(func_sig) = ast_implicit_expr(parser->ast, ortypeid(TYPE_TYPE), ORWORDT(ortypeid(TYPE_VOID)), token_implicit_at_end(func_sig->end));
+        parser_error(parser, OR_ERROR(
+            .tag = "syn.missing-arrow.signature-arg|skip",
+            .level = ERROR_SOURCE_PARSER,
+            .msg = lit2str("expected '->' after the function signature arguments"),
+            .args = ORERR_ARGS(error_arg_token(parser->current)),
+            .show_code_lines = ORERR_LINES(0),
+        ));
     }
 }
 

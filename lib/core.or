@@ -14,7 +14,7 @@ from_any :: (a: any_t, !u: type) -> u {
     return data;
 };
 
-assert :: (test := false, message := "") {
+assert :: (test := false, message := "") -> void {
     @icall "assert", test, message;
 };
 
